@@ -1,0 +1,7 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>MTG Collection</title>
+<!-- Routing is hash-based, so a 404 only happens on a stray path. Send it
+     back to the app rather than showing GitHub's default page. -->
+<script>location.replace(location.pathname.replace(/\/[^/]*$/, '/') + (location.hash || '#/search'));</script>
+<noscript><a href="./">Go to the collection</a></noscript>

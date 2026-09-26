@@ -7,6 +7,9 @@ and D1.
 https://mtg-api.mattshoe81.workers.dev
 ```
 
+Plus a web frontend at **https://mattshoe.github.io/mtg-api/** — search, decks,
+add and remove cards, stats, and a SQL console.
+
 No auth. It is a card database.
 
 Before this, the collection was five SQLite files in a Google Drive folder, and
@@ -150,6 +153,27 @@ Tagger bulk file, which has no per-card endpoint, so a card added through the
 API has no tags until the nightly backfill.
 
 ---
+
+## Frontend
+
+`frontend/` is a static site on GitHub Pages, deployed by
+`.github/workflows/pages.yml` on every push that touches it. Same stack as the
+Worker: plain ES modules, no build step, no framework, no dependencies at all.
+Open `frontend/index.html` through any static server and it talks to the live
+API.
+
+| view | what it does |
+|---|---|
+| Search | filter by name, rules text, colour identity, mana value, type, rarity, set, keyword, tag, legality, finish, power/toughness, and whether a copy is free |
+| Card | full detail in a drawer — every printing owned, decks it is in, tags, legalities, rulings, and ±1 buttons |
+| Decks | all 32 decks, each with its list, curve, notes and gaps; plus a gaps-and-conflicts overview |
+| Add / Remove | paste a list, preview the real dry run, then apply |
+| Stats | curve, colours, types, rarity, biggest sets, most unassigned copies |
+| Console | arbitrary SQL with a schema browser, snippets, history and CSV export |
+
+Keyboard: `s` `d` `a` `r` `g` `c` jump between views, `/` or `⌘K` finds a card,
+`t` toggles the theme, `esc` closes. Searches are shareable — the filters live
+in the URL — and can be saved by name.
 
 ## Development
 

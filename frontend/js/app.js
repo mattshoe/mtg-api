@@ -1,0 +1,212 @@
+// Shell: routing, theme, connection light, keyboard shortcuts, quick find.
+
+import * as api from './api.js';
+import { h, $, $$, fill, store, debounce, imageUrl, toast } from './util.js';
+import { openCard, closeCard } from './card.js';
+import * as search from './search.js';
+import * as decks from './decks.js';
+import * as manage from './manage.js';
+import * as stats from './stats.js';
+import * as sqlConsole from './console.js';
+
+// ------------------------------------------------------------------ theme
+
+function applyTheme(t) {
+  if (t === 'auto') document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme', t);
+  store.set('theme', t);
+}
+
+function toggleTheme() {
+  const cur = document.documentElement.getAttribute('data-theme')
+    || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+  applyTheme(cur === 'dark' ? 'light' : 'dark');
+}
+
+applyTheme(store.get('theme', 'auto'));
+
+// ------------------------------------------------------------ status light
+
+let settleTimer;
+api.onStatus((state) => {
+  const el = $('#conn');
+  const label = $('#conn-text');
+  if (!el) return;
+  clearTimeout(settleTimer);
+  if (state === 'busy') { el.className = 'conn busy'; label.textContent = 'working'; return; }
+  if (state === 'bad') { el.className = 'conn bad'; label.textContent = 'offline'; return; }
+  if (state === 'ok') { el.className = 'conn ok'; label.textContent = 'live'; }
+  if (state === 'settled') {
+    settleTimer = setTimeout(() => {
+      if (el.className !== 'conn bad') { el.className = 'conn ok'; label.textContent = 'live'; }
+    }, 150);
+  }
+});
+
+// ---------------------------------------------------------------- routing
+
+const ROUTES = {
+  search: (rest) => search.show(rest),
+  decks: (rest) => decks.show(rest),
+  add: () => manage.show('add'),
+  remove: () => manage.show('remove'),
+  stats: () => stats.show(),
+  console: () => sqlConsole.show(),
+};
+
+function parseHash() {
+  const raw = location.hash.replace(/^#\/?/, '');
+  const [pathPart, queryPart] = raw.split('?');
+  const [view, ...segs] = pathPart.split('/').filter(Boolean);
+  return { view: view || 'search', rest: segs.join('/'), query: queryPart || '' };
+}
+
+let currentView = null;
+
+async function route() {
+  const { view, rest, query } = parseHash();
+  const fn = ROUTES[view];
+
+  for (const a of $$('#tabs a')) a.classList.toggle('on', a.dataset.view === view);
+  $('#tabs').classList.remove('open');
+  $('#nav-toggle').setAttribute('aria-expanded', 'false');
+
+  if (!fn) { location.hash = '#/search'; return; }
+
+  // Search owns its own hash, so re-entering it with a new query string is a
+  // filter change rather than a fresh mount.
+  const sameView = currentView === view;
+  currentView = view;
+  if (view !== 'search') $('#view').dataset.view = view;
+
+  try {
+    if (view === 'search') await fn(query);
+    else await fn(rest);
+  } catch (e) {
+    fill($('#view'), h('div.wrap', h('div.err', String(e.message || e))));
+  }
+  if (!sameView) window.scrollTo(0, 0);
+}
+
+addEventListener('hashchange', () => {
+  // Search rewrites its own hash as filters change; do not remount for that.
+  const { view, query } = parseHash();
+  if (view === 'search' && currentView === 'search' && $('#view').dataset.view === 'search') {
+    const want = search.fromHash(query);
+    // Only remount when something arrived from outside (a link, back button).
+    search.show(query);
+    return;
+  }
+  route();
+});
+
+// ------------------------------------------------------------ quick find
+
+let paletteItems = [];
+let paletteIdx = 0;
+
+function closePalette() {
+  $('#palette-scrim').hidden = true;
+  $('#palette-input').value = '';
+  fill($('#palette-list'));
+}
+
+function openPalette() {
+  $('#palette-scrim').hidden = false;
+  const input = $('#palette-input');
+  input.focus();
+  input.select();
+}
+
+const searchPalette = debounce(async (term) => {
+  if (!term.trim()) { fill($('#palette-list')); paletteItems = []; return; }
+  try {
+    const rows = await api.rows(`
+      SELECT MIN(id) AS id, name, scryfall_id, type_line, SUM(qty) AS qty, owner
+        FROM cards
+       WHERE name_norm LIKE ? OR lower(face1) LIKE ? OR lower(face2) LIKE ?
+       GROUP BY owner, name_norm
+       ORDER BY length(name), name LIMIT 12`,
+    [`%${term.toLowerCase()}%`, `%${term.toLowerCase()}%`, `%${term.toLowerCase()}%`]);
+    paletteItems = rows;
+    paletteIdx = 0;
+    renderPalette();
+  } catch { /* typing fast, ignore */ }
+}, 180);
+
+function renderPalette() {
+  fill($('#palette-list'), paletteItems.map((r, i) => h('li', {
+    class: i === paletteIdx ? 'on' : '',
+    onclick: () => { closePalette(); openCard(r.id); },
+    onmouseenter: () => { paletteIdx = i; renderPalette(); },
+  },
+  h('img', {
+    src: imageUrl(r.scryfall_id, 'small'),
+    style: { width: '28px', borderRadius: '2px', flex: 'none' },
+    loading: 'lazy', alt: '',
+    onerror: (e) => { e.target.style.visibility = 'hidden'; },
+  }),
+  h('div', { style: { flex: '1', minWidth: '0' } },
+    h('div', r.name),
+    h('div.muted.small', r.type_line || '')),
+  h('span.tag.mini', `${r.qty}× ${r.owner}`))));
+}
+
+// ------------------------------------------------------------- shortcuts
+
+addEventListener('keydown', (e) => {
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
+
+  if (e.key === 'Escape') {
+    if (!$('#palette-scrim').hidden) { closePalette(); return; }
+    if (!$('#drawer').hidden) { closeCard(); return; }
+    return;
+  }
+
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+    e.preventDefault();
+    openPalette();
+    return;
+  }
+
+  if (!$('#palette-scrim').hidden) {
+    if (e.key === 'ArrowDown') { e.preventDefault(); paletteIdx = Math.min(paletteItems.length - 1, paletteIdx + 1); renderPalette(); }
+    if (e.key === 'ArrowUp') { e.preventDefault(); paletteIdx = Math.max(0, paletteIdx - 1); renderPalette(); }
+    if (e.key === 'Enter' && paletteItems[paletteIdx]) {
+      e.preventDefault();
+      const it = paletteItems[paletteIdx];
+      closePalette();
+      openCard(it.id);
+    }
+    return;
+  }
+
+  if (typing) return;
+
+  const go = { s: '#/search', d: '#/decks', a: '#/add', r: '#/remove', g: '#/stats', c: '#/console' }[e.key];
+  if (go) { location.hash = go; return; }
+  if (e.key === 't') toggleTheme();
+  if (e.key === '/') { e.preventDefault(); openPalette(); }
+  if (e.key === '?') {
+    toast('s search · d decks · a add · r remove · g stats · c console · t theme · / or ⌘K find · esc close');
+  }
+});
+
+// ----------------------------------------------------------------- wiring
+
+$('#theme-btn').addEventListener('click', toggleTheme);
+$('#nav-toggle').addEventListener('click', () => {
+  const open = $('#tabs').classList.toggle('open');
+  $('#nav-toggle').setAttribute('aria-expanded', String(open));
+});
+$('#drawer-scrim').addEventListener('click', closeCard);
+$('#palette-scrim').addEventListener('click', (e) => {
+  if (e.target === $('#palette-scrim')) closePalette();
+});
+$('#palette-input').addEventListener('input', (e) => searchPalette(e.target.value));
+
+if (!location.hash) location.hash = '#/search';
+route();
+
+// A first ping so the status light means something before you touch anything.
+api.scalar('SELECT 1').catch(() => {});
