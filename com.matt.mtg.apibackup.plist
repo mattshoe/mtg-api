@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Nightly D1 backup + tag backfill. Install with:
+    cp com.matt.mtg.apibackup.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.matt.mtg.apibackup.plist
+
+  This ADDS a job. It does not touch com.matt.mtg.mobile-queue.plist or
+  com.matt.mtg.prefetch.plist, both of which keep running as before.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.matt.mtg.apibackup</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/matthewshoemaker/repos/mtg-api/scripts/nightly.sh</string>
+  </array>
+
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key><integer>3</integer>
+    <key>Minute</key><integer>0</integer>
+  </dict>
+
+  <!-- npx needs node on PATH; launchd starts with almost none. -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/matthewshoemaker/repos/mtg-api</string>
+
+  <!-- nightly.sh writes its own log; these catch anything before that. -->
+  <key>StandardOutPath</key>
+  <string>/Users/matthewshoemaker/mtg-backups/launchd.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/matthewshoemaker/mtg-backups/launchd.err.log</string>
+</dict>
+</plist>

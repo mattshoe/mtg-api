@@ -1,0 +1,18 @@
+{
+  "name": "mtg-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "REST API over Matt's Magic: The Gathering collection, on Cloudflare Workers + D1",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.8.19",
+    "vitest": "~3.0.9",
+    "wrangler": "^4.20.0"
+  }
+}

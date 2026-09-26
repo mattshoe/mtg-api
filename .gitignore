@@ -1,0 +1,10 @@
+node_modules/
+.wrangler/
+*.env
+.env
+*.db
+*.db-shm
+*.db-wal
+data.sql
+combined.db
+.DS_Store

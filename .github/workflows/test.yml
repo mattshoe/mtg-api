@@ -1,0 +1,19 @@
+name: test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      # Runs the real Worker against a local D1 in workerd. No Cloudflare
+      # credentials needed and nothing touches the live database.
+      - run: npm test

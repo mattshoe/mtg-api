@@ -1,0 +1,354 @@
+import { describe, it, expect } from 'vitest';
+import { post, sql, exec, count, snapshot, stubScryfall } from './helpers.js';
+
+// From test/fixtures/scryfall/collection-basic.json — the printing the stub
+// hands back for "Lightning Bolt (2X2) 117".
+const BOLT_SCRYFALL_ID = 'f29ba16f-c8fb-42fe-aabf-87089cb214a7';
+
+const BOLT = '1 Lightning Bolt (2X2) 117';
+const YAVIMAYA = '1 Yavimaya, Cradle of Growth (M3C) 409';
+const FABLE = '1 Fable of the Mirror-Breaker';
+
+/** The one card row this add should have produced. */
+async function stack(name, finish = 'nonfoil', owner = 'matt') {
+  const rows = await sql(
+    'SELECT * FROM cards WHERE owner = ? AND name_norm = ? AND finish = ?',
+    owner, name.toLowerCase(), finish,
+  );
+  return rows;
+}
+
+describe('POST /cards/add — a new card', () => {
+  it('inserts one row with the right quantity and finish', async () => {
+    const r = await post('/cards/add', { list: `4 ${BOLT.slice(2)}` }, stubScryfall());
+    expect(r.status).toBe(200);
+    expect(r.body.applied).toBe(true);
+    expect(r.body.failed).toBe(0);
+    expect(r.body.changes).toEqual([['Lightning Bolt', '2X2', '117', 'nonfoil', 0, 4]]);
+
+    const rows = await stack('Lightning Bolt');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].qty).toBe(4);
+    expect(rows[0].setcode).toBe('2x2');
+    expect(rows[0].name_norm).toBe('lightning bolt');
+    expect(rows[0].owner).toBe('matt');
+  });
+
+  it('derives every child table from the Scryfall record', async () => {
+    await post('/cards/add', { list: BOLT }, stubScryfall());
+    const [card] = await stack('Lightning Bolt');
+
+    const colors = await sql('SELECT color, kind FROM card_colors WHERE card_id = ?', card.id);
+    expect(colors.filter((c) => c.kind === 'color').map((c) => c.color)).toEqual(['R']);
+    expect(colors.filter((c) => c.kind === 'identity').map((c) => c.color)).toEqual(['R']);
+
+    const types = await sql('SELECT type, kind FROM card_types WHERE card_id = ?', card.id);
+    expect(types.map((t) => `${t.kind}:${t.type}`)).toContain('type:Instant');
+
+    expect(await count('card_finishes', 'card_id = ?', card.id)).toBeGreaterThan(0);
+    expect(await count('card_games', 'card_id = ?', card.id)).toBeGreaterThan(0);
+    expect(await count('card_search', 'rowid = ?', card.id)).toBe(1);
+  });
+
+  it('writes legalities once per oracle card, not once per printing', async () => {
+    await post('/cards/add', { list: BOLT }, stubScryfall());
+    const [card] = await stack('Lightning Bolt');
+    const before = await count('legalities', 'oracle_id = ?', card.oracle_id);
+    expect(before).toBeGreaterThan(0);
+
+    // A second printing of the same oracle card must not duplicate them.
+    await post('/cards/add', { list: '1 Lightning Bolt (2X2) 117 *F*' }, stubScryfall());
+    expect(await count('legalities', 'oracle_id = ?', card.oracle_id)).toBe(before);
+  });
+
+  it('stores no not_legal rows', async () => {
+    await post('/cards/add', { list: BOLT }, stubScryfall());
+    expect(await count('legalities', "status = 'not_legal'")).toBe(0);
+  });
+
+  it('sets the sensible defaults on a card with no colors', async () => {
+    await post('/cards/add', { list: YAVIMAYA }, stubScryfall());
+    const [card] = await stack('Yavimaya, Cradle of Growth');
+    expect(card.colors).toBeNull();
+    expect(card.type_line).toContain('Land');
+    expect(card.color_identity_count).toBe(card.color_identity ? card.color_identity.length : 0);
+  });
+});
+
+describe('POST /cards/add — an existing card', () => {
+  it('increments a row that came from the seed, not from a prior add', async () => {
+    // A row already in the database has a low explicit id and sits under the
+    // unique index. The add path must find it by (owner, scryfall_id, finish)
+    // and update it, rather than collide trying to insert alongside it.
+    await exec(
+      `INSERT INTO cards (owner, qty, finish, foil_flag, scryfall_id, name, name_norm,
+                          setcode, collector_number)
+       VALUES ('matt', 3, 'nonfoil', '', ?, 'Lightning Bolt', 'lightning bolt', '2x2', '117')`,
+      BOLT_SCRYFALL_ID,
+    );
+
+    const before = await sql("SELECT id, qty FROM cards WHERE name_norm = 'lightning bolt'");
+    expect(before).toHaveLength(1);
+
+    const r = await post('/cards/add', { list: '2 Lightning Bolt (2X2) 117' }, stubScryfall());
+    expect(r.body.changes).toEqual([['Lightning Bolt', '2X2', '117', 'nonfoil', 3, 5]]);
+
+    const after = await sql("SELECT id, qty FROM cards WHERE name_norm = 'lightning bolt'");
+    expect(after).toHaveLength(1);
+    expect(after[0].id).toBe(before[0].id);
+    expect(after[0].qty).toBe(5);
+  });
+
+  it('a second add of the same printing adds to the same row', async () => {
+    await post('/cards/add', { list: '2 Lightning Bolt (2X2) 117' }, stubScryfall());
+    const first = await stack('Lightning Bolt');
+    expect(first[0].qty).toBe(2);
+
+    const r = await post('/cards/add', { list: '3 Lightning Bolt (2X2) 117' }, stubScryfall());
+    expect(r.body.changes).toEqual([['Lightning Bolt', '2X2', '117', 'nonfoil', 2, 5]]);
+
+    const second = await stack('Lightning Bolt');
+    expect(second).toHaveLength(1);
+    expect(second[0].qty).toBe(5);
+    expect(second[0].id).toBe(first[0].id);
+  });
+
+  it('folds duplicate lines in one request into a single change', async () => {
+    const r = await post('/cards/add', {
+      list: '1 Lightning Bolt (2X2) 117\n2 Lightning Bolt (2X2) 117',
+    }, stubScryfall());
+    expect(r.body.changes).toEqual([['Lightning Bolt', '2X2', '117', 'nonfoil', 0, 3]]);
+    expect((await stack('Lightning Bolt'))[0].qty).toBe(3);
+  });
+
+  it('keeps foil and nonfoil of the same printing as separate stacks', async () => {
+    await post('/cards/add', { list: '1 Lightning Bolt (2X2) 117' }, stubScryfall());
+    await post('/cards/add', { list: '1 Lightning Bolt (2X2) 117 *F*' }, stubScryfall());
+
+    const rows = await sql("SELECT finish, qty FROM cards WHERE owner='matt' AND name_norm='lightning bolt' ORDER BY finish");
+    expect(rows).toEqual([
+      { finish: 'foil', qty: 1 },
+      { finish: 'nonfoil', qty: 1 },
+    ]);
+  });
+});
+
+describe('POST /cards/add — double-faced cards', () => {
+  it('populates card_faces and both face columns', async () => {
+    const r = await post('/cards/add', { list: FABLE }, stubScryfall());
+    expect(r.body.failed).toBe(0);
+
+    const rows = await sql("SELECT * FROM cards WHERE name LIKE 'Fable of the Mirror-Breaker%'");
+    expect(rows).toHaveLength(1);
+    const card = rows[0];
+    expect(card.name).toBe('Fable of the Mirror-Breaker // Reflection of Kiki-Jiki');
+    expect(card.face1).toBe('Fable of the Mirror-Breaker');
+    expect(card.face2).toBe('Reflection of Kiki-Jiki');
+
+    const faces = await sql('SELECT face_index, name FROM card_faces WHERE card_id = ? ORDER BY face_index', card.id);
+    expect(faces.map((f) => f.name)).toEqual([
+      'Fable of the Mirror-Breaker', 'Reflection of Kiki-Jiki',
+    ]);
+  });
+
+  it('joins both faces oracle text so single-column search still works', async () => {
+    await post('/cards/add', { list: FABLE }, stubScryfall());
+    const [card] = await sql("SELECT oracle_text FROM cards WHERE name LIKE 'Fable%'");
+    expect(card.oracle_text).toContain('//');
+  });
+
+  it('records an alias for each face name', async () => {
+    await post('/cards/add', { list: FABLE }, stubScryfall());
+    const rows = await sql(
+      "SELECT canonical_name FROM aliases WHERE alias_norm = 'reflection of kiki-jiki'",
+    );
+    expect(rows[0].canonical_name).toBe('Fable of the Mirror-Breaker // Reflection of Kiki-Jiki');
+  });
+
+  it('resolves a card asked for by its full two-faced name', async () => {
+    // Scryfall's collection endpoint will not take "A // B"; only the front
+    // face. The database stores the full name, so this has to keep working.
+    const r = await post('/cards/add', {
+      list: '1 Fable of the Mirror-Breaker // Reflection of Kiki-Jiki',
+    }, stubScryfall());
+    expect(r.body.failed).toBe(0);
+    expect(r.body.applied).toBe(true);
+  });
+});
+
+describe('POST /cards/add — rulings', () => {
+  it('fetches rulings inline for a genuinely new oracle card', async () => {
+    const stub = stubScryfall();
+    await post('/cards/add', { list: FABLE }, stub);
+    const [card] = await sql("SELECT oracle_id FROM cards WHERE name LIKE 'Fable%'");
+    expect(await count('rulings', 'oracle_id = ?', card.oracle_id)).toBeGreaterThan(0);
+    expect(stub.calls.rulings).toBe(1);
+  });
+
+  it('does not refetch rulings for an oracle card already covered', async () => {
+    await post('/cards/add', { list: FABLE }, stubScryfall());
+    const stub = stubScryfall();
+    await post('/cards/add', { list: '1 Fable of the Mirror-Breaker' }, stub);
+    expect(stub.calls.rulings).toBe(0);
+  });
+});
+
+describe('POST /cards/add — dry run', () => {
+  it('reports the plan and writes absolutely nothing', async () => {
+    const before = await snapshot();
+    const r = await post('/cards/add', { list: `4 Lightning Bolt (2X2) 117`, dry_run: true }, stubScryfall());
+
+    expect(r.body.applied).toBe(false);
+    expect(r.body.dry_run).toBe(true);
+    expect(r.body.changes).toEqual([['Lightning Bolt', '2X2', '117', 'nonfoil', 0, 4]]);
+    expect(await snapshot()).toEqual(before);
+  });
+
+  it('a dry run over an existing stack shows the real before value', async () => {
+    await post('/cards/add', { list: '2 Lightning Bolt (2X2) 117' }, stubScryfall());
+    const r = await post('/cards/add', { list: '1 Lightning Bolt (2X2) 117', dry_run: true }, stubScryfall());
+    expect(r.body.changes[0][4]).toBe(2);
+    expect(r.body.changes[0][5]).toBe(3);
+  });
+});
+
+describe('POST /cards/add — failures', () => {
+  it('applies the good lines and reports the bad ones', async () => {
+    const r = await post('/cards/add', {
+      list: [
+        '1 Lightning Bolt (2X2) 117',
+        '1 Yavimaya, Cradle of Growth (M3C) 409',
+        '1 Not A Real Card At All',
+        '1 Misty Rainforest (MH2) 250',
+      ].join('\n'),
+    }, stubScryfall());
+
+    expect(r.body.applied).toBe(true);
+    expect(r.body.resolved).toBe(3);
+    expect(r.body.failed).toBe(1);
+    expect(r.body.errors[0]).toMatch(/Not A Real Card/);
+    expect(await count('cards', "owner='matt' AND name_norm='lightning bolt'")).toBe(1);
+  });
+
+  it('a Scryfall outage leaves the database untouched', async () => {
+    const before = await snapshot();
+    const r = await post('/cards/add', { list: BOLT }, stubScryfall({ fail: true }));
+    expect(r.status).toBe(502);
+    expect(r.body.applied).toBe(false);
+    expect(await snapshot()).toEqual(before);
+  });
+
+  it('a Scryfall 500 leaves the database untouched', async () => {
+    const before = await snapshot();
+    const r = await post('/cards/add', { list: BOLT }, stubScryfall({ status: 500 }));
+    expect(r.status).toBe(502);
+    expect(await snapshot()).toEqual(before);
+  });
+
+  it('an empty list is a 400', async () => {
+    const r = await post('/cards/add', { list: '' }, stubScryfall());
+    expect(r.status).toBe(400);
+  });
+
+  it('refuses a finish the printing was never sold in', async () => {
+    // Sol Ring in the recorded FRC printing is nonfoil only.
+    const r = await post('/cards/add', { list: '1 Sol Ring foil' }, stubScryfall());
+    expect(r.body.failed).toBe(1);
+    expect(r.body.errors[0]).toMatch(/no foil printing/);
+  });
+});
+
+describe('POST /cards/add — owners', () => {
+  it("adding for kayla does not touch matt's collection", async () => {
+    const mattBefore = await count('cards', "owner = 'matt'");
+    await post('/cards/add', { owner: 'kayla', list: BOLT }, stubScryfall());
+
+    expect(await count('cards', "owner = 'matt'")).toBe(mattBefore);
+    const rows = await sql("SELECT owner, qty FROM cards WHERE name_norm = 'lightning bolt'");
+    expect(rows).toEqual([{ owner: 'kayla', qty: 1 }]);
+  });
+
+  it('the same printing can be owned by both people independently', async () => {
+    await post('/cards/add', { owner: 'matt', list: '2 Lightning Bolt (2X2) 117' }, stubScryfall());
+    await post('/cards/add', { owner: 'kayla', list: '3 Lightning Bolt (2X2) 117' }, stubScryfall());
+    const rows = await sql("SELECT owner, qty FROM cards WHERE name_norm='lightning bolt' ORDER BY owner");
+    expect(rows).toEqual([{ owner: 'kayla', qty: 3 }, { owner: 'matt', qty: 2 }]);
+  });
+
+  it('owner is lowercased', async () => {
+    await post('/cards/add', { owner: 'MATT', list: BOLT }, stubScryfall());
+    expect(await count('cards', "owner = 'matt' AND name_norm = 'lightning bolt'")).toBe(1);
+  });
+});
+
+describe('POST /cards/add — batching', () => {
+  it('splits more than 75 identifiers across multiple Scryfall calls', async () => {
+    const stub = stubScryfall();
+    // 80 distinct lines; most will not resolve against the stub, which is
+    // fine — the assertion is about how many calls went out.
+    const list = Array.from({ length: 80 }, (_, i) => `1 Filler Card ${i}`).join('\n');
+    await post('/cards/add', { list }, stub);
+    expect(stub.calls.collection).toBe(2);
+    expect(stub.calls.identifiers).toHaveLength(80);
+  });
+
+  it('refuses an absurdly long list outright', async () => {
+    const list = Array.from({ length: 1001 }, (_, i) => `1 Card ${i}`).join('\n');
+    const r = await post('/cards/add', { list }, stubScryfall());
+    expect(r.status).toBe(400);
+    expect(r.body.error).toMatch(/too many lines/);
+  });
+});
+
+describe('POST /cards/add — Scryfall rate limiting', () => {
+  it('issues Scryfall calls one at a time, never overlapping', async () => {
+    // The bug this guards: rulings were fetched with Promise.all, which fires
+    // every request at once and earned a live 429 on the first real add.
+    // Workers freeze Date.now() between I/O, so wall-clock gaps are not
+    // measurable here — but overlap is, and serialization is the property
+    // that actually keeps us under Scryfall's 10-per-second limit.
+    const stub = stubScryfall();
+    let inFlight = 0;
+    let maxInFlight = 0;
+
+    const wrapped = async (url, init) => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      try {
+        await new Promise((r) => setTimeout(r, 5)); // hold the slot open
+        return await stub(url, init);
+      } finally {
+        inFlight -= 1;
+      }
+    };
+
+    // Two cards with different oracle ids, so two separate rulings lookups.
+    const r = await post('/cards/add', {
+      list: '1 Fable of the Mirror-Breaker\n1 Lightning Bolt (2X2) 117',
+    }, wrapped);
+
+    expect(r.body.applied).toBe(true);
+    expect(stub.calls.rulings).toBe(2);
+    expect(maxInFlight, 'Scryfall calls overlapped').toBe(1);
+  });
+
+  it('stops after the first rulings failure rather than hammering', async () => {
+    let calls = 0;
+    const stub = stubScryfall();
+    const flaky = async (url, init) => {
+      if (String(url).includes('/rulings')) {
+        calls += 1;
+        throw new Error('rate limited');
+      }
+      return stub(url, init);
+    };
+
+    const r = await post('/cards/add', { list: '1 Fable of the Mirror-Breaker' }, flaky);
+
+    // The card still lands; only its rulings are deferred.
+    expect(r.body.applied).toBe(true);
+    expect(calls).toBe(1);
+    expect(r.body.errors.join(' ')).toMatch(/rulings unavailable/);
+    expect(await count('cards', "name LIKE 'Fable%'")).toBe(1);
+  });
+});
