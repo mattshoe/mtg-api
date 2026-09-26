@@ -10,7 +10,7 @@ https://mtg-api.mattshoe81.workers.dev
 Plus a web frontend at **https://mattshoe.github.io/mtg-api/** — search, decks,
 add and remove cards, stats, and a SQL console.
 
-No auth. It is a card database.
+Reading is open. **Anything that writes needs admin mode** — see below.
 
 Before this, the collection was five SQLite files in a Google Drive folder, and
 every write went through a file queue — a write round trip averaged 90 seconds
@@ -73,10 +73,38 @@ A bare `SELECT` with no `LIMIT` of its own is capped, and the response says
 `"truncated": <limit>` when it hit the cap. Errors come back as
 `{"error":"..."}` with a 400 and the real SQLite message.
 
+### `POST /admin`
+
+Password in, token out. The token is a signed expiry (`<unix>.<hmac>`), good
+for 12 hours, not stored anywhere on the server.
+
+```bash
+curl -X POST https://mtg-api.mattshoe81.workers.dev/admin \
+  -H 'content-type: application/json' -d '{"password":"..."}'
+```
+
+```json
+{"ok":true,"token":"1790487821.vazqY21…","expires_at":1790487821}
+```
+
+Send it back as `Authorization: Bearer <token>` on anything that writes. Without
+it those endpoints answer `401 {"error":"admin mode required","admin_required":true}`.
+
+**What needs it:** `/cards/add` and `/cards/remove` (dry runs included), and any
+`POST /query` whose statement is not read-only. **What does not:** `/schema`,
+`GET /query`, and a read-only `POST /query`.
+
+The password is a Worker secret (`wrangler secret put ADMIN_PASSWORD`), never in
+the repo. Rotating it invalidates every outstanding token, because the password
+is the HMAC key.
+
+This stops a stray curl, a bookmarked tab left open, and an agent that wandered
+off its instructions. It is not protection from someone who has the password.
+
 ### `POST /cards/add` and `POST /cards/remove`
 
 The only endpoints that need more than SQL, because adding a card means asking
-Scryfall what the card is.
+Scryfall what the card is. Both need an admin token.
 
 ```bash
 curl -X POST https://mtg-api.mattshoe81.workers.dev/cards/add \
@@ -171,15 +199,21 @@ API.
 | Stats | curve, colours, types, rarity, biggest sets, most unassigned copies |
 | Console | arbitrary SQL with a schema browser, snippets, history and CSV export |
 
+Admin mode is the padlock in the top bar, or `l`. It lives in a JavaScript
+variable and nowhere else — not `localStorage`, not `sessionStorage`, not the
+URL — so closing or reloading the tab ends it. While it is off, Add and Remove
+show a lock screen, the drawer's ±1 buttons are replaced by an unlock button,
+and the console runs reads but prompts before a write.
+
 Keyboard: `s` `d` `a` `r` `g` `c` jump between views, `/` or `⌘K` finds a card,
-`t` toggles the theme, `esc` closes. Searches are shareable — the filters live
+`l` locks or unlocks, `t` toggles the theme, `esc` closes. Searches are shareable — the filters live
 in the URL — and can be saved by name.
 
 ## Development
 
 ```bash
 npm install
-npm test          # 158 tests against a real local D1 in workerd
+npm test          # 179 tests against a real local D1 in workerd
 npm run dev       # local server
 npm run deploy
 ```
@@ -199,7 +233,12 @@ src/scryfall.js   Scryfall client, rate-limited
 schema.sql        the whole schema
 ```
 
-`CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` come from `~/.mtg-api.env`.
+`CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` and `MTG_ADMIN_PASSWORD` come
+from `~/.mtg-api.env`. The Worker's own copy of the password is a secret:
+
+```bash
+printf 'newpassword' | npx wrangler secret put ADMIN_PASSWORD
+```
 
 ## Scripts
 
@@ -207,7 +246,7 @@ schema.sql        the whole schema
 |---|---|
 | `scripts/backup.py` | dump the live database to a local `.sql.gz`, and prove it restores |
 | `scripts/nightly.sh` | backup + tag backfill, run by launchd at 03:00 |
-| `scripts/backfill.py` | tags from the local Scryfall index |
+| `scripts/backfill.py` | tags from the local Scryfall index (writes, so it unlocks first) |
 | `scripts/verify.py` | compare the API against the old shards, table by table |
 | `scripts/seed.py` | one-time: the five old shards -> `data.sql` |
 | `scripts/make_fixture.py` | regenerate the test fixture |

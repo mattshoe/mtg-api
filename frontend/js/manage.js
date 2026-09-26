@@ -5,6 +5,7 @@
 
 import * as api from './api.js';
 import { h, $, fill, num, toast, store, errorBox } from './util.js';
+import { isAdmin, lockedPanel, onAdminChange } from './admin.js';
 
 const HISTORY_KEY = 'history';
 const MAX_HISTORY = 30;
@@ -94,6 +95,16 @@ function render(mode) {
   currentMode = mode;
   const isAdd = mode === 'add';
   const root = $('#view');
+
+  // The server refuses these without a token anyway; this is so the page
+  // says why up front instead of failing after you have typed a decklist.
+  if (!isAdmin()) {
+    fill(root, h('div.wrap',
+      h('div.page-head',
+        h('h1', isAdd ? 'Add cards' : 'Remove cards')),
+      lockedPanel(isAdd ? 'add cards' : 'remove cards', () => render(mode))));
+    return;
+  }
 
   const owner = store.get('owner', 'matt');
   const out = h('div');
@@ -207,6 +218,12 @@ function render(mode) {
   applyBtn.disabled = false;
   listInput.focus();
 }
+
+// Locking from the topbar while sitting on one of these views should put
+// the lock screen up immediately, not wait for a navigation.
+onAdminChange(() => {
+  if (document.querySelector('#view')?.dataset.view === currentMode) render(currentMode);
+});
 
 export function show(mode) {
   render(mode === 'remove' ? 'remove' : 'add');

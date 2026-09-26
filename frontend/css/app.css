@@ -113,6 +113,10 @@ h3 { font-size: 14px; }
 }
 .tabs a:hover { background: var(--bg-3); color: var(--text); text-decoration: none; }
 .tabs a.on { background: var(--accent-dim); color: var(--accent-2); }
+/* Edit views while admin mode is off. Still reachable — the view itself
+   explains what is needed — but visibly not currently usable. */
+.tabs a.gated { opacity: .55; }
+.tabs a.gated::after { content: " \1F512"; font-size: 9px; }
 
 .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
 

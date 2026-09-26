@@ -1,12 +1,14 @@
 // SQL console — the escape hatch for anything the UI does not cover.
 //
-// It posts, so it can write. That is deliberate: this is a private card
-// database and the point of the console is to not be fenced in.
+// Reads run for anyone. A statement that writes needs admin mode, the same
+// as everywhere else; the server enforces it and this just asks first so
+// the error is a prompt rather than a 401.
 
 import * as api from './api.js';
 import {
   h, $, fill, num, download, toCsv, toast, store, errorBox, loading,
 } from './util.js';
+import { isAdmin, promptUnlock } from './admin.js';
 
 const HISTORY_KEY = 'sql-history';
 
@@ -43,9 +45,26 @@ function resultTable(res) {
       }, v === null ? h('span.muted', 'NULL') : String(v))))))));
 }
 
+/**
+ * A rough read of whether a statement writes, only to decide whether to
+ * prompt. The server makes the real decision.
+ */
+function looksLikeWrite(sql) {
+  const bare = sql
+    .replace(/'(?:[^']|'')*'/g, ' ')
+    .replace(/--[^\n]*/g, ' ')
+    .replace(/\/\*[\s\S]*?\*\//g, ' ');
+  return /\b(insert|update|delete|drop|create|alter|replace|attach|detach|reindex|vacuum)\b/i.test(bare);
+}
+
 async function run() {
   const sql = editor.value.trim();
   if (!sql) return;
+
+  if (looksLikeWrite(sql) && !isAdmin()) {
+    promptUnlock(run);
+    return;
+  }
   fill(outEl, h('div.panel', h('div.panel-body', h('span.spinner'), ' Running…')));
   const t0 = performance.now();
   try {
@@ -73,7 +92,12 @@ async function run() {
         }, 'Copy JSON') : null),
       resultTable(res)));
   } catch (e) {
-    fill(outEl, h('div.panel', h('div.panel-body', errorBox(e))));
+    fill(outEl, h('div.panel', h('div.panel-body',
+      errorBox(e),
+      e.adminRequired
+        ? h('div', { style: { marginTop: '10px' } },
+          h('button.btn.sm.primary', { onclick: () => promptUnlock(run) }, 'Unlock and retry'))
+        : null)));
   }
 }
 
@@ -147,7 +171,7 @@ export async function show() {
           h('div.panel-head',
             h('h2', 'Query'),
             h('span.spacer'),
-            h('span.muted.small', '⌘/Ctrl ↵ to run')),
+            h('span.muted.small', isAdmin() ? 'admin on · ⌘/Ctrl ↵ to run' : 'reads only · ⌘/Ctrl ↵ to run')),
           h('div.panel-body',
             editor,
             h('div.flex-wrap', { style: { marginTop: '10px' } },

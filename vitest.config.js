@@ -12,6 +12,9 @@ export default defineWorkersConfig({
         wrangler: { configPath: './wrangler.toml' },
         miniflare: {
           compatibilityFlags: ['nodejs_compat'],
+          // The real password is a Worker secret. Tests get their own, so
+          // the suite never depends on production config.
+          bindings: { ADMIN_PASSWORD: 'test-password' },
         },
       },
     },

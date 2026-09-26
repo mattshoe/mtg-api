@@ -21,6 +21,12 @@ mkdir -p "$BACKUPS"
 exec >> "$LOG" 2>&1
 echo "=== $(date '+%Y-%m-%d %H:%M:%S') ==="
 
+# backfill.py writes, so it needs the admin password. backup.py is
+# read-only and does not.
+if [ -f "$HOME/.mtg-api.env" ]; then
+  set -a; . "$HOME/.mtg-api.env"; set +a
+fi
+
 STAMP=$(date '+%Y%m%d')
 OUT="$BACKUPS/mtg-$STAMP.sql.gz"
 

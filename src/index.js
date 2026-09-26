@@ -6,12 +6,14 @@
 //   POST /query       arbitrary SQL, compact JSON out
 //   POST /cards/add   a decklist in, Scryfall-enriched rows out
 //   POST /cards/remove
+//   POST /admin       password in, admin token out
 //
-// No auth. It is a card database.
+// Reading is open. Anything that writes needs an admin token — see admin.js.
 
 import { getSchema } from './schema.js';
-import { runQuery } from './query.js';
+import { runQuery, isReadOnly } from './query.js';
 import { addCards, removeCards } from './cards.js';
+import { mintToken, verifyToken, bearer } from './admin.js';
 
 const JSON_HEADERS = {
   'content-type': 'application/json; charset=utf-8',
@@ -61,8 +63,13 @@ const INDEX = {
     'POST /query': '{"sql":"SELECT ...","params":[],"fmt":"rows|objects|tsv","limit":5000}',
     'POST /cards/add': '{"owner":"matt","list":"4 Lightning Bolt (2X2) 117","dry_run":false}',
     'POST /cards/remove': '{"owner":"matt","list":"1 Sol Ring","dry_run":false}',
+    'POST /admin': '{"password":"..."} -> {"token":"...","expires_at":<unix>}',
   },
+  auth: 'Reads are open. Writes need Authorization: Bearer <token> from POST /admin.',
 };
+
+/** 401 with the reason, in the shape every other error uses. */
+const denied = (reason) => json({ error: reason, admin_required: true }, 401);
 
 export default {
   async fetch(request, env) {
@@ -76,7 +83,7 @@ export default {
         headers: {
           'access-control-allow-origin': '*',
           'access-control-allow-methods': 'GET, POST, OPTIONS',
-          'access-control-allow-headers': 'content-type',
+          'access-control-allow-headers': 'content-type, authorization',
         },
       });
     }
@@ -87,6 +94,16 @@ export default {
       if (path === '/schema') {
         if (method !== 'GET') return json({ error: 'use GET' }, 405);
         return json(await getSchema(env.DB));
+      }
+
+      if (path === '/admin') {
+        if (method !== 'POST') return json({ error: 'use POST' }, 405);
+        const { body, error } = await readJson(request);
+        if (error) return json({ error }, 400);
+        const issued = await mintToken(env, body.password);
+        // Same shape and timing whether or not the password was close.
+        if (!issued) return json({ error: 'wrong password' }, 401);
+        return json({ ok: true, ...issued });
       }
 
       if (path === '/query') {
@@ -108,11 +125,20 @@ export default {
         if (method !== 'POST') return json({ error: 'use GET or POST' }, 405);
         const { body, error } = await readJson(request);
         if (error) return json({ error }, 400);
+        // A SELECT needs nothing. Anything that could change a row does.
+        if (typeof body.sql === 'string' && !isReadOnly(body.sql)) {
+          const v = await verifyToken(env, bearer(request));
+          if (!v.ok) return denied(v.reason);
+        }
         return send(await runQuery(env.DB, body));
       }
 
       if (path === '/cards/add' || path === '/cards/remove') {
         if (method !== 'POST') return json({ error: 'use POST' }, 405);
+        // Gated whole, dry runs included: a preview is part of editing, and
+        // one rule is easier to trust than a carve-out.
+        const v = await verifyToken(env, bearer(request));
+        if (!v.ok) return denied(v.reason);
         const { body, error } = await readJson(request);
         if (error) return json({ error }, 400);
         const r = path === '/cards/add'

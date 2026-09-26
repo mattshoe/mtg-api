@@ -2,6 +2,10 @@
 
 import * as api from './api.js';
 import { h, $, $$, fill, store, debounce, imageUrl, toast } from './util.js';
+import {
+  adminButton, isAdmin, onAdminChange, promptUnlock, lock,
+  authHeader, rejected,
+} from './admin.js';
 import { openCard, closeCard } from './card.js';
 import * as search from './search.js';
 import * as decks from './decks.js';
@@ -24,6 +28,10 @@ function toggleTheme() {
 }
 
 applyTheme(store.get('theme', 'auto'));
+
+// Hand the API client the auth hooks. Done here rather than by importing
+// admin.js from api.js, so the dependency runs one way only.
+api.useAuth(authHeader, rejected);
 
 // ------------------------------------------------------------ status light
 
@@ -186,15 +194,30 @@ addEventListener('keydown', (e) => {
   const go = { s: '#/search', d: '#/decks', a: '#/add', r: '#/remove', g: '#/stats', c: '#/console' }[e.key];
   if (go) { location.hash = go; return; }
   if (e.key === 't') toggleTheme();
+  if (e.key === 'l') (isAdmin() ? lock() : promptUnlock());
   if (e.key === '/') { e.preventDefault(); openPalette(); }
   if (e.key === '?') {
-    toast('s search · d decks · a add · r remove · g stats · c console · t theme · / or ⌘K find · esc close');
+    toast('s search · d decks · a add · r remove · g stats · c console · l lock/unlock · t theme · / or ⌘K find · esc close');
   }
 });
 
 // ----------------------------------------------------------------- wiring
 
+$('.topbar-right').prepend(adminButton());
 $('#theme-btn').addEventListener('click', toggleTheme);
+
+// Mark the edit tabs while locked, so the padlock is visible before you
+// click into a view that cannot do anything.
+function paintTabs() {
+  const on = isAdmin();
+  for (const a of $$('#tabs a')) {
+    const gated = a.dataset.view === 'add' || a.dataset.view === 'remove';
+    a.classList.toggle('gated', gated && !on);
+    a.title = gated && !on ? 'Needs admin mode' : '';
+  }
+}
+onAdminChange(paintTabs);
+paintTabs();
 $('#nav-toggle').addEventListener('click', () => {
   const open = $('#tabs').classList.toggle('open');
   $('#nav-toggle').setAttribute('aria-expanded', String(open));

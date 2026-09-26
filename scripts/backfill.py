@@ -24,6 +24,28 @@ API = os.environ.get("MTG_API", "https://mtg-api.mattshoe81.workers.dev")
 CACHE = Path.home() / "Library/Caches/mtg-scryfall"
 BATCH = 400   # rows per INSERT; D1 rejects an oversized statement
 
+# This script writes, so it needs an admin token. The password lives in
+# ~/.mtg-api.env alongside the Cloudflare credentials, never in the repo.
+_token = [None]
+
+
+def admin_token(api):
+    if _token[0]:
+        return _token[0]
+    pw = os.environ.get("MTG_ADMIN_PASSWORD")
+    if not pw:
+        sys.exit("MTG_ADMIN_PASSWORD is not set - add it to ~/.mtg-api.env")
+    req = urllib.request.Request(
+        f"{api}/admin", data=json.dumps({"password": pw}).encode(),
+        headers={"Content-Type": "application/json",
+                 "User-Agent": "mtg-api-scripts/1.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            _token[0] = json.load(r)["token"]
+    except urllib.error.HTTPError as e:
+        sys.exit(f"admin unlock failed ({e.code}) - is MTG_ADMIN_PASSWORD right?")
+    return _token[0]
+
 
 def query(api, sql, params=None, fmt="rows"):
     body = json.dumps({"sql": sql, "params": params or [], "fmt": fmt}).encode()
@@ -32,7 +54,8 @@ def query(api, sql, params=None, fmt="rows"):
         # Cloudflare's bot protection answers urllib's default User-Agent
         # with a 403 (error 1010), so say who we are.
         headers={"Content-Type": "application/json",
-                 "User-Agent": "mtg-api-scripts/1.0"})
+                 "User-Agent": "mtg-api-scripts/1.0",
+                 "Authorization": f"Bearer {admin_token(api)}"})
     try:
         with urllib.request.urlopen(req, timeout=120) as r:
             return json.load(r)

@@ -5,6 +5,7 @@ import {
   h, $, fill, num, imageUrl, hasBackFace, manaCost, identity,
   loading, errorBox, toast,
 } from './util.js';
+import { isAdmin, promptUnlock } from './admin.js';
 
 let onClose = null;
 let current = null;
@@ -115,8 +116,13 @@ function view({ card, faces, printings, decks, tags, keywords, legalities, rulin
     imageBlock(card),
 
     h('div.flex-wrap', { style: { justifyContent: 'center', marginBottom: '14px' } },
-      h('button.btn.sm', { onclick: () => adjust(card, +1), title: 'Add one of this printing' }, '＋ Add one'),
-      h('button.btn.sm.danger', { onclick: () => adjust(card, -1), title: 'Remove one of this printing' }, '− Remove one')),
+      isAdmin()
+        ? [h('button.btn.sm', { onclick: () => adjust(card, +1), title: 'Add one of this printing' }, '＋ Add one'),
+          h('button.btn.sm.danger', { onclick: () => adjust(card, -1), title: 'Remove one of this printing' }, '− Remove one')]
+        : h('button.btn.sm.ghost', {
+          title: 'Adding and removing need admin mode',
+          onclick: () => promptUnlock(() => openCard(card.id, onClose)),
+        }, '🔒 Unlock to edit')),
 
     h('dl.kv',
       h('dt', 'Owner'), h('dd', card.owner),

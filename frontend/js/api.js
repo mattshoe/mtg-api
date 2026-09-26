@@ -8,6 +8,15 @@ export const API = 'https://mtg-api.mattshoe81.workers.dev';
 const listeners = new Set();
 let inFlight = 0;
 
+// Set by admin.js once it loads. Kept as a hook rather than a direct import
+// so api.js stays the lower layer of the two and there is no cycle.
+let authHeader = () => ({});
+let onUnauthorized = () => {};
+export function useAuth(headerFn, rejectedFn) {
+  authHeader = headerFn;
+  onUnauthorized = rejectedFn;
+}
+
 /** Subscribe to connection state: 'idle' | 'busy' | 'ok' | 'bad'. */
 export function onStatus(fn) {
   listeners.add(fn);
@@ -33,6 +42,10 @@ async function call(path, init) {
     if (!res.ok || (body && body.error)) {
       const err = new Error(body?.error || `HTTP ${res.status}`);
       err.status = res.status;
+      err.adminRequired = Boolean(body?.admin_required);
+      // The token expired or the Worker's password changed. Drop admin mode
+      // so the UI stops offering actions it can no longer perform.
+      if (res.status === 401) onUnauthorized();
       throw err;
     }
     emit('ok');
@@ -53,7 +66,7 @@ async function call(path, init) {
 
 const post = (path, body) => call(path, {
   method: 'POST',
-  headers: { 'content-type': 'application/json' },
+  headers: { 'content-type': 'application/json', ...authHeader() },
   body: JSON.stringify(body),
 });
 
