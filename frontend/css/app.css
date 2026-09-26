@@ -255,9 +255,6 @@ th {
   border-bottom: 1px solid var(--line); background: var(--bg-3);
   position: sticky; top: 0; white-space: nowrap;
 }
-th.sortable { cursor: pointer; user-select: none; }
-th.sortable:hover { color: var(--text); }
-th .arrow { color: var(--accent); }
 td { padding: 7px 11px; border-bottom: 1px solid var(--line); vertical-align: middle; }
 tbody tr:hover { background: var(--bg-3); }
 tbody tr.clickable { cursor: pointer; }
@@ -460,6 +457,21 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
 /* pagination */
 .pager { display: flex; align-items: center; gap: 8px; justify-content: center; padding: 18px 0; }
 .pager .info { color: var(--text-2); font-size: 13px; font-variant-numeric: tabular-nums; }
+
+/* little drop-up/down attached to a button */
+.menu-wrap { position: relative; display: inline-block; }
+.menu-wrap .menu {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 40;
+  min-width: 178px; padding: 5px;
+  background: var(--bg-2); border: 1px solid var(--line-2);
+  border-radius: var(--radius); box-shadow: 0 10px 28px rgba(0, 0, 0, .45);
+  display: flex; flex-direction: column; gap: 2px;
+}
+.menu-wrap .menu button {
+  text-align: left; padding: 8px 10px; border: none; border-radius: var(--radius-sm);
+  background: none; color: var(--text); font: inherit; font-size: 13px; cursor: pointer;
+}
+.menu-wrap .menu button:hover { background: var(--bg-3); color: var(--accent-2); }
 
 /* add/remove wizard */
 .steps { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }

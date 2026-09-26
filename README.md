@@ -259,7 +259,7 @@ API.
 
 | view | what it does |
 |---|---|
-| Search | every column in the database, as facets or as a query language — see below; prices shown on every card and sortable |
+| Search | every column in the database, as facets or as a query language — see below; a grid of cards, 100 a page, one row per card rather than per printing |
 | Card | full detail in a drawer — every printing owned, decks it is in, tags, legalities, rulings, and ±1 buttons |
 | Decks | all 32 decks, each with its list, curve, notes and gaps; plus a gaps-and-conflicts overview |
 | Add / Remove | three steps: list, whose collection, then a dry run you have to approve |
@@ -317,10 +317,15 @@ colours, set type, frame, border, release year, collector number, availability
 any/yes/no, format legality, has-rulings, copies owned, free copies, EDHREC
 rank, and which deck a card is in (or no deck at all).
 
-**Prices** appear on every card tile, as a column in table view, and per
-printing in the card drawer alongside the value of that whole stack and a
-TCGplayer link. The page header shows what the visible cards are worth, and
-Stats carries the collection total.
+**Prices** appear on every card tile and per printing in the card drawer,
+alongside the value of that whole stack and a TCGplayer link. Stats carries
+the collection total.
+
+**Export** takes the whole filtered set, not the page you can see, as a
+decklist — saved as a `.txt` or straight to the clipboard, capped at 5,000
+cards. Lines are `3 Sol Ring`, with no set code: a row is a card summed
+over every printing of it you own, so pinning it to one printing would be
+a lie.
 
 They live in their own `prices` table keyed by printing, not as columns on
 `cards`, so the daily job can rebuild them without touching the collection.

@@ -8,16 +8,15 @@
 import * as api from './api.js';
 import {
   h, $, fill, num, debounce, imageUrl, manaCost, COLORS,
-  RARITY_ORDER, download, toCsv, toast, store, loading, errorBox, empty,
+  RARITY_ORDER, download, toast, store, loading, errorBox, empty,
 } from './util.js';
 import { openCard } from './card.js';
 import {
-  DEFAULTS, SORTS, COLOR_MODES, FLAGS, buildQuery, toHash, fromHash, activeCount,
+  DEFAULTS, PAGE_SIZE, SORTS, COLOR_MODES, FLAGS, buildQuery, toHash, fromHash, activeCount,
 } from './filters.js';
 import { cheatsheet } from './cheatsheet.js';
 import { money, exact, priceOrReason, priceReason } from './prices.js';
 
-const PAGE_SIZES = [24, 48, 96, 200];
 
 let state = { ...DEFAULTS };
 let lastRun = null;
@@ -410,7 +409,7 @@ function activeChips() {
       title: 'Remove this filter', onclick: onDrop,
     }, text2, ' ×'))),
     h('button.btn.sm.ghost', {
-      onclick: () => push({ ...DEFAULTS, owner: state.owner, view: state.view, size: state.size }),
+      onclick: () => push({ ...DEFAULTS, owner: state.owner }),
     }, 'Clear all'));
 }
 
@@ -437,39 +436,8 @@ function cardTile(c) {
       h('span', { style: { marginLeft: 'auto' } }, (c.setcode || '').toUpperCase()))));
 }
 
-function resultsTable(list) {
-  const th = (key, text2, cls = '') => h(`th.sortable${cls}`, {
-    onclick: () => push({ sort: key, dir: state.sort === key && state.dir === 'asc' ? 'desc' : 'asc' }),
-  }, text2, state.sort === key ? h('span.arrow', state.dir === 'asc' ? ' ↑' : ' ↓') : null);
-
-  return h('div.table-wrap', h('table',
-    h('thead', h('tr',
-      th('name', 'Name'), h('th', 'Cost'), th('cmc', 'MV', '.num'),
-      h('th', 'Type'), th('power', 'P/T', '.num'), th('rarity', 'Rarity'),
-      th('set', 'Set'), th('artist', 'Artist'),
-      th('qty', 'Qty', '.num'), th('free', 'Free', '.num'),
-      th('price', 'Price', '.num'), th('value', 'Value', '.num'),
-      th('edhrec', 'EDHREC', '.num'))),
-    h('tbody', list.map((c) => h('tr.clickable', { onclick: () => openCard(c.id) },
-      h('td.t-name', c.name, c.printings > 1 ? h('span.muted.small', ` ×${c.printings}`) : null),
-      h('td', manaCost(c.mana_cost)),
-      h('td.num', c.cmc ?? '—'),
-      h('td.small', c.type_line || '—'),
-      h('td.num.small', c.power !== null ? `${c.power}/${c.toughness}` : '—'),
-      h('td', h('span.tag', c.rarity || '—')),
-      h('td.mono', (c.setcode || '').toUpperCase(), ' ', h('span.muted', c.collector_number || '')),
-      h('td.small.muted', c.artist || '—'),
-      h('td.num', c.qty),
-      h('td.num', c.free ?? 0),
-      h('td.num', c.price === null
-        ? h('span.muted.small', { title: 'Scryfall has no price for this printing' }, priceReason(c))
-        : exact(c.price)),
-      h('td.num', exact(c.value)),
-      h('td.num.muted', c.edhrec_rank ? num(c.edhrec_rank) : '—'))))));
-}
-
 function pager(total) {
-  const pages = Math.max(1, Math.ceil(total / state.size));
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   if (pages <= 1 && state.page === 1) return null;
   const go = (n) => push({ page: Math.min(pages, Math.max(1, n)) }, { resetPage: false });
   return h('div.pager',
@@ -484,40 +452,83 @@ function resultsHead(total) {
   return h('div.panel-head.results-head',
     h('h2', `${num(total)} ${total === 1 ? 'card' : 'cards'}`),
     h('span.spacer'),
-    h('div.seg',
-      h('button', { class: state.view === 'grid' ? 'on' : '', onclick: () => push({ view: 'grid' }, { resetPage: false }) }, 'Grid'),
-      h('button', { class: state.view === 'table' ? 'on' : '', onclick: () => push({ view: 'table' }, { resetPage: false }) }, 'Table')),
     h('select', { style: { width: 'auto' }, value: state.sort, onchange: setter('sort') },
       Object.entries(SORTS).map(([k, [text2]]) => h('option', { value: k, selected: state.sort === k }, text2))),
     h('button.btn.sm', {
       title: 'Reverse order',
       onclick: () => push({ dir: state.dir === 'asc' ? 'desc' : 'asc' }, { resetPage: false }),
     }, state.dir === 'asc' ? '↑' : '↓'),
-    h('button.btn.sm', { onclick: () => push({ group: !state.group }) }, state.group ? 'Ungroup' : 'Group'),
-    h('select', { style: { width: 'auto' }, value: String(state.size), onchange: (e) => push({ size: Number(e.target.value) }) },
-      PAGE_SIZES.map((n) => h('option', { value: n, selected: state.size === n }, `${n} / page`))),
-    h('button.btn.sm', { onclick: () => exportCsv(total) }, 'CSV'));
+    exportMenu(total));
 }
 
-async function exportCsv(total) {
-  const cap = 5000;
-  const { sql, params } = buildQuery({ ...state, page: 1, size: Math.min(total || cap, cap) });
+// ---------------------------------------------------------------- export
+
+const EXPORT_CAP = 5000;
+
+/**
+ * The whole filtered set as a decklist, not just the page you can see.
+ *
+ * No set code or collector number: a row here is a card, summed over every
+ * printing of it you own, so pinning it to one printing would be a lie.
+ * "3 Sol Ring" is what every deckbuilder reads anyway.
+ */
+async function decklist() {
+  const { sql, params } = buildQuery({ ...state, page: 1, size: EXPORT_CAP });
+  const res = await api.query(sql, params, { fmt: 'objects', limit: EXPORT_CAP });
+  const lines = res.rows.map((r) => `${r.qty} ${r.name}`);
+  return { text: lines.join('\n'), n: lines.length };
+}
+
+async function exportFile() {
   try {
-    const res = await api.query(sql, params, { limit: cap });
-    download(`mtg-search-${Date.now()}.csv`, toCsv(res.cols, res.rows), 'text/csv');
-    toast(`Exported ${num(res.n)} rows`, 'ok');
+    const { text, n } = await decklist();
+    download(`mtg-decklist-${new Date().toISOString().slice(0, 10)}.txt`, text);
+    toast(`Saved ${num(n)} card${n === 1 ? '' : 's'}`, 'ok');
   } catch (e) {
     toast(String(e.message), 'bad');
   }
+}
+
+async function exportClipboard() {
+  try {
+    const { text, n } = await decklist();
+    await navigator.clipboard.writeText(text);
+    toast(`Copied ${num(n)} card${n === 1 ? '' : 's'}`, 'ok');
+  } catch (e) {
+    // Clipboard writes need a secure context and a real user gesture; say
+    // so rather than failing silently.
+    toast(e?.name === 'NotAllowedError' ? 'Clipboard blocked by the browser' : String(e.message), 'bad');
+  }
+}
+
+function exportMenu(total) {
+  const menu = h('div.menu', { hidden: true },
+    h('button', { onclick: () => { menu.hidden = true; exportFile(); } }, 'Save as .txt'),
+    h('button', { onclick: () => { menu.hidden = true; exportClipboard(); } }, 'Copy to clipboard'));
+
+  const wrap = h('div.menu-wrap',
+    h('button.btn.sm', {
+      disabled: !total,
+      title: `Export all ${num(total)} as a decklist`,
+      onclick: (e) => {
+        e.stopPropagation();
+        menu.hidden = !menu.hidden;
+        if (!menu.hidden) {
+          const close = () => { menu.hidden = true; document.removeEventListener('click', close); };
+          document.addEventListener('click', close);
+        }
+      },
+    }, 'Export ▾'),
+    menu);
+
+  return wrap;
 }
 
 // ------------------------------------------------------------------ run
 
 function renderResults(rows, total) {
   const body = rows.length
-    ? (state.view === 'grid'
-      ? h('div.panel-body', h('div.grid', rows.map(cardTile)))
-      : resultsTable(rows))
+    ? h('div.panel-body', h('div.grid', rows.map(cardTile)))
     : empty('Nothing matches', 'Loosen a filter, or Clear all.');
   fill(resultsEl, h('div.panel', resultsHead(total), body), pager(total));
 }
@@ -535,7 +546,7 @@ async function run() {
 
   try {
     const [res, total] = await Promise.all([
-      api.query(sql, params, { fmt: 'objects', limit: state.size }),
+      api.query(sql, params, { fmt: 'objects', limit: PAGE_SIZE }),
       api.scalar(countQ.sql, countQ.params),
     ]);
     if (lastRun !== token) return;

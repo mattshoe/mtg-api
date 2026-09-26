@@ -6,6 +6,9 @@
 
 export const COLOR_LETTERS = ['W', 'U', 'B', 'R', 'G'];
 
+/** Fixed. One page size, and the page never shows printings separately. */
+export const PAGE_SIZE = 100;
+
 export const DEFAULTS = {
   // --- who and how many
   owner: 'matt',
@@ -71,7 +74,7 @@ export const DEFAULTS = {
   adv: '',
 
   // --- presentation
-  group: true, view: 'grid', sort: 'name', dir: 'asc', page: 1, size: 48,
+  sort: 'name', dir: 'asc', page: 1,
 };
 
 // Columns are qualified with `c.` because card_usage is joined in as `u`
@@ -608,31 +611,26 @@ export function buildQuery(s, { countOnly = false, advError } = {}) {
   const clause = where.length ? `WHERE ${where.join('\n  AND ')}` : '';
 
   if (countOnly) {
-    const inner = s.group
-      ? `SELECT 1 FROM cards c ${USAGE_JOIN} ${PRICE_JOIN} ${clause} GROUP BY c.owner, c.name_norm`
-      : `SELECT 1 FROM cards c ${USAGE_JOIN} ${PRICE_JOIN} ${clause}`;
+    const inner = `SELECT 1 FROM cards c ${USAGE_JOIN} ${PRICE_JOIN} ${clause} GROUP BY c.owner, c.name_norm`;
     return { sql: `SELECT COUNT(*) FROM (${inner})`, params };
   }
 
   const [, sortCol] = SORTS[s.sort] || SORTS.name;
   const dir = s.dir === 'desc' ? 'DESC' : 'ASC';
   const order = `ORDER BY (${sortCol}) IS NULL, (${sortCol}) ${dir}, c.name_norm ASC`;
-  const offset = (s.page - 1) * s.size;
+  const size = s.size || PAGE_SIZE;
+  const offset = (s.page - 1) * size;
 
-  // MIN(c.id) makes SQLite take the other bare columns from that same row,
-  // which is the representative printing we want to show.
-  const select = s.group
-    ? `SELECT MIN(c.id) AS id, ${SELECT_COLS},
+  // One row per card, never one per printing. MIN(c.id) makes SQLite take
+  // the other bare columns from that same row, which is the representative
+  // printing we show.
+  const select = `SELECT MIN(c.id) AS id, ${SELECT_COLS},
               SUM(c.qty) AS qty, COUNT(*) AS printings, u.free AS free,
               (${PRICE_EXPR}) AS price,
-              ROUND(SUM(c.qty * (${PRICE_EXPR})), 2) AS value`
-    : `SELECT c.id, ${SELECT_COLS},
-              c.qty AS qty, 1 AS printings, u.free AS free,
-              (${PRICE_EXPR}) AS price,
-              ROUND(c.qty * (${PRICE_EXPR}), 2) AS value`;
+              ROUND(SUM(c.qty * (${PRICE_EXPR})), 2) AS value`;
 
   return {
-    sql: `${select}\nFROM cards c\n${USAGE_JOIN}\n${PRICE_JOIN}\n${clause}\n${s.group ? 'GROUP BY c.owner, c.name_norm' : ''}\n${order}\nLIMIT ${s.size} OFFSET ${offset}`,
+    sql: `${select}\nFROM cards c\n${USAGE_JOIN}\n${PRICE_JOIN}\n${clause}\nGROUP BY c.owner, c.name_norm\n${order}\nLIMIT ${size} OFFSET ${offset}`,
     params,
   };
 }
@@ -666,7 +664,7 @@ export function fromHash(queryString) {
 
 /** How many real filters are on, for the "N active" badge and Reset. */
 export function activeCount(s) {
-  const skip = new Set(['page', 'size', 'view', 'sort', 'dir', 'group', 'owner', 'colorMode', 'colorTarget',
+  const skip = new Set(['page', 'sort', 'dir', 'owner', 'colorMode', 'colorTarget',
     'powOp', 'touOp', 'loyOp', 'legality']);
   return Object.keys(DEFAULTS).filter((k) => {
     if (skip.has(k)) return false;
