@@ -408,6 +408,23 @@ pre.out {
 .palette li.on { background: var(--accent-dim); }
 .palette-hint { padding: 8px 16px; border-top: 1px solid var(--line); color: var(--text-3); font-size: 11.5px; }
 
+/* ------------------------------------------------------------ uploader */
+.dropzone {
+  display: flex; align-items: center; gap: 12px;
+  padding: 13px 15px; cursor: pointer;
+  border: 1.5px dashed var(--line-2); border-radius: var(--radius-sm);
+  background: var(--bg); color: var(--text-2);
+  transition: border-color .12s ease, background .12s ease;
+}
+.dropzone:hover { border-color: var(--accent); background: var(--bg-3); }
+.dropzone.over {
+  border-color: var(--accent); background: var(--accent-dim);
+  border-style: solid;
+}
+.dz-icon { font-size: 20px; color: var(--accent); line-height: 1; flex: none; }
+.dz-main { font-size: 13.5px; font-weight: 550; color: var(--text); }
+.dz-sub { font-size: 12px; color: var(--text-3); margin-top: 1px; }
+
 /* ---------------------------------------------------------------- logs */
 .log-stats {
   display: flex; align-items: center; gap: 22px; flex-wrap: wrap;

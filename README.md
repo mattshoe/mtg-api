@@ -7,7 +7,7 @@ and D1.
 https://mtg-api.mattshoe81.workers.dev
 ```
 
-Plus a web frontend at **https://mattshoe.github.io/mtg-api/** — search, decks,
+Plus a web frontend at **https://mtg.mattshoe.org** — search, decks,
 add and remove cards, stats, and a SQL console.
 
 Reading is open. **Anything that writes needs admin mode** — see below.
@@ -169,7 +169,8 @@ curl -X POST https://mtg-api.mattshoe81.workers.dev/cards/add \
 Each `changes` row is `[name, set, collector_number, finish, qty_before, qty_after]`.
 `owner` defaults to `matt`. `dry_run` plans without writing anything.
 
-Accepted list lines — the same shapes the old tooling took:
+`list` takes whatever an exporter actually produces, text or CSV — the
+format is detected rather than declared.
 
 ```
 Sol Ring
@@ -177,9 +178,18 @@ Sol Ring
 4x Sol Ring
 1 Sol Ring (M3C) 409
 1 Sol Ring (M3C) 409 *F*
-1 Sol Ring (M3C) 409 foil
-# comments and blank lines are skipped
+1x Sol Ring (m3c) 409 [Ramp]     Archidekt category, stripped
+SB: 2 Negate                     MTGO board prefix, stripped
+Deck / Sideboard / Commander     section headers, skipped
+# and // are comments
 ```
+
+CSV from ManaBox, Moxfield or Deckbox works as-is — paste the file whole.
+Columns are matched by name rather than position, since every exporter
+orders and spells them differently: quantity/count/qty, name/card name,
+set code/edition/set, collector number/card number, foil/finish. Quoted
+fields with commas in them (`"Alela, Cunning Conqueror"`) parse correctly,
+and a `foil` column reads words or true/false.
 
 Set plus collector number pins an exact printing and wins over the name. A bad
 line does not sink the request: the good ones apply and the rest come back in
@@ -232,8 +242,17 @@ API has no tags until the nightly backfill.
 
 ## Frontend
 
-`frontend/` is a static site on GitHub Pages, deployed by
-`.github/workflows/pages.yml` on every push that touches it. Same stack as the
+`frontend/` is a static site on GitHub Pages at **mtg.mattshoe.org**,
+deployed by `.github/workflows/pages.yml` on every push that touches it. The
+custom domain is a plain CNAME from GoDaddy to `mattshoe.github.io`, the same
+way `boardgames.mattshoe.org` works — `frontend/CNAME` holds the name and
+GitHub issues the certificate.
+
+The API stays on `workers.dev`. A Workers custom domain needs the zone itself
+hosted on Cloudflare, and mattshoe.org is on GoDaddy nameservers; a CNAME from
+there to `*.workers.dev` is refused (error 1014). Moving the zone to
+Cloudflare would allow `mtg-api.mattshoe.org`, and nothing else would have to
+change. Same stack as the
 Worker: plain ES modules, no build step, no framework, no dependencies at all.
 Open `frontend/index.html` through any static server and it talks to the live
 API.
@@ -243,7 +262,7 @@ API.
 | Search | every column in the database, as facets or as a query language — see below; prices shown on every card and sortable |
 | Card | full detail in a drawer — every printing owned, decks it is in, tags, legalities, rulings, and ±1 buttons |
 | Decks | all 32 decks, each with its list, curve, notes and gaps; plus a gaps-and-conflicts overview |
-| Add / Remove | paste a list, preview the real dry run, then apply |
+| Add / Remove | paste or drop a file, preview the real dry run, then apply |
 | Stats | curve, colours, types, rarity, biggest sets, most unassigned copies |
 | Console | arbitrary SQL with a schema browser, snippets, history and CSV export |
 | Logs | every request, searchable and filterable, with errors in their own grouped view |
@@ -313,7 +332,7 @@ in the URL — and can be saved by name.
 
 ```bash
 npm install
-npm test          # 252 tests against a real local D1 in workerd
+npm test          # 266 tests against a real local D1 in workerd
 npm run dev       # local server
 npm run deploy
 ```

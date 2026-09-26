@@ -16,8 +16,34 @@ const EXAMPLES = [
   '2x Arcane Signet',
   '1 Sol Ring (M3C) 409',
   '1 Sol Ring (M3C) 409 *F*',
-  '# a comment line is ignored',
+  '1x Sol Ring (m3c) 409 [Ramp]',
+  'SB: 2 Negate',
+  '# and // are comments',
 ];
+
+const MAX_UPLOAD = 2 * 1024 * 1024;   // a collection export, not a database
+const MAX_LINES = 1000;               // the API's own cap
+
+/**
+ * Same detection the server uses: a CSV needs a header naming a card
+ * column. Only used here to count rows honestly in the UI.
+ */
+function looksLikeCsv(text) {
+  const first = text.split('\n').find((l) => l.trim());
+  if (!first || !first.includes(',')) return false;
+  const cols = first.toLowerCase().replace(/"/g, '').split(',').map((c) => c.replace(/[^a-z]/g, ''));
+  return cols.includes('name') || cols.includes('cardname');
+}
+
+/** How many cards a list actually represents, whatever shape it is. */
+function countCards(text) {
+  if (!text.trim()) return 0;
+  if (looksLikeCsv(text)) return text.split('\n').filter((l) => l.trim()).length - 1;
+  return text.split('\n').filter((l) => {
+    const t = l.trim();
+    return t && !t.startsWith('#') && !t.startsWith('//');
+  }).length;
+}
 
 function remember(entry) {
   const hist = store.get(HISTORY_KEY, []);
@@ -91,6 +117,71 @@ function historyPanel() {
 
 let currentMode = 'add';
 
+/**
+ * Reading a file only fills the box — it never submits. You still see
+ * exactly what will be sent, and the preview still runs against it.
+ */
+function fileDrop(listInput, onChange) {
+  const status = h('span.small.muted', 'or drop a file here');
+
+  const input = h('input', {
+    type: 'file',
+    accept: '.txt,.csv,.dek,.md,text/plain,text/csv',
+    multiple: true,
+    style: { display: 'none' },
+    onchange: (e) => { take([...e.target.files]); e.target.value = ''; },
+  });
+
+  async function take(files) {
+    if (!files.length) return;
+    const chunks = [];
+    for (const f of files) {
+      if (f.size > MAX_UPLOAD) {
+        toast(`${f.name} is too big (${(f.size / 1e6).toFixed(1)} MB)`, 'bad');
+        continue;
+      }
+      try {
+        chunks.push(await f.text());
+      } catch {
+        toast(`could not read ${f.name}`, 'bad');
+      }
+    }
+    if (!chunks.length) return;
+
+    const incoming = chunks.join('\n');
+    // Append rather than replace, so a file never eats something typed.
+    listInput.value = listInput.value.trim()
+      ? `${listInput.value.replace(/\s*$/, '')}\n${incoming}`
+      : incoming;
+    listInput.dispatchEvent(new Event('input'));
+
+    const n = countCards(incoming);
+    const kind = looksLikeCsv(incoming) ? 'CSV' : 'decklist';
+    const names = files.map((f) => f.name).join(', ');
+    status.textContent = `${names} — ${kind}, ${n} card${n === 1 ? '' : 's'}`;
+    toast(`Loaded ${n} card${n === 1 ? '' : 's'} from ${kind}`, 'ok');
+    if (onChange) onChange();
+  }
+
+  const zone = h('div.dropzone', {
+    onclick: () => input.click(),
+    ondragover: (e) => { e.preventDefault(); zone.classList.add('over'); },
+    ondragleave: () => zone.classList.remove('over'),
+    ondrop: (e) => {
+      e.preventDefault();
+      zone.classList.remove('over');
+      take([...(e.dataTransfer?.files || [])]);
+    },
+  },
+  input,
+  h('span.dz-icon', '⤓'),
+  h('div',
+    h('div.dz-main', 'Upload a file'),
+    h('div.dz-sub', status)));
+
+  return zone;
+}
+
 function render(mode) {
   currentMode = mode;
   const isAdd = mode === 'add';
@@ -127,11 +218,15 @@ function render(mode) {
     },
   }, o[0].toUpperCase() + o.slice(1))));
 
-  const count = h('span.muted.small', '0 lines');
-  listInput.addEventListener('input', () => {
-    const n = listInput.value.split('\n').filter((l) => l.trim() && !l.trim().startsWith('#')).length;
-    count.textContent = `${n} line${n === 1 ? '' : 's'}`;
-  });
+  const count = h('span.muted.small', '0 cards');
+  const updateCount = () => {
+    const n = countCards(listInput.value);
+    const over = n > MAX_LINES;
+    count.textContent = `${n} card${n === 1 ? '' : 's'}${looksLikeCsv(listInput.value) ? ' · CSV' : ''}`;
+    count.className = over ? 'small tag bad' : 'muted small';
+    if (over) count.textContent += ` — over the ${MAX_LINES} limit`;
+  };
+  listInput.addEventListener('input', updateCount);
 
   const busy = (on) => {
     for (const b of [previewBtn, applyBtn]) b.disabled = on;
@@ -157,7 +252,7 @@ function render(mode) {
         remember({ mode, owner: who, list, count: r.resolved });
         toast(`${isAdd ? 'Added' : 'Removed'} ${r.resolved} card${r.resolved === 1 ? '' : 's'}`, 'ok');
         listInput.value = '';
-        count.textContent = '0 lines';
+        updateCount();
         const hp = $('#history-slot');
         if (hp) fill(hp, historyPanel());
       } else if (dryRun) {
@@ -194,13 +289,14 @@ function render(mode) {
           h('div.panel-head', h('h2', 'List'), h('span.spacer'), count),
           h('div.panel-body',
             h('div.field', h('label', 'Whose collection'), ownerSel),
+            h('div.field', fileDrop(listInput, updateCount)),
             h('div.field', listInput),
             h('div.flex-wrap',
               previewBtn,
               applyBtn,
               h('span.spacer'),
               h('button.btn.sm.ghost', {
-                onclick: () => { listInput.value = ''; count.textContent = '0 lines'; fill(out); },
+                onclick: () => { listInput.value = ''; updateCount(); fill(out); },
               }, 'Clear')))),
         out,
         h('div', { id: 'history-slot' }, historyPanel())),
@@ -213,7 +309,17 @@ function render(mode) {
             h('div.small.muted', { style: { marginTop: '10px' } },
               isAdd
                 ? 'A set code plus collector number pins an exact printing. Without one, Scryfall picks the most recent paper printing. A bad line does not sink the rest — it comes back in the errors list.'
-                : 'Without a set code, copies are taken from the plainest printing first. Removing more than you own is refused outright and changes nothing.')))))));
+                : 'Without a set code, copies are taken from the plainest printing first. Removing more than you own is refused outright and changes nothing.'))),
+
+        h('div.panel', { style: { marginTop: '12px' } },
+          h('div.panel-head', h('h2', 'Files it understands')),
+          h('div.panel-body',
+            h('div.small.muted',
+              'Drop an export straight in. Text decklists from MTGA, Moxfield, '
+              + 'Archidekt or MTGO, and CSV from ManaBox, Moxfield or Deckbox. '
+              + 'Section headers like Deck and Sideboard, Archidekt categories '
+              + 'and SB: prefixes are ignored rather than treated as cards. '
+              + 'CSV columns are matched by name, so their order does not matter.')))))));
 
   applyBtn.disabled = false;
   listInput.focus();
