@@ -164,3 +164,43 @@ describe('POST /cards/remove — decks are left alone', () => {
     expect(gaps[0].n).toBeGreaterThanOrEqual(0);
   });
 });
+
+describe('POST /cards/remove — aliases', () => {
+  it('drops the face aliases when the last copy goes', async () => {
+    // Aliases key on canonical name, not card id, so they survived the
+    // delete and the table drifted upward with every add/remove cycle. The
+    // old builder rederived them from `cards` on every write.
+    await post('/cards/add', { list: '1 Fable of the Mirror-Breaker' }, stubScryfall());
+    expect(await count('aliases', "alias_norm = 'reflection of kiki-jiki'")).toBe(1);
+
+    await post('/cards/remove', { list: '1 Fable of the Mirror-Breaker' });
+
+    expect(await count('aliases', "alias_norm = 'reflection of kiki-jiki'")).toBe(0);
+    expect(await count('aliases', "alias_norm = 'fable of the mirror-breaker'")).toBe(0);
+  });
+
+  it('keeps the alias while another printing of the card is still owned', async () => {
+    await post('/cards/add', { list: '1 Fable of the Mirror-Breaker' }, stubScryfall());
+    await post('/cards/add', { list: '1 Fable of the Mirror-Breaker *F*' }, stubScryfall());
+    expect(await count('cards', "name LIKE 'Fable%'")).toBe(2);
+
+    await post('/cards/remove', { list: '1 Fable of the Mirror-Breaker *F*' });
+
+    expect(await count('cards', "name LIKE 'Fable%'")).toBe(1);
+    expect(await count('aliases', "alias_norm = 'reflection of kiki-jiki'")).toBe(1);
+  });
+
+  it('an add followed by a remove leaves every table where it started', async () => {
+    const before = await snapshot();
+    await post('/cards/add', { list: '2 Lightning Bolt (2X2) 117' }, stubScryfall());
+    await post('/cards/remove', { list: '2 Lightning Bolt (2X2) 117' });
+
+    const after = await snapshot();
+    // legalities and rulings are oracle-level and deliberately kept — a
+    // reference that costs nothing and saves a fetch next time.
+    for (const t of Object.keys(before)) {
+      if (t === 'legalities' || t === 'rulings') continue;
+      expect(after[t], `${t} drifted`).toBe(before[t]);
+    }
+  });
+});

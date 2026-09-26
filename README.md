@@ -143,7 +143,7 @@ API has no tags until the nightly backfill.
 
 ```bash
 npm install
-npm test          # 145 tests against a real local D1 in workerd
+npm test          # 148 tests against a real local D1 in workerd
 npm run dev       # local server
 npm run deploy
 ```
@@ -169,16 +169,28 @@ schema.sql        the whole schema
 
 | script | what it does |
 |---|---|
-| `scripts/seed.py` | one-time: the five old shards -> `data.sql` |
+| `scripts/backup.py` | dump the live database to a local `.sql.gz`, and prove it restores |
+| `scripts/nightly.sh` | backup + tag backfill, run by launchd at 03:00 |
 | `scripts/backfill.py` | tags from the local Scryfall index |
-| `scripts/nightly.sh` | export a backup, verify it restores, backfill |
+| `scripts/verify.py` | compare the API against the old shards, table by table |
+| `scripts/seed.py` | one-time: the five old shards -> `data.sql` |
 | `scripts/make_fixture.py` | regenerate the test fixture |
 
 ## Backups
 
-`scripts/nightly.sh` runs at 03:00 via `com.matt.mtg.apibackup.plist`. It
-exports the database, checks the dump actually restores, compares row counts
-against the live API, gzips it into `~/mtg-backups/`, and keeps 30 days.
+`scripts/nightly.sh` runs at 03:00 via `com.matt.mtg.apibackup.plist`: dump the
+database, restore the dump into a scratch SQLite file to prove it works, check
+the row counts against the live API, keep 30 days in `~/mtg-backups/`, then
+backfill tags. About 18 seconds end to end, 2.1 MB gzipped.
+
+Note what it does *not* use. `wrangler d1 export` is the obvious tool and the
+wrong one: it takes the database offline for the duration, and here that ran
+past ten minutes. `backup.py` pages every table out through `/query` instead,
+so nothing is ever locked and the API stays up.
+
+```bash
+gunzip -c ~/mtg-backups/mtg-20260926.sql.gz | sqlite3 restored.db
+```
 
 D1 also has Time Travel — 30 days of point-in-time restore, granular to the
 second:

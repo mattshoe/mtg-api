@@ -28,7 +28,11 @@ BATCH = 400   # rows per INSERT; D1 rejects an oversized statement
 def query(api, sql, params=None, fmt="rows"):
     body = json.dumps({"sql": sql, "params": params or [], "fmt": fmt}).encode()
     req = urllib.request.Request(
-        f"{api}/query", data=body, headers={"Content-Type": "application/json"})
+        f"{api}/query", data=body,
+        # Cloudflare's bot protection answers urllib's default User-Agent
+        # with a 403 (error 1010), so say who we are.
+        headers={"Content-Type": "application/json",
+                 "User-Agent": "mtg-api-scripts/1.0"})
     try:
         with urllib.request.urlopen(req, timeout=120) as r:
             return json.load(r)
