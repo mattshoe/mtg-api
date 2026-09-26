@@ -365,6 +365,10 @@ function filterPanel() {
 // ------------------------------------------------- active filter summary
 
 const LABELS = {
+  // Owner used to live in the toolbar where it was always on screen. It is
+  // a filter like any other now, so it has to earn a chip when it is not
+  // the default, or you cannot tell whose collection you are looking at.
+  owner: 'whose',
   q: 'name', text: 'rules text', textLike: 'exact text', flavor: 'flavour',
   artist: 'artist', watermark: 'watermark', typeLine: 'type line',
   manaCost: 'mana cost', collnum: 'number', adv: 'query',
@@ -409,7 +413,7 @@ function activeChips() {
       title: 'Remove this filter', onclick: onDrop,
     }, text2, ' ×'))),
     h('button.btn.sm.ghost', {
-      onclick: () => push({ ...DEFAULTS, owner: state.owner }),
+      onclick: () => push({ ...DEFAULTS }),
     }, 'Clear all'));
 }
 
@@ -577,9 +581,7 @@ function renderChrome() {
         type: 'search', value: state.q, placeholder: 'Search by name…',
         dataset: { fk: 'q-top' },
         oninput: debounce((e) => push({ q: e.target.value }), 400),
-      }),
-      seg('owner', [['matt', 'Matt'], ['kayla', 'Kayla'], ['both', 'Both']]),
-      h('button.btn.sm', { onclick: () => saveSearch() }, '☆ Save')),
+      })),
     activeChips(),
     panelOpen ? h('div.filters-wrap',
       h('div.fpanel-bar',
@@ -599,37 +601,10 @@ function renderChrome() {
             renderChrome();
           },
         }, 'Collapse all')),
-      h('div.panel', filterPanel())) : null,
-    savedBar());
+      h('div.panel', filterPanel())) : null);
 
   panelEl = $('#chrome');
   restoreFocus(snap);
-}
-
-function saveSearch() {
-  const name = prompt('Name this search');
-  if (!name) return;
-  const saved = store.get('saved', []);
-  store.set('saved', [...saved.filter((s) => s.name !== name), { name, hash: toHash(state) }]);
-  toast(`Saved "${name}"`, 'ok');
-  renderChrome();
-}
-
-function savedBar() {
-  const saved = store.get('saved', []);
-  if (!saved.length) return null;
-  return h('div.saved-bar',
-    h('span.small.muted', 'Saved:'),
-    h('div.chips', saved.map((s) => h('span.chip.mini', { onclick: () => { location.hash = s.hash; } },
-      s.name,
-      h('button.btn.ghost.sm', {
-        style: { padding: '0 0 0 5px' },
-        onclick: (e) => {
-          e.stopPropagation();
-          store.set('saved', saved.filter((x) => x.name !== s.name));
-          renderChrome();
-        },
-      }, '×')))));
 }
 
 function mount() {

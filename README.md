@@ -288,9 +288,10 @@ The filter panel is full width and collapsed by default. Open it and you get
 eleven group headers; each one opens on its own, so you only unfold what you
 are actually using. 76 checkboxes, ranges with operators, segmented toggles,
 colour pips. Nothing scrolls inside anything else — the page has one
-scrollbar. Open/closed state is remembered, and a link or saved search that
-arrives with filters set opens the groups responsible. Active filters show as
-removable chips above the panel, and each group header carries a count.
+scrollbar. Open/closed state is remembered, and a link that arrives with
+filters set opens the groups responsible. Active filters — whose collection
+included — show as removable chips above the panel, and each group header
+carries a count.
 
 **The query box** is optional, sits at the bottom of the panel, and takes
 Scryfall-style syntax ANDed with whatever the controls have set. The cheatsheet
@@ -339,8 +340,7 @@ range, are ordinary queries: around 150ms.
 
 Keyboard: `s` `d` `a` `r` `g` `c` jump between views, `/` or `⌘K` finds a card,
 `v` opens the logs, `l` locks or unlocks, `t` toggles the theme, `esc`
-closes. Searches are shareable — the filters live
-in the URL — and can be saved by name.
+closes. Searches are shareable: every filter lives in the URL.
 
 ## Development
 

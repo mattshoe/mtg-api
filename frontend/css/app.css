@@ -576,12 +576,12 @@ details.adv > div { padding-top: 12px; }
 .btn.open:hover { background: color-mix(in srgb, var(--accent) 22%, var(--bg-2)); }
 .btn.open .count-pill { background: var(--bg); color: var(--accent-2); }
 
-.active-bar, .saved-bar {
+.active-bar {
   display: flex; gap: 9px; align-items: center; flex-wrap: wrap;
   padding: 9px 11px; margin-bottom: 12px;
   background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius-sm);
 }
-.active-bar > .chips, .saved-bar > .chips { flex: 1; }
+.active-bar > .chips { flex: 1; }
 
 /* One scrollbar on the page, never a box that scrolls inside another box.
    The panel is as tall as it needs to be; collapsing is what keeps it out
@@ -668,7 +668,6 @@ details.adv > div { padding-top: 12px; }
 
 @media (max-width: 560px) {
   .fgrid { grid-template-columns: 1fr; }
-  .searchbar .seg { order: 3; }
   .bigsearch { flex-basis: 100%; }
 }
 
