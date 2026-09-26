@@ -458,29 +458,37 @@ details.adv > div { padding-top: 12px; }
 }
 .active-bar > .chips, .saved-bar > .chips { flex: 1; }
 
-/* Everything is visible, but the panel must not push the results off the
-   screen — so it scrolls inside itself and the cards stay in view. */
-.filters-wrap {
-  margin-bottom: 14px;
-  max-height: min(56vh, 620px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
+/* One scrollbar on the page, never a box that scrolls inside another box.
+   The panel is as tall as it needs to be; collapsing is what keeps it out
+   of the way. */
+.filters-wrap { margin-bottom: 14px; }
+.fpanel-bar {
+  display: flex; align-items: center; gap: 6px;
+  padding: 0 2px 7px;
 }
 
 .fgrid {
   display: grid; gap: 1px; background: var(--line);
   grid-template-columns: repeat(auto-fit, minmax(258px, 1fr));
 }
-.fgroup { background: var(--bg-2); padding: 13px 15px 15px; min-width: 0; }
-.fgroup > h3 {
-  display: flex; align-items: center; gap: 8px;
+.fgroup { background: var(--bg-2); min-width: 0; align-self: start; }
+.fgroup > summary {
+  display: flex; align-items: center; gap: 8px; cursor: pointer;
+  padding: 11px 14px; list-style: none;
   font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
-  color: var(--accent-2); margin-bottom: 11px;
-  padding-bottom: 7px; border-bottom: 1px solid var(--line);
+  color: var(--text-2); user-select: none;
 }
+.fgroup > summary::-webkit-details-marker { display: none; }
+.fgroup > summary::before {
+  content: "▸"; color: var(--text-3); font-size: 9px; transition: transform .12s ease;
+}
+.fgroup[open] > summary::before { transform: rotate(90deg); }
+.fgroup > summary:hover { background: var(--bg-3); color: var(--text); }
+.fgroup[open] > summary { color: var(--accent-2); border-bottom: 1px solid var(--line); }
+.fg-title { flex: 1; }
+.fgroup-body { padding: 13px 14px 15px; }
 .fgroup-body > * + * { margin-top: 11px; }
-.fgroup-color { background: color-mix(in srgb, var(--accent) 5%, var(--bg-2)); }
-.fgroup-wide { grid-column: 1 / -1; }
+.fgroup-color[open] { background: color-mix(in srgb, var(--accent) 5%, var(--bg-2)); }
 
 .frow > label {
   display: block; font-size: 10.5px; font-weight: 600; text-transform: uppercase;

@@ -37,8 +37,7 @@ function resultTable(res) {
       h('span.tag.ok', 'statement ran'),
       res.changes !== undefined ? h('div', `${num(res.changes)} row${res.changes === 1 ? '' : 's'} changed`) : null);
   }
-  return h('div.table-wrap', { style: { maxHeight: '62vh', overflow: 'auto' } },
-    h('table',
+  return h('div.table-wrap', h('table',
       h('thead', h('tr', res.cols.map((c) => h('th', c)))),
       h('tbody', res.rows.map((r) => h('tr', r.map((v) => h('td', {
         class: typeof v === 'number' ? 'num' : '',

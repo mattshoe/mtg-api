@@ -1,8 +1,9 @@
 // Search. The filter model and SQL live in filters.js; this is the UI.
 //
-// The filter surface is full width and everything is visible at once —
-// checkboxes, ranges, toggles — rather than buried in accordions down a
-// narrow column.
+// The filter surface is full width, collapsed by default, and every group
+// inside it collapses on its own. Nothing here scrolls inside anything
+// else — the page has one scrollbar and collapsing is what keeps the
+// panel out of the way.
 
 import * as api from './api.js';
 import {
@@ -21,7 +22,8 @@ let state = { ...DEFAULTS };
 let lastRun = null;
 let facets = null;
 let advError = null;
-let panelOpen = store.get('filtersOpen', true);
+let panelOpen = store.get('filtersOpen', false);
+let openGroups = new Set(store.get('openGroups', []));
 let panelEl;
 let resultsEl;
 
@@ -150,152 +152,212 @@ function tokens(key, placeholder, list) {
       : h('div.hint', 'type and press enter'));
 }
 
-function group(title, ...kids) {
-  return h('section.fgroup', h('h3', title), h('div.fgroup-body', ...kids));
-}
-
 function row(text2, control) {
   return h('div.frow', label(text2), control);
 }
 
 // ---------------------------------------------------------------- panel
 
-function colorGroup() {
+function colorBody() {
   const hint = (COLOR_MODES.find(([v]) => v === state.colorMode) || [])[2] || '';
-  return h('section.fgroup.fgroup-color',
-    h('h3', 'Colour'),
-    h('div.fgroup-body',
-      row('Match against', seg('colorTarget', [
-        ['id', 'Colour identity', 'What a commander allows — the usual one'],
-        ['card', 'Printed colour', 'The colours printed on the card'],
+  return [
+    row('Match against', seg('colorTarget', [
+      ['id', 'Colour identity', 'What a commander allows — the usual one'],
+      ['card', 'Printed colour', 'The colours printed on the card'],
+    ])),
+    row('How', h('div',
+      h('div.mode-grid', COLOR_MODES.map(([v, text2, title]) => h('button.chip', {
+        class: state.colorMode === v ? 'on' : '', title,
+        onclick: () => push({ colorMode: v }),
+      }, text2))),
+      h('div.hint', hint))),
+    row('Colours', h('div',
+      h('div.pips', COLORS.map(([c, name]) => h('button.pip', {
+        dataset: { c }, class: state.colors.includes(c) ? 'on' : '', title: name,
+        onclick: () => toggleIn('colors', c),
+      }, c))),
+      h('div.chips', { style: { marginTop: '7px' } },
+        h('button.chip.mini', { onclick: () => push({ colors: [] }) }, 'clear'),
+        h('button.chip.mini', { onclick: () => push({ colors: ['W', 'U', 'B', 'R', 'G'] }) }, 'all five'),
+        h('button.chip.mini', { onclick: () => push({ colors: ['C'], colorMode: 'exactly' }) }, 'colourless')))),
+    row('Number of colours', range('ciMin', 'ciMax')),
+    row('Produces mana', h('div.pips', COLORS.map(([c, name]) => h('button.pip', {
+      dataset: { c }, class: state.produces.includes(c) ? 'on' : '', title: `Taps for ${name}`,
+      onclick: () => toggleIn('produces', c),
+    }, c)))),
+  ];
+}
+
+/**
+ * The groups, as data. `keys` is what counts as "this group is in use",
+ * which drives both the badge on the header and whether a link that
+ * arrives with filters set opens the right groups.
+ */
+const GROUPS = [
+  {
+    id: 'collection',
+    title: 'Collection',
+    keys: ['pool', 'qtyMin', 'qtyMax', 'freeMin', 'deck', 'edhrecMin', 'edhrecMax'],
+    body: () => [
+      row('Whose', seg('owner', [['matt', 'Matt'], ['kayla', 'Kayla'], ['both', 'Both']])),
+      row('Pool', seg('pool', [
+        ['all', 'All'],
+        ['free', 'Unassigned', 'Copies not committed to a built deck'],
+        ['committed', 'In decks'],
       ])),
-      row('How', h('div',
-        h('div.mode-grid', COLOR_MODES.map(([v, text2, title]) => h('button.chip', {
-          class: state.colorMode === v ? 'on' : '', title,
-          onclick: () => push({ colorMode: v }),
-        }, text2))),
-        h('div.hint', hint))),
-      row('Colours', h('div',
-        h('div.pips', COLORS.map(([c, name]) => h('button.pip', {
-          dataset: { c }, class: state.colors.includes(c) ? 'on' : '', title: name,
-          onclick: () => toggleIn('colors', c),
-        }, c))),
-        h('div.chips', { style: { marginTop: '7px' } },
-          h('button.chip.mini', { onclick: () => push({ colors: [] }) }, 'clear'),
-          h('button.chip.mini', { onclick: () => push({ colors: ['W', 'U', 'B', 'R', 'G'] }) }, 'all five'),
-          h('button.chip.mini', { onclick: () => push({ colors: ['C'], colorMode: 'exactly' }) }, 'colourless')))),
-      row('Number of colours', range('ciMin', 'ciMax')),
-      row('Produces mana', h('div.pips', COLORS.map(([c, name]) => h('button.pip', {
-        dataset: { c }, class: state.produces.includes(c) ? 'on' : '', title: `Taps for ${name}`,
-        onclick: () => toggleIn('produces', c),
-      }, c))))));
+      row('Copies owned', range('qtyMin', 'qtyMax')),
+      row('Free copies, at least', h('input', {
+        type: 'number', min: '0', placeholder: 'any', value: state.freeMin,
+        dataset: { fk: 'freeMin' }, oninput: lazy('freeMin'),
+      })),
+      row('In a deck', h('select', { value: state.deck, dataset: { fk: 'deck' }, onchange: setter('deck') },
+        h('option', { value: '' }, 'any'),
+        h('option', { value: '_any', selected: state.deck === '_any' }, '— in any deck —'),
+        h('option', { value: '_none', selected: state.deck === '_none' }, '— in no deck —'),
+        (facets?.decks || []).map((d) => h('option', { value: d.slug, selected: state.deck === d.slug }, `${d.name} (${d.owner})`)))),
+      row('EDHREC rank', range('edhrecMin', 'edhrecMax')),
+    ],
+  },
+  {
+    id: 'colour',
+    title: 'Colour',
+    keys: ['colors', 'produces', 'ciMin', 'ciMax'],
+    body: colorBody,
+  },
+  {
+    id: 'type',
+    title: 'Card type',
+    keys: ['types', 'typesNot', 'supertypes', 'subtypes', 'typeLine'],
+    body: () => [
+      row(null, checks(facets?.types || [], 'types')),
+      row('Supertype', checks(['Legendary', 'Basic', 'Snow', 'World'], 'supertypes')),
+      row('Subtypes', tokens('subtypes', 'Elf, Equipment…', 'dl-subtypes')),
+      row('Exclude type', checks(facets?.types || [], 'typesNot')),
+      row('Type line contains', text('typeLine', 'Artifact Creature')),
+    ],
+  },
+  {
+    id: 'mana',
+    title: 'Mana & stats',
+    keys: ['cmcMin', 'cmcMax', 'manaCost', 'pow', 'tou', 'loy'],
+    body: () => [
+      row('Mana value', range('cmcMin', 'cmcMax')),
+      row('Mana cost contains', text('manaCost', '{G}{G}')),
+      row('Power', stat('powOp', 'pow')),
+      row('Toughness', stat('touOp', 'tou')),
+      row('Loyalty', stat('loyOp', 'loy')),
+    ],
+  },
+  {
+    id: 'text',
+    title: 'Text',
+    keys: ['q', 'text', 'textLike', 'flavor', 'artist', 'watermark'],
+    body: () => [
+      row('Name contains', text('q', 'sol ring')),
+      row('Rules text', h('div', text('text', 'draw a card'), h('div.hint', 'full-text, stemmed'))),
+      row('Exact text', h('div', text('textLike', 'enters tapped'), h('div.hint', 'literal substring'))),
+      row('Flavour text', text('flavor', '')),
+      row('Artist', text('artist', 'Rebecca Guay', 'dl-artists')),
+      row('Watermark', text('watermark', '', 'dl-watermarks')),
+    ],
+  },
+  {
+    id: 'tags',
+    title: 'Keywords & tags',
+    keys: ['keywords', 'tags'],
+    body: () => [
+      row('Keywords', tokens('keywords', 'Flying, Ward…', 'dl-keywords')),
+      row('Scryfall tags', tokens('tags', 'mana-rock, spot-removal…', 'dl-tags')),
+      h('div.hint', 'every one listed must match'),
+    ],
+  },
+  {
+    id: 'printing',
+    title: 'Rarity & printing',
+    keys: ['rarities', 'finish', 'sets', 'setTypes', 'yearMin', 'yearMax', 'collnum'],
+    body: () => [
+      row('Rarity', checks(RARITY_ORDER, 'rarities')),
+      row('Finish', seg('finish', [['', 'Any'], ['nonfoil', 'Nonfoil'], ['foil', 'Foil'], ['etched', 'Etched']])),
+      row('Sets', tokens('sets', 'MH3', 'dl-sets')),
+      row('Set type', checks(facets?.setTypes || [], 'setTypes')),
+      row('Release year', range('yearMin', 'yearMax', { min: '1993' })),
+      row('Collector number', text('collnum', '117')),
+    ],
+  },
+  {
+    id: 'physical',
+    title: 'Physical & digital',
+    keys: ['layouts', 'frames', 'borders', 'games'],
+    body: () => [
+      row('Layout', checks(facets?.layouts || [], 'layouts')),
+      row('Frame', checks(facets?.frames || [], 'frames', { cols: 3 })),
+      row('Border', checks(facets?.borders || [], 'borders')),
+      row('Available in', checks(['paper', 'arena', 'mtgo'], 'games', { cols: 3 })),
+    ],
+  },
+  {
+    id: 'flags',
+    title: 'Flags',
+    keys: FLAGS.map(([k]) => k),
+    body: () => [h('div.tri-list', FLAGS.map(([key, text2]) => tri(key, text2)))],
+  },
+  {
+    id: 'legality',
+    title: 'Legality',
+    keys: ['format', 'hasRulings'],
+    body: () => [
+      row('Format', h('select', { value: state.format, dataset: { fk: 'format' }, onchange: setter('format') },
+        h('option', { value: '' }, 'any format'),
+        (facets?.formats || []).map((f) => h('option', { value: f, selected: state.format === f }, f)))),
+      row('Status', h('select', { value: state.legality, dataset: { fk: 'legality' }, onchange: setter('legality'), disabled: !state.format },
+        ['legal', 'banned', 'restricted', 'not_legal'].map((v) => h('option', { value: v, selected: state.legality === v }, v)))),
+      h('div.tri-list', tri('hasRulings', 'Has rulings')),
+    ],
+  },
+  {
+    id: 'query',
+    title: 'Query language',
+    keys: ['adv'],
+    body: () => [
+      h('input.qbox', {
+        type: 'search', value: state.adv, spellcheck: false,
+        dataset: { fk: 'adv' },
+        placeholder: 'optional — id<=wub t:creature mv<=3 -is:reprint',
+        oninput: lazy('adv'),
+      }),
+      advError ? h('div.err', { style: { marginTop: '8px' } }, advError) : null,
+      h('div.flex', { style: { marginTop: '8px' } },
+        h('span.hint', { style: { flex: '1', marginTop: '0' } }, 'Optional. ANDed with everything above.'),
+        h('button.btn.sm.ghost', { onclick: () => cheatsheet() }, 'cheatsheet')),
+    ],
+  },
+];
+
+/** How many filters in this group are set. */
+function groupCount(g) {
+  return g.keys.filter((k) => {
+    const v = state[k]; const d = DEFAULTS[k];
+    return Array.isArray(v) ? v.length > 0 : (v !== d && v !== '');
+  }).length;
 }
 
 function filterPanel() {
-  return h('div.fgrid',
-    h('section.fgroup',
-      h('h3', 'Collection'),
-      h('div.fgroup-body',
-        row('Whose', seg('owner', [['matt', 'Matt'], ['kayla', 'Kayla'], ['both', 'Both']])),
-        row('Pool', seg('pool', [
-          ['all', 'All'],
-          ['free', 'Unassigned', 'Copies not committed to a built deck'],
-          ['committed', 'In decks'],
-        ])),
-        row('Copies owned', range('qtyMin', 'qtyMax')),
-        row('Free copies, at least', h('input', {
-          type: 'number', min: '0', placeholder: 'any', value: state.freeMin,
-          dataset: { fk: 'freeMin' }, oninput: lazy('freeMin'),
-        })),
-        row('In a deck', h('select', { value: state.deck, dataset: { fk: 'deck' }, onchange: setter('deck') },
-          h('option', { value: '' }, 'any'),
-          h('option', { value: '_any', selected: state.deck === '_any' }, '— in any deck —'),
-          h('option', { value: '_none', selected: state.deck === '_none' }, '— in no deck —'),
-          (facets?.decks || []).map((d) => h('option', { value: d.slug, selected: state.deck === d.slug }, `${d.name} (${d.owner})`)))),
-        row('EDHREC rank', range('edhrecMin', 'edhrecMax')))),
-
-    colorGroup(),
-
-    h('section.fgroup',
-      h('h3', 'Card type'),
-      h('div.fgroup-body',
-        row(null, checks(facets?.types || [], 'types')),
-        row('Supertype', checks(['Legendary', 'Basic', 'Snow', 'World'], 'supertypes')),
-        row('Subtypes', tokens('subtypes', 'Elf, Equipment…', 'dl-subtypes')),
-        row('Exclude type', checks(facets?.types || [], 'typesNot')),
-        row('Type line contains', text('typeLine', 'Artifact Creature')))),
-
-    h('section.fgroup',
-      h('h3', 'Mana & stats'),
-      h('div.fgroup-body',
-        row('Mana value', range('cmcMin', 'cmcMax')),
-        row('Mana cost contains', text('manaCost', '{G}{G}')),
-        row('Power', stat('powOp', 'pow')),
-        row('Toughness', stat('touOp', 'tou')),
-        row('Loyalty', stat('loyOp', 'loy')))),
-
-    h('section.fgroup',
-      h('h3', 'Text'),
-      h('div.fgroup-body',
-        row('Name contains', text('q', 'sol ring')),
-        row('Rules text', h('div', text('text', 'draw a card'), h('div.hint', 'full-text, stemmed'))),
-        row('Exact text', h('div', text('textLike', 'enters tapped'), h('div.hint', 'literal substring'))),
-        row('Flavour text', text('flavor', '')),
-        row('Artist', text('artist', 'Rebecca Guay', 'dl-artists')),
-        row('Watermark', text('watermark', '', 'dl-watermarks')))),
-
-    h('section.fgroup',
-      h('h3', 'Keywords & tags'),
-      h('div.fgroup-body',
-        row('Keywords', tokens('keywords', 'Flying, Ward…', 'dl-keywords')),
-        row('Scryfall tags', tokens('tags', 'mana-rock, spot-removal…', 'dl-tags')),
-        h('div.hint', 'every one listed must match'))),
-
-    h('section.fgroup',
-      h('h3', 'Rarity & printing'),
-      h('div.fgroup-body',
-        row('Rarity', checks(RARITY_ORDER, 'rarities')),
-        row('Finish', seg('finish', [['', 'Any'], ['nonfoil', 'Nonfoil'], ['foil', 'Foil'], ['etched', 'Etched']])),
-        row('Sets', tokens('sets', 'MH3', 'dl-sets')),
-        row('Set type', checks(facets?.setTypes || [], 'setTypes')),
-        row('Release year', range('yearMin', 'yearMax', { min: '1993' })),
-        row('Collector number', text('collnum', '117')))),
-
-    h('section.fgroup',
-      h('h3', 'Physical & digital'),
-      h('div.fgroup-body',
-        row('Layout', checks(facets?.layouts || [], 'layouts')),
-        row('Frame', checks(facets?.frames || [], 'frames', { cols: 3 })),
-        row('Border', checks(facets?.borders || [], 'borders')),
-        row('Available in', checks(['paper', 'arena', 'mtgo'], 'games', { cols: 3 })))),
-
-    h('section.fgroup',
-      h('h3', 'Flags'),
-      h('div.fgroup-body.tri-list', FLAGS.map(([key, text2]) => tri(key, text2)))),
-
-    h('section.fgroup',
-      h('h3', 'Legality'),
-      h('div.fgroup-body',
-        row('Format', h('select', { value: state.format, dataset: { fk: 'format' }, onchange: setter('format') },
-          h('option', { value: '' }, 'any format'),
-          (facets?.formats || []).map((f) => h('option', { value: f, selected: state.format === f }, f)))),
-        row('Status', h('select', { value: state.legality, dataset: { fk: 'legality' }, onchange: setter('legality'), disabled: !state.format },
-          ['legal', 'banned', 'restricted', 'not_legal'].map((v) => h('option', { value: v, selected: state.legality === v }, v)))),
-        h('div.tri-list', tri('hasRulings', 'Has rulings')))),
-
-    h('section.fgroup.fgroup-wide',
-      h('h3', 'Query language', h('button.btn.sm.ghost', {
-        style: { marginLeft: 'auto' }, onclick: () => cheatsheet(),
-      }, 'cheatsheet')),
-      h('div.fgroup-body',
-        h('input.qbox', {
-          type: 'search', value: state.adv, spellcheck: false,
-          dataset: { fk: 'adv' },
-          placeholder: 'optional — id<=wub t:creature mv<=3 -is:reprint',
-          oninput: lazy('adv'),
-        }),
-        advError ? h('div.err', { style: { marginTop: '8px' } }, advError) : null,
-        h('div.hint', 'Optional. ANDed with everything above.'))));
+  return h('div.fgrid', GROUPS.map((g) => {
+    const n = groupCount(g);
+    return h('details.fgroup', {
+      class: g.id === 'colour' ? 'fgroup-color' : '',
+      open: openGroups.has(g.id),
+      ontoggle: (e) => {
+        if (e.target.open) openGroups.add(g.id);
+        else openGroups.delete(g.id);
+        store.set('openGroups', [...openGroups]);
+      },
+    },
+    h('summary',
+      h('span.fg-title', g.title),
+      n ? h('span.count-pill', n) : null),
+    h('div.fgroup-body', ...g.body()));
+  }));
 }
 
 // ------------------------------------------------- active filter summary
@@ -493,7 +555,25 @@ function renderChrome() {
       seg('owner', [['matt', 'Matt'], ['kayla', 'Kayla'], ['both', 'Both']]),
       h('button.btn.sm', { onclick: () => saveSearch() }, '☆ Save')),
     activeChips(),
-    panelOpen ? h('div.panel.filters-wrap', { id: 'fpanel' }, filterPanel()) : null,
+    panelOpen ? h('div.filters-wrap',
+      h('div.fpanel-bar',
+        h('span.small.muted', 'Sections'),
+        h('span.spacer'),
+        h('button.btn.sm.ghost', {
+          onclick: () => {
+            openGroups = new Set(GROUPS.map((g) => g.id));
+            store.set('openGroups', [...openGroups]);
+            renderChrome();
+          },
+        }, 'Expand all'),
+        h('button.btn.sm.ghost', {
+          onclick: () => {
+            openGroups = new Set();
+            store.set('openGroups', []);
+            renderChrome();
+          },
+        }, 'Collapse all')),
+      h('div.panel', filterPanel())) : null,
     savedBar());
 
   panelEl = $('#chrome');
@@ -574,6 +654,14 @@ export { fromHash };
 
 export async function show(queryString) {
   state = fromHash(queryString);
+  // Arriving on a link or a saved search with filters already set: open
+  // the panel and the groups responsible, so the state is visible rather
+  // than hidden behind a collapsed header.
+  const busy = GROUPS.filter((g) => groupCount(g) > 0).map((g) => g.id);
+  if (busy.length) {
+    panelOpen = true;
+    for (const id of busy) openGroups.add(id);
+  }
   mount();
   renderChrome();
   await loadFacets();

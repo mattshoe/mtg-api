@@ -210,11 +210,13 @@ printed colour: **Exactly**, **At most** (nothing outside these — the one that
 answers "what can I put in this commander"), **At least**, and **Any of**.
 Colourless is handled per mode rather than pretended to be a sixth colour.
 
-The filter panel is full width and everything is visible at once — 76
-checkboxes, ranges with operators, segmented toggles, colour pips — in a
-responsive grid of eleven groups. It scrolls inside itself so the results stay
-on screen, collapses from the toolbar, and remembers whether you left it open.
-Active filters show as removable chips above it.
+The filter panel is full width and collapsed by default. Open it and you get
+eleven group headers; each one opens on its own, so you only unfold what you
+are actually using. 76 checkboxes, ranges with operators, segmented toggles,
+colour pips. Nothing scrolls inside anything else — the page has one
+scrollbar. Open/closed state is remembered, and a link or saved search that
+arrives with filters set opens the groups responsible. Active filters show as
+removable chips above the panel, and each group header carries a count.
 
 **The query box** is optional, sits at the bottom of the panel, and takes
 Scryfall-style syntax ANDed with whatever the controls have set. The cheatsheet
