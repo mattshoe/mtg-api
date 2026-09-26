@@ -319,9 +319,12 @@ Stats carries the collection total.
 They live in their own `prices` table keyed by printing, not as columns on
 `cards`, so the daily job can rebuild them without touching the collection.
 The `card_prices` view picks the figure matching each printing's finish — a
-foil row never quotes the nonfoil price. Because it is all SQL, sorting by
-price or by stack value, and filtering on a price range, are ordinary
-queries: around 150ms.
+foil row never quotes the nonfoil price. Where a price is genuinely absent
+the UI says why rather than showing a bare dash: a printing that has not
+come out yet shows its release date, a token shows "not sold singly", and
+Stats reports how many cards are unpriced under the total. Because it is
+all SQL, sorting by price or by stack value, and filtering on a price
+range, are ordinary queries: around 150ms.
 
 Keyboard: `s` `d` `a` `r` `g` `c` jump between views, `/` or `⌘K` finds a card,
 `v` opens the logs, `l` locks or unlocks, `t` toggles the theme, `esc`

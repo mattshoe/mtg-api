@@ -506,6 +506,13 @@ details.adv > div { padding-top: 12px; }
 }
 .btn.primary .count-pill { background: rgba(0,0,0,.24); color: inherit; }
 
+/* The Filters toggle marks "open", which everything else in here says with
+   accent-dim — tabs, chips, segmented controls. Solid gold made the single
+   largest control on a phone the loudest thing on the page. */
+.btn.open { background: var(--accent-dim); border-color: var(--accent); color: var(--accent-2); }
+.btn.open:hover { background: color-mix(in srgb, var(--accent) 22%, var(--bg-2)); }
+.btn.open .count-pill { background: var(--bg); color: var(--accent-2); }
+
 .active-bar, .saved-bar {
   display: flex; gap: 9px; align-items: center; flex-wrap: wrap;
   padding: 9px 11px; margin-bottom: 12px;
@@ -604,7 +611,7 @@ details.adv > div { padding-top: 12px; }
 
 @media (max-width: 720px) {
   .wrap { padding: 12px; }
-  .brand-text, .conn span { display: none; }
+  .conn span { display: none; }
   .tabs { position: fixed; top: var(--topbar-h); left: 0; right: 0; z-index: 39;
           flex-direction: column; background: var(--bg-2); border-bottom: 1px solid var(--line);
           padding: 8px; gap: 2px; display: none; box-shadow: var(--shadow); }

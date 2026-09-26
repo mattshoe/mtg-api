@@ -37,7 +37,12 @@ export async function show() {
              WHERE price IS NOT NULL)                        AS value,
           (SELECT ROUND(SUM(qty * price)) FROM card_prices
              WHERE price IS NOT NULL AND owner = 'matt')     AS matt_value,
-          (SELECT MAX(updated_at) FROM prices)               AS priced_at`),
+          (SELECT MAX(updated_at) FROM prices)               AS priced_at,
+          (SELECT COUNT(*) FROM cards c LEFT JOIN prices p
+             ON p.scryfall_id = c.scryfall_id
+           WHERE p.usd IS NULL)                              AS unpriced,
+          (SELECT COUNT(*) FROM cards
+            WHERE released_at > date('now'))                 AS unreleased`),
 
       api.rows(`SELECT CASE WHEN cmc >= 7 THEN 7 ELSE CAST(cmc AS INTEGER) END AS mv,
                        SUM(qty) AS n
@@ -104,7 +109,12 @@ export async function show() {
           title: totals.priced_at ? `Prices from ${totals.priced_at.slice(0, 10)}` : '',
         },
         h('div.n', totals.value ? `$${num(totals.value)}` : '—'),
-        h('div.l', 'market value'))),
+        h('div.l', 'market value'),
+        totals.unpriced
+          ? h('div.small.muted', { style: { marginTop: '4px', fontSize: '10.5px' } },
+            `${num(totals.unpriced)} unpriced`,
+            totals.unreleased ? ` · ${num(totals.unreleased)} unreleased` : '')
+          : null)),
 
       h('div.split', { style: { gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)' } },
         h('div.stack',

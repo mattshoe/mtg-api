@@ -71,3 +71,24 @@ export function exact(v) {
   if (v === null || v === undefined) return '—';
   return `$${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
+
+const UNPRICED_LAYOUTS = new Set(['token', 'double_faced_token', 'emblem', 'art_series']);
+
+/**
+ * Why a card has no price. "—" on its own reads as a failure, and most of
+ * the time it is not one: an unreleased printing has no market yet, and a
+ * token never will.
+ */
+export function priceReason(row) {
+  if (!row) return 'no price';
+  if (row.released_at && row.released_at > new Date().toISOString().slice(0, 10)) {
+    return `releases ${row.released_at}`;
+  }
+  if (UNPRICED_LAYOUTS.has(row.layout)) return 'not sold singly';
+  return 'no market price';
+}
+
+/** The price, or a short explanation of its absence. */
+export function priceOrReason(row, value = row?.price) {
+  return (value === null || value === undefined) ? priceReason(row) : exact(value);
+}

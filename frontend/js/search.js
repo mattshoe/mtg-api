@@ -15,7 +15,7 @@ import {
   DEFAULTS, SORTS, COLOR_MODES, FLAGS, buildQuery, toHash, fromHash, activeCount,
 } from './filters.js';
 import { cheatsheet } from './cheatsheet.js';
-import { money, exact } from './prices.js';
+import { money, exact, priceOrReason, priceReason } from './prices.js';
 
 const PAGE_SIZES = [24, 48, 96, 200];
 
@@ -429,7 +429,8 @@ function cardTile(c) {
   }),
   h('div.qty-badge', `${c.qty}`),
   h(`div.free-badge${free > 0 ? '' : '.none'}`, free > 0 ? `${free} free` : 'in decks'),
-  h('div.price-badge', money(c.price, { dash: '' })),
+  h('div.price-badge', { title: c.price === null ? priceReason(c) : '' },
+    money(c.price, { dash: '' })),
   h('div.card-meta',
     h('span.nm', c.name),
     h('span.sb', manaCost(c.mana_cost),
@@ -460,7 +461,9 @@ function resultsTable(list) {
       h('td.small.muted', c.artist || '—'),
       h('td.num', c.qty),
       h('td.num', c.free ?? 0),
-      h('td.num', exact(c.price)),
+      h('td.num', c.price === null
+        ? h('span.muted.small', { title: 'Scryfall has no price for this printing' }, priceReason(c))
+        : exact(c.price)),
       h('td.num', exact(c.value)),
       h('td.num.muted', c.edhrec_rank ? num(c.edhrec_rank) : '—'))))));
 }
@@ -565,7 +568,7 @@ function renderChrome() {
   fill($('#chrome'),
     h('div.searchbar',
       h('button.btn', {
-        class: panelOpen ? 'primary' : '',
+        class: panelOpen ? 'open' : '',
         onclick: () => {
           panelOpen = !panelOpen;
           store.set('filtersOpen', panelOpen);

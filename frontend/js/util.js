@@ -1,10 +1,25 @@
 // Small helpers. No framework, so these carry a lot of the weight.
 
+// SVG lives in its own namespace. document.createElement('svg') yields an
+// HTMLUnknownElement that renders nothing at all — which is why the lock
+// and close icons were showing as empty boxes.
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const SVG_TAGS = new Set(['svg', 'path', 'circle', 'rect', 'line', 'g',
+  'polyline', 'polygon', 'ellipse', 'text', 'defs', 'use']);
+
 /** Create an element. `h('div.card', {onclick}, ...children)` */
 export function h(spec, props, ...kids) {
   const [tag, ...classes] = String(spec).split('.');
-  const el = document.createElement(tag || 'div');
-  if (classes.length) el.className = classes.join(' ');
+  const name = tag || 'div';
+  const isSvg = SVG_TAGS.has(name);
+  const el = isSvg
+    ? document.createElementNS(SVG_NS, name)
+    : document.createElement(name);
+  // className is read-only on an SVGElement; the attribute is not.
+  if (classes.length) {
+    if (isSvg) el.setAttribute('class', classes.join(' '));
+    else el.className = classes.join(' ');
+  }
 
   if (props && (typeof props !== 'object' || props instanceof Node || Array.isArray(props))) {
     kids.unshift(props);
@@ -12,8 +27,10 @@ export function h(spec, props, ...kids) {
   }
   for (const [k, v] of Object.entries(props || {})) {
     if (v === null || v === undefined || v === false) continue;
-    if (k === 'class') el.className += ` ${v}`;
-    else if (k === 'html') el.innerHTML = v;
+    if (k === 'class') {
+      if (isSvg) el.setAttribute('class', `${el.getAttribute('class') || ''} ${v}`.trim());
+      else el.className += ` ${v}`;
+    } else if (k === 'html') el.innerHTML = v;
     else if (k === 'text') el.textContent = v;
     else if (k === 'style' && typeof v === 'object') Object.assign(el.style, v);
     else if (k.startsWith('on') && typeof v === 'function') el.addEventListener(k.slice(2), v);

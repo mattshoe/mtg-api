@@ -6,7 +6,7 @@ import {
   loading, errorBox, toast,
 } from './util.js';
 import { isAdmin, promptUnlock } from './admin.js';
-import { exact } from './prices.js';
+import { exact, priceOrReason, priceReason } from './prices.js';
 
 let onClose = null;
 let current = null;
@@ -50,7 +50,7 @@ async function fetchCard(id) {
     // Price comes straight from card_prices, which already picks the
     // figure matching each printing's finish.
     api.rows(`SELECT c.id, c.setcode, c.set_name, c.collector_number, c.finish,
-                     c.qty, c.rarity, c.released_at, c.scryfall_id,
+                     c.qty, c.rarity, c.released_at, c.scryfall_id, c.layout,
                      cp.price, cp.tcg_url, cp.updated_at AS priced_at
                 FROM cards c JOIN card_prices cp ON cp.card_id = c.id
                WHERE c.owner = ? AND c.name_norm = ?
@@ -117,7 +117,7 @@ function stackValue(printings) {
   }
   const when = printings.find((p) => p.priced_at)?.priced_at;
   return h('span', { title: when ? `Priced ${when.slice(0, 10)}` : '' },
-    any ? exact(sum) : '—');
+    any ? exact(sum) : priceReason(printings[0]));
 }
 
 function view({ card, faces, printings, decks, tags, keywords, legalities, rulings, usage }) {
@@ -184,7 +184,9 @@ function view({ card, faces, printings, decks, tags, keywords, legalities, rulin
         h('td.small', p.finish),
         h('td.num', p.qty),
         h('td', h('span.tag', p.rarity || '—')),
-        h('td.num', exact(p.price))))))),
+        h('td.num', p.price === null
+          ? h('span.muted.small', priceReason(p))
+          : exact(p.price))))))),
 
     decks.length ? h('div.sec', h('h3', `In ${decks.length} deck${decks.length === 1 ? '' : 's'}`),
       h('div.stack', decks.map((d) => h('div.flex', { style: { gap: '8px' } },
