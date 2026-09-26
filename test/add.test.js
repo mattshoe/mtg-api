@@ -345,10 +345,90 @@ describe('POST /cards/add — Scryfall rate limiting', () => {
 
     const r = await post('/cards/add', { list: '1 Fable of the Mirror-Breaker' }, flaky);
 
-    // The card still lands; only its rulings are deferred.
+    // The card still lands; only its rulings are deferred. That is a note,
+    // not a failure — nothing the user asked for went wrong.
     expect(r.body.applied).toBe(true);
     expect(calls).toBe(1);
-    expect(r.body.errors.join(' ')).toMatch(/rulings unavailable/);
+    expect(r.body.failed).toBe(0);
+    expect(r.body.notes.join(' ')).toMatch(/rulings unavailable/);
     expect(await count('cards', "name LIKE 'Fable%'")).toBe(1);
+  });
+});
+
+describe('POST /cards/add — large uploads', () => {
+  // D1 caps a statement at 100 bound parameters. Binding one per card meant
+  // any upload past ~99 distinct printings died with "too many SQL
+  // variables" — which is exactly what a collection export is.
+  it('handles more distinct printings than D1 allows bound parameters', { timeout: 30000 }, async () => {
+    const stub = stubScryfall();
+    const many = Array.from({ length: 250 }, (_, i) => ({
+      id: `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
+      name: `Bulk Card ${i}`,
+      set: 'tst',
+      collector_number: String(i),
+      type_line: 'Artifact',
+      oracle_id: `11111111-0000-4000-8000-${String(i).padStart(12, '0')}`,
+      finishes: ['nonfoil'],
+      colors: [], color_identity: [], keywords: [], games: ['paper'],
+      legalities: { commander: 'legal' },
+      prices: { usd: '0.10' },
+    }));
+    const byName = new Map(many.map((c) => [c.name.toLowerCase(), c]));
+    const wide = async (url, init) => {
+      const u = new URL(url);
+      if (u.pathname === '/cards/collection') {
+        const { identifiers } = JSON.parse(init.body);
+        return Response.json({
+          data: identifiers.map((i) => byName.get((i.name || '').toLowerCase())).filter(Boolean),
+          not_found: [],
+        });
+      }
+      return stub(url, init);
+    };
+
+    const list = many.map((c) => `1 ${c.name}`).join('\n');
+    const r = await post('/cards/add', { list }, wide);
+
+    expect(r.status).toBe(200);
+    expect(r.body.applied).toBe(true);
+    expect(r.body.failed).toBe(0);
+    expect(r.body.resolved).toBe(250);
+    expect(await count('cards', "setcode = 'tst'")).toBe(250);
+    // Rulings are skipped wholesale on an import this size, and said so.
+    expect(r.body.notes.join(' ')).toMatch(/rulings not fetched/);
+  });
+
+  it('a second pass over the same large list increments rather than duplicating', { timeout: 30000 }, async () => {
+    // This is the path that reads existing stacks back, which is where the
+    // parameter limit actually bit.
+    const stub = stubScryfall();
+    const many = Array.from({ length: 150 }, (_, i) => ({
+      id: `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
+      name: `Bulk Card ${i}`,
+      set: 'tst', collector_number: String(i), type_line: 'Artifact',
+      oracle_id: `11111111-0000-4000-8000-${String(i).padStart(12, '0')}`,
+      finishes: ['nonfoil'], colors: [], color_identity: [], keywords: [],
+      games: ['paper'], legalities: {}, prices: {},
+    }));
+    const byName = new Map(many.map((c) => [c.name.toLowerCase(), c]));
+    const wide = async (url, init) => {
+      const u = new URL(url);
+      if (u.pathname === '/cards/collection') {
+        const { identifiers } = JSON.parse(init.body);
+        return Response.json({
+          data: identifiers.map((i) => byName.get((i.name || '').toLowerCase())).filter(Boolean),
+          not_found: [],
+        });
+      }
+      return stub(url, init);
+    };
+    const list = many.map((c) => `1 ${c.name}`).join('\n');
+
+    await post('/cards/add', { list }, wide);
+    await post('/cards/add', { list }, wide);
+
+    expect(await count('cards', "setcode = 'tst'")).toBe(150);
+    const qtys = await sql("SELECT DISTINCT qty FROM cards WHERE setcode = 'tst'");
+    expect(qtys).toEqual([{ qty: 2 }]);
   });
 });

@@ -86,6 +86,12 @@ function resultBlock(r, mode) {
       h('div.err', r.errors.join('\n'))));
   }
 
+  // Notes are things worth knowing that are not failures — enrichment
+  // skipped on a big import, mostly. They must not read as errors.
+  if (r.notes?.length) {
+    kids.push(h('div.small.muted', { style: { marginTop: '10px' } }, r.notes.join(' · ')));
+  }
+
   return h('div.stack', kids);
 }
 
