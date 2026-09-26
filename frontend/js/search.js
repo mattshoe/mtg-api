@@ -425,19 +425,23 @@ function cardTile(c) {
     onclick: () => openCard(c.id),
     title: `${c.name} · ${(c.setcode || '').toUpperCase()} ${c.collector_number || ''}`,
   },
-  h('img.card-img', {
-    src: imageUrl(c.scryfall_id, 'normal'),
-    alt: c.name, loading: 'lazy', decoding: 'async',
-    onerror: (e) => { e.target.removeAttribute('src'); },
-  }),
-  h('div.qty-badge', `${c.qty}`),
-  h(`div.free-badge${free > 0 ? '' : '.none'}`, free > 0 ? `${free} free` : 'in decks'),
-  h('div.price-badge', { title: c.price === null ? priceReason(c) : '' },
-    money(c.price, { dash: '' })),
+  // The badges are positioned against the art, not the tile, so "bottom"
+  // means the bottom of the card image rather than under the caption.
+  h('div.card-art',
+    h('img.card-img', {
+      src: imageUrl(c.scryfall_id, 'normal'),
+      alt: c.name, loading: 'lazy', decoding: 'async',
+      onerror: (e) => { e.target.removeAttribute('src'); },
+    }),
+    h(`div.free-badge${free > 0 ? '' : '.none'}`, free > 0 ? `${free} free` : 'in decks'),
+    h('div.price-badge', { title: c.price === null ? priceReason(c) : '' },
+      money(c.price, { dash: '' }))),
   h('div.card-meta',
     h('span.nm', c.name),
-    h('span.sb', manaCost(c.mana_cost),
-      h('span', { style: { marginLeft: 'auto' } }, (c.setcode || '').toUpperCase()))));
+    h('span.sb',
+      manaCost(c.mana_cost),
+      h('span.qty', { title: `${c.qty} owned` }, `×${c.qty}`),
+      h('span.set', (c.setcode || '').toUpperCase()))));
 }
 
 function pager(total) {
