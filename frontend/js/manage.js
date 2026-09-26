@@ -132,7 +132,10 @@ const blank = (mode) => ({
   mode,
   step: 'list',
   list: '',
-  owner: store.get('owner', 'matt'),
+  // Deliberately nothing. Remembering the last choice, or defaulting to
+  // matt, is how a list lands in the wrong person's collection — the
+  // whole reason this is its own step is to make it a decision.
+  owner: null,
   preview: null,     // the dry run, once it comes back
   result: null,      // the real write, once applied
   error: null,
@@ -152,6 +155,12 @@ function stepper() {
 }
 
 function goto(step) {
+  // Nothing past step two happens without an owner, whatever calls this.
+  if ((step === 'review' || step === 'done') && !flow.owner) {
+    flow.step = 'who';
+    paint();
+    return;
+  }
   flow.step = step;
   // Stepping back invalidates the dry run: the next one has to be taken
   // against whatever the list and owner have become.
@@ -277,24 +286,31 @@ function stepList() {
 
 function stepWho() {
   const n = countCards(flow.list);
+  const picked = Boolean(flow.owner);
   return h('div.panel',
     h('div.panel-head',
       h('h2', 'Whose collection?'),
       h('span.spacer'),
       h('span.muted.small', `${num(n)} card${n === 1 ? '' : 's'} on the list`)),
     h('div.panel-body',
+      // Neither is selected until you say so, and nothing moves until one is.
       h('div.owner-pick', ['matt', 'kayla'].map((o) => h('button', {
         class: `owner-opt${flow.owner === o ? ' on' : ''}`,
-        onclick: () => { flow.owner = o; store.set('owner', o); paint(); },
+        onclick: () => { flow.owner = o; paint(); },
       }, o[0].toUpperCase() + o.slice(1)))),
       h('div.flex-wrap', { style: { marginTop: '16px' } },
         h('button.btn.ghost', { onclick: () => goto('list') }, '← Back'),
-        h('button.btn.primary', { onclick: () => goto('review') }, 'Preview changes →'))));
+        h('button.btn.primary', {
+          disabled: !picked,
+          title: picked ? '' : 'Pick whose collection this goes to',
+          onclick: () => goto('review'),
+        }, picked ? `Preview changes · ${flow.owner} →` : 'Pick one to continue'))));
 }
 
 // ----------------------------------------------------------- 3. review
 
 async function runPreview() {
+  if (!flow.owner) { goto('who'); return; }
   flow.busy = true;
   flow.error = null;
   paint();
@@ -310,6 +326,9 @@ async function runPreview() {
 }
 
 async function apply() {
+  // The server would fall back to matt if owner were missing. It cannot
+  // be missing by the time this renders, but this is the write.
+  if (!flow.owner) { goto('who'); return; }
   const isAdd = flow.mode === 'add';
   flow.busy = true;
   paint();
