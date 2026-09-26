@@ -154,6 +154,11 @@ main { min-height: calc(100vh - var(--topbar-h)); }
   padding: 11px 14px; border-bottom: 1px solid var(--line); background: var(--bg-3);
 }
 .panel-head h2 { flex: 1; font-size: 13px; letter-spacing: .02em; text-transform: uppercase; color: var(--text-2); }
+
+/* The results bar carries seven controls. On a phone they have to wrap
+   rather than run off the edge, and the count must not hog the slack. */
+.results-head { flex-wrap: wrap; row-gap: 8px; }
+.results-head h2 { flex: none; }
 .panel-body { padding: 14px; }
 
 .sticky-side { position: sticky; top: calc(var(--topbar-h) + 18px); max-height: calc(100vh - var(--topbar-h) - 36px); overflow-y: auto; }
@@ -299,7 +304,6 @@ td.mono { font-family: var(--mono); font-size: 12.5px; }
   pointer-events: none;
 }
 .price-badge:empty { display: none; }
-.price-total { font-variant-numeric: tabular-nums; }
 
 /* ---------------------------------------------------------------- drawer */
 .drawer-scrim { position: fixed; inset: 0; background: rgba(4,6,10,.62); z-index: 60; backdrop-filter: blur(2px); }

@@ -480,12 +480,9 @@ function pager(total) {
     h('button.btn.sm', { onclick: () => go(pages), disabled: state.page >= pages }, 'Last »'));
 }
 
-function resultsHead(total, rows) {
-  return h('div.panel-head',
+function resultsHead(total) {
+  return h('div.panel-head.results-head',
     h('h2', `${num(total)} ${total === 1 ? 'card' : 'cards'}`),
-    h('span.tag', state.group ? 'by name' : 'every printing'),
-    h('span.tag.price-total', { title: 'Market value of the cards on this page, from Scryfall/TCGplayer' },
-      pageValue(rows)),
     h('span.spacer'),
     h('div.seg',
       h('button', { class: state.view === 'grid' ? 'on' : '', onclick: () => push({ view: 'grid' }, { resetPage: false }) }, 'Grid'),
@@ -500,16 +497,6 @@ function resultsHead(total, rows) {
     h('select', { style: { width: 'auto' }, value: String(state.size), onchange: (e) => push({ size: Number(e.target.value) }) },
       PAGE_SIZES.map((n) => h('option', { value: n, selected: state.size === n }, `${n} / page`))),
     h('button.btn.sm', { onclick: () => exportCsv(total) }, 'CSV'));
-}
-
-/** Sum of what is on screen, counting how many copies are owned. */
-function pageValue(rows) {
-  let sum = 0;
-  let any = false;
-  for (const r of rows || []) {
-    if (r.value !== null && r.value !== undefined) { sum += r.value; any = true; }
-  }
-  return any ? `≈ ${money(sum)}` : '—';
 }
 
 async function exportCsv(total) {
@@ -532,7 +519,7 @@ function renderResults(rows, total) {
       ? h('div.panel-body', h('div.grid', rows.map(cardTile)))
       : resultsTable(rows))
     : empty('Nothing matches', 'Loosen a filter, or Clear all.');
-  fill(resultsEl, h('div.panel', resultsHead(total, rows), body), pager(total));
+  fill(resultsEl, h('div.panel', resultsHead(total), body), pager(total));
 }
 
 async function run() {
