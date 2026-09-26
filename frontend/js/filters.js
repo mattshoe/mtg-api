@@ -71,19 +71,25 @@ export const DEFAULTS = {
   group: true, view: 'grid', sort: 'name', dir: 'asc', page: 1, size: 48,
 };
 
+// Columns are qualified with `c.` because card_usage is joined in as `u`
+// and shares several names — an unqualified name_norm is ambiguous.
+// `qty` and `free` are output aliases, so they stay bare.
 export const SORTS = {
-  name: ['Name', 'name_norm'],
-  cmc: ['Mana value', 'cmc'],
+  name: ['Name', 'c.name_norm'],
+  cmc: ['Mana value', 'c.cmc'],
   qty: ['Quantity', 'qty'],
   free: ['Free copies', 'free'],
-  edhrec: ['EDHREC rank', 'edhrec_rank'],
-  released: ['Released', 'released_at'],
-  rarity: ['Rarity', "instr('common uncommon rare mythic special bonus', rarity)"],
-  set: ['Set', 'setcode'],
-  power: ['Power', "CASE WHEN power GLOB '[0-9]*' THEN CAST(power AS INTEGER) END"],
-  toughness: ['Toughness', "CASE WHEN toughness GLOB '[0-9]*' THEN CAST(toughness AS INTEGER) END"],
-  color: ['Colour identity', 'color_identity_count, color_identity'],
-  artist: ['Artist', 'artist'],
+  edhrec: ['EDHREC rank', 'c.edhrec_rank'],
+  released: ['Released', 'c.released_at'],
+  rarity: ['Rarity', "instr('common uncommon rare mythic special bonus', c.rarity)"],
+  set: ['Set', 'c.setcode'],
+  power: ['Power', "CASE WHEN c.power GLOB '[0-9]*' THEN CAST(c.power AS INTEGER) END"],
+  toughness: ['Toughness', "CASE WHEN c.toughness GLOB '[0-9]*' THEN CAST(c.toughness AS INTEGER) END"],
+  color: ['Colour identity', 'c.color_identity_count, c.color_identity'],
+  artist: ['Artist', 'c.artist'],
+  // Prices are not in the database, so this one is sorted client-side
+  // after a lookup. The column is a placeholder for the SQL path.
+  price: ['Price', 'c.name_norm'],
 };
 
 export const COLOR_MODES = [
@@ -203,8 +209,15 @@ const inList = (column, values, where, params) => {
 
 const exists = (sql, where, params, args) => { where.push(sql); params.push(...args); };
 
-/** Free copies, via the card_usage view. Correlated, keyed the same way. */
-export const USAGE_FREE = '(SELECT free FROM card_usage u WHERE u.owner = c.owner AND u.name_norm = c.name_norm)';
+/**
+ * Free copies come from the card_usage view, joined once rather than
+ * correlated per row. As a subquery it re-evaluated card_usage — itself a
+ * view over totals plus a grouped deck_cards join — for every candidate
+ * row, which blew D1's CPU limit outright on a whole-collection query.
+ * The join is 1:1 on (owner, name_norm), so it cannot fan rows out.
+ */
+export const USAGE_JOIN = 'LEFT JOIN card_usage u ON u.owner = c.owner AND u.name_norm = c.name_norm';
+export const USAGE_FREE = 'u.free';
 
 /**
  * State -> { where: [...], params: [...] }.
@@ -298,9 +311,9 @@ export function conditions(s, { advError } = {}) {
   if (s.hasRulings === 'yes') where.push('EXISTS (SELECT 1 FROM rulings r WHERE r.oracle_id = c.oracle_id)');
   if (s.hasRulings === 'no') where.push('NOT EXISTS (SELECT 1 FROM rulings r WHERE r.oracle_id = c.oracle_id)');
 
-  if (s.pool === 'free') where.push(`COALESCE(${USAGE_FREE}, 0) > 0`);
-  if (s.pool === 'committed') where.push(`COALESCE(${USAGE_FREE}, 0) <= 0`);
-  numeric(`COALESCE(${USAGE_FREE}, 0)`, '>=', s.freeMin, where, p);
+  if (s.pool === 'free') where.push('COALESCE(u.free, 0) > 0');
+  if (s.pool === 'committed') where.push('COALESCE(u.free, 0) <= 0');
+  numeric('COALESCE(u.free, 0)', '>=', s.freeMin, where, p);
 
   if (s.deck === '_any') {
     where.push('EXISTS (SELECT 1 FROM deck_cards dc JOIN decks d ON d.id = dc.deck_id WHERE dc.name_norm = c.name_norm AND d.owner = c.owner)');
@@ -374,7 +387,7 @@ const IS_SHAPES = {
   booster: 'c.booster = 1',
   oversized: 'c.oversized = 1',
   // collection
-  free: `COALESCE(${USAGE_FREE}, 0) > 0`,
+  free: 'COALESCE(u.free, 0) > 0',
   indeck: 'EXISTS (SELECT 1 FROM deck_cards dc JOIN decks d ON d.id = dc.deck_id WHERE dc.name_norm = c.name_norm AND d.owner = c.owner)',
   hasrulings: 'EXISTS (SELECT 1 FROM rulings r WHERE r.oracle_id = c.oracle_id)',
 };
@@ -509,7 +522,7 @@ export function parseAdvanced(input) {
       case 'tou': push(`(c.toughness GLOB '[0-9]*' AND CAST(c.toughness AS INTEGER) ${op} ?)`, [Number(v)], tok.neg); break;
       case 'loy': push(`(c.loyalty GLOB '[0-9]*' AND CAST(c.loyalty AS INTEGER) ${op} ?)`, [Number(v)], tok.neg); break;
       case 'qty': push(`c.qty ${op} ?`, [Number(v)], tok.neg); break;
-      case 'free': push(`COALESCE(${USAGE_FREE}, 0) ${op} ?`, [Number(v)], tok.neg); break;
+      case 'free': push(`COALESCE(u.free, 0) ${op} ?`, [Number(v)], tok.neg); break;
       case 'edhrec': push(`c.edhrec_rank ${tok.op === ':' ? '<=' : op} ?`, [Number(v)], tok.neg); break;
       case 'year': push(`substr(c.released_at, 1, 4) ${tok.op === ':' ? '=' : op} ?`, [String(Number(v))], tok.neg); break;
       case 'rarity': push('c.rarity = ?', [v.toLowerCase()], tok.neg); break;
@@ -562,7 +575,7 @@ export function parseAdvanced(input) {
 // ---------------------------------------------------------------- SQL
 
 const SELECT_COLS = `c.owner, c.name, c.name_norm, c.face2, c.layout,
-       c.scryfall_id, c.mana_cost, c.cmc, c.type_line, c.oracle_text,
+       c.scryfall_id, c.mana_cost, c.cmc, c.type_line,
        c.color_identity, c.rarity, c.setcode, c.set_name, c.collector_number,
        c.edhrec_rank, c.released_at, c.finish, c.power, c.toughness, c.artist`;
 
@@ -572,8 +585,8 @@ export function buildQuery(s, { countOnly = false, advError } = {}) {
 
   if (countOnly) {
     const inner = s.group
-      ? `SELECT 1 FROM cards c ${clause} GROUP BY c.owner, c.name_norm`
-      : `SELECT 1 FROM cards c ${clause}`;
+      ? `SELECT 1 FROM cards c ${USAGE_JOIN} ${clause} GROUP BY c.owner, c.name_norm`
+      : `SELECT 1 FROM cards c ${USAGE_JOIN} ${clause}`;
     return { sql: `SELECT COUNT(*) FROM (${inner})`, params };
   }
 
@@ -586,12 +599,12 @@ export function buildQuery(s, { countOnly = false, advError } = {}) {
   // which is the representative printing we want to show.
   const select = s.group
     ? `SELECT MIN(c.id) AS id, ${SELECT_COLS},
-              SUM(c.qty) AS qty, COUNT(*) AS printings, ${USAGE_FREE} AS free`
+              SUM(c.qty) AS qty, COUNT(*) AS printings, u.free AS free`
     : `SELECT c.id, ${SELECT_COLS},
-              c.qty AS qty, 1 AS printings, ${USAGE_FREE} AS free`;
+              c.qty AS qty, 1 AS printings, u.free AS free`;
 
   return {
-    sql: `${select}\nFROM cards c\n${clause}\n${s.group ? 'GROUP BY c.owner, c.name_norm' : ''}\n${order}\nLIMIT ${s.size} OFFSET ${offset}`,
+    sql: `${select}\nFROM cards c\n${USAGE_JOIN}\n${clause}\n${s.group ? 'GROUP BY c.owner, c.name_norm' : ''}\n${order}\nLIMIT ${s.size} OFFSET ${offset}`,
     params,
   };
 }

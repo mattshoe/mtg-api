@@ -6,6 +6,7 @@ import {
   loading, errorBox, toast,
 } from './util.js';
 import { isAdmin, promptUnlock } from './admin.js';
+import { fetchPrices, priceOf, exact, tcgLink } from './prices.js';
 
 let onClose = null;
 let current = null;
@@ -32,6 +33,25 @@ export async function openCard(id, after) {
     const data = await fetchCard(id);
     if (current !== id) return;
     fill($('#drawer-body'), view(data));
+    // Prices are a separate lookup; fill them in once they land rather
+    // than holding the whole drawer up for them.
+    fetchPrices(data.printings.map((p) => p.scryfall_id)).then(() => {
+      if (current !== id) return;
+      for (const el of $('#drawer-body').querySelectorAll('[data-price-for]')) {
+        el.textContent = exact(priceOf({
+          scryfall_id: el.dataset.priceFor, finish: el.dataset.finish,
+        }));
+      }
+      const total = data.printings.reduce((sum, p) => {
+        const v = priceOf(p);
+        return v === null ? sum : sum + v * p.qty;
+      }, 0);
+      const slot = $('#stack-value');
+      if (slot) slot.textContent = total ? exact(total) : '—';
+      const buy = $('#buy-link');
+      const href = tcgLink(data.card.scryfall_id);
+      if (buy && href) { buy.href = href; buy.hidden = false; }
+    });
   } catch (e) {
     fill($('#drawer-body'), h('div.drawer-head', h('h2', 'Error'), closeBtn()), h('div.drawer-body', errorBox(e)));
   }
@@ -130,6 +150,7 @@ function view({ card, faces, printings, decks, tags, keywords, legalities, rulin
       usage ? [h('dt', 'Free'), h('dd', usage.free > 0
         ? h('span.tag.ok', `${usage.free} unassigned`)
         : h('span.tag.warn', `all ${usage.owned} in decks`))] : null,
+      h('dt', 'Stack value'), h('dd', h('span', { id: 'stack-value' }, '…')),
       h('dt', 'Identity'), h('dd', identity(card.color_identity)),
       card.cmc !== null ? [h('dt', 'Mana value'), h('dd', card.cmc)] : null,
       card.power !== null ? [h('dt', 'P/T'), h('dd', `${card.power}/${card.toughness}`)] : null,
@@ -155,7 +176,7 @@ function view({ card, faces, printings, decks, tags, keywords, legalities, rulin
 
     h('div.sec', h('h3', `Printings you own (${printings.length})`),
       h('div.table-wrap', h('table',
-        h('thead', h('tr', h('th', 'Set'), h('th', '#'), h('th', 'Finish'), h('th.num', 'Qty'), h('th', 'Rarity'))),
+        h('thead', h('tr', h('th', 'Set'), h('th', '#'), h('th', 'Finish'), h('th.num', 'Qty'), h('th', 'Rarity'), h('th.num', 'Price'))),
         h('tbody', printings.map((p) => h(`tr${p.id === card.id ? '' : '.clickable'}`, {
           onclick: p.id === card.id ? null : () => openCard(p.id, onClose),
           style: p.id === card.id ? { background: 'var(--accent-dim)' } : null,
@@ -164,7 +185,8 @@ function view({ card, faces, printings, decks, tags, keywords, legalities, rulin
         h('td.mono', p.collector_number),
         h('td.small', p.finish),
         h('td.num', p.qty),
-        h('td', h('span.tag', p.rarity || '—'))))))),
+        h('td', h('span.tag', p.rarity || '—')),
+        h('td.num', { dataset: { priceFor: p.scryfall_id, finish: p.finish } }, '…')))))),
 
     decks.length ? h('div.sec', h('h3', `In ${decks.length} deck${decks.length === 1 ? '' : 's'}`),
       h('div.stack', decks.map((d) => h('div.flex', { style: { gap: '8px' } },
@@ -201,7 +223,10 @@ function view({ card, faces, printings, decks, tags, keywords, legalities, rulin
         h('a.btn.sm', {
           href: `https://edhrec.com/cards/${card.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`,
           target: '_blank', rel: 'noopener',
-        }, 'EDHREC ↗')))));
+        }, 'EDHREC ↗'),
+        h('a.btn.sm', {
+          id: 'buy-link', href: '#', hidden: true, target: '_blank', rel: 'noopener',
+        }, 'TCGplayer ↗')))));
 
   return h('div', head, body);
 }

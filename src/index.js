@@ -6,6 +6,7 @@
 //   POST /query       arbitrary SQL, compact JSON out
 //   POST /cards/add   a decklist in, Scryfall-enriched rows out
 //   POST /cards/remove
+//   POST /prices      scryfall ids in, TCGplayer-derived prices out
 //   POST /admin       password in, admin token out
 //
 // Reading is open. Anything that writes needs an admin token — see admin.js.
@@ -14,6 +15,7 @@ import { getSchema } from './schema.js';
 import { runQuery, isReadOnly } from './query.js';
 import { addCards, removeCards } from './cards.js';
 import { mintToken, verifyToken, bearer } from './admin.js';
+import { lookupPrices } from './prices.js';
 
 const JSON_HEADERS = {
   'content-type': 'application/json; charset=utf-8',
@@ -63,6 +65,7 @@ const INDEX = {
     'POST /query': '{"sql":"SELECT ...","params":[],"fmt":"rows|objects|tsv","limit":5000}',
     'POST /cards/add': '{"owner":"matt","list":"4 Lightning Bolt (2X2) 117","dry_run":false}',
     'POST /cards/remove': '{"owner":"matt","list":"1 Sol Ring","dry_run":false}',
+    'POST /prices': '{"ids":["<scryfall id>",...]} -> {"prices":{id:{usd,foil,etched,eur,tix,tcg}}}',
     'POST /admin': '{"password":"..."} -> {"token":"...","expires_at":<unix>}',
   },
   auth: 'Reads are open. Writes need Authorization: Bearer <token> from POST /admin.',
@@ -72,7 +75,7 @@ const INDEX = {
 const denied = (reason) => json({ error: reason, admin_required: true }, 401);
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/+$/, '') || '/';
     const method = request.method.toUpperCase();
@@ -94,6 +97,25 @@ export default {
       if (path === '/schema') {
         if (method !== 'GET') return json({ error: 'use GET' }, 405);
         return json(await getSchema(env.DB));
+      }
+
+      if (path === '/prices') {
+        // A read, so no admin token. Prices are public information and
+        // this only ever touches the cache and Scryfall, never D1.
+        if (method !== 'POST') return json({ error: 'use POST' }, 405);
+        const { body, error } = await readJson(request);
+        if (error) return json({ error }, 400);
+        if (!Array.isArray(body.ids)) return json({ error: 'ids must be an array' }, 400);
+        try {
+          const out = await lookupPrices(body.ids, {
+            fetchImpl: env.SCRYFALL_FETCH || fetch,
+            cache: env.DISABLE_PRICE_CACHE ? null : caches.default,
+            waitUntil: (pr) => ctx.waitUntil(pr),
+          });
+          return json(out);
+        } catch (e) {
+          return json({ error: String(e.message || e) }, e.status || 502);
+        }
       }
 
       if (path === '/admin') {

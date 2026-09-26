@@ -294,6 +294,14 @@ td.mono { font-family: var(--mono); font-size: 12.5px; }
   box-shadow: 0 0 0 1px rgba(255,255,255,.14);
 }
 .free-badge.none { color: var(--text-3); }
+.price-badge {
+  position: absolute; right: 6px; bottom: 44px; padding: 2px 7px; border-radius: 5px;
+  background: rgba(8,10,14,.86); color: var(--accent-2);
+  font: 700 11px/1.5 var(--mono); box-shadow: 0 0 0 1px rgba(255,255,255,.14);
+  pointer-events: none;
+}
+.price-badge:empty { display: none; }
+.price-total { font-variant-numeric: tabular-nums; }
 
 /* ---------------------------------------------------------------- drawer */
 .drawer-scrim { position: fixed; inset: 0; background: rgba(4,6,10,.62); z-index: 60; backdrop-filter: blur(2px); }

@@ -14,7 +14,12 @@ export default defineWorkersConfig({
           compatibilityFlags: ['nodejs_compat'],
           // The real password is a Worker secret. Tests get their own, so
           // the suite never depends on production config.
-          bindings: { ADMIN_PASSWORD: 'test-password' },
+          bindings: {
+            ADMIN_PASSWORD: 'test-password',
+            // The edge cache is real and shared; leaving it on would let
+            // one test's fetch satisfy the next test's assertion.
+            DISABLE_PRICE_CACHE: '1',
+          },
         },
       },
     },

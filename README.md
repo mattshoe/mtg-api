@@ -73,6 +73,30 @@ A bare `SELECT` with no `LIMIT` of its own is capped, and the response says
 `"truncated": <limit>` when it hit the cap. Errors come back as
 `{"error":"..."}` with a 400 and the real SQLite message.
 
+### `POST /prices`
+
+Prices for a list of scryfall ids, from Scryfall — whose `usd` figures are
+TCGplayer market prices, and which hands back a TCGplayer purchase link too.
+
+```bash
+curl -X POST https://mtg-api.mattshoe81.workers.dev/prices \
+  -H 'content-type: application/json' -d '{"ids":["2d47121d-8b90-4d28-9ffa-0a640b9dd611"]}'
+```
+
+```json
+{"prices":{"2d47121d-…":{"usd":1.97,"foil":null,"etched":null,"eur":1.3,"tix":0.04,"tcg":"https://…"}},
+ "fetched":1,"cached":0,"missing":[]}
+```
+
+No admin token — it is a read. Up to 1500 ids per call, batched 75 at a time
+into Scryfall at their documented rate limit, and cached in the Cloudflare
+Cache API for 12 hours. Around 300ms for a page of cards cold, ~120ms warm;
+the whole collection is about 15s cold and a second or two after that.
+
+**Prices are deliberately not in D1.** They go stale within a day, and a
+column that is wrong most of the time is worse than no column. The edge cache
+is storage the collection does not have to own, back up, or reconcile.
+
 ### `POST /admin`
 
 Password in, token out. The token is a signed expiry (`<unix>.<hmac>`), good
@@ -192,7 +216,7 @@ API.
 
 | view | what it does |
 |---|---|
-| Search | every column in the database, as facets or as a query language — see below |
+| Search | every column in the database, as facets or as a query language — see below; prices shown on every card and sortable |
 | Card | full detail in a drawer — every printing owned, decks it is in, tags, legalities, rulings, and ±1 buttons |
 | Decks | all 32 decks, each with its list, curve, notes and gaps; plus a gaps-and-conflicts overview |
 | Add / Remove | paste a list, preview the real dry run, then apply |
@@ -243,6 +267,15 @@ colours, set type, frame, border, release year, collector number, availability
 any/yes/no, format legality, has-rulings, copies owned, free copies, EDHREC
 rank, and which deck a card is in (or no deck at all).
 
+**Prices** appear on every card tile, as a column in table view, and per
+printing in the card drawer alongside the value of that whole stack and a
+TCGplayer link. The page header shows what the visible cards are worth.
+
+Sorting by price cannot happen in SQL, since prices are not in the database —
+so choosing it prices every match, sorts here, and then pages. Cold on the
+full collection that is roughly fifteen seconds with a running count; after
+that the edge cache makes it quick.
+
 Keyboard: `s` `d` `a` `r` `g` `c` jump between views, `/` or `⌘K` finds a card,
 `l` locks or unlocks, `t` toggles the theme, `esc` closes. Searches are shareable — the filters live
 in the URL — and can be saved by name.
@@ -251,7 +284,7 @@ in the URL — and can be saved by name.
 
 ```bash
 npm install
-npm test          # 179 tests against a real local D1 in workerd
+npm test          # 195 tests against a real local D1 in workerd
 npm run dev       # local server
 npm run deploy
 ```
