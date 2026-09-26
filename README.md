@@ -269,9 +269,15 @@ API.
 
 Admin mode is the padlock in the top bar, or `l`. It lives in a JavaScript
 variable and nowhere else — not `localStorage`, not `sessionStorage`, not the
-URL — so closing or reloading the tab ends it. While it is off, Add and Remove
-show a lock screen, the drawer's ±1 buttons are replaced by an unlock button,
-and the console runs reads but prompts before a write.
+URL — so closing or reloading the tab ends it.
+
+While it is off, everything that needs it is simply not there. The Add,
+Remove and Logs tabs are absent, their keyboard shortcuts do nothing, and a
+bookmark pointing at one of those routes lands on Search with the password
+prompt open. The drawer has no ±1 buttons and no unlock button either. The
+console still runs reads, because reads need no token, and refuses a write
+with a message rather than a second way in. Locking while one of the gated
+views is open moves you off it. The padlock is the only entrance.
 
 **Colour matching** has four explicit modes, on either colour identity or the
 printed colour: **Exactly**, **At most** (nothing outside these — the one that

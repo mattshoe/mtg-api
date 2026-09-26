@@ -8,7 +8,7 @@ import * as api from './api.js';
 import {
   h, $, fill, num, download, toCsv, toast, store, errorBox, loading,
 } from './util.js';
-import { isAdmin, promptUnlock } from './admin.js';
+import { isAdmin } from './admin.js';
 
 const HISTORY_KEY = 'sql-history';
 
@@ -60,8 +60,11 @@ async function run() {
   const sql = editor.value.trim();
   if (!sql) return;
 
+  // Reads are open to everyone, so the console stays. A write is the one
+  // thing it cannot do while locked, and it says so rather than offering
+  // a second way to unlock.
   if (looksLikeWrite(sql) && !isAdmin()) {
-    promptUnlock(run);
+    toast('That statement writes — unlock admin mode first', 'bad');
     return;
   }
   fill(outEl, h('div.panel', h('div.panel-body', h('span.spinner'), ' Running…')));
@@ -91,12 +94,9 @@ async function run() {
         }, 'Copy JSON') : null),
       resultTable(res)));
   } catch (e) {
-    fill(outEl, h('div.panel', h('div.panel-body',
-      errorBox(e),
-      e.adminRequired
-        ? h('div', { style: { marginTop: '10px' } },
-          h('button.btn.sm.primary', { onclick: () => promptUnlock(run) }, 'Unlock and retry'))
-        : null)));
+    // A 401 here means a token expired mid-session; admin.js has already
+    // said so and put the header lock back. No second unlock button.
+    fill(outEl, h('div.panel', h('div.panel-body', errorBox(e))));
   }
 }
 
@@ -162,7 +162,7 @@ export async function show() {
   fill(root, h('div.wrap',
     h('div.page-head',
       h('h1', 'SQL console'),
-      h('span.sub', 'Reads and writes. One statement per run.')),
+      h('span.sub', isAdmin() ? 'Reads and writes. One statement per run.' : 'Reads only. One statement per run.')),
 
     h('div.split',
       h('div.stack',

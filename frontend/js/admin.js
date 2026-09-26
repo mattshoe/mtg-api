@@ -142,15 +142,3 @@ export function adminButton() {
   paint();
   return btn;
 }
-
-/** The panel a gated view shows instead of its controls. */
-export function lockedPanel(what, onUnlocked) {
-  return h('div.panel',
-    h('div.panel-head', h('h2', 'Locked')),
-    h('div.panel-body', { style: { textAlign: 'center', padding: '34px 20px' } },
-      h('div', { style: { fontSize: '30px', marginBottom: '10px', opacity: '.5' } }, '🔒'),
-      h('h3', { style: { marginBottom: '6px' } }, `Admin mode is needed to ${what}`),
-      h('div.muted.small', { style: { marginBottom: '16px' } },
-        'It lasts for this tab only and is never remembered.'),
-      h('button.btn.primary', { onclick: () => promptUnlock(onUnlocked) }, 'Unlock')));
-}

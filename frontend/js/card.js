@@ -5,7 +5,7 @@ import {
   h, $, fill, num, imageUrl, hasBackFace, manaCost, identity,
   loading, errorBox, toast,
 } from './util.js';
-import { isAdmin, promptUnlock } from './admin.js';
+import { isAdmin } from './admin.js';
 import { exact, priceOrReason, priceReason } from './prices.js';
 
 let onClose = null;
@@ -133,14 +133,13 @@ function view({ card, faces, printings, decks, tags, keywords, legalities, rulin
   const body = h('div.drawer-body',
     imageBlock(card),
 
-    h('div.flex-wrap', { style: { justifyContent: 'center', marginBottom: '14px' } },
-      isAdmin()
-        ? [h('button.btn.sm', { onclick: () => adjust(card, +1), title: 'Add one of this printing' }, '＋ Add one'),
-          h('button.btn.sm.danger', { onclick: () => adjust(card, -1), title: 'Remove one of this printing' }, '− Remove one')]
-        : h('button.btn.sm.ghost', {
-          title: 'Adding and removing need admin mode',
-          onclick: () => promptUnlock(() => openCard(card.id, onClose)),
-        }, '🔒 Unlock to edit')),
+    // Nothing here while locked, not even an invitation to unlock. The
+    // header lock is the one way in.
+    isAdmin()
+      ? h('div.flex-wrap', { style: { justifyContent: 'center', marginBottom: '14px' } },
+        h('button.btn.sm', { onclick: () => adjust(card, +1), title: 'Add one of this printing' }, '＋ Add one'),
+        h('button.btn.sm.danger', { onclick: () => adjust(card, -1), title: 'Remove one of this printing' }, '− Remove one'))
+      : null,
 
     h('dl.kv',
       h('dt', 'Owner'), h('dd', card.owner),

@@ -54,6 +54,11 @@ api.onStatus((state) => {
 
 // ---------------------------------------------------------------- routing
 
+// Views that do nothing without a token. While locked they are not
+// reachable and their tabs are not in the DOM's flow at all — the lock in
+// the header is the only sign they exist.
+const GATED = new Set(['add', 'remove', 'logs']);
+
 const ROUTES = {
   search: (rest) => search.show(rest),
   decks: (rest) => decks.show(rest),
@@ -82,6 +87,15 @@ async function route() {
   $('#nav-toggle').setAttribute('aria-expanded', 'false');
 
   if (!fn) { location.hash = '#/search'; return; }
+
+  // A bookmark or a back button can still point at a gated view. Bounce to
+  // search and offer the password rather than rendering a shell that
+  // cannot do anything.
+  if (GATED.has(view) && !isAdmin()) {
+    location.replace(`#/search${query ? `?${query}` : ''}`);
+    promptUnlock(() => { location.hash = `#/${view}${rest ? `/${rest}` : ''}`; });
+    return;
+  }
 
   // Search owns its own hash, so re-entering it with a new query string is a
   // filter change rather than a fresh mount.
@@ -193,13 +207,19 @@ addEventListener('keydown', (e) => {
 
   if (typing) return;
 
-  const go = { s: '#/search', d: '#/decks', a: '#/add', r: '#/remove', g: '#/stats', c: '#/console', v: '#/logs' }[e.key];
-  if (go) { location.hash = go; return; }
+  const go = { s: 'search', d: 'decks', a: 'add', r: 'remove', g: 'stats', c: 'console', v: 'logs' }[e.key];
+  if (go) {
+    // The shortcuts for gated views are as hidden as their tabs.
+    if (!GATED.has(go) || isAdmin()) location.hash = `#/${go}`;
+    return;
+  }
   if (e.key === 't') toggleTheme();
   if (e.key === 'l') (isAdmin() ? lock() : promptUnlock());
   if (e.key === '/') { e.preventDefault(); openPalette(); }
   if (e.key === '?') {
-    toast('s search · d decks · a add · r remove · g stats · c console · v logs · l lock/unlock · t theme · / or ⌘K find · esc close');
+    toast(`s search · d decks${isAdmin() ? ' · a add · r remove' : ''} · g stats · c console`
+      + `${isAdmin() ? ' · v logs' : ''} · l ${isAdmin() ? 'lock' : 'unlock'} · t theme`
+      + ' · / or ⌘K find · esc close');
   }
 });
 
@@ -208,17 +228,17 @@ addEventListener('keydown', (e) => {
 $('.topbar-right').prepend(adminButton());
 $('#theme-btn').addEventListener('click', toggleTheme);
 
-// Mark the edit tabs while locked, so the padlock is visible before you
-// click into a view that cannot do anything.
+// The gated tabs appear and disappear with the lock. Locking while one of
+// them is open also has to move you off it, or the view stays on screen
+// with a dead token behind it.
 function paintTabs() {
   const on = isAdmin();
-  for (const a of $$('#tabs a')) {
-    const gated = ['add', 'remove', 'logs'].includes(a.dataset.view);
-    a.classList.toggle('gated', gated && !on);
-    a.title = gated && !on ? 'Needs admin mode' : '';
-  }
+  for (const a of $$('#tabs a[data-gated]')) a.hidden = !on;
 }
-onAdminChange(paintTabs);
+onAdminChange((on) => {
+  paintTabs();
+  if (!on && GATED.has(parseHash().view)) location.hash = '#/search';
+});
 paintTabs();
 $('#nav-toggle').addEventListener('click', () => {
   const open = $('#tabs').classList.toggle('open');
