@@ -6,8 +6,11 @@ database offline for the duration ("your D1 database will be unavailable to
 serve queries"), and on this database that ran for well over ten minutes. A
 nightly backup should not cost a nightly outage.
 
-So this pages every table out through /query instead. Read-only, no lock, no
-wrangler, no credentials — just HTTP. The output restores into plain SQLite:
+So this pages every table out through /query instead. Read-only, no lock,
+no wrangler — just HTTP. The one table that needs a credential is `logs`,
+which the Worker gates behind admin because it carries IP addresses; set
+MTG_ADMIN_PASSWORD and it is included, leave it unset and it is skipped.
+The output restores into plain SQLite:
 
     gunzip -c mtg-20260926.sql.gz | sqlite3 restored.db
 
@@ -57,16 +60,44 @@ def verify_covers_everything(api):
         sys.exit(f"backup would miss {sorted(unknown)} - add them to TABLES")
 
 
+# Set once by sign_in(), if a password was available.
+TOKEN = None
+
+
+def sign_in(api):
+    """Trade the admin password for a token, so `logs` can be read.
+
+    Optional by design: without it every other table still dumps. A bad
+    password is worth shouting about though, because the alternative is a
+    backup that quietly stops covering a table.
+    """
+    global TOKEN
+    password = os.environ.get("MTG_ADMIN_PASSWORD")
+    if not password:
+        return False
+    req = urllib.request.Request(
+        f"{api}/admin", data=json.dumps({"password": password}).encode(),
+        headers={"Content-Type": "application/json",
+                 "User-Agent": "mtg-api-backup/1.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            TOKEN = json.load(r)["token"]
+        return True
+    except urllib.error.HTTPError as e:
+        sys.exit(f"MTG_ADMIN_PASSWORD was rejected ({e.code}) - fix it or unset it")
+
+
 def query(api, sql, params=None):
     body = json.dumps({"sql": sql, "params": params or [], "limit": 50000}).encode()
     last = None
     for attempt in range(RETRIES):
-        req = urllib.request.Request(
-            f"{api}/query", data=body,
-            # Cloudflare's bot protection answers urllib's default
-            # User-Agent with a 403 (error 1010), so say who we are.
-            headers={"Content-Type": "application/json",
-                     "User-Agent": "mtg-api-backup/1.0"})
+        # Cloudflare's bot protection answers urllib's default
+        # User-Agent with a 403 (error 1010), so say who we are.
+        headers = {"Content-Type": "application/json",
+                   "User-Agent": "mtg-api-backup/1.0"}
+        if TOKEN:
+            headers["Authorization"] = f"Bearer {TOKEN}"
+        req = urllib.request.Request(f"{api}/query", data=body, headers=headers)
         try:
             with urllib.request.urlopen(req, timeout=120) as r:
                 return json.load(r)
@@ -106,6 +137,11 @@ def main():
 
     verify_covers_everything(args.api)
 
+    tables = list(TABLES)
+    if not sign_in(args.api):
+        tables.remove("logs")
+        print("no MTG_ADMIN_PASSWORD - skipping `logs` (admin only)", file=sys.stderr)
+
     opener = gzip.open if out.name.endswith(".gz") else open
     total = 0
 
@@ -117,7 +153,7 @@ def main():
         f.write(schema.read_text())
         f.write("\n")
 
-        for table in TABLES:
+        for table in tables:
             offset = 0
             n = 0
             cols = None
