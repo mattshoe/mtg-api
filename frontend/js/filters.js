@@ -662,13 +662,3 @@ export function fromHash(queryString) {
   return s;
 }
 
-/** How many real filters are on, for the "N active" badge and Reset. */
-export function activeCount(s) {
-  const skip = new Set(['page', 'sort', 'dir', 'colorMode', 'colorTarget',
-    'powOp', 'touOp', 'loyOp', 'legality']);
-  return Object.keys(DEFAULTS).filter((k) => {
-    if (skip.has(k)) return false;
-    const v = s[k]; const d = DEFAULTS[k];
-    return Array.isArray(v) ? v.length !== d.length : v !== d;
-  }).length;
-}

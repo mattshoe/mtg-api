@@ -5,9 +5,6 @@
 
 export const API = 'https://mtg-api.mattshoe81.workers.dev';
 
-const listeners = new Set();
-let inFlight = 0;
-
 // Set by admin.js once it loads. Kept as a hook rather than a direct import
 // so api.js stays the lower layer of the two and there is no cycle.
 let authHeader = () => ({});
@@ -17,19 +14,7 @@ export function useAuth(headerFn, rejectedFn) {
   onUnauthorized = rejectedFn;
 }
 
-/** Subscribe to connection state: 'idle' | 'busy' | 'ok' | 'bad'. */
-export function onStatus(fn) {
-  listeners.add(fn);
-  return () => listeners.delete(fn);
-}
-
-function emit(state, detail) {
-  for (const fn of listeners) fn(state, detail);
-}
-
 async function call(path, init) {
-  inFlight += 1;
-  emit('busy');
   try {
     const res = await fetch(API + path, init);
     const text = await res.text();
@@ -48,19 +33,13 @@ async function call(path, init) {
       if (res.status === 401) onUnauthorized();
       throw err;
     }
-    emit('ok');
     return body;
   } catch (e) {
     // A network failure and an API error read very differently to a user.
     if (e instanceof TypeError) {
-      emit('bad');
       throw new Error('cannot reach the API — check your connection');
     }
-    emit(e.status ? 'ok' : 'bad');
     throw e;
-  } finally {
-    inFlight -= 1;
-    if (inFlight === 0) emit('settled');
   }
 }
 

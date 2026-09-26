@@ -284,9 +284,9 @@ printed colour: **Exactly**, **At most** (nothing outside these — the one that
 answers "what can I put in this commander"), **At least**, and **Any of**.
 Colourless is handled per mode rather than pretended to be a sixth colour.
 
-The filter panel is full width and collapsed by default. Open it and you get
-eleven group headers; each one opens on its own, so you only unfold what you
-are actually using. 76 checkboxes, ranges with operators, segmented toggles,
+The filter panel is full width and always on screen as eleven group
+headers, each collapsed until you open it, so you only unfold what you are
+actually using. 76 checkboxes, ranges with operators, segmented toggles,
 colour pips. Nothing scrolls inside anything else — the page has one
 scrollbar. Open/closed state is remembered, and a link that arrives with
 filters set opens the groups responsible. Active filters — whose collection

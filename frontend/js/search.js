@@ -12,7 +12,7 @@ import {
 } from './util.js';
 import { openCard } from './card.js';
 import {
-  DEFAULTS, PAGE_SIZE, SORTS, COLOR_MODES, FLAGS, buildQuery, toHash, fromHash, activeCount,
+  DEFAULTS, PAGE_SIZE, SORTS, COLOR_MODES, FLAGS, buildQuery, toHash, fromHash,
 } from './filters.js';
 import { cheatsheet } from './cheatsheet.js';
 import { money, exact, priceOrReason, priceReason } from './prices.js';
@@ -22,7 +22,6 @@ let state = { ...DEFAULTS };
 let lastRun = null;
 let facets = null;
 let advError = null;
-let panelOpen = store.get('filtersOpen', false);
 let openGroups = new Set(store.get('openGroups', []));
 let panelEl;
 let resultsEl;
@@ -569,25 +568,16 @@ async function run() {
 /** Everything above the results: the toolbar, the chips, the panel. */
 function renderChrome() {
   const snap = captureFocus();
-  const n = activeCount(state);
 
   fill($('#chrome'),
     h('div.searchbar',
-      h('button.btn', {
-        class: panelOpen ? 'open' : '',
-        onclick: () => {
-          panelOpen = !panelOpen;
-          store.set('filtersOpen', panelOpen);
-          renderChrome();
-        },
-      }, panelOpen ? '▾ Filters' : '▸ Filters', n ? h('span.count-pill', n) : null),
       h('input.bigsearch', {
         type: 'search', value: state.q, placeholder: 'Search by name…',
         dataset: { fk: 'q-top' },
         oninput: debounce((e) => push({ q: e.target.value }), 400),
       })),
     activeChips(),
-    panelOpen ? h('div.filters-wrap',
+    h('div.filters-wrap',
       h('div.fpanel-bar',
         h('span.small.muted', 'Sections'),
         h('span.spacer'),
@@ -605,7 +595,7 @@ function renderChrome() {
             renderChrome();
           },
         }, 'Collapse all')),
-      h('div.panel', filterPanel())) : null);
+      h('div.panel', filterPanel())));
 
   panelEl = $('#chrome');
   restoreFocus(snap);
@@ -659,14 +649,9 @@ export { fromHash };
 
 export async function show(queryString) {
   state = fromHash(queryString);
-  // Arriving on a link or a saved search with filters already set: open
-  // the panel and the groups responsible, so the state is visible rather
-  // than hidden behind a collapsed header.
-  const busy = GROUPS.filter((g) => groupCount(g) > 0).map((g) => g.id);
-  if (busy.length) {
-    panelOpen = true;
-    for (const id of busy) openGroups.add(id);
-  }
+  // Arriving on a link with filters already set: open the groups
+  // responsible, so the state is visible rather than folded away.
+  for (const g of GROUPS) if (groupCount(g) > 0) openGroups.add(g.id);
   mount();
   renderChrome();
   await loadFacets();

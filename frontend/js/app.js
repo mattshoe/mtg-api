@@ -1,4 +1,4 @@
-// Shell: routing, theme, connection light, keyboard shortcuts, quick find.
+// Shell: routing, theme, keyboard shortcuts, quick find.
 
 import * as api from './api.js';
 import { h, $, $$, fill, store, debounce, imageUrl, toast } from './util.js';
@@ -33,24 +33,6 @@ applyTheme(store.get('theme', 'auto'));
 // Hand the API client the auth hooks. Done here rather than by importing
 // admin.js from api.js, so the dependency runs one way only.
 api.useAuth(authHeader, rejected);
-
-// ------------------------------------------------------------ status light
-
-let settleTimer;
-api.onStatus((state) => {
-  const el = $('#conn');
-  const label = $('#conn-text');
-  if (!el) return;
-  clearTimeout(settleTimer);
-  if (state === 'busy') { el.className = 'conn busy'; label.textContent = 'working'; return; }
-  if (state === 'bad') { el.className = 'conn bad'; label.textContent = 'offline'; return; }
-  if (state === 'ok') { el.className = 'conn ok'; label.textContent = 'live'; }
-  if (state === 'settled') {
-    settleTimer = setTimeout(() => {
-      if (el.className !== 'conn bad') { el.className = 'conn ok'; label.textContent = 'live'; }
-    }, 150);
-  }
-});
 
 // ---------------------------------------------------------------- routing
 
@@ -252,6 +234,3 @@ $('#palette-input').addEventListener('input', (e) => searchPalette(e.target.valu
 
 if (!location.hash) location.hash = '#/search';
 route();
-
-// A first ping so the status light means something before you touch anything.
-api.scalar('SELECT 1').catch(() => {});
