@@ -51,6 +51,12 @@ echo "-- saved $(ls -lh "$OUT" | awk '{print $5}') to $OUT"
 find "$BACKUPS" -name 'mtg-*.sql.gz' -mtime "+$KEEP_DAYS" -delete
 echo "-- $(find "$BACKUPS" -name 'mtg-*.sql.gz' | wc -l | tr -d ' ') backups retained"
 
+# Prices come from the Scryfall bulk file prefetch_scryfall.py already
+# keeps on disk — no API calls, and the Worker cannot do it because
+# Scryfall rate-limits Cloudflare's egress IPs. See refresh_prices.py.
+echo "-- refreshing prices"
+python3 "$REPO/scripts/refresh_prices.py" --api "$API" || echo "WARN: price refresh failed"
+
 echo "-- backfilling tags"
 python3 "$REPO/scripts/backfill.py" --api "$API" || echo "WARN: backfill failed"
 

@@ -21,7 +21,8 @@ export async function show() {
 
   try {
     const owner = 'matt';
-    const [totals, curve, rarity, types, sets, colors, topFree, dupes, decks, tags, recent] = await Promise.all([
+    const [totals, curve, rarity, types, sets, colors, topFree, dupes, decks, tags, recent,
+      priciest] = await Promise.all([
       api.one(`SELECT
           (SELECT COUNT(*) FROM cards)                       AS printings,
           (SELECT COUNT(*) FROM totals)                      AS uniques,
@@ -31,7 +32,12 @@ export async function show() {
           (SELECT COUNT(DISTINCT setcode) FROM cards)        AS sets,
           (SELECT COUNT(*) FROM cards WHERE finish!='nonfoil') AS foils,
           (SELECT COUNT(*) FROM cards WHERE owner='matt')    AS matt,
-          (SELECT COUNT(*) FROM cards WHERE owner='kayla')   AS kayla`),
+          (SELECT COUNT(*) FROM cards WHERE owner='kayla')   AS kayla,
+          (SELECT ROUND(SUM(qty * price)) FROM card_prices
+             WHERE price IS NOT NULL)                        AS value,
+          (SELECT ROUND(SUM(qty * price)) FROM card_prices
+             WHERE price IS NOT NULL AND owner = 'matt')     AS matt_value,
+          (SELECT MAX(updated_at) FROM prices)               AS priced_at`),
 
       api.rows(`SELECT CASE WHEN cmc >= 7 THEN 7 ELSE CAST(cmc AS INTEGER) END AS mv,
                        SUM(qty) AS n
@@ -71,6 +77,12 @@ export async function show() {
       api.rows(`SELECT name, setcode, released_at, MIN(id) AS id
                   FROM cards WHERE owner = ? AND released_at IS NOT NULL
                  GROUP BY name_norm ORDER BY released_at DESC LIMIT 10`, [owner]),
+
+      api.rows(`SELECT c.name, c.setcode, c.qty, cp.price,
+                       ROUND(c.qty * cp.price, 2) AS value, c.id
+                  FROM cards c JOIN card_prices cp ON cp.card_id = c.id
+                 WHERE c.owner = ? AND cp.price IS NOT NULL
+                 ORDER BY value DESC LIMIT 12`, [owner]),
     ]);
 
     const curveMax = Math.max(1, ...curve.map((c) => c.n));
@@ -87,7 +99,12 @@ export async function show() {
         tile(totals.free, 'unassigned', 'Copies not committed to a built deck'),
         tile(totals.decks, 'decks'),
         tile(totals.sets, 'sets'),
-        tile(totals.foils, 'foil / etched')),
+        tile(totals.foils, 'foil / etched'),
+        h('div.tile', {
+          title: totals.priced_at ? `Prices from ${totals.priced_at.slice(0, 10)}` : '',
+        },
+        h('div.n', totals.value ? `$${num(totals.value)}` : '—'),
+        h('div.l', 'market value'))),
 
       h('div.split', { style: { gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)' } },
         h('div.stack',
@@ -141,6 +158,14 @@ export async function show() {
             h('td', d.name, d.is_proxy ? h('span.tag.warn', { style: { marginLeft: '6px' } }, 'proxy') : null),
             h('td.num', d.card_count),
             h('td.num', d.owned_count < d.card_count ? h('span.tag.warn', d.owned_count) : d.owned_count))))))),
+
+          panel('Most valuable', h('div.table-wrap', h('table',
+            h('thead', h('tr', h('th', 'Card'), h('th.num', 'Each'), h('th.num', 'Qty'), h('th.num', 'Value'))),
+            h('tbody', priciest.map((c) => h('tr.clickable', { onclick: () => openCard(c.id) },
+              h('td.t-name', c.name, ' ', h('span.mono.small.muted', (c.setcode || '').toUpperCase())),
+              h('td.num', `$${c.price.toFixed(2)}`),
+              h('td.num.muted', c.qty),
+              h('td.num', `$${c.value.toFixed(2)}`))))))),
 
           panel('Newest printings', h('div.table-wrap', h('table',
             h('tbody', recent.map((c) => h('tr.clickable', { onclick: () => openCard(c.id) },

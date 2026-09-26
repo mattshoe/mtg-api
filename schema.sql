@@ -95,6 +95,28 @@ CREATE TABLE legalities (oracle_id TEXT, format TEXT, status TEXT);
 CREATE TABLE rulings    (oracle_id TEXT, published_at TEXT, source TEXT,
                          comment TEXT);
 
+-- ============================================================ prices
+-- Their own table keyed by printing, not columns on `cards`: prices are
+-- reference data with a shelf life of about a day, and the daily job
+-- rebuilds this without ever touching the collection itself.
+CREATE TABLE prices (
+    scryfall_id TEXT PRIMARY KEY,
+    usd REAL, usd_foil REAL, usd_etched REAL,
+    eur REAL, tix REAL,
+    tcg_url TEXT,
+    updated_at TEXT
+);
+
+-- What the daily job did, so a task that quietly stops working is visible.
+CREATE TABLE maintenance_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ran_at TEXT,
+    task TEXT,
+    ok INTEGER,
+    detail TEXT,
+    ms INTEGER
+);
+
 -- ============================================================ full text
 CREATE VIRTUAL TABLE card_search USING fts5(
     name, type_line, oracle_text, flavor_text, keywords, tags,
@@ -126,6 +148,8 @@ CREATE INDEX idx_tags_card       ON card_tags(card_id);
 CREATE INDEX idx_tags_slug       ON card_tags(tag_slug);
 CREATE INDEX idx_legal_oracle    ON legalities(oracle_id);
 CREATE INDEX idx_rulings_oracle  ON rulings(oracle_id);
+CREATE INDEX idx_prices_usd      ON prices(usd);
+CREATE INDEX idx_maint_ran       ON maintenance_log(ran_at DESC);
 
 -- One physical stack per (person, printing, finish). The old builder rebuilt
 -- the whole table from a card list every time, so it could not collide;
@@ -147,6 +171,19 @@ SELECT owner, name, name_norm, face1, face2,
        MIN(color_identity)                             AS color_identity
 FROM cards
 GROUP BY owner, name_norm;
+
+-- The price that actually applies to a stack, given its finish. A foil
+-- row must not quote the nonfoil price.
+CREATE VIEW card_prices AS
+SELECT c.id AS card_id, c.owner, c.name_norm, c.qty, c.finish,
+       CASE c.finish
+         WHEN 'foil'   THEN COALESCE(p.usd_foil, p.usd)
+         WHEN 'etched' THEN COALESCE(p.usd_etched, p.usd_foil, p.usd)
+         ELSE p.usd
+       END AS price,
+       p.tcg_url, p.updated_at
+FROM cards c
+LEFT JOIN prices p ON p.scryfall_id = c.scryfall_id;
 
 CREATE VIEW deck_gaps AS
 SELECT d.slug, d.name AS deck, d.owner, dc.name, dc.qty, dc.role

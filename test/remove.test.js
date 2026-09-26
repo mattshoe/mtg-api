@@ -196,10 +196,13 @@ describe('POST /cards/remove — aliases', () => {
     await post('/cards/remove', { list: '2 Lightning Bolt (2X2) 117' });
 
     const after = await snapshot();
-    // legalities and rulings are oracle-level and deliberately kept — a
-    // reference that costs nothing and saves a fetch next time.
+    // legalities, rulings and prices are reference data keyed by oracle id
+    // or printing, not by the stack you own. Keeping them costs nothing and
+    // saves a fetch next time; the daily job prunes prices for printings
+    // nobody owns any more.
+    const REFERENCE = new Set(['legalities', 'rulings', 'prices']);
     for (const t of Object.keys(before)) {
-      if (t === 'legalities' || t === 'rulings') continue;
+      if (REFERENCE.has(t)) continue;
       expect(after[t], `${t} drifted`).toBe(before[t]);
     }
   });

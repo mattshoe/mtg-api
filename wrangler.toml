@@ -13,5 +13,10 @@ binding = "DB"
 database_name = "mtg"
 database_id = "b7053e24-b783-46fe-9dc6-32772d42e274"
 
+# Daily maintenance: re-price the collection, prune, sweep, health check.
+# 08:10 UTC is a little after Scryfall publishes its daily price update.
+[triggers]
+crons = ["10 8 * * *"]
+
 [observability]
 enabled = true

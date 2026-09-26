@@ -15,15 +15,9 @@ import {
   DEFAULTS, SORTS, COLOR_MODES, FLAGS, buildQuery, toHash, fromHash, activeCount,
 } from './filters.js';
 import { cheatsheet } from './cheatsheet.js';
-import { fetchPrices, priceOf, money, exact } from './prices.js';
+import { money, exact } from './prices.js';
 
 const PAGE_SIZES = [24, 48, 96, 200];
-
-// Sorting by price means pricing every match, not just the page, because
-// the cheapest card overall is rarely on page one. The whole collection is
-// ~4,200 rows, so this covers it; the edge cache makes the second run fast.
-const PRICE_SORT_MAX = 5000;
-let priceNote = null;
 
 let state = { ...DEFAULTS };
 let lastRun = null;
@@ -204,7 +198,8 @@ const GROUPS = [
   {
     id: 'collection',
     title: 'Collection',
-    keys: ['pool', 'qtyMin', 'qtyMax', 'freeMin', 'deck', 'edhrecMin', 'edhrecMax'],
+    keys: ['pool', 'qtyMin', 'qtyMax', 'freeMin', 'deck', 'edhrecMin', 'edhrecMax',
+      'priceMin', 'priceMax'],
     body: () => [
       row('Whose', seg('owner', [['matt', 'Matt'], ['kayla', 'Kayla'], ['both', 'Both']])),
       row('Pool', seg('pool', [
@@ -223,6 +218,7 @@ const GROUPS = [
         h('option', { value: '_none', selected: state.deck === '_none' }, '— in no deck —'),
         (facets?.decks || []).map((d) => h('option', { value: d.slug, selected: state.deck === d.slug }, `${d.name} (${d.owner})`)))),
       row('EDHREC rank', range('edhrecMin', 'edhrecMax')),
+      row('Price, USD', range('priceMin', 'priceMax', { step: '0.01' })),
     ],
   },
   {
@@ -383,6 +379,7 @@ const LABELS = {
   tags: 'tag', produces: 'produces', colors: 'colour',
   finish: 'finish', pool: 'pool', deck: 'deck', format: 'format',
   hasRulings: 'rulings',
+  priceMin: 'price ≥', priceMax: 'price ≤',
 };
 
 function activeChips() {
@@ -432,8 +429,7 @@ function cardTile(c) {
   }),
   h('div.qty-badge', `${c.qty}`),
   h(`div.free-badge${free > 0 ? '' : '.none'}`, free > 0 ? `${free} free` : 'in decks'),
-  h('div.price-badge', { dataset: { priceFor: c.scryfall_id, finish: c.finish } },
-    money(priceOf(c), { dash: '' })),
+  h('div.price-badge', money(c.price, { dash: '' })),
   h('div.card-meta',
     h('span.nm', c.name),
     h('span.sb', manaCost(c.mana_cost),
@@ -451,7 +447,8 @@ function resultsTable(list) {
       h('th', 'Type'), th('power', 'P/T', '.num'), th('rarity', 'Rarity'),
       th('set', 'Set'), th('artist', 'Artist'),
       th('qty', 'Qty', '.num'), th('free', 'Free', '.num'),
-      th('price', 'Price', '.num'), th('edhrec', 'EDHREC', '.num'))),
+      th('price', 'Price', '.num'), th('value', 'Value', '.num'),
+      th('edhrec', 'EDHREC', '.num'))),
     h('tbody', list.map((c) => h('tr.clickable', { onclick: () => openCard(c.id) },
       h('td.t-name', c.name, c.printings > 1 ? h('span.muted.small', ` ×${c.printings}`) : null),
       h('td', manaCost(c.mana_cost)),
@@ -463,7 +460,8 @@ function resultsTable(list) {
       h('td.small.muted', c.artist || '—'),
       h('td.num', c.qty),
       h('td.num', c.free ?? 0),
-      h('td.num', { dataset: { priceFor: c.scryfall_id, finish: c.finish } }, exact(priceOf(c))),
+      h('td.num', exact(c.price)),
+      h('td.num', exact(c.value)),
       h('td.num.muted', c.edhrec_rank ? num(c.edhrec_rank) : '—'))))));
 }
 
@@ -483,7 +481,7 @@ function resultsHead(total, rows) {
   return h('div.panel-head',
     h('h2', `${num(total)} ${total === 1 ? 'card' : 'cards'}`),
     h('span.tag', state.group ? 'by name' : 'every printing'),
-    h('span.tag.price-total', { id: 'page-value', title: 'Market value of the cards on this page, from Scryfall/TCGplayer' },
+    h('span.tag.price-total', { title: 'Market value of the cards on this page, from Scryfall/TCGplayer' },
       pageValue(rows)),
     h('span.spacer'),
     h('div.seg',
@@ -506,10 +504,9 @@ function pageValue(rows) {
   let sum = 0;
   let any = false;
   for (const r of rows || []) {
-    const p = priceOf(r);
-    if (p !== null) { sum += p * (r.qty || 1); any = true; }
+    if (r.value !== null && r.value !== undefined) { sum += r.value; any = true; }
   }
-  return any ? `≈ ${money(sum)}` : '…';
+  return any ? `≈ ${money(sum)}` : '—';
 }
 
 async function exportCsv(total) {
@@ -526,79 +523,20 @@ async function exportCsv(total) {
 
 // ------------------------------------------------------------------ run
 
-/** Fill the price slots in place once the lookups land. */
-async function paintPrices(rows, token) {
-  const ids = rows.map((r) => r.scryfall_id).filter(Boolean);
-  if (!ids.length) return;
-  await fetchPrices(ids);
-  if (lastRun !== token) return;
-  for (const el of document.querySelectorAll('[data-price-for]')) {
-    const row = { scryfall_id: el.dataset.priceFor, finish: el.dataset.finish };
-    const p = priceOf(row);
-    el.textContent = el.classList.contains('price-badge')
-      ? money(p, { dash: '' })
-      : exact(p);
-  }
-  const tot = document.getElementById('page-value');
-  if (tot) tot.textContent = pageValue(rows);
-}
-
 function renderResults(rows, total) {
   const body = rows.length
     ? (state.view === 'grid'
       ? h('div.panel-body', h('div.grid', rows.map(cardTile)))
       : resultsTable(rows))
     : empty('Nothing matches', 'Loosen a filter, or Clear all.');
-  fill(resultsEl,
-    priceNote ? h('div.err', { style: { marginBottom: '12px' } }, priceNote) : null,
-    h('div.panel', resultsHead(total, rows), body),
-    pager(total));
-}
-
-/**
- * Sorting by price cannot happen in SQL, because prices are not in the
- * database. So: pull every match, price them all, sort here, then show
- * the page. Cold this takes a few seconds; the edge cache makes it quick
- * after that.
- */
-async function runPriceSort(token, total) {
-  const capped = Math.min(total, PRICE_SORT_MAX);
-  priceNote = total > PRICE_SORT_MAX
-    ? `Sorting ${num(PRICE_SORT_MAX)} of ${num(total)} matches by price. Narrow the search for a complete ordering.`
-    : null;
-
-  const { sql, params } = buildQuery({ ...state, page: 1, size: capped });
-  const res = await api.query(sql, params, { fmt: 'objects', limit: capped });
-  if (lastRun !== token) return;
-
-  const rows = res.rows;
-  const status = (done, of) => {
-    if (lastRun !== token) return;
-    fill(resultsEl, loading(`Pricing ${num(done)} of ${num(of)} cards…`));
-  };
-  await fetchPrices(rows.map((r) => r.scryfall_id).filter(Boolean), status);
-  if (lastRun !== token) return;
-
-  const desc = state.dir === 'desc';
-  rows.sort((a, b) => {
-    const pa = priceOf(a);
-    const pb = priceOf(b);
-    // No price sorts last either way, rather than pretending to be free.
-    if (pa === null && pb === null) return a.name_norm < b.name_norm ? -1 : 1;
-    if (pa === null) return 1;
-    if (pb === null) return -1;
-    return desc ? pb - pa : pa - pb;
-  });
-
-  const start = (state.page - 1) * state.size;
-  renderResults(rows.slice(start, start + state.size), rows.length);
+  fill(resultsEl, h('div.panel', resultsHead(total, rows), body), pager(total));
 }
 
 async function run() {
   renderChrome();
   advError = null;
-  priceNote = null;
   const opts = { advError: (m) => { advError = m; } };
+  const { sql, params } = buildQuery(state, opts);
   const countQ = buildQuery(state, { ...opts, countOnly: true });
 
   const token = Symbol('run');
@@ -606,15 +544,6 @@ async function run() {
   fill(resultsEl, loading('Searching'));
 
   try {
-    if (state.sort === 'price') {
-      const total = (await api.scalar(countQ.sql, countQ.params)) ?? 0;
-      if (lastRun !== token) return;
-      if (advError) renderChrome();
-      await runPriceSort(token, total);
-      return;
-    }
-
-    const { sql, params } = buildQuery(state, opts);
     const [res, total] = await Promise.all([
       api.query(sql, params, { fmt: 'objects', limit: state.size }),
       api.scalar(countQ.sql, countQ.params),
@@ -622,7 +551,6 @@ async function run() {
     if (lastRun !== token) return;
     renderResults(res.rows, total ?? 0);
     if (advError) renderChrome();
-    paintPrices(res.rows, token);
   } catch (e) {
     if (lastRun !== token) return;
     fill(resultsEl, errorBox(e));

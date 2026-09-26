@@ -58,6 +58,9 @@ export const DEFAULTS = {
   reserved: '', gameChanger: '', fullArt: '', textless: '', promo: '',
   reprint: '', storySpotlight: '', booster: '', oversized: '', variation: '',
 
+  // --- price
+  priceMin: '', priceMax: '',
+
   // --- oracle-level
   keywords: [], tags: [],
   format: '', legality: 'legal',
@@ -89,7 +92,8 @@ export const SORTS = {
   artist: ['Artist', 'c.artist'],
   // Prices are not in the database, so this one is sorted client-side
   // after a lookup. The column is a placeholder for the SQL path.
-  price: ['Price', 'c.name_norm'],
+  price: ['Price', 'price'],
+  value: ['Stack value', 'value'],
 };
 
 export const COLOR_MODES = [
@@ -220,6 +224,18 @@ export const USAGE_JOIN = 'LEFT JOIN card_usage u ON u.owner = c.owner AND u.nam
 export const USAGE_FREE = 'u.free';
 
 /**
+ * Prices live in their own table now, refreshed by the daily job, so the
+ * price that applies to a stack is a plain SQL expression — which means
+ * sorting and filtering by it happen in the database instead of by pulling
+ * the whole result set into the browser.
+ */
+export const PRICE_JOIN = 'LEFT JOIN prices pr ON pr.scryfall_id = c.scryfall_id';
+export const PRICE_EXPR = `CASE c.finish
+         WHEN 'foil'   THEN COALESCE(pr.usd_foil, pr.usd)
+         WHEN 'etched' THEN COALESCE(pr.usd_etched, pr.usd_foil, pr.usd)
+         ELSE pr.usd END`;
+
+/**
  * State -> { where: [...], params: [...] }.
  * Everything the user typed is bound; only identifiers this file owns are
  * ever interpolated.
@@ -311,6 +327,9 @@ export function conditions(s, { advError } = {}) {
   if (s.hasRulings === 'yes') where.push('EXISTS (SELECT 1 FROM rulings r WHERE r.oracle_id = c.oracle_id)');
   if (s.hasRulings === 'no') where.push('NOT EXISTS (SELECT 1 FROM rulings r WHERE r.oracle_id = c.oracle_id)');
 
+  if (s.priceMin !== '') { where.push(`(${PRICE_EXPR}) >= ?`); p.push(Number(s.priceMin)); }
+  if (s.priceMax !== '') { where.push(`(${PRICE_EXPR}) <= ?`); p.push(Number(s.priceMax)); }
+
   if (s.pool === 'free') where.push('COALESCE(u.free, 0) > 0');
   if (s.pool === 'committed') where.push('COALESCE(u.free, 0) <= 0');
   numeric('COALESCE(u.free, 0)', '>=', s.freeMin, where, p);
@@ -390,6 +409,8 @@ const IS_SHAPES = {
   free: 'COALESCE(u.free, 0) > 0',
   indeck: 'EXISTS (SELECT 1 FROM deck_cards dc JOIN decks d ON d.id = dc.deck_id WHERE dc.name_norm = c.name_norm AND d.owner = c.owner)',
   hasrulings: 'EXISTS (SELECT 1 FROM rulings r WHERE r.oracle_id = c.oracle_id)',
+  priced: 'pr.usd IS NOT NULL',
+  unpriced: 'pr.usd IS NULL',
 };
 
 export const IS_VALUES = Object.keys(IS_SHAPES);
@@ -415,6 +436,7 @@ const ALIASES = {
   is: 'is', not: 'not',
   qty: 'qty', have: 'qty',
   free: 'free',
+  usd: 'price', price: 'price',
   deck: 'deck',
   owner: 'owner',
   year: 'year',
@@ -523,6 +545,7 @@ export function parseAdvanced(input) {
       case 'loy': push(`(c.loyalty GLOB '[0-9]*' AND CAST(c.loyalty AS INTEGER) ${op} ?)`, [Number(v)], tok.neg); break;
       case 'qty': push(`c.qty ${op} ?`, [Number(v)], tok.neg); break;
       case 'free': push(`COALESCE(u.free, 0) ${op} ?`, [Number(v)], tok.neg); break;
+      case 'price': push(`(${PRICE_EXPR}) ${op} ?`, [Number(v)], tok.neg); break;
       case 'edhrec': push(`c.edhrec_rank ${tok.op === ':' ? '<=' : op} ?`, [Number(v)], tok.neg); break;
       case 'year': push(`substr(c.released_at, 1, 4) ${tok.op === ':' ? '=' : op} ?`, [String(Number(v))], tok.neg); break;
       case 'rarity': push('c.rarity = ?', [v.toLowerCase()], tok.neg); break;
@@ -577,7 +600,8 @@ export function parseAdvanced(input) {
 const SELECT_COLS = `c.owner, c.name, c.name_norm, c.face2, c.layout,
        c.scryfall_id, c.mana_cost, c.cmc, c.type_line,
        c.color_identity, c.rarity, c.setcode, c.set_name, c.collector_number,
-       c.edhrec_rank, c.released_at, c.finish, c.power, c.toughness, c.artist`;
+       c.edhrec_rank, c.released_at, c.finish, c.power, c.toughness, c.artist,
+       pr.tcg_url, pr.updated_at AS priced_at`;
 
 export function buildQuery(s, { countOnly = false, advError } = {}) {
   const { where, params } = conditions(s, { advError });
@@ -585,8 +609,8 @@ export function buildQuery(s, { countOnly = false, advError } = {}) {
 
   if (countOnly) {
     const inner = s.group
-      ? `SELECT 1 FROM cards c ${USAGE_JOIN} ${clause} GROUP BY c.owner, c.name_norm`
-      : `SELECT 1 FROM cards c ${USAGE_JOIN} ${clause}`;
+      ? `SELECT 1 FROM cards c ${USAGE_JOIN} ${PRICE_JOIN} ${clause} GROUP BY c.owner, c.name_norm`
+      : `SELECT 1 FROM cards c ${USAGE_JOIN} ${PRICE_JOIN} ${clause}`;
     return { sql: `SELECT COUNT(*) FROM (${inner})`, params };
   }
 
@@ -599,12 +623,16 @@ export function buildQuery(s, { countOnly = false, advError } = {}) {
   // which is the representative printing we want to show.
   const select = s.group
     ? `SELECT MIN(c.id) AS id, ${SELECT_COLS},
-              SUM(c.qty) AS qty, COUNT(*) AS printings, u.free AS free`
+              SUM(c.qty) AS qty, COUNT(*) AS printings, u.free AS free,
+              (${PRICE_EXPR}) AS price,
+              ROUND(SUM(c.qty * (${PRICE_EXPR})), 2) AS value`
     : `SELECT c.id, ${SELECT_COLS},
-              c.qty AS qty, 1 AS printings, u.free AS free`;
+              c.qty AS qty, 1 AS printings, u.free AS free,
+              (${PRICE_EXPR}) AS price,
+              ROUND(c.qty * (${PRICE_EXPR}), 2) AS value`;
 
   return {
-    sql: `${select}\nFROM cards c\n${USAGE_JOIN}\n${clause}\n${s.group ? 'GROUP BY c.owner, c.name_norm' : ''}\n${order}\nLIMIT ${s.size} OFFSET ${offset}`,
+    sql: `${select}\nFROM cards c\n${USAGE_JOIN}\n${PRICE_JOIN}\n${clause}\n${s.group ? 'GROUP BY c.owner, c.name_norm' : ''}\n${order}\nLIMIT ${s.size} OFFSET ${offset}`,
     params,
   };
 }

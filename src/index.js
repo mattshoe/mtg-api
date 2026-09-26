@@ -8,6 +8,8 @@
 //   POST /cards/remove
 //   POST /prices      scryfall ids in, TCGplayer-derived prices out
 //   POST /admin       password in, admin token out
+//   GET  /maintenance last run of the daily job
+//   POST /maintenance run it now (admin)
 //
 // Reading is open. Anything that writes needs an admin token — see admin.js.
 
@@ -16,6 +18,7 @@ import { runQuery, isReadOnly } from './query.js';
 import { addCards, removeCards } from './cards.js';
 import { mintToken, verifyToken, bearer } from './admin.js';
 import { lookupPrices } from './prices.js';
+import { runMaintenance, CRON_TASKS } from './maintenance.js';
 
 const JSON_HEADERS = {
   'content-type': 'application/json; charset=utf-8',
@@ -67,6 +70,8 @@ const INDEX = {
     'POST /cards/remove': '{"owner":"matt","list":"1 Sol Ring","dry_run":false}',
     'POST /prices': '{"ids":["<scryfall id>",...]} -> {"prices":{id:{usd,foil,etched,eur,tix,tcg}}}',
     'POST /admin': '{"password":"..."} -> {"token":"...","expires_at":<unix>}',
+    'GET /maintenance': 'what the daily job did last',
+    'POST /maintenance': 'run it now — needs admin; {"only":"orphans"} or {"all":true,"wait":true}',
   },
   auth: 'Reads are open. Writes need Authorization: Bearer <token> from POST /admin.',
 };
@@ -75,6 +80,14 @@ const INDEX = {
 const denied = (reason) => json({ error: reason, admin_required: true }, 401);
 
 export default {
+  /** Cloudflare Cron Trigger. Nothing has to be awake for this to run. */
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(runMaintenance(env.DB, {
+      fetchImpl: env.SCRYFALL_FETCH || fetch,
+      tasks: CRON_TASKS,
+    }));
+  },
+
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/+$/, '') || '/';
@@ -97,6 +110,35 @@ export default {
       if (path === '/schema') {
         if (method !== 'GET') return json({ error: 'use GET' }, 405);
         return json(await getSchema(env.DB));
+      }
+
+      if (path === '/maintenance') {
+        if (method === 'GET') {
+          const runs = await env.DB.prepare(
+            'SELECT ran_at, task, ok, detail, ms FROM maintenance_log ORDER BY id DESC LIMIT 25',
+          ).all();
+          return json({ runs: runs.results || [] });
+        }
+        if (method !== 'POST') return json({ error: 'use GET or POST' }, 405);
+        // It writes, so it is gated like any other write.
+        const v = await verifyToken(env, bearer(request));
+        if (!v.ok) return denied(v.reason);
+        const { body } = await readJson(request);
+        const job = runMaintenance(env.DB, {
+          fetchImpl: env.SCRYFALL_FETCH || fetch,
+          only: body?.only,
+          tasks: body?.all ? undefined : CRON_TASKS,
+        });
+        // Re-pricing the whole collection takes about a minute of mostly
+        // waiting on Scryfall. Returning immediately and letting it finish
+        // in the background is the honest shape; GET /maintenance says how
+        // it went. `wait: true` blocks, for tests and for a quick task.
+        if (body?.wait) {
+          const out = await job;
+          return json(out, out.ok ? 200 : 500);
+        }
+        ctx.waitUntil(job);
+        return json({ started: true, only: body?.only || 'all', check: 'GET /maintenance' }, 202);
       }
 
       if (path === '/prices') {

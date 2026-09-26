@@ -5,30 +5,22 @@
 // via /cards/collection, which takes 75 identifiers per call. A 50-card add is
 // one round trip, not 50.
 
+import { makeThrottle } from './throttle.js';
+
 const API = 'https://api.scryfall.com';
 const UA = 'MattMTGCollectionAPI/1.0';
 const CHUNK = 75; // Scryfall's documented cap for /cards/collection
 
 // Scryfall asks for 50-100ms between requests and threatens a network block
 // for ignoring it. Firing rulings lookups in parallel gets you rate-limited
-// on the second card, so every call goes through this gate.
-const MIN_GAP_MS = 110;
-
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// on the second card, so every call goes through the shared gate.
 
 /** Injectable so tests never touch the network. */
-export function makeClient(fetchImpl = fetch, { minGapMs = MIN_GAP_MS } = {}) {
-  let lastCall = 0;
-
-  async function throttle() {
-    const wait = lastCall + minGapMs - Date.now();
-    if (wait > 0) await sleep(wait);
-    lastCall = Date.now();
-  }
+export function makeClient(fetchImpl = fetch, { minGapMs } = {}) {
+  const throttle = makeThrottle(minGapMs ? { gapMs: minGapMs } : {});
 
   async function call(path, init = {}) {
-    await throttle();
-    const res = await fetchImpl(API + path, {
+    const res = await throttle(fetchImpl, API + path, {
       ...init,
       headers: {
         'User-Agent': UA,

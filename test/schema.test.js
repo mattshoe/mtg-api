@@ -5,11 +5,11 @@ const TABLES = [
   'aliases', 'card_faces', 'card_colors', 'card_finishes', 'card_frame_effects',
   'card_games', 'card_keywords', 'card_promo_types', 'card_search', 'card_tags',
   'card_types', 'cards', 'deck_cards', 'deck_notes', 'decks', 'legalities',
-  'rulings', 'tags',
+  'maintenance_log', 'prices', 'rulings', 'tags',
 ];
 
-const VIEWS = ['bulk_cards', 'card_usage', 'deck_conflicts', 'deck_gaps',
-  'decks_not_built', 'totals'];
+const VIEWS = ['bulk_cards', 'card_prices', 'card_usage', 'deck_conflicts',
+  'deck_gaps', 'decks_not_built', 'totals'];
 
 describe('GET /schema', () => {
   it('lists every table', async () => {

@@ -6,7 +6,7 @@ import {
   loading, errorBox, toast,
 } from './util.js';
 import { isAdmin, promptUnlock } from './admin.js';
-import { fetchPrices, priceOf, exact, tcgLink } from './prices.js';
+import { exact } from './prices.js';
 
 let onClose = null;
 let current = null;
@@ -33,25 +33,6 @@ export async function openCard(id, after) {
     const data = await fetchCard(id);
     if (current !== id) return;
     fill($('#drawer-body'), view(data));
-    // Prices are a separate lookup; fill them in once they land rather
-    // than holding the whole drawer up for them.
-    fetchPrices(data.printings.map((p) => p.scryfall_id)).then(() => {
-      if (current !== id) return;
-      for (const el of $('#drawer-body').querySelectorAll('[data-price-for]')) {
-        el.textContent = exact(priceOf({
-          scryfall_id: el.dataset.priceFor, finish: el.dataset.finish,
-        }));
-      }
-      const total = data.printings.reduce((sum, p) => {
-        const v = priceOf(p);
-        return v === null ? sum : sum + v * p.qty;
-      }, 0);
-      const slot = $('#stack-value');
-      if (slot) slot.textContent = total ? exact(total) : '—';
-      const buy = $('#buy-link');
-      const href = tcgLink(data.card.scryfall_id);
-      if (buy && href) { buy.href = href; buy.hidden = false; }
-    });
   } catch (e) {
     fill($('#drawer-body'), h('div.drawer-head', h('h2', 'Error'), closeBtn()), h('div.drawer-body', errorBox(e)));
   }
@@ -66,9 +47,14 @@ async function fetchCard(id) {
 
   const [faces, printings, decks, tags, keywords, legalities, rulings, usage] = await Promise.all([
     api.rows('SELECT * FROM card_faces WHERE card_id = ? ORDER BY face_index', [id]),
-    api.rows(`SELECT id, setcode, set_name, collector_number, finish, qty, rarity, released_at, scryfall_id
-                FROM cards WHERE owner = ? AND name_norm = ?
-               ORDER BY released_at DESC`, [card.owner, card.name_norm]),
+    // Price comes straight from card_prices, which already picks the
+    // figure matching each printing's finish.
+    api.rows(`SELECT c.id, c.setcode, c.set_name, c.collector_number, c.finish,
+                     c.qty, c.rarity, c.released_at, c.scryfall_id,
+                     cp.price, cp.tcg_url, cp.updated_at AS priced_at
+                FROM cards c JOIN card_prices cp ON cp.card_id = c.id
+               WHERE c.owner = ? AND c.name_norm = ?
+               ORDER BY c.released_at DESC`, [card.owner, card.name_norm]),
     api.rows(`SELECT d.slug, d.name, d.owner, d.is_proxy, d.status, dc.qty, dc.role
                 FROM deck_cards dc JOIN decks d ON d.id = dc.deck_id
                WHERE dc.name_norm = ? ORDER BY d.owner, d.name`, [card.name_norm]),
@@ -122,6 +108,18 @@ async function adjust(card, delta) {
   }
 }
 
+/** What every copy of this card is worth, across printings and finishes. */
+function stackValue(printings) {
+  let sum = 0;
+  let any = false;
+  for (const p of printings) {
+    if (p.price !== null && p.price !== undefined) { sum += p.price * p.qty; any = true; }
+  }
+  const when = printings.find((p) => p.priced_at)?.priced_at;
+  return h('span', { title: when ? `Priced ${when.slice(0, 10)}` : '' },
+    any ? exact(sum) : '—');
+}
+
 function view({ card, faces, printings, decks, tags, keywords, legalities, rulings, usage }) {
   const totalQty = printings.reduce((a, p) => a + p.qty, 0);
 
@@ -150,7 +148,7 @@ function view({ card, faces, printings, decks, tags, keywords, legalities, rulin
       usage ? [h('dt', 'Free'), h('dd', usage.free > 0
         ? h('span.tag.ok', `${usage.free} unassigned`)
         : h('span.tag.warn', `all ${usage.owned} in decks`))] : null,
-      h('dt', 'Stack value'), h('dd', h('span', { id: 'stack-value' }, '…')),
+      h('dt', 'Stack value'), h('dd', stackValue(printings)),
       h('dt', 'Identity'), h('dd', identity(card.color_identity)),
       card.cmc !== null ? [h('dt', 'Mana value'), h('dd', card.cmc)] : null,
       card.power !== null ? [h('dt', 'P/T'), h('dd', `${card.power}/${card.toughness}`)] : null,
@@ -186,7 +184,7 @@ function view({ card, faces, printings, decks, tags, keywords, legalities, rulin
         h('td.small', p.finish),
         h('td.num', p.qty),
         h('td', h('span.tag', p.rarity || '—')),
-        h('td.num', { dataset: { priceFor: p.scryfall_id, finish: p.finish } }, '…')))))),
+        h('td.num', exact(p.price))))))),
 
     decks.length ? h('div.sec', h('h3', `In ${decks.length} deck${decks.length === 1 ? '' : 's'}`),
       h('div.stack', decks.map((d) => h('div.flex', { style: { gap: '8px' } },
@@ -224,9 +222,12 @@ function view({ card, faces, printings, decks, tags, keywords, legalities, rulin
           href: `https://edhrec.com/cards/${card.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`,
           target: '_blank', rel: 'noopener',
         }, 'EDHREC ↗'),
-        h('a.btn.sm', {
-          id: 'buy-link', href: '#', hidden: true, target: '_blank', rel: 'noopener',
-        }, 'TCGplayer ↗')))));
+        (printings.find((p) => p.tcg_url) || {}).tcg_url
+          ? h('a.btn.sm', {
+            href: printings.find((p) => p.tcg_url).tcg_url,
+            target: '_blank', rel: 'noopener',
+          }, 'TCGplayer ↗')
+          : null))));
 
   return h('div', head, body);
 }

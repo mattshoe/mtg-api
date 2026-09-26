@@ -9,14 +9,13 @@
 // caches in the Cloudflare Cache API instead, which is storage the
 // collection does not have to own or back up.
 
+import { makeThrottle } from './throttle.js';
+
 const SCRYFALL = 'https://api.scryfall.com';
 const UA = 'MattMTGCollectionAPI/1.0';
 const CHUNK = 75;             // Scryfall's cap for /cards/collection
-const MIN_GAP_MS = 110;       // their documented rate limit
 const TTL_SECONDS = 12 * 3600;
 const MAX_IDS = 1500;         // one request should not become 20 batches often
-
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const cacheKey = (id) => new Request(`https://prices.mtg.internal/v1/${id}`);
 
@@ -66,16 +65,12 @@ export async function lookupPrices(ids, { fetchImpl = fetch, cache, waitUntil } 
   }
 
   const cachedCount = unique.length - misses.length;
+  const throttle = makeThrottle();
   let fetched = 0;
-  let last = 0;
 
   for (let i = 0; i < misses.length; i += CHUNK) {
     const slice = misses.slice(i, i + CHUNK);
-    const wait = last + MIN_GAP_MS - Date.now();
-    if (wait > 0) await sleep(wait);
-    last = Date.now();
-
-    const res = await fetchImpl(`${SCRYFALL}/cards/collection`, {
+    const res = await throttle(fetchImpl, `${SCRYFALL}/cards/collection`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'User-Agent': UA, Accept: 'application/json' },
       body: JSON.stringify({ identifiers: slice.map((id) => ({ id })) }),

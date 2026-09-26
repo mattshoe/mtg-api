@@ -75,8 +75,9 @@ A bare `SELECT` with no `LIMIT` of its own is capped, and the response says
 
 ### `POST /prices`
 
-Prices for a list of scryfall ids, from Scryfall — whose `usd` figures are
-TCGplayer market prices, and which hands back a TCGplayer purchase link too.
+On-demand prices for a list of scryfall ids, straight from Scryfall. Mostly
+superseded by the stored `prices` table — use that unless you need a figure
+fresher than this morning.
 
 ```bash
 curl -X POST https://mtg-api.mattshoe81.workers.dev/prices \
@@ -93,9 +94,13 @@ into Scryfall at their documented rate limit, and cached in the Cloudflare
 Cache API for 12 hours. Around 300ms for a page of cards cold, ~120ms warm;
 the whole collection is about 15s cold and a second or two after that.
 
-**Prices are deliberately not in D1.** They go stale within a day, and a
-column that is wrong most of the time is worse than no column. The edge cache
-is storage the collection does not have to own, back up, or reconcile.
+
+### `GET /maintenance` and `POST /maintenance`
+
+What the daily job did, and a way to run it now. GET is open; POST needs
+admin and returns `202` immediately, since the work runs in the background.
+`{"wait": true}` blocks, `{"only": "orphans"}` narrows, `{"all": true}`
+includes the price refresh.
 
 ### `POST /admin`
 
@@ -269,12 +274,15 @@ rank, and which deck a card is in (or no deck at all).
 
 **Prices** appear on every card tile, as a column in table view, and per
 printing in the card drawer alongside the value of that whole stack and a
-TCGplayer link. The page header shows what the visible cards are worth.
+TCGplayer link. The page header shows what the visible cards are worth, and
+Stats carries the collection total.
 
-Sorting by price cannot happen in SQL, since prices are not in the database —
-so choosing it prices every match, sorts here, and then pages. Cold on the
-full collection that is roughly fifteen seconds with a running count; after
-that the edge cache makes it quick.
+They live in their own `prices` table keyed by printing, not as columns on
+`cards`, so the daily job can rebuild them without touching the collection.
+The `card_prices` view picks the figure matching each printing's finish — a
+foil row never quotes the nonfoil price. Because it is all SQL, sorting by
+price or by stack value, and filtering on a price range, are ordinary
+queries: around 150ms.
 
 Keyboard: `s` `d` `a` `r` `g` `c` jump between views, `/` or `⌘K` finds a card,
 `l` locks or unlocks, `t` toggles the theme, `esc` closes. Searches are shareable — the filters live
@@ -284,7 +292,7 @@ in the URL — and can be saved by name.
 
 ```bash
 npm install
-npm test          # 195 tests against a real local D1 in workerd
+npm test          # 222 tests against a real local D1 in workerd
 npm run dev       # local server
 npm run deploy
 ```
@@ -316,11 +324,39 @@ printf 'newpassword' | npx wrangler secret put ADMIN_PASSWORD
 | script | what it does |
 |---|---|
 | `scripts/backup.py` | dump the live database to a local `.sql.gz`, and prove it restores |
+| `scripts/refresh_prices.py` | prices from the local Scryfall bulk file, no API calls |
 | `scripts/nightly.sh` | backup + tag backfill, run by launchd at 03:00 |
 | `scripts/backfill.py` | tags from the local Scryfall index (writes, so it unlocks first) |
 | `scripts/verify.py` | compare the API against the old shards, table by table |
 | `scripts/seed.py` | one-time: the five old shards -> `data.sql` |
 | `scripts/make_fixture.py` | regenerate the test fixture |
+
+## Daily maintenance
+
+Two halves, split by what each side can actually do.
+
+**Cloudflare Cron Trigger, 08:10 UTC** (`[triggers]` in `wrangler.toml`).
+Nothing needs to be awake. Prunes prices for printings nobody owns, sweeps
+child rows orphaned from a deleted card, rebuilds any missing full-text
+rows, and records a health snapshot. All D1-only, so nothing external can
+rate-limit it.
+
+**The Mac, 03:00** (`scripts/nightly.sh`). Refreshes every price, backfills
+Scryfall tags, and writes the local backup.
+
+Both log to `maintenance_log`; `GET /maintenance` shows the last 25 entries.
+
+### Why prices run on the Mac
+
+Not preference. Scryfall rate-limits Cloudflare's shared egress IPs hard: a
+Worker gets 20 batches of 75 and then a 429 that backing off does not clear,
+reproducibly at the same batch, while the identical 55 batches from a home IP
+finish in 37 seconds. Their own 429 says to use the bulk data offering for
+volume — and that file is 78 MB gzipped, far past what a Worker can hold.
+
+`prefetch_scryfall.py` already downloads that bulk file three times a day for
+the deck tooling, so `scripts/refresh_prices.py` reads prices straight off
+disk: 4,096 printings in about 12 seconds with no API call at all.
 
 ## Backups
 
