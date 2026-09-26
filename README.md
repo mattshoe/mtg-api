@@ -192,7 +192,7 @@ API.
 
 | view | what it does |
 |---|---|
-| Search | filter by name, rules text, colour identity, mana value, type, rarity, set, keyword, tag, legality, finish, power/toughness, and whether a copy is free |
+| Search | every column in the database, as facets or as a query language — see below |
 | Card | full detail in a drawer — every printing owned, decks it is in, tags, legalities, rulings, and ±1 buttons |
 | Decks | all 32 decks, each with its list, curve, notes and gaps; plus a gaps-and-conflicts overview |
 | Add / Remove | paste a list, preview the real dry run, then apply |
@@ -204,6 +204,35 @@ variable and nowhere else — not `localStorage`, not `sessionStorage`, not the
 URL — so closing or reloading the tab ends it. While it is off, Add and Remove
 show a lock screen, the drawer's ±1 buttons are replaced by an unlock button,
 and the console runs reads but prompts before a write.
+
+**Colour matching** has four explicit modes, on either colour identity or the
+printed colour: **Exactly**, **At most** (nothing outside these — the one that
+answers "what can I put in this commander"), **At least**, and **Any of**.
+Colourless is handled per mode rather than pretended to be a sixth colour.
+
+**The query box** takes Scryfall-style syntax, ANDed with whatever the panel
+has set. `?` opens a full cheatsheet.
+
+```
+id<=wub t:creature mv<=3        fits an Esper commander, cheap creatures
+tag:mana-rock is:free -t:land   spare rocks not committed to a deck
+pow>=6 -is:reprint r:mythic     big first-printing mythics
+o:"draw a card" mv<2 is:free    cheap unassigned draw
+edhrec<=250 -is:indeck          staples sitting in the bulk box
+a:"seb mckinnon" is:foil        by artist and finish
+```
+
+Keys: `name o t c id mv pow tou loy qty free edhrec year r s st layout cn
+a wm ft m kw tag f banned restricted deck owner game produces is not`, with
+`: = >= <= > <` where they make sense and `-` to negate anything. 43 `is:`
+values cover layout, type buckets, finish, flags and collection state.
+
+Everything else lives in the panel: supertypes, subtypes, exclude-a-type, mana
+cost, power/toughness/loyalty with operators, produced mana, number of
+colours, set type, frame, border, release year, collector number, availability
+(paper/Arena/MTGO), flavour text, artist, watermark, ten printing flags as
+any/yes/no, format legality, has-rulings, copies owned, free copies, EDHREC
+rank, and which deck a card is in (or no deck at all).
 
 Keyboard: `s` `d` `a` `r` `g` `c` jump between views, `/` or `⌘K` finds a card,
 `l` locks or unlocks, `t` toggles the theme, `esc` closes. Searches are shareable — the filters live

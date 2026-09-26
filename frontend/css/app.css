@@ -145,7 +145,7 @@ main { min-height: calc(100vh - var(--topbar-h)); }
 
 .wrap { max-width: 1680px; margin: 0 auto; padding: 18px; }
 
-.split { display: grid; grid-template-columns: 290px minmax(0, 1fr); gap: 18px; align-items: start; }
+.split { display: grid; grid-template-columns: 310px minmax(0, 1fr); gap: 18px; align-items: start; }
 
 .panel {
   background: var(--bg-2); border: 1px solid var(--line);
@@ -433,6 +433,19 @@ details.adv > summary::-webkit-details-marker { display: none; }
 details.adv > summary::before { content: "▸ "; color: var(--text-3); }
 details.adv[open] > summary::before { content: "▾ "; }
 details.adv > div { padding-top: 12px; }
+
+/* Colour mode picker — the four options sit as a 2x2 so every one is
+   visible at once rather than hidden behind a select. */
+.mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.mode-grid .chip { text-align: center; padding: 7px 8px; }
+.mode-hint { margin: -6px 0 12px; min-height: 16px; }
+
+/* The query box wants to look like the main event. */
+.qbox {
+  font-family: var(--mono); font-size: 13.5px;
+  padding: 11px 13px;
+}
+.qbox:focus { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
 
 .scroll-list { max-height: 210px; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 8px; background: var(--bg); }
 
