@@ -8,6 +8,60 @@ const DEFAULT_LIMIT = 5000;
 const MAX_LIMIT = 50000;
 
 /**
+ * The statement with string literals and comments blanked out, so keyword
+ * scanning cannot be fooled by a card named "Delete the Evidence".
+ */
+export function stripLiterals(sql) {
+  let out = '';
+  let i = 0;
+  while (i < sql.length) {
+    const c = sql[i];
+    if (c === "'" || c === '"' || c === '`') {
+      const quote = c;
+      out += ' ';
+      i += 1;
+      while (i < sql.length) {
+        if (sql[i] === quote) {
+          if (sql[i + 1] === quote) { i += 2; continue; }
+          i += 1;
+          break;
+        }
+        i += 1;
+      }
+      continue;
+    }
+    if (c === '-' && sql[i + 1] === '-') {
+      while (i < sql.length && sql[i] !== '\n') i += 1;
+      continue;
+    }
+    if (c === '/' && sql[i + 1] === '*') {
+      i += 2;
+      while (i < sql.length && !(sql[i] === '*' && sql[i + 1] === '/')) i += 1;
+      i += 2;
+      out += ' ';
+      continue;
+    }
+    out += c;
+    i += 1;
+  }
+  return out;
+}
+
+// Anything that could change the database. GET is read-only, so these are
+// refused there — a URL that deletes rows is one link-preview or prefetch
+// away from doing it by accident. POST has no such restriction.
+const MUTATING = /\b(insert|update|delete|drop|create|alter|replace|attach|detach|reindex|vacuum|begin|commit|rollback)\b/i;
+
+/** Is this statement incapable of changing anything? */
+export function isReadOnly(sql) {
+  const bare = stripLiterals(sql);
+  if (MUTATING.test(bare)) return false;
+  const head = bare.replace(/^[\s;]*/, '').slice(0, 8).toUpperCase();
+  return head.startsWith('SELECT') || head.startsWith('WITH')
+    || head.startsWith('VALUES') || head.startsWith('EXPLAIN');
+}
+
+/**
  * Is this one statement? A stray semicolon inside a string literal is fine;
  * a second statement after one is not. D1 rejects multi-statement prepares
  * anyway, but its error is opaque and this one says what is wrong.
@@ -68,9 +122,16 @@ function toTsv(cols, rows) {
   return [cols.join('\t'), ...rows.map((r) => r.map(cell).join('\t'))].join('\n');
 }
 
-export async function runQuery(db, body) {
+export async function runQuery(db, body, { readOnly = false } = {}) {
   const sql = typeof body.sql === 'string' ? body.sql.trim() : '';
   if (!sql) return { status: 400, body: { error: 'sql is required' } };
+
+  if (readOnly && !isReadOnly(sql)) {
+    return {
+      status: 405,
+      body: { error: 'GET /query is read-only; use POST for anything that writes' },
+    };
+  }
 
   const params = Array.isArray(body.params) ? body.params : [];
   const fmt = body.fmt || 'rows';

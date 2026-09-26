@@ -109,8 +109,13 @@ describe('routing', () => {
   });
 
   it('GET on a POST-only route is a 405', async () => {
-    expect((await get('/query')).status).toBe(405);
     expect((await get('/cards/add')).status).toBe(405);
+    expect((await get('/cards/remove')).status).toBe(405);
+  });
+
+  it('the index advertises the GET form of /query', async () => {
+    const r = await get('/');
+    expect(Object.keys(r.body.endpoints)).toContain('GET /query');
   });
 
   it('sends CORS headers', async () => {

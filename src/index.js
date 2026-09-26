@@ -2,6 +2,7 @@
 //
 //   GET  /            what this is
 //   GET  /schema      tables, views, columns, row counts
+//   GET  /query       read-only SQL via query string, for GET-only callers
 //   POST /query       arbitrary SQL, compact JSON out
 //   POST /cards/add   a decklist in, Scryfall-enriched rows out
 //   POST /cards/remove
@@ -30,6 +31,16 @@ function send(r) {
   return json(r.body, r.status);
 }
 
+/** `?params=[1,"x"]` -> an array, or null if it is not one. */
+function safeParams(raw) {
+  try {
+    const v = JSON.parse(raw);
+    return Array.isArray(v) ? v : null;
+  } catch {
+    return null;
+  }
+}
+
 async function readJson(request) {
   try {
     const body = await request.json();
@@ -46,6 +57,7 @@ const INDEX = {
   service: 'mtg-api',
   endpoints: {
     'GET /schema': 'tables, views, columns, row counts',
+    'GET /query': '?sql=SELECT+...&fmt=rows|objects|tsv&limit=5000 (read-only)',
     'POST /query': '{"sql":"SELECT ...","params":[],"fmt":"rows|objects|tsv","limit":5000}',
     'POST /cards/add': '{"owner":"matt","list":"4 Lightning Bolt (2X2) 117","dry_run":false}',
     'POST /cards/remove': '{"owner":"matt","list":"1 Sol Ring","dry_run":false}',
@@ -78,7 +90,22 @@ export default {
       }
 
       if (path === '/query') {
-        if (method !== 'POST') return json({ error: 'use POST' }, 405);
+        // GET exists for callers that can only fetch a URL — Claude desktop
+        // and mobile among them, whose web fetch is GET-only. It is
+        // read-only: a URL that can delete rows is one link preview away
+        // from doing it. POST is unrestricted.
+        if (method === 'GET') {
+          const q = url.searchParams;
+          const body = {
+            sql: q.get('sql') || '',
+            fmt: q.get('fmt') || 'rows',
+            ...(q.has('limit') ? { limit: Number(q.get('limit')) } : {}),
+            ...(q.has('params') ? { params: safeParams(q.get('params')) } : {}),
+          };
+          if (body.params === null) return json({ error: 'params must be a JSON array' }, 400);
+          return send(await runQuery(env.DB, body, { readOnly: true }));
+        }
+        if (method !== 'POST') return json({ error: 'use GET or POST' }, 405);
         const { body, error } = await readJson(request);
         if (error) return json({ error }, 400);
         return send(await runQuery(env.DB, body));

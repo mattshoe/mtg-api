@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { post, sql, count } from './helpers.js';
+import { post, get, sql, count } from './helpers.js';
 import { isSingleStatement } from '../src/query.js';
 
 describe('POST /query response shapes', () => {
@@ -203,5 +203,86 @@ describe('POST /query value fidelity', () => {
     });
     expect(r.body.n).toBe(2);
     expect(r.body.truncated).toBe(2);
+  });
+});
+
+describe('GET /query', () => {
+  // Claude desktop and mobile can fetch a URL but cannot POST, so the whole
+  // collection would be unreachable from there without this.
+  it('runs a SELECT from the query string', async () => {
+    const r = await get('/query?sql=' + encodeURIComponent(
+      "SELECT name, qty FROM cards WHERE name_norm = 'arcane signet' ORDER BY id LIMIT 2",
+    ));
+    expect(r.status).toBe(200);
+    expect(r.body.cols).toEqual(['name', 'qty']);
+    expect(r.body.rows.length).toBeGreaterThan(0);
+  });
+
+  it('honours fmt and limit', async () => {
+    const tsv = await get('/query?fmt=tsv&sql=' + encodeURIComponent('SELECT name FROM cards LIMIT 2'));
+    expect(tsv.headers.get('content-type')).toMatch(/tab-separated/);
+    expect(tsv.text.split('\n')).toHaveLength(3);
+
+    const capped = await get('/query?limit=3&sql=' + encodeURIComponent('SELECT id FROM cards'));
+    expect(capped.body.n).toBe(3);
+    expect(capped.body.truncated).toBe(3);
+  });
+
+  it('accepts bound params as a JSON array', async () => {
+    const r = await get('/query?params=' + encodeURIComponent('["kayla"]')
+      + '&sql=' + encodeURIComponent('SELECT COUNT(*) FROM cards WHERE owner = ?'));
+    expect(r.status).toBe(200);
+    expect(r.body.rows[0][0]).toBe(await count('cards', 'owner = ?', 'kayla'));
+  });
+
+  it('rejects params that are not a JSON array', async () => {
+    const r = await get('/query?params=nope&sql=' + encodeURIComponent('SELECT 1'));
+    expect(r.status).toBe(400);
+  });
+
+  it('refuses to write, and the write does not happen', async () => {
+    const before = await count('deck_notes');
+    for (const sql of [
+      "INSERT INTO deck_notes (deck_id, section, body) VALUES (1,'x','y')",
+      'DELETE FROM deck_notes',
+      'UPDATE cards SET qty = 0',
+      'DROP TABLE cards',
+      'CREATE TABLE evil (a)',
+      "ATTACH DATABASE 'x' AS y",
+    ]) {
+      const r = await get(`/query?sql=${encodeURIComponent(sql)}`);
+      expect(r.status, `${sql} was not refused`).toBe(405);
+      expect(r.body.error).toMatch(/read-only/);
+    }
+    expect(await count('deck_notes')).toBe(before);
+    expect(await count('cards', 'qty = 0')).toBe(0);
+  });
+
+  it('is not fooled by a mutating word inside a string literal', async () => {
+    // A card actually named "Delete the Evidence" must still be searchable.
+    const r = await get('/query?sql=' + encodeURIComponent(
+      "SELECT COUNT(*) FROM cards WHERE name = 'Delete the Evidence'",
+    ));
+    expect(r.status).toBe(200);
+    expect(r.body.rows[0][0]).toBe(0);
+  });
+
+  it('allows a CTE and an EXPLAIN', async () => {
+    const cte = await get('/query?sql=' + encodeURIComponent(
+      'WITH x AS (SELECT id FROM cards LIMIT 2) SELECT * FROM x',
+    ));
+    expect(cte.status).toBe(200);
+    expect(cte.body.n).toBe(2);
+  });
+
+  it('still rejects two statements', async () => {
+    const r = await get('/query?sql=' + encodeURIComponent('SELECT 1; SELECT 2'));
+    expect([400, 405]).toContain(r.status);
+  });
+
+  it('POST is still allowed to write', async () => {
+    const r = await post('/query', { sql: 'DELETE FROM deck_notes' });
+    expect(r.status).toBe(200);
+    expect(await count('deck_notes')).toBe(0);
   });
 });

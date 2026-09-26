@@ -29,9 +29,18 @@ real question.
 curl https://mtg-api.mattshoe81.workers.dev/schema
 ```
 
-### `POST /query`
+### `GET /query` and `POST /query`
 
-Arbitrary SQL, reads or writes, one statement per call.
+Arbitrary SQL, one statement per call. **POST** reads or writes. **GET** takes
+the same thing as query parameters and is read-only, for callers that can only
+fetch a URL — Claude desktop and mobile among them:
+
+```
+https://mtg-api.mattshoe81.workers.dev/query?fmt=tsv&sql=SELECT name, free FROM bulk_cards WHERE owner='matt' ORDER BY free DESC LIMIT 20
+```
+
+A GET that could delete rows is one link preview or prefetch away from doing
+it, so anything that writes is refused there with a 405. POST is unrestricted.
 
 ```bash
 curl -X POST https://mtg-api.mattshoe81.workers.dev/query \
@@ -49,6 +58,9 @@ curl -X POST https://mtg-api.mattshoe81.workers.dev/query \
 | `params` | values for `?` placeholders |
 | `fmt` | `rows` (default), `objects`, or `tsv` |
 | `limit` | row cap, default 5000 |
+
+GET takes the same names in the query string; `params` goes in as a JSON array,
+e.g. `?params=["matt"]`.
 
 `rows` names the columns once and sends each row as an array — on the full
 `cards` table that is 2.7 MB against 5.1 MB for `objects`. `tsv` is smaller
@@ -143,7 +155,7 @@ API has no tags until the nightly backfill.
 
 ```bash
 npm install
-npm test          # 148 tests against a real local D1 in workerd
+npm test          # 158 tests against a real local D1 in workerd
 npm run dev       # local server
 npm run deploy
 ```
