@@ -15,32 +15,97 @@ function colorBar(ci) {
   return h('div.pillbar', cs.map((c) => h('i', { style: { width: `${100 / cs.length}%`, background: COLOR_CSS[c] } })));
 }
 
+// The deck rows were written by hand, so every field carries prose the tile
+// has no room for. These pull the one fact out of each.
+
+const WORD = { white: 'W', blue: 'U', black: 'B', red: 'R', green: 'G' };
+
+// Alphabetical, the order the database stores identity in.
+const dedupe = (cs) => [...new Set(cs)].sort().join('');
+
+/**
+ * A deck's colour identity as WUBRG letters. The commander's own
+ * `color_identity` is the truth when we have the card; the `colors` column
+ * is free text ('Simic (Green/Blue)', '{W}{U}{B}{R} (Breya's identity)',
+ * 'Five-color (WUBRG)') and only gets read when we do not.
+ */
+export function ciOf(deck) {
+  if (deck.ci) return deck.ci;
+  const raw = deck.colors || '';
+  const syms = [...raw.matchAll(/\{([WUBRG])\}/gi)].map((m) => m[1].toUpperCase());
+  if (syms.length) return dedupe(syms);
+  const words = [...raw.matchAll(/\b(white|blue|black|red|green)\b/gi)].map((m) => WORD[m[1].toLowerCase()]);
+  if (words.length) return dedupe(words);
+  if (/wubrg|five.?colou?r/i.test(raw)) return 'BGRUW';
+  return '';
+}
+
+/** 'Ashling, the Limitless (featured alt commander: ...)' -> the name. */
+export const commanderName = (s) => String(s || '').replace(/\s*\([^)]*\)\s*$/, '').trim();
+
+/** 'Explorers of the Deep \u2014 ... Precon' -> 'Explorers of the Deep'. */
+export const deckTitle = (s) => String(s || '').split(/\s+\u2014\s+/)[0].trim() || String(s || '');
+
+/** '2 (0 Game Changers, though ...)' -> '2'. */
+export const bracketOf = (s) => (String(s || '').match(/\d+/) || [null])[0];
+
+/**
+ * Commander art for the banner. Cards we own come straight off Scryfall's
+ * image CDN from the id we already store. For a commander that is not in
+ * the collection — proxy decks, precons nobody has pulled apart — Scryfall
+ * will redirect a name lookup to the same image, so the <img> resolves it.
+ */
+function bannerUrl(deck, cmdr) {
+  if (deck.art_id) return imageUrl(deck.art_id, 'art_crop');
+  if (!cmdr) return '';
+  return `https://api.scryfall.com/cards/named?exact=${encodeURIComponent(cmdr)}&format=image&version=art_crop`;
+}
+
 function deckTile(d) {
-  const complete = d.card_count ? Math.round((d.owned_count / d.card_count) * 100) : 0;
-  return h('div.deck-card', { onclick: () => { location.hash = `#/decks/${encodeURIComponent(d.slug)}`; } },
-    colorBar(d.colors),
-    h('div',
-      h('strong', d.name),
-      h('div.cmdr', d.commander || '—')),
-    h('div.flex-wrap',
-      h('span.tag', d.owner),
-      d.is_proxy ? h('span.tag.warn', 'proxy') : null,
-      d.bracket ? h('span.tag.info', `bracket ${d.bracket}`) : null,
-      (d.status || '').startsWith('PROPOSED') ? h('span.tag.warn', 'proposed') : null),
-    h('div.flex.small.muted',
-      h('span', `${num(d.card_count)} cards`),
-      h('span.spacer'),
-      h('span', { class: complete === 100 ? '' : 'tag warn' }, `${complete}% owned`)));
+  const cmdr = commanderName(d.commander);
+  const bracket = bracketOf(d.bracket);
+  const art = bannerUrl(d, cmdr);
+  return h('div.deck-card', {
+    title: d.name,
+    onclick: () => { location.hash = `#/decks/${encodeURIComponent(d.slug)}`; },
+  },
+  h('div.deck-banner', art
+    ? h('img', {
+      src: art,
+      alt: '',
+      loading: 'lazy',
+      // A name Scryfall does not know 404s. Drop the banner rather than
+      // leaving a broken-image glyph in the tile.
+      onerror: (e) => e.target.parentElement.classList.add('none'),
+    })
+    : null),
+  h('div.deck-body',
+    h('div.deck-top',
+      h('strong.deck-name', deckTitle(d.name)),
+      bracket ? h('span.tag.info', `bracket ${bracket}`) : null),
+    h('div.deck-meta',
+      identity(ciOf(d)),
+      h('span.cmdr', cmdr || '—'))));
 }
 
 async function listView() {
   const root = $('#view');
   fill(root, h('div.wrap', loading('Loading decks')));
   try {
+    // The commander's card gives us both the banner art and a colour
+    // identity that is actual letters rather than the prose in decks.colors.
+    // Grouped by name_norm so a commander owned twice resolves once.
     const decks = await api.rows(`
-      SELECT slug, name, owner, commander, colors, bracket, theme, status,
-             is_proxy, card_count, owned_count
-        FROM decks ORDER BY owner, name`);
+      SELECT d.slug, d.name, d.owner, d.commander, d.colors, d.bracket,
+             c.scryfall_id AS art_id, c.color_identity AS ci
+        FROM decks d
+        LEFT JOIN (SELECT name_norm, MIN(id) AS id, scryfall_id, color_identity
+                     FROM cards GROUP BY name_norm) c
+          ON c.name_norm = lower(trim(CASE
+               WHEN instr(d.commander, ' (') > 0
+               THEN substr(d.commander, 1, instr(d.commander, ' (') - 1)
+               ELSE d.commander END))
+       ORDER BY d.owner, d.name`);
 
     const byOwner = {};
     for (const d of decks) (byOwner[d.owner] ||= []).push(d);
@@ -178,10 +243,10 @@ async function detailView(slug) {
           h('div.panel',
             h('div.panel-head', h('h2', 'Deck')),
             h('div.panel-body',
-              colorBar(deck.colors),
+              colorBar(ciOf(deck)),
               h('dl.kv', { style: { marginTop: '12px' } },
                 h('dt', 'Owner'), h('dd', deck.owner),
-                h('dt', 'Identity'), h('dd', identity(deck.colors)),
+                h('dt', 'Identity'), h('dd', identity(ciOf(deck))),
                 h('dt', 'Cards'), h('dd', `${num(deck.card_count)} (${num(deck.owned_count)} owned)`),
                 deck.bracket ? [h('dt', 'Bracket'), h('dd', deck.bracket)] : null,
                 deck.theme ? [h('dt', 'Theme'), h('dd', deck.theme)] : null,

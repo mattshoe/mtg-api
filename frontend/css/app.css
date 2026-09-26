@@ -460,13 +460,30 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
 .pager .info { color: var(--text-2); font-size: 13px; font-variant-numeric: tabular-nums; }
 
 /* deck list */
-.deck-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(268px, 1fr)); }
+.deck-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(272px, 1fr)); }
 .deck-card {
   background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius);
-  padding: 14px; cursor: pointer; display: flex; flex-direction: column; gap: 8px;
+  cursor: pointer; display: flex; flex-direction: column; overflow: hidden;
 }
 .deck-card:hover { border-color: var(--line-2); background: var(--bg-3); }
-.deck-card .cmdr { color: var(--text-2); font-size: 12.5px; }
+
+/* commander art, cropped to a band across the top */
+.deck-banner { flex: none; height: 96px; background: var(--bg-3); overflow: hidden; }
+.deck-banner.none { display: none; }
+.deck-banner img {
+  display: block; width: 100%; height: 100%;
+  object-fit: cover; object-position: center 38%;
+}
+
+.deck-body { padding: 11px 13px 13px; display: flex; flex-direction: column; gap: 7px; }
+.deck-top { display: flex; align-items: flex-start; gap: 8px; }
+.deck-top .tag { flex: none; margin-top: 1px; }
+.deck-name { flex: 1; min-width: 0; font-size: 14px; line-height: 1.3; }
+.deck-meta { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.deck-card .cmdr {
+  min-width: 0; color: var(--text-2); font-size: 12.5px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 
 .pillbar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: var(--bg-3); }
 .pillbar i { display: block; height: 100%; }
