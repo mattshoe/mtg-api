@@ -32,12 +32,29 @@ RETRIES = 5
 
 # Views are derived and rebuilt by schema.sql, so only real tables are dumped.
 # card_search is rebuilt from cards at the end, exactly as the old builder did.
+# A hardcoded list silently misses a table added later, so this is checked
+# against the live schema at run time — see verify_covers_everything().
 TABLES = [
     "cards", "card_faces", "card_colors", "card_types", "card_keywords",
     "card_finishes", "card_games", "card_promo_types", "card_frame_effects",
     "aliases", "decks", "deck_cards", "deck_notes",
     "card_tags", "tags", "legalities", "rulings",
+    "prices", "maintenance_log",
 ]
+
+# Rebuilt on restore rather than dumped.
+DERIVED = {"card_search"}
+
+
+def verify_covers_everything(api):
+    """Fail loudly if the database grew a table this script does not know."""
+    live = {r[0] for r in query(api,
+            "SELECT name FROM sqlite_master WHERE type='table' "
+            "AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' "
+            "AND name NOT LIKE 'd1_%' AND name NOT LIKE 'card_search_%'")["rows"]}
+    unknown = live - set(TABLES) - DERIVED
+    if unknown:
+        sys.exit(f"backup would miss {sorted(unknown)} - add them to TABLES")
 
 
 def query(api, sql, params=None):
@@ -86,6 +103,8 @@ def main():
     schema = Path(__file__).resolve().parent.parent / "schema.sql"
     if not schema.exists():
         sys.exit(f"missing {schema}")
+
+    verify_covers_everything(args.api)
 
     opener = gzip.open if out.name.endswith(".gz") else open
     total = 0
@@ -158,7 +177,7 @@ def main():
             return 1
 
         counts = {}
-        for t in TABLES + ["card_search"]:
+        for t in TABLES + list(DERIVED):
             counts[t] = db.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
 
         if counts["cards"] == 0:
