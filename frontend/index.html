@@ -10,6 +10,13 @@
 <link rel="preconnect" href="https://mtg-api.mattshoe81.workers.dev">
 <link rel="preconnect" href="https://cards.scryfall.io">
 <link rel="stylesheet" href="css/app.css">
+
+<!-- GitHub Pages serves everything with Cache-Control: max-age=600, so a
+     deploy would otherwise reach an open browser as a mix of old and new
+     files. The deploy stamps this map with ?v=<commit>, which makes every
+     module a new URL and pins one consistent set of them per page load.
+     Left empty it is a no-op, which is what local development wants. -->
+<script type="importmap">{"imports":{}}</script>
 </head>
 <body>
 
