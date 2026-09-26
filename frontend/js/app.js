@@ -12,6 +12,7 @@ import * as decks from './decks.js';
 import * as manage from './manage.js';
 import * as stats from './stats.js';
 import * as sqlConsole from './console.js';
+import * as logs from './logs.js';
 
 // ------------------------------------------------------------------ theme
 
@@ -60,6 +61,7 @@ const ROUTES = {
   remove: () => manage.show('remove'),
   stats: () => stats.show(),
   console: () => sqlConsole.show(),
+  logs: () => logs.show(),
 };
 
 function parseHash() {
@@ -191,13 +193,13 @@ addEventListener('keydown', (e) => {
 
   if (typing) return;
 
-  const go = { s: '#/search', d: '#/decks', a: '#/add', r: '#/remove', g: '#/stats', c: '#/console' }[e.key];
+  const go = { s: '#/search', d: '#/decks', a: '#/add', r: '#/remove', g: '#/stats', c: '#/console', v: '#/logs' }[e.key];
   if (go) { location.hash = go; return; }
   if (e.key === 't') toggleTheme();
   if (e.key === 'l') (isAdmin() ? lock() : promptUnlock());
   if (e.key === '/') { e.preventDefault(); openPalette(); }
   if (e.key === '?') {
-    toast('s search · d decks · a add · r remove · g stats · c console · l lock/unlock · t theme · / or ⌘K find · esc close');
+    toast('s search · d decks · a add · r remove · g stats · c console · v logs · l lock/unlock · t theme · / or ⌘K find · esc close');
   }
 });
 
@@ -211,7 +213,7 @@ $('#theme-btn').addEventListener('click', toggleTheme);
 function paintTabs() {
   const on = isAdmin();
   for (const a of $$('#tabs a')) {
-    const gated = a.dataset.view === 'add' || a.dataset.view === 'remove';
+    const gated = ['add', 'remove', 'logs'].includes(a.dataset.view);
     a.classList.toggle('gated', gated && !on);
     a.title = gated && !on ? 'Needs admin mode' : '';
   }

@@ -5,7 +5,7 @@ const TABLES = [
   'aliases', 'card_faces', 'card_colors', 'card_finishes', 'card_frame_effects',
   'card_games', 'card_keywords', 'card_promo_types', 'card_search', 'card_tags',
   'card_types', 'cards', 'deck_cards', 'deck_notes', 'decks', 'legalities',
-  'maintenance_log', 'prices', 'rulings', 'tags',
+  'logs', 'maintenance_log', 'prices', 'rulings', 'tags',
 ];
 
 const VIEWS = ['bulk_cards', 'card_prices', 'card_usage', 'deck_conflicts',
@@ -44,6 +44,9 @@ describe('GET /schema', () => {
   it('row counts match the database', async () => {
     const r = await get('/schema');
     for (const t of [...r.body.tables, ...r.body.views]) {
+      // `logs` cannot match: reading the schema logs the read, after the
+      // response has already reported the count.
+      if (t.name === 'logs') continue;
       expect(t.rows, `${t.name} row count`).toBe(await count(t.name));
     }
   });

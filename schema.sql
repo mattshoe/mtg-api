@@ -117,6 +117,27 @@ CREATE TABLE maintenance_log (
     ms INTEGER
 );
 
+-- ============================================================ logs
+-- Request and event log. Reads are gated on admin, unlike every other
+-- table here, because this one carries IP addresses and the SQL people
+-- ran. Rows live a week; the daily job prunes them.
+CREATE TABLE logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts      TEXT NOT NULL,
+    level   TEXT NOT NULL,      -- debug | info | warn | error
+    event   TEXT,               -- route slug: query, cards.add, admin, ...
+    method  TEXT,
+    path    TEXT,
+    status  INTEGER,
+    ms      INTEGER,
+    message TEXT,
+    detail  TEXT,               -- JSON, never credentials
+    ip      TEXT,
+    country TEXT,
+    ray     TEXT,               -- cf-ray, to line up with Cloudflare's logs
+    admin   INTEGER
+);
+
 -- ============================================================ full text
 CREATE VIRTUAL TABLE card_search USING fts5(
     name, type_line, oracle_text, flavor_text, keywords, tags,
@@ -150,6 +171,10 @@ CREATE INDEX idx_legal_oracle    ON legalities(oracle_id);
 CREATE INDEX idx_rulings_oracle  ON rulings(oracle_id);
 CREATE INDEX idx_prices_usd      ON prices(usd);
 CREATE INDEX idx_maint_ran       ON maintenance_log(ran_at DESC);
+CREATE INDEX idx_logs_ts         ON logs(ts DESC);
+CREATE INDEX idx_logs_level      ON logs(level, ts DESC);
+CREATE INDEX idx_logs_event      ON logs(event, ts DESC);
+CREATE INDEX idx_logs_status     ON logs(status, ts DESC);
 
 -- One physical stack per (person, printing, finish). The old builder rebuilt
 -- the whole table from a card list every time, so it could not collide;

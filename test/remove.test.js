@@ -200,7 +200,7 @@ describe('POST /cards/remove — aliases', () => {
     // or printing, not by the stack you own. Keeping them costs nothing and
     // saves a fetch next time; the daily job prunes prices for printings
     // nobody owns any more.
-    const REFERENCE = new Set(['legalities', 'rulings', 'prices']);
+    const REFERENCE = new Set(['legalities', 'rulings', 'prices', 'logs']);
     for (const t of Object.keys(before)) {
       if (REFERENCE.has(t)) continue;
       expect(after[t], `${t} drifted`).toBe(before[t]);

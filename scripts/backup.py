@@ -39,7 +39,7 @@ TABLES = [
     "card_finishes", "card_games", "card_promo_types", "card_frame_effects",
     "aliases", "decks", "deck_cards", "deck_notes",
     "card_tags", "tags", "legalities", "rulings",
-    "prices", "maintenance_log",
+    "prices", "maintenance_log", "logs",
 ]
 
 # Rebuilt on restore rather than dumped.

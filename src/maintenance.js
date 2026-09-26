@@ -9,6 +9,7 @@
 // working is visible rather than merely absent.
 
 import { makeThrottle } from './throttle.js';
+import { pruneLogs, RETENTION_DAYS } from './log.js';
 
 const SCRYFALL = 'https://api.scryfall.com';
 const UA = 'MattMTGCollectionAPI/1.0';
@@ -156,7 +157,9 @@ export async function healthCheck(db) {
                 ON p.scryfall_id = c.scryfall_id WHERE p.usd IS NULL) AS unpriced,
       (SELECT ROUND(SUM(qty * price), 2) FROM card_prices
                 WHERE price IS NOT NULL)                             AS value,
-      (SELECT COUNT(*) FROM card_search)                             AS indexed`).first();
+      (SELECT COUNT(*) FROM card_search)                             AS indexed,
+      (SELECT COUNT(*) FROM logs)                                    AS log_rows,
+      (SELECT COUNT(*) FROM logs WHERE level = 'error')              AS log_errors`).first();
   if (!row || !row.cards) throw new Error('cards table is empty');
   return row;
 }
@@ -172,7 +175,7 @@ export async function healthCheck(db) {
  * scripts/refresh_prices.py. Everything here touches only D1 and therefore
  * cannot be rate-limited by anyone.
  */
-export const CRON_TASKS = ['prune-prices', 'orphans', 'search', 'health'];
+export const CRON_TASKS = ['prune-prices', 'prune-logs', 'orphans', 'search', 'health'];
 
 /**
  * Everything, in order, each logged separately so one failure does not
@@ -182,6 +185,8 @@ export async function runMaintenance(db, { fetchImpl = fetch, only, tasks: want 
   const tasks = [
     ['prices', () => refreshPrices(db, { fetchImpl })],
     ['prune-prices', () => prunePrices(db)],
+    // Logs are kept for a week. Without this they would grow forever.
+    ['prune-logs', () => pruneLogs(db, RETENTION_DAYS)],
     ['orphans', () => sweepOrphans(db)],
     ['search', () => repairSearch(db)],
     ['health', () => healthCheck(db)],

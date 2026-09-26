@@ -95,6 +95,25 @@ Cache API for 12 hours. Around 300ms for a page of cards cold, ~120ms warm;
 the whole collection is about 15s cold and a second or two after that.
 
 
+### `GET /logs` and `GET /logs/stats`
+
+The request log. **Admin only** — unlike every other read here, because it
+carries IP addresses and the SQL people ran.
+
+```bash
+curl 'https://mtg-api.mattshoe81.workers.dev/logs?min=warn&since=24&q=bolt' \
+  -H "authorization: Bearer $TOKEN"
+```
+
+Filters: `min` (level and above), `level` (exact, comma-separated), `event`,
+`method`, `status` (`error`, `4xx`, `5xx`, or an exact code), `since` (hours
+or an ISO timestamp), `slow` (minimum ms), `q` (searches path, message,
+detail, event and IP), `limit`, `offset`.
+
+Because ordinary reads are open, the `logs` table is blocked in `/query` too
+unless you present a token — gating the endpoint but not the table would
+leave the data one `SELECT` away.
+
 ### `GET /maintenance` and `POST /maintenance`
 
 What the daily job did, and a way to run it now. GET is open; POST needs
@@ -227,6 +246,7 @@ API.
 | Add / Remove | paste a list, preview the real dry run, then apply |
 | Stats | curve, colours, types, rarity, biggest sets, most unassigned copies |
 | Console | arbitrary SQL with a schema browser, snippets, history and CSV export |
+| Logs | every request, searchable and filterable, with errors in their own grouped view |
 
 Admin mode is the padlock in the top bar, or `l`. It lives in a JavaScript
 variable and nowhere else — not `localStorage`, not `sessionStorage`, not the
@@ -285,14 +305,15 @@ price or by stack value, and filtering on a price range, are ordinary
 queries: around 150ms.
 
 Keyboard: `s` `d` `a` `r` `g` `c` jump between views, `/` or `⌘K` finds a card,
-`l` locks or unlocks, `t` toggles the theme, `esc` closes. Searches are shareable — the filters live
+`v` opens the logs, `l` locks or unlocks, `t` toggles the theme, `esc`
+closes. Searches are shareable — the filters live
 in the URL — and can be saved by name.
 
 ## Development
 
 ```bash
 npm install
-npm test          # 222 tests against a real local D1 in workerd
+npm test          # 252 tests against a real local D1 in workerd
 npm run dev       # local server
 npm run deploy
 ```
@@ -331,14 +352,36 @@ printf 'newpassword' | npx wrangler secret put ADMIN_PASSWORD
 | `scripts/seed.py` | one-time: the five old shards -> `data.sql` |
 | `scripts/make_fixture.py` | regenerate the test fixture |
 
+## Logging
+
+Every request writes one row to `logs`, after the response has gone out via
+`waitUntil`, with every failure swallowed — a log that breaks the thing it
+logs is worse than no log. Levels fall out of the outcome: 5xx is `error`,
+4xx is `warn`, a write is `info`, a read is `debug`, so the default view is
+signal and the reads are still there when you want them.
+
+Nothing secret is ever written. The `/admin` body is never recorded, and any
+credential-shaped key that reaches a detail object is redacted on the way in.
+A *failed* unlock is recorded, because that is the one thing in here that
+looks like someone trying doors.
+
+The Logs page has two modes. **All** is a table you can filter by level,
+event, method, status, duration and free text, with each row expanding to
+the full detail, IP and CF-Ray. **Errors** is not that with a filter on: it
+groups identical failures, leads with the message, and counts repeats —
+fifty copies of one broken query is one problem, and reading it as fifty
+rows is how you miss the second problem underneath.
+
+Rows live **7 days**; the daily job prunes them.
+
 ## Daily maintenance
 
 Two halves, split by what each side can actually do.
 
 **Cloudflare Cron Trigger, 08:10 UTC** (`[triggers]` in `wrangler.toml`).
-Nothing needs to be awake. Prunes prices for printings nobody owns, sweeps
-child rows orphaned from a deleted card, rebuilds any missing full-text
-rows, and records a health snapshot. All D1-only, so nothing external can
+Nothing needs to be awake. Prunes prices for printings nobody owns, deletes
+log rows past the 7-day window, sweeps child rows orphaned from a deleted
+card, rebuilds any missing full-text rows, and records a health snapshot. All D1-only, so nothing external can
 rate-limit it.
 
 **The Mac, 03:00** (`scripts/nightly.sh`). Refreshes every price, backfills
