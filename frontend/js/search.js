@@ -1,4 +1,8 @@
 // Search. The filter model and SQL live in filters.js; this is the UI.
+//
+// The filter surface is full width and everything is visible at once —
+// checkboxes, ranges, toggles — rather than buried in accordions down a
+// narrow column.
 
 import * as api from './api.js';
 import {
@@ -17,7 +21,36 @@ let state = { ...DEFAULTS };
 let lastRun = null;
 let facets = null;
 let advError = null;
+let panelOpen = store.get('filtersOpen', true);
+let panelEl;
 let resultsEl;
+
+// -------------------------------------------------------- state plumbing
+
+/**
+ * Re-rendering the whole panel on every keystroke would yank focus out of
+ * whatever you were typing in. Every control carries a stable key, so
+ * focus and cursor position can be put back afterwards.
+ */
+function captureFocus() {
+  const el = document.activeElement;
+  if (!el || !el.dataset || !el.dataset.fk) return null;
+  return {
+    fk: el.dataset.fk,
+    start: el.selectionStart ?? null,
+    end: el.selectionEnd ?? null,
+  };
+}
+
+function restoreFocus(snap) {
+  if (!snap) return;
+  const el = panelEl?.querySelector(`[data-fk="${CSS.escape(snap.fk)}"]`);
+  if (!el) return;
+  el.focus();
+  if (snap.start !== null && el.setSelectionRange) {
+    try { el.setSelectionRange(snap.start, snap.end); } catch { /* not a text input */ }
+  }
+}
 
 function push(patch, { resetPage = true } = {}) {
   state = { ...state, ...patch };
@@ -27,270 +60,292 @@ function push(patch, { resetPage = true } = {}) {
   run();
 }
 
+const toggleIn = (key, value) => push({
+  [key]: state[key].includes(value) ? state[key].filter((x) => x !== value) : [...state[key], value],
+});
+
 // ------------------------------------------------------------- controls
 
+const lazy = (k) => debounce((e) => push({ [k]: e.target.value }), 400);
 const setter = (k) => (e) => push({ [k]: e.target.value });
-const lazy = (k) => debounce((e) => push({ [k]: e.target.value }), 350);
 
-function toggleIn(key, value) {
-  const cur = state[key];
-  push({ [key]: cur.includes(value) ? cur.filter((x) => x !== value) : [...cur, value] });
+function label(text) {
+  return text ? h('label', text) : null;
 }
 
-function chips(values, key, { mini = true } = {}) {
-  return h('div.chips', values.map((v) => {
-    const [val, label] = Array.isArray(v) ? v : [v, v];
-    return h(`button.chip${mini ? '.mini' : ''}`, {
-      class: state[key].includes(val) ? 'on' : '',
-      onclick: () => toggleIn(key, val),
-    }, label);
+/** A checkbox list. This is the workhorse of the panel. */
+function checks(values, key, { cols = 2 } = {}) {
+  return h('div.checks', { style: { '--cols': cols } }, values.map((v) => {
+    const [val, text] = Array.isArray(v) ? v : [v, v];
+    return h('label.check',
+      h('input', {
+        type: 'checkbox',
+        checked: state[key].includes(val),
+        dataset: { fk: `${key}:${val}` },
+        onchange: () => toggleIn(key, val),
+      }),
+      h('span', text));
   }));
 }
 
-function field(label, ...kids) {
-  return h('div.field', label ? h('label', label) : null, ...kids);
+/** Mutually exclusive buttons. */
+function seg(key, options, { onPick } = {}) {
+  return h('div.seg', options.map(([v, text, title]) => h('button', {
+    class: state[key] === v ? 'on' : '',
+    title: title || '',
+    onclick: () => (onPick ? onPick(v) : push({ [key]: v })),
+  }, text)));
 }
 
-function textField(label, key, placeholder, list) {
-  return field(label, h('input', {
+function text(key, placeholder, list) {
+  return h('input', {
     type: 'search', value: state[key], placeholder, list,
+    dataset: { fk: key },
     oninput: lazy(key),
-  }));
+  });
 }
 
-function rangeField(label, minKey, maxKey, { step = '1', min = '0' } = {}) {
-  return field(label, h('div.row',
-    h('input', { type: 'number', step, min, placeholder: 'min', value: state[minKey], oninput: lazy(minKey) }),
-    h('input', { type: 'number', step, min, placeholder: 'max', value: state[maxKey], oninput: lazy(maxKey) })));
+function range(minKey, maxKey, { min = '0', step = '1' } = {}) {
+  return h('div.row',
+    h('input', { type: 'number', min, step, placeholder: 'min', value: state[minKey], dataset: { fk: minKey }, oninput: lazy(minKey) }),
+    h('input', { type: 'number', min, step, placeholder: 'max', value: state[maxKey], dataset: { fk: maxKey }, oninput: lazy(maxKey) }));
 }
 
-/** Power / toughness / loyalty: an operator plus a number. */
-function statField(label, opKey, valKey) {
-  return field(label, h('div.row',
-    h('select', { style: { flex: '0 0 74px' }, value: state[opKey], onchange: setter(opKey) },
+function stat(opKey, valKey) {
+  return h('div.row',
+    h('select', { style: { flex: '0 0 68px' }, value: state[opKey], dataset: { fk: opKey }, onchange: setter(opKey) },
       ['>=', '<=', '=', '>', '<'].map((o) => h('option', { value: o, selected: state[opKey] === o }, o))),
-    h('input', { type: 'number', placeholder: 'any', value: state[valKey], oninput: lazy(valKey) })));
+    h('input', { type: 'number', placeholder: 'any', value: state[valKey], dataset: { fk: valKey }, oninput: lazy(valKey) }));
 }
 
-/** Any / yes / no. */
-function triField(label, key) {
-  return field(label, h('div.seg',
-    [['', 'Any'], ['yes', 'Yes'], ['no', 'No']].map(([v, l]) => h('button', {
+/** Any / yes / no, for the boolean printing flags. */
+function tri(key, text2) {
+  return h('div.tri',
+    h('span.tri-label', text2),
+    h('div.seg.seg-sm', [['', 'Any'], ['yes', 'Yes'], ['no', 'No']].map(([v, l]) => h('button', {
       class: state[key] === v ? 'on' : '',
       onclick: () => push({ [key]: v }),
     }, l))));
 }
 
-function section(title, open, ...kids) {
-  return h('details.adv', { open }, h('summary', title), h('div.stack', ...kids));
+/** A tag-style list you add to with enter, remove by clicking. */
+function tokens(key, placeholder, list) {
+  return h('div',
+    h('input', {
+      type: 'search', list, placeholder,
+      dataset: { fk: key },
+      onkeydown: (e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        const v = e.target.value.trim();
+        if (!v) return;
+        e.target.value = '';
+        if (!state[key].includes(v)) push({ [key]: [...state[key], v] });
+      },
+    }),
+    state[key].length
+      ? h('div.chips', { style: { marginTop: '6px' } }, state[key].map((v) => h('span.chip.mini.on', {
+        title: 'Remove', onclick: () => push({ [key]: state[key].filter((x) => x !== v) }),
+      }, v, ' ×')))
+      : h('div.hint', 'type and press enter'));
 }
 
-// ---------------------------------------------------------------- colour
+function group(title, ...kids) {
+  return h('section.fgroup', h('h3', title), h('div.fgroup-body', ...kids));
+}
 
-function colorPanel() {
-  return h('div.panel',
-    h('div.panel-head', h('h2', 'Colour')),
-    h('div.panel-body',
-      field('Match against', h('div.seg',
-        [['id', 'Colour identity'], ['card', 'Printed colour']].map(([v, l]) => h('button', {
-          class: state.colorTarget === v ? 'on' : '',
-          title: v === 'id' ? 'What a commander allows — the usual one' : 'The colours printed on the card itself',
-          onclick: () => push({ colorTarget: v }),
-        }, l)))),
-
-      field('How to match', h('div.mode-grid',
-        COLOR_MODES.map(([v, label, hint]) => h('button.chip', {
-          class: state.colorMode === v ? 'on' : '',
-          title: hint,
-          onclick: () => push({ colorMode: v }),
-        }, label)))),
-
-      h('div.mode-hint.small.muted',
-        (COLOR_MODES.find(([v]) => v === state.colorMode) || [])[2] || ''),
-
-      field('Colours', h('div.pips',
-        COLORS.map(([c, name]) => h('button.pip', {
-          dataset: { c },
-          class: state.colors.includes(c) ? 'on' : '',
-          title: name,
-          onclick: () => toggleIn('colors', c),
-        }, c)))),
-
-      h('div.flex-wrap', { style: { marginTop: '-4px' } },
-        h('button.chip.mini', { onclick: () => push({ colors: [] }) }, 'Clear'),
-        h('button.chip.mini', { onclick: () => push({ colors: ['W', 'U', 'B', 'R', 'G'] }) }, 'All five'),
-        h('button.chip.mini', { onclick: () => push({ colors: ['C'], colorMode: 'exactly' }) }, 'Colourless only')),
-
-      rangeField('Number of colours', 'ciMin', 'ciMax'),
-
-      field('Produces mana', h('div.pips',
-        COLORS.map(([c, name]) => h('button.pip', {
-          dataset: { c },
-          class: state.produces.includes(c) ? 'on' : '',
-          title: `Taps for ${name}`,
-          onclick: () => toggleIn('produces', c),
-        }, c))))));
+function row(text2, control) {
+  return h('div.frow', label(text2), control);
 }
 
 // ---------------------------------------------------------------- panel
 
+function colorGroup() {
+  const hint = (COLOR_MODES.find(([v]) => v === state.colorMode) || [])[2] || '';
+  return h('section.fgroup.fgroup-color',
+    h('h3', 'Colour'),
+    h('div.fgroup-body',
+      row('Match against', seg('colorTarget', [
+        ['id', 'Colour identity', 'What a commander allows — the usual one'],
+        ['card', 'Printed colour', 'The colours printed on the card'],
+      ])),
+      row('How', h('div',
+        h('div.mode-grid', COLOR_MODES.map(([v, text2, title]) => h('button.chip', {
+          class: state.colorMode === v ? 'on' : '', title,
+          onclick: () => push({ colorMode: v }),
+        }, text2))),
+        h('div.hint', hint))),
+      row('Colours', h('div',
+        h('div.pips', COLORS.map(([c, name]) => h('button.pip', {
+          dataset: { c }, class: state.colors.includes(c) ? 'on' : '', title: name,
+          onclick: () => toggleIn('colors', c),
+        }, c))),
+        h('div.chips', { style: { marginTop: '7px' } },
+          h('button.chip.mini', { onclick: () => push({ colors: [] }) }, 'clear'),
+          h('button.chip.mini', { onclick: () => push({ colors: ['W', 'U', 'B', 'R', 'G'] }) }, 'all five'),
+          h('button.chip.mini', { onclick: () => push({ colors: ['C'], colorMode: 'exactly' }) }, 'colourless')))),
+      row('Number of colours', range('ciMin', 'ciMax')),
+      row('Produces mana', h('div.pips', COLORS.map(([c, name]) => h('button.pip', {
+        dataset: { c }, class: state.produces.includes(c) ? 'on' : '', title: `Taps for ${name}`,
+        onclick: () => toggleIn('produces', c),
+      }, c))))));
+}
+
 function filterPanel() {
-  const n = activeCount(state);
+  return h('div.fgrid',
+    h('section.fgroup',
+      h('h3', 'Collection'),
+      h('div.fgroup-body',
+        row('Whose', seg('owner', [['matt', 'Matt'], ['kayla', 'Kayla'], ['both', 'Both']])),
+        row('Pool', seg('pool', [
+          ['all', 'All'],
+          ['free', 'Unassigned', 'Copies not committed to a built deck'],
+          ['committed', 'In decks'],
+        ])),
+        row('Copies owned', range('qtyMin', 'qtyMax')),
+        row('Free copies, at least', h('input', {
+          type: 'number', min: '0', placeholder: 'any', value: state.freeMin,
+          dataset: { fk: 'freeMin' }, oninput: lazy('freeMin'),
+        })),
+        row('In a deck', h('select', { value: state.deck, dataset: { fk: 'deck' }, onchange: setter('deck') },
+          h('option', { value: '' }, 'any'),
+          h('option', { value: '_any', selected: state.deck === '_any' }, '— in any deck —'),
+          h('option', { value: '_none', selected: state.deck === '_none' }, '— in no deck —'),
+          (facets?.decks || []).map((d) => h('option', { value: d.slug, selected: state.deck === d.slug }, `${d.name} (${d.owner})`)))),
+        row('EDHREC rank', range('edhrecMin', 'edhrecMax')))),
 
-  return h('div.stack.filters-panel', { id: 'filters' },
-    h('div.panel',
-      h('div.panel-head',
-        h('h2', 'Filters'),
-        n ? h('span.tag.info', `${n} active`) : null,
-        h('span.spacer'),
-        h('button.btn.sm.ghost', {
-          onclick: () => push({ ...DEFAULTS, owner: state.owner, view: state.view, size: state.size }),
-        }, 'Reset')),
-      h('div.panel-body',
-        field('Whose collection', h('div.seg',
-          ['matt', 'kayla', 'both'].map((o) => h('button', {
-            class: state.owner === o ? 'on' : '',
-            onclick: () => push({ owner: o }),
-          }, o === 'both' ? 'Both' : o[0].toUpperCase() + o.slice(1))))),
+    colorGroup(),
 
-        textField('Name contains', 'q', 'sol ring'),
-        textField('Rules text', 'text', 'draw a card', undefined),
-        h('div.small.muted', { style: { marginTop: '-8px' } }, 'Full-text, stemmed. Use “Exact text” below for a literal substring.'),
+    h('section.fgroup',
+      h('h3', 'Card type'),
+      h('div.fgroup-body',
+        row(null, checks(facets?.types || [], 'types')),
+        row('Supertype', checks(['Legendary', 'Basic', 'Snow', 'World'], 'supertypes')),
+        row('Subtypes', tokens('subtypes', 'Elf, Equipment…', 'dl-subtypes')),
+        row('Exclude type', checks(facets?.types || [], 'typesNot')),
+        row('Type line contains', text('typeLine', 'Artifact Creature')))),
 
-        field('Pool', h('div.seg',
-          [['all', 'All'], ['free', 'Unassigned'], ['committed', 'In decks']].map(([v, l]) => h('button', {
-            class: state.pool === v ? 'on' : '',
-            title: v === 'free' ? 'Copies not committed to a built deck' : '',
-            onclick: () => push({ pool: v }),
-          }, l)))),
+    h('section.fgroup',
+      h('h3', 'Mana & stats'),
+      h('div.fgroup-body',
+        row('Mana value', range('cmcMin', 'cmcMax')),
+        row('Mana cost contains', text('manaCost', '{G}{G}')),
+        row('Power', stat('powOp', 'pow')),
+        row('Toughness', stat('touOp', 'tou')),
+        row('Loyalty', stat('loyOp', 'loy')))),
 
-        field('Card type', chips(facets?.types || [], 'types')),
-        field('Rarity', chips(RARITY_ORDER, 'rarities')))),
+    h('section.fgroup',
+      h('h3', 'Text'),
+      h('div.fgroup-body',
+        row('Name contains', text('q', 'sol ring')),
+        row('Rules text', h('div', text('text', 'draw a card'), h('div.hint', 'full-text, stemmed'))),
+        row('Exact text', h('div', text('textLike', 'enters tapped'), h('div.hint', 'literal substring'))),
+        row('Flavour text', text('flavor', '')),
+        row('Artist', text('artist', 'Rebecca Guay', 'dl-artists')),
+        row('Watermark', text('watermark', '', 'dl-watermarks')))),
 
-    colorPanel(),
+    h('section.fgroup',
+      h('h3', 'Keywords & tags'),
+      h('div.fgroup-body',
+        row('Keywords', tokens('keywords', 'Flying, Ward…', 'dl-keywords')),
+        row('Scryfall tags', tokens('tags', 'mana-rock, spot-removal…', 'dl-tags')),
+        h('div.hint', 'every one listed must match'))),
 
-    h('div.panel',
-      h('div.panel-head', h('h2', 'Everything else')),
-      h('div.panel-body.stack',
-        section('Mana & stats', hasAny(['cmcMin', 'cmcMax', 'pow', 'tou', 'loy', 'manaCost']),
-          rangeField('Mana value', 'cmcMin', 'cmcMax'),
-          textField('Mana cost contains', 'manaCost', '{G}{G}'),
-          statField('Power', 'powOp', 'pow'),
-          statField('Toughness', 'touOp', 'tou'),
-          statField('Loyalty', 'loyOp', 'loy')),
+    h('section.fgroup',
+      h('h3', 'Rarity & printing'),
+      h('div.fgroup-body',
+        row('Rarity', checks(RARITY_ORDER, 'rarities')),
+        row('Finish', seg('finish', [['', 'Any'], ['nonfoil', 'Nonfoil'], ['foil', 'Foil'], ['etched', 'Etched']])),
+        row('Sets', tokens('sets', 'MH3', 'dl-sets')),
+        row('Set type', checks(facets?.setTypes || [], 'setTypes')),
+        row('Release year', range('yearMin', 'yearMax', { min: '1993' })),
+        row('Collector number', text('collnum', '117')))),
 
-        section('Types', hasAny(['supertypes', 'subtypes', 'typesNot', 'typeLine']),
-          field('Supertype', chips(['Legendary', 'Basic', 'Snow', 'World'], 'supertypes')),
-          field('Subtypes (all must match)', multiText('subtypes', 'Elf, Equipment…', 'dl-subtypes')),
-          field('Exclude type', chips(facets?.types || [], 'typesNot')),
-          textField('Type line contains', 'typeLine', 'Artifact Creature')),
+    h('section.fgroup',
+      h('h3', 'Physical & digital'),
+      h('div.fgroup-body',
+        row('Layout', checks(facets?.layouts || [], 'layouts')),
+        row('Frame', checks(facets?.frames || [], 'frames', { cols: 3 })),
+        row('Border', checks(facets?.borders || [], 'borders')),
+        row('Available in', checks(['paper', 'arena', 'mtgo'], 'games', { cols: 3 })))),
 
-        section('Text & credits', hasAny(['textLike', 'flavor', 'artist', 'watermark']),
-          textField('Exact text (substring)', 'textLike', 'enters tapped'),
-          textField('Flavour text', 'flavor', ''),
-          textField('Artist', 'artist', 'Rebecca Guay', 'dl-artists'),
-          textField('Watermark', 'watermark', '', 'dl-watermarks')),
+    h('section.fgroup',
+      h('h3', 'Flags'),
+      h('div.fgroup-body.tri-list', FLAGS.map(([key, text2]) => tri(key, text2)))),
 
-        section('Keywords & tags', hasAny(['keywords', 'tags']),
-          field('Keywords (all must match)', multiText('keywords', 'Flying, Ward…', 'dl-keywords')),
-          field('Scryfall tags (all must match)', multiText('tags', 'mana-rock, spot-removal…', 'dl-tags'))),
+    h('section.fgroup',
+      h('h3', 'Legality'),
+      h('div.fgroup-body',
+        row('Format', h('select', { value: state.format, dataset: { fk: 'format' }, onchange: setter('format') },
+          h('option', { value: '' }, 'any format'),
+          (facets?.formats || []).map((f) => h('option', { value: f, selected: state.format === f }, f)))),
+        row('Status', h('select', { value: state.legality, dataset: { fk: 'legality' }, onchange: setter('legality'), disabled: !state.format },
+          ['legal', 'banned', 'restricted', 'not_legal'].map((v) => h('option', { value: v, selected: state.legality === v }, v)))),
+        h('div.tri-list', tri('hasRulings', 'Has rulings')))),
 
-        section('Printing', hasAny(['sets', 'setTypes', 'layouts', 'frames', 'borders', 'games', 'yearMin', 'yearMax', 'collnum', 'finish']),
-          field('Sets', multiText('sets', 'MH3', 'dl-sets')),
-          field('Set type', chips(facets?.setTypes || [], 'setTypes')),
-          field('Layout', chips(facets?.layouts || [], 'layouts')),
-          field('Finish', h('div.seg',
-            [['', 'Any'], ['nonfoil', 'Nonfoil'], ['foil', 'Foil'], ['etched', 'Etched']].map(([v, l]) => h('button', {
-              class: state.finish === v ? 'on' : '',
-              onclick: () => push({ finish: v }),
-            }, l)))),
-          rangeField('Release year', 'yearMin', 'yearMax', { min: '1993' }),
-          field('Frame', chips(facets?.frames || [], 'frames')),
-          field('Border', chips(facets?.borders || [], 'borders')),
-          field('Available in', chips(['paper', 'arena', 'mtgo'], 'games')),
-          textField('Collector number', 'collnum', '117')),
-
-        section('Flags', FLAGS.some(([k]) => state[k] !== ''),
-          ...FLAGS.map(([key, label]) => triField(label, key))),
-
-        section('Legality', Boolean(state.format),
-          field('Format', h('div.row',
-            h('select', { value: state.format, onchange: setter('format') },
-              h('option', { value: '' }, 'any format'),
-              (facets?.formats || []).map((f) => h('option', { value: f, selected: state.format === f }, f))),
-            h('select', { value: state.legality, onchange: setter('legality'), disabled: !state.format },
-              ['legal', 'banned', 'restricted', 'not_legal'].map((v) => h('option', { value: v, selected: state.legality === v }, v))))),
-          triField('Has rulings', 'hasRulings')),
-
-        section('Collection & decks', hasAny(['qtyMin', 'qtyMax', 'freeMin', 'deck', 'edhrecMin', 'edhrecMax']),
-          rangeField('Copies owned', 'qtyMin', 'qtyMax'),
-          field('At least this many free', h('input', {
-            type: 'number', min: '0', placeholder: 'any', value: state.freeMin, oninput: lazy('freeMin'),
-          })),
-          field('In a deck', h('select', { value: state.deck, onchange: setter('deck') },
-            h('option', { value: '' }, 'any'),
-            h('option', { value: '_any', selected: state.deck === '_any' }, 'in any deck'),
-            h('option', { value: '_none', selected: state.deck === '_none' }, 'in no deck'),
-            (facets?.decks || []).map((d) => h('option', { value: d.slug, selected: state.deck === d.slug }, d.name)))),
-          rangeField('EDHREC rank', 'edhrecMin', 'edhrecMax')))),
-
-    h('div.panel',
-      h('div.panel-head', h('h2', 'Saved searches')),
-      h('div.panel-body', savedSearches())));
+    h('section.fgroup.fgroup-wide',
+      h('h3', 'Query language', h('button.btn.sm.ghost', {
+        style: { marginLeft: 'auto' }, onclick: () => cheatsheet(),
+      }, 'cheatsheet')),
+      h('div.fgroup-body',
+        h('input.qbox', {
+          type: 'search', value: state.adv, spellcheck: false,
+          dataset: { fk: 'adv' },
+          placeholder: 'optional — id<=wub t:creature mv<=3 -is:reprint',
+          oninput: lazy('adv'),
+        }),
+        advError ? h('div.err', { style: { marginTop: '8px' } }, advError) : null,
+        h('div.hint', 'Optional. ANDed with everything above.'))));
 }
 
-const hasAny = (keys) => keys.some((k) => {
-  const v = state[k];
-  return Array.isArray(v) ? v.length > 0 : v !== DEFAULTS[k];
-});
+// ------------------------------------------------- active filter summary
 
-/** A list of values built with a datalist input plus removable chips. */
-function multiText(key, placeholder, list) {
-  const input = h('input', {
-    type: 'search', list, placeholder,
-    onkeydown: (e) => {
-      if (e.key !== 'Enter') return;
-      e.preventDefault();
-      const v = e.target.value.trim();
-      if (!v) return;
-      e.target.value = '';
-      if (!state[key].includes(v)) push({ [key]: [...state[key], v] });
-    },
-  });
-  return h('div',
-    input,
-    state[key].length
-      ? h('div.chips', { style: { marginTop: '6px' } }, state[key].map((v) => h('span.chip.mini.on', {
-        title: 'Remove',
-        onclick: () => push({ [key]: state[key].filter((x) => x !== v) }),
-      }, v, ' ×')))
-      : h('div.small.muted', { style: { marginTop: '4px' } }, 'type and press enter'));
-}
+const LABELS = {
+  q: 'name', text: 'rules text', textLike: 'exact text', flavor: 'flavour',
+  artist: 'artist', watermark: 'watermark', typeLine: 'type line',
+  manaCost: 'mana cost', collnum: 'number', adv: 'query',
+  cmcMin: 'mv ≥', cmcMax: 'mv ≤', ciMin: 'colours ≥', ciMax: 'colours ≤',
+  qtyMin: 'owned ≥', qtyMax: 'owned ≤', freeMin: 'free ≥',
+  edhrecMin: 'edhrec ≥', edhrecMax: 'edhrec ≤',
+  yearMin: 'year ≥', yearMax: 'year ≤',
+  types: 'type', typesNot: 'not type', supertypes: 'supertype', subtypes: 'subtype',
+  rarities: 'rarity', sets: 'set', setTypes: 'set type', layouts: 'layout',
+  frames: 'frame', borders: 'border', games: 'in', keywords: 'keyword',
+  tags: 'tag', produces: 'produces', colors: 'colour',
+  finish: 'finish', pool: 'pool', deck: 'deck', format: 'format',
+  hasRulings: 'rulings',
+};
 
-function savedSearches() {
-  const saved = store.get('saved', []);
-  return h('div.stack',
-    h('button.btn.sm', {
-      onclick: () => {
-        const name = prompt('Name this search');
-        if (!name) return;
-        store.set('saved', [...saved.filter((s) => s.name !== name), { name, hash: toHash(state) }]);
-        toast(`Saved "${name}"`, 'ok');
-        renderSide();
-      },
-    }, '＋ Save current'),
-    saved.length
-      ? h('div.chips', saved.map((s) => h('span.chip', { onclick: () => { location.hash = s.hash; } },
-        s.name,
-        h('button.btn.ghost.sm', {
-          style: { padding: '0 0 0 6px' },
-          onclick: (e) => {
-            e.stopPropagation();
-            store.set('saved', saved.filter((x) => x.name !== s.name));
-            renderSide();
-          },
-        }, '×'))))
-      : h('div.muted.small', 'None yet.'));
+function activeChips() {
+  const out = [];
+  const drop = (patch) => () => push(patch);
+
+  for (const [key, text2] of Object.entries(LABELS)) {
+    const v = state[key];
+    const d = DEFAULTS[key];
+    if (Array.isArray(v)) {
+      if (!v.length) continue;
+      const shown = key === 'colors'
+        ? `${(COLOR_MODES.find(([m]) => m === state.colorMode) || [])[1]?.toLowerCase()} ${v.join('')}`
+        : v.join(', ');
+      out.push([`${text2}: ${shown}`, drop({ [key]: [] })]);
+    } else if (v !== d && v !== '') {
+      out.push([`${text2}: ${v}`, drop({ [key]: d })]);
+    }
+  }
+  for (const [key, text2] of FLAGS) {
+    if (state[key]) out.push([`${text2}: ${state[key]}`, drop({ [key]: '' })]);
+  }
+
+  if (!out.length) return null;
+  return h('div.active-bar',
+    h('span.small.muted', 'Active:'),
+    h('div.chips', out.map(([text2, onDrop]) => h('button.chip.on.mini', {
+      title: 'Remove this filter', onclick: onDrop,
+    }, text2, ' ×'))),
+    h('button.btn.sm.ghost', {
+      onclick: () => push({ ...DEFAULTS, owner: state.owner, view: state.view, size: state.size }),
+    }, 'Clear all'));
 }
 
 // --------------------------------------------------------------- results
@@ -315,9 +370,9 @@ function cardTile(c) {
 }
 
 function resultsTable(list) {
-  const th = (key, label, cls = '') => h(`th.sortable${cls}`, {
+  const th = (key, text2, cls = '') => h(`th.sortable${cls}`, {
     onclick: () => push({ sort: key, dir: state.sort === key && state.dir === 'asc' ? 'desc' : 'asc' }),
-  }, label, state.sort === key ? h('span.arrow', state.dir === 'asc' ? ' ↑' : ' ↓') : null);
+  }, text2, state.sort === key ? h('span.arrow', state.dir === 'asc' ? ' ↑' : ' ↓') : null);
 
   return h('div.table-wrap', h('table',
     h('thead', h('tr',
@@ -351,8 +406,8 @@ function pager(total) {
     h('button.btn.sm', { onclick: () => go(pages), disabled: state.page >= pages }, 'Last »'));
 }
 
-function renderResults(list, total) {
-  const head = h('div.panel-head',
+function resultsHead(total) {
+  return h('div.panel-head',
     h('h2', `${num(total)} ${total === 1 ? 'card' : 'cards'}`),
     h('span.tag', state.group ? 'by name' : 'every printing'),
     h('span.spacer'),
@@ -360,7 +415,7 @@ function renderResults(list, total) {
       h('button', { class: state.view === 'grid' ? 'on' : '', onclick: () => push({ view: 'grid' }, { resetPage: false }) }, 'Grid'),
       h('button', { class: state.view === 'table' ? 'on' : '', onclick: () => push({ view: 'table' }, { resetPage: false }) }, 'Table')),
     h('select', { style: { width: 'auto' }, value: state.sort, onchange: setter('sort') },
-      Object.entries(SORTS).map(([k, [label]]) => h('option', { value: k, selected: state.sort === k }, label))),
+      Object.entries(SORTS).map(([k, [text2]]) => h('option', { value: k, selected: state.sort === k }, text2))),
     h('button.btn.sm', {
       title: 'Reverse order',
       onclick: () => push({ dir: state.dir === 'asc' ? 'desc' : 'asc' }, { resetPage: false }),
@@ -369,12 +424,6 @@ function renderResults(list, total) {
     h('select', { style: { width: 'auto' }, value: String(state.size), onchange: (e) => push({ size: Number(e.target.value) }) },
       PAGE_SIZES.map((n) => h('option', { value: n, selected: state.size === n }, `${n} / page`))),
     h('button.btn.sm', { onclick: () => exportCsv(total) }, 'CSV'));
-
-  const body = list.length
-    ? (state.view === 'grid' ? h('div.panel-body', h('div.grid', list.map(cardTile))) : resultsTable(list))
-    : empty('Nothing matches', 'Loosen a filter, or hit Reset.');
-
-  fill(resultsEl, queryBox(), h('div.panel', head, body), pager(total));
 }
 
 async function exportCsv(total) {
@@ -389,49 +438,10 @@ async function exportCsv(total) {
   }
 }
 
-// -------------------------------------------------------------- query box
-
-const EXAMPLES = [
-  ['Fits a Alela deck', 'id<=wub is:creature'],
-  ['Cheap unassigned removal', 'tag:spot-removal mv<=2 is:free'],
-  ['Big green beaters', 'id<=g pow>=5 t:creature'],
-  ['Spare mana rocks', 'tag:mana-rock is:free -t:land'],
-  ['Top-ranked staples', 'edhrec<=250 is:free'],
-  ['Foils I own', 'is:foil'],
-  ['Not in any deck', '-is:indeck qty>=2'],
-  ['Draw spells under 3', 'o:"draw a card" mv<3'],
-];
-
-function queryBox() {
-  const input = h('input.qbox', {
-    type: 'search',
-    value: state.adv,
-    placeholder: 'id<=wub  t:creature  mv<=3  pow>=4  -is:reprint  o:"draw a card"',
-    spellcheck: false,
-    oninput: debounce((e) => push({ adv: e.target.value }), 450),
-  });
-
-  return h('div.panel', { style: { marginBottom: '14px' } },
-    h('div.panel-body', { style: { paddingBottom: advError || state.adv ? '14px' : '14px' } },
-      h('div.flex', { style: { gap: '8px' } },
-        input,
-        h('button.btn.sm', {
-          onclick: () => cheatsheet(),
-          title: 'Every key the query box understands',
-        }, '?')),
-      advError ? h('div.err', { style: { marginTop: '8px' } }, advError) : null,
-      h('div.chips', { style: { marginTop: '8px' } },
-        EXAMPLES.map(([label, q]) => h('button.chip.mini', {
-          title: q,
-          onclick: () => push({ adv: q }),
-        }, label)),
-        state.adv ? h('button.chip.mini', { onclick: () => push({ adv: '' }) }, 'clear ×') : null)));
-}
-
 // ------------------------------------------------------------------ run
 
 async function run() {
-  renderSide();
+  renderChrome();
   advError = null;
   const opts = { advError: (m) => { advError = m; } };
   const { sql, params } = buildQuery(state, opts);
@@ -439,7 +449,7 @@ async function run() {
 
   const token = Symbol('run');
   lastRun = token;
-  fill(resultsEl, queryBox(), loading('Searching'));
+  fill(resultsEl, loading('Searching'));
 
   try {
     const [res, total] = await Promise.all([
@@ -447,16 +457,73 @@ async function run() {
       api.scalar(countQ.sql, countQ.params),
     ]);
     if (lastRun !== token) return;
-    renderResults(res.rows, total ?? 0);
+    const body = res.rows.length
+      ? (state.view === 'grid'
+        ? h('div.panel-body', h('div.grid', res.rows.map(cardTile)))
+        : resultsTable(res.rows))
+      : empty('Nothing matches', 'Loosen a filter, or Clear all.');
+    fill(resultsEl, h('div.panel', resultsHead(total ?? 0), body), pager(total ?? 0));
+    if (advError) renderChrome(); // the error only becomes known after building
   } catch (e) {
     if (lastRun !== token) return;
-    fill(resultsEl, queryBox(), errorBox(e));
+    fill(resultsEl, errorBox(e));
   }
 }
 
-function renderSide() {
-  const side = $('#side');
-  if (side) fill(side, filterPanel());
+/** Everything above the results: the toolbar, the chips, the panel. */
+function renderChrome() {
+  const snap = captureFocus();
+  const n = activeCount(state);
+
+  fill($('#chrome'),
+    h('div.searchbar',
+      h('button.btn', {
+        class: panelOpen ? 'primary' : '',
+        onclick: () => {
+          panelOpen = !panelOpen;
+          store.set('filtersOpen', panelOpen);
+          renderChrome();
+        },
+      }, panelOpen ? '▾ Filters' : '▸ Filters', n ? h('span.count-pill', n) : null),
+      h('input.bigsearch', {
+        type: 'search', value: state.q, placeholder: 'Search by name…',
+        dataset: { fk: 'q-top' },
+        oninput: debounce((e) => push({ q: e.target.value }), 400),
+      }),
+      seg('owner', [['matt', 'Matt'], ['kayla', 'Kayla'], ['both', 'Both']]),
+      h('button.btn.sm', { onclick: () => saveSearch() }, '☆ Save')),
+    activeChips(),
+    panelOpen ? h('div.panel.filters-wrap', { id: 'fpanel' }, filterPanel()) : null,
+    savedBar());
+
+  panelEl = $('#chrome');
+  restoreFocus(snap);
+}
+
+function saveSearch() {
+  const name = prompt('Name this search');
+  if (!name) return;
+  const saved = store.get('saved', []);
+  store.set('saved', [...saved.filter((s) => s.name !== name), { name, hash: toHash(state) }]);
+  toast(`Saved "${name}"`, 'ok');
+  renderChrome();
+}
+
+function savedBar() {
+  const saved = store.get('saved', []);
+  if (!saved.length) return null;
+  return h('div.saved-bar',
+    h('span.small.muted', 'Saved:'),
+    h('div.chips', saved.map((s) => h('span.chip.mini', { onclick: () => { location.hash = s.hash; } },
+      s.name,
+      h('button.btn.ghost.sm', {
+        style: { padding: '0 0 0 5px' },
+        onclick: (e) => {
+          e.stopPropagation();
+          store.set('saved', saved.filter((x) => x.name !== s.name));
+          renderChrome();
+        },
+      }, '×')))));
 }
 
 function mount() {
@@ -464,13 +531,10 @@ function mount() {
   if (root.dataset.view === 'search') return;
   root.dataset.view = 'search';
   resultsEl = h('div');
-  fill(root, h('div.wrap',
-    h('div.split',
-      h('div.sticky-side', { id: 'side' }),
-      resultsEl)));
+  fill(root, h('div.wrap', h('div', { id: 'chrome' }), resultsEl));
 }
 
-/** Datalists and chip vocabularies, fetched once. */
+/** Datalists and checkbox vocabularies, fetched once. */
 async function loadFacets() {
   if (facets) return;
   try {
@@ -511,8 +575,8 @@ export { fromHash };
 export async function show(queryString) {
   state = fromHash(queryString);
   mount();
-  renderSide();
+  renderChrome();
   await loadFacets();
-  renderSide();
+  renderChrome();
   run();
 }

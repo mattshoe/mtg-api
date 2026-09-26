@@ -434,17 +434,95 @@ details.adv > summary::before { content: "▸ "; color: var(--text-3); }
 details.adv[open] > summary::before { content: "▾ "; }
 details.adv > div { padding-top: 12px; }
 
-/* Colour mode picker — the four options sit as a 2x2 so every one is
-   visible at once rather than hidden behind a select. */
-.mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
-.mode-grid .chip { text-align: center; padding: 7px 8px; }
-.mode-hint { margin: -6px 0 12px; min-height: 16px; }
+/* ============================================================ search UI
+   The filter surface is full width and always legible: a responsive grid
+   of groups, every control visible, no accordions to hunt through. */
 
-/* The query box wants to look like the main event. */
-.qbox {
-  font-family: var(--mono); font-size: 13.5px;
-  padding: 11px 13px;
+.searchbar {
+  display: flex; gap: 9px; align-items: center; flex-wrap: wrap;
+  margin-bottom: 12px;
 }
+.bigsearch { flex: 1 1 260px; min-width: 200px; padding: 9px 12px; font-size: 14.5px; }
+.count-pill {
+  display: inline-grid; place-items: center; min-width: 18px; height: 18px;
+  padding: 0 5px; margin-left: 2px; border-radius: 99px;
+  background: var(--bg); color: var(--accent-2);
+  font: 700 11px/1 var(--mono);
+}
+.btn.primary .count-pill { background: rgba(0,0,0,.24); color: inherit; }
+
+.active-bar, .saved-bar {
+  display: flex; gap: 9px; align-items: center; flex-wrap: wrap;
+  padding: 9px 11px; margin-bottom: 12px;
+  background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius-sm);
+}
+.active-bar > .chips, .saved-bar > .chips { flex: 1; }
+
+/* Everything is visible, but the panel must not push the results off the
+   screen — so it scrolls inside itself and the cards stay in view. */
+.filters-wrap {
+  margin-bottom: 14px;
+  max-height: min(56vh, 620px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.fgrid {
+  display: grid; gap: 1px; background: var(--line);
+  grid-template-columns: repeat(auto-fit, minmax(258px, 1fr));
+}
+.fgroup { background: var(--bg-2); padding: 13px 15px 15px; min-width: 0; }
+.fgroup > h3 {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--accent-2); margin-bottom: 11px;
+  padding-bottom: 7px; border-bottom: 1px solid var(--line);
+}
+.fgroup-body > * + * { margin-top: 11px; }
+.fgroup-color { background: color-mix(in srgb, var(--accent) 5%, var(--bg-2)); }
+.fgroup-wide { grid-column: 1 / -1; }
+
+.frow > label {
+  display: block; font-size: 10.5px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .05em; color: var(--text-3); margin-bottom: 5px;
+}
+.hint { font-size: 11.5px; color: var(--text-3); margin-top: 4px; line-height: 1.4; }
+
+/* real checkboxes, because a checkbox should look like a checkbox */
+.checks { display: grid; grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr)); gap: 3px 10px; }
+.check {
+  display: flex; align-items: center; gap: 7px; cursor: pointer;
+  font-size: 12.5px; color: var(--text-2); text-transform: none;
+  letter-spacing: 0; font-weight: 400; margin: 0; padding: 2px 0;
+  min-width: 0;
+}
+.check:hover { color: var(--text); }
+.check span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.check input[type=checkbox] {
+  appearance: none; width: 15px; height: 15px; flex: none; margin: 0;
+  border: 1.5px solid var(--line-2); border-radius: 4px; background: var(--bg);
+  cursor: pointer; position: relative;
+}
+.check input[type=checkbox]:hover { border-color: var(--text-3); }
+.check input[type=checkbox]:checked { background: var(--accent); border-color: var(--accent); }
+.check input[type=checkbox]:checked::after {
+  content: ""; position: absolute; left: 4px; top: 1px;
+  width: 4px; height: 8px; border: solid #17130a;
+  border-width: 0 2px 2px 0; transform: rotate(42deg);
+}
+.check input[type=checkbox]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* the four colour modes, all visible at once */
+.mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.mode-grid .chip { text-align: center; padding: 7px 8px; justify-content: center; }
+
+.seg-sm button { padding: 3px 9px; font-size: 11.5px; }
+.tri-list > * + * { margin-top: 6px; }
+.tri { display: flex; align-items: center; gap: 9px; }
+.tri-label { flex: 1; font-size: 12.5px; color: var(--text-2); min-width: 0;
+             overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.qbox { font-family: var(--mono); font-size: 13.5px; padding: 10px 12px; }
 .qbox:focus { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
 
 .scroll-list { max-height: 210px; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 8px; background: var(--bg); }
@@ -453,8 +531,12 @@ details.adv > div { padding-top: 12px; }
 @media (max-width: 900px) {
   .split { grid-template-columns: 1fr; }
   .sticky-side { position: static; max-height: none; }
-  .filters-panel { display: none; }
-  .filters-panel.open { display: block; }
+}
+
+@media (max-width: 560px) {
+  .fgrid { grid-template-columns: 1fr; }
+  .searchbar .seg { order: 3; }
+  .bigsearch { flex-basis: 100%; }
 }
 
 @media (max-width: 720px) {

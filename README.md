@@ -210,8 +210,15 @@ printed colour: **Exactly**, **At most** (nothing outside these — the one that
 answers "what can I put in this commander"), **At least**, and **Any of**.
 Colourless is handled per mode rather than pretended to be a sixth colour.
 
-**The query box** takes Scryfall-style syntax, ANDed with whatever the panel
-has set. `?` opens a full cheatsheet.
+The filter panel is full width and everything is visible at once — 76
+checkboxes, ranges with operators, segmented toggles, colour pips — in a
+responsive grid of eleven groups. It scrolls inside itself so the results stay
+on screen, collapses from the toolbar, and remembers whether you left it open.
+Active filters show as removable chips above it.
+
+**The query box** is optional, sits at the bottom of the panel, and takes
+Scryfall-style syntax ANDed with whatever the controls have set. The cheatsheet
+button lists every key.
 
 ```
 id<=wub t:creature mv<=3        fits an Esper commander, cheap creatures
