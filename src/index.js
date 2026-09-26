@@ -6,6 +6,7 @@
 //   POST /query       arbitrary SQL, compact JSON out
 //   POST /cards/add   a decklist in, Scryfall-enriched rows out
 //   POST /cards/remove
+//   POST /decks/disassemble  delete a deck, freeing its cards (admin)
 //   POST /prices      scryfall ids in, TCGplayer-derived prices out
 //   POST /admin       password in, admin token out
 //   GET  /maintenance last run of the daily job
@@ -18,6 +19,7 @@
 import { getSchema } from './schema.js';
 import { runQuery, isReadOnly, stripLiterals } from './query.js';
 import { addCards, removeCards } from './cards.js';
+import { disassembleDeck } from './decks.js';
 import { mintToken, verifyToken, bearer } from './admin.js';
 import { lookupPrices } from './prices.js';
 import { runMaintenance, CRON_TASKS } from './maintenance.js';
@@ -71,6 +73,7 @@ const INDEX = {
     'POST /query': '{"sql":"SELECT ...","params":[],"fmt":"rows|objects|tsv","limit":5000}',
     'POST /cards/add': '{"owner":"matt","list":"4 Lightning Bolt (2X2) 117","dry_run":false}',
     'POST /cards/remove': '{"owner":"matt","list":"1 Sol Ring","dry_run":false}',
+    'POST /decks/disassemble': '{"slug":"...","dry_run":false} — deletes the deck, its cards go back to bulk; needs admin',
     'POST /prices': '{"ids":["<scryfall id>",...]} -> {"prices":{id:{usd,foil,etched,eur,tix,tcg}}}',
     'POST /admin': '{"password":"..."} -> {"token":"...","expires_at":<unix>}',
     'GET /logs': '?min=info&q=&event=&status=error&since=24&limit=100 — admin only',
@@ -301,6 +304,26 @@ async function route(request, env, ctx, entry) {
         errors: r.body?.errors?.slice(0, 5),
       };
       if (r.body?.failed) entry.level = 'warn';
+      return send(r);
+    }
+
+    if (path === '/decks/disassemble') {
+      if (method !== 'POST') return json({ error: 'use POST' }, 405);
+      // Gated whole, dry runs included, the same as add and remove.
+      const v = await verifyToken(env, bearer(request));
+      if (!v.ok) return denied(v.reason);
+      const { body, error } = await readJson(request);
+      if (error) return json({ error }, 400);
+      entry.admin = true;
+      entry.write = true;
+      const r = await disassembleDeck(env.DB, body);
+      entry.detail = {
+        slug: body?.slug || null,
+        dry_run: Boolean(body?.dry_run),
+        applied: r.body?.applied,
+        freed: r.body?.freed,
+      };
+      if (r.status >= 400) entry.message = r.body?.error;
       return send(r);
     }
 

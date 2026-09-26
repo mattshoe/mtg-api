@@ -88,6 +88,10 @@ export function removeCards(body) {
   return post('/cards/remove', body);
 }
 
+export function disassembleDeck(body) {
+  return post('/decks/disassemble', body);
+}
+
 /** cols+rows -> array of objects, for when query() is more convenient. */
 export function toObjects(res) {
   return res.rows.map((r) => Object.fromEntries(res.cols.map((c, i) => [c, r[i]])));

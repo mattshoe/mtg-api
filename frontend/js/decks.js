@@ -174,6 +174,63 @@ async function gapsView() {
 
 const ROLE_ORDER = ['commander', 'spell', 'land'];
 
+/**
+ * Disassembling deletes the deck and hands its cards back to bulk. The
+ * cards themselves never move — they are already in `cards`; what goes is
+ * the deck's claim on them, which is what `free` counts.
+ *
+ * Irreversible and there is no undo, so it asks first, and what it shows
+ * is the server's own dry run rather than a number worked out here.
+ */
+async function confirmDisassemble(deck) {
+  let plan;
+  try {
+    plan = await api.disassembleDeck({ slug: deck.slug, dry_run: true });
+  } catch (e) {
+    toast(String(e.message), 'bad');
+    return;
+  }
+
+  const go = h('button.btn.danger', `Disassemble · free ${num(plan.freed)}`);
+  const close = () => scrim.remove();
+
+  go.addEventListener('click', async () => {
+    go.disabled = true;
+    go.textContent = 'Working…';
+    try {
+      const r = await api.disassembleDeck({ slug: deck.slug });
+      close();
+      toast(`Disassembled ${r.deck.name} — ${num(r.freed)} card${r.freed === 1 ? '' : 's'} back in bulk`, 'ok');
+      location.hash = '#/decks';
+    } catch (e) {
+      toast(String(e.message), 'bad');
+      go.disabled = false;
+      go.textContent = `Disassemble · free ${num(plan.freed)}`;
+    }
+  });
+
+  const scrim = h('div.palette-scrim', {
+    onclick: (e) => { if (e.target === scrim) close(); },
+  }, h('div.palette', { style: { padding: '18px' } },
+    h('h2', { style: { marginBottom: '4px' } }, 'Disassemble this deck?'),
+    h('div.muted.small', { style: { marginBottom: '12px' } },
+      `${deck.name} is deleted, along with its list and notes. `
+      + `The ${num(plan.freed)} card${plan.freed === 1 ? '' : 's'} it is holding go back to `
+      + `${deck.owner}'s bulk — nothing leaves the collection. This cannot be undone.`),
+    plan.cards?.length
+      ? h('div.table-wrap', { style: { maxHeight: '240px', overflowY: 'auto' } },
+        h('table',
+          h('thead', h('tr', h('th', 'Card'), h('th.num', 'Freed'))),
+          h('tbody', plan.cards.map((c) => h('tr',
+            h('td.t-name', c.name), h('td.num', c.qty))))))
+      : h('div.small.muted', 'It is not holding anything you own.'),
+    h('div.flex', { style: { marginTop: '14px' } },
+      go,
+      h('button.btn.ghost', { onclick: close }, 'Cancel'))));
+
+  document.body.append(scrim);
+}
+
 async function detailView(slug) {
   const root = $('#view');
   fill(root, h('div.wrap', loading('Loading deck')));
@@ -236,7 +293,10 @@ async function detailView(slug) {
         h('button.btn.sm', { onclick: () => exportDeck(deck, cards) }, 'Export list'),
         h('button.btn.sm', {
           onclick: () => { location.hash = `#/search?q=&owner=${deck.owner}`; },
-        }, 'Search collection')),
+        }, 'Search collection'),
+        isAdmin()
+          ? h('button.btn.sm.danger', { onclick: () => confirmDisassemble(deck) }, 'Disassemble')
+          : null),
 
       h('div.split',
         h('div.sticky-side.stack',

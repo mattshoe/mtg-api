@@ -196,6 +196,32 @@ line does not sink the request: the good ones apply and the rest come back in
 `errors`. The whole mutation is one D1 batch, so a Scryfall failure leaves the
 database untouched.
 
+### `POST /decks/disassemble`
+
+```json
+{"slug": "fairy-alela-faerie-tribal", "dry_run": false}
+```
+
+Deletes the deck, its list and its notes, and hands every card it was
+holding back to bulk. Admin only, dry runs included.
+
+Nothing about a card moves. `cards` already records what is owned and
+`deck_cards` is the only thing claiming any of it; bulk is not a place but
+`card_usage.free`, owned minus the copies some deck has spoken for. Delete
+the deck and those copies come free on their own — which is why the reply
+counts `freed` from rows that are actually `in_collection`, and why a deck
+made mostly of gaps frees almost nothing.
+
+```json
+{"deck":{"slug":"…","name":"…","owner":"kayla"},
+ "freed":100,"cards":[{"name":"Bitterblossom","qty":1}],
+ "rows":{"deck_cards":78,"deck_notes":1},"applied":true,"dry_run":false}
+```
+
+The three deletes are one batch. Half of them would leave `deck_cards`
+rows pointing at a deck that no longer exists, and those would count
+against `free` forever.
+
 ---
 
 ## The data
@@ -261,7 +287,7 @@ API.
 |---|---|
 | Search | every column in the database, as facets or as a query language — see below; a grid of cards, 100 a page, one row per card rather than per printing |
 | Card | full detail in a drawer — every printing owned, decks it is in, tags, legalities, rulings, and ±1 buttons |
-| Decks | all 32 decks, each with its list, curve, notes and gaps; plus a gaps-and-conflicts overview |
+| Decks | all 32 decks, each with its list, curve, notes and gaps; plus a gaps-and-conflicts overview. Admins can disassemble one |
 | Add / Remove | three steps: list, whose collection, then a dry run you have to approve |
 | Stats | curve, colours, types, rarity, biggest sets, most unassigned copies |
 | Console | arbitrary SQL with a schema browser, snippets, history and CSV export |
