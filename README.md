@@ -262,7 +262,7 @@ API.
 | Search | every column in the database, as facets or as a query language — see below; prices shown on every card and sortable |
 | Card | full detail in a drawer — every printing owned, decks it is in, tags, legalities, rulings, and ±1 buttons |
 | Decks | all 32 decks, each with its list, curve, notes and gaps; plus a gaps-and-conflicts overview |
-| Add / Remove | paste or drop a file, preview the real dry run, then apply |
+| Add / Remove | three steps: list, whose collection, then a dry run you have to approve |
 | Stats | curve, colours, types, rarity, biggest sets, most unassigned copies |
 | Console | arbitrary SQL with a schema browser, snippets, history and CSV export |
 | Logs | every request, searchable and filterable, with errors in their own grouped view |

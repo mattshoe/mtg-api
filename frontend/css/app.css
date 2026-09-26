@@ -461,6 +461,38 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
 .pager { display: flex; align-items: center; gap: 8px; justify-content: center; padding: 18px 0; }
 .pager .info { color: var(--text-2); font-size: 13px; font-variant-numeric: tabular-nums; }
 
+/* add/remove wizard */
+.steps { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+.steps .step {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 14px; border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--bg-2); color: var(--text-2); font: inherit; font-size: 13px;
+}
+.steps .step:not(:disabled) { cursor: pointer; }
+.steps .step:not(:disabled):hover { border-color: var(--line-2); background: var(--bg-3); }
+.steps .step-n {
+  display: inline-grid; place-items: center; width: 19px; height: 19px;
+  border-radius: 50%; background: var(--bg); border: 1px solid var(--line-2);
+  font-size: 11px; line-height: 1;
+}
+.steps .step.on { border-color: var(--accent); background: var(--accent-dim); color: var(--accent-2); }
+.steps .step.on .step-n { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+.steps .step.done { color: var(--text); }
+.steps .step.done .step-n { color: var(--ok, var(--accent-2)); }
+
+/* step two is one decision, so make it one decision's worth of target */
+.owner-pick { display: flex; gap: 10px; flex-wrap: wrap; }
+.owner-pick .owner-opt {
+  flex: 1; min-width: 130px; padding: 18px 16px;
+  border: 1px solid var(--line-2); border-radius: var(--radius);
+  background: var(--bg-2); color: var(--text); font: inherit; font-size: 15px;
+  cursor: pointer; text-transform: capitalize;
+}
+.owner-pick .owner-opt:hover { border-color: var(--accent); background: var(--bg-3); }
+.owner-pick .owner-opt.on {
+  border-color: var(--accent); background: var(--accent-dim); color: var(--accent-2);
+}
+
 /* deck list */
 .deck-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(272px, 1fr)); }
 .deck-card {

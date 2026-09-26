@@ -1,7 +1,12 @@
-// Add and remove. Same shape either way: paste a list, preview, apply.
+// Add and remove. Same three steps either way, in order, no skipping:
 //
-// Preview is not optional politeness — it is a real dry run against the
-// server, so what you approve is what happens.
+//   1. List    paste it, or drop a file in
+//   2. Who     whose collection it lands in
+//   3. Review  a real dry run against the server, then Apply
+//
+// Nothing reaches the write without passing through step 3, and step 3
+// shows what the server did when told not to commit — so what you approve
+// is what happens.
 
 import * as api from './api.js';
 import { h, $, fill, num, toast, store, errorBox } from './util.js';
@@ -103,7 +108,7 @@ function historyPanel() {
       h('h2', 'Recent'),
       h('span.spacer'),
       h('button.btn.sm.ghost', {
-        onclick: () => { store.del(HISTORY_KEY); render(currentMode); },
+        onclick: () => { store.del(HISTORY_KEY); paint(); },
       }, 'Clear')),
     h('div.table-wrap', h('table',
       h('thead', h('tr', h('th', 'When'), h('th', 'What'), h('th', 'Owner'), h('th.num', 'Cards'), h('th', ''))),
@@ -114,18 +119,50 @@ function historyPanel() {
         h('td.num', e.count),
         h('td', h('button.btn.sm.ghost', {
           title: 'Put this list back in the box',
-          onclick: () => {
-            const ta = $('#list-input');
-            if (ta) { ta.value = e.list; ta.focus(); }
-          },
+          onclick: () => { flow.list = e.list; flow.step = 'list'; paint(); },
         }, 'Reuse'))))))));
 }
 
+// One flow at a time, reset on every mount. It lives outside paint() so a
+// step change can repaint without threading state through every caller.
 let currentMode = 'add';
+let flow = null;
+
+const blank = (mode) => ({
+  mode,
+  step: 'list',
+  list: '',
+  owner: store.get('owner', 'matt'),
+  preview: null,     // the dry run, once it comes back
+  result: null,      // the real write, once applied
+  error: null,
+  busy: false,
+});
+
+const STEPS = [['list', 'List'], ['who', 'Who'], ['review', 'Review']];
+
+/** The 1-2-3 across the top. You can go back, never forward. */
+function stepper() {
+  const at = flow.step === 'done' ? STEPS.length : STEPS.findIndex(([k]) => k === flow.step);
+  return h('div.steps', STEPS.map(([key, label], i) => h('button', {
+    class: `step${i === at ? ' on' : ''}${i < at ? ' done' : ''}`,
+    disabled: i >= at || flow.busy,
+    onclick: () => goto(key),
+  }, h('span.step-n', i < at ? '✓' : String(i + 1)), label)));
+}
+
+function goto(step) {
+  flow.step = step;
+  // Stepping back invalidates the dry run: the next one has to be taken
+  // against whatever the list and owner have become.
+  if (step !== 'review') { flow.preview = null; flow.error = null; }
+  paint();
+  if (step === 'review' && !flow.preview) runPreview();
+}
 
 /**
- * Reading a file only fills the box — it never submits. You still see
- * exactly what will be sent, and the preview still runs against it.
+ * Reading a file only fills the box. It never submits and never advances
+ * a step.
  */
 function fileDrop(listInput, onChange) {
   const status = h('span.small.muted', 'or drop a file here');
@@ -188,93 +225,179 @@ function fileDrop(listInput, onChange) {
   return zone;
 }
 
-function render(mode) {
-  currentMode = mode;
-  const isAdd = mode === 'add';
-  const root = $('#view');
+// ------------------------------------------------------------- 1. list
 
-  // The router does not reach here without a token, but a stray call
-  // should render nothing rather than a form that cannot submit.
-  if (!isAdmin()) { fill(root); return; }
-
-  const owner = store.get('owner', 'matt');
-  const out = h('div');
+function stepList() {
+  const isAdd = flow.mode === 'add';
 
   const listInput = h('textarea', {
     id: 'list-input',
     rows: 14,
+    spellcheck: false,
     placeholder: isAdd
       ? 'One card per line.\n\n4 Lightning Bolt\n1 Sol Ring (M3C) 409 *F*\nArcane Signet'
       : 'One card per line.\n\n1 Sol Ring\n2 Lightning Bolt (2X2) 117',
-    spellcheck: false,
   });
+  listInput.value = flow.list;
 
-  const ownerSel = h('div.seg', ['matt', 'kayla'].map((o) => h('button', {
-    class: owner === o ? 'on' : '',
-    onclick: (e) => {
-      store.set('owner', o);
-      [...e.target.parentElement.children].forEach((b) => b.classList.remove('on'));
-      e.target.classList.add('on');
-    },
-  }, o[0].toUpperCase() + o.slice(1))));
+  const count = h('span.muted.small');
+  const next = h('button.btn.primary', {
+    onclick: () => { flow.list = listInput.value.trim(); goto('who'); },
+  }, 'Continue →');
 
-  const count = h('span.muted.small', '0 cards');
   const updateCount = () => {
     const n = countCards(listInput.value);
     const over = n > MAX_LINES;
     count.textContent = `${n} card${n === 1 ? '' : 's'}${looksLikeCsv(listInput.value) ? ' · CSV' : ''}`;
     count.className = over ? 'small tag bad' : 'muted small';
     if (over) count.textContent += ` — over the ${MAX_LINES} limit`;
+    next.disabled = !n || over;
+    flow.list = listInput.value;
   };
   listInput.addEventListener('input', updateCount);
+  updateCount();
+  queueMicrotask(() => listInput.focus());
 
-  const busy = (on) => {
-    for (const b of [previewBtn, applyBtn]) b.disabled = on;
-    previewBtn.textContent = on ? 'Working…' : 'Preview';
-  };
+  return h('div.panel',
+    h('div.panel-head',
+      h('h2', isAdd ? 'What are you adding?' : 'What are you removing?'),
+      h('span.spacer'), count),
+    h('div.panel-body',
+      h('div.field', fileDrop(listInput, updateCount)),
+      h('div.field', listInput),
+      h('div.flex-wrap',
+        next,
+        h('span.spacer'),
+        h('button.btn.sm.ghost', {
+          onclick: () => { listInput.value = ''; updateCount(); listInput.focus(); },
+        }, 'Clear'))));
+}
 
-  async function submit(dryRun) {
-    const list = listInput.value.trim();
-    if (!list) { toast('Nothing to submit', 'bad'); return; }
-    const who = $('.seg button.on', root)?.textContent.toLowerCase() || owner;
+// -------------------------------------------------------------- 2. who
 
-    busy(true);
-    fill(out, h('div.panel', h('div.panel-body', h('span.spinner'), ' Talking to Scryfall…')));
-    try {
-      const body = { owner: who, list, dry_run: dryRun };
-      const r = isAdd ? await api.addCards(body) : await api.removeCards(body);
+function stepWho() {
+  const n = countCards(flow.list);
+  return h('div.panel',
+    h('div.panel-head',
+      h('h2', 'Whose collection?'),
+      h('span.spacer'),
+      h('span.muted.small', `${num(n)} card${n === 1 ? '' : 's'} on the list`)),
+    h('div.panel-body',
+      h('div.owner-pick', ['matt', 'kayla'].map((o) => h('button', {
+        class: `owner-opt${flow.owner === o ? ' on' : ''}`,
+        onclick: () => { flow.owner = o; store.set('owner', o); paint(); },
+      }, o[0].toUpperCase() + o.slice(1)))),
+      h('div.flex-wrap', { style: { marginTop: '16px' } },
+        h('button.btn.ghost', { onclick: () => goto('list') }, '← Back'),
+        h('button.btn.primary', { onclick: () => goto('review') }, 'Preview changes →'))));
+}
 
-      fill(out, h('div.panel',
-        h('div.panel-head', h('h2', dryRun ? 'Preview' : 'Result')),
-        h('div.panel-body', resultBlock(r, mode))));
+// ----------------------------------------------------------- 3. review
 
-      if (!dryRun && r.applied) {
-        remember({ mode, owner: who, list, count: r.resolved });
-        toast(`${isAdd ? 'Added' : 'Removed'} ${r.resolved} card${r.resolved === 1 ? '' : 's'}`, 'ok');
-        listInput.value = '';
-        updateCount();
-        const hp = $('#history-slot');
-        if (hp) fill(hp, historyPanel());
-      } else if (dryRun) {
-        applyBtn.disabled = false;
-        applyBtn.classList.add('primary');
-      }
-    } catch (e) {
-      fill(out, h('div.panel', h('div.panel-body', errorBox(e))));
-      toast(String(e.message), 'bad');
-    } finally {
-      busy(false);
+async function runPreview() {
+  flow.busy = true;
+  flow.error = null;
+  paint();
+  try {
+    const body = { owner: flow.owner, list: flow.list, dry_run: true };
+    flow.preview = flow.mode === 'add' ? await api.addCards(body) : await api.removeCards(body);
+  } catch (e) {
+    flow.error = e;
+  } finally {
+    flow.busy = false;
+    paint();
+  }
+}
+
+async function apply() {
+  const isAdd = flow.mode === 'add';
+  flow.busy = true;
+  paint();
+  try {
+    const body = { owner: flow.owner, list: flow.list, dry_run: false };
+    const r = isAdd ? await api.addCards(body) : await api.removeCards(body);
+    flow.result = r;
+    flow.step = 'done';
+    if (r.applied) {
+      remember({ mode: flow.mode, owner: flow.owner, list: flow.list, count: r.resolved });
+      toast(`${isAdd ? 'Added' : 'Removed'} ${r.resolved} card${r.resolved === 1 ? '' : 's'}`, 'ok');
     }
+  } catch (e) {
+    flow.error = e;
+  } finally {
+    flow.busy = false;
+    paint();
+  }
+}
+
+function stepReview() {
+  const isAdd = flow.mode === 'add';
+
+  if (flow.busy) {
+    return h('div.panel',
+      h('div.panel-head', h('h2', 'Review')),
+      h('div.panel-body', h('span.spinner'), ' Checking against Scryfall…'));
   }
 
-  const previewBtn = h('button.btn', { onclick: () => submit(true) }, 'Preview');
-  const applyBtn = h('button', {
-    class: `btn ${isAdd ? 'primary' : 'danger'}`,
-    onclick: () => {
-      if (!isAdd && !confirm('Remove these cards from the collection?')) return;
-      submit(false);
-    },
-  }, isAdd ? 'Add to collection' : 'Remove from collection');
+  if (flow.error) {
+    return h('div.panel',
+      h('div.panel-head', h('h2', 'Review')),
+      h('div.panel-body',
+        errorBox(flow.error),
+        h('div.flex-wrap', { style: { marginTop: '12px' } },
+          h('button.btn.ghost', { onclick: () => goto('who') }, '← Back'),
+          h('button.btn', { onclick: runPreview }, 'Try again'))));
+  }
+
+  const r = flow.preview;
+  if (!r) return h('div.panel', h('div.panel-body', h('span.spinner')));
+
+  const n = r.changes?.length || 0;
+
+  return h('div.panel',
+    h('div.panel-head',
+      h('h2', 'Review'),
+      h('span.spacer'),
+      h('span.tag', flow.owner)),
+    h('div.panel-body',
+      resultBlock(r, flow.mode),
+      h('div.flex-wrap', { style: { marginTop: '16px' } },
+        h('button.btn.ghost', { onclick: () => goto('who') }, '← Back'),
+        h('button', {
+          class: `btn ${isAdd ? 'primary' : 'danger'}`,
+          disabled: !n,
+          title: n ? '' : 'Nothing resolved, so there is nothing to apply',
+          onclick: apply,
+        }, n
+          ? `${isAdd ? 'Add' : 'Remove'} ${num(n)} printing${n === 1 ? '' : 's'} · ${flow.owner}`
+          : 'Nothing to apply'))));
+}
+
+// --------------------------------------------------------------- done
+
+function stepDone() {
+  const isAdd = flow.mode === 'add';
+  return h('div.panel',
+    h('div.panel-head', h('h2', flow.result?.applied ? 'Applied' : 'Nothing applied')),
+    h('div.panel-body',
+      resultBlock(flow.result, flow.mode),
+      h('div.flex-wrap', { style: { marginTop: '16px' } },
+        h('button.btn.primary', {
+          onclick: () => { flow = blank(flow.mode); paint(); },
+        }, isAdd ? 'Add more' : 'Remove more'),
+        h('button.btn.ghost', {
+          onclick: () => { location.hash = '#/search'; },
+        }, 'Back to search'))));
+}
+
+// -------------------------------------------------------------- paint
+
+const BODIES = { list: stepList, who: stepWho, review: stepReview, done: stepDone };
+
+function paint() {
+  const isAdd = flow.mode === 'add';
+  const root = $('#view');
+  if (!isAdmin()) { fill(root); return; }
 
   fill(root, h('div.wrap',
     h('div.page-head',
@@ -283,23 +406,14 @@ function render(mode) {
         ? 'Resolved against Scryfall, then written to the collection.'
         : 'Matched against printings you already own.')),
 
+    stepper(),
+
     h('div.split',
       h('div.stack',
-        h('div.panel',
-          h('div.panel-head', h('h2', 'List'), h('span.spacer'), count),
-          h('div.panel-body',
-            h('div.field', h('label', 'Whose collection'), ownerSel),
-            h('div.field', fileDrop(listInput, updateCount)),
-            h('div.field', listInput),
-            h('div.flex-wrap',
-              previewBtn,
-              applyBtn,
-              h('span.spacer'),
-              h('button.btn.sm.ghost', {
-                onclick: () => { listInput.value = ''; updateCount(); fill(out); },
-              }, 'Clear')))),
-        out,
-        h('div', { id: 'history-slot' }, historyPanel())),
+        BODIES[flow.step](),
+        // The history table is a way back into step one, so it only
+        // belongs on step one.
+        flow.step === 'list' ? h('div', { id: 'history-slot' }, historyPanel()) : null),
 
       h('div.sticky-side',
         h('div.panel',
@@ -320,9 +434,12 @@ function render(mode) {
               + 'Section headers like Deck and Sideboard, Archidekt categories '
               + 'and SB: prefixes are ignored rather than treated as cards. '
               + 'CSV columns are matched by name, so their order does not matter.')))))));
+}
 
-  applyBtn.disabled = false;
-  listInput.focus();
+function render(mode) {
+  currentMode = mode;
+  flow = blank(mode);
+  paint();
 }
 
 export function show(mode) {
