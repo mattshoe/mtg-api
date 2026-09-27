@@ -6,7 +6,7 @@
 
 import { API } from './api.js';
 import { h, fill, toast } from './util.js';
-import { pushOverlay, dropOverlay } from './overlay.js';
+import { pushOverlay, dropOverlay, forgetOverlay } from './overlay.js';
 
 let token = null;
 let expiresAt = 0;
@@ -77,6 +77,17 @@ export function promptUnlock(afterUnlock) {
   const back = () => { dialogOpen = false; scrim.remove(); };
   const close = () => { back(); dropOverlay(back); };
 
+  /**
+   * Close on the way somewhere else.
+   *
+   * `history.back()` is asynchronous, so popping the dialog's entry and
+   * then navigating is a race the pop wins — it lands last and undoes the
+   * navigation. That is what sent an unlocked share straight back to the
+   * library. The entry the dialog pushed is the current one, so `go` is
+   * expected to replace it rather than push past it.
+   */
+  const closeAndGo = (go) => { back(); forgetOverlay(back); go(); };
+
   async function submit() {
     const pw = input.value;
     if (!pw) return;
@@ -85,9 +96,9 @@ export function promptUnlock(afterUnlock) {
     err.hidden = true;
     try {
       await unlock(pw);
-      close();
+      if (afterUnlock) closeAndGo(afterUnlock);
+      else close();
       toast('Admin mode on — edits enabled for this tab', 'ok');
-      if (afterUnlock) afterUnlock();
     } catch (e) {
       err.textContent = String(e.message);
       err.hidden = false;

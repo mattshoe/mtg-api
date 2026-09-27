@@ -1,12 +1,13 @@
 // The page half of the Android share target.
 //
 // `sw.js` catches the share POST and parks the text in the cache, because
-// that POST has nowhere else to go on static hosting. This reads it back,
-// clears it, and holds it until the add page mounts and claims it.
+// that POST has nowhere else to go on static hosting. This reads it back.
 //
-// The service worker exists only for that. It is registered here rather
-// than in sw.js's own right so the one place that depends on it is the one
-// place that sets it up.
+// The payload stays in the cache until the add page actually has it. That
+// is the whole trick: the add page is behind the password, so between the
+// share landing and the list reaching the box there is a bounce to the
+// library, a login dialog and a navigation back. Holding the payload in a
+// variable across all that meant one stray reload threw the file away.
 
 const CACHE = 'share-inbox';
 
@@ -14,24 +15,20 @@ const CACHE = 'share-inbox';
 // at the site root.
 const SLOT = new URL('share-inbox-payload', location.href).href;
 
-let pending = null;
+// A share nobody ever picked up should not ambush the next launch by
+// dragging it onto the add page days later.
+const STALE_MS = 15 * 60 * 1000;
 
-/** Claim whatever was shared, if anything. Only returns it once. */
-export function takeShared() {
-  const p = pending;
-  pending = null;
-  return p;
-}
-
-async function drain() {
+async function read(consume) {
   if (typeof caches === 'undefined') return null;
   try {
     const cache = await caches.open(CACHE);
     const res = await cache.match(SLOT);
     if (!res) return null;
-    await cache.delete(SLOT);
     const payload = await res.json();
-    return payload?.list ? payload : null;
+    const stale = !payload?.list || Date.now() - (payload.at || 0) > STALE_MS;
+    if (stale || consume) await cache.delete(SLOT);
+    return stale ? null : payload;
   } catch {
     // No cache, no worker, private mode — sharing is a shortcut, not a
     // feature anything else depends on.
@@ -39,32 +36,30 @@ async function drain() {
   }
 }
 
+/** Is something sitting in the inbox? Leaves it there. */
+export const sharedWaiting = () => read(false).then(Boolean);
+
+/** Take it. This is the only thing that empties the inbox. */
+export const takeShared = () => read(true);
+
+export function registerWorker() {
+  if (!navigator.serviceWorker) return;
+  // `updateViaCache: 'none'` keeps the worker script out of the HTTP
+  // cache. Pages serves it with max-age=600 like everything else, and a
+  // worker that updates ten minutes late is the one file the version
+  // stamping cannot reach — the browser fetches it by name, not through
+  // the import map.
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
+}
+
 /**
- * Register the worker and watch for shares.
+ * Call `fn` when a share turns up in an app that is already running.
  *
- * `onShared` fires once per share, after the payload is in hand, and is
- * expected to send the app to the add page.
+ * An installed app is usually resumed rather than loaded, so the share can
+ * land after the boot-time check has already come back empty.
  */
-export function installShareTarget(onShared) {
-  if (navigator.serviceWorker) {
-    // `updateViaCache: 'none'` keeps the worker script out of the HTTP
-    // cache. Pages serves it with max-age=600 like everything else, and a
-    // worker that updates ten minutes late is the one file the version
-    // stamping cannot reach — the browser fetches it by name, not through
-    // the import map.
-    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
-  }
-
-  const check = async () => {
-    const payload = await drain();
-    if (!payload) return;
-    pending = payload;
-    onShared(payload);
-  };
-
-  check();
-  // An installed app is often resumed rather than loaded, so the first
-  // check can have already happened by the time the share lands.
+export function watchShares(fn) {
+  const check = async () => { if (await sharedWaiting()) fn(); };
   addEventListener('pageshow', check);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) check(); });
 }

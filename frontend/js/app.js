@@ -8,7 +8,7 @@ import {
 } from './admin.js';
 import { openCard, closeCard, openCardId, hideCardForRoute } from './card.js';
 import { pushOverlay, dropOverlay } from './overlay.js';
-import { installShareTarget } from './share.js';
+import { registerWorker, sharedWaiting, watchShares } from './share.js';
 import * as search from './search.js';
 import * as decks from './decks.js';
 import * as manage from './manage.js';
@@ -65,7 +65,10 @@ async function route() {
   // cannot do anything.
   if (GATED.has(view) && !isAdmin()) {
     location.replace(`#/search${query ? `?${query}` : ''}`);
-    promptUnlock(() => { location.hash = `#/${view}${rest ? `/${rest}` : ''}`; });
+    // replace, not assign: promptUnlock hands this the history entry its
+    // own dialog was occupying, so the view we were headed for takes that
+    // slot and back still goes to the page before it.
+    promptUnlock(() => { location.replace(`#/${view}${rest ? `/${rest}` : ''}`); });
     return;
   }
 
@@ -250,16 +253,28 @@ $('#palette-scrim').addEventListener('click', (e) => {
 });
 $('#palette-input').addEventListener('input', (e) => searchPalette(e.target.value));
 
+registerWorker();
+
 // A decklist or CSV shared from another Android app lands on the add page
-// with the list already in the box. Going through route() rather than
-// setting the hash covers the case where we are already sitting on #/add,
-// which fires no hashchange, and the gate in route() still applies — a
-// share while locked asks for the password, and the list is waiting on the
-// other side of it.
-installShareTarget(() => {
+// with the list already in the box. The worker's redirect puts us on #/add
+// directly, so on boot this only has to cover the app being resumed
+// somewhere else. It must happen before the first route(): sending the
+// share somewhere after routing meant two navigations fighting over the
+// same history entry, and the login dialog's own entry lost.
+async function boot() {
+  if (!location.hash) location.hash = '#/search';
+  if (parseHash().view !== 'add' && await sharedWaiting()) {
+    location.replace('#/add');   // fires hashchange, which routes
+    return;
+  }
+  route();
+}
+
+// A share arriving while the app is already open. The list itself stays in
+// the cache either way, so this only has to get the user to the page.
+watchShares(() => {
   if (parseHash().view === 'add') route();
   else location.hash = '#/add';
 });
 
-if (!location.hash) location.hash = '#/search';
-route();
+boot();

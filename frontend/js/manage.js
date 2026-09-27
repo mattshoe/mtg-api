@@ -461,15 +461,18 @@ function render(mode) {
   paint();
 }
 
-export function show(mode) {
+export async function show(mode) {
   render(mode === 'remove' ? 'remove' : 'add');
-  if (flow.mode !== 'add') return;
+  if (flow.mode !== 'add' || !isAdmin()) return;
 
-  // Something was shared into the app from the Android share sheet. It
-  // fills the box and stops there — the owner step and the dry run are
-  // still ahead of it, the same as anything typed.
-  const shared = takeShared();
-  if (!shared?.list) return;
+  // Something was shared into the app from the Android share sheet. This
+  // is the first point at which the page can actually hold it, so it is
+  // also the first point at which it leaves the cache. It fills the box
+  // and stops there — the owner step and the dry run are still ahead of
+  // it, the same as anything typed.
+  const mine = flow;
+  const shared = await takeShared();
+  if (!shared?.list || flow !== mine) return;
   flow.list = shared.list;
   paint();
 
