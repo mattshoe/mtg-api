@@ -114,7 +114,23 @@ export function autocomplete(input, { onPick, limit = 10 } = {}) {
     clearTimeout(timer);
     timer = setTimeout(look, WAIT);
   });
-  input.addEventListener('blur', () => setTimeout(close, 120));
+  // Pressing anywhere outside closes it. This is the signal that actually
+  // means "done with the list", and unlike a blur it cannot be confused by
+  // the chrome re-rendering: a debounced push detaches and re-attaches this
+  // input, which blurs it even though focus comes straight back, and a
+  // blind close on blur shut the list about half a second after every
+  // keystroke — suggestions appeared and then vanished on their own.
+  //
+  // Capture phase, so it still fires when something else stops the event.
+  document.addEventListener('pointerdown', (e) => {
+    if (!wrap.contains(e.target)) close();
+  }, true);
+
+  // And for leaving by keyboard, where there is no press to notice. Guarded
+  // the same way, because the re-render blurs without focus really going.
+  input.addEventListener('blur', () => setTimeout(() => {
+    if (document.activeElement !== input && !wrap.contains(document.activeElement)) close();
+  }, 120));
   input.addEventListener('keydown', (e) => {
     if (list.hidden || !items.length) return;
     if (e.key === 'ArrowDown') { e.preventDefault(); highlight((active + 1) % items.length); }
