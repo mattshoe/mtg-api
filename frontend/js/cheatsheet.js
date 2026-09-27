@@ -2,6 +2,7 @@
 
 import { h } from './util.js';
 import { IS_VALUES } from './filters.js';
+import { pushOverlay, dropOverlay } from './overlay.js';
 
 const KEYS = [
   ['Words', [
@@ -54,7 +55,8 @@ const KEYS = [
 ];
 
 export function cheatsheet() {
-  const close = () => scrim.remove();
+  const back = () => scrim.remove();
+  const close = () => { back(); dropOverlay(back); };
 
   const table = (rows) => h('table', h('tbody', rows.map(([key, what, eg]) => h('tr',
     h('td', { style: { whiteSpace: 'nowrap' } }, h('code', key)),
@@ -81,6 +83,7 @@ export function cheatsheet() {
         h('div.chips', IS_VALUES.map((v) => h('span.chip.mini', v)))))));
 
   document.body.append(scrim);
+  pushOverlay(back);
   addEventListener('keydown', function esc(e) {
     if (e.key === 'Escape') { close(); removeEventListener('keydown', esc); }
   });

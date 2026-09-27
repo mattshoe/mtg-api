@@ -7,6 +7,7 @@ import {
 } from './util.js';
 import { isAdmin } from './admin.js';
 import { exact, priceReason } from './prices.js';
+import { pushOverlay, dropOverlay, forgetOverlay } from './overlay.js';
 
 let onClose = null;
 let current = null;
@@ -14,17 +15,58 @@ let current = null;
 /** The card the drawer is showing, or null. */
 export const openCardId = () => current;
 
-export function closeCard() {
+/** Hide it and run whatever wanted to know. Touches no history. */
+function shutDrawer() {
+  if (current === null) return false;
   $('#drawer').hidden = true;
   $('#drawer-scrim').hidden = true;
   current = null;
   if (onClose) { const f = onClose; onClose = null; f(); }
+  return true;
+}
+
+/**
+ * Close the drawer the ordinary way — the X, escape, the scrim.
+ *
+ * The drawer owns a history entry, so closing has to give it back; without
+ * that the next back press would do nothing visible.
+ */
+export function closeCard() {
+  if (shutDrawer()) dropOverlay(backClose);
+}
+
+/** The back button already popped the entry, so only hide. */
+const backClose = () => { shutDrawer(); };
+
+/**
+ * Leave the drawer for somewhere else in the app.
+ *
+ * `replace`, not a new entry: the drawer's own entry is the current one, so
+ * the destination lands in its place and back still reaches the page the
+ * drawer opened over rather than re-opening the drawer.
+ */
+/**
+ * The route changed underneath the drawer — a nav tab, a back press that
+ * landed elsewhere. Hide it and give up its history entry without moving,
+ * since the navigation has already happened.
+ */
+export function hideCardForRoute() {
+  if (shutDrawer()) forgetOverlay(backClose);
+}
+
+function leaveFor(hash) {
+  if (shutDrawer()) forgetOverlay(backClose);
+  location.replace(hash);
 }
 
 /** Open the drawer for a cards.id. `after` runs on close, to refresh a list. */
 export async function openCard(id, after) {
+  // Re-opening the same drawer (the admin toggle does this) must not stack
+  // a second history entry on top of the first.
+  const wasOpen = current !== null;
   onClose = after || null;
   current = id;
+  if (!wasOpen) pushOverlay(backClose);
   const drawer = $('#drawer');
   const scrim = $('#drawer-scrim');
   drawer.hidden = false;
@@ -41,7 +83,7 @@ export async function openCard(id, after) {
   }
 }
 
-const closeBtn = () => h('button.icon-btn', { onclick: closeCard, title: 'Close (esc)', 'aria-label': 'Close' },
+const closeBtn = () => h('button.icon-btn', { onclick: () => closeCard(), title: 'Close (esc)', 'aria-label': 'Close' },
   h('svg', { viewBox: '0 0 24 24', html: '<path d="M6 6l12 12M18 6L6 18"/>' }));
 
 async function fetchCard(id) {
@@ -171,7 +213,7 @@ function view({ card, faces, printings, decks, tags, keywords, legalities, rulin
 
     keywords.length ? h('div.sec', h('h3', 'Keywords'),
       h('div.chips', keywords.map((k) => h('span.chip.mini', {
-        onclick: () => { location.hash = `#/search?keyword=${encodeURIComponent(k)}`; closeCard(); },
+        onclick: () => leaveFor(`#/search?keyword=${encodeURIComponent(k)}`),
       }, k)))) : null,
 
     h('div.sec', h('h3', `Printings you own (${printings.length})`),
@@ -194,7 +236,7 @@ function view({ card, faces, printings, decks, tags, keywords, legalities, rulin
       h('div.stack', decks.map((d) => h('div.flex', { style: { gap: '8px' } },
         h('a', {
           href: `#/decks/${encodeURIComponent(d.slug)}`,
-          onclick: () => closeCard(),
+          onclick: (e) => { e.preventDefault(); leaveFor(`#/decks/${encodeURIComponent(d.slug)}`); },
         }, d.name),
         h('span.tag.mini', `${d.qty}× ${d.role || 'card'}`),
         d.is_proxy ? h('span.tag.warn', 'proxy') : null,
@@ -203,7 +245,7 @@ function view({ card, faces, printings, decks, tags, keywords, legalities, rulin
     tags.length ? h('div.sec', h('h3', `Tags (${tags.length})`),
       h('div.chips', tags.map((t) => h('span.chip.mini', {
         title: t.label || t.slug,
-        onclick: () => { location.hash = `#/search?tag=${encodeURIComponent(t.slug)}`; closeCard(); },
+        onclick: () => leaveFor(`#/search?tag=${encodeURIComponent(t.slug)}`),
       }, t.slug)))) : null,
 
     legalities.length ? h('div.sec', h('h3', 'Legality'),

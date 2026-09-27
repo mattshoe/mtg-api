@@ -8,6 +8,7 @@ import {
 import { openCard } from './card.js';
 import { isAdmin } from './admin.js';
 import { newDeckView } from './newdeck.js';
+import { pushOverlay, dropOverlay } from './overlay.js';
 
 const COLOR_CSS = { W: 'var(--w)', U: 'var(--u)', B: 'var(--b)', R: 'var(--r)', G: 'var(--g)' };
 
@@ -195,7 +196,8 @@ async function confirmDisassemble(deck) {
   }
 
   const go = h('button.btn.danger', `Disassemble · free ${num(plan.freed)}`);
-  const close = () => scrim.remove();
+  const back = () => scrim.remove();
+  const close = () => { back(); dropOverlay(back); };
 
   go.addEventListener('click', async () => {
     go.disabled = true;
@@ -232,6 +234,7 @@ async function confirmDisassemble(deck) {
       h('button.btn.ghost', { onclick: close }, 'Cancel'))));
 
   document.body.append(scrim);
+  pushOverlay(back);
 }
 
 /**
@@ -258,7 +261,8 @@ function editList(deck, cards) {
   const count = h('span.muted.small');
   const out = h('div');
   const save = h('button.btn.primary', 'Review changes');
-  const close = () => scrim.remove();
+  const back = () => scrim.remove();
+  const close = () => { back(); dropOverlay(back); };
 
   const tally = () => {
     const n = box.value.split('\n')
@@ -348,6 +352,7 @@ function editList(deck, cards) {
       h('button.btn.ghost', { onclick: close }, 'Cancel'))));
 
   document.body.append(scrim);
+  pushOverlay(back);
   box.focus();
 }
 

@@ -6,6 +6,7 @@
 
 import { API } from './api.js';
 import { h, fill, toast } from './util.js';
+import { pushOverlay, dropOverlay } from './overlay.js';
 
 let token = null;
 let expiresAt = 0;
@@ -73,7 +74,8 @@ export function promptUnlock(afterUnlock) {
   const err = h('div.err', { hidden: true });
   const btn = h('button.btn.primary', 'Unlock');
 
-  const close = () => { dialogOpen = false; scrim.remove(); };
+  const back = () => { dialogOpen = false; scrim.remove(); };
+  const close = () => { back(); dropOverlay(back); };
 
   async function submit() {
     const pw = input.value;
@@ -116,6 +118,7 @@ export function promptUnlock(afterUnlock) {
       h('button.btn.ghost', { onclick: close }, 'Cancel'))));
 
   document.body.append(scrim);
+  pushOverlay(back);
   input.focus();
 }
 

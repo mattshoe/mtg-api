@@ -6,7 +6,8 @@ import {
   adminButton, isAdmin, onAdminChange, promptUnlock, lock,
   authHeader, rejected,
 } from './admin.js';
-import { openCard, closeCard, openCardId } from './card.js';
+import { openCard, closeCard, openCardId, hideCardForRoute } from './card.js';
+import { pushOverlay, dropOverlay } from './overlay.js';
 import * as search from './search.js';
 import * as decks from './decks.js';
 import * as manage from './manage.js';
@@ -64,6 +65,10 @@ async function route() {
   const { view, rest, query } = parseHash();
   const fn = ROUTES[view];
 
+  // Navigating out from under the drawer closes it. Leaving it up over a
+  // page it does not belong to is how back got confusing in the first place.
+  hideCardForRoute();
+
   for (const a of $$('#tabs a')) a.classList.toggle('on', a.dataset.view === view);
   $('#tabs').classList.remove('open');
   $('#nav-toggle').setAttribute('aria-expanded', 'false');
@@ -109,13 +114,22 @@ addEventListener('hashchange', () => {
 let paletteItems = [];
 let paletteIdx = 0;
 
-function closePalette() {
+function hidePalette() {
+  if ($('#palette-scrim').hidden) return false;
   $('#palette-scrim').hidden = true;
   $('#palette-input').value = '';
   fill($('#palette-list'));
+  return true;
+}
+
+const paletteBack = () => { hidePalette(); };
+
+function closePalette() {
+  if (hidePalette()) dropOverlay(paletteBack);
 }
 
 function openPalette() {
+  if ($('#palette-scrim').hidden) pushOverlay(paletteBack);
   $('#palette-scrim').hidden = false;
   const input = $('#palette-input');
   input.focus();
