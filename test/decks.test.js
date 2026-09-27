@@ -375,3 +375,100 @@ describe('POST /decks/list — basic lands', () => {
     expect(await count('deck_gaps', 'slug = ?', SLUG)).toBe(1);
   });
 });
+
+describe('POST /decks/list — the commander field', () => {
+  it('makes the named card the commander, whatever the deck said before', async () => {
+    const r = await post('/decks/list', {
+      slug: SLUG,
+      commander: 'Arcane Signet',          // nonsense as a commander, exact as a test
+      list: "1 Ambition's Cost",
+    });
+    expect(r.status).toBe(200);
+    const rows = await sql(
+      `SELECT dc.name, dc.role FROM deck_cards dc JOIN decks d ON d.id = dc.deck_id
+        WHERE d.slug = ? ORDER BY dc.name`, SLUG,
+    );
+    expect(rows).toEqual([
+      { name: "Ambition's Cost", role: 'spell' },
+      { name: 'Arcane Signet', role: 'commander' },
+    ]);
+  });
+
+  it('puts the commander in the deck even when the list does not mention it', async () => {
+    const r = await post('/decks/list', { slug: SLUG, commander: 'Arcane Signet', list: '1 Sol Ring' });
+    expect(r.body.rows).toBe(2);
+    expect(r.body.card_count).toBe(2);
+  });
+
+  it('does not double it up when the list names it too', async () => {
+    const r = await post('/decks/list', {
+      slug: SLUG, commander: 'Arcane Signet', list: '1 Arcane Signet\n1 Sol Ring',
+    });
+    expect(r.body.rows).toBe(2);
+    const [row] = await sql(
+      `SELECT dc.qty, dc.role FROM deck_cards dc JOIN decks d ON d.id = dc.deck_id
+        WHERE d.slug = ? AND dc.name = 'Arcane Signet'`, SLUG,
+    );
+    expect(row).toEqual({ qty: 1, role: 'commander' });
+  });
+
+  it('takes partners, two names in the one field', async () => {
+    await post('/decks/list', {
+      slug: SLUG, commander: "Arcane Signet\nAmbition's Cost", list: '1 Sol Ring',
+    });
+    const roles = await sql(
+      `SELECT dc.name, dc.role FROM deck_cards dc JOIN decks d ON d.id = dc.deck_id
+        WHERE d.slug = ? AND dc.role = 'commander' ORDER BY dc.name`, SLUG,
+    );
+    expect(roles.map((r) => r.name)).toEqual(["Ambition's Cost", 'Arcane Signet']);
+    const [deck] = await sql('SELECT commander FROM decks WHERE slug = ?', SLUG);
+    expect(deck.commander).toBe("Arcane Signet // Ambition's Cost");
+  });
+
+  it('leaves the commander column alone when the name has not changed', async () => {
+    // The column carries prose the editor's plain field cannot show, so an
+    // unchanged name must not overwrite it.
+    const [before] = await sql('SELECT commander FROM decks WHERE slug = ?', SLUG);
+    expect(before.commander).toMatch(/\(/);          // it has the annotation
+
+    const r = await post('/decks/list', {
+      slug: SLUG, commander: 'Kardur, Doomscourge', list: '1 Sol Ring',
+    });
+    expect(r.body.commander_changed).toBe(false);
+
+    const [after] = await sql('SELECT commander FROM decks WHERE slug = ?', SLUG);
+    expect(after.commander).toBe(before.commander);
+  });
+
+  it('rewrites the column when the commander really changes', async () => {
+    const r = await post('/decks/list', { slug: SLUG, commander: 'Sol Ring', list: '1 Arcane Signet' });
+    expect(r.body.commander_changed).toBe(true);
+    const [after] = await sql('SELECT commander FROM decks WHERE slug = ?', SLUG);
+    expect(after.commander).toBe('Sol Ring');
+  });
+
+  it('reports a bad commander line rather than silently dropping it', async () => {
+    const before = await listOf(SLUG);
+    const r = await post('/decks/list', { slug: SLUG, commander: '0 Nope', list: '1 Sol Ring' });
+    expect(r.status).toBe(400);
+    expect(r.body.errors[0]).toMatch(/at least 1/);
+    expect(await listOf(SLUG)).toBe(before);
+  });
+
+  it('an empty commander field means the deck has none', async () => {
+    const r = await post('/decks/list', { slug: SLUG, commander: '', list: '1 Sol Ring' });
+    expect(r.status).toBe(200);
+    expect(await count('deck_cards',
+      "deck_id = (SELECT id FROM decks WHERE slug = ?) AND role = 'commander'", SLUG)).toBe(0);
+  });
+
+  it('without the field at all, the old name-matching still applies', async () => {
+    const r = await post('/decks/list', { slug: SLUG, list: '1 Kardur, Doomscourge\n1 Sol Ring' });
+    expect(r.status).toBe(200);
+    const [row] = await sql(
+      `SELECT dc.role FROM deck_cards dc JOIN decks d ON d.id = dc.deck_id
+        WHERE d.slug = ? AND dc.name LIKE 'Kardur%'`, SLUG,
+    );
+    expect(row.role).toBe('commander');
+  });
+});

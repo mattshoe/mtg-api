@@ -241,13 +241,17 @@ async function confirmDisassemble(deck) {
  * server does the diff and nothing is written until it is on screen.
  */
 function editList(deck, cards) {
-  const asText = ROLE_ORDER.flatMap((role) => {
-    const list = cards.filter((c) => (c.role || 'spell') === role);
-    return list.length ? [`# ${role}`, ...list.map((c) => `${c.qty} ${c.name}`), ''] : [];
-  }).join('\n').trim();
+  // The commander gets its own field, so the list below is the 99 and
+  // nothing else — no headings, no marker on one line, just cards.
+  const cmdrBox = h('input', { type: 'text', placeholder: 'e.g. Alela, Cunning Conqueror' });
+  cmdrBox.value = cards.filter((c) => c.role === 'commander').map((c) => c.name).join(' // ')
+    || commanderName(deck.commander);
 
   const box = h('textarea', { rows: 18, spellcheck: false });
-  box.value = asText;
+  box.value = cards
+    .filter((c) => c.role !== 'commander')
+    .map((c) => `${c.qty} ${c.name}`)
+    .join('\n');
 
   const count = h('span.muted.small');
   const out = h('div');
@@ -259,7 +263,9 @@ function editList(deck, cards) {
       .filter((l) => l.trim() && !l.trim().startsWith('#') && !l.trim().startsWith('//')).length;
     count.textContent = `${n} line${n === 1 ? '' : 's'}`;
   };
-  box.addEventListener('input', () => { tally(); fill(out); save.textContent = 'Review changes'; });
+  const dirty = () => { tally(); fill(out); reviewed = null; save.textContent = 'Review changes'; };
+  box.addEventListener('input', dirty);
+  cmdrBox.addEventListener('input', dirty);
   tally();
 
   let reviewed = null;
@@ -275,7 +281,9 @@ function editList(deck, cards) {
     save.disabled = true;
     try {
       if (!reviewed) {
-        const plan = await api.editDeckList({ slug: deck.slug, list: box.value, dry_run: true });
+        const plan = await api.editDeckList({
+          slug: deck.slug, commander: cmdrBox.value, list: box.value, dry_run: true,
+        });
         reviewed = box.value;
         fill(out,
           h('div.flex-wrap', { style: { marginTop: '12px' } },
@@ -286,12 +294,18 @@ function editList(deck, cards) {
           pair('Removed', plan.removed, ([n, q]) => h('span.chip.mini.bad', `−${q} ${n}`)),
           pair('Quantity changed', plan.changed, ([n, a, b]) => h('span.chip.mini', `${n} ${a}→${b}`)),
           pair('No longer owned', plan.newly_missing, (n) => h('span.chip.mini.bad', n)),
+          plan.commander_changed
+            ? h('div.small', { style: { marginTop: '10px' } },
+              h('span.tag.warn', 'commander'), ` → ${plan.commander || 'none'}`)
+            : null,
           (!plan.added.length && !plan.removed.length && !plan.changed.length)
             ? h('div.small.muted', { style: { marginTop: '10px' } }, 'No changes.')
             : null);
         save.textContent = 'Save list';
       } else {
-        const r = await api.editDeckList({ slug: deck.slug, list: box.value });
+        const r = await api.editDeckList({
+          slug: deck.slug, commander: cmdrBox.value, list: box.value,
+        });
         close();
         toast(`Saved — ${num(r.card_count)} cards, ${num(r.owned_count)} owned`, 'ok');
         detailView(deck.slug);
@@ -312,9 +326,9 @@ function editList(deck, cards) {
   }, h('div.palette.wide', { style: { padding: '18px' } },
     h('div.flex', h('h2', 'Edit list'), h('span.spacer'), count),
     h('div.muted.small', { style: { margin: '4px 0 12px' } },
-      `One card per line, "2 Sol Ring". This replaces ${deck.name}'s list entirely — `
-      + 'what is in the box is what the deck becomes. # and // are comments.'),
-    h('div.field', box),
+      `Replaces ${deck.name}'s list entirely — what is in the box is what the deck becomes.`),
+    h('div.field', h('label', 'Commander'), cmdrBox),
+    h('div.field', h('label', 'The 99'), box),
     out,
     h('div.flex', { style: { marginTop: '12px' } },
       save,
@@ -441,14 +455,12 @@ async function detailView(slug) {
 }
 
 function exportDeck(deck, cards) {
-  const lines = [`// ${deck.name}`, deck.commander ? `// Commander: ${deck.commander}` : '', ''];
-  for (const role of ROLE_ORDER) {
-    const list = cards.filter((c) => (c.role || 'spell') === role);
-    if (!list.length) continue;
-    lines.push(`// ${role}`);
-    for (const c of list) lines.push(`${c.qty} ${c.name}`);
-    lines.push('');
-  }
+  // A plain decklist. Commander first because that is where every tool
+  // expects it, and no headings, because they are not cards.
+  const order = (c) => ROLE_ORDER.indexOf(c.role || 'spell');
+  const lines = [...cards]
+    .sort((a, b) => order(a) - order(b) || a.name.localeCompare(b.name))
+    .map((c) => `${c.qty} ${c.name}`);
   download(`${deck.slug}.txt`, lines.join('\n'));
   toast('Decklist downloaded', 'ok');
 }

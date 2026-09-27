@@ -232,6 +232,14 @@ Replaces a deck's list wholesale from a decklist, in the same format
 `/cards/add` takes. Admin only. The reply is a diff — `added`, `removed`,
 `changed`, plus `rows`, `card_count` and `owned_count`.
 
+`commander` is its own field so the list stays the 99 and nothing else,
+with no heading or marker singling one line out. Two names in it are
+partners. Send it and it defines the commander rows outright; leave it
+off and the deck's existing commander is matched by name. The
+`decks.commander` column is only rewritten when the name actually
+changes, because it carries hand-written prose the field cannot show and
+should not silently delete.
+
 A replace, not a merge: what you send is what the deck becomes. Which is
 why one unparseable line refuses the whole request rather than applying
 the rest — dropping a line here would silently delete a card from the

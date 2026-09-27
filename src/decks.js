@@ -133,6 +133,11 @@ async function anyPrintingIndex(db, keys) {
  * why a single unparseable line refuses the whole request instead of
  * applying the rest — dropping a line here silently deletes a card from
  * the deck, which is not what a typo should do.
+ *
+ * `commander` is its own field, so the 99 stay a plain list with nothing
+ * marking one line out from the others. Send it and it defines the
+ * commander rows outright; leave it off and the deck's existing commander
+ * is matched by name, the way it worked before the field existed.
  */
 export async function editDeckList(db, body) {
   const slug = String(body?.slug || '').trim();
@@ -144,9 +149,15 @@ export async function editDeckList(db, body) {
   ).bind(slug).first();
   if (!deck) return { status: 404, body: { error: `no deck with slug "${slug}"` } };
 
+  const hasCommanderField = typeof body.commander === 'string';
+  const cmdrParsed = hasCommanderField ? parseList(body.commander) : { items: [], errors: [] };
   const { items, errors } = parseList(body.list);
-  if (errors.length) {
-    return { status: 400, body: { error: `${errors.length} line(s) could not be read`, errors } };
+  const allErrors = [...cmdrParsed.errors, ...errors];
+  if (allErrors.length) {
+    return {
+      status: 400,
+      body: { error: `${allErrors.length} line(s) could not be read`, errors: allErrors },
+    };
   }
   if (!items.length) {
     return { status: 400, body: { error: 'the list is empty — disassemble the deck instead' } };
@@ -156,12 +167,16 @@ export async function editDeckList(db, body) {
   }
 
   // The same card written twice is one row with the quantities added.
+  // The commander is added first so that writing it into the 99 as well
+  // does not produce a second row for it.
   const wanted = new Map();
-  for (const it of items) {
+  const commanders = new Set(cmdrParsed.items.map((it) => normalize(it.name)));
+  for (const it of [...cmdrParsed.items, ...items]) {
     const key = normalize(it.name);
     const prev = wanted.get(key);
-    if (prev) prev.qty += it.qty;
-    else wanted.set(key, { qty: it.qty, typed: it.name, name_norm: key });
+    if (prev) { if (!commanders.has(key)) prev.qty += it.qty; } else {
+      wanted.set(key, { qty: it.qty, typed: it.name, name_norm: key });
+    }
   }
 
   const keys = [...wanted.keys()];
@@ -187,7 +202,9 @@ export async function editDeckList(db, body) {
       name_norm: w.name_norm,
       raw_name: w.typed,
       oracle_id: card?.oracle_id ?? null,
-      role: w.name_norm === cmdr ? 'commander' : (/\bLand\b/.test(type) ? 'land' : 'spell'),
+      role: (hasCommanderField ? commanders.has(w.name_norm) : w.name_norm === cmdr)
+        ? 'commander'
+        : (/\bLand\b/.test(type) ? 'land' : 'spell'),
       // A heading is the one thing a decklist cannot carry, so keep the
       // one the row already had and leave new rows unsectioned.
       section: was?.section ?? null,
@@ -213,8 +230,18 @@ export async function editDeckList(db, body) {
     return !r.in_collection && was && was.in_collection === 1;
   }).map((r) => r.name);
 
+  const typedCommander = cmdrParsed.items.map((it) => it.name).join(' // ');
+  // decks.commander carries hand-written prose after the name ("featured
+  // alt commander: ..."), which the editor's plain field cannot show and
+  // must not quietly delete. Only a real change to the name rewrites it.
+  const newCommander = hasCommanderField && normalize(typedCommander) !== cmdr
+    ? (typedCommander || null)
+    : null;
+
   const out = {
     deck: { slug: deck.slug, name: deck.name, owner: deck.owner },
+    commander: hasCommanderField ? (typedCommander || null) : deck.commander,
+    commander_changed: newCommander !== null,
     rows: rows.length,
     card_count: cardCount,
     owned_count: ownedCount,
@@ -236,6 +263,10 @@ export async function editDeckList(db, body) {
     db.prepare('UPDATE decks SET card_count = ?, owned_count = ? WHERE id = ?')
       .bind(cardCount, ownedCount, deck.id),
   ];
+  if (hasCommanderField && newCommander !== null) {
+    statements.push(db.prepare('UPDATE decks SET commander = ? WHERE id = ?')
+      .bind(newCommander, deck.id));
+  }
   // One batch: a deck that lost its list but never got the new one back is
   // not a state worth being able to reach.
   await db.batch(statements);
