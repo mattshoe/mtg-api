@@ -11,7 +11,10 @@ export const PAGE_SIZE = 100;
 
 export const DEFAULTS = {
   // --- who and how many
-  owner: 'matt',
+  // Everything, both collections, unless you narrow it. Rows stay per
+  // owner — GROUP BY is (owner, name_norm) — so a card they both own is
+  // two rows, which is the truth rather than a merged total.
+  owner: 'both',
   qtyMin: '', qtyMax: '',
   pool: 'all',            // all | free | committed
   freeMin: '',
