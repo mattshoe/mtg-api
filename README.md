@@ -245,11 +245,29 @@ why one unparseable line refuses the whole request rather than applying
 the rest — dropping a line here would silently delete a card from the
 deck, and a typo should not do that.
 
-`in_collection` is recomputed from the collection on every save, since it
-is what `deck_gaps` reports and what `card_usage` counts against `free`.
-Basic lands are always treated as present: they are not tracked in the
-collection any more, so a deck running twenty Forests is not short twenty
-cards. `role` comes from the type line, with the deck's own commander
+**Editing a list moves real cards.** A card put into a deck came from
+somewhere, so the collection is made to say so:
+
+- copies the deck drops go **back to bulk** — nothing is written for that,
+  bulk is `card_usage.free` and the deck simply stops claiming them
+- copies the deck gains come **out of bulk** when a spare exists
+- when no spare exists the shortfall is **acquired**: it goes through
+  `/cards/add`, Scryfall and all, so the collection gains a real row
+  rather than the deck claiming a card that does not exist
+
+The reply lists `returned` and `acquired`, and a dry run plans the
+purchase without making it. Buying happens before the deck is written, so
+a name Scryfall cannot resolve leaves the deck exactly as it was.
+
+A deck's own current claim does not count against it — the whole list
+returns to bulk as part of the edit. Another deck already being short does
+not count either: this edit makes its own deck whole, not someone else's.
+Proxy and PROPOSED decks acquire nothing, because `card_usage` does not
+count them as consuming anything, and basic lands are never bought.
+
+`in_collection` is recomputed on every save, since it is what `deck_gaps`
+reports and what `card_usage` counts against `free`. On a real deck it is
+therefore always 1. `role` comes from the type line, with the commander
 marked as such, and section headings are kept for rows that survive.
 
 ---

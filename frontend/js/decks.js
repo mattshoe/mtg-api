@@ -290,9 +290,18 @@ function editList(deck, cards) {
             h('span.tag.info', 'preview — nothing saved yet'),
             h('span.muted.small',
               `${num(plan.rows)} rows · ${num(plan.card_count)} cards · ${num(plan.owned_count)} owned`)),
-          pair('Added', plan.added, ([n, q]) => h('span.chip.mini.ok', `+${q} ${n}`)),
-          pair('Removed', plan.removed, ([n, q]) => h('span.chip.mini.bad', `−${q} ${n}`)),
+          pair('Added to the deck', plan.added, ([n, q]) => h('span.chip.mini.ok', `+${q} ${n}`)),
+          pair('Removed from the deck', plan.removed, ([n, q]) => h('span.chip.mini.bad', `−${q} ${n}`)),
           pair('Quantity changed', plan.changed, ([n, a, b]) => h('span.chip.mini', `${n} ${a}→${b}`)),
+          // The two that move real cards, not just the list.
+          pair('Back to bulk', plan.returned, ([n, q]) => h('span.chip.mini.ok', `${q}× ${n}`)),
+          plan.acquired?.length
+            ? h('div', { style: { marginTop: '10px' } },
+              h('div.small',
+                h('span.tag.warn', 'added to the collection'),
+                ' bulk has no spare copy of these, so saving records them as acquired'),
+              h('div.chips', plan.acquired.map(([n, q]) => h('span.chip.mini.bad', `+${q} ${n}`))))
+            : null,
           pair('No longer owned', plan.newly_missing, (n) => h('span.chip.mini.bad', n)),
           plan.commander_changed
             ? h('div.small', { style: { marginTop: '10px' } },
@@ -307,7 +316,9 @@ function editList(deck, cards) {
           slug: deck.slug, commander: cmdrBox.value, list: box.value,
         });
         close();
-        toast(`Saved — ${num(r.card_count)} cards, ${num(r.owned_count)} owned`, 'ok');
+        const bought = (r.acquired || []).reduce((a, [, q]) => a + q, 0);
+        toast(`Saved — ${num(r.card_count)} cards`
+          + (bought ? `, ${num(bought)} added to the collection` : ''), 'ok');
         detailView(deck.slug);
       }
     } catch (e) {

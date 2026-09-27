@@ -14,6 +14,7 @@
 // counting against `free` forever.
 
 import { parseList, normalize } from './parse.js';
+import { addCards } from './cards.js';
 
 /**
  * What a deck is holding, by name, for the confirmation step.
@@ -103,11 +104,39 @@ async function ownedIndex(db, owner, keys) {
     const slice = keys.slice(i, i + CHUNK);
     const marks = slice.map(() => '?').join(',');
     const r = await db.prepare(`
-      SELECT name_norm, MIN(id) AS id, name, oracle_id, type_line
+      SELECT name_norm, MIN(id) AS id, name, oracle_id, type_line, SUM(qty) AS owned_qty
         FROM cards
        WHERE owner = ? AND name_norm IN (${marks})
        GROUP BY name_norm`).bind(owner, ...slice).all();
     for (const row of r.results || []) found.set(row.name_norm, row);
+  }
+  return found;
+}
+
+/**
+ * How many copies the owner's *other* decks have already spoken for.
+ *
+ * "Other" matters: the deck being edited hands its whole list back to bulk
+ * as part of the edit, so its current claim must not count against it.
+ * Proxy and PROPOSED decks are skipped for the same reason card_usage
+ * skips them — they do not consume real cards.
+ */
+async function claimedElsewhere(db, owner, deckId, keys) {
+  const found = new Map();
+  for (let i = 0; i < keys.length; i += CHUNK) {
+    const slice = keys.slice(i, i + CHUNK);
+    const marks = slice.map(() => '?').join(',');
+    const r = await db.prepare(`
+      SELECT dc.name_norm, SUM(dc.qty) AS n
+        FROM deck_cards dc
+        JOIN decks d ON d.id = dc.deck_id
+       WHERE d.owner = ? AND d.id != ?
+         AND d.is_proxy = 0
+         AND (d.status IS NULL OR d.status NOT LIKE 'PROPOSED%')
+         AND dc.in_collection = 1
+         AND dc.name_norm IN (${marks})
+       GROUP BY dc.name_norm`).bind(owner, deckId, ...slice).all();
+    for (const row of r.results || []) found.set(row.name_norm, row.n);
   }
   return found;
 }
@@ -139,13 +168,13 @@ async function anyPrintingIndex(db, keys) {
  * commander rows outright; leave it off and the deck's existing commander
  * is matched by name, the way it worked before the field existed.
  */
-export async function editDeckList(db, body) {
+export async function editDeckList(db, body, fetchImpl) {
   const slug = String(body?.slug || '').trim();
   if (!slug) return { status: 400, body: { error: 'slug is required' } };
   if (typeof body?.list !== 'string') return { status: 400, body: { error: 'list must be a string' } };
 
   const deck = await db.prepare(
-    'SELECT id, slug, name, owner, commander FROM decks WHERE slug = ?',
+    'SELECT id, slug, name, owner, commander, is_proxy, status FROM decks WHERE slug = ?',
   ).bind(slug).first();
   if (!deck) return { status: 404, body: { error: `no deck with slug "${slug}"` } };
 
@@ -180,15 +209,39 @@ export async function editDeckList(db, body) {
   }
 
   const keys = [...wanted.keys()];
-  const [owned, anywhere, currentRows] = await Promise.all([
+  const [owned, anywhere, currentRows, elsewhere] = await Promise.all([
     ownedIndex(db, deck.owner, keys),
     anyPrintingIndex(db, keys),
     db.prepare(
       'SELECT qty, name, name_norm, role, section, in_collection FROM deck_cards WHERE deck_id = ?',
     ).bind(deck.id).all(),
+    claimedElsewhere(db, deck.owner, deck.id, keys),
   ]);
+
+  // A proxy or merely PROPOSED deck is not made of real cards — card_usage
+  // does not count it against anything — so it neither draws from bulk nor
+  // causes anything to be acquired.
+  const physical = !deck.is_proxy && !(deck.status || '').startsWith('PROPOSED');
   const current = new Map((currentRows.results || []).map((r) => [r.name_norm, r]));
   const cmdr = commanderNorm(deck.commander);
+
+  // What the deck needs that bulk cannot cover. Putting a card in a deck
+  // means it came from somewhere: out of bulk if a copy was spare, and
+  // otherwise it had to be acquired, so the collection is made to say so
+  // rather than the deck claiming a card that does not exist.
+  const shortfall = [];
+  if (physical) {
+    for (const w of wanted.values()) {
+      if (isBasic(w.name_norm)) continue;
+      const have = owned.get(w.name_norm)?.owned_qty ?? 0;
+      const spoken = elsewhere.get(w.name_norm) ?? 0;
+      // Clamped: another deck being short already is that deck's problem.
+      // Editing this one should make this one whole, not pay off a debt
+      // somewhere else.
+      const spare = Math.max(0, have - spoken);
+      if (w.qty > spare) shortfall.push([w.typed, w.qty - spare]);
+    }
+  }
 
   const rows = [];
   for (const w of wanted.values()) {
@@ -208,7 +261,9 @@ export async function editDeckList(db, body) {
       // A heading is the one thing a decklist cannot carry, so keep the
       // one the row already had and leave new rows unsectioned.
       section: was?.section ?? null,
-      in_collection: (owned.has(w.name_norm) || isBasic(w.name_norm)) ? 1 : 0,
+      // Backed by definition on a physical deck: anything short was just
+      // acquired above.
+      in_collection: (physical || owned.has(w.name_norm) || isBasic(w.name_norm)) ? 1 : 0,
     });
   }
 
@@ -249,9 +304,40 @@ export async function editDeckList(db, body) {
     removed,
     changed,
     newly_missing: gapsNow,
+    // Copies that had to be bought to back this list, and copies the edit
+    // hands back. Bulk is card_usage.free, so returning is just the deck
+    // letting go — there is nothing to write for it.
+    acquired: shortfall,
+    returned: [...current.values()]
+      .map((r) => {
+        const still = wanted.get(r.name_norm)?.qty ?? 0;
+        return r.in_collection && r.qty > still ? [r.name, r.qty - still] : null;
+      })
+      .filter(Boolean),
   };
 
   if (body?.dry_run) return { status: 200, body: { ...out, applied: false, dry_run: true } };
+
+  // Buy first, write the deck second. If Scryfall cannot resolve a name
+  // the deck is left exactly as it was, rather than pointing at cards the
+  // collection does not have.
+  let acquisition = null;
+  if (shortfall.length) {
+    acquisition = await addCards(db, {
+      owner: deck.owner,
+      list: shortfall.map(([name, n]) => `${n} ${name}`).join('\n'),
+    }, fetchImpl);
+    if (acquisition.status !== 200 || acquisition.body?.failed) {
+      return {
+        status: acquisition.status === 200 ? 400 : acquisition.status,
+        body: {
+          error: 'could not acquire the cards this list needs, so the deck is unchanged',
+          errors: acquisition.body?.errors || [acquisition.body?.error].filter(Boolean),
+          acquired: shortfall,
+        },
+      };
+    }
+  }
 
   const statements = [
     db.prepare('DELETE FROM deck_cards WHERE deck_id = ?').bind(deck.id),
@@ -271,5 +357,13 @@ export async function editDeckList(db, body) {
   // not a state worth being able to reach.
   await db.batch(statements);
 
-  return { status: 200, body: { ...out, applied: true, dry_run: false } };
+  return {
+    status: 200,
+    body: {
+      ...out,
+      applied: true,
+      dry_run: false,
+      acquired_notes: acquisition?.body?.notes || [],
+    },
+  };
 }

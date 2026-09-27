@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { post, postAnon, get, sql, count, snapshot } from './helpers.js';
+import { post, postAnon, get, sql, count, snapshot, stubScryfall } from './helpers.js';
 
 // Deck 1 in the fixture is 'chaos-incarnate-precon', matt's, with five
 // deck_cards rows all in_collection = 1.
@@ -261,24 +261,24 @@ describe('POST /decks/list — applied', () => {
   });
 
   it('keeps card_count and owned_count in step with the list', async () => {
-    await post('/decks/list', { slug: SLUG, list: '4 Arcane Signet\n2 Definitely Not A Real Card' });
+    // Everything a real deck lists ends up backed, so the two agree.
+    await post('/decks/list', { slug: SLUG, list: '4 Sol Ring\n2 Lightning Bolt' }, stubScryfall());
     const [deck] = await sql('SELECT card_count, owned_count FROM decks WHERE slug = ?', SLUG);
     expect(deck.card_count).toBe(6);
-    expect(deck.owned_count).toBe(4);   // the made-up card is not owned
+    expect(deck.owned_count).toBe(6);
   });
 
-  it('recomputes in_collection from the collection, not from the old row', async () => {
-    await post('/decks/list', { slug: SLUG, list: '1 Arcane Signet\n1 Definitely Not A Real Card' });
+  it('leaves a real deck with no gaps at all, because it buys what is short', async () => {
+    await post('/decks/list', { slug: SLUG, list: '1 Sol Ring\n1 Lightning Bolt' }, stubScryfall());
     const rows = await sql(
       `SELECT dc.name, dc.in_collection FROM deck_cards dc JOIN decks d ON d.id = dc.deck_id
         WHERE d.slug = ? ORDER BY dc.name`, SLUG,
     );
     expect(rows).toEqual([
-      { name: 'Arcane Signet', in_collection: 1 },
-      { name: 'Definitely Not A Real Card', in_collection: 0 },
+      { name: 'Lightning Bolt', in_collection: 1 },
+      { name: 'Sol Ring', in_collection: 1 },
     ]);
-    // and it lands in deck_gaps, which is what in_collection = 0 is for
-    expect(await count('deck_gaps', 'slug = ? AND name = ?', SLUG, 'Definitely Not A Real Card')).toBe(1);
+    expect(await count('deck_gaps', 'slug = ?', SLUG)).toBe(0);
   });
 
   it('adds up a card written on two lines', async () => {
@@ -314,16 +314,18 @@ describe('POST /decks/list — applied', () => {
     expect(after.free).toBe(before.owned);
   });
 
-  it('takes nothing out of the collection and leaves other decks alone', async () => {
-    const cards = await count('cards');
+  it('removes nothing from the collection and leaves other decks alone', async () => {
+    // An edit may add to the collection, to back what the deck now wants.
+    // It must never take anything out of it, or touch another deck.
+    const copies = (await sql('SELECT SUM(qty) AS n FROM cards'))[0].n;
     const otherRows = await sql(
       `SELECT deck_id, COUNT(*) n FROM deck_cards
         WHERE deck_id != (SELECT id FROM decks WHERE slug = ?) GROUP BY deck_id ORDER BY deck_id`, SLUG,
     );
 
-    await post('/decks/list', { slug: SLUG, list: '1 Arcane Signet' });
+    await post('/decks/list', { slug: SLUG, list: "1 Ambition's Cost" }, stubScryfall());
 
-    expect(await count('cards')).toBe(cards);
+    expect((await sql('SELECT SUM(qty) AS n FROM cards'))[0].n).toBeGreaterThanOrEqual(copies);
     expect(await sql(
       `SELECT deck_id, COUNT(*) n FROM deck_cards
         WHERE deck_id != (SELECT id FROM decks WHERE slug = ?) GROUP BY deck_id ORDER BY deck_id`, SLUG,
@@ -369,10 +371,14 @@ describe('POST /decks/list — basic lands', () => {
     expect(await count('deck_gaps', 'slug = ?', SLUG)).toBe(0);
   });
 
-  it('still calls a non-basic land a gap when it is not owned', async () => {
-    const r = await post('/decks/list', { slug: SLUG, list: '1 Definitely Not A Real Land' });
+  it('still calls a non-basic a gap on a proxy deck, which buys nothing', async () => {
+    // A proxy deck is not made of real cards, so an unowned one stays a
+    // gap instead of being acquired.
+    const slug = 'halo-proxy-astor-equipment';
+    const r = await post('/decks/list', { slug, list: '1 Lightning Bolt' }, stubScryfall());
+    expect(r.body.acquired).toEqual([]);
     expect(r.body.owned_count).toBe(0);
-    expect(await count('deck_gaps', 'slug = ?', SLUG)).toBe(1);
+    expect(await count('deck_gaps', 'slug = ?', slug)).toBe(1);
   });
 });
 
@@ -470,5 +476,165 @@ describe('POST /decks/list — the commander field', () => {
         WHERE d.slug = ? AND dc.name LIKE 'Kardur%'`, SLUG,
     );
     expect(row.role).toBe('commander');
+  });
+});
+
+// Editing a list moves real cards: out of bulk when a spare copy exists,
+// back to bulk when the deck lets go, and into the collection when there
+// was no spare to take.
+//
+// The Scryfall stub only knows five cards, so anything that has to be
+// bought is written in terms of those. Everything else uses cards the
+// fixture already owns, where nothing is bought and the stub is never
+// reached.
+describe('POST /decks/list — bulk', () => {
+  const owned = (n) => sql(
+    'SELECT COALESCE(SUM(qty), 0) AS q FROM cards WHERE owner = ? AND name_norm = ?', 'matt', n,
+  ).then((r) => r[0].q);
+
+  it('takes a spare copy out of bulk without buying anything', async () => {
+    // Ambition's Cost is owned, and this deck is the only claim on it, so
+    // the edit can take it straight back out of bulk.
+    const before = await owned("ambition's cost");
+    expect(before).toBeGreaterThan(0);
+
+    const r = await post('/decks/list', { slug: SLUG, list: "1 Ambition's Cost" }, stubScryfall());
+    expect(r.status).toBe(200);
+    expect(r.body.acquired).toEqual([]);
+    expect(await owned("ambition's cost")).toBe(before);
+  });
+
+  it('buys the shortfall when bulk cannot cover the list', async () => {
+    expect(await owned('sol ring')).toBe(0);
+
+    const r = await post('/decks/list', { slug: SLUG, list: '2 Sol Ring' }, stubScryfall());
+    expect(r.status).toBe(200);
+    expect(r.body.acquired).toEqual([['Sol Ring', 2]]);
+    expect(await owned('sol ring')).toBe(2);
+
+    // the deck is backed, so it is not a gap
+    expect(await count('deck_gaps', 'slug = ?', SLUG)).toBe(0);
+    const [deck] = await sql('SELECT card_count, owned_count FROM decks WHERE slug = ?', SLUG);
+    expect(deck.owned_count).toBe(2);
+  });
+
+  it('buys only the difference, not the whole line', async () => {
+    // One Ambition's Cost is owned and only this deck wants it, so asking
+    // for three needs two more, not three.
+    const r = await post('/decks/list',
+      { slug: SLUG, list: "3 Ambition's Cost", dry_run: true }, stubScryfall());
+    expect(r.body.acquired).toEqual([["Ambition's Cost", 2]]);
+  });
+
+  it('counts what another deck has already claimed', async () => {
+    // matt owns one Arcane Signet and deck 2 has it. This deck releasing
+    // its own claim does not make that copy free, so wanting one here
+    // means buying one.
+    const [have] = await sql(
+      "SELECT SUM(qty) q FROM cards WHERE owner='matt' AND name_norm='arcane signet'",
+    );
+    expect(have.q).toBe(1);
+
+    const r = await post('/decks/list',
+      { slug: SLUG, list: '1 Arcane Signet', dry_run: true }, stubScryfall());
+    expect(r.body.acquired).toEqual([['Arcane Signet', 1]]);
+  });
+
+  it('does not count the deck\'s own current claim against it', async () => {
+    // The one copy this deck already holds comes back to bulk as part of
+    // the edit, so asking for it again buys nothing.
+    const r = await post('/decks/list',
+      { slug: SLUG, list: "1 Ambition's Cost", dry_run: true }, stubScryfall());
+    expect(r.body.acquired).toEqual([]);
+  });
+
+  it('hands copies back to bulk when the deck drops them', async () => {
+    const before = await usage("ambition's cost");
+    expect(before.in_decks).toBe(1);
+
+    const r = await post('/decks/list', { slug: SLUG, list: '1 Sol Ring' }, stubScryfall());
+    expect(r.status).toBe(200);
+    expect(r.body.returned.map((x) => x[0])).toContain("Ambition's Cost");
+
+    const after = await usage("ambition's cost");
+    expect(after.owned).toBe(before.owned);    // still owned
+    expect(after.free).toBe(before.owned);     // and back in bulk
+  });
+
+  it('never buys basic lands', async () => {
+    const r = await post('/decks/list', { slug: SLUG, list: '30 Swamp\n4 Wastes' }, stubScryfall());
+    expect(r.status).toBe(200);
+    expect(r.body.acquired).toEqual([]);
+    expect(await count('cards', "name_norm IN ('swamp','wastes')")).toBe(0);
+  });
+
+  it('buys nothing for a proxy deck', async () => {
+    const before = await count('cards');
+    const r = await post('/decks/list',
+      { slug: 'halo-proxy-astor-equipment', list: '4 Lightning Bolt' }, stubScryfall());
+    expect(r.status).toBe(200);
+    expect(r.body.acquired).toEqual([]);
+    expect(await count('cards')).toBe(before);
+  });
+
+  it('a dry run plans the purchase without making it', async () => {
+    const snap = await snapshot();
+    const r = await post('/decks/list',
+      { slug: SLUG, list: '2 Lightning Bolt', dry_run: true }, stubScryfall());
+    expect(r.body.acquired).toEqual([['Lightning Bolt', 2]]);
+    expect(await owned('lightning bolt')).toBe(0);
+    expect(await snapshot()).toEqual(snap);
+  });
+
+  it('leaves the deck alone when a card cannot be acquired', async () => {
+    const listBefore = await listOf(SLUG);
+    const snap = await snapshot();
+    const r = await post('/decks/list',
+      { slug: SLUG, list: '1 Utter Nonsense Not A Card' }, stubScryfall());
+    expect(r.status).toBe(400);
+    expect(r.body.error).toMatch(/unchanged/);
+    expect(await listOf(SLUG)).toBe(listBefore);
+    expect(await snapshot()).toEqual(snap);
+  });
+
+  it('leaves the deck alone when Scryfall is down', async () => {
+    const listBefore = await listOf(SLUG);
+    const r = await post('/decks/list',
+      { slug: SLUG, list: '2 Lightning Bolt' }, stubScryfall({ fail: true }));
+    expect(r.status).toBeGreaterThanOrEqual(400);
+    expect(await listOf(SLUG)).toBe(listBefore);
+  });
+
+  it('never makes another card worse off than it was', async () => {
+    // Only cards that already had a card_usage row can be compared: a card
+    // nobody owned has no row at all, and acquiring one is what creates it.
+    const key = (r) => `${r.owner}|${r.name_norm}`;
+    const before = new Map(
+      (await sql('SELECT owner, name_norm, free FROM card_usage')).map((r) => [key(r), r.free]),
+    );
+
+    await post('/decks/list', { slug: SLUG, list: '3 Sol Ring\n1 Lightning Bolt' }, stubScryfall());
+
+    for (const r of await sql('SELECT owner, name_norm, free FROM card_usage')) {
+      const was = before.get(key(r));
+      if (was === undefined) continue;
+      expect(r.free).toBeGreaterThanOrEqual(Math.min(was, 0));
+    }
+  });
+
+  it('leaves the deck it edited with no gaps, and buys exactly the shortfall', async () => {
+    const before = (await sql(
+      "SELECT COALESCE(SUM(qty),0) q FROM cards WHERE owner='matt' AND name_norm='sol ring'",
+    ))[0].q;
+
+    const r = await post('/decks/list',
+      { slug: SLUG, list: '3 Sol Ring\n1 Lightning Bolt' }, stubScryfall());
+
+    expect(await count('deck_gaps', 'slug = ?', SLUG)).toBe(0);
+    const bought = r.body.acquired.find(([n]) => n === 'Sol Ring')?.[1] ?? 0;
+    const after = (await sql(
+      "SELECT COALESCE(SUM(qty),0) q FROM cards WHERE owner='matt' AND name_norm='sol ring'",
+    ))[0].q;
+    expect(after).toBe(before + bought);
   });
 });

@@ -317,7 +317,7 @@ async function route(request, env, ctx, entry) {
       if (error) return json({ error }, 400);
       entry.admin = true;
       entry.write = true;
-      const r = await editDeckList(env.DB, body);
+      const r = await editDeckList(env.DB, body, env.SCRYFALL_FETCH || fetch);
       entry.detail = {
         slug: body?.slug || null,
         dry_run: Boolean(body?.dry_run),
@@ -326,6 +326,7 @@ async function route(request, env, ctx, entry) {
         added: r.body?.added?.length,
         removed: r.body?.removed?.length,
         changed: r.body?.changed?.length,
+        acquired: r.body?.acquired?.length,
       };
       if (r.status >= 400) entry.message = r.body?.error;
       return send(r);
