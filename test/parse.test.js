@@ -32,6 +32,15 @@ describe('parseLine', () => {
     });
   }
 
+  it('keeps the comma in a two-word legend written without a set code', () => {
+    // The name group is non-greedy, so this parses as name "Kardur," plus
+    // collector number "Doomscourge" before the two are put back together.
+    // Stripping the trailing comma too early swallowed it.
+    expect(parseLine('1 Kardur, Doomscourge').name).toBe('Kardur, Doomscourge');
+    expect(parseLine('Kardur, Doomscourge').name).toBe('Kardur, Doomscourge');
+    expect(parseLine('2x Alela, Cunning Conqueror').name).toBe('Alela, Cunning Conqueror');
+  });
+
   it('keeps a trailing number in the name when no set was given', () => {
     // "Fear of Missing Out 2" must not lose its 2 to the collector-number slot.
     expect(parseLine('1 Borrowed Time 2').name).toBe('Borrowed Time 2');

@@ -209,6 +209,8 @@ select { appearance: none; background-image:
 .chip:hover { border-color: var(--text-3); color: var(--text); }
 .chip.on { background: var(--accent-dim); border-color: var(--accent); color: var(--accent-2); font-weight: 600; }
 .chip.mini { padding: 2px 7px; font-size: 11px; }
+.chip.ok { border-color: color-mix(in srgb, var(--ok) 45%, var(--line)); color: var(--ok); }
+.chip.bad { border-color: color-mix(in srgb, var(--bad) 45%, var(--line)); color: var(--bad); }
 
 /* pip toggles, one per colour */
 .pips { display: flex; gap: 5px; }
@@ -398,6 +400,8 @@ pre.out {
 .palette-scrim { position: fixed; inset: 0; background: rgba(4,6,10,.6); z-index: 80; display: grid; place-items: start center; padding-top: 12vh; }
 .palette { width: min(560px, 92vw); background: var(--bg-2); border: 1px solid var(--line-2);
            border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+.palette.wide { width: min(760px, 94vw); max-height: 82vh; overflow-y: auto; }
+.palette.wide textarea { font-family: var(--mono); font-size: 12.5px; line-height: 1.5; }
 .palette input { border: none; border-radius: 0; border-bottom: 1px solid var(--line); padding: 14px 16px; font-size: 15px; }
 .palette input:focus { border-color: var(--line); }
 .palette ul { list-style: none; margin: 0; padding: 0; max-height: 46vh; overflow-y: auto; }

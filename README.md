@@ -222,6 +222,28 @@ The three deletes are one batch. Half of them would leave `deck_cards`
 rows pointing at a deck that no longer exists, and those would count
 against `free` forever.
 
+### `POST /decks/list`
+
+```json
+{"slug": "fairy-alela-faerie-tribal", "list": "1 Alela, Cunning Conqueror\n3 Bitterblossom", "dry_run": false}
+```
+
+Replaces a deck's list wholesale from a decklist, in the same format
+`/cards/add` takes. Admin only. The reply is a diff — `added`, `removed`,
+`changed`, plus `rows`, `card_count` and `owned_count`.
+
+A replace, not a merge: what you send is what the deck becomes. Which is
+why one unparseable line refuses the whole request rather than applying
+the rest — dropping a line here would silently delete a card from the
+deck, and a typo should not do that.
+
+`in_collection` is recomputed from the collection on every save, since it
+is what `deck_gaps` reports and what `card_usage` counts against `free`.
+Basic lands are always treated as present: they are not tracked in the
+collection any more, so a deck running twenty Forests is not short twenty
+cards. `role` comes from the type line, with the deck's own commander
+marked as such, and section headings are kept for rows that survive.
+
 ---
 
 ## The data
@@ -287,7 +309,7 @@ API.
 |---|---|
 | Search | every column in the database, as facets or as a query language — see below; a grid of cards, 100 a page, one row per card rather than per printing |
 | Card | full detail in a drawer — every printing owned, decks it is in, tags, legalities, rulings, and ±1 buttons |
-| Decks | all 32 decks, each with its list, curve, notes and gaps; plus a gaps-and-conflicts overview. Admins can disassemble one |
+| Decks | every deck with its list, curve, notes and gaps, plus a gaps-and-conflicts overview. Admins can edit a list or disassemble the deck |
 | Add / Remove | three steps: list, whose collection, then a dry run you have to approve |
 | Stats | curve, colours, types, rarity, biggest sets, most unassigned copies |
 | Console | arbitrary SQL with a schema browser, snippets, history and CSV export |

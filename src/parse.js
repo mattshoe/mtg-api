@@ -95,8 +95,14 @@ export function parseLine(raw) {
   const set = (setRaw || '').toUpperCase();
   const num = set ? (numRaw || null) : null;
 
-  let name = nameRaw.trim().replace(/,+$/, '');
+  // Reassemble first, strip the trailing comma second. The name group is
+  // non-greedy, so "Kardur, Doomscourge" with no set code parses as name
+  // "Kardur," plus collector number "Doomscourge" — stripping before the
+  // two are put back together swallowed the comma and gave Scryfall a
+  // card that does not exist.
+  let name = nameRaw.trim();
   if (!set && numRaw) name = `${name} ${numRaw}`.trim();
+  name = name.replace(/,+$/, '').trim();
   if (!name) return { error: 'no card name' };
   if (name.length > MAX_NAME) return { error: 'name too long' };
 

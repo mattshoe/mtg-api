@@ -232,6 +232,98 @@ async function confirmDisassemble(deck) {
   document.body.append(scrim);
 }
 
+/**
+ * Edit the whole list as text. A decklist is what this data already is,
+ * and it is what every other tool in the app speaks, so the editor is a
+ * textarea rather than a row of per-card widgets.
+ *
+ * Replace, not merge: what is in the box is what the deck becomes. The
+ * server does the diff and nothing is written until it is on screen.
+ */
+function editList(deck, cards) {
+  const asText = ROLE_ORDER.flatMap((role) => {
+    const list = cards.filter((c) => (c.role || 'spell') === role);
+    return list.length ? [`# ${role}`, ...list.map((c) => `${c.qty} ${c.name}`), ''] : [];
+  }).join('\n').trim();
+
+  const box = h('textarea', { rows: 18, spellcheck: false });
+  box.value = asText;
+
+  const count = h('span.muted.small');
+  const out = h('div');
+  const save = h('button.btn.primary', 'Review changes');
+  const close = () => scrim.remove();
+
+  const tally = () => {
+    const n = box.value.split('\n')
+      .filter((l) => l.trim() && !l.trim().startsWith('#') && !l.trim().startsWith('//')).length;
+    count.textContent = `${n} line${n === 1 ? '' : 's'}`;
+  };
+  box.addEventListener('input', () => { tally(); fill(out); save.textContent = 'Review changes'; });
+  tally();
+
+  let reviewed = null;
+
+  const pair = (label, list, render) => (list.length
+    ? h('div', { style: { marginTop: '10px' } },
+      h('div.small.muted', `${label} (${list.length})`),
+      h('div.chips', list.slice(0, 40).map(render)),
+      list.length > 40 ? h('div.small.muted', `…and ${list.length - 40} more`) : null)
+    : null);
+
+  save.addEventListener('click', async () => {
+    save.disabled = true;
+    try {
+      if (!reviewed) {
+        const plan = await api.editDeckList({ slug: deck.slug, list: box.value, dry_run: true });
+        reviewed = box.value;
+        fill(out,
+          h('div.flex-wrap', { style: { marginTop: '12px' } },
+            h('span.tag.info', 'preview — nothing saved yet'),
+            h('span.muted.small',
+              `${num(plan.rows)} rows · ${num(plan.card_count)} cards · ${num(plan.owned_count)} owned`)),
+          pair('Added', plan.added, ([n, q]) => h('span.chip.mini.ok', `+${q} ${n}`)),
+          pair('Removed', plan.removed, ([n, q]) => h('span.chip.mini.bad', `−${q} ${n}`)),
+          pair('Quantity changed', plan.changed, ([n, a, b]) => h('span.chip.mini', `${n} ${a}→${b}`)),
+          pair('No longer owned', plan.newly_missing, (n) => h('span.chip.mini.bad', n)),
+          (!plan.added.length && !plan.removed.length && !plan.changed.length)
+            ? h('div.small.muted', { style: { marginTop: '10px' } }, 'No changes.')
+            : null);
+        save.textContent = 'Save list';
+      } else {
+        const r = await api.editDeckList({ slug: deck.slug, list: box.value });
+        close();
+        toast(`Saved — ${num(r.card_count)} cards, ${num(r.owned_count)} owned`, 'ok');
+        detailView(deck.slug);
+      }
+    } catch (e) {
+      // A parse failure comes back with the offending lines; show them all.
+      fill(out, h('div.err', { style: { marginTop: '12px' } },
+        [e.message, ...(e.errors || [])].join('\n')));
+      reviewed = null;
+      save.textContent = 'Review changes';
+    } finally {
+      save.disabled = false;
+    }
+  });
+
+  const scrim = h('div.palette-scrim', {
+    onclick: (e) => { if (e.target === scrim) close(); },
+  }, h('div.palette.wide', { style: { padding: '18px' } },
+    h('div.flex', h('h2', 'Edit list'), h('span.spacer'), count),
+    h('div.muted.small', { style: { margin: '4px 0 12px' } },
+      `One card per line, "2 Sol Ring". This replaces ${deck.name}'s list entirely — `
+      + 'what is in the box is what the deck becomes. # and // are comments.'),
+    h('div.field', box),
+    out,
+    h('div.flex', { style: { marginTop: '12px' } },
+      save,
+      h('button.btn.ghost', { onclick: close }, 'Cancel'))));
+
+  document.body.append(scrim);
+  box.focus();
+}
+
 async function detailView(slug) {
   const root = $('#view');
   fill(root, h('div.wrap', loading('Loading deck')));
@@ -295,6 +387,9 @@ async function detailView(slug) {
         h('button.btn.sm', {
           onclick: () => { location.hash = `#/search?q=&owner=${deck.owner}`; },
         }, 'Search collection'),
+        isAdmin()
+          ? h('button.btn.sm', { onclick: () => editList(deck, cards) }, 'Edit list')
+          : null,
         isAdmin()
           ? h('button.btn.sm.danger', { onclick: () => confirmDisassemble(deck) }, 'Disassemble')
           : null),

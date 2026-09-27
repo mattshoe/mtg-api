@@ -28,6 +28,9 @@ async function call(path, init) {
       const err = new Error(body?.error || `HTTP ${res.status}`);
       err.status = res.status;
       err.adminRequired = Boolean(body?.admin_required);
+      // Per-line complaints from the decklist parser. Without this the
+      // caller only learns that something was wrong, not what.
+      if (Array.isArray(body?.errors)) err.errors = body.errors;
       // The token expired or the Worker's password changed. Drop admin mode
       // so the UI stops offering actions it can no longer perform.
       if (res.status === 401) onUnauthorized();
@@ -90,6 +93,10 @@ export function removeCards(body) {
 
 export function disassembleDeck(body) {
   return post('/decks/disassemble', body);
+}
+
+export function editDeckList(body) {
+  return post('/decks/list', body);
 }
 
 /** cols+rows -> array of objects, for when query() is more convenient. */
