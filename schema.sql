@@ -54,6 +54,7 @@ CREATE TABLE decks (
     slug TEXT UNIQUE,           -- one row per deck, no -vN suffixes
     name TEXT,
     owner TEXT,                 -- 'matt' | 'kayla'; never mix the two
+    format TEXT,                -- 'commander' | 'standard' | 'modern' | ...
     source_file TEXT,
     recorded_date TEXT,
     status TEXT,

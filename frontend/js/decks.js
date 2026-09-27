@@ -7,6 +7,7 @@ import {
 } from './util.js';
 import { openCard } from './card.js';
 import { isAdmin } from './admin.js';
+import { newDeckView } from './newdeck.js';
 
 const COLOR_CSS = { W: 'var(--w)', U: 'var(--u)', B: 'var(--b)', R: 'var(--r)', G: 'var(--g)' };
 
@@ -116,6 +117,7 @@ async function listView() {
         h('h1', 'Decks'),
         h('span.sub', `${decks.length} total`),
         h('span.spacer'),
+        isAdmin() ? h('a.btn.sm.primary', { href: '#/decks/_new' }, '+ New deck') : null,
         h('a.btn.sm', { href: '#/decks/_gaps' }, 'Gaps & conflicts')),
       Object.entries(byOwner).map(([owner, list]) => h('div', { style: { marginBottom: '26px' } },
         h('h2', { style: { marginBottom: '10px', textTransform: 'capitalize' } }, owner, h('span.muted.small', ` · ${list.length}`)),
@@ -479,5 +481,10 @@ function exportDeck(deck, cards) {
 export function show(slug) {
   if (!slug) return listView();
   if (slug === '_gaps') return gapsView();
+  if (slug === '_new') {
+    // Creating a deck writes, so it is admin-only like every other edit.
+    if (!isAdmin()) { location.replace('#/decks'); return undefined; }
+    return newDeckView();
+  }
   return detailView(decodeURIComponent(slug));
 }

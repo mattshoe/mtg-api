@@ -431,25 +431,30 @@ describe('POST /decks/list — the commander field', () => {
     expect(deck.commander).toBe("Arcane Signet // Ambition's Cost");
   });
 
+  // The proxy deck, because it buys nothing: these are about the column,
+  // not about the collection.
+  const PROXY = 'halo-proxy-astor-equipment';
+
   it('leaves the commander column alone when the name has not changed', async () => {
     // The column carries prose the editor's plain field cannot show, so an
     // unchanged name must not overwrite it.
-    const [before] = await sql('SELECT commander FROM decks WHERE slug = ?', SLUG);
+    const [before] = await sql('SELECT commander FROM decks WHERE slug = ?', PROXY);
     expect(before.commander).toMatch(/\(/);          // it has the annotation
 
     const r = await post('/decks/list', {
-      slug: SLUG, commander: 'Kardur, Doomscourge', list: '1 Sol Ring',
-    });
+      slug: PROXY, commander: 'Astor, Bearer of Blades', list: '1 Lightning Bolt',
+    }, stubScryfall());
     expect(r.body.commander_changed).toBe(false);
 
-    const [after] = await sql('SELECT commander FROM decks WHERE slug = ?', SLUG);
+    const [after] = await sql('SELECT commander FROM decks WHERE slug = ?', PROXY);
     expect(after.commander).toBe(before.commander);
   });
 
   it('rewrites the column when the commander really changes', async () => {
-    const r = await post('/decks/list', { slug: SLUG, commander: 'Sol Ring', list: '1 Arcane Signet' });
+    const r = await post('/decks/list',
+      { slug: PROXY, commander: 'Sol Ring', list: '1 Lightning Bolt' }, stubScryfall());
     expect(r.body.commander_changed).toBe(true);
-    const [after] = await sql('SELECT commander FROM decks WHERE slug = ?', SLUG);
+    const [after] = await sql('SELECT commander FROM decks WHERE slug = ?', PROXY);
     expect(after.commander).toBe('Sol Ring');
   });
 
@@ -469,11 +474,14 @@ describe('POST /decks/list — the commander field', () => {
   });
 
   it('without the field at all, the old name-matching still applies', async () => {
-    const r = await post('/decks/list', { slug: SLUG, list: '1 Kardur, Doomscourge\n1 Sol Ring' });
+    // On the proxy deck, so the assertion is about the role and not about
+    // going shopping for an Astor.
+    const r = await post('/decks/list',
+      { slug: PROXY, list: '1 Astor, Bearer of Blades\n1 Lightning Bolt' }, stubScryfall());
     expect(r.status).toBe(200);
     const [row] = await sql(
       `SELECT dc.role FROM deck_cards dc JOIN decks d ON d.id = dc.deck_id
-        WHERE d.slug = ? AND dc.name LIKE 'Kardur%'`, SLUG,
+        WHERE d.slug = ? AND dc.name LIKE 'Astor%'`, PROXY,
     );
     expect(row.role).toBe('commander');
   });
@@ -592,7 +600,7 @@ describe('POST /decks/list — bulk', () => {
     const r = await post('/decks/list',
       { slug: SLUG, list: '1 Utter Nonsense Not A Card' }, stubScryfall());
     expect(r.status).toBe(400);
-    expect(r.body.error).toMatch(/unchanged/);
+    expect(r.body.error).toMatch(/nothing was changed/);
     expect(await listOf(SLUG)).toBe(listBefore);
     expect(await snapshot()).toEqual(snap);
   });
@@ -636,5 +644,149 @@ describe('POST /decks/list — bulk', () => {
       "SELECT COALESCE(SUM(qty),0) q FROM cards WHERE owner='matt' AND name_norm='sol ring'",
     ))[0].q;
     expect(after).toBe(before + bought);
+  });
+});
+
+// -------------------------------------------------------------- creating
+
+describe('POST /decks/create', () => {
+  const NEW = { name: 'Test Brew', format: 'commander', owner: 'matt', commander: 'Sol Ring' };
+
+  it('refuses without a token', async () => {
+    const snap = await snapshot();
+    const r = await postAnon('/decks/create', { ...NEW, list: '1 Lightning Bolt' });
+    expect(r.status).toBe(401);
+    expect(await snapshot()).toEqual(snap);
+  });
+
+  it('insists on a name, a known format and a real owner', async () => {
+    const bad = [
+      [{ ...NEW, name: '' }, /name/],
+      [{ ...NEW, format: 'pauperish' }, /format/],
+      [{ ...NEW, owner: '' }, /whose/],
+      [{ ...NEW, owner: 'dave' }, /whose/],
+    ];
+    for (const [body, pattern] of bad) {
+      const r = await post('/decks/create', { ...body, list: '1 Lightning Bolt' }, stubScryfall());
+      expect(r.status, JSON.stringify(body)).toBe(400);
+      expect(r.body.error).toMatch(pattern);
+    }
+    expect(await count('decks', "slug = 'test-brew'")).toBe(0);
+  });
+
+  it('insists on a commander for a commander deck, but not for standard', async () => {
+    const without = { name: 'Test Brew', format: 'commander', owner: 'matt', list: '1 Lightning Bolt' };
+    expect((await post('/decks/create', without, stubScryfall())).body.error).toMatch(/commander/);
+
+    const std = { name: 'Test Std', format: 'standard', owner: 'matt', list: '4 Lightning Bolt' };
+    const r = await post('/decks/create', std, stubScryfall());
+    expect(r.status).toBe(201);
+    const [deck] = await sql('SELECT format, commander FROM decks WHERE slug = ?', 'test-std');
+    expect(deck).toEqual({ format: 'standard', commander: null });
+  });
+
+  it('rejects a bracket outside 1-5', async () => {
+    const r = await post('/decks/create',
+      { ...NEW, bracket: '9', list: '1 Lightning Bolt' }, stubScryfall());
+    expect(r.body.error).toMatch(/bracket/);
+  });
+
+  it('refuses to collide with an existing deck', async () => {
+    // Slugs come from the name, so a different name that reduces to the
+    // same slug is the collision worth catching.
+    const r = await post('/decks/create',
+      { ...NEW, name: 'Chaos Incarnate Precon!', list: '1 Lightning Bolt' }, stubScryfall());
+    expect(r.status).toBe(409);
+    expect(r.body.error).toMatch(/already exists/);
+    expect(r.body.slug).toBe('chaos-incarnate-precon');
+  });
+
+  it('creates the deck, its list, and the cards to back it', async () => {
+    const r = await post('/decks/create',
+      { ...NEW, bracket: '3', theme: 'artifacts', list: '2 Lightning Bolt' }, stubScryfall());
+
+    expect(r.status).toBe(201);
+    expect(r.body.created).toBe(true);
+    expect(r.body.slug).toBe('test-brew');
+
+    const [deck] = await sql(
+      'SELECT slug, name, owner, format, commander, bracket, theme, is_proxy, card_count, owned_count FROM decks WHERE slug = ?',
+      'test-brew',
+    );
+    expect(deck).toMatchObject({
+      slug: 'test-brew', name: 'Test Brew', owner: 'matt', format: 'commander',
+      commander: 'Sol Ring', bracket: '3', theme: 'artifacts', is_proxy: 0,
+    });
+    expect(deck.card_count).toBe(3);      // the commander plus two bolts
+    expect(deck.owned_count).toBe(3);
+
+    const rows = await sql(
+      `SELECT dc.qty, dc.name, dc.role FROM deck_cards dc JOIN decks d ON d.id = dc.deck_id
+        WHERE d.slug = ? ORDER BY dc.name`, 'test-brew',
+    );
+    expect(rows).toEqual([
+      { qty: 2, name: 'Lightning Bolt', role: 'spell' },
+      { qty: 1, name: 'Sol Ring', role: 'commander' },
+    ]);
+
+    // it bought what it needed rather than claiming cards from nowhere
+    expect(r.body.acquired).toEqual(expect.arrayContaining([['Sol Ring', 1], ['Lightning Bolt', 2]]));
+    expect(await count('deck_gaps', 'slug = ?', 'test-brew')).toBe(0);
+  });
+
+  it('gives the new deck a fresh id rather than reusing one', async () => {
+    const before = await sql('SELECT id FROM decks ORDER BY id');
+    await post('/decks/create', { ...NEW, list: '1 Lightning Bolt' }, stubScryfall());
+    const after = await sql('SELECT id FROM decks ORDER BY id');
+    expect(after).toHaveLength(before.length + 1);
+    expect(new Set(after.map((r) => r.id)).size).toBe(after.length);
+  });
+
+  it('a dry run creates nothing', async () => {
+    const snap = await snapshot();
+    const r = await post('/decks/create',
+      { ...NEW, list: '2 Lightning Bolt', dry_run: true }, stubScryfall());
+    expect(r.status).toBe(200);
+    expect(r.body.created).toBeFalsy();
+    expect(r.body.acquired.length).toBeGreaterThan(0);
+    expect(await snapshot()).toEqual(snap);
+  });
+
+  it('creates nothing at all when a card cannot be resolved', async () => {
+    const snap = await snapshot();
+    const r = await post('/decks/create',
+      { ...NEW, list: '1 Utter Nonsense Not A Card' }, stubScryfall());
+    expect(r.status).toBe(400);
+    expect(await snapshot()).toEqual(snap);
+    expect(await count('decks', "slug = 'test-brew'")).toBe(0);
+  });
+
+  it('refuses an empty list', async () => {
+    const r = await post('/decks/create', { ...NEW, list: '  \n# nothing' }, stubScryfall());
+    expect(r.status).toBe(400);
+    expect(r.body.error).toMatch(/empty/);
+  });
+
+  it('takes a proxy deck, which buys nothing', async () => {
+    const cards = await count('cards');
+    const r = await post('/decks/create',
+      { ...NEW, name: 'Proxy Brew', is_proxy: true, list: '4 Lightning Bolt' }, stubScryfall());
+    expect(r.status).toBe(201);
+    expect(r.body.acquired).toEqual([]);
+    expect(await count('cards')).toBe(cards);
+    const [deck] = await sql('SELECT is_proxy FROM decks WHERE slug = ?', 'proxy-brew');
+    expect(deck.is_proxy).toBe(1);
+  });
+});
+
+describe('GET /decks/formats', () => {
+  it('lists the formats, saying which take a commander', async () => {
+    const r = await get('/decks/formats');
+    expect(r.status).toBe(200);
+    const ids = r.body.formats.map((f) => f.id);
+    expect(ids).toContain('commander');
+    expect(ids).toContain('standard');
+    expect(r.body.formats.find((f) => f.id === 'commander').singleton).toBe(true);
+    expect(r.body.formats.find((f) => f.id === 'standard').singleton).toBeUndefined();
   });
 });

@@ -171,12 +171,25 @@ async function anyPrintingIndex(db, keys) {
 export async function editDeckList(db, body, fetchImpl) {
   const slug = String(body?.slug || '').trim();
   if (!slug) return { status: 400, body: { error: 'slug is required' } };
-  if (typeof body?.list !== 'string') return { status: 400, body: { error: 'list must be a string' } };
 
   const deck = await db.prepare(
     'SELECT id, slug, name, owner, commander, is_proxy, status FROM decks WHERE slug = ?',
   ).bind(slug).first();
   if (!deck) return { status: 404, body: { error: `no deck with slug "${slug}"` } };
+
+  return planAndWrite(db, deck, body, fetchImpl);
+}
+
+/**
+ * The work behind both editing a list and creating a deck with one.
+ *
+ * `deck` is a row for an existing deck, or a deck-shaped object with
+ * `id: null` for one that does not exist yet — everything here treats an
+ * absent id as "no deck_cards rows and no prior claim", which is exactly
+ * what a new deck is.
+ */
+async function planAndWrite(db, deck, body, fetchImpl) {
+  if (typeof body?.list !== 'string') return { status: 400, body: { error: 'list must be a string' } };
 
   const hasCommanderField = typeof body.commander === 'string';
   const cmdrParsed = hasCommanderField ? parseList(body.commander) : { items: [], errors: [] };
@@ -189,7 +202,14 @@ export async function editDeckList(db, body, fetchImpl) {
     };
   }
   if (!items.length) {
-    return { status: 400, body: { error: 'the list is empty — disassemble the deck instead' } };
+    return {
+      status: 400,
+      body: {
+        error: deck.id
+          ? 'the list is empty — disassemble the deck instead'
+          : 'the list is empty',
+      },
+    };
   }
   if (items.length > MAX_ROWS) {
     return { status: 400, body: { error: `${items.length} lines is over the ${MAX_ROWS} limit` } };
@@ -212,10 +232,12 @@ export async function editDeckList(db, body, fetchImpl) {
   const [owned, anywhere, currentRows, elsewhere] = await Promise.all([
     ownedIndex(db, deck.owner, keys),
     anyPrintingIndex(db, keys),
-    db.prepare(
-      'SELECT qty, name, name_norm, role, section, in_collection FROM deck_cards WHERE deck_id = ?',
-    ).bind(deck.id).all(),
-    claimedElsewhere(db, deck.owner, deck.id, keys),
+    deck.id
+      ? db.prepare(
+        'SELECT qty, name, name_norm, role, section, in_collection FROM deck_cards WHERE deck_id = ?',
+      ).bind(deck.id).all()
+      : { results: [] },
+    claimedElsewhere(db, deck.owner, deck.id ?? -1, keys),
   ]);
 
   // A proxy or merely PROPOSED deck is not made of real cards — card_usage
@@ -224,6 +246,8 @@ export async function editDeckList(db, body, fetchImpl) {
   const physical = !deck.is_proxy && !(deck.status || '').startsWith('PROPOSED');
   const current = new Map((currentRows.results || []).map((r) => [r.name_norm, r]));
   const cmdr = commanderNorm(deck.commander);
+  // A deck being created has no stored commander to compare against, so
+  // whatever the field says is by definition the new one.
 
   // What the deck needs that bulk cannot cover. Putting a card in a deck
   // means it came from somewhere: out of bulk if a copy was spare, and
@@ -323,35 +347,66 @@ export async function editDeckList(db, body, fetchImpl) {
   // collection does not have.
   let acquisition = null;
   if (shortfall.length) {
-    acquisition = await addCards(db, {
+    const purchase = {
       owner: deck.owner,
       list: shortfall.map(([name, n]) => `${n} ${name}`).join('\n'),
-    }, fetchImpl);
-    if (acquisition.status !== 200 || acquisition.body?.failed) {
-      return {
-        status: acquisition.status === 200 ? 400 : acquisition.status,
-        body: {
-          error: 'could not acquire the cards this list needs, so the deck is unchanged',
-          errors: acquisition.body?.errors || [acquisition.body?.error].filter(Boolean),
-          acquired: shortfall,
-        },
-      };
-    }
+    };
+    const refuse = (a) => ({
+      status: a.status === 200 ? 400 : a.status,
+      body: {
+        error: 'could not acquire the cards this list needs, so nothing was changed',
+        errors: a.body?.errors || [a.body?.error].filter(Boolean),
+        acquired: shortfall,
+      },
+    });
+
+    // Check the whole purchase resolves before any of it is written.
+    // /cards/add applies the lines it understood and reports the rest,
+    // which is right for a bare import but wrong here: a deck that failed
+    // to save must not leave half its shopping list in the collection.
+    const check = await addCards(db, { ...purchase, dry_run: true }, fetchImpl);
+    if (check.status !== 200 || check.body?.failed) return refuse(check);
+
+    acquisition = await addCards(db, purchase, fetchImpl);
+    if (acquisition.status !== 200 || acquisition.body?.failed) return refuse(acquisition);
   }
 
-  const statements = [
-    db.prepare('DELETE FROM deck_cards WHERE deck_id = ?').bind(deck.id),
-    ...rows.map((r) => db.prepare(`
+  const statements = [];
+  let deckId = deck.id;
+
+  if (!deckId) {
+    // Pick the id rather than relying on last_insert_rowid() between
+    // statements, so creating the deck and filling it stay one batch and
+    // a failure cannot leave an empty deck behind. The UNIQUE slug is
+    // what actually guards against a collision.
+    const max = await db.prepare('SELECT COALESCE(MAX(id), 0) AS n FROM decks').first();
+    deckId = (max?.n ?? 0) + 1;
+    statements.push(db.prepare(`
+      INSERT INTO decks (id, slug, name, owner, format, recorded_date, status,
+                         colors, commander, theme, bracket, is_proxy, card_count, owned_count)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
+      deckId, deck.slug, deck.name, deck.owner, deck.format,
+      new Date().toISOString().slice(0, 10), deck.status ?? null,
+      deck.colors ?? null, deck.commander ?? null, deck.theme ?? null,
+      deck.bracket ?? null, deck.is_proxy ? 1 : 0, cardCount, ownedCount,
+    ));
+  } else {
+    statements.push(db.prepare('DELETE FROM deck_cards WHERE deck_id = ?').bind(deckId));
+  }
+
+  statements.push(...rows.map((r) => db.prepare(`
       INSERT INTO deck_cards (deck_id, qty, name, name_norm, raw_name, oracle_id, role, section, in_collection)
       VALUES (?,?,?,?,?,?,?,?,?)`).bind(
-      deck.id, r.qty, r.name, r.name_norm, r.raw_name, r.oracle_id, r.role, r.section, r.in_collection,
-    )),
-    db.prepare('UPDATE decks SET card_count = ?, owned_count = ? WHERE id = ?')
-      .bind(cardCount, ownedCount, deck.id),
-  ];
-  if (hasCommanderField && newCommander !== null) {
-    statements.push(db.prepare('UPDATE decks SET commander = ? WHERE id = ?')
-      .bind(newCommander, deck.id));
+    deckId, r.qty, r.name, r.name_norm, r.raw_name, r.oracle_id, r.role, r.section, r.in_collection,
+  )));
+
+  if (deck.id) {
+    statements.push(db.prepare('UPDATE decks SET card_count = ?, owned_count = ? WHERE id = ?')
+      .bind(cardCount, ownedCount, deckId));
+    if (hasCommanderField && newCommander !== null) {
+      statements.push(db.prepare('UPDATE decks SET commander = ? WHERE id = ?')
+        .bind(newCommander, deckId));
+    }
   }
   // One batch: a deck that lost its list but never got the new one back is
   // not a state worth being able to reach.
@@ -366,4 +421,95 @@ export async function editDeckList(db, body, fetchImpl) {
       acquired_notes: acquisition?.body?.notes || [],
     },
   };
+}
+
+// -------------------------------------------------------------- creating
+
+/**
+ * The formats the wizard offers. Commander is the only one that has a
+ * commander or a bracket, which is what the wizard branches on.
+ */
+export const FORMATS = [
+  { id: 'commander', label: 'Commander / EDH', singleton: true, size: 100 },
+  { id: 'brawl', label: 'Brawl', singleton: true, size: 60 },
+  { id: 'standard', label: 'Standard', size: 60 },
+  { id: 'pioneer', label: 'Pioneer', size: 60 },
+  { id: 'modern', label: 'Modern', size: 60 },
+  { id: 'legacy', label: 'Legacy', size: 60 },
+  { id: 'vintage', label: 'Vintage', size: 60 },
+  { id: 'pauper', label: 'Pauper', size: 60 },
+  { id: 'limited', label: 'Limited / Draft', size: 40 },
+  { id: 'casual', label: 'Casual / kitchen table' },
+];
+
+const FORMAT_IDS = new Set(FORMATS.map((f) => f.id));
+const COMMANDER_FORMATS = new Set(FORMATS.filter((f) => f.singleton).map((f) => f.id));
+const OWNERS = new Set(['matt', 'kayla']);
+
+/** A name -> a slug that is safe in a URL and unlikely to collide. */
+export function slugify(name) {
+  return String(name || '')
+    .toLowerCase()
+    .normalize('NFKD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60);
+}
+
+/**
+ * Create a deck from the wizard, list and all.
+ *
+ * Everything the wizard asks for is validated here rather than only in
+ * the browser, because the browser is not the only caller and a deck with
+ * no owner or a duplicate slug is not worth being able to make.
+ */
+export async function createDeck(db, body, fetchImpl) {
+  const name = String(body?.name || '').trim();
+  const format = String(body?.format || '').trim().toLowerCase();
+  const owner = String(body?.owner || '').trim().toLowerCase();
+
+  if (!name) return { status: 400, body: { error: 'the deck needs a name' } };
+  if (name.length > 200) return { status: 400, body: { error: 'that name is too long' } };
+  if (!FORMAT_IDS.has(format)) {
+    return { status: 400, body: { error: 'pick a format', formats: [...FORMAT_IDS] } };
+  }
+  if (!OWNERS.has(owner)) {
+    return { status: 400, body: { error: 'pick whose deck this is', owners: [...OWNERS] } };
+  }
+
+  const wantsCommander = COMMANDER_FORMATS.has(format);
+  const commander = wantsCommander ? String(body?.commander || '').trim() : '';
+  if (wantsCommander && !commander) {
+    return { status: 400, body: { error: `a ${format} deck needs a commander` } };
+  }
+
+  const bracket = wantsCommander && body?.bracket ? String(body.bracket).trim() : null;
+  if (bracket && !/^[1-5]$/.test(bracket)) {
+    return { status: 400, body: { error: 'bracket is 1 to 5' } };
+  }
+
+  const slug = String(body?.slug || '').trim() || slugify(name);
+  if (!slug) return { status: 400, body: { error: 'that name does not make a usable slug' } };
+  const clash = await db.prepare('SELECT slug FROM decks WHERE slug = ?').bind(slug).first();
+  if (clash) {
+    return { status: 409, body: { error: `a deck already exists at "${slug}"`, slug } };
+  }
+
+  const deck = {
+    id: null,
+    slug,
+    name,
+    owner,
+    format,
+    commander: commander || null,
+    theme: String(body?.theme || '').trim() || null,
+    bracket,
+    is_proxy: body?.is_proxy ? 1 : 0,
+    status: body?.status ? String(body.status).trim() : null,
+    colors: null,
+  };
+
+  const r = await planAndWrite(db, deck, { ...body, commander }, fetchImpl);
+  if (r.status !== 200) return r;
+  return { status: r.body.applied ? 201 : 200, body: { ...r.body, created: r.body.applied, slug } };
 }

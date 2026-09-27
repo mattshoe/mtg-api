@@ -99,6 +99,14 @@ export function editDeckList(body) {
   return post('/decks/list', body);
 }
 
+export function createDeck(body) {
+  return post('/decks/create', body);
+}
+
+export function deckFormats() {
+  return call('/decks/formats', { method: 'GET' });
+}
+
 /** cols+rows -> array of objects, for when query() is more convenient. */
 export function toObjects(res) {
   return res.rows.map((r) => Object.fromEntries(res.cols.map((c, i) => [c, r[i]])));

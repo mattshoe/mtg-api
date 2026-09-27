@@ -496,6 +496,12 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
 
 /* step two is one decision, so make it one decision's worth of target */
 .owner-pick { display: flex; gap: 10px; flex-wrap: wrap; }
+/* the format grid wants more than two across */
+.fmt-pick { display: grid; gap: 9px; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); }
+.fmt-pick .owner-opt { min-width: 0; text-align: left; padding: 13px 14px; font-size: 14px; }
+label.check { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; cursor: pointer; }
+label.check input { width: auto; margin: 0; }
+label.check .small { flex-basis: 100%; }
 .owner-pick .owner-opt {
   flex: 1; min-width: 130px; padding: 18px 16px;
   border: 1px solid var(--line-2); border-radius: var(--radius);

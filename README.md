@@ -222,6 +222,24 @@ The three deletes are one batch. Half of them would leave `deck_cards`
 rows pointing at a deck that no longer exists, and those would count
 against `free` forever.
 
+### `POST /decks/create`
+
+```json
+{"name": "Fairy Deck", "format": "commander", "owner": "kayla",
+ "commander": "Alela, Cunning Conqueror", "bracket": "3", "list": "1 Bitterblossom\n…"}
+```
+
+A new deck, list and all, behind the wizard at `#/decks/_new`. Admin only.
+`GET /decks/formats` is the dropdown's source and says which formats take
+a commander. The slug comes from the name and a clash is a 409 rather
+than a second deck at the same URL.
+
+Everything the wizard asks is validated here too, because the browser is
+not the only caller. Creating goes through the same path as editing a
+list, so a new deck draws its cards out of bulk and acquires whatever
+bulk cannot cover — a dry run shows that shopping list before anything is
+written, and if any of it cannot be resolved nothing is created at all.
+
 ### `POST /decks/list`
 
 ```json
