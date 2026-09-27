@@ -11,7 +11,7 @@
 import * as api from './api.js';
 import { h, $, fill, num, toast, store, errorBox } from './util.js';
 import { isAdmin } from './admin.js';
-import { takeShared } from './share.js';
+import { sharedNow, shareUsed } from './share.js';
 
 const HISTORY_KEY = 'history';
 const MAX_HISTORY = 30;
@@ -131,7 +131,11 @@ let flow = null;
 const blank = (mode) => ({
   mode,
   step: 'list',
-  list: '',
+  // A decklist shared in from another Android app is just a list somebody
+  // already typed, so it starts in the box. Seeding it here rather than
+  // filling the box after the render is what makes it survive being
+  // rendered twice, which is the normal case on a phone.
+  list: mode === 'add' ? (sharedNow()?.list || '') : '',
   // Deliberately nothing. Remembering the last choice, or defaulting to
   // matt, is how a list lands in the wrong person's collection — the
   // whole reason this is its own step is to make it a decision.
@@ -155,6 +159,9 @@ function stepper() {
 }
 
 function goto(step) {
+  // Past step one the list belongs to the flow, so the share it came from
+  // is spent and must not seed the box again.
+  if (step !== 'list') shareUsed();
   // Nothing past step two happens without an owner, whatever calls this.
   if ((step === 'review' || step === 'done') && !flow.owner) {
     flow.step = 'who';
@@ -278,7 +285,12 @@ function stepList() {
         next,
         h('span.spacer'),
         h('button.btn.sm.ghost', {
-          onclick: () => { listInput.value = ''; updateCount(); listInput.focus(); },
+          onclick: () => {
+            shareUsed();   // emptied on purpose, so do not seed it back
+            listInput.value = '';
+            updateCount();
+            listInput.focus();
+          },
         }, 'Clear'))));
 }
 
@@ -461,21 +473,14 @@ function render(mode) {
   paint();
 }
 
-export async function show(mode) {
+export function show(mode) {
   render(mode === 'remove' ? 'remove' : 'add');
-  if (flow.mode !== 'add' || !isAdmin()) return;
 
-  // Something was shared into the app from the Android share sheet. This
-  // is the first point at which the page can actually hold it, so it is
-  // also the first point at which it leaves the cache. It fills the box
-  // and stops there — the owner step and the dry run are still ahead of
-  // it, the same as anything typed.
-  const mine = flow;
-  const shared = await takeShared();
-  if (!shared?.list || flow !== mine) return;
-  flow.list = shared.list;
-  paint();
-
+  // The list is already in the box by now; this only says where it came
+  // from, once, however many times the page gets rendered.
+  const shared = flow.mode === 'add' ? sharedNow() : null;
+  if (!shared || shared.announced) return;
+  shared.announced = true;
   const n = countCards(shared.list);
   const from = shared.names?.length ? ` from ${shared.names.join(', ')}` : '';
   toast(`Loaded ${n} card${n === 1 ? '' : 's'}${from}`, 'ok');

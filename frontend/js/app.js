@@ -8,7 +8,7 @@ import {
 } from './admin.js';
 import { openCard, closeCard, openCardId, hideCardForRoute } from './card.js';
 import { pushOverlay, dropOverlay } from './overlay.js';
-import { registerWorker, sharedWaiting, watchShares } from './share.js';
+import { registerWorker, loadShare, sharedNow, watchShares } from './share.js';
 import * as search from './search.js';
 import * as decks from './decks.js';
 import * as manage from './manage.js';
@@ -263,7 +263,10 @@ registerWorker();
 // same history entry, and the login dialog's own entry lost.
 async function boot() {
   if (!location.hash) location.hash = '#/search';
-  if (parseHash().view !== 'add' && await sharedWaiting()) {
+  // Before the first render, because the add page takes the list without
+  // awaiting anything — it has to already be in hand by then.
+  await loadShare();
+  if (sharedNow() && parseHash().view !== 'add') {
     location.replace('#/add');   // fires hashchange, which routes
     return;
   }
