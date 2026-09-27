@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Export the five collection shards as one data.sql for `wrangler d1 import`.
+"""SPENT — the one-time migration, kept for the record. Do not run it.
+
+Export the five collection shards as one data.sql for `wrangler d1 import`.
+
+This ran once, on 2026-09-26. The shards it reads have been frozen ever
+since and D1 has moved on, so running it again would overwrite the live
+collection with a pre-migration snapshot.
 
 The shards are opened read-only and immutable. This script never writes to
 them, and the old pipeline keeps running while it reads.

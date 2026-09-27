@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Compare the live API against the old collection shards, row for row.
+"""SPENT — the migration parity check, kept for the record.
+
+Compare the live API against the old collection shards, row for row.
+
+It was meaningful on migration day. The shards are frozen and the API has
+taken every write since, so every difference it reports now is expected and
+none of them are informative.
 
 The unit suite proves the Worker is correct against a fixture. This proves
 the migration landed the real data. Read-only on both sides, safe to run any

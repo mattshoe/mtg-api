@@ -473,9 +473,9 @@ printf 'newpassword' | npx wrangler secret put ADMIN_PASSWORD
 | `scripts/refresh_prices.py` | prices from the local Scryfall bulk file, no API calls |
 | `scripts/nightly.sh` | backup + tag backfill, run by launchd at 03:00 |
 | `scripts/backfill.py` | tags from the local Scryfall index (writes, so it unlocks first) |
-| `scripts/verify.py` | compare the API against the old shards, table by table |
-| `scripts/seed.py` | one-time: the five old shards -> `data.sql` |
-| `scripts/make_fixture.py` | regenerate the test fixture |
+| `scripts/verify.py` | spent: the migration-day parity check against the old shards |
+| `scripts/seed.py` | spent: one-time, the five old shards -> `data.sql` |
+| `scripts/make_fixture.py` | regenerate the test fixture, from the live API |
 
 ## Logging
 
