@@ -32,7 +32,7 @@ export function h(spec, props, ...kids) {
       else el.className += ` ${v}`;
     } else if (k === 'html') el.innerHTML = v;
     else if (k === 'text') el.textContent = v;
-    else if (k === 'style' && typeof v === 'object') Object.assign(el.style, v);
+    else if (k === 'style' && typeof v === 'object') setStyle(el, v);
     else if (k.startsWith('on') && typeof v === 'function') el.addEventListener(k.slice(2), v);
     else if (k === 'dataset') Object.assign(el.dataset, v);
     else if (v === true) el.setAttribute(k, '');
@@ -40,6 +40,21 @@ export function h(spec, props, ...kids) {
   }
   add(el, kids);
   return el;
+}
+
+/**
+ * Apply a style object, custom properties included.
+ *
+ * Object.assign onto a CSSStyleDeclaration silently drops anything it does
+ * not recognise as a property, and `--a1` is not one — so the hybrid mana
+ * pips set their two colours, got neither, and rendered dark text on a dark
+ * panel at about 1.1:1. Custom properties need setProperty.
+ */
+function setStyle(el, styles) {
+  for (const [k, v] of Object.entries(styles)) {
+    if (k.startsWith('--')) el.style.setProperty(k, v);
+    else el.style[k] = v;
+  }
 }
 
 function add(el, kids) {

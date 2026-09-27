@@ -1,7 +1,7 @@
-// Shell: routing, theme, keyboard shortcuts, quick find.
+// Shell: routing, keyboard shortcuts, quick find.
 
 import * as api from './api.js';
-import { h, $, $$, fill, store, debounce, imageUrl, toast } from './util.js';
+import { h, $, $$, fill, debounce, imageUrl, toast } from './util.js';
 import {
   adminButton, isAdmin, onAdminChange, promptUnlock, lock,
   authHeader, rejected,
@@ -14,22 +14,6 @@ import * as manage from './manage.js';
 import * as stats from './stats.js';
 import * as sqlConsole from './console.js';
 import * as logs from './logs.js';
-
-// ------------------------------------------------------------------ theme
-
-function applyTheme(t) {
-  if (t === 'auto') document.documentElement.removeAttribute('data-theme');
-  else document.documentElement.setAttribute('data-theme', t);
-  store.set('theme', t);
-}
-
-function toggleTheme() {
-  const cur = document.documentElement.getAttribute('data-theme')
-    || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
-  applyTheme(cur === 'dark' ? 'light' : 'dark');
-}
-
-applyTheme(store.get('theme', 'auto'));
 
 // Hand the API client the auth hooks. Done here rather than by importing
 // admin.js from api.js, so the dependency runs one way only.
@@ -207,12 +191,11 @@ addEventListener('keydown', (e) => {
     if (!GATED.has(go) || isAdmin()) location.hash = `#/${go}`;
     return;
   }
-  if (e.key === 't') toggleTheme();
   if (e.key === 'l') (isAdmin() ? lock() : promptUnlock());
   if (e.key === '/') { e.preventDefault(); openPalette(); }
   if (e.key === '?') {
     toast(`s search · d decks${isAdmin() ? ' · a add · r remove' : ''} · g stats · c console`
-      + `${isAdmin() ? ' · v logs' : ''} · l ${isAdmin() ? 'lock' : 'unlock'} · t theme`
+      + `${isAdmin() ? ' · v logs' : ''} · l ${isAdmin() ? 'lock' : 'unlock'}`
       + ' · / or ⌘K find · esc close');
   }
 });
@@ -220,7 +203,6 @@ addEventListener('keydown', (e) => {
 // ----------------------------------------------------------------- wiring
 
 $('.topbar-right').prepend(adminButton());
-$('#theme-btn').addEventListener('click', toggleTheme);
 
 // The gated tabs appear and disappear with the lock. Locking while one of
 // them is open also has to move you off it, or the view stays on screen

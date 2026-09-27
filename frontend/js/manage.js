@@ -303,7 +303,8 @@ function stepWho() {
           disabled: !picked,
           title: picked ? '' : 'Pick whose collection this goes to',
           onclick: () => goto('review'),
-        }, picked ? `Preview changes · ${flow.owner} →` : 'Pick one to continue'))));
+        }, picked ? `Preview changes · ${flow.owner} →` : 'Pick one to continue'),
+        picked ? null : h('span.small.says', 'Pick whose collection this goes to.'))));
 }
 
 // ----------------------------------------------------------- 3. review

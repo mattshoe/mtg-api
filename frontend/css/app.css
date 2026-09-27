@@ -9,9 +9,14 @@
   --bg-hover:  #222b37;
   --line:      #262f3c;
   --line-2:    #344052;
+  /* Contrast against the three surfaces below, at the worst of them:
+     text 12.9:1, text-2 7.3:1, text-3 5.4:1. WCAG AA wants 4.5:1 for
+     normal text, and --text-3 used to be 3.5:1 — under it everywhere,
+     which is why the hints and the labels were hard to read. Nothing here
+     is allowed below 4.5 again. */
   --text:      #e4e9f0;
-  --text-2:    #9aa7b8;
-  --text-3:    #6b7889;
+  --text-2:    #a4b1c2;
+  --text-3:    #94a1b2;
   --accent:    #d4a24c;
   --accent-2:  #f0c070;
   --accent-dim:#3a2f18;
@@ -29,29 +34,6 @@
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
   --topbar-h: 54px;
 }
-
-:root[data-theme="light"] {
-  --bg:        #f6f7f9;
-  --bg-2:      #ffffff;
-  --bg-3:      #eef1f5;
-  --bg-hover:  #e4e9f0;
-  --line:      #dde3ea;
-  --line-2:    #c6cfda;
-  --text:      #16202c;
-  --text-2:    #5a6878;
-  --text-3:    #8695a6;
-  --accent:    #9a6c14;
-  --accent-2:  #7d570c;
-  --accent-dim:#f5e9cf;
-  --ok:        #2f7d52;
-  --warn:      #9a6a12;
-  --bad:       #b2333c;
-  --info:      #2a6ba8;
-
-  --w: #b9a94a; --u: #2f7fc0; --b: #6a5f70; --r: #c25a3f; --g: #3d8f56; --c: #7c8a99;
-  --shadow: 0 8px 30px rgba(22,32,44,.12);
-}
-
 * { box-sizing: border-box; }
 
 /* .drawer and .palette-scrim set display, which would beat the default
@@ -126,9 +108,6 @@ h3 { font-size: 14px; }
 }
 .icon-btn:hover { background: var(--bg-hover); color: var(--text); }
 .icon-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
-.ico-sun { display: none; }
-:root[data-theme="light"] .ico-sun { display: block; }
-:root[data-theme="light"] .ico-moon { display: none; }
 
 .nav-toggle { display: none; }
 
@@ -147,7 +126,7 @@ main { min-height: calc(100vh - var(--topbar-h)); }
   display: flex; align-items: center; gap: 10px;
   padding: 11px 14px; border-bottom: 1px solid var(--line); background: var(--bg-3);
 }
-.panel-head h2 { flex: 1; font-size: 13px; letter-spacing: .02em; text-transform: uppercase; color: var(--text-2); }
+.panel-head h2 { flex: 1; font-size: 13px; letter-spacing: .02em; text-transform: uppercase; color: var(--text); }
 
 /* The results bar carries seven controls. On a phone they have to wrap
    rather than run off the edge, and the count must not hog the slack. */
@@ -161,8 +140,9 @@ main { min-height: calc(100vh - var(--topbar-h)); }
 .page-head .sub { color: var(--text-2); font-size: 13px; }
 
 /* ---------------------------------------------------------------- forms */
+/* A field label is not decoration — it is the question being asked. */
 label { display: block; font-size: 11.5px; font-weight: 600; text-transform: uppercase;
-        letter-spacing: .04em; color: var(--text-3); margin-bottom: 5px; }
+        letter-spacing: .04em; color: var(--text); margin-bottom: 5px; }
 
 input[type=text], input[type=number], input[type=search], select, textarea {
   width: 100%; padding: 8px 10px;
@@ -323,7 +303,7 @@ td.mono { font-family: var(--mono); font-size: 12.5px; }
 .flavor { white-space: pre-wrap; font-style: italic; color: var(--text-3); font-size: 12.5px; margin-top: 8px; }
 
 .kv { display: grid; grid-template-columns: max-content 1fr; gap: 5px 14px; font-size: 13px; }
-.kv dt { color: var(--text-3); font-size: 11.5px; text-transform: uppercase; letter-spacing: .03em; padding-top: 2px; }
+.kv dt { color: var(--text-2); font-size: 11.5px; text-transform: uppercase; letter-spacing: .03em; padding-top: 2px; }
 .kv dd { margin: 0; }
 
 .sec { margin-top: 20px; }
@@ -345,6 +325,9 @@ td.mono { font-family: var(--mono); font-size: 12.5px; }
 .bar-row .val { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-2); font-size: 12.5px; }
 
 .muted { color: var(--text-3); }
+/* For the sentence that tells you what to do next, or what went wrong.
+   Dimming that is the one place the muted grey is actively wrong. */
+.says { color: var(--text); }
 .small { font-size: 12.5px; }
 .mono { font-family: var(--mono); }
 .nowrap { white-space: nowrap; }

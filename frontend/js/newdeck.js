@@ -327,7 +327,7 @@ function sourceBody() {
 
   return h('div',
     h('div.flex-wrap', { style: { marginBottom: '10px' } },
-      h('span.small.muted', 'Set every card at once:'),
+      h('span.small.says', 'Set every card at once:'),
       h('button.btn.sm', { onclick: () => setAll(decidable, 'bulk') }, 'All from bulk'),
       other && transferable.length
         ? h('button.btn.sm', {
@@ -454,7 +454,7 @@ function paint() {
               disabled: Boolean(b),
               onclick: () => go(1),
             }, 'Continue →'),
-          h('span.small.muted', { id: 'wiz-why' }, last ? '' : (b || '')))))));
+          h('span.small.says', { id: 'wiz-why' }, last ? '' : (b || '')))))));
 }
 
 export async function newDeckView() {
