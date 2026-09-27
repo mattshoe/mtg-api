@@ -222,6 +222,26 @@ The three deletes are one batch. Half of them would leave `deck_cards`
 rows pointing at a deck that no longer exists, and those would count
 against `free` forever.
 
+### `POST /cards/validate`
+
+```json
+{"list": "1 Sol Ring\n1 Bitterblosom"}     // or {"names": [...]}
+```
+
+Do these names exist? The collection is asked first — most of what anyone
+types is already owned, that lookup is free, and it keeps a familiar list
+validating with no network at all — then Scryfall for the rest, and a
+fuzzy lookup for a suggestion on anything still missing.
+
+```json
+{"ok": false, "checked": 2, "unknown": 1,
+ "cards": [{"name":"Sol Ring","ok":true,"source":"collection","suggestion":null},
+           {"name":"Bitterblosom","ok":false,"source":null,"suggestion":"Bitterblossom"}]}
+```
+
+Open, since it writes nothing. Scryfall being unreachable is a 502, not a
+verdict that the names are bad.
+
 ### `POST /decks/create`
 
 ```json

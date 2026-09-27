@@ -12,6 +12,7 @@
 
 import * as api from './api.js';
 import { h, $, fill, num, toast, loading, errorBox } from './util.js';
+import { autocomplete } from './complete.js';
 
 const OWNERS = [['matt', 'Matt'], ['kayla', 'Kayla']];
 
@@ -38,6 +39,8 @@ const blank = () => ({
   is_proxy: false,
   list: '',
   sources: {},     // name_norm -> 'bulk' | 'transfer' | 'buy'
+  checked: null,   // the name check for the list as it currently stands
+  checking: false,
   plan: null,
   error: null,
   busy: false,
@@ -54,6 +57,7 @@ function steps() {
     { id: 'name', title: 'Name' },
     wantsCommander() ? { id: 'commander', title: 'Commander' } : null,
     { id: 'list', title: 'Cards' },
+    { id: 'check', title: 'Check' },
     { id: 'source', title: 'Source' },
     { id: 'review', title: 'Review' },
   ].filter(Boolean);
@@ -69,6 +73,14 @@ function blocker() {
     case 'name': return state.name.trim() ? null : 'Give the deck a name.';
     case 'commander': return state.commander.trim() ? null : 'Name the commander.';
     case 'list': return countLines(state.list) ? null : 'Paste the decklist, or upload a file.';
+    case 'check': {
+      if (state.checking) return 'Checking the names…';
+      if (!state.checked) return 'Checking the names…';
+      const bad = state.checked.cards.filter((c) => !c.ok).length;
+      return bad
+        ? `${bad} name${bad === 1 ? ' is' : 's are'} not a real card. Fix ${bad === 1 ? 'it' : 'them'} before going on.`
+        : null;
+    }
     case 'source': return state.plan ? null : 'Working out where the cards come from…';
     default: return null;
   }
@@ -87,7 +99,33 @@ function go(delta) {
   // choices back, so going forward between them does not refetch.
   if (!['source', 'review'].includes(at().id)) state.plan = null;
   paint();
+  if (at().id === 'check') checkNames();
   if (['source', 'review'].includes(at().id)) dryRun();
+}
+
+/** The names, as the list currently reads. Used to know when to re-check. */
+const listFingerprint = () => `${state.commander}\n--\n${state.list}`;
+
+async function checkNames() {
+  const fingerprint = listFingerprint();
+  if (state.checked?.of === fingerprint) return;    // already checked this exact list
+  state.checking = true;
+  state.checked = null;
+  state.error = null;
+  paint();
+  try {
+    const names = [
+      ...(wantsCommander() ? state.commander.split('\n') : []),
+      ...state.list.split('\n'),
+    ].map((l) => l.trim()).filter((l) => l && !l.startsWith('#') && !l.startsWith('//'));
+    const r = await api.validateNames({ list: names.join('\n') });
+    state.checked = { ...r, of: fingerprint };
+  } catch (e) {
+    state.error = e;
+  } finally {
+    state.checking = false;
+    paint();
+  }
 }
 
 function payload(dryRun) {
@@ -186,12 +224,13 @@ function stepBody() {
     case 'commander': {
       const cmdr = h('input', { type: 'text', value: state.commander, placeholder: 'Alela, Cunning Conqueror' });
       cmdr.addEventListener('input', () => { state.commander = cmdr.value; refreshFooter(); });
+      const cmdrField = autocomplete(cmdr);
       queueMicrotask(() => cmdr.focus());
       const sel = h('select',
         BRACKETS.map(([v, label]) => h('option', { value: v, selected: state.bracket === v }, label)));
       sel.addEventListener('change', () => { state.bracket = sel.value; });
       return h('div',
-        field('Commander', 'Two names, one per line, if the deck runs partners.', cmdr),
+        field('Commander', 'Starts suggesting real cards after two letters.', cmdrField),
         field('Bracket', 'Optional. The Commander power bracket, 1 to 5.', sel));
     }
 
@@ -235,6 +274,9 @@ function stepBody() {
           h('button.btn.sm.ghost', { onclick: () => file.click() }, 'Upload a file')));
     }
 
+    case 'check':
+      return checkBody();
+
     case 'source':
       return sourceBody();
 
@@ -244,7 +286,72 @@ function stepBody() {
   }
 }
 
-// --------------------------------------------------------- 5. where from
+// ------------------------------------------------------------- 5. check
+//
+// Every name, against the collection first and Scryfall for the rest. A
+// typo that gets past here becomes a card nobody owns and a deck slot
+// nothing can fill, so this step will not let you go on until it is clean.
+
+function checkBody() {
+  if (state.checking) return h('div', h('span.spinner'), ' Checking every name…');
+  if (state.error) {
+    return h('div',
+      h('div.err', String(state.error.message || state.error)),
+      h('button.btn.sm', { style: { marginTop: '10px' }, onclick: checkNames }, 'Try again'));
+  }
+  const r = state.checked;
+  if (!r) return h('div', h('span.spinner'));
+
+  const bad = r.cards.filter((c) => !c.ok);
+
+  if (!bad.length) {
+    return h('div',
+      h('div.flex-wrap',
+        h('span.tag.ok', 'all real'),
+        h('span.small.says', `${num(r.checked)} name${r.checked === 1 ? '' : 's'} checked, every one is a card.`)),
+      h('div.small.muted', { style: { marginTop: '8px' } },
+        'Names already in the collection are confirmed from it; the rest were looked up on Scryfall.'));
+  }
+
+  // Replacing a name edits the list itself, so the fix survives to the end.
+  const replace = (from, to) => {
+    const swap = (text) => text.split('\n').map((line) => {
+      const m = line.match(/^(\s*\d*\s*[xX]?\s*)(.+?)(\s*)$/);
+      if (!m) return line;
+      return m[2].trim().toLowerCase() === from.toLowerCase() ? `${m[1]}${to}` : line;
+    }).join('\n');
+    state.list = swap(state.list);
+    state.commander = swap(state.commander);
+    state.checked = null;
+    paint();
+    checkNames();
+  };
+
+  return h('div',
+    h('div.flex-wrap',
+      h('span.tag.bad', `${bad.length} not found`),
+      h('span.small.says',
+        `${num(bad.length)} of ${num(r.checked)} name${r.checked === 1 ? '' : 's'} is not a real card. `
+        + 'Fix them here, or go back and edit the list.')),
+
+    h('div.table-wrap', { style: { marginTop: '10px', maxHeight: '44vh', overflowY: 'auto' } },
+      h('table',
+        h('thead', h('tr', h('th', 'What you typed'), h('th', 'Did you mean'), h('th', ''))),
+        h('tbody', bad.map((c) => h('tr',
+          h('td.t-name', c.name),
+          h('td', c.suggestion
+            ? h('span', c.suggestion)
+            : h('span.small.muted', 'no close match')),
+          h('td', c.suggestion
+            ? h('button.btn.sm', { onclick: () => replace(c.name, c.suggestion) }, 'Use it')
+            : null)))))),
+
+    h('div.small.muted', { style: { marginTop: '10px' } },
+      'A name with no close match is usually a card that does not exist, or one '
+      + 'spelled differently enough that Scryfall will not guess between two cards.'));
+}
+
+// --------------------------------------------------------- 6. where from
 //
 // The server has already worked out what each collection could cover. The
 // arithmetic for a given choice is simple and fixed, so it is repeated here

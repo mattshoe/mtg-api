@@ -9,6 +9,7 @@
 //   POST /decks/disassemble  delete a deck, freeing its cards (admin)
 //   POST /decks/list         replace a deck's list (admin)
 //   POST /decks/create       new deck, from the wizard (admin)
+//   POST /cards/validate     do these card names exist?
 //   GET  /decks/formats      the formats the wizard offers
 //   POST /prices      scryfall ids in, TCGplayer-derived prices out
 //   POST /admin       password in, admin token out
@@ -21,6 +22,7 @@
 
 import { getSchema } from './schema.js';
 import { runQuery, mayWrite, stripLiterals } from './query.js';
+import { validateNames } from './validate.js';
 import { addCards, removeCards } from './cards.js';
 import { disassembleDeck, editDeckList, createDeck, FORMATS } from './decks.js';
 import { mintToken, verifyToken, bearer } from './admin.js';
@@ -77,6 +79,7 @@ const INDEX = {
     'POST /cards/add': '{"owner":"matt","list":"4 Lightning Bolt (2X2) 117","dry_run":false}',
     'POST /cards/remove': '{"owner":"matt","list":"1 Sol Ring","dry_run":false}',
     'POST /decks/disassemble': '{"slug":"...","dry_run":false} — deletes the deck, its cards go back to bulk; needs admin',
+    'POST /cards/validate': '{"list":"1 Sol Ring\\n..."} or {"names":[...]} -> which names are real, with suggestions',
     'GET /decks/formats': 'the deck formats the wizard offers',
     'POST /decks/create': '{"name":"...","format":"commander","owner":"matt","commander":"...","list":"..."} — needs admin',
     'POST /decks/list': '{"slug":"...","list":"1 Sol Ring\\n...","dry_run":false} — replaces the deck list; needs admin',
@@ -313,6 +316,18 @@ async function route(request, env, ctx, entry) {
         errors: r.body?.errors?.slice(0, 5),
       };
       if (r.body?.failed) entry.level = 'warn';
+      return send(r);
+    }
+
+    if (path === '/cards/validate') {
+      // A read: it checks names against the collection and Scryfall and
+      // writes nothing, so it needs no token.
+      if (method !== 'POST') return json({ error: 'use POST' }, 405);
+      const { body, error } = await readJson(request);
+      if (error) return json({ error }, 400);
+      const r = await validateNames(env.DB, body, env.SCRYFALL_FETCH || fetch);
+      entry.detail = { checked: r.body?.checked, unknown: r.body?.unknown };
+      if (r.status >= 400) entry.message = r.body?.error;
       return send(r);
     }
 

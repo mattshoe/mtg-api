@@ -46,6 +46,23 @@ export function makeClient(fetchImpl = fetch, { minGapMs } = {}) {
 
   return {
     /**
+     * The closest real card name to something misspelled, or null.
+     *
+     * Scryfall's fuzzy match is deliberately strict — it refuses rather than
+     * guess between two plausible cards — so a null here means "no obvious
+     * fix", not "no such card".
+     */
+    async suggest(name) {
+      try {
+        const card = await call(`/cards/named?fuzzy=${encodeURIComponent(name)}`);
+        return card?.name || null;
+      } catch (e) {
+        if (e.status === 404) return null;   // no single obvious match
+        throw e;
+      }
+    },
+
+    /**
      * Resolve many identifiers at once.
      * @param {Array<object>} identifiers Scryfall identifier objects
      * @returns {Promise<{data: object[], not_found: object[]}>}

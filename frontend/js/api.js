@@ -107,6 +107,10 @@ export function deckFormats() {
   return call('/decks/formats', { method: 'GET' });
 }
 
+export function validateNames(body) {
+  return post('/cards/validate', body);
+}
+
 /** cols+rows -> array of objects, for when query() is more convenient. */
 export function toObjects(res) {
   return res.rows.map((r) => Object.fromEntries(res.cols.map((c, i) => [c, r[i]])));
