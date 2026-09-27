@@ -11,6 +11,9 @@ import { exact, priceReason } from './prices.js';
 let onClose = null;
 let current = null;
 
+/** The card the drawer is showing, or null. */
+export const openCardId = () => current;
+
 export function closeCard() {
   $('#drawer').hidden = true;
   $('#drawer-scrim').hidden = true;

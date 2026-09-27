@@ -494,24 +494,34 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
 .steps .step.done { color: var(--text); }
 .steps .step.done .step-n { color: var(--ok, var(--accent-2)); }
 
+/* A pickable option. The look belongs to the button, not to the container
+   it happens to sit in: scoping these to .owner-pick left every format
+   button in .fmt-pick with no border, no hover and — the one that mattered
+   — no selected state, so clicking a format did nothing visible. */
+.owner-opt {
+  padding: 18px 16px; min-width: 130px;
+  border: 1px solid var(--line-2); border-radius: var(--radius);
+  background: var(--bg-2); color: var(--text); font: inherit; font-size: 15px;
+  cursor: pointer; text-align: left;
+  transition: border-color .12s ease, background .12s ease;
+}
+.owner-opt:hover { border-color: var(--accent); background: var(--bg-3); }
+.owner-opt.on {
+  border-color: var(--accent); background: var(--accent-dim); color: var(--accent-2);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
 /* step two is one decision, so make it one decision's worth of target */
 .owner-pick { display: flex; gap: 10px; flex-wrap: wrap; }
+.owner-pick .owner-opt { flex: 1; text-transform: capitalize; text-align: center; }
+
 /* the format grid wants more than two across */
 .fmt-pick { display: grid; gap: 9px; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); }
-.fmt-pick .owner-opt { min-width: 0; text-align: left; padding: 13px 14px; font-size: 14px; }
+.fmt-pick .owner-opt { min-width: 0; padding: 13px 14px; font-size: 14px; }
+
 label.check { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; cursor: pointer; }
 label.check input { width: auto; margin: 0; }
 label.check .small { flex-basis: 100%; }
-.owner-pick .owner-opt {
-  flex: 1; min-width: 130px; padding: 18px 16px;
-  border: 1px solid var(--line-2); border-radius: var(--radius);
-  background: var(--bg-2); color: var(--text); font: inherit; font-size: 15px;
-  cursor: pointer; text-transform: capitalize;
-}
-.owner-pick .owner-opt:hover { border-color: var(--accent); background: var(--bg-3); }
-.owner-pick .owner-opt.on {
-  border-color: var(--accent); background: var(--accent-dim); color: var(--accent-2);
-}
 
 /* deck list */
 .deck-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(272px, 1fr)); }

@@ -6,7 +6,7 @@ import {
   adminButton, isAdmin, onAdminChange, promptUnlock, lock,
   authHeader, rejected,
 } from './admin.js';
-import { openCard, closeCard } from './card.js';
+import { openCard, closeCard, openCardId } from './card.js';
 import * as search from './search.js';
 import * as decks from './decks.js';
 import * as manage from './manage.js';
@@ -217,12 +217,35 @@ function paintTabs() {
 }
 onAdminChange((on) => {
   paintTabs();
-  if (!on && GATED.has(parseHash().view)) location.hash = '#/search';
+  // Locking while on a gated view has to move you off it; the hashchange
+  // re-renders on the way out.
+  if (!on && GATED.has(parseHash().view)) { location.hash = '#/search'; return; }
+  // Otherwise re-render where you are. Unlocking used to change nothing on
+  // screen until you navigated away and back, so the edit buttons the
+  // password just earned you stayed hidden on the page you were looking at.
+  route();
+  const card = openCardId();
+  if (card) openCard(card);
 });
 paintTabs();
-$('#nav-toggle').addEventListener('click', () => {
+function closeNav() {
+  $('#tabs').classList.remove('open');
+  $('#nav-toggle').setAttribute('aria-expanded', 'false');
+}
+
+$('#nav-toggle').addEventListener('click', (e) => {
+  e.stopPropagation();
   const open = $('#tabs').classList.toggle('open');
   $('#nav-toggle').setAttribute('aria-expanded', String(open));
+});
+
+// Picking anything in the menu closes it. route() did this, but only when
+// the hash actually changed — tapping the tab you were already on left the
+// menu sitting open over the page.
+$('#tabs').addEventListener('click', (e) => { if (e.target.closest('a')) closeNav(); });
+// And so does a tap anywhere else, the way a menu is expected to behave.
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#tabs, #nav-toggle')) closeNav();
 });
 $('#drawer-scrim').addEventListener('click', closeCard);
 $('#palette-scrim').addEventListener('click', (e) => {
