@@ -5,11 +5,11 @@
   "type": "module",
   "description": "REST API over Matt's Magic: The Gathering collection, on Cloudflare Workers + D1",
   "scripts": {
-    "test": "eslint frontend/js && vitest run",
+    "test": "eslint frontend/js frontend/sw.js && vitest run",
     "test:watch": "vitest",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "lint": "eslint frontend/js"
+    "lint": "eslint frontend/js frontend/sw.js"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.8.19",

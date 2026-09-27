@@ -2,11 +2,37 @@
   "name": "MTG Collection",
   "short_name": "Collection",
   "start_url": "./#/search",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#0e1116",
   "theme_color": "#0e1116",
   "icons": [
     { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
     { "src": "icons/icon-180.png", "sizes": "180x180", "type": "image/png" }
-  ]
+  ],
+  "share_target": {
+    "action": "share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        {
+          "name": "file",
+          "accept": [
+            "text/plain",
+            "text/csv",
+            "text/comma-separated-values",
+            "application/csv",
+            ".txt",
+            ".csv",
+            ".dek",
+            ".md"
+          ]
+        }
+      ]
+    }
+  }
 }

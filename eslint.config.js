@@ -17,8 +17,24 @@ export default [
         'queueMicrotask', 'requestAnimationFrame', 'performance', 'console',
         'addEventListener', 'removeEventListener', 'matchMedia', 'getComputedStyle',
         'alert', 'confirm', 'prompt', 'structuredClone', 'TextEncoder', 'crypto',
-        'CSS', 'history', 'FileReader', 'DataTransfer',
+        'CSS', 'history', 'FileReader', 'DataTransfer', 'caches',
       ].map((g) => [g, 'readonly'])),
+    },
+    rules: {
+      'no-undef': 'error',
+      'no-unused-vars': ['error', { args: 'none', varsIgnorePattern: '^_' }],
+    },
+  },
+  {
+    // The service worker runs in its own global, so it gets its own list.
+    files: ['frontend/sw.js'],
+    languageOptions: {
+      ecmaVersion: 2023,
+      sourceType: 'script',
+      globals: Object.fromEntries(
+        ['self', 'caches', 'fetch', 'Request', 'Response', 'Headers', 'URL', 'console']
+          .map((g) => [g, 'readonly']),
+      ),
     },
     rules: {
       'no-undef': 'error',

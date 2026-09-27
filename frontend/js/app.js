@@ -8,6 +8,7 @@ import {
 } from './admin.js';
 import { openCard, closeCard, openCardId, hideCardForRoute } from './card.js';
 import { pushOverlay, dropOverlay } from './overlay.js';
+import { installShareTarget } from './share.js';
 import * as search from './search.js';
 import * as decks from './decks.js';
 import * as manage from './manage.js';
@@ -248,6 +249,17 @@ $('#palette-scrim').addEventListener('click', (e) => {
   if (e.target === $('#palette-scrim')) closePalette();
 });
 $('#palette-input').addEventListener('input', (e) => searchPalette(e.target.value));
+
+// A decklist or CSV shared from another Android app lands on the add page
+// with the list already in the box. Going through route() rather than
+// setting the hash covers the case where we are already sitting on #/add,
+// which fires no hashchange, and the gate in route() still applies — a
+// share while locked asks for the password, and the list is waiting on the
+// other side of it.
+installShareTarget(() => {
+  if (parseHash().view === 'add') route();
+  else location.hash = '#/add';
+});
 
 if (!location.hash) location.hash = '#/search';
 route();

@@ -11,6 +11,7 @@
 import * as api from './api.js';
 import { h, $, fill, num, toast, store, errorBox } from './util.js';
 import { isAdmin } from './admin.js';
+import { takeShared } from './share.js';
 
 const HISTORY_KEY = 'history';
 const MAX_HISTORY = 30;
@@ -462,4 +463,17 @@ function render(mode) {
 
 export function show(mode) {
   render(mode === 'remove' ? 'remove' : 'add');
+  if (flow.mode !== 'add') return;
+
+  // Something was shared into the app from the Android share sheet. It
+  // fills the box and stops there — the owner step and the dry run are
+  // still ahead of it, the same as anything typed.
+  const shared = takeShared();
+  if (!shared?.list) return;
+  flow.list = shared.list;
+  paint();
+
+  const n = countCards(shared.list);
+  const from = shared.names?.length ? ` from ${shared.names.join(', ')}` : '';
+  toast(`Loaded ${n} card${n === 1 ? '' : 's'}${from}`, 'ok');
 }
