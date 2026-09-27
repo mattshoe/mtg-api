@@ -74,7 +74,9 @@ export const DEFAULTS = {
   adv: '',
 
   // --- presentation
-  sort: 'name', dir: 'asc', page: 1,
+  // Sorted by what a card is worth, biggest first. It is the question
+  // being asked of a collection more often than any other.
+  sort: 'price', dir: 'desc', page: 1,
 };
 
 // Columns are qualified with `c.` because card_usage is joined in as `u`

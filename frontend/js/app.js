@@ -209,7 +209,7 @@ $('.topbar-right').prepend(adminButton());
 // with a dead token behind it.
 function paintTabs() {
   const on = isAdmin();
-  for (const a of $$('#tabs a[data-gated]')) a.hidden = !on;
+  for (const el of $$('#tabs [data-gated]')) el.hidden = !on;
 }
 onAdminChange((on) => {
   paintTabs();

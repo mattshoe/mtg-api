@@ -36,13 +36,15 @@
   </a>
 
   <nav class="tabs" id="tabs" aria-label="Sections">
-    <a href="#/search" data-view="search">Search</a>
+    <a href="#/search" data-view="search">Library</a>
     <a href="#/decks"  data-view="decks">Decks</a>
-    <a href="#/add"    data-view="add" data-gated hidden>Add</a>
-    <a href="#/remove" data-view="remove" data-gated hidden>Remove</a>
     <a href="#/stats"  data-view="stats">Stats</a>
-    <a href="#/console" data-view="console">Console</a>
-    <a href="#/logs"   data-view="logs" data-gated hidden>Logs</a>
+    <a href="#/console" data-view="console">Query</a>
+    <span class="tabs-sep" data-gated hidden aria-hidden="true"></span>
+    <span class="tabs-group" data-gated hidden>Admin options</span>
+    <a href="#/add"    data-view="add" data-gated hidden>Bulk Add</a>
+    <a href="#/remove" data-view="remove" data-gated hidden>Bulk Remove</a>
+    <a href="#/logs"   data-view="logs" data-gated hidden>Server Logs</a>
   </nav>
 
   <div class="topbar-right">

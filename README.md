@@ -388,7 +388,7 @@ API.
 
 | view | what it does |
 |---|---|
-| Search | every column in the database, as facets or as a query language — see below; a grid of cards, 100 a page, one row per card rather than per printing |
+| Library | every column in the database, as facets or as a query language — see below; a grid of cards, 100 a page, sorted by price descending, one row per card rather than per printing. The name box autocompletes against every card in Magic, not only the ones owned |
 | Card | full detail in a drawer — every printing owned, decks it is in, tags, legalities, rulings, and ±1 buttons |
 | Decks | every deck with its list, curve, notes and gaps, plus a gaps-and-conflicts overview. Admins can edit a list or disassemble the deck |
 | Add / Remove | three steps: list, whose collection, then a dry run you have to approve |

@@ -11,6 +11,7 @@ import {
   RARITY_ORDER, download, toast, store, loading, errorBox, empty,
 } from './util.js';
 import { openCard } from './card.js';
+import { autocomplete } from './complete.js';
 import {
   DEFAULTS, PAGE_SIZE, SORTS, COLOR_MODES, FLAGS, buildQuery, toHash, fromHash,
 } from './filters.js';
@@ -361,6 +362,34 @@ function filterPanel() {
   }));
 }
 
+/**
+ * The name box, built once and reused.
+ *
+ * The chrome re-renders on every filter change, and a fresh input each time
+ * would take the autocomplete list down with it — the suggestions would
+ * appear and then vanish 400ms later when the debounced push landed. Moving
+ * the same node keeps its listeners and its open dropdown.
+ */
+let nameBox = null;
+let nameWrap = null;
+
+function nameField() {
+  if (!nameWrap) {
+    nameBox = h('input.bigsearch', {
+      type: 'search',
+      placeholder: 'Search any card by name…',
+      dataset: { fk: 'q-top' },
+    });
+    nameBox.addEventListener('input', debounce(() => push({ q: nameBox.value }), 400));
+    // Every card in Magic, not only the ones owned: searching for something
+    // and finding out you do not have it is a fair question to ask.
+    nameWrap = autocomplete(nameBox, { onPick: () => push({ q: nameBox.value }) });
+  }
+  // Only when it differs, or typing into it would fight the re-render.
+  if (document.activeElement !== nameBox && nameBox.value !== state.q) nameBox.value = state.q;
+  return nameWrap;
+}
+
 // ------------------------------------------------- active filter summary
 
 const LABELS = {
@@ -570,12 +599,7 @@ function renderChrome() {
   const snap = captureFocus();
 
   fill($('#chrome'),
-    h('div.searchbar',
-      h('input.bigsearch', {
-        type: 'search', value: state.q, placeholder: 'Search by name…',
-        dataset: { fk: 'q-top' },
-        oninput: debounce((e) => push({ q: e.target.value }), 400),
-      })),
+    h('div.searchbar', nameField()),
     activeChips(),
     h('div.filters-wrap',
       h('div.fpanel-bar',
