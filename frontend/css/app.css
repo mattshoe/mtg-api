@@ -571,6 +571,15 @@ label.check .small { flex-basis: 100%; }
 }
 .ac-list li.on { background: var(--accent-dim); color: var(--accent-2); }
 
+/* the row for whichever collection the page is scoped to */
+tbody tr.on > td { background: var(--accent-dim); }
+tbody tr.total > td { border-top: 1px solid var(--line-2); color: var(--text); }
+.seg a { padding: 6px 12px; border-right: 1px solid var(--line-2); background: var(--bg);
+         color: var(--text-2); font-size: 12.5px; }
+.seg a:last-child { border-right: none; }
+.seg a:hover { background: var(--bg-3); color: var(--text); text-decoration: none; }
+.seg a.on { background: var(--accent-dim); color: var(--accent-2); }
+
 /* the sourcing totals, above the per-card table */
 .summary-bar {
   display: flex; flex-wrap: wrap; gap: 14px; align-items: center;

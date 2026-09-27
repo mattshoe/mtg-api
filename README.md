@@ -392,7 +392,7 @@ API.
 | Card | full detail in a drawer — every printing owned, decks it is in, tags, legalities, rulings, and ±1 buttons |
 | Decks | every deck with its list, curve, notes and gaps, plus a gaps-and-conflicts overview. Admins can edit a list or disassemble the deck |
 | Add / Remove | three steps: list, whose collection, then a dry run you have to approve |
-| Stats | curve, colours, types, rarity, biggest sets, most unassigned copies |
+| Stats | both collections side by side, then curve, colours, types, rarity, biggest sets and most unassigned copies for whichever is in scope — `#/stats`, `#/stats/matt`, `#/stats/kayla` |
 | Console | arbitrary SQL with a schema browser, snippets, history and CSV export |
 | Logs | every request, searchable and filterable, with errors in their own grouped view |
 

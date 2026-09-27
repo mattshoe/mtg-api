@@ -31,7 +31,7 @@ const ROUTES = {
   decks: (rest) => decks.show(rest),
   add: () => manage.show('add'),
   remove: () => manage.show('remove'),
-  stats: () => stats.show(),
+  stats: (rest) => stats.show(rest),
   console: () => sqlConsole.show(),
   logs: () => logs.show(),
 };
