@@ -790,3 +790,148 @@ describe('GET /decks/formats', () => {
     expect(r.body.formats.find((f) => f.id === 'standard').singleton).toBeUndefined();
   });
 });
+
+// ------------------------------------------------------- choosing a source
+//
+// A card in a deck came from somewhere. The wizard asks where: out of this
+// owner's bulk, out of the other collection, or bought new. These cover the
+// arithmetic behind that choice and the inventory move behind a transfer.
+
+describe('POST /decks/list — the sourcing plan', () => {
+  const find = (body, name) => body.sourcing.find((s) => s.name === name);
+
+  it('reports, per card, what each collection could cover', async () => {
+    const r = await post('/decks/list',
+      { slug: SLUG, list: "2 Ambition's Cost\n1 Sol Ring", dry_run: true }, stubScryfall());
+
+    const cost = find(r.body, "Ambition's Cost");
+    expect(cost).toMatchObject({ need: 2, other_owner: 'kayla' });
+    expect(cost.own_free).toBeGreaterThanOrEqual(0);
+    expect(cost.own_free + cost.buy + cost.transfer).toBe(2);
+  });
+
+  it('defaults to bulk first and buys only the remainder', async () => {
+    const r = await post('/decks/list',
+      { slug: SLUG, list: "3 Ambition's Cost", dry_run: true }, stubScryfall());
+    const s = find(r.body, "Ambition's Cost");
+    expect(s.choice).toBe('bulk');
+    expect(s.from_bulk).toBe(s.own_free);
+    expect(s.buy).toBe(3 - s.own_free);
+  });
+
+  it('"buy" leaves bulk alone and gets the whole quantity new', async () => {
+    const r = await post('/decks/list', {
+      slug: SLUG,
+      list: "2 Ambition's Cost",
+      sources: { "ambition's cost": 'buy' },
+      dry_run: true,
+    }, stubScryfall());
+    const s = find(r.body, "Ambition's Cost");
+    expect(s.from_bulk).toBe(0);
+    expect(s.buy).toBe(2);
+    expect(r.body.acquired).toContainEqual(["Ambition's Cost", 2]);
+  });
+
+  it('never sources a basic land from anywhere', async () => {
+    const r = await post('/decks/list',
+      { slug: SLUG, list: '1 Sol Ring\n20 Swamp', dry_run: true }, stubScryfall());
+    const s = find(r.body, 'Swamp');
+    expect(s.basic).toBe(true);
+    expect(s.buy).toBe(0);
+    expect(s.transfer).toBe(0);
+  });
+
+  it('a proxy deck sources nothing at all', async () => {
+    const r = await post('/decks/list',
+      { slug: 'halo-proxy-astor-equipment', list: '4 Lightning Bolt', dry_run: true }, stubScryfall());
+    expect(r.body.acquired).toEqual([]);
+    expect(r.body.sourcing.every((s) => s.buy === 0 && s.transfer === 0)).toBe(true);
+  });
+});
+
+describe('POST /decks/list — transferring between collections', () => {
+  const heldBy = (owner, nameNorm) => sql(
+    'SELECT COALESCE(SUM(qty), 0) AS q FROM cards WHERE owner = ? AND name_norm = ?', owner, nameNorm,
+  ).then((r) => r[0].q);
+
+  it('plans a transfer out of the other collection instead of buying', async () => {
+    // Kayla owns Arcane Signet and no deck of hers claims it.
+    const kayla = await heldBy('kayla', 'arcane signet');
+    expect(kayla).toBeGreaterThan(0);
+
+    const r = await post('/decks/list', {
+      slug: SLUG,
+      list: '1 Arcane Signet',
+      sources: { 'arcane signet': 'transfer' },
+      dry_run: true,
+    }, stubScryfall());
+
+    expect(r.body.transferred).toContainEqual(['Arcane Signet', 1, 'kayla']);
+    expect(r.body.acquired).toEqual([]);
+  });
+
+  it('actually moves the copies, and buys nothing', async () => {
+    const before = {
+      matt: await heldBy('matt', 'arcane signet'),
+      kayla: await heldBy('kayla', 'arcane signet'),
+    };
+
+    const r = await post('/decks/list', {
+      slug: SLUG,
+      list: '1 Arcane Signet',
+      sources: { 'arcane signet': 'transfer' },
+    }, stubScryfall());
+    expect(r.status).toBe(200);
+    expect(r.body.acquired).toEqual([]);
+
+    expect(await heldBy('kayla', 'arcane signet')).toBe(before.kayla - 1);
+    expect(await heldBy('matt', 'arcane signet')).toBe(before.matt + 1);
+  });
+
+  it('conserves the total across both collections', async () => {
+    const total = () => sql(
+      "SELECT COALESCE(SUM(qty),0) AS q FROM cards WHERE name_norm = 'arcane signet'",
+    ).then((r) => r[0].q);
+    const before = await total();
+    await post('/decks/list', {
+      slug: SLUG, list: '1 Arcane Signet', sources: { 'arcane signet': 'transfer' },
+    }, stubScryfall());
+    expect(await total()).toBe(before);
+  });
+
+  it('gives the received card its child rows, not a bare row', async () => {
+    await post('/decks/list', {
+      slug: SLUG, list: '1 Arcane Signet', sources: { 'arcane signet': 'transfer' },
+    }, stubScryfall());
+
+    const [row] = await sql(
+      `SELECT id FROM cards WHERE owner = 'matt' AND name_norm = 'arcane signet' ORDER BY id DESC LIMIT 1`,
+    );
+    const kids = await sql('SELECT COUNT(*) AS n FROM card_types WHERE card_id = ?', row.id);
+    expect(kids[0].n).toBeGreaterThan(0);
+    const fts = await sql('SELECT COUNT(*) AS n FROM card_search WHERE rowid = ?', row.id);
+    expect(fts[0].n).toBe(1);
+  });
+
+  it('falls back to buying whatever the other collection cannot cover', async () => {
+    const kayla = await heldBy('kayla', 'arcane signet');
+    const r = await post('/decks/list', {
+      slug: SLUG,
+      list: `${kayla + 4} Arcane Signet`,
+      sources: { 'arcane signet': 'transfer' },
+      dry_run: true,
+    }, stubScryfall());
+    const s = r.body.sourcing.find((x) => x.name === 'Arcane Signet');
+    expect(s.transfer).toBe(s.other_free);
+    expect(s.from_bulk + s.transfer + s.buy).toBe(kayla + 4);
+    expect(s.buy).toBeGreaterThan(0);
+  });
+
+  it('leaves no orphaned child rows behind in the giving collection', async () => {
+    await post('/decks/list', {
+      slug: SLUG, list: '1 Arcane Signet', sources: { 'arcane signet': 'transfer' },
+    }, stubScryfall());
+    expect(await count('card_types', 'card_id NOT IN (SELECT id FROM cards)')).toBe(0);
+    expect(await count('card_search', 'rowid NOT IN (SELECT id FROM cards)')).toBe(0);
+  });
+});

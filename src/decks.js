@@ -121,7 +121,10 @@ async function ownedIndex(db, owner, keys) {
  * Proxy and PROPOSED decks are skipped for the same reason card_usage
  * skips them — they do not consume real cards.
  */
-async function claimedElsewhere(db, owner, deckId, keys) {
+const claimedElsewhere = (db, owner, deckId, keys) => claimedBy(db, owner, deckId, keys);
+
+/** The same question, for any owner and any deck to exclude. */
+async function claimedBy(db, owner, exceptDeckId, keys) {
   const found = new Map();
   for (let i = 0; i < keys.length; i += CHUNK) {
     const slice = keys.slice(i, i + CHUNK);
@@ -135,7 +138,7 @@ async function claimedElsewhere(db, owner, deckId, keys) {
          AND (d.status IS NULL OR d.status NOT LIKE 'PROPOSED%')
          AND dc.in_collection = 1
          AND dc.name_norm IN (${marks})
-       GROUP BY dc.name_norm`).bind(owner, deckId, ...slice).all();
+       GROUP BY dc.name_norm`).bind(owner, exceptDeckId, ...slice).all();
     for (const row of r.results || []) found.set(row.name_norm, row.n);
   }
   return found;
@@ -154,6 +157,163 @@ async function anyPrintingIndex(db, keys) {
   }
   return found;
 }
+
+const OTHER = { matt: 'kayla', kayla: 'matt' };
+
+/**
+ * What each card could be covered by, before anything is decided.
+ *
+ * Three places a copy can come from, and the wizard asks which:
+ *   - `own_free`   spare in this owner's collection, committed to no deck
+ *   - `other_free` spare in the other collection, which can be transferred
+ *   - anything left is new, and has to be bought
+ */
+async function sourcingPlan(db, owner, wanted, ownedIdx, elsewhereIdx) {
+  const other = OTHER[owner];
+  const keys = [...wanted.keys()];
+  const [otherOwned, otherClaimed] = other
+    ? await Promise.all([ownedIndex(db, other, keys), claimedBy(db, other, -1, keys)])
+    : [new Map(), new Map()];
+
+  const plan = [];
+  for (const w of wanted.values()) {
+    const ownHave = ownedIdx.get(w.name_norm)?.owned_qty ?? 0;
+    const ownFree = Math.max(0, ownHave - (elsewhereIdx.get(w.name_norm) ?? 0));
+    const otherHave = otherOwned.get(w.name_norm)?.owned_qty ?? 0;
+    const otherFree = Math.max(0, otherHave - (otherClaimed.get(w.name_norm) ?? 0));
+    plan.push({
+      name: w.typed,
+      name_norm: w.name_norm,
+      need: w.qty,
+      own_free: ownFree,
+      other_free: otherFree,
+      other_owner: other || null,
+      basic: isBasic(w.name_norm),
+    });
+  }
+  return plan;
+}
+
+/**
+ * Turn the plan plus the caller's choices into counts.
+ *
+ * `sources` is name_norm -> 'bulk' | 'transfer' | 'buy', and decides only
+ * where the copies bulk cannot cover come from. 'buy' is the exception: it
+ * means leave bulk alone entirely and get new copies, which is what someone
+ * picking "net-new" for a card they already own is asking for.
+ */
+function decideSources(plan, sources = {}, physical = true) {
+  const out = [];
+  for (const p of plan) {
+    const choice = sources[p.name_norm] || 'bulk';
+    if (!physical || p.basic) {
+      out.push({ ...p, choice, from_bulk: p.need, transfer: 0, buy: 0 });
+      continue;
+    }
+    const fromBulk = choice === 'buy' ? 0 : Math.min(p.need, p.own_free);
+    let left = p.need - fromBulk;
+    const transfer = choice === 'transfer' ? Math.min(left, p.other_free) : 0;
+    left -= transfer;
+    out.push({ ...p, choice, from_bulk: fromBulk, transfer, buy: left });
+  }
+  return out;
+}
+
+/**
+ * Move copies of a card between collections.
+ *
+ * A transfer is a real inventory move: the other owner loses the copies and
+ * this owner gains them, printing for printing. The new rows are copies of
+ * the old ones rather than a fresh Scryfall lookup, because the card is
+ * already described correctly — and that keeps a transfer working offline.
+ */
+async function transferStatements(db, from, to, byName) {
+  const statements = [];
+  const names = [...byName.keys()];
+  if (!names.length) return statements;
+
+  const max = await db.prepare('SELECT COALESCE(MAX(id), 0) AS n FROM cards').first();
+  let nextId = (max?.n ?? 0) + 1;
+
+  const CHILD = ['card_faces', 'card_colors', 'card_types', 'card_keywords',
+    'card_finishes', 'card_games', 'card_promo_types', 'card_frame_effects', 'card_tags'];
+
+  for (let i = 0; i < names.length; i += CHUNK) {
+    const slice = names.slice(i, i + CHUNK);
+    const marks = slice.map(() => '?').join(',');
+    const src = await db.prepare(`
+      SELECT id, name_norm, scryfall_id, finish, qty
+        FROM cards WHERE owner = ? AND name_norm IN (${marks}) AND qty > 0
+       ORDER BY finish = 'nonfoil' DESC, id`).bind(from, ...slice).all();
+    const dst = await db.prepare(`
+      SELECT id, scryfall_id, finish, qty
+        FROM cards WHERE owner = ? AND name_norm IN (${marks})`).bind(to, ...slice).all();
+
+    const destBy = new Map((dst.results || []).map((r) => [`${r.scryfall_id}|${r.finish}`, r]));
+
+    for (const row of src.results || []) {
+      let want = byName.get(row.name_norm) || 0;
+      if (want <= 0) continue;
+      const take = Math.min(want, row.qty);
+      byName.set(row.name_norm, want - take);
+
+      // Out of the giver's stack, and the row goes when it empties.
+      if (take === row.qty) {
+        statements.push(db.prepare('DELETE FROM cards WHERE id = ?').bind(row.id));
+        statements.push(db.prepare('DELETE FROM card_search WHERE rowid = ?').bind(row.id));
+        for (const t of CHILD) {
+          statements.push(db.prepare(`DELETE FROM ${t} WHERE card_id = ?`).bind(row.id));
+        }
+      } else {
+        statements.push(db.prepare('UPDATE cards SET qty = qty - ? WHERE id = ?').bind(take, row.id));
+      }
+
+      // Into the receiver's, merging with the same printing where there is one.
+      const key = `${row.scryfall_id}|${row.finish}`;
+      const hit = destBy.get(key);
+      if (hit) {
+        statements.push(db.prepare('UPDATE cards SET qty = qty + ? WHERE id = ?').bind(take, hit.id));
+      } else {
+        const newId = nextId;
+        nextId += 1;
+        statements.push(db.prepare(`
+          INSERT INTO cards SELECT ?, ?, ?, finish, foil_flag, scryfall_id, oracle_id,
+            name, name_norm, face1, face2, mana_cost, cmc, oracle_text, flavor_text,
+            power, toughness, loyalty, defense, type_line, supertypes, types, subtypes,
+            colors, color_identity, color_identity_count, produced_mana, rarity, setcode,
+            set_name, set_type, released_at, collector_number, artist, layout, frame,
+            border_color, watermark, security_stamp, reserved, game_changer, full_art,
+            textless, promo, reprint, variation, oversized, story_spotlight, booster,
+            edhrec_rank FROM cards WHERE id = ?`).bind(newId, to, take, row.id));
+        for (const t of CHILD) {
+          const cols = t === 'card_tags' ? 'tag_slug, kind'
+            : t === 'card_faces' ? 'face_index, name, mana_cost, type_line, oracle_text, flavor_text, power, toughness, loyalty, defense, artist, colors'
+              : COLUMN_OF[t];
+          statements.push(db.prepare(
+            `INSERT INTO ${t} SELECT ?, ${cols} FROM ${t} WHERE card_id = ?`,
+          ).bind(newId, row.id));
+        }
+        statements.push(db.prepare(`
+          INSERT INTO card_search (rowid, name, type_line, oracle_text, flavor_text, keywords, tags)
+          SELECT ?, name, type_line, oracle_text, flavor_text, NULL, NULL FROM cards WHERE id = ?`)
+          .bind(newId, row.id));
+        destBy.set(key, { id: newId, qty: take });
+      }
+    }
+  }
+  return statements;
+}
+
+/** The non-key column of each simple child table, for a copying insert. */
+const COLUMN_OF = {
+  card_colors: 'color, kind',
+  card_types: 'type, kind',
+  card_keywords: 'keyword',
+  card_finishes: 'finish',
+  card_games: 'game',
+  card_promo_types: 'promo_type',
+  card_frame_effects: 'frame_effect',
+};
 
 /**
  * Replace a deck's list wholesale from a decklist.
@@ -249,23 +409,19 @@ async function planAndWrite(db, deck, body, fetchImpl) {
   // A deck being created has no stored commander to compare against, so
   // whatever the field says is by definition the new one.
 
-  // What the deck needs that bulk cannot cover. Putting a card in a deck
-  // means it came from somewhere: out of bulk if a copy was spare, and
-  // otherwise it had to be acquired, so the collection is made to say so
-  // rather than the deck claiming a card that does not exist.
-  const shortfall = [];
-  if (physical) {
-    for (const w of wanted.values()) {
-      if (isBasic(w.name_norm)) continue;
-      const have = owned.get(w.name_norm)?.owned_qty ?? 0;
-      const spoken = elsewhere.get(w.name_norm) ?? 0;
-      // Clamped: another deck being short already is that deck's problem.
-      // Editing this one should make this one whole, not pay off a debt
-      // somewhere else.
-      const spare = Math.max(0, have - spoken);
-      if (w.qty > spare) shortfall.push([w.typed, w.qty - spare]);
-    }
-  }
+  // Where every copy is coming from. Putting a card in a deck means it came
+  // from somewhere: out of bulk if a copy was spare, out of the other
+  // collection if the caller said to transfer it, and otherwise bought — so
+  // the collection is made to say so rather than the deck claiming a card
+  // that does not exist.
+  //
+  // `own_free` is clamped at zero: another deck being short already is that
+  // deck's problem, and editing this one should make this one whole rather
+  // than pay off a debt somewhere else.
+  const plan = await sourcingPlan(db, deck.owner, wanted, owned, elsewhere);
+  const decided = decideSources(plan, body?.sources, physical);
+  const shortfall = decided.filter((d) => d.buy > 0).map((d) => [d.name, d.buy]);
+  const transfers = decided.filter((d) => d.transfer > 0);
 
   const rows = [];
   for (const w of wanted.values()) {
@@ -332,6 +488,22 @@ async function planAndWrite(db, deck, body, fetchImpl) {
     // hands back. Bulk is card_usage.free, so returning is just the deck
     // letting go — there is nothing to write for it.
     acquired: shortfall,
+    transferred: transfers.map((d) => [d.name, d.transfer, d.other_owner]),
+    // What every card could come from, so the caller can choose before
+    // committing rather than discover afterwards.
+    sourcing: decided.map((d) => ({
+      name: d.name,
+      name_norm: d.name_norm,
+      need: d.need,
+      own_free: d.own_free,
+      other_free: d.other_free,
+      other_owner: d.other_owner,
+      basic: d.basic,
+      choice: d.choice,
+      from_bulk: d.from_bulk,
+      transfer: d.transfer,
+      buy: d.buy,
+    })),
     returned: [...current.values()]
       .map((r) => {
         const still = wanted.get(r.name_norm)?.qty ?? 0;
@@ -371,7 +543,14 @@ async function planAndWrite(db, deck, body, fetchImpl) {
     if (acquisition.status !== 200 || acquisition.body?.failed) return refuse(acquisition);
   }
 
+  // Transfers move real rows between collections, so they go in the same
+  // batch as the deck: a deck that claims transferred cards while the
+  // transfer failed would be claiming someone else's.
   const statements = [];
+  if (transfers.length) {
+    const byName = new Map(transfers.map((d) => [d.name_norm, d.transfer]));
+    statements.push(...await transferStatements(db, OTHER[deck.owner], deck.owner, byName));
+  }
   let deckId = deck.id;
 
   if (!deckId) {

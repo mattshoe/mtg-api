@@ -37,6 +37,7 @@ const blank = () => ({
   bracket: '',
   is_proxy: false,
   list: '',
+  sources: {},     // name_norm -> 'bulk' | 'transfer' | 'buy'
   plan: null,
   error: null,
   busy: false,
@@ -53,6 +54,7 @@ function steps() {
     { id: 'name', title: 'Name' },
     wantsCommander() ? { id: 'commander', title: 'Commander' } : null,
     { id: 'list', title: 'Cards' },
+    { id: 'source', title: 'Source' },
     { id: 'review', title: 'Review' },
   ].filter(Boolean);
 }
@@ -67,6 +69,7 @@ function blocker() {
     case 'name': return state.name.trim() ? null : 'Give the deck a name.';
     case 'commander': return state.commander.trim() ? null : 'Name the commander.';
     case 'list': return countLines(state.list) ? null : 'Paste the decklist, or upload a file.';
+    case 'source': return state.plan ? null : 'Working out where the cards come from…';
     default: return null;
   }
 }
@@ -79,10 +82,12 @@ function go(delta) {
   if (next < 0 || next >= steps().length) return;
   if (delta > 0 && blocker()) return;
   state.step = next;
-  state.plan = null;
   state.error = null;
+  // The plan is the same for Source and Review; only Review sends the
+  // choices back, so going forward between them does not refetch.
+  if (!['source', 'review'].includes(at().id)) state.plan = null;
   paint();
-  if (at().id === 'review') dryRun();
+  if (['source', 'review'].includes(at().id)) dryRun();
 }
 
 function payload(dryRun) {
@@ -95,6 +100,7 @@ function payload(dryRun) {
     theme: state.theme.trim(),
     is_proxy: state.is_proxy,
     list: state.list,
+    sources: state.sources,
     dry_run: dryRun,
   };
 }
@@ -229,10 +235,128 @@ function stepBody() {
           h('button.btn.sm.ghost', { onclick: () => file.click() }, 'Upload a file')));
     }
 
+    case 'source':
+      return sourceBody();
+
     case 'review':
     default:
       return reviewBody();
   }
+}
+
+// --------------------------------------------------------- 5. where from
+//
+// The server has already worked out what each collection could cover. The
+// arithmetic for a given choice is simple and fixed, so it is repeated here
+// rather than asking the server again on every toggle — the choices go back
+// with the dry run on the next step, which is what confirms them.
+
+/** How a row breaks down under a choice. Mirrors decideSources on the server. */
+function split(row, choice) {
+  if (row.basic) return { bulk: row.need, transfer: 0, buy: 0 };
+  const bulk = choice === 'buy' ? 0 : Math.min(row.need, row.own_free);
+  let left = row.need - bulk;
+  const transfer = choice === 'transfer' ? Math.min(left, row.other_free) : 0;
+  left -= transfer;
+  return { bulk, transfer, buy: left };
+}
+
+const choiceOf = (row) => state.sources[row.name_norm] || 'bulk';
+
+function sourceTotals(rows) {
+  const t = { bulk: 0, transfer: 0, buy: 0 };
+  for (const r of rows) {
+    const s = split(r, choiceOf(r));
+    t.bulk += s.bulk; t.transfer += s.transfer; t.buy += s.buy;
+  }
+  return t;
+}
+
+function setAll(rows, choice) {
+  for (const r of rows) {
+    if (r.basic) continue;
+    if (choice === 'transfer' && !r.other_free) continue;
+    state.sources[r.name_norm] = choice;
+  }
+  paint();
+}
+
+function sourceBody() {
+  if (state.busy) return h('div', h('span.spinner'), ' Working out where the cards come from…');
+  if (state.error) {
+    return h('div',
+      h('div.err', [state.error.message, ...(state.error.errors || [])].join('\n')),
+      h('button.btn.sm', { style: { marginTop: '10px' }, onclick: dryRun }, 'Try again'));
+  }
+  const rows = state.plan?.sourcing || [];
+  if (!rows.length) return h('div', h('span.spinner'));
+
+  const other = rows.find((r) => r.other_owner)?.other_owner;
+  const t = sourceTotals(rows);
+  const decidable = rows.filter((r) => !r.basic);
+  const transferable = decidable.filter((r) => r.other_free > 0);
+
+  if (!decidable.length) {
+    return h('div.small.muted',
+      'Nothing to decide — every card here is a basic land, which the collection does not track.');
+  }
+
+  const chooser = (r) => {
+    if (r.basic) return h('span.small.muted', 'untracked');
+    const c = choiceOf(r);
+    const opt = (id, label, enabled, title) => h('button', {
+      class: c === id ? 'on' : '',
+      disabled: !enabled,
+      title: title || '',
+      onclick: () => { state.sources[r.name_norm] = id; paint(); },
+    }, label);
+    return h('div.seg.seg-sm',
+      opt('bulk', 'Bulk', r.own_free > 0, r.own_free ? '' : 'nothing spare in this collection'),
+      opt('transfer', other ? `From ${other}` : 'Transfer', r.other_free > 0,
+        r.other_free ? '' : `nothing spare in ${other || 'the other collection'}`),
+      opt('buy', 'New', true, 'get new copies and leave bulk alone'));
+  };
+
+  const covered = (r) => {
+    const s = split(r, choiceOf(r));
+    return h('td.small',
+      s.bulk ? h('span.chip.mini.ok', `${s.bulk} bulk`) : null,
+      s.transfer ? h('span.chip.mini', `${s.transfer} ${other}`) : null,
+      s.buy ? h('span.chip.mini.bad', `${s.buy} new`) : null);
+  };
+
+  return h('div',
+    h('div.flex-wrap', { style: { marginBottom: '10px' } },
+      h('span.small.muted', 'Set every card at once:'),
+      h('button.btn.sm', { onclick: () => setAll(decidable, 'bulk') }, 'All from bulk'),
+      other && transferable.length
+        ? h('button.btn.sm', {
+          onclick: () => setAll(transferable, 'transfer'),
+        }, `All from ${other} where possible`)
+        : null,
+      h('button.btn.sm', { onclick: () => setAll(decidable, 'buy') }, 'All new')),
+
+    h('div.summary-bar',
+      h('span', h('strong', num(t.bulk)), ' out of bulk'),
+      other ? h('span', h('strong', num(t.transfer)), ` from ${other}`) : null,
+      h('span', h('strong', num(t.buy)), ' bought new'),
+      h('span.spacer'),
+      h('span.muted', `${num(transferable.length)} card${transferable.length === 1 ? '' : 's'} `
+        + `could come from ${other || 'the other collection'}`)),
+
+    h('div.table-wrap', { style: { maxHeight: '46vh', overflowY: 'auto', marginTop: '10px' } },
+      h('table',
+        h('thead', h('tr',
+          h('th', 'Card'), h('th.num', 'Need'), h('th.num', 'Your bulk'),
+          h('th.num', other ? `${other}'s bulk` : 'Other'),
+          h('th', 'Source'), h('th', 'Covered by'))),
+        h('tbody', rows.map((r) => h('tr',
+          h('td.t-name', r.name),
+          h('td.num', r.need),
+          h('td.num', r.basic ? '—' : r.own_free),
+          h('td.num', r.basic ? '—' : r.other_free),
+          h('td', chooser(r)),
+          covered(r)))))));
 }
 
 function reviewBody() {
@@ -258,15 +382,28 @@ function reviewBody() {
       ...(state.is_proxy ? row('Proxy', 'yes — nothing will be bought') : []),
       ...row('Cards', `${num(p.card_count)} across ${num(p.rows)} rows`)),
 
+    p.transferred?.length
+      ? h('div', { style: { marginTop: '14px' } },
+        h('div.small',
+          h('span.tag.info', 'moving collections'),
+          ` these leave ${p.transferred[0][2]}'s collection and join ${state.owner}'s`),
+        h('div.chips', { style: { marginTop: '6px' } },
+          p.transferred.map(([n, q]) => h('span.chip.mini', `${q}× ${n}`))))
+      : null,
+
     p.acquired?.length
       ? h('div', { style: { marginTop: '14px' } },
         h('div.small',
           h('span.tag.warn', 'added to the collection'),
-          ' bulk has no spare copy of these, so creating the deck records them as acquired'),
+          ' nothing spare covers these, so creating the deck records them as acquired'),
         h('div.chips', { style: { marginTop: '6px' } },
           p.acquired.map(([n, q]) => h('span.chip.mini.bad', `+${q} ${n}`))))
-      : h('div.small.muted', { style: { marginTop: '14px' } },
-        'Every card comes out of bulk — nothing needs to be acquired.'));
+      : null,
+
+    !p.acquired?.length && !p.transferred?.length
+      ? h('div.small.muted', { style: { marginTop: '14px' } },
+        'Every card comes out of bulk — nothing is bought and nothing moves.')
+      : null);
 }
 
 // ------------------------------------------------------------------ shell

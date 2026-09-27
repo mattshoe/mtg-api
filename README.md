@@ -263,6 +263,23 @@ why one unparseable line refuses the whole request rather than applying
 the rest — dropping a line here would silently delete a card from the
 deck, and a typo should not do that.
 
+**You choose where each card comes from.** The dry run returns a
+`sourcing` array — per card, `need`, `own_free`, `other_free` and which
+owner the other collection belongs to. Send `sources` back as
+`{name_norm: "bulk" | "transfer" | "buy"}` to decide:
+
+- `bulk` (the default) takes what this collection has spare and buys the
+  rest
+- `transfer` takes the spare, then **moves** copies out of the other
+  collection, then buys whatever is still short
+- `buy` leaves bulk alone and gets the whole quantity new
+
+A transfer is a real inventory move: the other owner loses the copies,
+printing for printing, and the receiving rows are copied from theirs
+rather than re-fetched, so it works offline. It goes in the same batch as
+the deck — a deck claiming transferred cards while the transfer failed
+would be claiming someone else's.
+
 **Editing a list moves real cards.** A card put into a deck came from
 somewhere, so the collection is made to say so:
 
