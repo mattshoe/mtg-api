@@ -47,18 +47,78 @@ export function stripLiterals(sql) {
   return out;
 }
 
-// Anything that could change the database. GET is read-only, so these are
-// refused there — a URL that deletes rows is one link-preview or prefetch
-// away from doing it by accident. POST has no such restriction.
-const MUTATING = /\b(insert|update|delete|drop|create|alter|replace|attach|detach|reindex|vacuum|begin|commit|rollback)\b/i;
-
-/** Is this statement incapable of changing anything? */
-export function isReadOnly(sql) {
-  const bare = stripLiterals(sql);
-  if (MUTATING.test(bare)) return false;
-  const head = bare.replace(/^[\s;]*/, '').slice(0, 8).toUpperCase();
+/**
+ * Does this statement even look like a read? Cheap and synchronous, and on
+ * its own it already refuses INSERT, UPDATE, DELETE, DROP, ALTER, ATTACH,
+ * PRAGMA and the rest, because none of them begin with one of these words.
+ *
+ * What it cannot see is a write wearing a read's hat:
+ * `WITH x AS (...) INSERT INTO ...` begins with WITH. That is what
+ * `readOnlyCheck` is for.
+ */
+export function isReadOnlyShape(sql) {
+  const head = stripLiterals(sql).replace(/^[\s;(]*/, '').slice(0, 8).toUpperCase();
   return head.startsWith('SELECT') || head.startsWith('WITH')
     || head.startsWith('VALUES') || head.startsWith('EXPLAIN');
+}
+
+/**
+ * Opcodes a read cannot produce.
+ *
+ * Deliberately narrow. Every statement that modifies a table opens a cursor
+ * for writing, so `OpenWrite` is the signal; the rest are the schema and
+ * connection-level operations that bypass a table cursor.
+ *
+ * `Insert`, `IdxInsert` and `Delete` are NOT here on purpose: SQLite uses
+ * them to fill the ephemeral tables behind GROUP BY, DISTINCT and IN(...),
+ * so listing them would refuse ordinary reads.
+ */
+const WRITE_OPCODES = new Set([
+  'OpenWrite', 'Destroy', 'Clear', 'DropTable', 'DropIndex', 'DropTrigger',
+  'CreateBtree', 'ParseSchema', 'Attach', 'Detach', 'JournalMode', 'Vacuum',
+  'SetCookie', 'VUpdate', 'VCreate', 'VDestroy', 'VRename',
+]);
+
+/**
+ * Ask SQLite whether the statement writes, instead of guessing from words.
+ *
+ * `EXPLAIN` compiles the statement and hands back its program without ever
+ * running it, which is exactly what `sqlite3_stmt_readonly` inspects. A word
+ * list cannot do this job: `replace()` is a string function, so
+ * `SELECT replace(name,'a','b')` is a perfectly good read that the old
+ * blocklist refused, and `WITH x AS (...) DELETE ...` is a write it could
+ * only catch by accident.
+ *
+ * Returns `{ ok }`, or `{ ok: false, reason, syntax }` when the statement
+ * does not compile — in which case the message has offsets into the caller's
+ * own SQL, which the wrapped execution below cannot give.
+ */
+export async function readOnlyCheck(db, sql, params = []) {
+  if (!isReadOnlyShape(sql)) {
+    return {
+      ok: false,
+      reason: 'only SELECT, WITH, VALUES and EXPLAIN statements can be read over GET',
+    };
+  }
+  // EXPLAIN and EXPLAIN QUERY PLAN list a program, they never run it, and
+  // EXPLAIN cannot be applied to itself.
+  if (/^\s*explain\b/i.test(stripLiterals(sql))) return { ok: true };
+
+  let rows;
+  try {
+    rows = (await db.prepare(`EXPLAIN ${sql}`).bind(...params).all()).results || [];
+  } catch (e) {
+    return { ok: false, syntax: true, reason: withTruncationHint(cleanError(e), sql) };
+  }
+
+  const writes = [...new Set(rows.map((r) => r.opcode).filter((o) => WRITE_OPCODES.has(o)))];
+  if (writes.length) {
+    return {
+      ok: false,
+      reason: `that statement writes to the database (${writes.join(', ')}); use POST`,
+    };
+  }
+  return { ok: true };
 }
 
 /**
@@ -122,16 +182,63 @@ function toTsv(cols, rows) {
   return [cols.join('\t'), ...rows.map((r) => r.map(cell).join('\t'))].join('\n');
 }
 
+const cleanError = (e) => String(e.cause?.message || e.message || e)
+  .replace(/^D1_(ERROR|EXEC_ERROR):\s*/, '');
+
+/**
+ * A statement that is one bare word almost never means what it says.
+ *
+ * It means the sql parameter was not URL-encoded: an unencoded space ends
+ * the request target, so the server is handed `SELECT` and the rest of the
+ * query never arrives. Saying "incomplete input" and stopping there sends
+ * people looking for a fault in SQL they did write.
+ */
+const withTruncationHint = (msg, sql) => (/^\s*\w+\s*$/.test(sql)
+  ? `${msg} — received only "${sql.trim()}", which looks truncated; URL-encode the sql parameter`
+  : msg);
+
+/**
+ * An error message that points at the SQL the caller actually sent.
+ *
+ * A row-returning statement is executed wrapped in `SELECT * FROM (...)` to
+ * cap it, so SQLite's offsets and quoted tokens refer to text the caller
+ * never wrote. `sql=SELECT` came back as `near ")": syntax error at offset
+ * 23`, which describes the wrapper. Re-compiling the original with EXPLAIN
+ * — which never executes it — gets the real complaint.
+ */
+async function truthfulError(db, e, sql, wrapped, params = []) {
+  const raw = cleanError(e);
+  if (!wrapped) return raw;
+  try {
+    await db.prepare(`EXPLAIN ${sql}`).bind(...params).all();
+  } catch (inner) {
+    return withTruncationHint(cleanError(inner), sql);
+  }
+  return raw;
+}
+
+/**
+ * Does this statement need an admin token on POST?
+ *
+ * Conservative by construction: anything that is not shaped like a read
+ * needs one, no questions. The one shape that can hide a write behind a
+ * read's opening word is `WITH ... INSERT|UPDATE|DELETE`, and only that
+ * shape pays for the extra compile. A SELECT cannot write, so the common
+ * path costs nothing.
+ *
+ * A statement that does not compile is not a write — let it through and
+ * let the caller see the syntax error rather than a demand for a password.
+ */
+export async function mayWrite(db, sql) {
+  if (typeof sql !== 'string' || !isReadOnlyShape(sql)) return true;
+  if (!/^\s*with\b/i.test(stripLiterals(sql))) return false;
+  const verdict = await readOnlyCheck(db, sql);
+  return !verdict.ok && !verdict.syntax;
+}
+
 export async function runQuery(db, body, { readOnly = false } = {}) {
   const sql = typeof body.sql === 'string' ? body.sql.trim() : '';
   if (!sql) return { status: 400, body: { error: 'sql is required' } };
-
-  if (readOnly && !isReadOnly(sql)) {
-    return {
-      status: 405,
-      body: { error: 'GET /query is read-only; use POST for anything that writes' },
-    };
-  }
 
   const params = Array.isArray(body.params) ? body.params : [];
   const fmt = body.fmt || 'rows';
@@ -141,6 +248,17 @@ export async function runQuery(db, body, { readOnly = false } = {}) {
 
   if (!isSingleStatement(sql)) {
     return { status: 400, body: { error: 'one statement per request' } };
+  }
+
+  if (readOnly) {
+    const verdict = await readOnlyCheck(db, sql, params);
+    if (!verdict.ok) {
+      // A statement that does not compile is a bad request; one that
+      // compiles and writes is the wrong method for this endpoint.
+      return verdict.syntax
+        ? { status: 400, body: { error: verdict.reason } }
+        : { status: 405, body: { error: `GET /query is read-only: ${verdict.reason}` } };
+    }
   }
 
   let limit = body.limit === undefined ? DEFAULT_LIMIT : Number(body.limit);
@@ -153,7 +271,8 @@ export async function runQuery(db, body, { readOnly = false } = {}) {
   // SELECT or a statement with a trailing comment lands in the wrong place.
   let effective = sql.replace(/;\s*$/, '');
   let capped = false;
-  if (isRowReturning(effective) && !hasOwnLimit(effective)) {
+  const isExplain = /^\s*explain\b/i.test(stripLiterals(effective));
+  if (isRowReturning(effective) && !hasOwnLimit(effective) && !isExplain) {
     effective = `SELECT * FROM (\n${effective}\n) LIMIT ${limit + 1}`;
     capped = true;
   }
@@ -162,8 +281,7 @@ export async function runQuery(db, body, { readOnly = false } = {}) {
   try {
     res = await db.prepare(effective).bind(...params).all();
   } catch (e) {
-    const msg = String(e.cause?.message || e.message || e).replace(/^D1_(ERROR|EXEC_ERROR):\s*/, '');
-    return { status: 400, body: { error: msg } };
+    return { status: 400, body: { error: await truthfulError(db, e, sql, capped, params) } };
   }
 
   let results = res.results || [];

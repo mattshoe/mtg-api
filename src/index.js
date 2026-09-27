@@ -20,7 +20,7 @@
 // Reading is open. Anything that writes needs an admin token — see admin.js.
 
 import { getSchema } from './schema.js';
-import { runQuery, isReadOnly, stripLiterals } from './query.js';
+import { runQuery, mayWrite, stripLiterals } from './query.js';
 import { addCards, removeCards } from './cards.js';
 import { disassembleDeck, editDeckList, createDeck, FORMATS } from './decks.js';
 import { mintToken, verifyToken, bearer } from './admin.js';
@@ -267,12 +267,15 @@ async function route(request, env, ctx, entry) {
         }
         const out = await runQuery(env.DB, body, { readOnly: true });
         entry.detail = { sql: String(body.sql || '').slice(0, 300), n: out.body?.n };
+        // Without this a rejected GET logged no reason at all, which is how
+        // two 400s went unexplained.
+        if (out.status >= 400) entry.message = out.body?.error;
         return send(out);
       }
       if (method !== 'POST') return json({ error: 'use GET or POST' }, 405);
     const { body, error } = await readJson(request);
     if (error) return json({ error }, 400);
-    const writes = typeof body.sql === 'string' && !isReadOnly(body.sql);
+    const writes = await mayWrite(env.DB, body.sql);
     // Reads are open, except the log — see /logs. Gating the endpoint but
     // not the table would leave the data one SELECT away.
     if (writes || touchesLogs(body.sql)) {

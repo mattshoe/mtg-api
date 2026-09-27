@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { post, get, sql, count } from './helpers.js';
+import { post, postAnon, get, sql, count, snapshot, stubScryfall } from './helpers.js';
 import { isSingleStatement } from '../src/query.js';
 
 describe('POST /query response shapes', () => {
@@ -284,5 +284,164 @@ describe('GET /query', () => {
     const r = await post('/query', { sql: 'DELETE FROM deck_notes' });
     expect(r.status).toBe(200);
     expect(await count('deck_notes')).toBe(0);
+  });
+});
+
+// ------------------------------------------------- read-only over GET
+//
+// The guard used to be a keyword blocklist over the raw statement, which got
+// it wrong in both directions: it refused reads that merely contained one of
+// the words, and it only caught a write hidden behind a CTE by accident. It
+// asks SQLite now — EXPLAIN compiles the statement and hands back its
+// program without running it, and a program that opens a cursor for writing
+// is not a read.
+
+const getSql = (sql, extra = '') =>
+  get(`/query?sql=${encodeURIComponent(sql)}${extra}`);
+
+describe('GET /query — reads that must be allowed', () => {
+  const reads = [
+    ['a join',
+      "SELECT c.name, u.free FROM cards c JOIN card_usage u ON u.name_norm = c.name_norm"
+      + " AND u.owner = c.owner WHERE c.owner = 'matt' LIMIT 5"],
+    ['a subquery',
+      "SELECT name FROM cards WHERE owner = 'matt' AND name_norm IN"
+      + " (SELECT name_norm FROM deck_cards) LIMIT 5"],
+    ['a scalar function',
+      "SELECT name FROM cards WHERE substr(type_line, 1, 8) = 'Artifact' LIMIT 5"],
+    // The one the blocklist actually broke: replace() is a string function,
+    // and `\breplace\b` matched it.
+    ['replace(), which is a function and not a statement',
+      "SELECT replace(name, 'a', 'b') AS x FROM cards LIMIT 2"],
+    ['a CTE', 'WITH t AS (SELECT name FROM cards LIMIT 3) SELECT * FROM t'],
+    ['a nested CTE feeding a join',
+      'WITH t AS (SELECT name_norm FROM cards LIMIT 5)'
+      + ' SELECT c.name FROM cards c JOIN t ON t.name_norm = c.name_norm LIMIT 5'],
+    ['GROUP BY and DISTINCT, which fill ephemeral tables internally',
+      'SELECT DISTINCT rarity, COUNT(*) AS n FROM cards GROUP BY rarity ORDER BY n DESC'],
+    ['EXPLAIN QUERY PLAN', 'EXPLAIN QUERY PLAN SELECT name FROM cards'],
+    ['VALUES', 'VALUES (1, 2)'],
+    ['a literal containing the word delete',
+      "SELECT COUNT(*) AS n FROM cards WHERE name = 'Delete the Evidence'"],
+    ['a compound select',
+      'SELECT name FROM cards UNION SELECT name FROM deck_cards LIMIT 5'],
+  ];
+
+  for (const [label, sql] of reads) {
+    it(`allows ${label}`, async () => {
+      const r = await getSql(sql);
+      expect(r.status, JSON.stringify(r.body)).toBe(200);
+    });
+  }
+});
+
+describe('GET /query — writes that must stay refused', () => {
+  const writes = [
+    ['INSERT', "INSERT INTO tags (slug, kind, label) VALUES ('x', 'y', 'z')"],
+    ['UPDATE', "UPDATE cards SET qty = 99 WHERE owner = 'matt'"],
+    ['DELETE', 'DELETE FROM cards'],
+    ['DROP', 'DROP TABLE cards'],
+    ['CREATE', 'CREATE TABLE evil (a TEXT)'],
+    ['ALTER', 'ALTER TABLE cards ADD COLUMN evil TEXT'],
+    ['ATTACH', "ATTACH DATABASE 'x.db' AS x"],
+    ['REINDEX', 'REINDEX'],
+    ['a PRAGMA write', 'PRAGMA writable_schema = 1'],
+    // The one a word list only catches by luck: it opens with WITH.
+    ['a write hidden behind a CTE',
+      "WITH t AS (SELECT 'x' AS s) INSERT INTO tags (slug, kind, label)"
+      + " SELECT s, 'k', 'l' FROM t"],
+    ['a delete hidden behind a CTE',
+      'WITH t AS (SELECT id FROM cards LIMIT 1) DELETE FROM cards WHERE id IN (SELECT id FROM t)'],
+  ];
+
+  for (const [label, sql] of writes) {
+    it(`refuses ${label}, and changes nothing`, async () => {
+      const before = await snapshot();
+      const r = await getSql(sql);
+      expect(r.status, JSON.stringify(r.body)).toBe(405);
+      expect(r.body.error).toMatch(/read-only/);
+      expect(await snapshot()).toEqual(before);
+    });
+  }
+
+  it('says why, not just no', async () => {
+    const r = await getSql('DELETE FROM cards');
+    expect(r.body.error).toMatch(/only SELECT, WITH, VALUES and EXPLAIN/);
+  });
+
+  it('names the write it found when the shape looked like a read', async () => {
+    const r = await getSql(
+      "WITH t AS (SELECT 'x' AS s) INSERT INTO tags (slug, kind, label) SELECT s, 'k', 'l' FROM t",
+    );
+    expect(r.body.error).toMatch(/writes to the database/);
+    expect(r.body.error).toMatch(/OpenWrite/);
+  });
+});
+
+describe('GET /query — errors that explain themselves', () => {
+  it('reports a syntax error against the caller\'s own SQL, not the wrapper', async () => {
+    // The limit wrap made this come back as `near ")": syntax error at
+    // offset 23` — a bracket the caller never typed.
+    const r = await getSql('SELECT');
+    expect(r.status).toBe(400);
+    expect(r.body.error).not.toMatch(/near "\)"/);
+    expect(r.body.error).toMatch(/incomplete input|syntax error/i);
+  });
+
+  it('spots a query truncated by an unencoded space and says so', async () => {
+    const r = await getSql('SELECT');
+    expect(r.body.error).toMatch(/truncated/);
+    expect(r.body.error).toMatch(/URL-encode/);
+  });
+
+  it('still says when the sql parameter is missing entirely', async () => {
+    const r = await get('/query');
+    expect(r.status).toBe(400);
+    expect(r.body.error).toBe('sql is required');
+  });
+
+  it('reports an unknown column against the real statement', async () => {
+    const r = await getSql('SELECT nope FROM cards');
+    expect(r.status).toBe(400);
+    expect(r.body.error).toMatch(/no such column: nope/);
+  });
+});
+
+describe('POST /query — the auth gate follows the same truth', () => {
+  it('lets an anonymous read use replace() without demanding a token', async () => {
+    const r = await postAnon('/query', { sql: "SELECT replace(name,'a','b') AS x FROM cards LIMIT 1" });
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+  });
+
+  it('still demands a token for a write hidden behind a CTE', async () => {
+    const before = await snapshot();
+    const r = await postAnon('/query', {
+      sql: "WITH t AS (SELECT 'x' AS s) INSERT INTO tags (slug, kind, label) SELECT s, 'k', 'l' FROM t",
+    });
+    expect(r.status).toBe(401);
+    expect(await snapshot()).toEqual(before);
+  });
+
+  it('still demands a token for a plain write', async () => {
+    const r = await postAnon('/query', { sql: 'DELETE FROM cards' });
+    expect(r.status).toBe(401);
+  });
+});
+
+describe('the test harness itself', () => {
+  it('hands the Worker a stub, never the real fetch', async () => {
+    // Guards the thing that actually broke: a call with no stub used to get
+    // real network access. Now the default is the stub, so an add that the
+    // stub cannot resolve fails on the card, not on a timeout.
+    const r = await post('/cards/add', { list: '1 Definitely Not A Real Card', dry_run: true });
+    expect(r.status).toBe(200);
+    expect(r.body.errors.join(' ')).toMatch(/no card named/);
+  });
+
+  it('a deliberately offline stub fails fast and writes nothing', async () => {
+    const before = await count('cards', "name_norm = 'sol ring'");
+    const r = await post('/cards/add', { list: '1 Sol Ring' }, stubScryfall({ fail: true }));
+    expect(r.status).toBeGreaterThanOrEqual(400);
+    expect(await count('cards', "name_norm = 'sol ring'")).toBe(before);
   });
 });
