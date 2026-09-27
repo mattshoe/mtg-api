@@ -3,16 +3,25 @@
 // Reads stay open. Writes need a token, and the only way to get one is to
 // present the password to POST /admin.
 //
-// The token is a signed expiry, not a stored session: `<exp>.<hmac>`, where
-// the HMAC key is the password itself. Nothing to persist, nothing to clean
-// up, and revoking everything outstanding is one `wrangler secret put`.
+// The token is a signature, not a stored session: `<exp>.<hmac>`, where the
+// HMAC key is the password itself. Nothing to persist, nothing to clean up,
+// and revoking everything outstanding is one `wrangler secret put`.
+//
+// It does not expire. It used to last twelve hours, which meant re-entering
+// the password most days and, worse, in the middle of things that are a
+// fresh page load — a decklist shared in from the Android share sheet had
+// to survive the login before it could reach the box. `0` in the expiry
+// slot means no expiry; a real number there is one of the old twelve-hour
+// tokens, still honoured until its time runs out.
 //
 // Worth being clear about what this is and is not. It stops a stray curl, a
 // bookmarked page left open, and an agent that wandered off its instructions.
 // It is not protection against someone who has the password, and the token
 // travels in a header over TLS like any bearer token.
 
-const TTL_SECONDS = 12 * 60 * 60;
+// The expiry slot's stand-in for "never". Still signed, so it cannot be
+// forged onto a token that had a real one.
+const NO_EXPIRY = '0';
 
 const enc = new TextEncoder();
 
@@ -40,8 +49,10 @@ export async function mintToken(env, password) {
   if (!secret) throw new Error('ADMIN_PASSWORD is not configured on this Worker');
   if (typeof password !== 'string' || !equal(password, secret)) return null;
 
-  const exp = Math.floor(Date.now() / 1000) + TTL_SECONDS;
-  return { token: `${exp}.${await sign(secret, String(exp))}`, expires_at: exp };
+  return {
+    token: `${NO_EXPIRY}.${await sign(secret, NO_EXPIRY)}`,
+    expires_at: null,
+  };
 }
 
 /** -> { ok } | { ok: false, reason } */
@@ -56,6 +67,9 @@ export async function verifyToken(env, token) {
   const expected = await sign(secret, expPart);
   if (!equal(mac, expected)) return { ok: false, reason: 'invalid admin token' };
 
+  if (expPart === NO_EXPIRY) return { ok: true };
+
+  // One of the old timed tokens. Honour it until it lapses.
   const exp = Number(expPart);
   if (!Number.isFinite(exp) || exp * 1000 < Date.now()) {
     return { ok: false, reason: 'admin session expired — unlock again' };

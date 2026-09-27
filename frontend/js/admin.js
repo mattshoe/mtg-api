@@ -1,15 +1,16 @@
 // Admin mode in the browser.
 //
-// The token is kept until it expires, across reloads and across launches
+// The token is kept until you lock it, across reloads and across launches
 // of the installed app. It used to live in a module variable and die with
 // the page, which read well and was miserable to use: a share from the
 // Android share sheet is a fresh page load, so every single one asked for
 // the password again before it would show you the list it had just been
 // handed.
 //
-// What is stored is the token the server issued and its expiry, not the
-// password. It is a twelve-hour bearer token for one database, and the
-// server is still the only thing that decides whether it is any good.
+// What is stored is the token the server issued, not the password, and the
+// server is still the only thing that decides whether it is any good. The
+// lock button and `wrangler secret put ADMIN_PASSWORD` are the two ways
+// out.
 
 import { API } from './api.js';
 import { h, fill, toast, store } from './util.js';
@@ -18,14 +19,18 @@ import { pushOverlay, dropOverlay, forgetOverlay } from './overlay.js';
 const KEY = 'admin';
 
 let token = null;
-let expiresAt = 0;
+// Null means it does not expire, which is what the server issues now. A
+// number is one of the old twelve-hour tokens, still good until it lapses.
+let expiresAt = null;
 const listeners = new Set();
+
+const live = (exp) => exp === null || exp === undefined || exp * 1000 > Date.now();
 
 // Picked up before anything else runs, so the first route already knows
 // whether the admin pages are reachable.
 (function restore() {
   const saved = store.get(KEY, null);
-  if (!saved?.token || !(saved.expires_at * 1000 > Date.now())) {
+  if (!saved?.token || !live(saved.expires_at)) {
     if (saved) store.del(KEY);
     return;
   }
@@ -33,7 +38,7 @@ const listeners = new Set();
   expiresAt = saved.expires_at;
 }());
 
-export const isAdmin = () => Boolean(token) && expiresAt * 1000 > Date.now();
+export const isAdmin = () => Boolean(token) && live(expiresAt);
 export const authHeader = () => (isAdmin() ? { authorization: `Bearer ${token}` } : {});
 
 export function onAdminChange(fn) {
@@ -48,7 +53,7 @@ function announce() {
 export function lock({ quiet = false } = {}) {
   const was = isAdmin();
   token = null;
-  expiresAt = 0;
+  expiresAt = null;
   store.del(KEY);
   announce();
   if (was && !quiet) toast('Admin mode off');
@@ -68,7 +73,7 @@ export async function unlock(password) {
   }
   const body = await res.json();
   token = body.token;
-  expiresAt = body.expires_at;
+  expiresAt = body.expires_at ?? null;
   store.set(KEY, { token, expires_at: expiresAt });
   announce();
   return true;
@@ -144,7 +149,7 @@ export function promptUnlock(afterUnlock) {
     h('h2', { style: { marginBottom: '4px' } }, 'Admin mode'),
     h('div.muted.small', { style: { marginBottom: '14px' } },
       'Needed for adding and removing cards, and for any SQL that writes. '
-      + 'Stays on until it expires, or until you lock it.'),
+      + 'Stays on until you lock it.'),
     h('div.field', input),
     err,
     h('div.flex', { style: { marginTop: '12px' } },

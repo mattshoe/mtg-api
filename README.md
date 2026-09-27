@@ -124,7 +124,7 @@ includes the price refresh.
 ### `POST /admin`
 
 Password in, token out. The token is a signed expiry (`<unix>.<hmac>`), good
-for 12 hours, not stored anywhere on the server.
+until the password is rotated, not stored anywhere on the server.
 
 ```bash
 curl -X POST https://mtg-api.mattshoe81.workers.dev/admin \
@@ -132,7 +132,7 @@ curl -X POST https://mtg-api.mattshoe81.workers.dev/admin \
 ```
 
 ```json
-{"ok":true,"token":"1790487821.vazqY21…","expires_at":1790487821}
+{"ok":true,"token":"0.vazqY21…","expires_at":null}
 ```
 
 Send it back as `Authorization: Bearer <token>` on anything that writes. Without

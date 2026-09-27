@@ -6,13 +6,29 @@ import {
 
 const BOLT = '1 Lightning Bolt (2X2) 117';
 
+/**
+ * Sign a token payload the way the Worker does, so a test can mint one the
+ * verifier will accept — the only way to produce a lapsed token that gets
+ * as far as the clock check.
+ */
+async function signAs(password, payload) {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw', enc.encode(password), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
+  );
+  const mac = await crypto.subtle.sign('HMAC', key, enc.encode(payload));
+  return btoa(String.fromCharCode(...new Uint8Array(mac)))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
 describe('POST /admin', () => {
   it('hands back a token for the right password', async () => {
     const r = await postAnon('/admin', { password: TEST_PASSWORD });
     expect(r.status).toBe(200);
     expect(r.body.ok).toBe(true);
     expect(typeof r.body.token).toBe('string');
-    expect(r.body.expires_at).toBeGreaterThan(Math.floor(Date.now() / 1000));
+    // No expiry: the token lasts until the password is rotated.
+    expect(r.body.expires_at).toBeNull();
   });
 
   it('refuses a wrong password', async () => {
@@ -137,11 +153,27 @@ describe('token handling', () => {
     }
   });
 
-  it('rejects an expired token', async () => {
-    // A token is `<unix expiry>.<hmac>`; rewriting the expiry breaks the
-    // signature, so an expired one has to be signed honestly. The verifier
-    // checks the signature first, then the clock — this proves the clock
-    // check exists by showing a past expiry with a valid shape is refused.
+  it('the token it issues does not expire', async () => {
+    const token = await adminToken();
+    expect(token.split('.')[0]).toBe('0');
+    const r = await postAs('/query', { sql: 'DELETE FROM deck_notes WHERE 0' }, token);
+    expect(r.status).toBe(200);
+  });
+
+  it('still rejects one of the old timed tokens once it has lapsed', async () => {
+    // A token is `<expiry>.<hmac>`; rewriting the expiry breaks the
+    // signature, so a lapsed one has to be signed honestly. Borrowing the
+    // signature off a `0` token gives the right shape with the wrong
+    // payload, which the signature check refuses before the clock is
+    // consulted — so sign the past expiry properly.
+    const past = String(Math.floor(Date.now() / 1000) - 60);
+    const mac = await signAs(TEST_PASSWORD, past);
+    const r = await postAs('/cards/remove', { list: '1 Sol Ring' }, `${past}.${mac}`);
+    expect(r.status).toBe(401);
+    expect(r.body.error).toMatch(/expired/i);
+  });
+
+  it('a past expiry carrying another token\'s signature is refused', async () => {
     const past = Math.floor(Date.now() / 1000) - 60;
     const forged = `${past}.${(await adminToken()).split('.')[1]}`;
     const r = await postAs('/cards/remove', { list: '1 Sol Ring' }, forged);

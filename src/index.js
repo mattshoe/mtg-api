@@ -84,7 +84,7 @@ const INDEX = {
     'POST /decks/create': '{"name":"...","format":"commander","owner":"matt","commander":"...","list":"..."} — needs admin',
     'POST /decks/list': '{"slug":"...","list":"1 Sol Ring\\n...","dry_run":false} — replaces the deck list; needs admin',
     'POST /prices': '{"ids":["<scryfall id>",...]} -> {"prices":{id:{usd,foil,etched,eur,tix,tcg}}}',
-    'POST /admin': '{"password":"..."} -> {"token":"...","expires_at":<unix>}',
+    'POST /admin': '{"password":"..."} -> {"token":"...","expires_at":null}',
     'GET /logs': '?min=info&q=&event=&status=error&since=24&limit=100 — admin only',
     'GET /logs/stats': 'counts, slowest routes, retention — admin only',
     'GET /maintenance': 'what the daily job did last',
