@@ -1,16 +1,37 @@
 // Admin mode in the browser.
 //
-// The token lives in a module variable and nowhere else — not localStorage,
-// not sessionStorage, not the URL. Closing the tab ends the session, which
-// is the point. A reload ends it too.
+// The token is kept until it expires, across reloads and across launches
+// of the installed app. It used to live in a module variable and die with
+// the page, which read well and was miserable to use: a share from the
+// Android share sheet is a fresh page load, so every single one asked for
+// the password again before it would show you the list it had just been
+// handed.
+//
+// What is stored is the token the server issued and its expiry, not the
+// password. It is a twelve-hour bearer token for one database, and the
+// server is still the only thing that decides whether it is any good.
 
 import { API } from './api.js';
-import { h, fill, toast } from './util.js';
+import { h, fill, toast, store } from './util.js';
 import { pushOverlay, dropOverlay, forgetOverlay } from './overlay.js';
+
+const KEY = 'admin';
 
 let token = null;
 let expiresAt = 0;
 const listeners = new Set();
+
+// Picked up before anything else runs, so the first route already knows
+// whether the admin pages are reachable.
+(function restore() {
+  const saved = store.get(KEY, null);
+  if (!saved?.token || !(saved.expires_at * 1000 > Date.now())) {
+    if (saved) store.del(KEY);
+    return;
+  }
+  token = saved.token;
+  expiresAt = saved.expires_at;
+}());
 
 export const isAdmin = () => Boolean(token) && expiresAt * 1000 > Date.now();
 export const authHeader = () => (isAdmin() ? { authorization: `Bearer ${token}` } : {});
@@ -28,6 +49,7 @@ export function lock({ quiet = false } = {}) {
   const was = isAdmin();
   token = null;
   expiresAt = 0;
+  store.del(KEY);
   announce();
   if (was && !quiet) toast('Admin mode off');
 }
@@ -47,6 +69,7 @@ export async function unlock(password) {
   const body = await res.json();
   token = body.token;
   expiresAt = body.expires_at;
+  store.set(KEY, { token, expires_at: expiresAt });
   announce();
   return true;
 }
@@ -98,7 +121,7 @@ export function promptUnlock(afterUnlock) {
       await unlock(pw);
       if (afterUnlock) closeAndGo(afterUnlock);
       else close();
-      toast('Admin mode on — edits enabled for this tab', 'ok');
+      toast('Admin mode on', 'ok');
     } catch (e) {
       err.textContent = String(e.message);
       err.hidden = false;
@@ -121,7 +144,7 @@ export function promptUnlock(afterUnlock) {
     h('h2', { style: { marginBottom: '4px' } }, 'Admin mode'),
     h('div.muted.small', { style: { marginBottom: '14px' } },
       'Needed for adding and removing cards, and for any SQL that writes. '
-      + 'Lasts for this tab only.'),
+      + 'Stays on until it expires, or until you lock it.'),
     h('div.field', input),
     err,
     h('div.flex', { style: { marginTop: '12px' } },
