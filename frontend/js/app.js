@@ -98,8 +98,6 @@ addEventListener('hashchange', () => {
   // Search rewrites its own hash as filters change; do not remount for that.
   const { view, query } = parseHash();
   if (view === 'search' && currentView === 'search' && $('#view').dataset.view === 'search') {
-    const want = search.fromHash(query);
-    // Only remount when something arrived from outside (a link, back button).
     search.show(query);
     return;
   }

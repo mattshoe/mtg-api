@@ -15,7 +15,7 @@ import {
   DEFAULTS, PAGE_SIZE, SORTS, COLOR_MODES, FLAGS, buildQuery, toHash, fromHash,
 } from './filters.js';
 import { cheatsheet } from './cheatsheet.js';
-import { money, exact, priceOrReason, priceReason } from './prices.js';
+import { money, priceReason } from './prices.js';
 
 
 let state = { ...DEFAULTS };

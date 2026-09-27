@@ -125,7 +125,6 @@ function historyPanel() {
 
 // One flow at a time, reset on every mount. It lives outside paint() so a
 // step change can repaint without threading state through every caller.
-let currentMode = 'add';
 let flow = null;
 
 const blank = (mode) => ({
@@ -456,7 +455,6 @@ function paint() {
 }
 
 function render(mode) {
-  currentMode = mode;
   flow = blank(mode);
   paint();
 }

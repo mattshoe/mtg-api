@@ -6,6 +6,7 @@ import {
   loading, errorBox, empty,
 } from './util.js';
 import { openCard } from './card.js';
+import { isAdmin } from './admin.js';
 
 const COLOR_CSS = { W: 'var(--w)', U: 'var(--u)', B: 'var(--b)', R: 'var(--r)', G: 'var(--g)' };
 

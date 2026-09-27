@@ -6,7 +6,7 @@ import {
   loading, errorBox, toast,
 } from './util.js';
 import { isAdmin } from './admin.js';
-import { exact, priceOrReason, priceReason } from './prices.js';
+import { exact, priceReason } from './prices.js';
 
 let onClose = null;
 let current = null;

@@ -1,6 +1,6 @@
 // The query box reference. Everything it understands, in one overlay.
 
-import { h, $ } from './util.js';
+import { h } from './util.js';
 import { IS_VALUES } from './filters.js';
 
 const KEYS = [

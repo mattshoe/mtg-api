@@ -5,7 +5,7 @@
 // is the point. A reload ends it too.
 
 import { API } from './api.js';
-import { h, $, fill, toast } from './util.js';
+import { h, fill, toast } from './util.js';
 
 let token = null;
 let expiresAt = 0;
