@@ -31,7 +31,7 @@
 //     is no way to tell an empty POST from a body it declined to parse, so
 //     the raw bytes get split by hand as well and the two are compared.
 
-const VERSION = 'sw-8';
+const VERSION = 'sw-9';
 
 const API = 'https://mtg-api.mattshoe81.workers.dev';
 const CACHE = 'share-inbox';
@@ -172,6 +172,34 @@ async function park(payload) {
   }
 }
 
+/**
+ * Hand the body to the API and let a real server read it.
+ *
+ * Chromium can hand a service worker an empty body for a navigation POST
+ * even when the request carried a file, and every read on this side goes
+ * through the same request object — so two local parsers agreeing that it
+ * is empty proves nothing at all. Streaming it out untouched is the only
+ * way to find out what Chrome actually sent, and if the stream survives
+ * where the parsers did not, it is also the fix.
+ */
+async function askServer(request, contentType) {
+  try {
+    const res = await fetch(`${API}/share`, {
+      method: 'POST',
+      headers: {
+        'content-type': contentType,
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
+      body: request.body,
+      duplex: 'half',
+    });
+    if (!res.ok) return { error: `server said ${res.status}` };
+    return await res.json();
+  } catch (e) {
+    return { error: String(e && e.message) };
+  }
+}
+
 async function receive(request, event) {
   shareId = Math.random().toString(36).slice(2, 8);
   const seen = [];
@@ -196,6 +224,10 @@ async function receive(request, event) {
     clientId: event?.clientId || null,
     resultingClientId: event?.resultingClientId || null,
   });
+
+  // Taken first, off its own clone, so nothing here has read the stream
+  // before it is forwarded.
+  const forwarded = askServer(request.clone(), headers['content-type'] || '');
 
   let raw = '';
   try {
@@ -287,7 +319,28 @@ async function receive(request, event) {
     }, 'warn');
   }
 
-  const list = parts.join('\n').trim();
+  let list = parts.join('\n').trim();
+
+  // What the server made of the same bytes. If it found a file that
+  // nothing on this side could see, that is the answer and it wins.
+  const server = await forwarded;
+  let viaServer = false;
+  await say('server read the same body', {
+    localChars: list.length,
+    serverChars: server?.list ? server.list.length : 0,
+    serverReport: server?.report || null,
+    serverError: server?.error || null,
+  }, server?.error ? 'warn' : 'info');
+  if (!list && server?.list) {
+    list = server.list.trim();
+    viaServer = true;
+    for (const n of server.names || []) names.push(n);
+    for (const f of server.report?.files || []) seen.push(f);
+    await say('the server saw a file this side could not', {
+      chars: list.length, files: server.report?.files || [],
+    }, 'warn');
+  }
+
   const problem = list
     ? null
     : (failure ? `the share could not be read (${failure}).` : describe(seen, fields));
@@ -305,6 +358,8 @@ async function receive(request, event) {
       chars: list.length,
       failure,
       rescued,
+      viaServer,
+      server: server?.report || { error: server?.error || null },
       req: {
         ct: ct || null,
         len: headers['content-length'] || null,

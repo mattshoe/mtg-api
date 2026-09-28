@@ -155,6 +155,62 @@ async function route(request, env, ctx, entry) {
       return json(await getSchema(env.DB));
     }
 
+  // The share body, parsed somewhere other than the phone.
+  //
+  // Chromium has a long-standing problem where reading a navigation POST
+  // inside a service worker — formData(), text(), any of it — can come
+  // back empty even though the request carried a file. Both reads on the
+  // phone go through the same request object, so both would be empty for
+  // the same reason and agreeing with each other proves nothing. This is
+  // the control: the worker forwards the body here untouched and a real
+  // server says what is actually in it.
+  if (path === '/share') {
+    if (method !== 'POST') return json({ error: 'use POST' }, 405);
+    const ct = request.headers.get('content-type') || '';
+    const raw = await request.arrayBuffer();
+
+    const files = [];
+    const fields = [];
+    const parts = [];
+    const names = [];
+    let err = null;
+
+    try {
+      const form = await new Response(raw, { headers: { 'content-type': ct } }).formData();
+      for (const [field, value] of form.entries()) {
+        if (typeof value === 'string') {
+          fields.push({ field, length: value.length });
+          const t = value.trim();
+          if (t && field !== 'url' && !/^https?:\/\/\S+$/i.test(t)) parts.push(t);
+          continue;
+        }
+        files.push({ field, name: value.name || '', type: value.type || '', size: value.size || 0 });
+        const text = await value.text();
+        if (text && !text.includes('\u0000')) { parts.push(text); if (value.name) names.push(value.name); }
+      }
+    } catch (e) {
+      err = String(e.message || e);
+    }
+
+    const list = parts.join('\n').trim();
+    const decoder = new TextDecoder();
+    entry.event = 'share';
+    entry.level = list ? 'info' : 'warn';
+    entry.message = list
+      ? `share: ${list.length} chars from ${names.join(', ') || 'text'}`
+      : 'share: the body reached the server with nothing usable in it';
+    entry.detail = {
+      contentType: ct,
+      bytes: raw.byteLength,
+      files,
+      fields,
+      chars: list.length,
+      error: err,
+      head: decoder.decode(raw.slice(0, 1500)),
+    };
+    return json({ ok: true, list, names, report: { bytes: raw.byteLength, ct, files, fields, error: err } });
+  }
+
   // The browser reporting something the server cannot see for itself.
   // The share target runs entirely in a service worker on the phone, so
   // without this there is no way to find out what Android actually handed
