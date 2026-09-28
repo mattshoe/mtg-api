@@ -1,45 +1,51 @@
 package org.mattshoe.mtg.web
 
-import kotlinx.browser.document
+import androidx.compose.runtime.Composition
 import kotlinx.browser.window
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import org.jetbrains.compose.web.renderComposable
 import org.mattshoe.mtg.core.MassEntry
 import org.mattshoe.mtg.core.MtgApi
+import org.w3c.dom.HTMLElement
 
 /**
- * Entry point for the Compose HTML build of the wizard.
+ * The bridge the hand-written app mounts this through.
  *
- * It mounts into an element the existing page already has, so this can go
- * live behind a flag beside the hand-written version rather than
- * replacing it — one route renders the old page, one renders this, and
- * the two can be compared side by side on the same stylesheet.
+ * Deliberately not a page of its own. The site is eighteen screens and
+ * this is one of them, so it loads on the entry route and nowhere else —
+ * the other seventeen never pay for the Compose runtime, and the router,
+ * the nav and the rest of the app carry on exactly as they were.
+ *
+ * `window.mtgEntry.mount(el, list, token)` renders into an element the
+ * caller owns; `unmount()` disposes it on the way out. Leaving a
+ * composition attached to a node the router is about to replace is how
+ * you get two of them.
  */
-fun main() {
-    val token = runCatching {
-        window.localStorage.getItem("mtg.admin")?.let { raw ->
-            Regex("\"token\"\\s*:\\s*\"([^\"]+)\"").find(raw)?.groupValues?.get(1)
+@JsExport
+object MtgEntry {
+
+    private var composition: Composition? = null
+
+    fun mount(root: HTMLElement, sharedList: String?, token: String) {
+        unmount()
+        composition = renderComposable(root = root) {
+            MassEntryPage(
+                api = MtgApi(),
+                token = token,
+                scope = CoroutineScope(Dispatchers.Main),
+                initial = if (sharedList.isNullOrBlank()) MassEntry() else MassEntry.fromShare(sharedList),
+            )
         }
-    }.getOrNull().orEmpty()
+    }
 
-    // A list shared in arrives in the fragment, exactly as the service
-    // worker already delivers it to the hand-written page.
-    val shared = Regex("[?&]share=([^&]*)").find(window.location.hash)
-        ?.groupValues?.get(1)
-        ?.let { runCatching { decodeURIComponent(it) }.getOrNull() }
-        ?.let { runCatching { JSON.parse<dynamic>(it).list as? String }.getOrNull() }
-        .orEmpty()
-
-    val mount = document.getElementById("view") ?: document.body!!
-    renderComposable(root = mount) {
-        MassEntryPage(
-            api = MtgApi(),
-            token = token,
-            scope = CoroutineScope(Dispatchers.Main),
-            initial = if (shared.isNotEmpty()) MassEntry.fromShare(shared) else MassEntry(),
-        )
+    fun unmount() {
+        composition?.dispose()
+        composition = null
     }
 }
 
-private external fun decodeURIComponent(s: String): String
+fun main() {
+    // Hang it off window so plain JS can reach it without a module loader.
+    window.asDynamic().mtgEntry = MtgEntry
+}

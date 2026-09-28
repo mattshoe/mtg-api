@@ -12,6 +12,7 @@ plugins {
 // that away, which is not a trade worth making for a site that is
 // almost entirely card names and tables.
 kotlin {
+    // @JsExport on a plain object needs the export to survive DCE.
     js(IR) {
         browser {
             commonWebpackConfig { outputFileName = "mtg.js" }

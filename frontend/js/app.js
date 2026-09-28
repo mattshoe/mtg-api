@@ -14,6 +14,7 @@ import {
 import * as search from './search.js';
 import * as decks from './decks.js';
 import * as manage from './manage.js';
+import { mountEntry, unmountEntry } from './kmp.js';
 import * as stats from './stats.js';
 import * as sqlConsole from './console.js';
 import * as logs from './logs.js';
@@ -27,12 +28,17 @@ api.useAuth(authHeader, rejected);
 // Views that do nothing without a token. While locked they are not
 // reachable and their tabs are not in the DOM's flow at all — the lock in
 // the header is the only sign they exist.
-const GATED = new Set(['entry', 'logs']);
+const GATED = new Set(['entry', 'entryjs', 'logs']);
 
 const ROUTES = {
   search: (rest) => search.show(rest),
   decks: (rest) => decks.show(rest),
-  entry: () => manage.show(),
+  // The multiplatform build. Its rules are shared with the Android app,
+  // so the two cannot disagree about what is reachable.
+  entry: () => showEntry(),
+  // The hand-written one, still here and one hash away, so a bad deploy
+  // of the bundle is a link rather than a rollback.
+  entryjs: () => manage.show(),
   stats: (rest) => stats.show(rest),
   console: () => sqlConsole.show(),
   logs: () => logs.show(),
@@ -60,6 +66,10 @@ async function route() {
   // Navigating out from under the drawer closes it. Leaving it up over a
   // page it does not belong to is how back got confusing in the first place.
   hideCardForRoute();
+
+  // And a live Compose composition must not be left attached to a node
+  // the router is about to replace.
+  if (currentView === 'entry' && view !== 'entry') unmountEntry();
 
   for (const a of $$('#tabs a')) a.classList.toggle('on', a.dataset.view === view);
   $('#tabs').classList.remove('open');
@@ -92,6 +102,21 @@ async function route() {
     fill($('#view'), h('div.wrap', h('div.err', String(e.message || e))));
   }
   if (!sameView) window.scrollTo(0, 0);
+}
+
+/**
+ * The entry route, multiplatform build first.
+ *
+ * If the bundle will not load there is still a working wizard in this
+ * repo, so fall back to it rather than showing an empty page.
+ */
+async function showEntry() {
+  try {
+    await mountEntry(sharedNow()?.list, authHeader().authorization?.slice(7));
+  } catch {
+    toast('Loading the new wizard failed, using the old one', 'bad');
+    manage.show();
+  }
 }
 
 addEventListener('hashchange', () => {
