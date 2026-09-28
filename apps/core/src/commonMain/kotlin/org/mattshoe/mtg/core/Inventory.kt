@@ -65,14 +65,14 @@ object Inventory {
         Feature(Area.SHELL, "Toasts", "util.js"),
 
         // -------------------------------------------------------- library
-        Feature(Area.LIBRARY, "Card grid, 100 per page, with paging", "search.js", logic = true),
+        Feature(Area.LIBRARY, "Card grid, 100 per page, with paging", "search.js", logic = true, done = true),
         Feature(Area.LIBRARY, "Filter panel: owner, pool, deck, finish, quantity", "filters.js", logic = true),
         Feature(Area.LIBRARY, "Filter panel: name, oracle text, flavour, artist, watermark, type line", "filters.js", logic = true),
         Feature(Area.LIBRARY, "Colour filter with exactly / at most / at least / any of", "filters.js", logic = true),
         Feature(Area.LIBRARY, "Filter panel: cmc, power, toughness, rarity, set, keyword, tag, format", "filters.js", logic = true),
         Feature(Area.LIBRARY, "Boolean flags — reserved, game changer, full art and the rest", "filters.js", logic = true),
         Feature(Area.LIBRARY, "Advanced query box with its own parser", "filters.js parseAdvanced"),
-        Feature(Area.LIBRARY, "Sorting, price descending by default", "filters.js SORTS"),
+        Feature(Area.LIBRARY, "Sorting, price descending by default", "filters.js SORTS", logic = true, done = true),
         Feature(Area.LIBRARY, "Filter state in the URL, so a search is a link", "filters.js toHash/fromHash"),
         Feature(Area.LIBRARY, "Name autocomplete against all of Scryfall", "complete.js"),
         Feature(Area.LIBRARY, "Export the whole result as a decklist or to the clipboard", "search.js"),

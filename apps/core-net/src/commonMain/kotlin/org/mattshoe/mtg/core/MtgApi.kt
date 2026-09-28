@@ -87,6 +87,15 @@ class MtgApi internal constructor(
         return res.decode()
     }
 
+    /** One read. No token: reads are open. */
+    suspend fun queryRaw(sql: String, params: List<Any?>): QueryResult {
+        val res = http.post("$base/query") {
+            contentType(ContentType.Application.Json)
+            setBody(QueryRequest(sql, bind(params)))
+        }
+        return res.decode()
+    }
+
     /**
      * The server's own words on a refusal, not a status code.
      *
@@ -133,3 +142,36 @@ class MtgApi internal constructor(
         }
     }
 }
+
+// --------------------------------------------------------------- query
+
+/**
+ * `/query` answers `{cols, rows, n}` — columns once, rows as arrays.
+ *
+ * Everything in the app that reads rather than writes goes through it:
+ * the Library, decks, stats, the console. Reads need no token.
+ */
+@Serializable
+data class QueryResult(
+    val cols: List<String> = emptyList(),
+    val rows: List<kotlinx.serialization.json.JsonArray> = emptyList(),
+    val n: Int = 0,
+)
+
+@Serializable
+private data class QueryRequest(
+    val sql: String,
+    val params: List<kotlinx.serialization.json.JsonElement> = emptyList(),
+)
+
+/** Bound values, as JSON, without pretending numbers are strings. */
+private fun bind(values: List<Any?>): List<kotlinx.serialization.json.JsonElement> = values.map {
+    when (it) {
+        null -> kotlinx.serialization.json.JsonNull
+        is Number -> kotlinx.serialization.json.JsonPrimitive(it)
+        is Boolean -> kotlinx.serialization.json.JsonPrimitive(it)
+        else -> kotlinx.serialization.json.JsonPrimitive(it.toString())
+    }
+}
+
+suspend fun MtgApi.query(statement: Sql): QueryResult = queryRaw(statement.sql, statement.params)
