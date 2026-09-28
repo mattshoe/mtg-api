@@ -183,6 +183,8 @@ object MtgApp {
     fun unmount() {
         composition?.dispose()
         composition = null
+        // Nothing to unlock here: the shell's `DisposableEffect`
+        // releases the page as the composition goes away.
     }
 
     // ------------------------------------------------------- listeners

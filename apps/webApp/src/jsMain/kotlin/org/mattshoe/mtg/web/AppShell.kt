@@ -1,6 +1,7 @@
 package org.mattshoe.mtg.web
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -61,6 +62,15 @@ fun AppShell(
 ) {
     var password by remember { mutableStateOf("") }
     var showFilters by remember { mutableStateOf(false) }
+
+    // The page underneath an overlay holds still. `overscroll-behavior`
+    // on the drawer only stops the chaining once the drawer itself
+    // reaches its end; a swipe that starts on the scrim never touches
+    // the drawer at all and went straight through to the results.
+    DisposableEffect(state.overlays.stack.isEmpty()) {
+        lockPage(state.overlays.stack.isNotEmpty())
+        onDispose { lockPage(false) }
+    }
 
     // `app-nav`, not `tabs`: the hand-written stylesheet collapses
     // `.tabs` into a hamburger drawer below 720px and opens it from the
@@ -239,3 +249,15 @@ fun AppState.openDeck(slug: String) = navigate(Route(View.DECKS, slug))
 
 /** For the tests, and for anything that wants the history without the shell. */
 fun AppState.withHistory(h: EntryHistory) = copy(history = h)
+
+/**
+ * Stops the page behind an overlay scrolling.
+ *
+ * A class on `body` rather than an inline style, so the rule lives in
+ * the stylesheet with everything else and a half-torn-down
+ * composition cannot leave the page stuck.
+ */
+private fun lockPage(locked: Boolean) {
+    val body = kotlinx.browser.document.body ?: return
+    if (locked) body.classList.add("overlay-open") else body.classList.remove("overlay-open")
+}

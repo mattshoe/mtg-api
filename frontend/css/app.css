@@ -35,6 +35,11 @@
   --topbar-h: 54px;
 }
 * { box-sizing: border-box; }
+/* While anything is open over the page, the page underneath holds
+   still. `overscroll-behavior` alone only stops the chaining once a
+   scrollable overlay reaches its end — a swipe that starts on the
+   scrim never touched the overlay at all and went straight through. */
+body.overlay-open { overflow: hidden; }
 /* Nothing with a picture in it gets to be wider than what holds it.
    The drawer's card scan is 745px from Scryfall and ran off the side
    of a phone; this is the net under every other image too. */
@@ -338,11 +343,14 @@ td.mono { font-family: var(--mono); font-size: 12.5px; }
 .price-badge:empty { display: none; }
 
 /* ---------------------------------------------------------------- drawer */
-.drawer-scrim { position: fixed; inset: 0; background: rgba(4,6,10,.62); z-index: 60; backdrop-filter: blur(2px); }
+.drawer-scrim {
+  position: fixed; inset: 0; background: rgba(4,6,10,.62); z-index: 60;
+  backdrop-filter: blur(2px); overscroll-behavior: contain; touch-action: none;
+}
 .drawer {
   position: fixed; top: 0; right: 0; bottom: 0; width: min(560px, 100%);
   background: var(--bg-2); border-left: 1px solid var(--line);
-  z-index: 61; overflow-y: auto; box-shadow: var(--shadow);
+  z-index: 61; overflow-y: auto; overscroll-behavior: contain; box-shadow: var(--shadow);
   animation: slide .16s ease;
 }
 @keyframes slide { from { transform: translateX(24px); opacity: .4; } }
@@ -435,7 +443,11 @@ pre.out {
 @keyframes pop { from { transform: translateY(6px); opacity: 0; } }
 
 /* command palette */
-.palette-scrim { position: fixed; inset: 0; background: rgba(4,6,10,.6); z-index: 80; display: grid; place-items: start center; padding-top: 12vh; }
+.palette-scrim {
+  position: fixed; inset: 0; background: rgba(4,6,10,.6); z-index: 80;
+  display: grid; place-items: start center; padding-top: 12vh;
+  overflow-y: auto; overscroll-behavior: contain;
+}
 .palette { width: min(560px, 92vw); background: var(--bg-2); border: 1px solid var(--line-2);
            border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
 .palette.wide { width: min(760px, 94vw); max-height: 82vh; overflow-y: auto; }
