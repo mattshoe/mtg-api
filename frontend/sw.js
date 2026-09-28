@@ -31,7 +31,7 @@
 //     is no way to tell an empty POST from a body it declined to parse, so
 //     the raw bytes get split by hand as well and the two are compared.
 
-const VERSION = 'sw-9';
+const VERSION = 'sw-10';
 
 const API = 'https://mtg-api.mattshoe81.workers.dev';
 const CACHE = 'share-inbox';
@@ -265,8 +265,11 @@ async function receive(request, event) {
         const text = value.trim();
         if (!text) continue;
         fields.push(field);
-        // A bare link is the page it came from, not a decklist.
-        if (field !== 'url' && !/^https?:\/\/\S+$/i.test(text)) parts.push(text);
+        // `title` is the name of whatever was shared and `url` is where it
+        // came from. Neither is a card list — sharing a web page put its
+        // title in the box. Only `text` can carry one.
+        if (field !== 'text') continue;
+        if (!/^https?:\/\/\S+$/i.test(text)) parts.push(text);
         continue;
       }
 
