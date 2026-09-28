@@ -24,6 +24,11 @@ kotlin {
         binaries.executable()
     }
     sourceSets {
+        // The real stylesheet, served to Karma, so a layout test can
+        // measure what the site actually looks like rather than what
+        // an unstyled DOM happens to lay out as.
+        named("jsTest") { resources.srcDir(rootProject.file("../frontend/css")) }
+
         jsTest.dependencies {
             implementation(kotlin("test"))
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
