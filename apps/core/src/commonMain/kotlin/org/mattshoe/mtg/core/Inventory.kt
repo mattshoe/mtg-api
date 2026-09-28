@@ -43,6 +43,16 @@ data class Feature(
     val logic: Boolean = false,
     /** Usable end to end on Android and on the web. The only flag that counts. */
     val done: Boolean = false,
+    /**
+     * The tests that prove it, by function name.
+     *
+     * Naming them is the point: "there are eight hundred tests" is not
+     * the same claim as "this feature has one". `CoverageGateTest`
+     * checks every name here exists in a test source, so renaming a
+     * test tells you which feature just lost its proof instead of
+     * quietly leaving the inventory lying.
+     */
+    val tests: List<String> = emptyList(),
 ) {
     init {
         require(!done || logic) { "$what claims to be done without its logic ported" }
@@ -57,69 +67,289 @@ object Inventory {
 
     val features: List<Feature> = listOf(
         // ---------------------------------------------------------- shell
-        Feature(Area.SHELL, "Hash routing between the six views", "app.js", logic = true, done = true),
-        Feature(Area.SHELL, "Nav tabs, with the admin group hidden until unlocked", "app.js, index.html", logic = true, done = true),
-        Feature(Area.SHELL, "Keyboard shortcuts and the ? help toast", "app.js", logic = true, done = true),
-        Feature(Area.SHELL, "Quick find palette on ⌘K and /", "app.js", logic = true, done = true),
-        Feature(Area.SHELL, "Back button dismisses overlays instead of navigating", "overlay.js", logic = true, done = true),
-        Feature(Area.SHELL, "Toasts", "util.js", logic = true, done = true),
+        Feature(Area.SHELL, "Hash routing between the six views", "app.js", logic = true, done = true,
+            tests = listOf(
+                "aRouteParses", "anUnknownViewIsTheDefault", "aRouteRoundTrips",
+                "theOldAddAndRemoveNamesLandOnTheWizard", "theSixViewsAndWhichOfThemAreGated",
+                "everyViewIsReachableUnlocked", "switchingTabsSwapsTheScreen", "everyUnlockedTabRendersItsOwnScreen",
+            )),
+        Feature(Area.SHELL, "Nav tabs, with the admin group hidden until unlocked", "app.js, index.html", logic = true, done = true,
+            tests = listOf(
+                "lockedHidesTheAdminViewsEntirely", "unlockedShowsThemAll", "noViewIsLostBetweenTheNavAndTheRouter",
+                "lockedShowsFourTabsAndNoAdminOnes", "theCurrentTabIsMarked", "gatedTabsAreAbsentWhileLocked",
+                "unlockingBringsTheGatedTabsBack", "andItIsVisibleAtPhoneWidth",
+            )),
+        Feature(Area.SHELL, "Keyboard shortcuts and the ? help toast", "app.js", logic = true, done = true,
+            tests = listOf(
+                "lettersGoToTheirView", "gatedShortcutsAreAsHiddenAsTheirTabs", "nothingFiresWhileTyping",
+                "theHelpToastListsOnlyWhatIsReachable", "questionMarkToasts", "aBareLetterNavigates",
+                "theSameLetterInATextFieldDoesNot", "theHelpKeyToasts",
+            )),
+        Feature(Area.SHELL, "Quick find palette on ⌘K and /", "app.js", logic = true, done = true,
+            tests = listOf(
+                "theFirstRowIsChosenUntilYouMove", "theHighlightStopsAtBothEnds", "itLooksAtBothFacesAndBothOwners",
+                "theTermIsBoundNotPasted", "slashOpensTheFinder", "theChordWorksWhileTyping",
+                "theFindButtonOpensTheFinder", "theFinderListsWhatWasFound",
+            )),
+        Feature(Area.SHELL, "Back button dismisses overlays instead of navigating", "overlay.js", logic = true, done = true,
+            tests = listOf(
+                "backTakesTheTopOneOff", "backWithNothingOpenIsNotHandled",
+                "openingTheSameOverlayTwiceDoesNotStackIt", "closingAnOverlayThrowsAwayWhatItWasHolding",
+                "closingOneUnderneathLeavesTheTopAlone", "navigatingTakesEveryOverlayWithIt",
+                "escapeClosesWhateverIsOnTop", "escapeWithNothingOpenIsLeftAlone",
+            )),
+        Feature(Area.SHELL, "Toasts", "util.js", logic = true, done = true,
+            tests = listOf("navigatingClearsAStaleToast", "questionMarkToasts", "theHelpKeyToasts")),
 
         // -------------------------------------------------------- library
-        Feature(Area.LIBRARY, "Card grid, 100 per page, with paging", "search.js", logic = true, done = true),
+        Feature(Area.LIBRARY, "Card grid, 100 per page, with paging", "search.js", logic = true, done = true,
+            tests = listOf(
+                "pagesAreRoundedUp", "theRangeShownReadsTheWayAPersonWouldSayIt", "nextAndPreviousStopAtTheEnds",
+                "paginationIsPageTimesSize", "showsTheRangeAndTotal", "previousIsDeadOnTheFirstPageAndNextOnTheLast",
+                "thePagerMovesAndTheRangeFollows", "theLibraryShowsTheRangeAndTheRows",
+            )),
         // Taken out on request: the box and the reference that
         // explained it. `parseQueryBox` stays in the core — it is
         // tested and costs nothing — but nothing types into it.
-        Feature(Area.LIBRARY, "Filter panel folds into ten groups, each on its own", "search.js GROUPS", logic = true, done = true),
-        Feature(Area.LIBRARY, "Filter panel: owner, pool, deck, finish, quantity", "filters.js", logic = true, done = true),
-        Feature(Area.LIBRARY, "Filter panel: name, oracle text, flavour, artist, watermark, type line", "filters.js", logic = true, done = true),
-        Feature(Area.LIBRARY, "Colour filter with exactly / at most / at least / any of", "filters.js", logic = true, done = true),
-        Feature(Area.LIBRARY, "Filter panel: cmc, power, toughness, rarity, set, keyword, tag, format", "filters.js", logic = true, done = true),
-        Feature(Area.LIBRARY, "Boolean flags — reserved, game changer, full art and the rest", "filters.js", logic = true, done = true),
-        Feature(Area.LIBRARY, "Sorting, price descending by default", "filters.js SORTS", logic = true, done = true),
-        Feature(Area.LIBRARY, "Filter state in the URL, so a search is a link", "filters.js toHash/fromHash", logic = true, done = true),
-        Feature(Area.LIBRARY, "Name autocomplete against all of Scryfall", "complete.js", logic = true, done = true),
-        Feature(Area.LIBRARY, "Export the whole result as a decklist or to the clipboard", "search.js", logic = true, done = true),
-        Feature(Area.LIBRARY, "Prices fetched and shown, with a reason when missing", "prices.js", logic = true, done = true),
+        Feature(Area.LIBRARY, "Filter panel folds into ten groups, each on its own", "search.js GROUPS", logic = true, done = true,
+            tests = listOf(
+                "everythingIsFoldedAwayToStart", "eachGroupFoldsOnItsOwn", "aClosedGroupDoesNotRenderItsControls",
+                "aGroupWithSomethingSetSaysHowMany", "aGroupWithNothingSetHasNoBadge",
+                "everyFieldIsCountedByExactlyOneGroup", "everyFilterGroupOpensAndClosesOnItsOwn",
+                "thePanelHasEveryGroupTheOldPageHad",
+            )),
+        Feature(Area.LIBRARY, "Filter panel: owner, pool, deck, finish, quantity", "filters.js", logic = true, done = true,
+            tests = listOf(
+                "bothMeansNoOwnerClause", "poolFiltersOnFreeCopies", "deckAnyAndNoneAreTheirOwnClauses",
+                "theThreePoolsAreTheThreeAnswers", "deckByNameIsBoundBySlug",
+                "finishIsAnEqualsAndAnEmptyFinishMeansAny", "theCollectionGroupWritesItsFields",
+                "andWhoseCollectionItIsLivesWithTheOtherFilters",
+            )),
+        Feature(Area.LIBRARY, "Filter panel: name, oracle text, flavour, artist, watermark, type line", "filters.js", logic = true, done = true,
+            tests = listOf(
+                "aNameSearchLooksAtBothFacesAndIsBound", "oracleTextUsesFullTextSearch",
+                "aLiteralTextSearchIsALikeNotAMatch", "everyFieldOnThePanelChangesTheQuery",
+                "theWordFieldsWriteTheirOwnColumns", "theNameBoxAcceptsTypedCharacters",
+                "andTheTypedNameReachesTheFilters", "clearingTheBoxClearsTheFilter",
+            )),
+        Feature(Area.LIBRARY, "Colour filter with exactly / at most / at least / any of", "filters.js", logic = true, done = true,
+            tests = listOf(
+                "exactlyBindsColoursInAlphabeticalOrder", "atMostExcludesEveryColourNotChosen",
+                "atLeastRequiresEveryColourChosen", "anyOfIsOneOrClause", "anyOfIncludesColourlessWhenAsked",
+                "theColourTargetPicksTheColumn", "allFourModesAreOfferedAndStick",
+                "coloursAccumulateRatherThanReplacingEachOther",
+            )),
+        Feature(Area.LIBRARY, "Filter panel: cmc, power, toughness, rarity, set, keyword, tag, format", "filters.js", logic = true, done = true,
+            tests = listOf(
+                "powerComparesOnlyRealNumbers", "rarityBecomesAnInListWithOnePlaceholderEach",
+                "setCodesAreComparedLowercase", "keywordsAreLowercasedAndEveryOneMustMatch",
+                "tagsMatchTheSlugExactly", "aFormatWithoutAStatusStillAsksForLegal", "theRangesWriteBothEnds",
+                "tokensAddOnEnterAndRemoveOnClick",
+            )),
+        Feature(Area.LIBRARY, "Boolean flags — reserved, game changer, full art and the rest", "filters.js", logic = true, done = true,
+            tests = listOf(
+                "flagsGoThreeWays", "theGameChangerFlagUsesItsDatabaseColumn", "theFlagsAreThreeValued",
+                "onlySetFlagsAppearInTheUrl", "everyFieldOnThePanelChangesTheQuery",
+            )),
+        Feature(Area.LIBRARY, "Sorting, price descending by default", "filters.js SORTS", logic = true, done = true,
+            tests = listOf(
+                "theDefaultsAreBothCollectionsAndPriceDescending", "nullsSortLastWhicheverDirection",
+                "nameIsAlwaysTheTiebreak", "sortingByTheSameColumnFlipsDirection", "sortingReturnsToPageOne",
+                "theSortIsADropdownOfEverySortWithTheCurrentOneChosen", "theSortDropdownOffersEverySortAndPicksOne",
+                "theDirectionButtonFlipsAndSaysWhichWayItIs",
+            )),
+        Feature(Area.LIBRARY, "Filter state in the URL, so a search is a link", "filters.js toHash/fromHash", logic = true, done = true,
+            tests = listOf(
+                "theDefaultSearchIsABareHash", "anEmptyQueryStringIsTheDefaults", "onlyWhatDiffersIsWritten",
+                "everyFieldSurvivesTheRoundTrip", "spacesAndPunctuationSurvive", "unicodeSurvives",
+                "anUnknownParameterIsIgnoredRatherThanCrashing", "aNonsensePageFallsBackToOne",
+            )),
+        Feature(Area.LIBRARY, "Name autocomplete against all of Scryfall", "complete.js", logic = true, done = true,
+            tests = listOf(
+                "oneCharacterIsNotWorthAsking", "theHighlightWrapsBothWays",
+                "pickingPutsTheNameInTheBoxAndClosesTheList", "itNeverShowsMoreThanTen",
+                "namesComeBackAndTheTermIsSentAsTyped", "aFailureIsNoSuggestionsRatherThanAnException",
+                "autocompleteOffersWhatCameBack", "andItAlsoAsksScryfallForSuggestions",
+            )),
+        Feature(Area.LIBRARY, "Export the whole result as a decklist or to the clipboard", "search.js", logic = true, done = true,
+            tests = listOf(
+                "theExportQueryIsUnpagedAndCapped", "theExportKeepsTheSearchItWasMadeFrom",
+                "aDecklistIsQuantityAndName", "aTwoFacedCardExportsWithBothNames",
+                "anEmptySearchExportsNothingRatherThanABlankLine", "theFilenameCarriesTheDate", "exportIsOffered",
+                "exportAsksForAnExport",
+            )),
+        Feature(Area.LIBRARY, "Prices fetched and shown, with a reason when missing", "prices.js", logic = true, done = true,
+            tests = listOf(
+                "centsMatterUnderTenAndDoNotAboveIt", "thousandsAreGrouped", "noPriceIsADashNotAZero",
+                "anUnreleasedPrintingSaysWhenItArrives", "aTokenIsNotSoldSingly", "aPriceBeatsAReason",
+                "theBadgesSayWhatIsSpareAndWhatItIsWorth", "aCardWithNoSpareCopySaysWhereTheyWent",
+            )),
 
         // ---------------------------------------------------------- decks
-        Feature(Area.DECKS, "Deck tiles: name, colour pips, commander, bracket, art banner", "decks.js", logic = true, done = true),
-        Feature(Area.DECKS, "Deck detail with its card list", "decks.js", logic = true, done = true),
-        Feature(Area.DECKS, "Edit a deck's list, commander as its own field", "decks.js", logic = true, done = true),
-        Feature(Area.DECKS, "Disassemble a deck back into bulk", "decks.js", logic = true, done = true),
-        Feature(Area.DECKS, "New deck wizard: format, owner, name, commander, cards, sourcing", "newdeck.js", logic = true, done = true),
-        Feature(Area.DECKS, "Card name validation against Scryfall in the wizard", "newdeck.js", logic = true, done = true),
+        Feature(Area.DECKS, "Deck tiles: name, colour pips, commander, bracket, art banner", "decks.js", logic = true, done = true,
+            tests = listOf(
+                "readingItACharacterAtATimeWouldBeNonsense", "theTileNameStopsAtTheEmDash",
+                "theBannerPrefersACardWeOwn", "andFallsBackToAskingScryfallByName",
+                "theCommanderNameDropsItsSetAnnotation", "aTileShowsTheCommanderWithoutItsSetAnnotation",
+                "theDeckTileWearsItsCommandersArt", "theDeckTileShowsTheTileWidthNameAndItsIdentity",
+            )),
+        Feature(Area.DECKS, "Deck detail with its card list", "decks.js", logic = true, done = true,
+            tests = listOf(
+                "gapsAreTheCardsTheOwnerIsShortOf", "oneDecksCardsAreBoundBySlug", "closingADeckForgetsItsCards",
+                "decksGroupByOwnerInAStableOrder", "aDeckDetailCountsCardsAndFlagsWhatIsMissing",
+                "openingADeckAsksThroughTheCallback", "decksAreGroupedByOwner", "eachRouteSaysWhatItNeeds",
+            )),
+        Feature(Area.DECKS, "Edit a deck's list, commander as its own field", "decks.js", logic = true, done = true,
+            tests = listOf(
+                "theCommanderComesOutOfTheList", "aDeckWithNoCommanderRowFallsBackToTheStoredName",
+                "savingIsNotOfferedUntilTheServerHasSaidWhatWouldHappen", "editingAfterAReviewTakesSaveAwayAgain",
+                "changingOnlyTheCommanderAlsoCountsAsAnEdit", "thePositionalArraysBecomeSomethingReadable",
+                "theEditDialogWillNotSaveBeforeItHasReviewed", "theEditDialogOffersSaveOnceThePlanIsIn",
+            )),
+        Feature(Area.DECKS, "Disassemble a deck back into bulk", "decks.js", logic = true, done = true,
+            tests = listOf(
+                "itWillNotFireBeforeTheDryRunComesBack", "theWarningSaysAllOfIt", "oneCardIsNotOneCards",
+                "doneMeansDone", "theDisassembleDryRunReads", "disassembleWillNotFireBeforeTheDryRunIsBack",
+                "disassembleArmsOnceTheDryRunIsBack", "disassembleSaysWhatItWillDoAndWillNotFireEarly",
+            )),
+        Feature(Area.DECKS, "New deck wizard: format, owner, name, commander, cards, sourcing", "newdeck.js", logic = true, done = true,
+            tests = listOf(
+                "startsAtTheFormatWithNothingChosen", "theCommanderStepOnlyExistsForFormatsThatWantOne",
+                "aCommanderFormatWillNotPassTheCommanderStepEmpty", "anUnnamedDeckGoesNoFurther",
+                "everyCardNeedsASourceBeforeADeckCanBeCreated", "whatIsBeingBoughtIsListedSeparately",
+                "jumpingAheadLandsOnTheLastStepActuallyAnswered",
+                "theNewDeckWizardWillNotLeaveTheFirstStepUnanswered",
+            )),
+        Feature(Area.DECKS, "Card name validation against Scryfall in the wizard", "newdeck.js", logic = true, done = true,
+            tests = listOf(
+                "everyNameKnownIsOk", "aTypoComesBackWithItsSuggestion", "anUnknownNameWithNoNearMissIsStillReported",
+                "namesMustBeCheckedBeforeSourcing", "aFailedCheckBlocksTheRestOfTheWizard",
+                "editingTheListThrowsAwayTheCheckAndEverySourcingChoice",
+            )),
 
         // ---------------------------------------------------------- stats
-        Feature(Area.STATS, "Collection totals and breakdowns", "stats.js", logic = true, done = true),
-        Feature(Area.STATS, "Per-owner scoping at #/stats/matt and /kayla", "stats.js", logic = true, done = true),
+        Feature(Area.STATS, "Collection totals and breakdowns", "stats.js", logic = true, done = true,
+            tests = listOf(
+                "theDefaultScopeIsEveryone", "anUnscopedQueryStillSlotsIntoAWhere", "theSideBySideIsAlwaysBoth",
+                "totalsDecode", "missingNumbersAreZeroRatherThanACrash", "anEmptyResultIsZeroesNotAnException",
+                "statsShowTheTotals", "anUnpricedCollectionSaysSoRatherThanShowingZero",
+            )),
+        Feature(Area.STATS, "Per-owner scoping at #/stats/matt and /kayla", "stats.js", logic = true, done = true,
+            tests = listOf(
+                "statsScopeComesOutOfTheRoute", "aScopedQueryBindsTheOwnerOncePerSubquery",
+                "theActiveScopeIsMarkedAndSwitchingAsksForTheOther", "aRouteParses",
+            )),
 
         // ---------------------------------------------------------- query
-        Feature(Area.QUERY, "Free SQL against the collection, read-only", "console.js", logic = true, done = true),
+        Feature(Area.QUERY, "Free SQL against the collection, read-only", "console.js", logic = true, done = true,
+            tests = listOf(
+                "aTableKeepsColumnOrderAndNulls", "nothingToRunIsNotRunnable",
+                "aFailureClearsTheStaleResultRatherThanLeavingItOnScreen", "runIsRefusedWithNothingToRun",
+                "aResultRendersAsARealTable", "anErrorReplacesTheStaleResultRatherThanSittingAboveIt",
+                "anEmptyResultSaysSoRatherThanShowingAnEmptyTable",
+            )),
 
         // ---------------------------------------------------------- entry
-        Feature(Area.ENTRY, "Four step wizard: which, list, who, review", "manage.js", logic = true, done = true),
-        Feature(Area.ENTRY, "Mandatory dry run before any write", "manage.js", logic = true, done = true),
-        Feature(Area.ENTRY, "Owner never preselected", "manage.js", logic = true, done = true),
-        Feature(Area.ENTRY, "Decklist and CSV parsing", "manage.js, parse.js", logic = true, done = true),
-        Feature(Area.ENTRY, "File upload into the list box", "manage.js", logic = true, done = true),
-        Feature(Area.ENTRY, "Recent history, with reuse", "manage.js", logic = true, done = true),
+        Feature(Area.ENTRY, "Four step wizard: which, list, who, review", "manage.js", logic = true, done = true,
+            tests = listOf(
+                "startsWithNothingChosen", "aDirectionIsNeededBeforeAnythingElse", "anEmptyListGoesNoFurther",
+                "theStepperOnlyOffersStepsAlreadyAnswered", "enterMoreClearsEverything",
+                "theWizardWalksToTheOwnerStep", "choosingADirectionEnablesContinue",
+                "theStepperRefusesStepsNotYetAnswered",
+            )),
+        Feature(Area.ENTRY, "Mandatory dry run before any write", "manage.js", logic = true, done = true,
+            tests = listOf(
+                "applyIsUnreachableUntilTheServerHasSaidWhatItWouldDo", "aPreviewThatResolvedNothingOffersNoWrite",
+                "applyIsNotOfferedTwice", "editingTheListThrowsAwayTheDryRunItWasTakenAgainst",
+                "changingTheOwnerThrowsAwayTheDryRunToo", "noWriteIsOfferedBeforeADryRun",
+                "applyIsNotOfferedWithoutADryRun", "aPreviewSaysDryRunAndCarriesTheToken",
+            )),
+        Feature(Area.ENTRY, "Owner never preselected", "manage.js", logic = true, done = true,
+            tests = listOf(
+                "neitherOwnerIsAssumed", "nothingIsPreselectedInTheWizard", "theWizardWalksToTheOwnerStep",
+                "testNeitherOwnerIsPreselectedAndPreviewIsNotOfferedUntilOneIs",
+                "reusePutsTheListBackWithoutTheOwner", "aShareOpensTheWizardWithTheListAlreadyInIt",
+            )),
+        Feature(Area.ENTRY, "Decklist and CSV parsing", "manage.js, parse.js", logic = true, done = true,
+            tests = listOf(
+                "aCsvNeedsAHeaderNamingTheCardColumn", "aCommaInACardNameIsNotACsv", "aCsvHeaderIsNotACard",
+                "commentsAreNotCards", "sectionHeadersAreNotCards", "cardLinesSkipTheSameThingsCountingDoes",
+                "csvCardLinesDropTheHeader", "aSharedListArrivesWithNothingElseDecided",
+            )),
+        Feature(Area.ENTRY, "File upload into the list box", "manage.js", logic = true, done = true,
+            tests = listOf(
+                "aFileNeverEatsWhatWasTyped", "twoMegabytesIsTheCeiling", "theSizeReadsLikeASize",
+                "itSaysWhatCameOffDisk", "theFileDropIsOnTheListStep", "theFileButtonIsOnTheListStep",
+            )),
+        Feature(Area.ENTRY, "Recent history, with reuse", "manage.js", logic = true, done = true,
+            tests = listOf(
+                "newestFirst", "itStopsAtThirty", "onlyTwelveAreShown", "itSurvivesARoundTripThroughAStore",
+                "rubbishInTheStoreIsNoHistoryRatherThanACrash", "aFinishedEntryBecomesARow",
+                "anUnfinishedEntryIsNotRecorded", "recentEntriesCanBePutBackInTheBox",
+            )),
 
         // ----------------------------------------------------------- card
-        Feature(Area.CARD, "Card detail drawer with art, prices, legalities, rulings", "card.js", logic = true, done = true),
-        Feature(Area.CARD, "Which decks a card is in, and how many are free", "card.js", logic = true, done = true),
+        Feature(Area.CARD, "Card detail drawer with art, prices, legalities, rulings", "card.js", logic = true, done = true,
+            tests = listOf(
+                "artIsDerivedFromTheIdAlreadyOnTheRow", "aMissingOrShortIdGivesNoUrlRatherThanABrokenOne",
+                "printingsDecodeAndSumToWhatIsOwned", "theQueriesBindNameAndOwner",
+                "theCardSheetSaysWhatIsOwnedAndWhatIsFree", "theArtComesOffScryfallByTheIdOnTheRow",
+            )),
+        Feature(Area.CARD, "Which decks a card is in, and how many are free", "card.js", logic = true, done = true,
+            tests = listOf(
+                "proxiesDoNotCountAgainstWhatIsFree", "moreDecksThanCopiesIsFlaggedAndFreeNeverGoesNegative",
+                "theQueriesBindNameAndOwner", "theCardSheetSaysWhatIsOwnedAndWhatIsFree", "aProxyDoesNotEatACopy",
+                "aCardWithNoSpareCopySaysWhereTheyWent",
+            )),
 
         // ----------------------------------------------------------- logs
-        Feature(Area.LOGS, "Request log with filtering", "logs.js", logic = true, done = true),
-        Feature(Area.LOGS, "Log summary counts", "logs.js", logic = true, done = true),
+        Feature(Area.LOGS, "Request log with filtering", "logs.js", logic = true, done = true,
+            tests = listOf(
+                "failuresAreStatusOrLevel", "slowIsOverASecond", "theErrorsToggleNarrowsWithoutLosingTheRest",
+                "logLinesDecodeFromNamedColumns", "theLogShowsItsLinesAndCountsTheFailures",
+                "narrowingToErrorsDoesNotThrowTheRestAway",
+            )),
+        Feature(Area.LOGS, "Log summary counts", "logs.js", logic = true, done = true,
+            tests = listOf(
+                "failuresAreStatusOrLevel", "theErrorsToggleNarrowsWithoutLosingTheRest",
+                "theLogShowsItsLinesAndCountsTheFailures",
+            )),
 
         // ---------------------------------------------------------- admin
-        Feature(Area.ADMIN, "Password unlock, token kept until locked", "admin.js", logic = true, done = true),
-        Feature(Area.ADMIN, "Gated views unreachable and invisible while locked", "app.js, admin.js", logic = true, done = true),
+        Feature(Area.ADMIN, "Password unlock, token kept until locked", "admin.js", logic = true, done = true,
+            tests = listOf(
+                "anEmptyTokenIsNotUnlocked", "lockingForgetsTheToken", "unlockSendsThePasswordAndNoToken",
+                "aTokenlessServerReplyIsARefusalNotASilentSuccess", "aWrongPasswordSurfacesTheServersOwnWords",
+                "anExpiredTokenIsReportedNotSwallowed", "theUnlockDialogAsksAndHandsThePasswordBack",
+                "lLocksAndUnlocks",
+            )),
+        Feature(Area.ADMIN, "Gated views unreachable and invisible while locked", "app.js, admin.js", logic = true, done = true,
+            tests = listOf(
+                "lockedHidesTheAdminViewsEntirely", "aGatedRouteBouncesWhileLocked",
+                "bouncingKeepsTheQueryStringSoNothingTypedIsLost",
+                "navigatingToAGatedViewWhileLockedLandsSomewhereUsable",
+                "lockingWhileOnAGatedViewIsCaughtByLandingAgain", "gatedShortcutsAreAsHiddenAsTheirTabs",
+                "gatedTabsAreAbsentWhileLocked", "theAdminActionsAreHiddenWhileLocked",
+            )),
 
         // ---------------------------------------------------------- share
-        Feature(Area.SHARE, "Receive a shared file from another Android app", "SharedFile.kt", logic = true, done = true),
-        Feature(Area.SHARE, "Read it whatever its declared MIME type", "SharedFile.kt", logic = true, done = true),
-        Feature(Area.SHARE, "Say what arrived when nothing usable did", "SharedFile.kt", logic = true, done = true),
+        Feature(Area.SHARE, "Receive a shared file from another Android app", "SharedFile.kt", logic = true, done = true,
+            tests = listOf(
+                "testReadsACsvSharedAsAContentUri", "testReadsAPlainDecklist", "testReadsSeveralFilesAtOnce",
+                "testOpenWithIsReadTheSameWay", "testSharedTextIsTakenToo", "testALargeExportSurvivesIntact",
+                "testTheManifestClaimsAFileShare", "testASharedCsvArrivesOnScreen",
+            )),
+        Feature(Area.SHARE, "Read it whatever its declared MIME type", "SharedFile.kt", logic = true, done = true,
+            tests = listOf(
+                "testReadsAFileWhateverItsDeclaredTypeIs", "testOpenWithIsReadTheSameWay",
+                "testTheManifestClaimsAFileShare",
+            )),
+        Feature(Area.SHARE, "Say what arrived when nothing usable did", "SharedFile.kt", logic = true, done = true,
+            tests = listOf(
+                "testABareLinkIsNotACardList", "testBinaryIsRefusedAndSaysSo",
+                "testAnEmptyShareIsReportedRatherThanIgnored", "testABinaryShareSaysWhatWasWrongInsteadOfGoingQuiet",
+                "textIsTextAndBinaryIsNot", "aFewOddCharactersAreStillText",
+            )),
     )
 
     val done: List<Feature> get() = features.filter { it.done }

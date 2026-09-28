@@ -2,6 +2,7 @@ plugins {
     id("org.jetbrains.kotlin.multiplatform")
     id("com.android.library")
     id("org.jetbrains.kotlin.plugin.serialization")
+    id("org.jetbrains.kotlinx.kover")
 }
 
 // Everything that is not a pixel and not a socket.
@@ -50,5 +51,40 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+    }
+}
+
+// A measured floor, not a feeling. `koverVerify` runs in CI and fails
+// the build under it; raise it as gaps close so it can only ratchet.
+//
+// The floor is on :core deliberately — it is the half both platforms
+// execute, so a line uncovered here is a line uncovered twice.
+kover {
+    reports {
+        filters {
+            excludes {
+                // The manifest describes the port; it is data, and
+                // `InventoryTest` already reads all of it.
+                classes("org.mattshoe.mtg.core.Inventory*")
+                classes("org.mattshoe.mtg.core.Design*")
+            }
+        }
+        verify {
+            // Measured at 87.3% line / 56.9% branch today. Set just
+            // under, so it is a ratchet rather than a target: it can
+            // only be raised, and nothing may slip below it.
+            rule("lines") {
+                bound {
+                    minValue = 85
+                    coverageUnits = kotlinx.kover.gradle.plugin.dsl.CoverageUnit.LINE
+                }
+            }
+            rule("branches") {
+                bound {
+                    minValue = 55
+                    coverageUnits = kotlinx.kover.gradle.plugin.dsl.CoverageUnit.BRANCH
+                }
+            }
+        }
     }
 }

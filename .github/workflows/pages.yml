@@ -52,11 +52,28 @@ jobs:
         working-directory: apps
         run: ./gradlew --no-daemon :webApp:jsBrowserDistribution
 
-      # The tests that say the port is complete. A red one here stops
-      # the deploy rather than shipping a screen that lost a feature.
-      - name: Test the shared core and the web build
+      # Everything that does not need a phone. A red test here stops
+      # the deploy rather than shipping a screen that lost a feature —
+      # including the browser suite, which is the only thing that
+      # catches a page that renders but cannot be typed into.
+      - name: Test the shared core
         working-directory: apps
-        run: ./gradlew --no-daemon :core:jvmTest :core:jsNodeTest :core-net:jvmTest
+        run: >-
+          ./gradlew --no-daemon
+          :core:jvmTest :core:jsNodeTest
+          :core-net:jvmTest :core-net:jsNodeTest
+
+      - name: Test the site in a browser
+        working-directory: apps
+        run: ./gradlew --no-daemon :webApp:jsBrowserTest
+
+      - name: Coverage floor
+        working-directory: apps
+        run: ./gradlew --no-daemon :core:koverVerify
+
+      - name: Count what ran
+        if: always()
+        run: python3 scripts/count_tests.py apps
 
       - name: Stage the bundle
         run: |
