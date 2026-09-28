@@ -35,8 +35,19 @@ data class Feature(
     val what: String,
     /** Where it lives today, so the port has something to read. */
     val source: String,
+    /**
+     * The rules are in the shared core with tests on both targets.
+     * Necessary for `done` and nowhere near sufficient — a search that
+     * builds the right SQL is not a screen anyone can use.
+     */
+    val logic: Boolean = false,
+    /** Usable end to end on Android and on the web. The only flag that counts. */
     val done: Boolean = false,
-)
+) {
+    init {
+        require(!done || logic) { "$what claims to be done without its logic ported" }
+    }
+}
 
 /**
  * The manifest. Adding a row is how a gap gets recorded; flipping `done`
@@ -54,12 +65,12 @@ object Inventory {
         Feature(Area.SHELL, "Toasts", "util.js"),
 
         // -------------------------------------------------------- library
-        Feature(Area.LIBRARY, "Card grid, 100 per page, with paging", "search.js"),
-        Feature(Area.LIBRARY, "Filter panel: owner, pool, deck, finish, quantity", "filters.js"),
-        Feature(Area.LIBRARY, "Filter panel: name, oracle text, flavour, artist, watermark, type line", "filters.js"),
-        Feature(Area.LIBRARY, "Colour filter with exactly / at most / at least / any of", "filters.js"),
-        Feature(Area.LIBRARY, "Filter panel: cmc, power, toughness, rarity, set, keyword, tag, format", "filters.js"),
-        Feature(Area.LIBRARY, "Boolean flags — reserved, game changer, full art and the rest", "filters.js"),
+        Feature(Area.LIBRARY, "Card grid, 100 per page, with paging", "search.js", logic = true),
+        Feature(Area.LIBRARY, "Filter panel: owner, pool, deck, finish, quantity", "filters.js", logic = true),
+        Feature(Area.LIBRARY, "Filter panel: name, oracle text, flavour, artist, watermark, type line", "filters.js", logic = true),
+        Feature(Area.LIBRARY, "Colour filter with exactly / at most / at least / any of", "filters.js", logic = true),
+        Feature(Area.LIBRARY, "Filter panel: cmc, power, toughness, rarity, set, keyword, tag, format", "filters.js", logic = true),
+        Feature(Area.LIBRARY, "Boolean flags — reserved, game changer, full art and the rest", "filters.js", logic = true),
         Feature(Area.LIBRARY, "Advanced query box with its own parser", "filters.js parseAdvanced"),
         Feature(Area.LIBRARY, "Sorting, price descending by default", "filters.js SORTS"),
         Feature(Area.LIBRARY, "Filter state in the URL, so a search is a link", "filters.js toHash/fromHash"),
@@ -84,10 +95,10 @@ object Inventory {
         Feature(Area.QUERY, "Schema cheatsheet", "cheatsheet.js"),
 
         // ---------------------------------------------------------- entry
-        Feature(Area.ENTRY, "Four step wizard: which, list, who, review", "manage.js", done = true),
-        Feature(Area.ENTRY, "Mandatory dry run before any write", "manage.js", done = true),
-        Feature(Area.ENTRY, "Owner never preselected", "manage.js", done = true),
-        Feature(Area.ENTRY, "Decklist and CSV parsing", "manage.js, parse.js", done = true),
+        Feature(Area.ENTRY, "Four step wizard: which, list, who, review", "manage.js", logic = true, done = true),
+        Feature(Area.ENTRY, "Mandatory dry run before any write", "manage.js", logic = true, done = true),
+        Feature(Area.ENTRY, "Owner never preselected", "manage.js", logic = true, done = true),
+        Feature(Area.ENTRY, "Decklist and CSV parsing", "manage.js, parse.js", logic = true, done = true),
         Feature(Area.ENTRY, "File upload into the list box", "manage.js"),
         Feature(Area.ENTRY, "Recent history, with reuse", "manage.js"),
 
@@ -104,26 +115,34 @@ object Inventory {
         Feature(Area.ADMIN, "Gated views unreachable and invisible while locked", "app.js, admin.js"),
 
         // ---------------------------------------------------------- share
-        Feature(Area.SHARE, "Receive a shared file from another Android app", "SharedFile.kt", done = true),
-        Feature(Area.SHARE, "Read it whatever its declared MIME type", "SharedFile.kt", done = true),
-        Feature(Area.SHARE, "Say what arrived when nothing usable did", "SharedFile.kt", done = true),
+        Feature(Area.SHARE, "Receive a shared file from another Android app", "SharedFile.kt", logic = true, done = true),
+        Feature(Area.SHARE, "Read it whatever its declared MIME type", "SharedFile.kt", logic = true, done = true),
+        Feature(Area.SHARE, "Say what arrived when nothing usable did", "SharedFile.kt", logic = true, done = true),
     )
 
     val done: List<Feature> get() = features.filter { it.done }
+    val logicOnly: List<Feature> get() = features.filter { it.logic && !it.done }
     val remaining: List<Feature> get() = features.filterNot { it.done }
+    val untouched: List<Feature> get() = features.filterNot { it.logic || it.done }
 
     val percentDone: Int
         get() = if (features.isEmpty()) 100 else done.size * 100 / features.size
 
     /** What is left, grouped, for a build to print rather than a person to guess. */
     fun report(): String = buildString {
-        appendLine("Ported ${done.size} of ${features.size} features (${percentDone}%).")
+        appendLine(
+            "Ported ${done.size} of ${features.size} features (${percentDone}%). " +
+                "${logicOnly.size} more have their rules shared but no screen yet.",
+        )
         Area.entries.forEach { area ->
             val inArea = features.filter { it.area == area }
             if (inArea.isEmpty()) return@forEach
             val left = inArea.count { !it.done }
             appendLine("  ${area.label}: ${inArea.size - left}/${inArea.size}")
-            inArea.filterNot { it.done }.forEach { appendLine("      todo  ${it.what}  [${it.source}]") }
+            inArea.filterNot { it.done }.forEach {
+                val state = if (it.logic) "rules only" else "todo     "
+                appendLine("      $state  ${it.what}  [${it.source}]")
+            }
         }
     }
 }
