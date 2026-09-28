@@ -172,6 +172,9 @@ data class Filters(
     val edhrecMin: String = "", val edhrecMax: String = "",
     val hasRulings: Tri = Tri.ANY,
 
+    /** The query box, ANDed on top of everything above. */
+    val adv: String = "",
+
     // Sorted by what a card is worth, biggest first. It is the question
     // asked of a collection more often than any other.
     val sort: Sort = Sort.PRICE,
@@ -380,6 +383,18 @@ fun conditions(s: Filters): Sql {
                 "WHERE dc.name_norm = c.name_norm AND d.slug = ?)",
             s.deck,
         )
+    }
+
+    // The query box last, so its clauses read after the structured ones.
+    // A syntax error there is the caller's to show, not this function's
+    // to swallow — a box that silently matches everything is worse than
+    // one that says what it did not understand.
+    if (s.adv.isNotBlank()) {
+        val adv = parseQueryBox(s.adv)
+        if (adv.sql.isNotEmpty()) {
+            c.where += adv.sql
+            c.params.addAll(adv.params)
+        }
     }
 
     return Sql(c.where.joinToString("\n  AND "), c.params)
