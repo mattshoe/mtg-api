@@ -20,6 +20,7 @@ data class AppState(
     val newDeck: NewDeck = NewDeck(),
     val history: EntryHistory = EntryHistory(),
     val complete: Completion = Completion(),
+    val facets: Facets = Facets(),
     val palette: PaletteState = PaletteState(),
     val card: CardDetail? = null,
     val deckEdit: DeckEditState? = null,

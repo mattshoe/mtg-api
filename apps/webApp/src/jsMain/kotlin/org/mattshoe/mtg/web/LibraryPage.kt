@@ -14,6 +14,7 @@ import org.jetbrains.compose.web.dom.Text
 import org.mattshoe.mtg.core.CardQueries
 import org.mattshoe.mtg.core.CardRow
 import org.mattshoe.mtg.core.Completion
+import org.mattshoe.mtg.core.Facets
 import org.mattshoe.mtg.core.Library
 import org.mattshoe.mtg.core.Prices
 import org.mattshoe.mtg.core.Sort
@@ -40,7 +41,7 @@ fun LibraryPage(
     onExport: () -> Unit = {},
     complete: Completion = Completion(),
     onComplete: (Completion) -> Unit = {},
-    onCheatsheet: () -> Unit = {},
+    facets: Facets = Facets(),
 ) {
     Div(attrs = { classes("wrap") }) {
         Div(attrs = { classes("page-head") }) { H1 { Text("Library") } }
@@ -77,12 +78,6 @@ fun LibraryPage(
                         onClick { onSearch() }
                     }) { Text("Search") }
                 }
-                Input(type = InputType.Text) {
-                    classes("field", "mono")
-                    placeholder("Query box — c<=wu t:creature mv<=3 -is:reprint")
-                    value(state.filters.adv)
-                    onInput { onState(state.where(state.filters.copy(adv = it.value))) }
-                }
                 Div(attrs = { classes("flex-wrap") }) {
                     Button(attrs = {
                         classes("btn", "sm", "ghost")
@@ -93,10 +88,6 @@ fun LibraryPage(
                         classes("btn", "sm", "ghost")
                         onClick { onExport() }
                     }) { Text("Export decklist") }
-                    Button(attrs = {
-                        classes("btn", "sm", "ghost")
-                        onClick { onCheatsheet() }
-                    }) { Text("Query box help") }
                 }
                 Div(attrs = { classes("flex-wrap") }) {
                     listOf(Sort.PRICE, Sort.NAME, Sort.CMC, Sort.QTY).forEach { sort ->
@@ -113,7 +104,7 @@ fun LibraryPage(
             }
         }
 
-        if (showFilters) FilterPanel(state.filters) { onState(state.where(it)) }
+        if (showFilters) FilterPanel(state.filters, facets) { onState(state.where(it)) }
 
         when {
             state.busy -> Div(attrs = { classes("empty") }) { Text("Searching…") }

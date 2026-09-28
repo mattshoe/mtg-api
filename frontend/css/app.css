@@ -140,10 +140,6 @@ h3 { font-size: 14px; }
 .app-nav .app-tool { flex: none; margin-left: 4px; }
 @media (max-width: 720px) { .app-nav { padding: 8px 12px 0; } }
 
-/* An active toggle among ghost buttons — the sort that is in force, the
-   filter panel while it is open. */
-.btn.on { background: var(--accent-dim); border-color: var(--accent); color: var(--accent-2); }
-.seg button.on { background: var(--accent-dim); color: var(--accent-2); font-weight: 600; }
 
 
 
@@ -767,3 +763,10 @@ details.adv > div { padding-top: 12px; }
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* --------------------------------------------------------- overrides */
+/* These have to come last. `.btn.ghost` sets a transparent background at
+   the same specificity, so an `.on` rule written earlier in the file
+   loses to it and a selected toggle shows nothing at all. */
+.btn.on { background: var(--accent-dim); border-color: var(--accent); color: var(--accent-2); }
+.btn.ghost.on { background: var(--accent-dim); border-color: var(--accent); color: var(--accent-2); }

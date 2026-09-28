@@ -168,11 +168,11 @@ class ScreensTest {
     }
 
     @Test
-    fun thePanelHasEveryFacetTheOldPageHad() = runTest {
+    fun thePanelHasEveryGroupTheOldPageHad() = runTest {
         val root = mount { FilterPanel(Filters()) {} }
         settle()
-        listOf("Words", "Colour", "Numbers", "Pool", "Printing", "Flags", "Legality").forEach {
-            assertTrue(root.text().contains(it), "$it is missing from the panel")
+        org.mattshoe.mtg.core.Facet.entries.forEach { facet ->
+            assertTrue(root.text().contains(facet.title), "${facet.title} is missing from the panel")
         }
         // The four colour modes are the whole point of it for Commander.
         listOf("Exactly", "At most", "At least", "Any of").forEach {
@@ -181,13 +181,16 @@ class ScreensTest {
     }
 
     @Test
-    fun theQueryBoxIsOnTheScreen() = runTest {
+    fun thereIsNoQueryBoxOnTheLibrary() = runTest {
         val root = mount { LibraryPage(Library().loaded(listOf(card("Sol Ring")), 1), {}, {}, {}) }
         settle()
         val inputs = root.querySelectorAll("input")
         val placeholders = (0 until inputs.length)
             .mapNotNull { (inputs[it] as? HTMLElement)?.getAttribute("placeholder") }
-        assertTrue(placeholders.any { it.startsWith("Query box") }, placeholders.toString())
+        // Asked for and taken out. The name field is the only input the
+        // Library itself has.
+        assertFalse(placeholders.any { it.startsWith("Query box") }, placeholders.toString())
+        assertEquals(listOf("Card name"), placeholders)
     }
 
     @Test

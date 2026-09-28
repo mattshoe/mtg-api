@@ -104,7 +104,7 @@ fun AppShell(
                 onState(state.copy(complete = c))
                 if (c.worthAsking) onLookup(c.term)
             },
-            onCheatsheet = { onState(state.opening(Overlay.CHEATSHEET)) },
+            facets = state.facets,
         )
 
         View.DECKS -> DecksPage(

@@ -66,12 +66,15 @@ object Inventory {
 
         // -------------------------------------------------------- library
         Feature(Area.LIBRARY, "Card grid, 100 per page, with paging", "search.js", logic = true, done = true),
+        // Taken out on request: the box and the reference that
+        // explained it. `parseQueryBox` stays in the core — it is
+        // tested and costs nothing — but nothing types into it.
+        Feature(Area.LIBRARY, "Filter panel folds into ten groups, each on its own", "search.js GROUPS", logic = true, done = true),
         Feature(Area.LIBRARY, "Filter panel: owner, pool, deck, finish, quantity", "filters.js", logic = true, done = true),
         Feature(Area.LIBRARY, "Filter panel: name, oracle text, flavour, artist, watermark, type line", "filters.js", logic = true, done = true),
         Feature(Area.LIBRARY, "Colour filter with exactly / at most / at least / any of", "filters.js", logic = true, done = true),
         Feature(Area.LIBRARY, "Filter panel: cmc, power, toughness, rarity, set, keyword, tag, format", "filters.js", logic = true, done = true),
         Feature(Area.LIBRARY, "Boolean flags — reserved, game changer, full art and the rest", "filters.js", logic = true, done = true),
-        Feature(Area.LIBRARY, "Advanced query box with its own parser", "filters.js parseAdvanced", logic = true, done = true),
         Feature(Area.LIBRARY, "Sorting, price descending by default", "filters.js SORTS", logic = true, done = true),
         Feature(Area.LIBRARY, "Filter state in the URL, so a search is a link", "filters.js toHash/fromHash", logic = true, done = true),
         Feature(Area.LIBRARY, "Name autocomplete against all of Scryfall", "complete.js", logic = true, done = true),
@@ -92,7 +95,6 @@ object Inventory {
 
         // ---------------------------------------------------------- query
         Feature(Area.QUERY, "Free SQL against the collection, read-only", "console.js", logic = true, done = true),
-        Feature(Area.QUERY, "Schema cheatsheet", "cheatsheet.js", logic = true, done = true),
 
         // ---------------------------------------------------------- entry
         Feature(Area.ENTRY, "Four step wizard: which, list, who, review", "manage.js", logic = true, done = true),

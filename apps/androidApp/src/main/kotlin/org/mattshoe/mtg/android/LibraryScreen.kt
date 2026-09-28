@@ -134,17 +134,9 @@ private fun Controls(
             Primary("Search", enabled = !state.busy, onClick = onSearch)
         }
 
-        Field(
-            value = state.filters.adv,
-            onValueChange = { onState(state.where(state.filters.copy(adv = it))) },
-            placeholder = "Query box — c<=wu t:creature mv<=3 -is:reprint",
-            mono = true,
-        )
-
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Ghost(if (showFilters) "Hide filters" else "Filters", on = showFilters, onClick = onToggleFilters)
             Ghost("Export decklist", onClick = onExport)
-            Ghost("Query box help", onClick = onCheatsheet)
         }
 
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
