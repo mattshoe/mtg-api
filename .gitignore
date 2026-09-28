@@ -11,3 +11,9 @@ combined.db
 
 # stray backups, if a script is run from the repo root
 *.sql.gz
+
+# Gradle, for the apps/ multiplatform project
+apps/.gradle/
+apps/.kotlin/
+apps/**/build/
+apps/local.properties
