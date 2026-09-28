@@ -71,7 +71,7 @@ class InventoryTest {
     fun portedFeaturesStayPorted() {
         // A ratchet, not a target: raise it as features land so none can
         // quietly come back out.
-        val expected = 9
+        val expected = 13
         assertTrue(
             Inventory.done.size >= expected,
             "the inventory went backwards: ${Inventory.done.size} done, was at least $expected",

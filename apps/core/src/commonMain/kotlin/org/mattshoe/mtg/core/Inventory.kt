@@ -79,16 +79,16 @@ object Inventory {
         Feature(Area.LIBRARY, "Prices fetched and shown, with a reason when missing", "prices.js"),
 
         // ---------------------------------------------------------- decks
-        Feature(Area.DECKS, "Deck tiles: name, colour pips, commander, bracket, art banner", "decks.js"),
-        Feature(Area.DECKS, "Deck detail with its card list", "decks.js"),
+        Feature(Area.DECKS, "Deck tiles: name, colour pips, commander, bracket, art banner", "decks.js", logic = true, done = true),
+        Feature(Area.DECKS, "Deck detail with its card list", "decks.js", logic = true, done = true),
         Feature(Area.DECKS, "Edit a deck's list, commander as its own field", "decks.js"),
         Feature(Area.DECKS, "Disassemble a deck back into bulk", "decks.js"),
         Feature(Area.DECKS, "New deck wizard: format, owner, name, commander, cards, sourcing", "newdeck.js"),
         Feature(Area.DECKS, "Card name validation against Scryfall in the wizard", "newdeck.js"),
 
         // ---------------------------------------------------------- stats
-        Feature(Area.STATS, "Collection totals and breakdowns", "stats.js"),
-        Feature(Area.STATS, "Per-owner scoping at #/stats/matt and /kayla", "stats.js"),
+        Feature(Area.STATS, "Collection totals and breakdowns", "stats.js", logic = true, done = true),
+        Feature(Area.STATS, "Per-owner scoping at #/stats/matt and /kayla", "stats.js", logic = true, done = true),
 
         // ---------------------------------------------------------- query
         Feature(Area.QUERY, "Free SQL against the collection, read-only", "console.js"),
