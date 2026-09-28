@@ -1,7 +1,7 @@
 {
   "name": "MTG Collection",
   "short_name": "Collection",
-  "id": "/mtg-collection-2",
+  "id": "/mtg-collection-4",
   "start_url": "./?b=4#/search",
   "scope": "./",
   "display": "standalone",
