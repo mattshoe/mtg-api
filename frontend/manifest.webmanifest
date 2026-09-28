@@ -30,6 +30,14 @@
         {
           "name": "file",
           "accept": [
+            "text/*",
+            "application/*",
+            "application/octet-stream",
+            "application/csv",
+            "application/vnd.ms-excel",
+            "application/json",
+            "text/plain",
+            "text/csv",
             "*/*"
           ]
         }

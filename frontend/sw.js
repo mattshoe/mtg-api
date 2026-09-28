@@ -31,7 +31,7 @@
 //     is no way to tell an empty POST from a body it declined to parse, so
 //     the raw bytes get split by hand as well and the two are compared.
 
-const VERSION = 'sw-7';
+const VERSION = 'sw-8';
 
 const API = 'https://mtg-api.mattshoe81.workers.dev';
 const CACHE = 'share-inbox';
@@ -147,10 +147,11 @@ function splitMultipart(raw, boundary) {
 /** What turned up, in words, for when none of it was usable. */
 function describe(files, fields) {
   if (!files.length && !fields.length) {
-    return 'Android sent the share with nothing in it — no file, no text, an empty body. '
-      + 'It dropped the file before this app saw it, which is what happens when the copy of '
-      + 'the app on the home screen was installed with a narrower list of accepted file types '
-      + 'than the site has now. Remove it from the home screen, add it again, share once more.';
+    return 'Android sent an empty share — no file, no text, nothing in the body at all. '
+      + 'It dropped the file before this app saw it. The list of file types this app accepts '
+      + 'is compiled into the installed app and a website update cannot change it. Dragging '
+      + 'the icon off the home screen does not uninstall it either: long-press the icon, tap '
+      + 'App info, and Uninstall from there, then add it to the home screen again.';
   }
   if (!files.length) return 'the share carried text, but nothing that reads as a card list.';
   const list = files.map((f) => `${f.name || 'unnamed'} (${f.type || 'no type'}, ${size(f.size)})`);
