@@ -1,12 +1,6 @@
 package org.mattshoe.mtg.web
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
 import org.jetbrains.compose.web.attributes.disabled
 import org.jetbrains.compose.web.attributes.rows
 import org.jetbrains.compose.web.dom.Button
@@ -17,10 +11,8 @@ import org.jetbrains.compose.web.dom.Pre
 import org.jetbrains.compose.web.dom.Span
 import org.jetbrains.compose.web.dom.Text
 import org.jetbrains.compose.web.dom.TextArea
-import org.mattshoe.mtg.core.ApiFailure
 import org.mattshoe.mtg.core.Direction
 import org.mattshoe.mtg.core.MassEntry
-import org.mattshoe.mtg.core.MtgApi
 import org.mattshoe.mtg.core.Owner
 import org.mattshoe.mtg.core.Step
 
@@ -38,27 +30,15 @@ import org.mattshoe.mtg.core.Step
  */
 @Composable
 fun MassEntryPage(
-    api: MtgApi,
-    token: String,
-    scope: CoroutineScope,
-    initial: MassEntry = MassEntry(),
+    state: MassEntry,
+    onState: (MassEntry) -> Unit,
+    onPreview: () -> Unit,
+    onApply: () -> Unit,
 ) {
-    // remember, or every recomposition throws the wizard back to the
-    // start — the state would be rebuilt from `initial` each pass.
-    var s by remember { mutableStateOf(initial) }
-
-    fun run(what: String, block: suspend () -> MassEntry) {
-        s = s.working(what)
-        scope.launch {
-            s = try {
-                block()
-            } catch (e: ApiFailure) {
-                s.failed(e.message ?: "something went wrong")
-            } catch (e: Exception) {
-                s.failed(e.message ?: e.toString())
-            }
-        }
-    }
+    // State is hoisted, the same as every other screen and the same as
+    // the Android sibling. The shell owns it, so a share can put a list
+    // in before this is ever composed.
+    val s = state
 
     Div(attrs = { classes("wrap") }) {
         Div(attrs = { classes("page-head") }) {
@@ -74,23 +54,15 @@ fun MassEntryPage(
             }
         }
 
-        Stepper(s) { target -> s = s.goTo(target) }
+        Stepper(s) { target -> onState(s.goTo(target)) }
 
         when {
             s.busy != null -> Panel("Working") { Text(s.busy!!) }
-            s.step == Step.WHICH -> WhichStep(s, { s = s.choose(it) }, { s = s.goTo(Step.LIST) })
-            s.step == Step.LIST -> ListStep(s, { s = s.type(it) }, { s = s.goTo(it) })
-            s.step == Step.WHO -> WhoStep(s, { s = s.assign(it) }, { s = s.goTo(it) }) {
-                run("Checking against Scryfall…") {
-                    s.previewed(api.cards(token, s.direction!!, s.owner!!, s.list, dryRun = true))
-                }
-            }
-            s.step == Step.REVIEW -> ReviewStep(s, { s = s.goTo(it) }) {
-                run("Writing…") {
-                    s.finished(api.cards(token, s.direction!!, s.owner!!, s.list, dryRun = false))
-                }
-            }
-            s.step == Step.DONE -> DoneStep(s) { s = s.again() }
+            s.step == Step.WHICH -> WhichStep(s, { onState(s.choose(it)) }, { onState(s.goTo(Step.LIST)) })
+            s.step == Step.LIST -> ListStep(s, { onState(s.type(it)) }, { onState(s.goTo(it)) })
+            s.step == Step.WHO -> WhoStep(s, { onState(s.assign(it)) }, { onState(s.goTo(it)) }, onPreview)
+            s.step == Step.REVIEW -> ReviewStep(s, { onState(s.goTo(it)) }, onApply)
+            s.step == Step.DONE -> DoneStep(s) { onState(s.again()) }
         }
 
         s.error?.let { Div(attrs = { classes("err") }) { Text(it) } }

@@ -1,13 +1,12 @@
 package org.mattshoe.mtg.web
 
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import kotlinx.browser.document
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.await
 import kotlinx.coroutines.test.runTest
 import org.jetbrains.compose.web.renderComposable
 import org.mattshoe.mtg.core.MassEntry
-import org.mattshoe.mtg.core.MtgApi
 import org.w3c.dom.HTMLButtonElement
 import org.w3c.dom.HTMLElement
 import org.w3c.dom.get
@@ -40,16 +39,25 @@ class MassEntryPageTest {
         roots.clear()
     }
 
+    private var current: MassEntry = MassEntry()
+
+    /**
+     * State is hoisted now, so the test holds it and feeds it back —
+     * which is also what the shell does, so this exercises the real
+     * arrangement rather than a special case.
+     */
     private fun mount(initial: MassEntry = MassEntry()): HTMLElement {
         val root = document.createElement("div") as HTMLElement
         document.body!!.appendChild(root)
         roots += root
+        current = initial
         renderComposable(root = root) {
+            val s = remember { mutableStateOf(initial) }
             MassEntryPage(
-                api = MtgApi("https://example.invalid"),
-                token = "test-token",
-                scope = CoroutineScope(Dispatchers.Main),
-                initial = initial,
+                state = s.value,
+                onState = { current = it; s.value = it },
+                onPreview = {},
+                onApply = {},
             )
         }
         return root

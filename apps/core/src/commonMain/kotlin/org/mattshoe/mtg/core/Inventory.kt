@@ -57,8 +57,8 @@ object Inventory {
 
     val features: List<Feature> = listOf(
         // ---------------------------------------------------------- shell
-        Feature(Area.SHELL, "Hash routing between the six views", "app.js", logic = true),
-        Feature(Area.SHELL, "Nav tabs, with the admin group hidden until unlocked", "app.js, index.html"),
+        Feature(Area.SHELL, "Hash routing between the six views", "app.js", logic = true, done = true),
+        Feature(Area.SHELL, "Nav tabs, with the admin group hidden until unlocked", "app.js, index.html", logic = true, done = true),
         Feature(Area.SHELL, "Keyboard shortcuts and the ? help toast", "app.js"),
         Feature(Area.SHELL, "Quick find palette on ⌘K and /", "app.js"),
         Feature(Area.SHELL, "Back button dismisses overlays instead of navigating", "overlay.js"),
@@ -76,7 +76,7 @@ object Inventory {
         Feature(Area.LIBRARY, "Filter state in the URL, so a search is a link", "filters.js toHash/fromHash", logic = true, done = true),
         Feature(Area.LIBRARY, "Name autocomplete against all of Scryfall", "complete.js", logic = true),
         Feature(Area.LIBRARY, "Export the whole result as a decklist or to the clipboard", "search.js", logic = true),
-        Feature(Area.LIBRARY, "Prices fetched and shown, with a reason when missing", "prices.js", logic = true),
+        Feature(Area.LIBRARY, "Prices fetched and shown, with a reason when missing", "prices.js", logic = true, done = true),
 
         // ---------------------------------------------------------- decks
         Feature(Area.DECKS, "Deck tiles: name, colour pips, commander, bracket, art banner", "decks.js", logic = true, done = true),
@@ -111,8 +111,8 @@ object Inventory {
         Feature(Area.LOGS, "Log summary counts", "logs.js", logic = true, done = true),
 
         // ---------------------------------------------------------- admin
-        Feature(Area.ADMIN, "Password unlock, token kept until locked", "admin.js", logic = true),
-        Feature(Area.ADMIN, "Gated views unreachable and invisible while locked", "app.js, admin.js", logic = true),
+        Feature(Area.ADMIN, "Password unlock, token kept until locked", "admin.js", logic = true, done = true),
+        Feature(Area.ADMIN, "Gated views unreachable and invisible while locked", "app.js, admin.js", logic = true, done = true),
 
         // ---------------------------------------------------------- share
         Feature(Area.SHARE, "Receive a shared file from another Android app", "SharedFile.kt", logic = true, done = true),
