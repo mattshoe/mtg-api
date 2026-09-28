@@ -78,7 +78,9 @@ class DecksStatsPageTest {
     fun openingADeckAsksThroughTheCallback() = runTest {
         val root = mount { DecksPage(DecksState().loaded(listOf(deck("a", "matt", "Alela"))), { opened = it }, {}) }
         settle()
-        root.buttons().first { it.textContent == "Open" }.click()
+        // The whole tile is the target now, the way the hand-written
+        // grid had it — there is no separate Open button to aim at.
+        (root.querySelector(".deck-card") as HTMLElement).click()
         settle()
         assertEquals("a", opened?.slug)
     }

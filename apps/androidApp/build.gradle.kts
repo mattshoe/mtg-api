@@ -55,6 +55,11 @@ dependencies {
     implementation(compose.material3)
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+    // Card art. The web gets it from an <img>; Compose has no loader of
+    // its own, and a grid of Magic cards without the pictures is not the
+    // same screen.
+    implementation("io.coil-kt.coil3:coil-compose:3.0.4")
+    implementation("io.coil-kt.coil3:coil-network-okhttp:3.0.4")
 
     // The screens are tested on a device, clicked, because "the port is
     // done" is a claim about what a person can do with the app.

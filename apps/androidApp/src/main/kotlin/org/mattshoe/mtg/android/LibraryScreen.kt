@@ -22,9 +22,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.layout.ContentScale
+import coil3.compose.AsyncImage
+import org.mattshoe.mtg.core.CardQueries
 import org.mattshoe.mtg.core.CardRow
 import org.mattshoe.mtg.core.Completion
 import org.mattshoe.mtg.core.Library
+import org.mattshoe.mtg.core.Prices
 import org.mattshoe.mtg.core.Sort
 
 /**
@@ -122,7 +129,7 @@ fun LibraryScreen(
                     fontSize = 13.sp,
                 )
                 LazyColumn(
-                    Modifier.fillMaxWidth().height(520.dp),
+                    Modifier.fillMaxWidth().height(560.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     items(state.rows, key = { "${it.owner}:${it.nameNorm}" }) { CardTile(it, onOpen) }
@@ -135,27 +142,42 @@ fun LibraryScreen(
 
 @Composable
 private fun CardTile(card: CardRow, onOpen: (CardRow) -> Unit) {
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(12.dp)) {
-            // Selectable, the same as the web. A canvas renderer would
-            // have taken copying a card name away.
-            SelectionContainer {
-                Text(card.fullName, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+    // A row rather than the web's picture grid: a full card at phone
+    // width is one card per screen, which is a worse way to read a
+    // collection than a thumbnail beside the name.
+    Card(Modifier.fillMaxWidth().clickable { onOpen(card) }) {
+        Row(
+            Modifier.padding(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            CardQueries.art(card.scryfallId, "small")?.let { url ->
+                AsyncImage(
+                    model = url,
+                    contentDescription = card.fullName,
+                    modifier = Modifier.width(64.dp).aspectRatio(488f / 680f),
+                    contentScale = ContentScale.Fit,
+                )
             }
-            Text(
-                listOfNotNull(
-                    card.typeLine,
-                    card.setCode?.uppercase(),
-                    card.manaCost,
-                ).joinToString(" · "),
-                fontSize = 12.sp,
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("${card.qty}× ${card.owner}", fontSize = 12.sp)
-                card.free?.let { Text("$it free", fontSize = 12.sp) }
-                card.price?.let { Text("$$it", fontSize = 12.sp) }
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                // Selectable, the same as the web. A canvas renderer
+                // would have taken copying a card name away.
+                SelectionContainer {
+                    Text(card.fullName, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                }
+                Text(
+                    listOfNotNull(
+                        card.typeLine,
+                        card.setCode?.uppercase(),
+                        card.manaCost,
+                    ).joinToString(" · "),
+                    fontSize = 12.sp,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("${card.qty}× ${card.owner}", fontSize = 12.sp)
+                    Text(if ((card.free ?: 0) > 0) "${card.free} free" else "in decks", fontSize = 12.sp)
+                    Text(Prices.money(card.price, dash = ""), fontSize = 12.sp)
+                }
             }
-            OutlinedButton(onClick = { onOpen(card) }) { Text("Details", fontSize = 12.sp) }
         }
     }
 }

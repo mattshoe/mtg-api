@@ -161,3 +161,81 @@ class DeckPlanWireTest {
         assertFalse(d.applied)
     }
 }
+
+/**
+ * The deck rows were written by hand, so every column carries prose the
+ * tile has no room for. These pull the one fact out of each.
+ */
+class DeckProseTest {
+
+    private fun deck(name: String = "Alela", colors: String? = null, commander: String? = null) =
+        Deck("alela", name, "matt", commander, colors, null, null)
+
+    @Test
+    fun bareLettersAreTakenAsTheyAre() {
+        // What the database stores when the commander was looked up
+        // properly, rather than typed.
+        assertEquals("UW", deck(colors = "UW").identity)
+        assertEquals("BUW", deck(colors = "wub").identity)
+    }
+
+    @Test
+    fun manaSymbolsWin() {
+        assertEquals("BRUW", deck(colors = "{W}{U}{B}{R} (Breya's identity)").identity)
+    }
+
+    @Test
+    fun colourWordsAreReadWhenThereAreNoSymbols() {
+        assertEquals("GU", deck(colors = "Simic (Green/Blue)").identity)
+        assertEquals("BG", deck(colors = "Golgari (Black/Green)").identity)
+    }
+
+    @Test
+    fun fiveColourIsSpeltEveryWhichWay() {
+        assertEquals("BGRUW", deck(colors = "Five-color (WUBRG)").identity)
+        assertEquals("BGRUW", deck(colors = "five colour").identity)
+    }
+
+    @Test
+    fun nothingUsableIsColourless() {
+        assertEquals("", deck(colors = null).identity)
+        assertEquals("", deck(colors = "???").identity)
+        assertTrue(deck(colors = null).colorPips.isEmpty())
+    }
+
+    @Test
+    fun readingItACharacterAtATimeWouldBeNonsense() {
+        // The bug this replaced: "Five-color (WUBRG)" rendered as
+        // eighteen pips, one per letter of the sentence.
+        assertEquals(5, deck(colors = "Five-color (WUBRG)").colorPips.size)
+    }
+
+    @Test
+    fun theTileNameStopsAtTheEmDash() {
+        assertEquals(
+            "Dance of the Elements",
+            deck(name = "Dance of the Elements — Lorwyn Eclipsed Commander Precon").title,
+        )
+        assertEquals("Alela", deck(name = "Alela").title)
+    }
+
+    @Test
+    fun theBannerPrefersACardWeOwn() {
+        val url = CardQueries.banner("abcdef12-3456", "Alela, Artful Provocateur")
+        assertEquals("https://cards.scryfall.io/art_crop/front/a/b/abcdef12-3456.jpg", url)
+    }
+
+    @Test
+    fun andFallsBackToAskingScryfallByName() {
+        val url = CardQueries.banner(null, "Alela, Artful Provocateur")
+        assertTrue(url!!.startsWith("https://api.scryfall.com/cards/named?exact="), url)
+        assertTrue(url.contains("Alela%2C%20Artful%20Provocateur"), url)
+        assertTrue(url.endsWith("&format=image&version=art_crop"), url)
+    }
+
+    @Test
+    fun andHasNothingToShowForADeckWithNoCommander() {
+        assertEquals(null, CardQueries.banner(null, null))
+        assertEquals(null, CardQueries.banner(null, "  "))
+    }
+}

@@ -76,7 +76,13 @@ class LibraryPageTest {
         assertEquals(0, root.querySelectorAll("canvas").length)
         assertTrue(root.textContent!!.contains("Sol Ring"))
         assertTrue(root.textContent!!.contains("Opt"))
-        assertTrue(root.textContent!!.contains("3× matt"))
+        // The tile is the picture, the name and a compact caption now,
+        // the same markup the hand-written grid used.
+        assertTrue(root.textContent!!.contains("×3"), root.textContent!!)
+        assertEquals(2, root.querySelectorAll(".card").length)
+        // No scryfall id on this fixture, so no picture — a missing id
+        // has to leave the frame empty rather than emit a broken img.
+        assertEquals(0, root.querySelectorAll(".card-img").length)
     }
 
     @Test

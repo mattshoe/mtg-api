@@ -62,6 +62,30 @@ object CardQueries {
         return "https://cards.scryfall.io/$size/front/$a/$b/$scryfallId.jpg"
     }
 
+    /**
+     * A commander's art, cropped, for the band across a deck tile.
+     *
+     * Falls back to Scryfall's named-card image endpoint when the
+     * collection has no printing to take an id from — which happens
+     * for a proxy deck whose commander nobody owns.
+     */
+    fun banner(artId: String?, commanderName: String?): String? {
+        art(artId, "art_crop")?.let { return it }
+        val name = commanderName?.trim().orEmpty()
+        if (name.isEmpty()) return null
+        return "https://api.scryfall.com/cards/named?exact=" +
+            percent(name) + "&format=image&version=art_crop"
+    }
+
+    /** No `encodeURIComponent` on Android or iOS, so by hand. */
+    private fun percent(s: String): String = buildString {
+        s.encodeToByteArray().forEach { b ->
+            val c = b.toInt().toChar()
+            if (c.isLetterOrDigit() && b.toInt() in 0..127 || c in "-_.~") append(c)
+            else append('%').append((b.toInt() and 0xFF).toString(16).uppercase().padStart(2, '0'))
+        }
+    }
+
     fun printings(nameNorm: String, owner: String) = Sql(
         """SELECT c.id, c.setcode, c.set_name, c.collector_number, c.finish, c.qty, c.scryfall_id
              FROM cards c

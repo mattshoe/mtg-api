@@ -15,6 +15,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.layout.ContentScale
+import coil3.compose.AsyncImage
+import org.mattshoe.mtg.core.CardQueries
 import org.mattshoe.mtg.core.Deck
 import org.mattshoe.mtg.core.DecksState
 
@@ -91,10 +95,19 @@ fun DecksScreen(
 private fun DeckTile(deck: Deck, onOpen: (Deck) -> Unit) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp)) {
-            Text(deck.name, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+            // The commander's art, the same band the web tile has.
+            CardQueries.banner(deck.artId, deck.commanderName)?.let { url ->
+                AsyncImage(
+                    model = url,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxWidth().height(96.dp),
+                    contentScale = ContentScale.Crop,
+                )
+            }
+            Text(deck.title, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
             Text(
                 listOfNotNull(
-                    deck.colorPips.takeIf { it.isNotEmpty() }?.joinToString(""),
+                    deck.identity.ifEmpty { "C" },
                     deck.commanderName,
                     deck.bracket?.let { "Bracket $it" },
                 ).joinToString(" · "),

@@ -460,3 +460,90 @@ class BrowserKeysTest {
         assertEquals(null, AppState().onBrowserKey(key("Escape")))
     }
 }
+
+/**
+ * The card grid, which is most of what the site is.
+ *
+ * Its Android sibling is `theLibraryShowsTheRangeAndTheRows`, which
+ * checks the same facts against `LibraryScreen`.
+ */
+class CardGridTest {
+
+    private val roots = mutableListOf<org.w3c.dom.HTMLElement>()
+
+    @AfterTest
+    fun cleanUp() {
+        roots.forEach { it.remove() }
+        roots.clear()
+    }
+
+    private fun mount(body: @Composable () -> Unit): org.w3c.dom.HTMLElement {
+        val root = document.createElement("div") as org.w3c.dom.HTMLElement
+        document.body!!.appendChild(root)
+        roots += root
+        renderComposable(root = root) { body() }
+        return root
+    }
+
+    private suspend fun settle() = repeat(3) {
+        Promise<Unit> { resolve, _ -> kotlinx.browser.window.requestAnimationFrame { resolve(Unit) } }.await()
+    }
+
+    private fun card(id: String?, free: Int?, price: Double?) = CardRow(
+        id = 1, owner = "matt", name = "Sol Ring", nameNorm = "sol ring", face2 = null,
+        layout = "normal", scryfallId = id, manaCost = "{1}", cmc = 1.0,
+        typeLine = "Artifact", colorIdentity = "", rarity = "uncommon", setCode = "m3c",
+        setName = "Modern Horizons 3", collectorNumber = "409", edhrecRank = null,
+        releasedAt = null, finish = "nonfoil", power = null, toughness = null,
+        artist = null, qty = 3, printings = 1, free = free, price = price, value = price,
+    )
+
+    @Test
+    fun theArtComesOffScryfallByTheIdOnTheRow() = runTest {
+        val root = mount {
+            LibraryPage(Library().loaded(listOf(card("abcdef12-3456", 1, 2.5)), 1), {}, {}, {})
+        }
+        settle()
+        val img = root.querySelector(".card-img") as org.w3c.dom.HTMLImageElement
+        assertTrue(img.src.endsWith("/normal/front/a/b/abcdef12-3456.jpg"), img.src)
+        assertEquals("lazy", img.getAttribute("loading"))
+    }
+
+    @Test
+    fun theBadgesSayWhatIsSpareAndWhatItIsWorth() = runTest {
+        val root = mount {
+            LibraryPage(Library().loaded(listOf(card("abcdef12-3456", 2, 2.5)), 1), {}, {}, {})
+        }
+        settle()
+        assertEquals("2 free", (root.querySelector(".free-badge") as org.w3c.dom.HTMLElement).textContent)
+        assertEquals("$2.50", (root.querySelector(".price-badge") as org.w3c.dom.HTMLElement).textContent)
+    }
+
+    @Test
+    fun aCardWithNoSpareCopySaysWhereTheyWent() = runTest {
+        val root = mount {
+            LibraryPage(Library().loaded(listOf(card("abcdef12-3456", 0, null)), 1), {}, {}, {})
+        }
+        settle()
+        val badge = root.querySelector(".free-badge") as org.w3c.dom.HTMLElement
+        assertEquals("in decks", badge.textContent)
+        assertTrue(badge.className.contains("none"), badge.className)
+        // No price is a blank badge, not a dash: the dash reads as an
+        // error and most of the time it is not one.
+        assertEquals("", (root.querySelector(".price-badge") as org.w3c.dom.HTMLElement).textContent)
+    }
+
+    @Test
+    fun theDeckTileWearsItsCommandersArt() = runTest {
+        val deck = Deck("alela", "Alela — Custom Dimir Faerie Tribal", "matt",
+            "Alela, Artful Provocateur", "Five-color (WUBRG)", 3, "abcdef12-3456")
+        val root = mount { DecksPage(DecksState().loaded(listOf(deck)), {}, {}) }
+        settle()
+        val img = root.querySelector(".deck-banner img") as org.w3c.dom.HTMLImageElement
+        assertTrue(img.src.endsWith("/art_crop/front/a/b/abcdef12-3456.jpg"), img.src)
+        // The name is the tile-width half, and the pips are the five
+        // colours rather than one per letter of the sentence.
+        assertEquals("Alela", (root.querySelector(".deck-name") as org.w3c.dom.HTMLElement).textContent)
+        assertEquals(5, root.querySelectorAll(".mana .ms").length)
+    }
+}

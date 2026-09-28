@@ -43,6 +43,10 @@ class Scryfall internal constructor(private val http: HttpClient) {
             val text = http.get("$BASE/cards/autocomplete") {
                 parameter("q", term.trim())
                 header("Accept", "application/json")
+                // Scryfall answers 400 to a bare client library user
+                // agent, and asks callers to say who they are. Their
+                // CDN does the same to the card images.
+                header("User-Agent", USER_AGENT)
             }.bodyAsText()
             json.decodeFromString<Names>(text).data.take(limit)
         } catch (e: Exception) {
@@ -53,6 +57,7 @@ class Scryfall internal constructor(private val http: HttpClient) {
 
     companion object {
         const val BASE = "https://api.scryfall.com"
+        const val USER_AGENT = "mtg-collection/1.0 (+https://mtg.mattshoe.org)"
         const val MIN_TERM = 2
     }
 }

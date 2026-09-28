@@ -7,12 +7,15 @@ import org.jetbrains.compose.web.attributes.placeholder
 import org.jetbrains.compose.web.dom.Button
 import org.jetbrains.compose.web.dom.Div
 import org.jetbrains.compose.web.dom.H1
+import org.jetbrains.compose.web.dom.Img
 import org.jetbrains.compose.web.dom.Input
 import org.jetbrains.compose.web.dom.Span
 import org.jetbrains.compose.web.dom.Text
+import org.mattshoe.mtg.core.CardQueries
 import org.mattshoe.mtg.core.CardRow
 import org.mattshoe.mtg.core.Completion
 import org.mattshoe.mtg.core.Library
+import org.mattshoe.mtg.core.Prices
 import org.mattshoe.mtg.core.Sort
 
 /**
@@ -123,18 +126,36 @@ fun LibraryPage(
 
 @Composable
 private fun Tile(card: CardRow, onOpen: (CardRow) -> Unit) {
+    // The same markup and the same class names the hand-written grid
+    // used, so the picture, the free badge and the price sit exactly
+    // where the stylesheet already puts them.
     Div(attrs = {
-        classes("card-tile")
+        classes("card")
         onClick { onOpen(card) }
     }) {
-        Div(attrs = { classes("t-name") }) { Text(card.fullName) }
-        Div(attrs = { classes("muted", "small") }) {
-            Text(listOfNotNull(card.typeLine, card.setCode?.uppercase(), card.manaCost).joinToString(" · "))
+        Div(attrs = { classes("card-art") }) {
+            // Scryfall addresses art by the id already on the row, so
+            // this costs a URL rather than a lookup.
+            CardQueries.art(card.scryfallId, "normal")?.let { url ->
+                Img(src = url, alt = card.fullName, attrs = {
+                    classes("card-img")
+                    attr("loading", "lazy")
+                    attr("decoding", "async")
+                })
+            }
+            val free = card.free ?: 0
+            Div(attrs = { classes("free-badge"); if (free <= 0) classes("none") }) {
+                Text(if (free > 0) "$free free" else "in decks")
+            }
+            Div(attrs = { classes("price-badge") }) { Text(Prices.money(card.price, dash = "")) }
         }
-        Div(attrs = { classes("flex-wrap", "small") }) {
-            Span(attrs = { classes("tag", "mini") }) { Text("${card.qty}× ${card.owner}") }
-            card.free?.let { Span(attrs = { classes("tag", "mini") }) { Text("$it free") } }
-            card.price?.let { Span(attrs = { classes("tag", "mini") }) { Text("$$it") } }
+        Div(attrs = { classes("card-meta") }) {
+            Span(attrs = { classes("nm") }) { Text(card.fullName) }
+            Span(attrs = { classes("sb") }) {
+                Span { Text(card.manaCost.orEmpty()) }
+                Span(attrs = { classes("qty") }) { Text("×${card.qty}") }
+                Span(attrs = { classes("set") }) { Text(card.setCode?.uppercase().orEmpty()) }
+            }
         }
     }
 }

@@ -23,7 +23,38 @@ data class Deck(
     /** The commander's art, for the banner across the top of a tile. */
     val artId: String?,
 ) {
-    val colorPips: List<String> get() = (colors ?: "").map { it.toString() }
+    /**
+     * The deck's colour identity as WUBRG letters.
+     *
+     * `decks.colors` was written by hand and is free text — "Simic
+     * (Green/Blue)", "{W}{U}{B}{R} (Breya's identity)", "Five-color
+     * (WUBRG)" — so reading it a character at a time turns a deck name
+     * into a row of nonsense pips. Symbols first, then colour words,
+     * then the five-colour shorthand.
+     */
+    val identity: String
+        get() {
+            val raw = colors.orEmpty()
+            // Some rows are already just the letters, which is what the
+            // database stores when a commander was looked up properly.
+            val bare = raw.trim()
+            if (bare.isNotEmpty() && LETTERS.matches(bare)) {
+                return dedupe(bare.uppercase().map { it.toString() })
+            }
+            val syms = SYMBOL.findAll(raw).map { it.groupValues[1].uppercase() }.toList()
+            if (syms.isNotEmpty()) return dedupe(syms)
+            val words = WORD_RE.findAll(raw)
+                .mapNotNull { WORDS[it.groupValues[1].lowercase()] }.toList()
+            if (words.isNotEmpty()) return dedupe(words)
+            if (FIVE.containsMatchIn(raw)) return "BGRUW"
+            return ""
+        }
+
+    val colorPips: List<String> get() = identity.map { it.toString() }
+
+    /** "Explorers of the Deep — ... Precon" is a tile-width name plus prose. */
+    val title: String
+        get() = name.split(DASH).firstOrNull()?.trim()?.ifEmpty { null } ?: name
 
     /**
      * The commander without its set annotation.
@@ -33,6 +64,20 @@ data class Deck(
      */
     val commanderName: String?
         get() = commander?.substringBefore(" (")?.trim()?.takeIf { it.isNotEmpty() }
+
+    private companion object {
+        val SYMBOL = Regex("""\{([WUBRG])\}""", RegexOption.IGNORE_CASE)
+        val WORD_RE = Regex("""\b(white|blue|black|red|green)\b""", RegexOption.IGNORE_CASE)
+        val FIVE = Regex("""wubrg|five.?colou?r""", RegexOption.IGNORE_CASE)
+        val DASH = Regex("""\s+\u2014\s+""")
+        val LETTERS = Regex("""[WUBRGwubrg]{1,5}""")
+        val WORDS = mapOf(
+            "white" to "W", "blue" to "U", "black" to "B", "red" to "R", "green" to "G",
+        )
+
+        /** Alphabetical, the order the database stores identity in. */
+        fun dedupe(cs: List<String>) = cs.distinct().sorted().joinToString("")
+    }
 }
 
 data class DeckCard(

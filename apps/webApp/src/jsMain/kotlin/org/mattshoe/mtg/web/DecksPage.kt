@@ -8,6 +8,8 @@ import org.jetbrains.compose.web.dom.H1
 import org.jetbrains.compose.web.dom.H2
 import org.jetbrains.compose.web.dom.Span
 import org.jetbrains.compose.web.dom.Text
+import org.jetbrains.compose.web.dom.Img
+import org.mattshoe.mtg.core.CardQueries
 import org.mattshoe.mtg.core.Deck
 import org.mattshoe.mtg.core.DecksState
 
@@ -40,7 +42,7 @@ fun DecksPage(
                 state.decks.isEmpty() -> Div(attrs = { classes("empty") }) { Text("No decks yet.") }
                 else -> state.byOwner.forEach { (owner, decks) ->
                     H2 { Text(owner.replaceFirstChar(Char::uppercase)) }
-                    Div(attrs = { classes("grid") }) { decks.forEach { Tile(it, onOpen) } }
+                    Div(attrs = { classes("deck-grid") }) { decks.forEach { Tile(it, onOpen) } }
                 }
             }
         } else {
@@ -90,19 +92,37 @@ fun DecksPage(
     }
 }
 
+/** WUBRG pips, or one colourless one. The same markup `util.js` emitted. */
+@Composable
+private fun Identity(ci: String) {
+    Span(attrs = { classes("mana") }) {
+        val letters = ci.ifEmpty { "C" }
+        letters.forEach { c ->
+            Span(attrs = { classes("ms"); attr("data-s", c.toString()) }) { Text(c.toString()) }
+        }
+    }
+}
+
 @Composable
 private fun Tile(deck: Deck, onOpen: (Deck) -> Unit) {
-    Div(attrs = { classes("deck-tile"); onClick { onOpen(deck) } }) {
-        Div(attrs = { classes("t-name") }) { Text(deck.name) }
-        Div(attrs = { classes("muted", "small") }) {
-            Text(
-                listOfNotNull(
-                    deck.colorPips.takeIf { it.isNotEmpty() }?.joinToString(""),
-                    deck.commanderName,
-                    deck.bracket?.let { "Bracket $it" },
-                ).joinToString(" · "),
-            )
+    // The same markup the hand-written grid used: the commander's art
+    // cropped to a band across the top, then the name and identity.
+    Div(attrs = { classes("deck-card"); onClick { onOpen(deck) } }) {
+        val art = CardQueries.banner(deck.artId, deck.commanderName)
+        Div(attrs = { classes("deck-banner"); if (art == null) classes("none") }) {
+            art?.let { Img(src = it, alt = "", attrs = { attr("loading", "lazy") }) }
         }
-        Button(attrs = { classes("btn", "sm", "ghost"); onClick { onOpen(deck) } }) { Text("Open") }
+        Div(attrs = { classes("deck-body") }) {
+            Div(attrs = { classes("deck-top") }) {
+                Span(attrs = { classes("deck-name") }) { Text(deck.title) }
+                deck.bracket?.let {
+                    Span(attrs = { classes("tag", "info") }) { Text("bracket $it") }
+                }
+            }
+            Div(attrs = { classes("deck-meta") }) {
+                Identity(deck.identity)
+                Span(attrs = { classes("cmdr") }) { Text(deck.commanderName ?: "—") }
+            }
+        }
     }
 }

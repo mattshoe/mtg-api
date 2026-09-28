@@ -196,6 +196,20 @@ class ScreensTest {
         rule.runOnIdle { assertEquals("Solemn Simulacrum", picked) }
     }
 
+    @Test
+    fun theDeckTileShowsTheTileWidthNameAndItsIdentity() {
+        // The sibling of `theDeckTileWearsItsCommandersArt` on the web.
+        // The pips come from `Deck.identity`, so "Five-color (WUBRG)"
+        // cannot render as one per letter of the sentence.
+        val deck = Deck(
+            "alela", "Alela — Custom Dimir Faerie Tribal", "matt",
+            "Alela, Artful Provocateur", "Five-color (WUBRG)", 3, "abcdef12-3456",
+        )
+        content { DecksScreen(DecksState().loaded(listOf(deck)), {}, {}) }
+        rule.onNodeWithText("Alela").assertExists()
+        rule.onNodeWithText("BGRUW · Alela, Artful Provocateur · Bracket 3").assertExists()
+    }
+
     // ------------------------------------------------------------- card
 
     @Test
