@@ -73,7 +73,7 @@ object Inventory {
         Feature(Area.LIBRARY, "Boolean flags — reserved, game changer, full art and the rest", "filters.js", logic = true),
         Feature(Area.LIBRARY, "Advanced query box with its own parser", "filters.js parseAdvanced", logic = true),
         Feature(Area.LIBRARY, "Sorting, price descending by default", "filters.js SORTS", logic = true, done = true),
-        Feature(Area.LIBRARY, "Filter state in the URL, so a search is a link", "filters.js toHash/fromHash"),
+        Feature(Area.LIBRARY, "Filter state in the URL, so a search is a link", "filters.js toHash/fromHash", logic = true, done = true),
         Feature(Area.LIBRARY, "Name autocomplete against all of Scryfall", "complete.js"),
         Feature(Area.LIBRARY, "Export the whole result as a decklist or to the clipboard", "search.js"),
         Feature(Area.LIBRARY, "Prices fetched and shown, with a reason when missing", "prices.js"),
