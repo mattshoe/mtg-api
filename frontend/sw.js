@@ -29,7 +29,7 @@
 //     turned up, whether or not it worked, and the page shows it and logs
 //     it. An empty box that explains itself can be fixed.
 
-const VERSION = 'sw-4';
+const VERSION = 'sw-5';
 
 const CACHE = 'share-inbox';
 const SHARE = new URL('share', self.registration.scope).pathname;
@@ -79,9 +79,24 @@ function textual(s) {
 
 const size = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)} MB` : `${Math.round(n / 1024)} KB`);
 
-/** What turned up, in words, for when none of it was usable. */
+/**
+ * What turned up, in words, for when none of it was usable.
+ *
+ * The empty case has a specific cause worth naming. Android matches a
+ * share against the `accept` list in the manifest and drops the file
+ * before this code runs if it does not match — and that list is frozen
+ * into the installed app when it is installed, so widening it here does
+ * nothing for a copy already on a phone. An empty POST with no file and
+ * no text is the signature of exactly that, and the only cure is to
+ * remove the app from the home screen and add it again.
+ */
 function describe(files, fields) {
-  if (!files.length && !fields.length) return 'the share arrived empty — no file and no text in it.';
+  if (!files.length && !fields.length) {
+    return 'Android sent the share with nothing in it — no file, no text. That means it '
+      + 'dropped the file before this app saw it, which happens when the installed copy of '
+      + 'the app was installed with a narrower list of accepted file types than it has now. '
+      + 'Remove it from the home screen, add it again, and share once more.';
+  }
   if (!files.length) return 'the share carried text, but nothing that reads as a card list.';
   const list = files.map((f) => `${f.name || 'unnamed'} (${f.type || 'no type'}, ${size(f.size)})`);
   return `nothing in the share read as text: ${list.join(', ')}.`;

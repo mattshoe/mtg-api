@@ -30,19 +30,7 @@
         {
           "name": "file",
           "accept": [
-            "text/*",
-            "application/csv",
-            "application/vnd.ms-excel",
-            "application/json",
-            "application/octet-stream",
-            ".txt",
-            ".csv",
-            ".dek",
-            ".dec",
-            ".mwdeck",
-            ".cod",
-            ".md",
-            ".json"
+            "*/*"
           ]
         }
       ]
