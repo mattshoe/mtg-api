@@ -9,9 +9,6 @@ on:
     branches: [main]
     paths:
       - 'frontend/**'
-      # The site is the Kotlin build now, so a change to the shared code
-      # or to either UI changes what gets published.
-      - 'apps/**'
       - '.github/workflows/pages.yml'
       # The stamper rewrites the frontend on the way out, so a change to it
       # changes what gets published even when nothing under frontend/ moved.
@@ -37,37 +34,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
-
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-      - uses: gradle/actions/setup-gradle@v4
-
-      # The page and the Android app are the same Kotlin. Building it
-      # here rather than committing a bundle is what stops the two from
-      # drifting: a change to the shared core cannot reach one platform
-      # without reaching the other.
-      - name: Build the shared web bundle
-        working-directory: apps
-        run: ./gradlew --no-daemon :webApp:jsBrowserDistribution
-
-      # The tests that say the port is complete. A red one here stops
-      # the deploy rather than shipping a screen that lost a feature.
-      - name: Test the shared core and the web build
-        working-directory: apps
-        run: ./gradlew --no-daemon :core:jvmTest :core:jsNodeTest :core-net:jvmTest
-
-      - name: Stage the bundle
-        run: |
-          mkdir -p frontend/kmp
-          cp apps/webApp/build/dist/js/productionExecutable/mtg.js frontend/kmp/
-
       # Pages serves everything with max-age=600 and will not let us say
       # otherwise, so the URLs have to carry the version instead.
       - name: Stamp asset versions
         run: python3 scripts/stamp_assets.py frontend "${GITHUB_SHA::12}"
-
       - uses: actions/upload-pages-artifact@v3
         with:
           path: frontend

@@ -12,61 +12,68 @@
 <meta name="theme-color" content="#0e1116">
 <link rel="preconnect" href="https://mtg-api.mattshoe81.workers.dev">
 <link rel="preconnect" href="https://cards.scryfall.io">
-<!-- The same stylesheet the hand-written page used, unchanged. The two
-     renderings are meant to look alike and one stylesheet is how that
-     stays true without anybody maintaining a second copy. -->
 <link rel="stylesheet" href="css/app.css">
+
+<!-- GitHub Pages serves everything with Cache-Control: max-age=600, so a
+     deploy would otherwise reach an open browser as a mix of old and new
+     files. The deploy stamps this map with ?v=<commit>, which makes every
+     module a new URL and pins one consistent set of them per page load.
+     Left empty it is a no-op, which is what local development wants. -->
+<script type="importmap">{"imports":{}}</script>
 </head>
 <body>
 
 <a class="skip" href="#main">Skip to content</a>
 
 <header class="topbar">
+  <button class="nav-toggle" id="nav-toggle" aria-label="Menu" aria-expanded="false">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+  </button>
+
   <a class="brand" href="#/search">
     <img class="brand-mark" src="icons/icon-32.png" alt="" width="22" height="22">
     <span class="brand-text">Collection</span>
   </a>
-  <div class="topbar-right">
-    <!-- Leaves the app entirely, so it is not a view and never lights
-         up as the current one. -->
+
+  <nav class="tabs" id="tabs" aria-label="Sections">
+    <a href="#/search" data-view="search">Library</a>
+    <a href="#/decks"  data-view="decks">Decks</a>
+    <a href="#/stats"  data-view="stats">Stats</a>
+    <a href="#/console" data-view="console">Query</a>
+    <span class="tabs-sep" aria-hidden="true"></span>
+    <!-- Leaves the app entirely, so it is not a view and never lights up
+         as the current one. -->
     <a href="app/" class="tabs-away">Android app</a>
+    <span class="tabs-sep" data-gated hidden aria-hidden="true"></span>
+    <span class="tabs-group" data-gated hidden>Admin options</span>
+    <a href="#/entry"  data-view="entry" data-gated hidden>Mass Entry</a>
+    <a href="#/logs"   data-view="logs" data-gated hidden>Server Logs</a>
+  </nav>
+
+  <div class="topbar-right">
   </div>
 </header>
 
-<!-- The nav, the screens and every dialog are drawn by the shared
-     Kotlin build; there is nothing static left to keep in step with
-     Android. -->
-<main id="main"><div id="view"></div></main>
+<main id="main">
+  <div id="view"></div>
+</main>
 
-<script src="kmp/mtg.js"></script>
-<script>
-(function () {
-  // The service worker's share target hands a list over in the
-  // fragment. Take it out of the URL before mounting: leaving a whole
-  // decklist in the address bar means a reload re-applies it, and any
-  // link copied out of here carries it.
-  function sharedList() {
-    var m = /[?&]share=([^&]*)/.exec(location.hash);
-    if (!m) return null;
-    var list = null;
-    try { list = (JSON.parse(decodeURIComponent(m[1])) || {}).list || null; } catch (e) {}
-    var clean = location.hash.replace(/[?&]share=[^&]*/, '').replace(/\?$/, '') || '#/entry';
-    try { history.replaceState(history.state, '', clean); } catch (e) {}
-    return list;
-  }
+<!-- Card detail, opened from anywhere -->
+<div class="drawer-scrim" id="drawer-scrim" hidden></div>
+<aside class="drawer" id="drawer" hidden aria-label="Card detail" tabindex="-1">
+  <div id="drawer-body"></div>
+</aside>
 
-  function token() {
-    try { return (JSON.parse(localStorage.getItem('mtg.admin') || '{}') || {}).token || ''; }
-    catch (e) { return ''; }
-  }
+<div class="toasts" id="toasts" aria-live="polite"></div>
 
-  window.mtgApp.mount(document.getElementById('view'), sharedList(), token());
+<div class="palette-scrim" id="palette-scrim" hidden>
+  <div class="palette" role="dialog" aria-label="Quick find">
+    <input id="palette-input" type="text" placeholder="Jump to a card…" autocomplete="off" spellcheck="false">
+    <ul id="palette-list"></ul>
+    <div class="palette-hint">↑↓ move · ↵ open · esc close</div>
+  </div>
+</div>
 
-  // Only for the share target. It intercepts nothing else.
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').catch(function () {});
-  }
-}());
-</script>
+<script type="module" src="js/app.js"></script>
 </body>
 </html>

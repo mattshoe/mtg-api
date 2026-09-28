@@ -17,7 +17,3 @@ apps/.gradle/
 apps/.kotlin/
 apps/**/build/
 apps/local.properties
-
-# Built by the Pages workflow from apps/webApp. Committing it would let
-# the deployed page drift from the source that also builds Android.
-frontend/kmp/
