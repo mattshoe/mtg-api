@@ -91,7 +91,7 @@ object Inventory {
         Feature(Area.STATS, "Per-owner scoping at #/stats/matt and /kayla", "stats.js", logic = true, done = true),
 
         // ---------------------------------------------------------- query
-        Feature(Area.QUERY, "Free SQL against the collection, read-only", "console.js"),
+        Feature(Area.QUERY, "Free SQL against the collection, read-only", "console.js", logic = true, done = true),
         Feature(Area.QUERY, "Schema cheatsheet", "cheatsheet.js"),
 
         // ---------------------------------------------------------- entry
@@ -103,12 +103,12 @@ object Inventory {
         Feature(Area.ENTRY, "Recent history, with reuse", "manage.js"),
 
         // ----------------------------------------------------------- card
-        Feature(Area.CARD, "Card detail drawer with art, prices, legalities, rulings", "card.js"),
-        Feature(Area.CARD, "Which decks a card is in, and how many are free", "card.js"),
+        Feature(Area.CARD, "Card detail drawer with art, prices, legalities, rulings", "card.js", logic = true, done = true),
+        Feature(Area.CARD, "Which decks a card is in, and how many are free", "card.js", logic = true, done = true),
 
         // ----------------------------------------------------------- logs
-        Feature(Area.LOGS, "Request log with filtering", "logs.js"),
-        Feature(Area.LOGS, "Log summary counts", "logs.js"),
+        Feature(Area.LOGS, "Request log with filtering", "logs.js", logic = true, done = true),
+        Feature(Area.LOGS, "Log summary counts", "logs.js", logic = true, done = true),
 
         // ---------------------------------------------------------- admin
         Feature(Area.ADMIN, "Password unlock, token kept until locked", "admin.js"),
