@@ -12,7 +12,8 @@ uploaded:
 
   - every ES module gets an import-map entry pointing at `<path>?v=<ver>`,
     which covers the relative imports inside the modules themselves
-  - the entry <script> and the stylesheet get the same query
+  - the entry <script>, the stylesheet and the manifest get the same
+    query
 
 index.html is still cached for ten minutes, but it is now the only thing
 that is: whichever copy of it a browser holds pins one coherent set of
@@ -59,6 +60,13 @@ def main():
     )
     html = html.replace('src="js/app.js"', f'src="js/app.js?v={ver}"')
     html = html.replace('href="css/app.css"', f'href="css/app.css?v={ver}"')
+    # The manifest too. Android builds the installed app by fetching this,
+    # and Pages serves it with the same ten minute cache as everything
+    # else — so reinstalling shortly after a deploy built the app from the
+    # previous manifest, silently, and every share_target change sat on
+    # the server without ever reaching the phone.
+    html = html.replace(
+        'href="manifest.webmanifest"', f'href="manifest.webmanifest?v={ver}"')
 
     if html == before:
         sys.exit("nothing was stamped - index.html does not look as expected")
