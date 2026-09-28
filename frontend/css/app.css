@@ -108,6 +108,11 @@ h3 { font-size: 14px; }
   font-size: 10.5px; font-weight: 700; letter-spacing: .07em;
   text-transform: uppercase; color: var(--text-3);
 }
+/* A link out of the app rather than a place inside it, so it is quieter
+   than the views and carries a mark saying it leaves. */
+.tabs a.tabs-away { color: var(--text-3); font-weight: 400; }
+.tabs a.tabs-away::after { content: " \2197"; opacity: .75; }
+
 /* Edit views while admin mode is off. Still reachable — the view itself
    explains what is needed — but visibly not currently usable. */
 
