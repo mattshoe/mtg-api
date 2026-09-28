@@ -1,7 +1,6 @@
 package org.mattshoe.mtg.web
 
 import androidx.compose.runtime.Composable
-import org.jetbrains.compose.web.attributes.disabled
 import org.jetbrains.compose.web.dom.Button
 import org.jetbrains.compose.web.dom.Div
 import org.jetbrains.compose.web.dom.H1
@@ -41,27 +40,42 @@ fun DecksPage(
                 state.error != null -> Div(attrs = { classes("err") }) { Text("Could not load decks: ${state.error}") }
                 state.decks.isEmpty() -> Div(attrs = { classes("empty") }) { Text("No decks yet.") }
                 else -> state.byOwner.forEach { (owner, decks) ->
-                    H2 { Text(owner.replaceFirstChar(Char::uppercase)) }
-                    Div(attrs = { classes("deck-grid") }) { decks.forEach { Tile(it, onOpen) } }
+                    // A group, not a loose heading followed by a grid.
+                    // The two people's shelves have to look like two
+                    // shelves.
+                    Div(attrs = { classes("owner-group") }) {
+                        Div(attrs = { classes("owner-head") }) {
+                            H2 { Text(owner.replaceFirstChar(Char::uppercase)) }
+                            Span(attrs = { classes("count") }) {
+                                Text("${decks.size} " + if (decks.size == 1) "deck" else "decks")
+                            }
+                        }
+                        Div(attrs = { classes("deck-grid") }) { decks.forEach { Tile(it, onOpen) } }
+                    }
                 }
             }
         } else {
-            Button(attrs = { classes("btn", "ghost"); onClick { onClose() } }) { Text("← Decks") }
-            Div(attrs = { classes("page-head") }) { H1 { Text(open.name) } }
-            Div(attrs = { classes("muted", "small") }) {
-                Text(
-                    listOfNotNull(
-                        open.commanderName,
-                        open.bracket?.let { "Bracket $it" },
-                        open.colorPips.takeIf { it.isNotEmpty() }?.joinToString(""),
-                    ).joinToString(" · "),
-                )
-            }
-            Div(attrs = { classes("muted", "small") }) { Text("${state.totalCards} cards") }
-            if (admin) {
-                // Both of these move real cards, and both show the
-                // server's own dry run before they are allowed to.
-                Div(attrs = { classes("flex-wrap") }) {
+            // The back button, the name and the two admin actions are
+            // one header row rather than four things stacked flush.
+            Div(attrs = { classes("page-head") }) {
+                Button(attrs = {
+                    classes("btn", "sm", "ghost")
+                    onClick { onClose() }
+                }) { Text("← Decks") }
+                H1 { Text(open.name) }
+                Span(attrs = { classes("sub") }) {
+                    Text(
+                        listOfNotNull(
+                            open.commanderName,
+                            open.bracket?.let { "Bracket $it" },
+                            open.colorPips.takeIf { it.isNotEmpty() }?.joinToString(""),
+                        ).joinToString(" · "),
+                    )
+                }
+                Span(attrs = { classes("spacer") }) {}
+                if (admin) {
+                    // Both of these move real cards, and both show the
+                    // server's own dry run before they are allowed to.
                     Button(attrs = {
                         classes("btn", "sm")
                         onClick { onEdit(open) }
@@ -72,17 +86,28 @@ fun DecksPage(
                     }) { Text("Disassemble") }
                 }
             }
-            if (state.gaps.isNotEmpty()) {
-                Div(attrs = { classes("tag", "bad") }) { Text("${state.gaps.size} not owned") }
-            }
-            Div(attrs = { classes("panel") }) {
-                Div(attrs = { classes("panel-body") }) {
-                    state.cards.forEach { c ->
-                        Div(attrs = { classes("flex-wrap", "small") }) {
-                            Span { Text("${c.qty}×") }
-                            Span(attrs = { classes("t-name") }) { Text(c.name) }
-                            if (c.owned < c.qty) {
-                                Span(attrs = { classes("tag", "bad", "mini") }) { Text("has ${c.owned}") }
+
+            Div(attrs = { classes("stack") }) {
+                Div(attrs = { classes("flex-wrap", "small") }) {
+                    Span(attrs = { classes("tag", "mini") }) { Text("${state.totalCards} cards") }
+                    if (state.gaps.isNotEmpty()) {
+                        Span(attrs = { classes("tag", "bad", "mini") }) {
+                            Text("${state.gaps.size} not owned")
+                        }
+                    }
+                }
+                Div(attrs = { classes("panel") }) {
+                    Div(attrs = { classes("panel-head") }) { H2 { Text("Cards") } }
+                    Div(attrs = { classes("panel-body") }) {
+                        state.cards.forEach { c ->
+                            Div(attrs = { classes("deck-line", "small") }) {
+                                Span(attrs = { classes("num") }) { Text("${c.qty}×") }
+                                Span(attrs = { classes("t-name") }) { Text(c.name) }
+                                if (c.owned < c.qty) {
+                                    Span(attrs = { classes("tag", "bad", "mini") }) {
+                                        Text("has ${c.owned}")
+                                    }
+                                }
                             }
                         }
                     }

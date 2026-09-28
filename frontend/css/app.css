@@ -575,6 +575,17 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
 .check .small { flex-basis: 100%; }
 
 /* deck list */
+/* Decks are grouped by whose they are, and that heading used to be a
+   bare h2 — `margin: 0` like every other heading here — so one
+   person's shelf ran straight into the next with nothing between
+   them. The rule is the section break. */
+.owner-group + .owner-group { margin-top: 28px; }
+.owner-head {
+  display: flex; align-items: baseline; gap: 8px;
+  margin-bottom: 11px; padding-bottom: 7px; border-bottom: 1px solid var(--line);
+}
+.owner-head .count { color: var(--text-3); font-size: 12px; }
+
 .deck-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(272px, 1fr)); }
 .deck-card {
   background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius);
@@ -589,6 +600,16 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
   display: block; width: 100%; height: 100%;
   object-fit: cover; object-position: center 38%;
 }
+
+/* One line of a deck's list. Flush rows with no rule between them
+   read as a paragraph rather than a list. */
+.deck-line { display: flex; align-items: center; gap: 9px; padding: 7px 0; }
+.deck-line + .deck-line { border-top: 1px solid var(--line); }
+.deck-line .num {
+  flex: none; min-width: 26px; color: var(--text-3);
+  font: 600 12px/1 var(--mono); text-align: right;
+}
+.deck-line .t-name { flex: 1; min-width: 0; }
 
 .deck-body { padding: 11px 13px 13px; display: flex; flex-direction: column; gap: 7px; }
 .deck-top { display: flex; align-items: flex-start; gap: 8px; }
