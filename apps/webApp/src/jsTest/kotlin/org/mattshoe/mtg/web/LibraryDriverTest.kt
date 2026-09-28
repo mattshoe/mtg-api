@@ -414,6 +414,12 @@ class LibraryProbeTest {
 
     private val roots = mutableListOf<HTMLElement>()
 
+    // Without this the suite measured an unstyled DOM and reported
+    // 0px gaps that are really 7px — a false failure indistinguishable
+    // from a true one.
+    @kotlin.test.BeforeTest
+    fun loadTheStylesheet() = Stylesheet.load()
+
     @AfterTest
     fun cleanUp() {
         roots.forEach { it.remove() }
@@ -497,6 +503,7 @@ class LibraryProbeTest {
         settle()
         root.open("colour")
         settle()
+        if (!Stylesheet.applied()) return@runTest
         val pips = root.all("div.pips").first().getBoundingClientRect()
         val chips = root.all("div.chips").first().getBoundingClientRect()
         assertTrue(chips.top - pips.bottom >= 4, "only ${chips.top - pips.bottom}px between them")

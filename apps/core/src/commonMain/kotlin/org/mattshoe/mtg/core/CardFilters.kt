@@ -59,21 +59,41 @@ enum class Flag(val slug: String, val column: String, val label: String) {
  * shares several names — an unqualified name_norm is ambiguous. `qty` and
  * `free` are output aliases, so they stay bare.
  */
-enum class Sort(val slug: String, val label: String, val column: String) {
-    NAME("name", "Name", "c.name_norm"),
-    CMC("cmc", "Mana value", "c.cmc"),
-    QTY("qty", "Quantity", "qty"),
-    FREE("free", "Free copies", "free"),
-    EDHREC("edhrec", "EDHREC rank", "c.edhrec_rank"),
-    RELEASED("released", "Released", "c.released_at"),
-    RARITY("rarity", "Rarity", "instr('common uncommon rare mythic special bonus', c.rarity)"),
-    SET("set", "Set", "c.setcode"),
-    POWER("power", "Power", "CASE WHEN c.power GLOB '[0-9]*' THEN CAST(c.power AS INTEGER) END"),
-    TOUGHNESS("toughness", "Toughness", "CASE WHEN c.toughness GLOB '[0-9]*' THEN CAST(c.toughness AS INTEGER) END"),
-    COLOR("color", "Colour identity", "c.color_identity_count, c.color_identity"),
-    ARTIST("artist", "Artist", "c.artist"),
-    PRICE("price", "Price", "price"),
-    VALUE("value", "Stack value", "value"),
+enum class Sort(val slug: String, val label: String, val keys: List<String>) {
+    NAME("name", "Name", listOf("c.name_norm")),
+    CMC("cmc", "Mana value", listOf("MIN(c.cmc)")),
+    QTY("qty", "Quantity", listOf("qty")),
+    FREE("free", "Free copies", listOf("free")),
+    EDHREC("edhrec", "EDHREC rank", listOf("MIN(c.edhrec_rank)")),
+
+    // Aggregates, not bare columns. A bare column in a grouped query
+    // takes its value from the `MIN(c.id)` row — the printing that
+    // happened to be imported first — so "newest first" sorted a card
+    // you own a 2026 printing of by its 1993 one, and a Sol Ring owned
+    // in LEA, C21 and M3C sorted as uncommon.
+    RELEASED("released", "Released", listOf("MAX(c.released_at)")),
+    RARITY(
+        "rarity",
+        "Rarity",
+        listOf("MAX(instr('common uncommon rare mythic special bonus', c.rarity))"),
+    ),
+    SET("set", "Set", listOf("MIN(c.setcode)")),
+    POWER("power", "Power", listOf("MAX(CASE WHEN c.power GLOB '[0-9]*' THEN CAST(c.power AS INTEGER) END)")),
+    TOUGHNESS(
+        "toughness",
+        "Toughness",
+        listOf("MAX(CASE WHEN c.toughness GLOB '[0-9]*' THEN CAST(c.toughness AS INTEGER) END)"),
+    ),
+
+    // Two keys, which is why this is a list. As one comma-separated
+    // string it became `ORDER BY (a, b) DESC` — a row value, which
+    // SQLite refuses outside a comparison, so picking this sort
+    // returned `row value misused` and emptied the grid.
+    COLOR("color", "Colour identity", listOf("MIN(c.color_identity_count)", "MIN(c.color_identity)")),
+
+    ARTIST("artist", "Artist", listOf("MIN(c.artist)")),
+    PRICE("price", "Price", listOf("price")),
+    VALUE("value", "Stack value", listOf("value")),
     ;
 
     companion object {
@@ -295,8 +315,7 @@ fun conditions(s: Filters): Sql {
     c.pt("c.toughness", s.touOp, s.tou)
     c.pt("c.loyalty", s.loyOp, s.loy)
 
-    c.numeric("c.qty", ">=", s.qtyMin)
-    c.numeric("c.qty", "<=", s.qtyMax)
+    // qtyMin/qtyMax are a HAVING, not a WHERE — see `having`.
     c.numeric("c.edhrec_rank", ">=", s.edhrecMin)
     c.numeric("c.edhrec_rank", "<=", s.edhrecMax)
 
@@ -400,18 +419,40 @@ fun conditions(s: Filters): Sql {
     return Sql(c.where.joinToString("\n  AND "), c.params)
 }
 
+/**
+ * Filters on the whole stack rather than on one printing.
+ *
+ * `qty` is displayed as `SUM(c.qty)` over every printing owned, so
+ * asking for it in the WHERE asks a different question than the
+ * control does: "copies owned, at least 4" on a card held as four
+ * separate singles returned nothing while the grid printed `4` beside
+ * it. These belong after the grouping.
+ */
+fun having(s: Filters): Sql {
+    val c = Clauses()
+    c.numeric("SUM(c.qty)", ">=", s.qtyMin)
+    c.numeric("SUM(c.qty)", "<=", s.qtyMax)
+    return Sql(c.where.joinToString("\n  AND "), c.params)
+}
+
 /** The page of cards, or the count of them. */
 fun buildQuery(s: Filters, countOnly: Boolean = false): Sql {
     val conds = conditions(s)
     val clause = if (conds.sql.isEmpty()) "" else "WHERE ${conds.sql}"
+    val post = having(s)
+    val havingClause = if (post.sql.isEmpty()) "" else "HAVING ${post.sql}"
+    val params = conds.params + post.params
 
     if (countOnly) {
-        val inner = "SELECT 1 FROM cards c $USAGE_JOIN $PRICE_JOIN $clause GROUP BY c.owner, c.name_norm"
-        return Sql("SELECT COUNT(*) FROM ($inner)", conds.params)
+        val inner = "SELECT 1 FROM cards c $USAGE_JOIN $PRICE_JOIN $clause " +
+            "GROUP BY c.owner, c.name_norm $havingClause"
+        return Sql("SELECT COUNT(*) FROM ($inner)", params)
     }
 
     val dir = if (s.descending) "DESC" else "ASC"
-    val order = "ORDER BY (${s.sort.column}) IS NULL, (${s.sort.column}) $dir, c.name_norm ASC"
+    val order = "ORDER BY " +
+        s.sort.keys.joinToString(", ") { "($it) IS NULL, ($it) $dir" } +
+        ", c.name_norm ASC"
     val size = if (s.size > 0) s.size else PAGE_SIZE
     val offset = (s.page - 1).coerceAtLeast(0) * size
 
@@ -424,7 +465,8 @@ fun buildQuery(s: Filters, countOnly: Boolean = false): Sql {
               ROUND(SUM(c.qty * ($PRICE_EXPR)), 2) AS value"""
 
     return Sql(
-        "$select\nFROM cards c\n$USAGE_JOIN\n$PRICE_JOIN\n$clause\nGROUP BY c.owner, c.name_norm\n$order\nLIMIT $size OFFSET $offset",
-        conds.params,
+        "$select\nFROM cards c\n$USAGE_JOIN\n$PRICE_JOIN\n$clause" +
+            "\nGROUP BY c.owner, c.name_norm\n$havingClause\n$order\nLIMIT $size OFFSET $offset",
+        params,
     )
 }

@@ -27,6 +27,90 @@ class FilterCoverageTest {
         assertTrue(where(f).isNotEmpty(), "$name added no clause at all")
     }
 
+    /**
+     * "Copies owned" asks about the stack, which is what the grid
+     * shows — `SUM(c.qty)` over every printing. As a WHERE it asked
+     * about one printing instead, so a card held as four separate
+     * singles was hidden from "at least 4" while the grid printed 4
+     * beside it.
+     */
+    @Test
+    fun theStackIsFilteredNotThePrinting() {
+        val f = Filters(qtyMin = "4", qtyMax = "8")
+        assertEquals("", where(f), "qty must not be a WHERE")
+        val post = having(f)
+        assertTrue(post.sql.contains("SUM(c.qty) >= ?"), post.sql)
+        assertTrue(post.sql.contains("SUM(c.qty) <= ?"), post.sql)
+        assertEquals(listOf(4.0, 8.0), post.params)
+
+        // And it has to reach both statements, or the count disagrees
+        // with the rows it is counting.
+        assertTrue(buildQuery(f).sql.contains("HAVING"))
+        assertTrue(buildQuery(f, countOnly = true).sql.contains("HAVING"))
+        assertEquals(listOf(4.0, 8.0), buildQuery(f, countOnly = true).params)
+    }
+
+    /**
+     * Every sort key has to survive the GROUP BY.
+     *
+     * A bare column takes its value from the `MIN(c.id)` row — the
+     * printing imported first — so "newest first" sorted a card by its
+     * oldest printing. And "Colour identity" held two comma-separated
+     * expressions, which `ORDER BY (a, b)` parses as a row value:
+     * SQLite refuses it outright and the grid went blank.
+     */
+    @Test
+    fun everySortKeyIsGroupedOrAggregated() {
+        val perPrinting = listOf(
+            "c.released_at", "c.setcode", "c.artist", "c.rarity", "c.power", "c.toughness",
+        )
+        Sort.entries.forEach { sort ->
+            assertTrue(sort.keys.isNotEmpty(), "${sort.label} has no sort key")
+            sort.keys.forEach { key ->
+                // A comma inside `instr('a, b', x)` is fine; one at
+                // the top level makes `ORDER BY (…)` a row value,
+                // which SQLite refuses.
+                assertFalse(
+                    key.hasTopLevelComma(),
+                    "${sort.label} packs two expressions into one key: $key",
+                )
+                val bare = perPrinting.any { key == it }
+                assertFalse(bare, "${sort.label} sorts on a bare per-printing column: $key")
+                if (perPrinting.any { key.contains(it) }) {
+                    assertTrue(
+                        key.startsWith("MIN(") || key.startsWith("MAX("),
+                        "${sort.label} touches a per-printing column without aggregating: $key",
+                    )
+                }
+            }
+        }
+    }
+
+    /** True only for a comma outside every bracket and quote. */
+    private fun String.hasTopLevelComma(): Boolean {
+        var depth = 0
+        var quoted = false
+        forEach { ch ->
+            when {
+                ch == '\'' -> quoted = !quoted
+                quoted -> Unit
+                ch == '(' -> depth++
+                ch == ')' -> depth--
+                ch == ',' && depth == 0 -> return true
+            }
+        }
+        return false
+    }
+
+    @Test
+    fun theColourSortOrdersByCountThenIdentity() {
+        val sql = buildQuery(Filters(sort = Sort.COLOR)).sql
+        assertTrue(sql.contains("(MIN(c.color_identity_count)) DESC"), sql)
+        assertTrue(sql.contains("(MIN(c.color_identity)) DESC"), sql)
+        // The shape that broke it: `ORDER BY (a, b)` is a row value.
+        assertFalse(sql.contains("(c.color_identity_count, c.color_identity)"), sql)
+    }
+
     // ------------------------------------------------------------ types
 
     @Test
@@ -222,7 +306,7 @@ class FilterCoverageTest {
     fun everyFieldOnThePanelChangesTheQuery() {
         addsAClause("owner", Filters(owner = "matt"))
         addsAClause("pool", Filters(pool = Pool.FREE))
-        addsAClause("qty", Filters(qtyMin = "2"))
+        // qty is a HAVING now, not a WHERE — see `theStackIsFilteredNotThePrinting`.
         addsAClause("freeMin", Filters(freeMin = "1"))
         addsAClause("deck", Filters(deck = "alela"))
         addsAClause("edhrec", Filters(edhrecMax = "500"))

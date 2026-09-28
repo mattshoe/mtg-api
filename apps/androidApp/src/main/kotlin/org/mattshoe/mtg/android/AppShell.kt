@@ -142,9 +142,10 @@ fun AppShell(
                 onToggleFilters = { showFilters = !showFilters },
                 onExport = onExport,
                 complete = state.complete,
-                onComplete = { c ->
-                    onState(state.copy(complete = c))
+                onName = { c ->
+                    onState(state.typedCardName(c))
                     if (c.worthAsking) onLookup(c.term)
+                    onSearch()
                 },
                 onCheatsheet = { onState(state.opening(Overlay.CHEATSHEET)) },
             )

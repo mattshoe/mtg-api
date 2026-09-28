@@ -42,7 +42,7 @@ fun LibraryPage(
     onToggleFilters: () -> Unit = {},
     onExport: () -> Unit = {},
     complete: Completion = Completion(),
-    onComplete: (Completion) -> Unit = {},
+    onName: (Completion) -> Unit = {},
     facets: Facets = Facets(),
 ) {
     // One rule: anything that changes the filters asks the database
@@ -62,13 +62,15 @@ fun LibraryPage(
             // `stack` is what puts air between the rows. Without it
             // every control in here sits flush against the next.
             Div(attrs = { classes("panel-body", "stack") }) {
+                // One callback, not two. The suggestion state and the
+                // name filter hold the same word and have to move in
+                // one update — done separately, the second built on a
+                // copy that predated the first and threw it away, and
+                // the box would not accept a character.
                 AutocompleteField(
                     hint = "Card name",
                     state = complete,
-                    onState = { c ->
-                        onComplete(c)
-                        apply(state.where(state.filters.copy(q = c.term)))
-                    },
+                    onState = onName,
                     onPick = { onSearch() },
                 )
                 // No owner control and no Search button up here. Whose
@@ -134,7 +136,9 @@ private fun SortPicker(state: Library, apply: (Library) -> Unit) {
         }
     }
     Button(attrs = {
-        classes("btn", "sm", "ghost")
+        // `dir` gives it the same box as the select it is paired with.
+        // A bare glyph next to a chunky dropdown reads as an accident.
+        classes("btn", "sm", "ghost", "dir")
         attr("title", if (state.filters.descending) "Largest first" else "Smallest first")
         onClick { apply(state.where(state.filters.copy(descending = !state.filters.descending))) }
     }) { Text(if (state.filters.descending) "↓" else "↑") }

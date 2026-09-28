@@ -13,7 +13,6 @@ import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.CardRow
 import org.mattshoe.mtg.core.Facets
 import org.w3c.dom.HTMLElement
-import org.w3c.dom.HTMLLinkElement
 import org.w3c.dom.get
 import kotlin.js.Promise
 import kotlin.math.abs
@@ -37,20 +36,8 @@ import kotlin.test.assertTrue
 class LibraryLayoutTest {
 
     private val roots = mutableListOf<HTMLElement>()
-    private var sheet: HTMLLinkElement? = null
-
     @BeforeTest
-    fun loadTheStylesheet() {
-        if (document.querySelector("link[data-mtg]") != null) return
-        val link = document.createElement("link") as HTMLLinkElement
-        link.rel = "stylesheet"
-        // Karma serves the test package's `kotlin/` directory, which is
-        // where Gradle drops the resources it was told to include.
-        link.href = "/base/kotlin/app.css"
-        link.setAttribute("data-mtg", "")
-        document.head!!.appendChild(link)
-        sheet = link
-    }
+    fun loadTheStylesheet() = Stylesheet.load()
 
     @AfterTest
     fun cleanUp() {
@@ -62,15 +49,7 @@ class LibraryLayoutTest {
         Promise<Unit> { resolve, _ -> window.requestAnimationFrame { resolve(Unit) } }.await()
     }
 
-    /** True once the stylesheet is in, so a probe can say so rather than pass blindly. */
-    private fun styled(): Boolean {
-        val probe = document.createElement("div") as HTMLElement
-        probe.className = "btn"
-        document.body!!.appendChild(probe)
-        val padded = window.getComputedStyle(probe).paddingLeft
-        probe.remove()
-        return padded != "0px" && padded != ""
-    }
+    private fun styled() = Stylesheet.applied()
 
     private fun card(name: String) = CardRow(
         id = 1, owner = "matt", name = name, nameNorm = name.lowercase(), face2 = null,
@@ -128,7 +107,6 @@ class LibraryLayoutTest {
         if (!styled()) return@runTest
         val limit = frame.getBoundingClientRect().right + 1
         val over = frame.all("*").filter { it.getBoundingClientRect().right > limit }
-            .filterNot { it.className.contains("app-nav") } // scrolls sideways on purpose
             .map { Box(it).what + " right=" + Box(it).r.right }
         assertTrue(over.isEmpty(), "these run off the right edge at 390px:\n" + over.joinToString("\n"))
     }
@@ -259,16 +237,17 @@ class LibraryLayoutTest {
     }
 
     @Test
-    fun theNavIsVisibleAndScrollableRatherThanHidden() = runTest {
+    fun everyNavItemIsOnScreenAtPhoneWidth() = runTest {
         val frame = render(390)
         settle()
         if (!styled()) return@runTest
         val nav = frame.all("nav").first()
         val box = nav.getBoundingClientRect()
         assertTrue(box.height > 0 && box.width > 0, "the nav has no box at phone width")
-        assertTrue(
-            window.getComputedStyle(nav).overflowX.let { it == "auto" || it == "scroll" },
-            "the nav does not scroll, so its last tabs are unreachable",
-        )
+        // It used to scroll sideways, which put "Find" past the right
+        // edge with nothing on screen saying it was there.
+        val limit = frame.getBoundingClientRect().right + 1
+        val off = nav.all("button").filter { it.getBoundingClientRect().right > limit }
+        assertTrue(off.isEmpty(), "off the edge: ${off.map { Box(it).what }}")
     }
 }

@@ -59,7 +59,7 @@ fun LibraryScreen(
     onToggleFilters: () -> Unit = {},
     onExport: () -> Unit = {},
     complete: Completion = Completion(),
-    onComplete: (Completion) -> Unit = {},
+    onName: (Completion) -> Unit = {},
     onCheatsheet: () -> Unit = {},
 ) {
     LazyVerticalGrid(
@@ -74,7 +74,7 @@ fun LibraryScreen(
                 PageHead("Library")
                 Controls(
                     state, onState, onSearch, showFilters,
-                    onToggleFilters, onExport, complete, onComplete, onCheatsheet,
+                    onToggleFilters, onExport, complete, onName, onCheatsheet,
                 )
                 if (showFilters) FilterSheet(state.filters, { onState(state.where(it)) }, onToggleFilters)
                 when {
@@ -107,17 +107,15 @@ private fun Controls(
     onToggleFilters: () -> Unit,
     onExport: () -> Unit,
     complete: Completion,
-    onComplete: (Completion) -> Unit,
+    onName: (Completion) -> Unit,
     onCheatsheet: () -> Unit,
 ) {
     Panel {
+        // One callback, not two — see `AppState.typedCardName`.
         AutocompleteField(
             label = "Card name",
             state = complete,
-            onState = { c ->
-                onComplete(c)
-                onState(state.where(state.filters.copy(q = c.term)))
-            },
+            onState = onName,
             onPick = { onSearch() },
         )
 

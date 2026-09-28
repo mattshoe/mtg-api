@@ -82,6 +82,24 @@ data class AppState(
         Overlay.CHEATSHEET, Overlay.UNLOCK -> this
     }
 
+    // ------------------------------------------------------- the name box
+
+    /**
+     * A character typed into the card name box.
+     *
+     * Both the suggestion state and the filter hold that word, and
+     * they have to move together in ONE copy. Done as two calls —
+     * `onComplete(c)` then `onState(library)` — both build on the
+     * `AppState` captured before the keystroke, so whichever lands
+     * second throws the other away. That is what stopped the box
+     * accepting a single character: `complete.term` never advanced,
+     * and the input is bound to it.
+     */
+    fun typedCardName(c: Completion): AppState = copy(
+        complete = c,
+        library = library.where(library.filters.copy(q = c.term)),
+    )
+
     // --------------------------------------------------------- shortcuts
 
     /**
