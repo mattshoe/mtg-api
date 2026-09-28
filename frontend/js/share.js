@@ -30,14 +30,31 @@ const usable = (p) => Boolean(p) && (Boolean(p.list) || Boolean(p.problem));
 
 // ------------------------------------------------------- the fragment
 
+// What the fragment looked like on arrival, reported once the token is
+// available. Module load happens before anything can log.
+let arrival = null;
+
 (function fromFragment() {
-  const m = /[?&]share=([^&]*)/.exec(location.hash);
+  const hash = location.hash;
+  const m = /[?&]share=([^&]*)/.exec(hash);
+  arrival = {
+    href: location.href.slice(0, 200),
+    hashLength: hash.length,
+    hasShareParam: Boolean(m),
+    encodedLength: m ? m[1].length : 0,
+  };
   if (!m) return;
 
   try {
     const payload = JSON.parse(decodeURIComponent(m[1]));
+    arrival.decoded = true;
+    arrival.keys = Object.keys(payload || {});
+    arrival.listChars = payload?.list ? payload.list.length : 0;
     if (usable(payload)) held = payload;
+    else arrival.rejected = 'payload had neither a list nor a problem';
   } catch (e) {
+    arrival.decoded = false;
+    arrival.error = e.message;
     held = { at: Date.now(), problem: `the share arrived but would not decode (${e.message}).`, report: {} };
   }
 
@@ -139,12 +156,22 @@ export function reportShare(message, detail) {
 function announce() {
   if (reported || !held) return;
   reported = true;
-  reportShare(held.problem ? `share unusable: ${held.problem}` : 'share received', {
+  reportShare(held.problem ? `page: share unusable — ${held.problem}` : 'page: share received', {
     ...(held.report || {}),
+    arrival,
     via: heldKey === SLOT && held.report?.parked !== false ? 'fragment' : 'cache',
     chars: held.list ? held.list.length : 0,
     names: held.names || [],
     problem: held.problem || null,
+  });
+}
+
+/** Everything the page knows about how it got here, share or not. */
+export function reportArrival(extra) {
+  reportShare('page: boot', {
+    ...arrival,
+    ...extra,
+    held: held ? { chars: held.list?.length || 0, problem: held.problem || null } : null,
   });
 }
 
@@ -161,6 +188,19 @@ export function registerWorker() {
   navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' })
     .then((reg) => reg.update())
     .catch(() => {});
+
+  // Hand the worker a token so it can log on its own. It handles the share
+  // in a context the page never sees — if it goes wrong before the
+  // redirect, the page is not there to report it, and for five attempts
+  // that was a blind spot.
+  const give = () => {
+    const sw = navigator.serviceWorker.controller;
+    const auth = authHeader();
+    if (sw && auth.authorization) sw.postMessage({ type: 'auth', token: auth.authorization.slice(7) });
+  };
+  give();
+  navigator.serviceWorker.addEventListener('controllerchange', give);
+  navigator.serviceWorker.ready.then(give).catch(() => {});
 }
 
 /**

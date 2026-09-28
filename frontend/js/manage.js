@@ -11,7 +11,7 @@
 import * as api from './api.js';
 import { h, $, fill, num, toast, store, errorBox } from './util.js';
 import { isAdmin } from './admin.js';
-import { sharedNow, shareUsed } from './share.js';
+import { sharedNow, shareUsed, reportShare } from './share.js';
 
 const HISTORY_KEY = 'history';
 const MAX_HISTORY = 30;
@@ -142,7 +142,12 @@ function shareTrouble() {
     bits.push('no files in the share');
   }
   if (r.fields?.length) bits.push(`text fields: ${r.fields.join(', ')}`);
+  if (r.req) bits.push(`body: ${r.req.rawLen} bytes, ${r.req.ct || 'no content-type'}`);
+  if (r.req?.partsSeen?.length) {
+    bits.push(`parts: ${r.req.partsSeen.map((x) => `${x.field}${x.filename ? `=${x.filename}` : ''} ${x.type || '?'} ${x.bytes}B`).join('; ')}`);
+  }
   if (r.failure) bits.push(`error: ${r.failure}`);
+  if (r.rescued) bits.push('parsed by hand');
   if (r.v) bits.push(r.v);
   return { problem: shared.problem, detail: bits.join(' — ') };
 }
@@ -512,6 +517,13 @@ export function show(mode) {
   // The list is already in the box by now; this only says where it came
   // from, once, however many times the page gets rendered.
   const shared = flow.mode === 'add' ? sharedNow() : null;
+  reportShare('page: add page rendered', {
+    mode,
+    hasShare: Boolean(shared),
+    boxChars: flow.list.length,
+    note: flow.shareNote?.problem || null,
+    id: shared?.report?.id || null,
+  });
   if (!shared || shared.announced) return;
   shared.announced = true;
   if (!shared.list) {

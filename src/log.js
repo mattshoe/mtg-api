@@ -15,7 +15,7 @@
 export const RETENTION_DAYS = 7;
 
 const MAX_MESSAGE = 400;
-const MAX_DETAIL = 2000;
+const MAX_DETAIL = 20000;
 
 /**
  * What a row's level should be, given how the request went. The default

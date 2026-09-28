@@ -10,6 +10,7 @@ import { openCard, closeCard, openCardId, hideCardForRoute } from './card.js';
 import { pushOverlay, dropOverlay } from './overlay.js';
 import {
   registerWorker, loadShare, sharedNow, watchShares, reportShare, workerVersion,
+  reportArrival,
 } from './share.js';
 import * as search from './search.js';
 import * as decks from './decks.js';
@@ -274,11 +275,27 @@ async function boot() {
   // wrote anything. That failure leaves no other trace, so it gets a line
   // in the log rather than an unexplained empty box.
   const nav = performance.getEntriesByType('navigation')[0];
-  if (!sharedNow() && parseHash().view === 'add' && nav?.type === 'navigate') {
-    reportShare('landed on add with an empty share inbox', {
+  const onAdd = parseHash().view === 'add';
+  const fresh = nav?.type === 'navigate';
+
+  // Narrated on every boot that could be a share, not only the failures.
+  // Knowing what a working one looks like is half of reading the broken one.
+  if (onAdd || sharedNow()) {
+    reportArrival({
+      navType: nav?.type || null,
+      navUrl: nav?.name?.slice(0, 200) || null,
+      view: parseHash().view,
+      admin: isAdmin(),
       controlled: Boolean(navigator.serviceWorker?.controller),
       sw: await workerVersion(),
-      url: nav.name,
+    });
+  }
+
+  if (!sharedNow() && onAdd && fresh) {
+    reportShare('page: landed on add with nothing to show for it', {
+      controlled: Boolean(navigator.serviceWorker?.controller),
+      sw: await workerVersion(),
+      url: nav.name?.slice(0, 200),
     });
   }
   if (sharedNow() && parseHash().view !== 'add') {
