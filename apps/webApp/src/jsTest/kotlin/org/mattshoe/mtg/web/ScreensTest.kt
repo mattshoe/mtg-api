@@ -612,13 +612,13 @@ class NavTest {
         val root = document.createElement("div") as org.w3c.dom.HTMLElement
         document.body!!.appendChild(root)
         roots += root
-        renderComposable(root = root) {
-            LibraryPage(Library().loaded(emptyList(), 0), {}, {}, {})
-        }
+        renderComposable(root = root) { FilterPanel(Filters()) {} }
+        settle()
+        (root.querySelector("details[data-facet=collection] summary") as org.w3c.dom.HTMLElement).click()
         settle()
         // `owner-opt` is the wizard's one-big-decision styling: 130px
         // minimum each, which wrapped onto two lines on a phone.
         assertEquals(0, root.querySelectorAll(".owner-opt").length)
-        assertEquals(3, root.querySelectorAll(".seg button").length)
+        assertTrue(root.querySelectorAll(".seg button").length >= 3)
     }
 }

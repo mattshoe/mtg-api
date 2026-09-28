@@ -71,27 +71,11 @@ fun LibraryPage(
                     },
                     onPick = { onSearch() },
                 )
-                Div(attrs = { classes("flex-wrap") }) {
-                    // A segmented control, not three choice cards. The
-                    // `owner-opt` styling is for the wizard's one big
-                    // decision per screen; three of them side by side
-                    // wrapped onto two lines on a phone.
-                    Div(attrs = { classes("seg") }) {
-                        listOf("both" to "Both", "matt" to "Matt", "kayla" to "Kayla")
-                            .forEach { (slug, label) ->
-                                Button(attrs = {
-                                    if (state.filters.owner == slug) classes("on")
-                                    onClick { apply(state.where(state.filters.copy(owner = slug))) }
-                                }) { Text(label) }
-                            }
-                    }
-                    Span(attrs = { classes("spacer") }) {}
-                    Button(attrs = {
-                        classes("btn", "primary")
-                        if (state.busy) disabled()
-                        onClick { onSearch() }
-                    }) { Text("Search") }
-                }
+                // No owner control and no Search button up here. Whose
+                // collection it is lives in the Collection group with
+                // every other filter, and everything applies as it is
+                // typed — a button that re-runs what already ran is
+                // just a thing to forget to press.
                 Div(attrs = { classes("flex-wrap") }) {
                     Button(attrs = {
                         classes("btn", "sm", "ghost")

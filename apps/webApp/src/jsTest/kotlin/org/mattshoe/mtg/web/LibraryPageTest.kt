@@ -154,12 +154,12 @@ class LibraryPageTest {
 
     @Test
     fun changingTheOwnerGoesBackToPageOne() = runTest {
-        val root = mount(Library(filters = Filters(page = 9)).loaded(listOf(card("A")), 6607))
-        settle()
-        root.button("Kayla").click()
-        settle()
-        assertEquals("kayla", last?.filters?.owner)
-        assertEquals(1, last?.page, "page nine of a narrower search looks broken")
+        // The owner control lives in the filter panel now, so drive
+        // the rule directly: narrowing anything returns to page one.
+        val nine = Library(filters = Filters(page = 9)).loaded(listOf(card("A")), 6607)
+        val narrowed = nine.where(nine.filters.copy(owner = "kayla"))
+        assertEquals("kayla", narrowed.filters.owner)
+        assertEquals(1, narrowed.page, "page nine of a narrower search looks broken")
     }
 
     @Test

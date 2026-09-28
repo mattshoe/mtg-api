@@ -486,11 +486,35 @@ class FilterApplyTest {
 
     @Test
     fun soDoesEveryOtherToggle() = runTest {
-        val p = mount()
+        val p = mount(open = "collection")
         settle()
         val before = p.searches
         p.button("Matt").click(); settle()
         assertTrue(p.searches > before, "choosing an owner did not re-run the search")
+        assertEquals("matt", p.library.filters.owner)
+    }
+
+    @Test
+    fun thereIsNoSearchButtonBecauseItAppliesAsYouGo() = runTest {
+        val p = mount()
+        settle()
+        assertTrue(
+            p.buttons().none { it.textContent?.trim() == "Search" },
+            "a button that re-runs what already ran is a thing to forget to press",
+        )
+    }
+
+    @Test
+    fun andWhoseCollectionItIsLivesWithTheOtherFilters() = runTest {
+        // It was duplicated above the panel, which is the one place
+        // you would not look for a filter.
+        val p = mount()
+        settle()
+        assertTrue(p.buttons().none { it.textContent?.trim() == "Kayla" })
+        p.root.querySelector("details[data-facet=collection] summary")
+            ?.let { (it as HTMLElement).click() }
+        settle()
+        assertTrue(p.buttons().any { it.textContent?.trim() == "Kayla" })
     }
 
     @Test
