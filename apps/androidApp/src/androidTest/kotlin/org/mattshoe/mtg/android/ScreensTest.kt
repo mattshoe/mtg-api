@@ -168,9 +168,13 @@ class ScreensTest {
     }
 
     @Test
-    fun theQueryBoxIsOnTheScreen() {
+    fun thereIsNoQueryBoxOnTheLibrary() {
+        // Taken out on request, on both platforms. The sibling is
+        // `thereIsNoQueryBoxOnTheLibrary` in the web suite.
         content { LibraryScreen(Library().loaded(listOf(card("Sol Ring")), 1), {}, {}, {}) }
-        rule.onNodeWithText("Query box — c<=wu t:creature mv<=3 -is:reprint").assertExists()
+        rule.onAllNodesWithText("Query box — c<=wu t:creature mv<=3 -is:reprint")
+            .fetchSemanticsNodes()
+            .let { assertTrue(it.isEmpty(), "the query box is back on Android") }
     }
 
     @Test

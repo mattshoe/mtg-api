@@ -136,5 +136,9 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: results
+      # Reports, does not judge — `shared`, `web` and `android` above
+      # already fail on a red test, and a second X for the same cause
+      # is noise.
       - name: Count them
+        continue-on-error: true
         run: python3 scripts/count_tests.py results
