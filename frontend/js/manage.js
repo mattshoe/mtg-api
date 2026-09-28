@@ -124,6 +124,29 @@ function historyPanel() {
         }, 'Reuse'))))))));
 }
 
+/**
+ * The worker's account of a share that produced nothing, on the page.
+ *
+ * Reading it out of a server log is fine for me and useless to the person
+ * holding the phone, so it says the whole thing here: what went wrong,
+ * what actually arrived, and which build of the worker handled it.
+ */
+function shareTrouble() {
+  const shared = sharedNow();
+  if (!shared?.problem) return null;
+  const r = shared.report || {};
+  const bits = [];
+  if (r.files?.length) {
+    bits.push(r.files.map((f) => `${f.name || 'unnamed'} · ${f.type || 'no type'} · ${f.size}B`).join('; '));
+  } else if (r.files) {
+    bits.push('no files in the share');
+  }
+  if (r.fields?.length) bits.push(`text fields: ${r.fields.join(', ')}`);
+  if (r.failure) bits.push(`error: ${r.failure}`);
+  if (r.v) bits.push(r.v);
+  return { problem: shared.problem, detail: bits.join(' — ') };
+}
+
 // One flow at a time, reset on every mount. It lives outside paint() so a
 // step change can repaint without threading state through every caller.
 let flow = null;
@@ -138,7 +161,7 @@ const blank = (mode) => ({
   list: mode === 'add' ? (sharedNow()?.list || '') : '',
   // Set when a share arrived that the worker could not make anything of.
   // An empty box with no explanation is the worst possible outcome here.
-  shareNote: mode === 'add' ? (sharedNow()?.problem || null) : null,
+  shareNote: mode === 'add' ? shareTrouble() : null,
   // Deliberately nothing. Remembering the last choice, or defaulting to
   // matt, is how a list lands in the wrong person's collection — the
   // whole reason this is its own step is to make it a decision.
@@ -284,7 +307,10 @@ function stepList() {
     h('div.panel-body',
       flow.shareNote
         ? h('div.err', { style: { marginBottom: '12px' } },
-          `Shared in, but ${flow.shareNote} Open it and paste the text instead.`)
+          h('div', `Shared in, but ${flow.shareNote.problem}`),
+          flow.shareNote.detail
+            ? h('div.small', { style: { marginTop: '6px', opacity: '.85' } }, flow.shareNote.detail)
+            : null)
         : null,
       h('div.field', fileDrop(listInput, updateCount)),
       h('div.field', listInput),

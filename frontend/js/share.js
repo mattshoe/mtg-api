@@ -1,119 +1,102 @@
 // The page half of the Android share target.
 //
-// `sw.js` catches the share POST and parks the text in the cache, because
-// that POST has nowhere else to go on static hosting. This reads it back.
+// `sw.js` catches the share POST and hands the list over in the URL
+// fragment — `#/add?share=<encoded>`. That is read here, synchronously, at
+// module load, before a single thing has rendered. It used to come through
+// Cache Storage and that is what kept failing on the phone: the redirect
+// arrived on the add page and the cache read came back empty, with nothing
+// anywhere to say why.
 //
-// Two things make the timing awkward, and between them they decide the
-// shape of this file:
-//
-//   - The add page is behind the password, so the list has to survive a
-//     bounce to the library, a login dialog and a navigation back before
-//     anything can put it in a box.
-//   - The add page can be rendered more than once on the way through
-//     that. Android fires a visibility change when the soft keyboard
-//     closes over the password field, which is enough to route again.
-//
-// So the list stays in the cache until it is genuinely used, and it is
-// handed out synchronously from memory in the meantime. An await in the
-// middle of claiming it let one render take the payload and a later one
-// paint an empty box over the top, which is exactly what happened.
+// A fragment cannot be evicted, needs no quota, and cannot be read back
+// under a key that does not match. The cache is still read as a fallback,
+// because a list too big for a URL still goes that way.
 
 import { API } from './api.js';
 import { authHeader } from './admin.js';
 
 const CACHE = 'share-inbox';
-
-// Same URL the worker writes to: a cache key is a URL, and both sides sit
-// at the site root.
 const SLOT = new URL('share-inbox-payload', location.href).href;
 
 // A share nobody ever picked up should not ambush the next launch by
-// dragging it onto the add page days later.
+// dragging it onto the add page days later. Only applies to the cache
+// path; a fragment is by definition this navigation.
 const STALE_MS = 15 * 60 * 1000;
 
 let held = null;
 let heldKey = SLOT;
+let reported = false;
+
+const usable = (p) => Boolean(p) && (Boolean(p.list) || Boolean(p.problem));
+
+// ------------------------------------------------------- the fragment
+
+(function fromFragment() {
+  const m = /[?&]share=([^&]*)/.exec(location.hash);
+  if (!m) return;
+
+  try {
+    const payload = JSON.parse(decodeURIComponent(m[1]));
+    if (usable(payload)) held = payload;
+  } catch (e) {
+    held = { at: Date.now(), problem: `the share arrived but would not decode (${e.message}).`, report: {} };
+  }
+
+  // Take it back out of the URL. Leaving a whole decklist in the address
+  // bar means a reload re-applies it, and any link copied out of here
+  // carries it.
+  const clean = location.hash.replace(/[?&]share=[^&]*/, '').replace(/\?$/, '') || '#/add';
+  try { history.replaceState(history.state, '', clean); } catch { /* not worth failing over */ }
+}());
+
+// ----------------------------------------------------------- the cache
 
 async function inbox() {
   if (typeof caches === 'undefined') return null;
   try {
     return await caches.open(CACHE);
   } catch {
-    // No cache, no worker, private mode — sharing is a shortcut, not a
-    // feature anything else depends on.
     return null;
   }
 }
 
 /**
- * Find the parked share.
+ * Look for a parked share under any key that could be ours.
  *
- * The exact key is what the worker writes, but it is derived from the
- * worker's scope and this from the page's URL, so a mismatch is possible
- * in a way that would look exactly like nothing having been shared. There
- * is at most a handful of keys in here — check them all rather than let
- * that be a silent failure.
+ * The exact key is derived from the worker's scope and this one from the
+ * page's URL. They should agree, and a disagreement would look exactly
+ * like nothing having been shared, so check every key rather than let
+ * that be silent.
  */
 async function find(cache) {
   const hit = await cache.match(SLOT);
   if (hit) return { key: SLOT, res: hit };
   for (const req of await cache.keys()) {
-    if (req.url.endsWith('/share-inbox-payload')) {
-      return { key: req, res: await cache.match(req) };
-    }
+    if (req.url.endsWith('/share-inbox-payload')) return { key: req, res: await cache.match(req) };
   }
   return null;
 }
 
 /** Read the inbox into memory. Leaves the cache entry where it is. */
 export async function loadShare() {
-  if (held) return held;
+  if (held) { announce(); return held; }
   const cache = await inbox();
   if (!cache) return null;
   try {
     const found = await find(cache);
     if (!found?.res) return null;
     const payload = await found.res.json();
-    // `problem` is the worker saying it got something it could not use.
-    // That is worth showing, so it counts as a share for these purposes.
-    if ((!payload?.list && !payload?.problem) || Date.now() - (payload.at || 0) > STALE_MS) {
+    if (!usable(payload) || Date.now() - (payload.at || 0) > STALE_MS) {
       await cache.delete(found.key);
       return null;
     }
     held = payload;
     heldKey = found.key;
-    reportShare(payload.problem ? `share unusable: ${payload.problem}` : 'share received', {
-      ...(payload.report || {}),
-      chars: payload.list ? payload.list.length : 0,
-      names: payload.names || [],
-      problem: payload.problem || null,
-    });
   } catch (e) {
     reportShare('share inbox could not be read', { error: String(e && e.message) });
     return null;
   }
+  announce();
   return held;
-}
-
-/**
- * Tell the server what happened.
- *
- * All of this runs in a service worker on a phone, where there is no
- * console to read and no way to attach a debugger from here. Without a
- * line in the log there is nothing to go on but guesswork, and guesswork
- * is what made this take four attempts. Fire and forget: a report that
- * fails must never be the reason a share fails.
- */
-export function reportShare(message, detail) {
-  try {
-    const auth = authHeader();
-    if (!auth.authorization) return;
-    fetch(`${API}/logs/client`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', ...auth },
-      body: JSON.stringify({ level: detail?.problem ? 'warn' : 'info', message, detail }),
-    }).catch(() => {});
-  } catch { /* never in the way */ }
 }
 
 /** The share in hand, with no waiting. Repaint-safe because of it. */
@@ -130,21 +113,80 @@ export async function shareUsed() {
   try { await cache.delete(key); } catch { /* it will go stale anyway */ }
 }
 
+// ------------------------------------------------------------ logging
+
+/**
+ * Tell the server what happened.
+ *
+ * All of this runs in a service worker on a phone, where there is no
+ * console to read from a laptop and nothing to attach a debugger to.
+ * Without a line in the log there is nothing to go on but guesswork, and
+ * guesswork is what made this take five attempts. Fire and forget: a
+ * report that fails must never be the reason a share fails.
+ */
+export function reportShare(message, detail) {
+  try {
+    const auth = authHeader();
+    if (!auth.authorization) return;
+    fetch(`${API}/logs/client`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...auth },
+      body: JSON.stringify({ level: detail?.problem ? 'warn' : 'info', message, detail }),
+    }).catch(() => {});
+  } catch { /* never in the way */ }
+}
+
+function announce() {
+  if (reported || !held) return;
+  reported = true;
+  reportShare(held.problem ? `share unusable: ${held.problem}` : 'share received', {
+    ...(held.report || {}),
+    via: heldKey === SLOT && held.report?.parked !== false ? 'fragment' : 'cache',
+    chars: held.list ? held.list.length : 0,
+    names: held.names || [],
+    problem: held.problem || null,
+  });
+}
+
+// ------------------------------------------------------------- worker
+
 export function registerWorker() {
   if (!navigator.serviceWorker) return;
   // `updateViaCache: 'none'` keeps the worker script out of the HTTP
-  // cache. Pages serves it with max-age=600 like everything else, and a
-  // worker that updates ten minutes late is the one file the version
-  // stamping cannot reach — the browser fetches it by name, not through
-  // the import map.
-  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
+  // cache, and the explicit update() makes every launch check for a new
+  // one. Pages serves it with max-age=600 like everything else, and it is
+  // the one file the version stamping cannot reach — the browser fetches
+  // it by name, not through the import map. Without this, a fix to the
+  // worker can sit unused for ten minutes after it ships.
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' })
+    .then((reg) => reg.update())
+    .catch(() => {});
+}
+
+/**
+ * Which build of the worker is actually running.
+ *
+ * Pages caches sw.js for ten minutes and a worker can go on serving long
+ * after a fix ships, so "did my change even reach the phone" is a real
+ * question and this is the only way to answer it. An older worker has no
+ * message handler and never replies, which says what it needs to say.
+ */
+export function workerVersion() {
+  const sw = navigator.serviceWorker?.controller;
+  if (!sw) return Promise.resolve('none');
+  return new Promise((resolve) => {
+    const ch = new MessageChannel();
+    const done = setTimeout(() => resolve('no answer — older worker'), 800);
+    ch.port1.onmessage = (e) => { clearTimeout(done); resolve(e.data?.sw || 'unknown'); };
+    try { sw.postMessage('version', [ch.port2]); } catch { clearTimeout(done); resolve('unreachable'); }
+  });
 }
 
 /**
  * Call `fn` when a share turns up in an app that is already running.
  *
- * An installed app is usually resumed rather than loaded, so the share can
- * land after the boot-time read has already come back empty.
+ * Only the cache path can arrive that way — a fragment comes in on a
+ * navigation, which is a fresh load.
  */
 export function watchShares(fn) {
   const check = async () => { if (await loadShare()) fn(); };

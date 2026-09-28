@@ -8,7 +8,9 @@ import {
 } from './admin.js';
 import { openCard, closeCard, openCardId, hideCardForRoute } from './card.js';
 import { pushOverlay, dropOverlay } from './overlay.js';
-import { registerWorker, loadShare, sharedNow, watchShares, reportShare } from './share.js';
+import {
+  registerWorker, loadShare, sharedNow, watchShares, reportShare, workerVersion,
+} from './share.js';
 import * as search from './search.js';
 import * as decks from './decks.js';
 import * as manage from './manage.js';
@@ -275,6 +277,7 @@ async function boot() {
   if (!sharedNow() && parseHash().view === 'add' && nav?.type === 'navigate') {
     reportShare('landed on add with an empty share inbox', {
       controlled: Boolean(navigator.serviceWorker?.controller),
+      sw: await workerVersion(),
       url: nav.name,
     });
   }
