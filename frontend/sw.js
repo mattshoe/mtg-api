@@ -10,6 +10,18 @@
 // request that is not the share POST falls through untouched, so this
 // cannot serve a stale page — which matters here, because Pages already
 // caches for ten minutes and the asset stamping exists to work around it.
+//
+// Two rules learned the hard way:
+//
+//   - Take whatever arrives. Android apps label a shared file with any
+//     MIME type they feel like, `application/vnd.ms-excel` for a CSV and
+//     `application/octet-stream` for anything they are unsure of, and they
+//     do not always send a filename. Guessing from the label threw away
+//     real decklists. Whether the bytes decode as text is the only test
+//     that means anything, so that is the only test.
+//   - Never fail silently. If nothing usable came through, park a note
+//     saying what did arrive. An empty box that explains itself can be
+//     fixed; an empty box that says nothing cannot.
 
 const CACHE = 'share-inbox';
 const SHARE = new URL('share', self.registration.scope).pathname;
@@ -18,12 +30,6 @@ const HOME = new URL('./#/add', self.registration.scope).href;
 
 // A collection export, not a database. Same ceiling the upload box uses.
 const MAX_BYTES = 2 * 1024 * 1024;
-
-// Android is loose about honouring the manifest's accept list, so a file
-// manager can hand over anything. Only text is any use to a decklist
-// parser, and a binary read as UTF-8 is worse than nothing.
-const TEXT_TYPE = /^(text\/|application\/(csv|json|octet-stream)$|$)/i;
-const TEXT_NAME = /\.(txt|csv|dek|md|mwdeck|cod)$/i;
 
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
@@ -36,38 +42,87 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(Response.redirect(HOME, 303));
 });
 
-const usable = (f) => f && typeof f.text === 'function' && f.size > 0
-  && f.size <= MAX_BYTES && (TEXT_TYPE.test(f.type || '') || TEXT_NAME.test(f.name || ''));
+/**
+ * Did this decode as text?
+ *
+ * Bytes that are not UTF-8 come back as replacement characters, so a few
+ * of those is a file with an odd character in it and a great many is a
+ * JPEG. A NUL settles it on its own — no text file has one.
+ */
+function textual(s) {
+  if (!s || /\u0000/.test(s)) return false;
+  const head = s.slice(0, 4096);
+  const bad = (head.match(/\uFFFD/g) || []).length;
+  return bad / head.length < 0.02;
+}
+
+const size = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)} MB` : `${Math.round(n / 1024)} KB`);
+
+/** What turned up, in words, for when none of it was usable. */
+function describe(files, strings) {
+  if (!files.length && !strings.length) return 'the share arrived empty — no file and no text.';
+  if (!files.length) return 'the share carried text but no card names in it.';
+  const list = files.map((f) => `${f.name || 'unnamed'} (${f.type || 'no type'}, ${size(f.size)})`);
+  return `nothing in the share read as text: ${list.join(', ')}.`;
+}
+
+async function park(payload) {
+  try {
+    const cache = await caches.open(CACHE);
+    await cache.put(SLOT, new Response(JSON.stringify(payload), {
+      headers: { 'content-type': 'application/json' },
+    }));
+  } catch {
+    // Out of quota, or no cache at all. The add page opens empty, which is
+    // the same place throwing would land, minus a browser error screen.
+  }
+}
 
 async function receive(request) {
+  const seen = [];
+  const strings = [];
+  const parts = [];
+  const names = [];
+
   try {
     const form = await request.formData();
 
-    const parts = [];
-    const names = [];
-    for (const file of form.getAll('file')) {
-      if (!usable(file)) continue;
-      const text = await file.text();
-      // A NUL byte means this was not text, whatever it claimed to be.
-      if (text.indexOf(String.fromCharCode(0)) !== -1) continue;
-      parts.push(text);
-      if (file.name) names.push(file.name);
-    }
+    // Every field, not just the one the manifest named. If a sender puts
+    // the file somewhere unexpected it is still the only file here.
+    for (const [field, value] of form.entries()) {
+      if (typeof value === 'string') {
+        const text = value.trim();
+        if (!text) continue;
+        strings.push(text);
+        // A bare link is the page it came from, not a decklist.
+        if (field !== 'url' && !/^https?:\/\/\S+$/i.test(text)) parts.push(text);
+        continue;
+      }
 
-    // Sharing selected text rather than a file — a decklist off a web page.
-    const typed = String(form.get('text') || '').trim();
-    if (typed && !/^https?:\/\/\S+$/i.test(typed)) parts.push(typed);
+      seen.push({ name: value.name || '', type: value.type || '', size: value.size || 0 });
+      if (!value.size || value.size > MAX_BYTES) continue;
+      let text;
+      try { text = await value.text(); } catch { continue; }
+      if (!textual(text)) continue;
+      parts.push(text);
+      if (value.name) names.push(value.name);
+    }
 
     const list = parts.join('\n').trim();
-    if (list) {
-      const cache = await caches.open(CACHE);
-      await cache.put(SLOT, new Response(JSON.stringify({ list, names, at: Date.now() }), {
-        headers: { 'content-type': 'application/json' },
-      }));
-    }
-  } catch {
-    // A share that cannot be read just opens an empty add page. Throwing
-    // here would show the user a browser error instead of the app.
+    // `report` rides along even on success. The page forwards it to the
+    // server log, which is the only way to see from a laptop what a phone
+    // actually put in the share.
+    const report = { files: seen, strings: strings.length, chars: list.length };
+    await park(list
+      ? { list, names, at: Date.now(), report }
+      : { at: Date.now(), problem: describe(seen, strings), report });
+  } catch (e) {
+    await park({
+      at: Date.now(),
+      problem: `the share could not be read: ${e && e.message}`,
+      report: { files: seen, strings: strings.length, failed: true },
+    });
   }
+
   return Response.redirect(HOME, 303);
 }

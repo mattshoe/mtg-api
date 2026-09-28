@@ -18,6 +18,9 @@
 // middle of claiming it let one render take the payload and a later one
 // paint an empty box over the top, which is exactly what happened.
 
+import { API } from './api.js';
+import { authHeader } from './admin.js';
+
 const CACHE = 'share-inbox';
 
 // Same URL the worker writes to: a cache key is a URL, and both sides sit
@@ -29,6 +32,7 @@ const SLOT = new URL('share-inbox-payload', location.href).href;
 const STALE_MS = 15 * 60 * 1000;
 
 let held = null;
+let heldKey = SLOT;
 
 async function inbox() {
   if (typeof caches === 'undefined') return null;
@@ -41,24 +45,75 @@ async function inbox() {
   }
 }
 
+/**
+ * Find the parked share.
+ *
+ * The exact key is what the worker writes, but it is derived from the
+ * worker's scope and this from the page's URL, so a mismatch is possible
+ * in a way that would look exactly like nothing having been shared. There
+ * is at most a handful of keys in here — check them all rather than let
+ * that be a silent failure.
+ */
+async function find(cache) {
+  const hit = await cache.match(SLOT);
+  if (hit) return { key: SLOT, res: hit };
+  for (const req of await cache.keys()) {
+    if (req.url.endsWith('/share-inbox-payload')) {
+      return { key: req, res: await cache.match(req) };
+    }
+  }
+  return null;
+}
+
 /** Read the inbox into memory. Leaves the cache entry where it is. */
 export async function loadShare() {
   if (held) return held;
   const cache = await inbox();
   if (!cache) return null;
   try {
-    const res = await cache.match(SLOT);
-    if (!res) return null;
-    const payload = await res.json();
-    if (!payload?.list || Date.now() - (payload.at || 0) > STALE_MS) {
-      await cache.delete(SLOT);
+    const found = await find(cache);
+    if (!found?.res) return null;
+    const payload = await found.res.json();
+    // `problem` is the worker saying it got something it could not use.
+    // That is worth showing, so it counts as a share for these purposes.
+    if ((!payload?.list && !payload?.problem) || Date.now() - (payload.at || 0) > STALE_MS) {
+      await cache.delete(found.key);
       return null;
     }
     held = payload;
-  } catch {
+    heldKey = found.key;
+    reportShare(payload.problem ? `share unusable: ${payload.problem}` : 'share received', {
+      ...(payload.report || {}),
+      chars: payload.list ? payload.list.length : 0,
+      names: payload.names || [],
+      problem: payload.problem || null,
+    });
+  } catch (e) {
+    reportShare('share inbox could not be read', { error: String(e && e.message) });
     return null;
   }
   return held;
+}
+
+/**
+ * Tell the server what happened.
+ *
+ * All of this runs in a service worker on a phone, where there is no
+ * console to read and no way to attach a debugger from here. Without a
+ * line in the log there is nothing to go on but guesswork, and guesswork
+ * is what made this take four attempts. Fire and forget: a report that
+ * fails must never be the reason a share fails.
+ */
+export function reportShare(message, detail) {
+  try {
+    const auth = authHeader();
+    if (!auth.authorization) return;
+    fetch(`${API}/logs/client`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...auth },
+      body: JSON.stringify({ level: detail?.problem ? 'warn' : 'info', message, detail }),
+    }).catch(() => {});
+  } catch { /* never in the way */ }
 }
 
 /** The share in hand, with no waiting. Repaint-safe because of it. */
@@ -67,10 +122,12 @@ export const sharedNow = () => held;
 /** It is in the box now, and nothing else needs it. */
 export async function shareUsed() {
   if (!held) return;
+  const key = heldKey;
   held = null;
+  heldKey = SLOT;
   const cache = await inbox();
   if (!cache) return;
-  try { await cache.delete(SLOT); } catch { /* it will go stale anyway */ }
+  try { await cache.delete(key); } catch { /* it will go stale anyway */ }
 }
 
 export function registerWorker() {

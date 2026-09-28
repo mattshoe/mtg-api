@@ -86,6 +86,7 @@ const INDEX = {
     'POST /prices': '{"ids":["<scryfall id>",...]} -> {"prices":{id:{usd,foil,etched,eur,tix,tcg}}}',
     'POST /admin': '{"password":"..."} -> {"token":"...","expires_at":null}',
     'GET /logs': '?min=info&q=&event=&status=error&since=24&limit=100 — admin only',
+    'POST /logs/client': '{"level":"info","message":"...","detail":{...}} — admin only',
     'GET /logs/stats': 'counts, slowest routes, retention — admin only',
     'GET /maintenance': 'what the daily job did last',
     'POST /maintenance': 'run it now — needs admin; {"only":"orphans"} or {"all":true,"wait":true}',
@@ -153,6 +154,22 @@ async function route(request, env, ctx, entry) {
       if (method !== 'GET') return json({ error: 'use GET' }, 405);
       return json(await getSchema(env.DB));
     }
+
+  // The browser reporting something the server cannot see for itself.
+  // The share target runs entirely in a service worker on the phone, so
+  // without this there is no way to find out what Android actually handed
+  // over when a share comes out wrong.
+  if (path === '/logs/client') {
+    if (method !== 'POST') return json({ error: 'use POST' }, 405);
+    const v = await verifyToken(env, bearer(request));
+    if (!v.ok) return denied(v.reason);
+    entry.admin = true;
+    const { body } = await readJson(request);
+    entry.level = ['debug', 'info', 'warn', 'error'].includes(body?.level) ? body.level : 'info';
+    entry.message = String(body?.message || 'client report').slice(0, 300);
+    entry.detail = body?.detail ?? null;
+    return json({ ok: true });
+  }
 
     if (path === '/logs' || path === '/logs/stats') {
     if (method !== 'GET') return json({ error: 'use GET' }, 405);

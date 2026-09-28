@@ -8,7 +8,7 @@ import {
 } from './admin.js';
 import { openCard, closeCard, openCardId, hideCardForRoute } from './card.js';
 import { pushOverlay, dropOverlay } from './overlay.js';
-import { registerWorker, loadShare, sharedNow, watchShares } from './share.js';
+import { registerWorker, loadShare, sharedNow, watchShares, reportShare } from './share.js';
 import * as search from './search.js';
 import * as decks from './decks.js';
 import * as manage from './manage.js';
@@ -266,6 +266,18 @@ async function boot() {
   // Before the first render, because the add page takes the list without
   // awaiting anything — it has to already be in hand by then.
   await loadShare();
+
+  // Arriving on the add page as a fresh navigation is the share target's
+  // redirect, and an empty inbox at that point means the worker never
+  // wrote anything. That failure leaves no other trace, so it gets a line
+  // in the log rather than an unexplained empty box.
+  const nav = performance.getEntriesByType('navigation')[0];
+  if (!sharedNow() && parseHash().view === 'add' && nav?.type === 'navigate') {
+    reportShare('landed on add with an empty share inbox', {
+      controlled: Boolean(navigator.serviceWorker?.controller),
+      url: nav.name,
+    });
+  }
   if (sharedNow() && parseHash().view !== 'add') {
     location.replace('#/add');   // fires hashchange, which routes
     return;

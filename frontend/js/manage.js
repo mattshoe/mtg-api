@@ -136,6 +136,9 @@ const blank = (mode) => ({
   // filling the box after the render is what makes it survive being
   // rendered twice, which is the normal case on a phone.
   list: mode === 'add' ? (sharedNow()?.list || '') : '',
+  // Set when a share arrived that the worker could not make anything of.
+  // An empty box with no explanation is the worst possible outcome here.
+  shareNote: mode === 'add' ? (sharedNow()?.problem || null) : null,
   // Deliberately nothing. Remembering the last choice, or defaulting to
   // matt, is how a list lands in the wrong person's collection — the
   // whole reason this is its own step is to make it a decision.
@@ -279,6 +282,10 @@ function stepList() {
       h('h2', isAdd ? 'What are you adding?' : 'What are you removing?'),
       h('span.spacer'), count),
     h('div.panel-body',
+      flow.shareNote
+        ? h('div.err', { style: { marginBottom: '12px' } },
+          `Shared in, but ${flow.shareNote} Open it and paste the text instead.`)
+        : null,
       h('div.field', fileDrop(listInput, updateCount)),
       h('div.field', listInput),
       h('div.flex-wrap',
@@ -481,6 +488,11 @@ export function show(mode) {
   const shared = flow.mode === 'add' ? sharedNow() : null;
   if (!shared || shared.announced) return;
   shared.announced = true;
+  if (!shared.list) {
+    // The note is on the panel already; the share is spent either way.
+    shareUsed();
+    return;
+  }
   const n = countCards(shared.list);
   const from = shared.names?.length ? ` from ${shared.names.join(', ')}` : '';
   toast(`Loaded ${n} card${n === 1 ? '' : 's'}${from}`, 'ok');
