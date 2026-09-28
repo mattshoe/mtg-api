@@ -13,11 +13,27 @@ import org.mattshoe.mtg.core.DecksState
 
 /** Decks, on the web. Sibling of `DecksScreen`. */
 @Composable
-fun DecksPage(state: DecksState, onOpen: (Deck) -> Unit, onClose: () -> Unit) {
+fun DecksPage(
+    state: DecksState,
+    onOpen: (Deck) -> Unit,
+    onClose: () -> Unit,
+    admin: Boolean = false,
+    onNew: () -> Unit = {},
+    onEdit: (Deck) -> Unit = {},
+    onDisassemble: (Deck) -> Unit = {},
+) {
     Div(attrs = { classes("wrap") }) {
         val open = state.open
         if (open == null) {
-            Div(attrs = { classes("page-head") }) { H1 { Text("Decks") } }
+            Div(attrs = { classes("page-head") }) {
+                H1 { Text("Decks") }
+                if (admin) {
+                    Button(attrs = {
+                        classes("btn", "primary")
+                        onClick { onNew() }
+                    }) { Text("New deck") }
+                }
+            }
             when {
                 state.busy -> Div(attrs = { classes("empty") }) { Text("Loading…") }
                 state.error != null -> Div(attrs = { classes("err") }) { Text("Could not load decks: ${state.error}") }
@@ -40,6 +56,20 @@ fun DecksPage(state: DecksState, onOpen: (Deck) -> Unit, onClose: () -> Unit) {
                 )
             }
             Div(attrs = { classes("muted", "small") }) { Text("${state.totalCards} cards") }
+            if (admin) {
+                // Both of these move real cards, and both show the
+                // server's own dry run before they are allowed to.
+                Div(attrs = { classes("flex-wrap") }) {
+                    Button(attrs = {
+                        classes("btn", "sm")
+                        onClick { onEdit(open) }
+                    }) { Text("Edit list") }
+                    Button(attrs = {
+                        classes("btn", "sm", "danger")
+                        onClick { onDisassemble(open) }
+                    }) { Text("Disassemble") }
+                }
+            }
             if (state.gaps.isNotEmpty()) {
                 Div(attrs = { classes("tag", "bad") }) { Text("${state.gaps.size} not owned") }
             }

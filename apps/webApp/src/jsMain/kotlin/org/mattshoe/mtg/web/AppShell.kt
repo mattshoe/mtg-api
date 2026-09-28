@@ -14,16 +14,24 @@ import org.jetbrains.compose.web.dom.Input
 import org.jetbrains.compose.web.dom.Nav
 import org.jetbrains.compose.web.dom.Text
 import org.mattshoe.mtg.core.AppState
+import org.mattshoe.mtg.core.CardRow
+import org.mattshoe.mtg.core.EntryHistory
+import org.mattshoe.mtg.core.Found
+import org.mattshoe.mtg.core.HistoryEntry
+import org.mattshoe.mtg.core.Overlay
 import org.mattshoe.mtg.core.Owner
 import org.mattshoe.mtg.core.Route
 import org.mattshoe.mtg.core.View
+import org.w3c.files.File
 
 /**
- * The shell: the nav, the lock, and whichever screen is current.
+ * The shell: the nav, the lock, whichever screen is current, and
+ * whatever is on top of it.
  *
  * Sibling of `AppShell` on Android. The visible tabs come from `Admin`
- * in the shared core, so a gated view cannot be absent on one platform
- * and present on the other.
+ * in the shared core and the overlay stack comes from `Overlays`, so a
+ * gated view cannot be absent on one platform and present on the other,
+ * and back cannot dismiss different things.
  */
 @Composable
 fun AppShell(
@@ -35,9 +43,24 @@ fun AppShell(
     onRunSql: () -> Unit,
     onPreviewEntry: () -> Unit,
     onApplyEntry: () -> Unit,
+    onExport: () -> Unit = {},
+    onOpenCard: (CardRow) -> Unit = {},
+    onOpenFound: (Found) -> Unit = {},
+    onFind: (String) -> Unit = {},
+    onLookup: (String) -> Unit = {},
+    onFiles: (List<File>) -> Unit = {},
+    onReuse: (HistoryEntry) -> Unit = {},
+    onClearHistory: () -> Unit = {},
+    onEditDeck: (String) -> Unit = {},
+    onReviewDeck: () -> Unit = {},
+    onSaveDeck: () -> Unit = {},
+    onAskDisassemble: (String) -> Unit = {},
+    onDisassemble: () -> Unit = {},
+    onCheckNames: () -> Unit = {},
+    onCreateDeck: () -> Unit = {},
 ) {
-    var asking by remember { mutableStateOf(false) }
     var password by remember { mutableStateOf("") }
+    var showFilters by remember { mutableStateOf(false) }
 
     Nav(attrs = { classes("tabs") }) {
         state.admin.visible.forEach { view ->
@@ -53,10 +76,14 @@ fun AppShell(
                 if (state.admin.unlocked) {
                     onState(state.copy(admin = state.admin.lock()).navigate(state.route))
                 } else {
-                    asking = true
+                    onState(state.opening(Overlay.UNLOCK))
                 }
             }
         }) { Text(if (state.admin.unlocked) "Lock" else "Unlock") }
+        Button(attrs = {
+            classes("btn", "sm", "ghost")
+            onClick { onState(state.opening(Overlay.PALETTE).copy(palette = state.palette.opened())) }
+        }) { Text("Find") }
     }
 
     when (state.view) {
@@ -64,13 +91,26 @@ fun AppShell(
             state = state.library,
             onState = { onState(state.copy(library = it)) },
             onSearch = onSearch,
-            onOpen = { },
+            onOpen = onOpenCard,
+            showFilters = showFilters,
+            onToggleFilters = { showFilters = !showFilters },
+            onExport = onExport,
+            complete = state.complete,
+            onComplete = { c ->
+                onState(state.copy(complete = c))
+                if (c.worthAsking) onLookup(c.term)
+            },
+            onCheatsheet = { onState(state.opening(Overlay.CHEATSHEET)) },
         )
 
         View.DECKS -> DecksPage(
             state = state.decks,
             onOpen = { onOpenDeck(it.slug) },
             onClose = { onState(state.copy(decks = state.decks.close())) },
+            admin = state.admin.unlocked,
+            onNew = { onState(state.opening(Overlay.NEW_DECK)) },
+            onEdit = { onEditDeck(it.slug) },
+            onDisassemble = { onAskDisassemble(it.slug) },
         )
 
         View.STATS -> StatsPage(state.stats) { owner: Owner? ->
@@ -81,6 +121,7 @@ fun AppShell(
             state = state.console,
             onState = { onState(state.copy(console = it)) },
             onRun = onRunSql,
+            onCheatsheet = { onState(state.opening(Overlay.CHEATSHEET)) },
         )
 
         View.LOGS -> LogsPage(state.logs) { onState(state.copy(logs = it)) }
@@ -90,12 +131,66 @@ fun AppShell(
             onState = { onState(state.copy(entry = it)) },
             onPreview = onPreviewEntry,
             onApply = onApplyEntry,
+            history = state.history,
+            onFiles = onFiles,
+            onReuse = onReuse,
+            onClearHistory = onClearHistory,
         )
     }
 
     state.toast?.let { Div(attrs = { classes("toast") }) { Text(it) } }
 
-    if (asking) {
+    // ------------------------------------------------------- overlays
+
+    state.card?.takeIf { Overlay.CARD in state.overlays }?.let { card ->
+        CardSheet(card) { onState(state.closing(Overlay.CARD)) }
+    }
+
+    if (Overlay.PALETTE in state.overlays) {
+        PaletteDialog(
+            state = state.palette,
+            onState = { p ->
+                onState(state.copy(palette = p))
+                if (p.worthAsking) onFind(p.term)
+            },
+            onOpen = onOpenFound,
+            onClose = { onState(state.closing(Overlay.PALETTE)) },
+        )
+    }
+
+    if (Overlay.CHEATSHEET in state.overlays) {
+        CheatsheetDialog { onState(state.closing(Overlay.CHEATSHEET)) }
+    }
+
+    state.deckEdit?.takeIf { Overlay.DECK_EDIT in state.overlays }?.let { edit ->
+        DeckEditDialog(
+            state = edit,
+            onState = { onState(state.copy(deckEdit = it)) },
+            onReview = onReviewDeck,
+            onSave = onSaveDeck,
+            onClose = { onState(state.closing(Overlay.DECK_EDIT)) },
+        )
+    }
+
+    state.disassemble?.takeIf { Overlay.DISASSEMBLE in state.overlays }?.let { d ->
+        DisassembleDialog(
+            state = d,
+            onGo = onDisassemble,
+            onClose = { onState(state.closing(Overlay.DISASSEMBLE)) },
+        )
+    }
+
+    if (Overlay.NEW_DECK in state.overlays) {
+        NewDeckDialog(
+            state = state.newDeck,
+            onState = { onState(state.copy(newDeck = it)) },
+            onCheck = onCheckNames,
+            onCreate = onCreateDeck,
+            onClose = { onState(state.closing(Overlay.NEW_DECK)) },
+        )
+    }
+
+    if (Overlay.UNLOCK in state.overlays) {
         Div(attrs = { classes("palette-scrim") }) {
             Div(attrs = { classes("palette") }) {
                 H2 { Text("Admin mode") }
@@ -114,11 +209,15 @@ fun AppShell(
                 Div(attrs = { classes("flex") }) {
                     Button(attrs = {
                         classes("btn", "primary")
-                        onClick { asking = false; onUnlock(password); password = "" }
+                        onClick {
+                            onState(state.closing(Overlay.UNLOCK))
+                            onUnlock(password)
+                            password = ""
+                        }
                     }) { Text("Unlock") }
                     Button(attrs = {
                         classes("btn", "ghost")
-                        onClick { asking = false; password = "" }
+                        onClick { onState(state.closing(Overlay.UNLOCK)); password = "" }
                     }) { Text("Cancel") }
                 }
             }
@@ -128,3 +227,6 @@ fun AppShell(
 
 /** Where a deck tap goes, as a route rather than a special case. */
 fun AppState.openDeck(slug: String) = navigate(Route(View.DECKS, slug))
+
+/** For the tests, and for anything that wants the history without the shell. */
+fun AppState.withHistory(h: EntryHistory) = copy(history = h)

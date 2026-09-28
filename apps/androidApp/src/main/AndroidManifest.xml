@@ -2,11 +2,16 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
     <application android:label="@string/app_name" android:theme="@android:style/Theme.Material.NoActionBar">
-        <activity android:name=".NextShareActivity" android:exported="true" android:launchMode="singleTask">
+        <!-- The whole app. The same screens the website has. -->
+        <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTask">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+        </activity>
+        <!-- A share from another app lands straight on the wizard,
+             which is the whole reason this build exists. -->
+        <activity android:name=".NextShareActivity" android:exported="true" android:launchMode="singleTask">
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />

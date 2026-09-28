@@ -1,6 +1,5 @@
 package org.mattshoe.mtg.core
 
-import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -42,15 +41,14 @@ class InventoryTest {
     }
 
     /**
-     * The one that stays red.
+     * The one that used to stay red.
      *
-     * `@Ignore`d so the rest of the suite stays usable while the port is
-     * in flight. Drop the annotation to see what is left, and drop it for
-     * good once it passes. `reportWhatIsLeft` below prints the same thing
-     * without failing anything.
+     * It was `@Ignore`d while the port was in flight and it is not any
+     * more, because it passes. Anything added to the inventory from
+     * here turns it red again until there is a screen for it on both
+     * platforms, which is the entire point of keeping it.
      */
     @Test
-    @Ignore
     fun theWholeAppIsPorted() {
         if (Inventory.remaining.isNotEmpty()) fail("\n" + Inventory.report())
     }
@@ -69,9 +67,9 @@ class InventoryTest {
      */
     @Test
     fun portedFeaturesStayPorted() {
-        // A ratchet, not a target: raise it as features land so none can
-        // quietly come back out.
-        val expected = 24
+        // A ratchet, not a target. It is at the top now, so this is
+        // the test that catches a feature being quietly dropped.
+        val expected = 43
         assertTrue(
             Inventory.done.size >= expected,
             "the inventory went backwards: ${Inventory.done.size} done, was at least $expected",

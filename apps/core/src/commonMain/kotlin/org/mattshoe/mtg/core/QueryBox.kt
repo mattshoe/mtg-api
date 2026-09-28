@@ -111,6 +111,14 @@ private val IS_SHAPES = mapOf(
     "unpriced" to "pr.usd IS NULL",
 )
 
+/**
+ * Every `is:` shape the box understands.
+ *
+ * Exposed so the cheatsheet lists what the parser actually accepts
+ * rather than a second copy of the list that goes stale.
+ */
+val IS_VALUES: List<String> get() = IS_SHAPES.keys.sorted()
+
 /** Split on whitespace, keeping quoted runs together. */
 private val TOKEN = Regex(
     """(-?)([A-Za-z]+)(>=|<=|!=|[:=<>])("([^"]*)"|'([^']*)'|[^\s]*)|(-?)"([^"]*)"|(-?)(\S+)""",

@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -21,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.mattshoe.mtg.core.CardRow
+import org.mattshoe.mtg.core.Completion
 import org.mattshoe.mtg.core.Library
 import org.mattshoe.mtg.core.Sort
 
@@ -38,16 +41,30 @@ fun LibraryScreen(
     onState: (Library) -> Unit,
     onSearch: () -> Unit,
     onOpen: (CardRow) -> Unit,
+    showFilters: Boolean = false,
+    onToggleFilters: () -> Unit = {},
+    onExport: () -> Unit = {},
+    complete: Completion = Completion(),
+    onComplete: (Completion) -> Unit = {},
+    onCheatsheet: () -> Unit = {},
 ) {
-    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    // Scrollable, because the filter panel is far taller than a phone
+    // and the pager lives under a list of a hundred cards. The grid
+    // itself is a fixed-height LazyColumn, so the nesting is legal.
+    Column(
+        Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
         Text("Library", fontSize = 26.sp)
 
-        OutlinedTextField(
-            value = state.filters.q,
-            onValueChange = { onState(state.where(state.filters.copy(q = it))) },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            label = { Text("Card name") },
+        AutocompleteField(
+            label = "Card name",
+            state = complete,
+            onState = { c ->
+                onComplete(c)
+                onState(state.where(state.filters.copy(q = c.term)))
+            },
+            onPick = { onSearch() },
         )
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -60,6 +77,27 @@ fun LibraryScreen(
             }
             Spacer(Modifier.weight(1f))
             Button(onClick = onSearch, enabled = !state.busy) { Text("Search") }
+        }
+
+        OutlinedTextField(
+            value = state.filters.adv,
+            onValueChange = { onState(state.where(state.filters.copy(adv = it))) },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            label = { Text("Query box — c<=wu t:creature mv<=3", fontSize = 11.sp) },
+        )
+
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            OutlinedButton(onClick = onToggleFilters) {
+                Text(if (showFilters) "Hide filters" else "Filters", fontSize = 12.sp)
+            }
+            OutlinedButton(onClick = onExport) { Text("Export decklist", fontSize = 12.sp) }
+            OutlinedButton(onClick = onCheatsheet) { Text("Query help", fontSize = 12.sp) }
+        }
+
+        if (showFilters) {
+            FilterSheet(state.filters, { onState(state.where(it)) }, onToggleFilters)
+            return@Column
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

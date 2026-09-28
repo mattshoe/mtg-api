@@ -11,10 +11,16 @@ import org.jetbrains.compose.web.dom.Pre
 import org.jetbrains.compose.web.dom.Span
 import org.jetbrains.compose.web.dom.Text
 import org.jetbrains.compose.web.dom.TextArea
+import org.jetbrains.compose.web.attributes.InputType
+import org.jetbrains.compose.web.dom.Input
 import org.mattshoe.mtg.core.Direction
+import org.mattshoe.mtg.core.EntryHistory
+import org.mattshoe.mtg.core.HistoryEntry
 import org.mattshoe.mtg.core.MassEntry
 import org.mattshoe.mtg.core.Owner
 import org.mattshoe.mtg.core.Step
+import org.w3c.files.File
+import org.w3c.files.FileList
 
 /**
  * The mass entry wizard, in the browser.
@@ -34,6 +40,10 @@ fun MassEntryPage(
     onState: (MassEntry) -> Unit,
     onPreview: () -> Unit,
     onApply: () -> Unit,
+    history: EntryHistory = EntryHistory(),
+    onFiles: (List<File>) -> Unit = {},
+    onReuse: (HistoryEntry) -> Unit = {},
+    onClearHistory: () -> Unit = {},
 ) {
     // State is hoisted, the same as every other screen and the same as
     // the Android sibling. The shell owns it, so a share can put a list
@@ -59,7 +69,12 @@ fun MassEntryPage(
         when {
             s.busy != null -> Panel("Working") { Text(s.busy!!) }
             s.step == Step.WHICH -> WhichStep(s, { onState(s.choose(it)) }, { onState(s.goTo(Step.LIST)) })
-            s.step == Step.LIST -> ListStep(s, { onState(s.type(it)) }, { onState(s.goTo(it)) })
+            s.step == Step.LIST -> {
+                ListStep(s, { onState(s.type(it)) }, { onState(s.goTo(it)) }, onFiles)
+                // The history table puts an old list back in the box, so
+                // it belongs on the step that has the box.
+                HistoryPanel(history, onReuse, onClearHistory)
+            }
             s.step == Step.WHO -> WhoStep(s, { onState(s.assign(it)) }, { onState(s.goTo(it)) }, onPreview)
             s.step == Step.REVIEW -> ReviewStep(s, { onState(s.goTo(it)) }, onApply)
             s.step == Step.DONE -> DoneStep(s) { onState(s.again()) }
@@ -107,7 +122,12 @@ private fun WhichStep(s: MassEntry, pick: (Direction) -> Unit, next: () -> Unit)
 }
 
 @Composable
-private fun ListStep(s: MassEntry, type: (String) -> Unit, go: (Step) -> Unit) {
+private fun ListStep(
+    s: MassEntry,
+    type: (String) -> Unit,
+    go: (Step) -> Unit,
+    onFiles: (List<File>) -> Unit,
+) {
     val kind = if (s.isCsv) " · CSV" else ""
     val over = if (s.overLimit) " — over the ${MassEntry.MAX_CARDS} limit" else ""
     Panel(s.direction!!.question, note = "${s.cardCount} cards$kind$over") {
@@ -116,6 +136,7 @@ private fun ListStep(s: MassEntry, type: (String) -> Unit, go: (Step) -> Unit) {
             rows(14)
             onInput { type(it.value) }
         })
+        FileDrop(onFiles)
         Div(attrs = { classes("flex-wrap") }) {
             Ghost("← Back") { go(Step.WHICH) }
             Primary("Continue →", s.canLeaveList) { go(Step.WHO) }
@@ -223,4 +244,83 @@ private fun Ghost(label: String, click: () -> Unit) {
         classes("btn", "ghost")
         onClick { click() }
     }) { Text(label) }
+}
+
+/**
+ * A file into the list box.
+ *
+ * Reading one only fills the box — it never submits and never advances
+ * a step. The input accepts everything: a narrow list greys out the
+ * file you actually want in Android's picker, and the same guesswork
+ * about MIME types that broke the share sheet would break this too.
+ */
+@Composable
+private fun FileDrop(onFiles: (List<File>) -> Unit) {
+    Div(attrs = {
+        classes("dropzone")
+        onDragOver { it.preventDefault() }
+        onDrop { e ->
+            e.preventDefault()
+            onFiles(e.dataTransfer?.files.toList())
+        }
+    }) {
+        Input(type = InputType.File) {
+            // Hidden by being tiny and transparent, NOT by
+            // `display: none`. Android Chrome will not open a picker for
+            // an input that is not rendered, so a display:none input is
+            // a button that does nothing at all.
+            classes("file-in")
+            attr("accept", "*/*")
+            attr("multiple", "")
+            onChange { e ->
+                val el = e.target
+                onFiles(el.files.toList())
+                el.value = ""
+            }
+        }
+        Span(attrs = { classes("dz-icon") }) { Text("⤓") }
+        Div {
+            Div(attrs = { classes("dz-main") }) { Text("Upload a file") }
+            Div(attrs = { classes("dz-sub", "small", "muted") }) { Text("or drop one here") }
+        }
+    }
+}
+
+private fun FileList?.toList(): List<File> =
+    if (this == null) emptyList() else (0 until length).mapNotNull { item(it) }
+
+/** What was entered recently, and putting it back in the box. */
+@Composable
+private fun HistoryPanel(
+    history: EntryHistory,
+    onReuse: (HistoryEntry) -> Unit,
+    onClear: () -> Unit,
+) {
+    if (history.isEmpty) return
+    Div(attrs = { classes("panel") }) {
+        Div(attrs = { classes("panel-head") }) {
+            H2 { Text("Recent") }
+            Span(attrs = { classes("spacer") }) {}
+            Button(attrs = {
+                classes("btn", "sm", "ghost")
+                onClick { onClear() }
+            }) { Text("Clear") }
+        }
+        Div(attrs = { classes("panel-body") }) {
+            history.recent.forEach { e ->
+                Div(attrs = { classes("flex-wrap", "small") }) {
+                    Span(attrs = { classes("muted", "nowrap") }) { Text(e.at.replace('T', ' ').take(16)) }
+                    Span(attrs = { classes("tag", "mini", if (e.isAdd) "ok" else "bad") }) {
+                        Text(e.direction)
+                    }
+                    Span { Text(e.owner) }
+                    Span(attrs = { classes("tag", "mini") }) { Text("${e.count}") }
+                    Button(attrs = {
+                        classes("btn", "sm", "ghost")
+                        onClick { onReuse(e) }
+                    }) { Text("Reuse") }
+                }
+            }
+        }
+    }
 }

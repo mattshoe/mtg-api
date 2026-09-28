@@ -21,7 +21,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.FlowRow
 import org.mattshoe.mtg.core.Direction
+import org.mattshoe.mtg.core.EntryHistory
+import org.mattshoe.mtg.core.HistoryEntry
 import org.mattshoe.mtg.core.MassEntry
 import org.mattshoe.mtg.core.Owner
 import org.mattshoe.mtg.core.Step
@@ -41,6 +44,10 @@ fun MassEntryScreen(
     onState: (MassEntry) -> Unit,
     onPreview: () -> Unit,
     onApply: () -> Unit,
+    history: EntryHistory = EntryHistory(),
+    onPickFile: () -> Unit = {},
+    onReuse: (HistoryEntry) -> Unit = {},
+    onClearHistory: () -> Unit = {},
 ) {
     Column(
         Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),
@@ -61,7 +68,12 @@ fun MassEntryScreen(
         when {
             state.busy != null -> Card { Text(state.busy!!, Modifier.padding(16.dp)) }
             state.step == Step.WHICH -> Which(state, onState)
-            state.step == Step.LIST -> ListStep(state, onState)
+            state.step == Step.LIST -> {
+                ListStep(state, onState, onPickFile)
+                // The history table puts an old list back in the box, so
+                // it belongs on the step that has the box.
+                HistoryPanel(history, onReuse, onClearHistory)
+            }
             state.step == Step.WHO -> Who(state, onState, onPreview)
             state.step == Step.REVIEW -> Review(state, onState, onApply)
             state.step == Step.DONE -> Done(state) { onState(state.again()) }
@@ -101,7 +113,7 @@ private fun Which(s: MassEntry, onState: (MassEntry) -> Unit) {
 }
 
 @Composable
-private fun ListStep(s: MassEntry, onState: (MassEntry) -> Unit) {
+private fun ListStep(s: MassEntry, onState: (MassEntry) -> Unit, onPickFile: () -> Unit) {
     val kind = if (s.isCsv) " · CSV" else ""
     val over = if (s.overLimit) " — over the ${MassEntry.MAX_CARDS} limit" else ""
     Panel(s.direction!!.question, "${s.cardCount} cards$kind$over") {
@@ -111,6 +123,10 @@ private fun ListStep(s: MassEntry, onState: (MassEntry) -> Unit) {
             modifier = Modifier.fillMaxWidth().height(260.dp),
             placeholder = { Text("One card per line.") },
         )
+        Spacer(Modifier.height(8.dp))
+        // Reading a file only fills the box. It never submits and never
+        // advances a step, the same as the web.
+        OutlinedButton(onClick = onPickFile) { Text("Upload a file") }
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { onState(s.goTo(Step.WHICH)) }) { Text("← Back") }
@@ -211,4 +227,27 @@ private fun Choice(label: String, on: Boolean, click: () -> Unit) {
 @Composable
 private fun Primary(label: String, enabled: Boolean, click: () -> Unit) {
     Button(onClick = click, enabled = enabled) { Text(label) }
+}
+
+/** What was entered recently, and putting it back in the box. */
+@Composable
+private fun HistoryPanel(
+    history: EntryHistory,
+    onReuse: (HistoryEntry) -> Unit,
+    onClear: () -> Unit,
+) {
+    if (history.isEmpty) return
+    Panel("Recent", "${history.entries.size} kept on this device") {
+        history.recent.forEach { e ->
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(e.at.replace('T', ' ').take(16), fontSize = 12.sp)
+                Text(e.direction, fontSize = 12.sp)
+                Text(e.owner, fontSize = 12.sp)
+                Text("${e.count}", fontSize = 12.sp)
+                OutlinedButton(onClick = { onReuse(e) }) { Text("Reuse", fontSize = 11.sp) }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        OutlinedButton(onClick = onClear) { Text("Clear") }
+    }
 }

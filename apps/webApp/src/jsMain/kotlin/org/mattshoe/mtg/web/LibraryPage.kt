@@ -11,6 +11,7 @@ import org.jetbrains.compose.web.dom.Input
 import org.jetbrains.compose.web.dom.Span
 import org.jetbrains.compose.web.dom.Text
 import org.mattshoe.mtg.core.CardRow
+import org.mattshoe.mtg.core.Completion
 import org.mattshoe.mtg.core.Library
 import org.mattshoe.mtg.core.Sort
 
@@ -31,18 +32,27 @@ fun LibraryPage(
     onState: (Library) -> Unit,
     onSearch: () -> Unit,
     onOpen: (CardRow) -> Unit,
+    showFilters: Boolean = false,
+    onToggleFilters: () -> Unit = {},
+    onExport: () -> Unit = {},
+    complete: Completion = Completion(),
+    onComplete: (Completion) -> Unit = {},
+    onCheatsheet: () -> Unit = {},
 ) {
     Div(attrs = { classes("wrap") }) {
         Div(attrs = { classes("page-head") }) { H1 { Text("Library") } }
 
         Div(attrs = { classes("panel") }) {
             Div(attrs = { classes("panel-body") }) {
-                Input(type = InputType.Text) {
-                    classes("field")
-                    placeholder("Card name")
-                    value(state.filters.q)
-                    onInput { onState(state.where(state.filters.copy(q = it.value))) }
-                }
+                AutocompleteField(
+                    hint = "Card name",
+                    state = complete,
+                    onState = { c ->
+                        onComplete(c)
+                        onState(state.where(state.filters.copy(q = c.term)))
+                    },
+                    onPick = { onSearch() },
+                )
                 Div(attrs = { classes("flex-wrap") }) {
                     listOf("both" to "Both", "matt" to "Matt", "kayla" to "Kayla").forEach { (slug, label) ->
                         Button(attrs = {
@@ -58,6 +68,27 @@ fun LibraryPage(
                         onClick { onSearch() }
                     }) { Text("Search") }
                 }
+                Input(type = InputType.Text) {
+                    classes("field", "mono")
+                    placeholder("Query box — c<=wu t:creature mv<=3 -is:reprint")
+                    value(state.filters.adv)
+                    onInput { onState(state.where(state.filters.copy(adv = it.value))) }
+                }
+                Div(attrs = { classes("flex-wrap") }) {
+                    Button(attrs = {
+                        classes("btn", "sm", "ghost")
+                        if (showFilters) classes("on")
+                        onClick { onToggleFilters() }
+                    }) { Text(if (showFilters) "Hide filters" else "Filters") }
+                    Button(attrs = {
+                        classes("btn", "sm", "ghost")
+                        onClick { onExport() }
+                    }) { Text("Export decklist") }
+                    Button(attrs = {
+                        classes("btn", "sm", "ghost")
+                        onClick { onCheatsheet() }
+                    }) { Text("Query box help") }
+                }
                 Div(attrs = { classes("flex-wrap") }) {
                     listOf(Sort.PRICE, Sort.NAME, Sort.CMC, Sort.QTY).forEach { sort ->
                         val on = state.filters.sort == sort
@@ -72,6 +103,8 @@ fun LibraryPage(
                 }
             }
         }
+
+        if (showFilters) FilterPanel(state.filters) { onState(state.where(it)) }
 
         when {
             state.busy -> Div(attrs = { classes("empty") }) { Text("Searching…") }

@@ -18,6 +18,14 @@ data class AppState(
     val logs: LogsState = LogsState(),
     val entry: MassEntry = MassEntry(),
     val newDeck: NewDeck = NewDeck(),
+    val history: EntryHistory = EntryHistory(),
+    val complete: Completion = Completion(),
+    val palette: PaletteState = PaletteState(),
+    val card: CardDetail? = null,
+    val deckEdit: DeckEditState? = null,
+    val disassemble: DisassembleState? = null,
+    /** What is on top, and therefore what back closes. */
+    val overlays: Overlays = Overlays(),
     /** Set when a share arrived and has not been used yet. */
     val sharedList: String? = null,
     val toast: String? = null,
@@ -25,7 +33,8 @@ data class AppState(
     val view: View get() = route.view
 
     /** Where a route actually lands, given the lock. */
-    fun navigate(to: Route) = copy(route = admin.land(to), toast = null)
+    fun navigate(to: Route) =
+        copy(route = admin.land(to), toast = null, overlays = overlays.clear(), card = null)
 
     fun navigate(view: View, rest: String = "") = navigate(Route(view, rest))
 
@@ -43,6 +52,70 @@ data class AppState(
     )
 
     fun shareUsed() = copy(sharedList = null)
+
+    // --------------------------------------------------------- overlays
+
+    fun opening(o: Overlay) = copy(overlays = overlays.open(o), toast = null)
+
+    fun closing(o: Overlay) = copy(overlays = overlays.close(o)).forget(o)
+
+    /**
+     * Back, or escape.
+     *
+     * Returns null when there was nothing to dismiss, which is how a
+     * platform knows to let the gesture through to its own navigation
+     * rather than swallowing it.
+     */
+    fun dismissTop(): AppState? {
+        val top = overlays.top ?: return null
+        return copy(overlays = overlays.pop()).forget(top)
+    }
+
+    /** Closing an overlay throws away whatever it was holding. */
+    private fun forget(o: Overlay): AppState = when (o) {
+        Overlay.CARD -> copy(card = null)
+        Overlay.PALETTE -> copy(palette = palette.closed())
+        Overlay.DECK_EDIT -> copy(deckEdit = null)
+        Overlay.DISASSEMBLE -> copy(disassemble = null)
+        Overlay.NEW_DECK -> copy(newDeck = NewDeck())
+        Overlay.CHEATSHEET, Overlay.UNLOCK -> this
+    }
+
+    // --------------------------------------------------------- shortcuts
+
+    /**
+     * A key, and what the whole app becomes because of it.
+     *
+     * Both platforms route their keyboard through this, so `d` cannot
+     * mean decks in one build and nothing in the other. Unhandled keys
+     * come back null.
+     */
+    fun onKey(key: String, typing: Boolean = false, meta: Boolean = false, ctrl: Boolean = false): AppState? {
+        val chord = Shortcuts.ofChord(key, meta, ctrl)
+        val action = chord ?: Shortcuts.of(key, typing, admin, overlays.any) ?: return null
+        return when (action) {
+            is Action.Go -> navigate(action.view)
+            Action.OpenPalette -> opening(Overlay.PALETTE).copy(palette = palette.opened())
+            Action.ShowHelp -> say(Shortcuts.help(admin))
+            Action.Close -> dismissTop()
+            Action.ToggleLock ->
+                if (admin.unlocked) copy(admin = admin.lock()).navigate(route)
+                else opening(Overlay.UNLOCK)
+        }
+    }
+
+    // ------------------------------------------------------------ entry
+
+    /**
+     * A finished entry becomes a history row.
+     *
+     * Recorded here rather than by whichever screen happened to call
+     * apply, so a share that writes from the Android activity and a
+     * paste that writes from the web land in the same list.
+     */
+    fun recordEntry(now: String): AppState =
+        if (entry.result == null) this
+        else copy(history = history.remember(EntryHistory.of(entry, now)))
 }
 
 /**
@@ -65,6 +138,11 @@ object Load {
 
     fun card(nameNorm: String, owner: String): Pair<Sql, Sql> =
         CardQueries.printings(nameNorm, owner) to CardQueries.usedIn(nameNorm, owner)
+
+    fun find(term: String): Sql = PaletteQueries.find(term)
+
+    /** The whole filtered set, unpaged, for an export. */
+    fun export(filters: Filters): Sql = Export.query(filters)
 
     /**
      * Which route needs what.

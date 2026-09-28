@@ -59,32 +59,32 @@ object Inventory {
         // ---------------------------------------------------------- shell
         Feature(Area.SHELL, "Hash routing between the six views", "app.js", logic = true, done = true),
         Feature(Area.SHELL, "Nav tabs, with the admin group hidden until unlocked", "app.js, index.html", logic = true, done = true),
-        Feature(Area.SHELL, "Keyboard shortcuts and the ? help toast", "app.js"),
-        Feature(Area.SHELL, "Quick find palette on ⌘K and /", "app.js"),
-        Feature(Area.SHELL, "Back button dismisses overlays instead of navigating", "overlay.js"),
-        Feature(Area.SHELL, "Toasts", "util.js"),
+        Feature(Area.SHELL, "Keyboard shortcuts and the ? help toast", "app.js", logic = true, done = true),
+        Feature(Area.SHELL, "Quick find palette on ⌘K and /", "app.js", logic = true, done = true),
+        Feature(Area.SHELL, "Back button dismisses overlays instead of navigating", "overlay.js", logic = true, done = true),
+        Feature(Area.SHELL, "Toasts", "util.js", logic = true, done = true),
 
         // -------------------------------------------------------- library
         Feature(Area.LIBRARY, "Card grid, 100 per page, with paging", "search.js", logic = true, done = true),
-        Feature(Area.LIBRARY, "Filter panel: owner, pool, deck, finish, quantity", "filters.js", logic = true),
-        Feature(Area.LIBRARY, "Filter panel: name, oracle text, flavour, artist, watermark, type line", "filters.js", logic = true),
-        Feature(Area.LIBRARY, "Colour filter with exactly / at most / at least / any of", "filters.js", logic = true),
-        Feature(Area.LIBRARY, "Filter panel: cmc, power, toughness, rarity, set, keyword, tag, format", "filters.js", logic = true),
-        Feature(Area.LIBRARY, "Boolean flags — reserved, game changer, full art and the rest", "filters.js", logic = true),
-        Feature(Area.LIBRARY, "Advanced query box with its own parser", "filters.js parseAdvanced", logic = true),
+        Feature(Area.LIBRARY, "Filter panel: owner, pool, deck, finish, quantity", "filters.js", logic = true, done = true),
+        Feature(Area.LIBRARY, "Filter panel: name, oracle text, flavour, artist, watermark, type line", "filters.js", logic = true, done = true),
+        Feature(Area.LIBRARY, "Colour filter with exactly / at most / at least / any of", "filters.js", logic = true, done = true),
+        Feature(Area.LIBRARY, "Filter panel: cmc, power, toughness, rarity, set, keyword, tag, format", "filters.js", logic = true, done = true),
+        Feature(Area.LIBRARY, "Boolean flags — reserved, game changer, full art and the rest", "filters.js", logic = true, done = true),
+        Feature(Area.LIBRARY, "Advanced query box with its own parser", "filters.js parseAdvanced", logic = true, done = true),
         Feature(Area.LIBRARY, "Sorting, price descending by default", "filters.js SORTS", logic = true, done = true),
         Feature(Area.LIBRARY, "Filter state in the URL, so a search is a link", "filters.js toHash/fromHash", logic = true, done = true),
-        Feature(Area.LIBRARY, "Name autocomplete against all of Scryfall", "complete.js", logic = true),
-        Feature(Area.LIBRARY, "Export the whole result as a decklist or to the clipboard", "search.js", logic = true),
+        Feature(Area.LIBRARY, "Name autocomplete against all of Scryfall", "complete.js", logic = true, done = true),
+        Feature(Area.LIBRARY, "Export the whole result as a decklist or to the clipboard", "search.js", logic = true, done = true),
         Feature(Area.LIBRARY, "Prices fetched and shown, with a reason when missing", "prices.js", logic = true, done = true),
 
         // ---------------------------------------------------------- decks
         Feature(Area.DECKS, "Deck tiles: name, colour pips, commander, bracket, art banner", "decks.js", logic = true, done = true),
         Feature(Area.DECKS, "Deck detail with its card list", "decks.js", logic = true, done = true),
-        Feature(Area.DECKS, "Edit a deck's list, commander as its own field", "decks.js"),
-        Feature(Area.DECKS, "Disassemble a deck back into bulk", "decks.js"),
-        Feature(Area.DECKS, "New deck wizard: format, owner, name, commander, cards, sourcing", "newdeck.js", logic = true),
-        Feature(Area.DECKS, "Card name validation against Scryfall in the wizard", "newdeck.js", logic = true),
+        Feature(Area.DECKS, "Edit a deck's list, commander as its own field", "decks.js", logic = true, done = true),
+        Feature(Area.DECKS, "Disassemble a deck back into bulk", "decks.js", logic = true, done = true),
+        Feature(Area.DECKS, "New deck wizard: format, owner, name, commander, cards, sourcing", "newdeck.js", logic = true, done = true),
+        Feature(Area.DECKS, "Card name validation against Scryfall in the wizard", "newdeck.js", logic = true, done = true),
 
         // ---------------------------------------------------------- stats
         Feature(Area.STATS, "Collection totals and breakdowns", "stats.js", logic = true, done = true),
@@ -92,15 +92,15 @@ object Inventory {
 
         // ---------------------------------------------------------- query
         Feature(Area.QUERY, "Free SQL against the collection, read-only", "console.js", logic = true, done = true),
-        Feature(Area.QUERY, "Schema cheatsheet", "cheatsheet.js"),
+        Feature(Area.QUERY, "Schema cheatsheet", "cheatsheet.js", logic = true, done = true),
 
         // ---------------------------------------------------------- entry
         Feature(Area.ENTRY, "Four step wizard: which, list, who, review", "manage.js", logic = true, done = true),
         Feature(Area.ENTRY, "Mandatory dry run before any write", "manage.js", logic = true, done = true),
         Feature(Area.ENTRY, "Owner never preselected", "manage.js", logic = true, done = true),
         Feature(Area.ENTRY, "Decklist and CSV parsing", "manage.js, parse.js", logic = true, done = true),
-        Feature(Area.ENTRY, "File upload into the list box", "manage.js"),
-        Feature(Area.ENTRY, "Recent history, with reuse", "manage.js"),
+        Feature(Area.ENTRY, "File upload into the list box", "manage.js", logic = true, done = true),
+        Feature(Area.ENTRY, "Recent history, with reuse", "manage.js", logic = true, done = true),
 
         // ----------------------------------------------------------- card
         Feature(Area.CARD, "Card detail drawer with art, prices, legalities, rulings", "card.js", logic = true, done = true),

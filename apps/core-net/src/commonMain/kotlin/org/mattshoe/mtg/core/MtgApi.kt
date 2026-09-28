@@ -53,6 +53,7 @@ class MtgApi internal constructor(
     @Serializable
     private data class DeckListRequest(
         val slug: String,
+        val commander: String,
         val list: String,
         @SerialName("dry_run") val dryRun: Boolean,
     )
@@ -72,6 +73,9 @@ class MtgApi internal constructor(
         val list: String,
         @SerialName("dry_run") val dryRun: Boolean,
     )
+
+    @Serializable
+    private data class ValidateRequest(val list: String)
 
     @Serializable
     private data class ErrorBody(val error: String = "")
@@ -119,18 +123,30 @@ class MtgApi internal constructor(
         return res.decode()
     }
 
-    /** Replace a deck's list. Moves real cards, so it is gated like a write. */
-    suspend fun setDeckList(token: String, slug: String, list: String, dryRun: Boolean): Applied {
+    /**
+     * Replace a deck's list. Moves real cards, so it is gated like a write.
+     *
+     * The commander is its own field rather than a line in the list: the
+     * stored value carries hand-written prose after the name, and the
+     * server only rewrites it when the name itself actually changed.
+     */
+    suspend fun setDeckList(
+        token: String,
+        slug: String,
+        commander: String,
+        list: String,
+        dryRun: Boolean,
+    ): DeckPlan {
         val res = http.post("$base/decks/list") {
             contentType(ContentType.Application.Json)
             header("Authorization", "Bearer $token")
-            setBody(DeckListRequest(slug, list, dryRun))
+            setBody(DeckListRequest(slug, commander, list, dryRun))
         }
         return res.decode()
     }
 
     /** Delete a deck; its cards go back to the owner's bulk. */
-    suspend fun disassemble(token: String, slug: String, dryRun: Boolean): Applied {
+    suspend fun disassemble(token: String, slug: String, dryRun: Boolean): Disassembly {
         val res = http.post("$base/decks/disassemble") {
             contentType(ContentType.Application.Json)
             header("Authorization", "Bearer $token")
@@ -148,7 +164,7 @@ class MtgApi internal constructor(
         commander: String?,
         list: String,
         dryRun: Boolean,
-    ): Applied {
+    ): DeckPlan {
         val res = http.post("$base/decks/create") {
             contentType(ContentType.Application.Json)
             header("Authorization", "Bearer $token")
@@ -166,7 +182,7 @@ class MtgApi internal constructor(
     suspend fun validateRaw(list: String): Validation {
         val res = http.post("$base/cards/validate") {
             contentType(ContentType.Application.Json)
-            setBody(mapOf("list" to list))
+            setBody(ValidateRequest(list))
         }
         return res.decode()
     }
@@ -204,6 +220,11 @@ class MtgApi internal constructor(
         internal val json = Json {
             ignoreUnknownKeys = true
             isLenient = true
+        }
+
+        /** A client with no JSON plugin, for callers that parse by hand. */
+        internal fun plainClient() = HttpClient {
+            install(HttpTimeout) { requestTimeoutMillis = 20_000 }
         }
 
         private fun defaultClient() = HttpClient {

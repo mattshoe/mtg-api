@@ -22,7 +22,14 @@ import kotlinx.serialization.json.Json
  * Cloudflare's shared egress — which Scryfall rate-limits, and which is
  * already why the nightly price refresh runs on the Mac instead.
  */
-class Scryfall(private val http: HttpClient) {
+class Scryfall internal constructor(private val http: HttpClient) {
+
+    /**
+     * Ktor stays out of this signature for the same reason it stays out
+     * of `MtgApi`'s: naming the engine here would force every caller to
+     * depend on it.
+     */
+    constructor() : this(MtgApi.plainClient())
 
     @Serializable
     private data class Names(val data: List<String> = emptyList())

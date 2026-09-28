@@ -25,7 +25,15 @@ import org.mattshoe.mtg.core.DecksState
  * web cannot disagree about which cards a deck is short of.
  */
 @Composable
-fun DecksScreen(state: DecksState, onOpen: (Deck) -> Unit, onClose: () -> Unit) {
+fun DecksScreen(
+    state: DecksState,
+    onOpen: (Deck) -> Unit,
+    onClose: () -> Unit,
+    admin: Boolean = false,
+    onNew: () -> Unit = {},
+    onEdit: (Deck) -> Unit = {},
+    onDisassemble: (Deck) -> Unit = {},
+) {
     Column(
         Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -33,6 +41,7 @@ fun DecksScreen(state: DecksState, onOpen: (Deck) -> Unit, onClose: () -> Unit) 
         val open = state.open
         if (open == null) {
             Text("Decks", fontSize = 26.sp)
+            if (admin) OutlinedButton(onClick = onNew) { Text("New deck") }
             when {
                 state.busy -> Text("Loading…")
                 state.error != null -> Text("Could not load decks: ${state.error}")
@@ -54,6 +63,16 @@ fun DecksScreen(state: DecksState, onOpen: (Deck) -> Unit, onClose: () -> Unit) 
                 fontSize = 13.sp,
             )
             Text("${state.totalCards} cards", fontSize = 13.sp)
+            if (admin) {
+                // Both of these move real cards, and both show the
+                // server's own dry run before they are allowed to.
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { onEdit(open) }) { Text("Edit list", fontSize = 12.sp) }
+                    OutlinedButton(onClick = { onDisassemble(open) }) {
+                        Text("Disassemble", fontSize = 12.sp)
+                    }
+                }
+            }
             if (state.gaps.isNotEmpty()) {
                 Text("${state.gaps.size} not owned", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
             }

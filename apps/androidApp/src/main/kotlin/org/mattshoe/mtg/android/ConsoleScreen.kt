@@ -24,7 +24,12 @@ import org.mattshoe.mtg.core.LogsState
 
 /** The query console, on Android. Sibling of `ConsolePage`. */
 @Composable
-fun ConsoleScreen(state: ConsoleState, onState: (ConsoleState) -> Unit, onRun: () -> Unit) {
+fun ConsoleScreen(
+    state: ConsoleState,
+    onState: (ConsoleState) -> Unit,
+    onRun: () -> Unit,
+    onCheatsheet: () -> Unit = {},
+) {
     Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Query", fontSize = 26.sp)
         OutlinedTextField(
@@ -37,6 +42,7 @@ fun ConsoleScreen(state: ConsoleState, onState: (ConsoleState) -> Unit, onRun: (
             Button(onClick = onRun, enabled = state.canRun) {
                 Text(if (state.busy) "Running…" else "Run")
             }
+            OutlinedButton(onClick = onCheatsheet) { Text("Cheatsheet", fontSize = 12.sp) }
             state.result?.let { Text("${it.rows.size} rows in ${state.took}ms", fontSize = 13.sp) }
         }
         state.error?.let { Text(it, fontSize = 13.sp) }

@@ -19,9 +19,20 @@ import org.mattshoe.mtg.core.LogsState
 
 /** The query console, on the web. Sibling of `ConsoleScreen`. */
 @Composable
-fun ConsolePage(state: ConsoleState, onState: (ConsoleState) -> Unit, onRun: () -> Unit) {
+fun ConsolePage(
+    state: ConsoleState,
+    onState: (ConsoleState) -> Unit,
+    onRun: () -> Unit,
+    onCheatsheet: () -> Unit = {},
+) {
     Div(attrs = { classes("wrap") }) {
-        Div(attrs = { classes("page-head") }) { H1 { Text("Query") } }
+        Div(attrs = { classes("page-head") }) {
+            H1 { Text("Query") }
+            Button(attrs = {
+                classes("btn", "sm", "ghost")
+                onClick { onCheatsheet() }
+            }) { Text("Cheatsheet") }
+        }
         Div(attrs = { classes("panel") }) {
             Div(attrs = { classes("panel-body") }) {
                 TextArea(value = state.sql, attrs = {
