@@ -1,6 +1,18 @@
-# The Library page: everything wrong with it
+# The Library page: the catalogue, and what came of it
 
-A catalogue, not a plan. Nothing here is fixed.
+**All of it is fixed.** Kept as written so the reasoning survives —
+each entry is why a test exists now.
+
+Verified by: 528 distinct tests (1,488 executions across four
+targets), all green; `scripts/filter_sweep.py` running 94 filter
+shapes against the real collection; and live queries for the two data
+bugs.
+
+What the fixes were, in commit order:
+
+- `932e669` the four broken ones
+- `5fc9493` numbers that are true, searches that do not crash
+- `00672ac` the rest of the catalogue
 
 Each entry is marked with how much it is actually known:
 
