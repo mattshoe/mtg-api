@@ -216,7 +216,11 @@ function fileDrop(listInput, onChange) {
 
   const input = h('input', {
     type: 'file',
-    accept: '.txt,.csv,.dek,.md,text/plain,text/csv',
+    // Everything. A narrow list greys out the file you actually want in
+    // Android's picker, and the same guesswork about MIME types that broke
+    // the share sheet would break this too. What can be read is decided
+    // after it is read.
+    accept: '*/*',
     multiple: true,
     style: { display: 'none' },
     onchange: (e) => { take([...e.target.files]); e.target.value = ''; },
@@ -303,21 +307,45 @@ function stepList() {
   };
   listInput.addEventListener('input', updateCount);
   updateCount();
-  queueMicrotask(() => listInput.focus());
+  // Not on a share that came up empty: the thing to do there is tap the
+  // big button, and raising the keyboard over it helps nobody.
+  if (!flow.shareNote) queueMicrotask(() => listInput.focus());
 
-  return h('div.panel',
+  const zone = fileDrop(listInput, updateCount);
+
+  /**
+   * The rescue.
+   *
+   * Android drops the file out of the share before any of this runs, and
+   * nothing on this side can reach that decision. What it can do is put
+   * the file picker one large tap away instead of leaving someone staring
+   * at an empty box — this has to work for Kayla, not for whoever is
+   * willing to go reinstall a web app.
+   */
+  const rescue = flow.shareNote
+    ? h('div.panel', { style: { marginBottom: '14px', borderColor: 'var(--accent)' } },
+      h('div.panel-body',
+        h('h2', { style: { marginBottom: '6px' } }, 'Pick the file'),
+        h('div.says', { style: { marginBottom: '12px' } },
+          'It came through without the file attached. Tap here and choose it.'),
+        h('button.btn.primary', {
+          style: { width: '100%', padding: '16px', fontSize: '1.05rem' },
+          onclick: () => zone.querySelector('input[type=file]').click(),
+        }, 'Choose file'),
+        h('details', { style: { marginTop: '12px' } },
+          h('summary.small.muted', 'Why'),
+          h('div.small.muted', { style: { marginTop: '6px' } }, flow.shareNote.problem),
+          flow.shareNote.detail
+            ? h('div.small.mono', { style: { marginTop: '6px', opacity: '.8' } }, flow.shareNote.detail)
+            : null)))
+    : null;
+
+  return h('div.stack', rescue, h('div.panel',
     h('div.panel-head',
       h('h2', isAdd ? 'What are you adding?' : 'What are you removing?'),
       h('span.spacer'), count),
     h('div.panel-body',
-      flow.shareNote
-        ? h('div.err', { style: { marginBottom: '12px' } },
-          h('div', `Shared in, but ${flow.shareNote.problem}`),
-          flow.shareNote.detail
-            ? h('div.small', { style: { marginTop: '6px', opacity: '.85' } }, flow.shareNote.detail)
-            : null)
-        : null,
-      h('div.field', fileDrop(listInput, updateCount)),
+      h('div.field', zone),
       h('div.field', listInput),
       h('div.flex-wrap',
         next,
@@ -329,7 +357,7 @@ function stepList() {
             updateCount();
             listInput.focus();
           },
-        }, 'Clear'))));
+        }, 'Clear')))));
 }
 
 // -------------------------------------------------------------- 2. who
