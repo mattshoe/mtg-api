@@ -57,12 +57,18 @@ fun LibraryPage(
                     onPick = { onSearch() },
                 )
                 Div(attrs = { classes("flex-wrap") }) {
-                    listOf("both" to "Both", "matt" to "Matt", "kayla" to "Kayla").forEach { (slug, label) ->
-                        Button(attrs = {
-                            classes("owner-opt")
-                            if (state.filters.owner == slug) classes("on")
-                            onClick { onState(state.where(state.filters.copy(owner = slug))) }
-                        }) { Text(label) }
+                    // A segmented control, not three choice cards. The
+                    // `owner-opt` styling is for the wizard's one big
+                    // decision per screen; three of them side by side
+                    // wrapped onto two lines on a phone.
+                    Div(attrs = { classes("seg") }) {
+                        listOf("both" to "Both", "matt" to "Matt", "kayla" to "Kayla")
+                            .forEach { (slug, label) ->
+                                Button(attrs = {
+                                    if (state.filters.owner == slug) classes("on")
+                                    onClick { onState(state.where(state.filters.copy(owner = slug))) }
+                                }) { Text(label) }
+                            }
                     }
                     Span(attrs = { classes("spacer") }) {}
                     Button(attrs = {

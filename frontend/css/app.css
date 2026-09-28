@@ -118,6 +118,34 @@ h3 { font-size: 14px; }
 
 .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
 
+/* ------------------------------------------------------------ app nav */
+/* The nav the shared build draws, inside the page rather than in the top
+   bar. Deliberately not `.tabs`: that one collapses into a hamburger
+   drawer below 720px and needs JavaScript in the header to open it, so
+   reusing it left the phone with no navigation at all. This one is a row
+   of pills that scrolls sideways and is visible at every width. */
+.app-nav {
+  display: flex; gap: 6px; align-items: center;
+  padding: 10px 18px 0; overflow-x: auto; scrollbar-width: none;
+}
+.app-nav::-webkit-scrollbar { display: none; }
+.app-tab {
+  flex: none; padding: 7px 13px; border-radius: 99px;
+  border: 1px solid var(--line-2); background: var(--bg-2); color: var(--text-2);
+  font: inherit; font-size: 13.5px; font-weight: 550; white-space: nowrap; cursor: pointer;
+}
+.app-tab:hover { background: var(--bg-3); color: var(--text); }
+.app-tab.on { background: var(--accent-dim); border-color: var(--accent); color: var(--accent-2); }
+/* The lock and the finder are not places to go, so they are quieter. */
+.app-nav .app-tool { flex: none; margin-left: 4px; }
+@media (max-width: 720px) { .app-nav { padding: 8px 12px 0; } }
+
+/* An active toggle among ghost buttons — the sort that is in force, the
+   filter panel while it is open. */
+.btn.on { background: var(--accent-dim); border-color: var(--accent); color: var(--accent-2); }
+.seg button.on { background: var(--accent-dim); color: var(--accent-2); font-weight: 600; }
+
+
 
 .icon-btn {
   display: grid; place-items: center; width: 32px; height: 32px;

@@ -62,16 +62,20 @@ fun AppShell(
     var password by remember { mutableStateOf("") }
     var showFilters by remember { mutableStateOf(false) }
 
-    Nav(attrs = { classes("tabs") }) {
+    // `app-nav`, not `tabs`: the hand-written stylesheet collapses
+    // `.tabs` into a hamburger drawer below 720px and opens it from the
+    // header's own JavaScript, so borrowing that class left the phone
+    // with no navigation at all.
+    Nav(attrs = { classes("app-nav") }) {
         state.admin.visible.forEach { view ->
             Button(attrs = {
-                classes("tab")
+                classes("app-tab")
                 if (state.view == view) classes("on")
                 onClick { onState(state.navigate(view)) }
             }) { Text(view.label) }
         }
         Button(attrs = {
-            classes("btn", "sm", "ghost")
+            classes("btn", "sm", "ghost", "app-tool")
             onClick {
                 if (state.admin.unlocked) {
                     onState(state.copy(admin = state.admin.lock()).navigate(state.route))
@@ -81,7 +85,7 @@ fun AppShell(
             }
         }) { Text(if (state.admin.unlocked) "Lock" else "Unlock") }
         Button(attrs = {
-            classes("btn", "sm", "ghost")
+            classes("btn", "sm", "ghost", "app-tool")
             onClick { onState(state.opening(Overlay.PALETTE).copy(palette = state.palette.opened())) }
         }) { Text("Find") }
     }

@@ -547,3 +547,72 @@ class CardGridTest {
         assertEquals(5, root.querySelectorAll(".mana .ms").length)
     }
 }
+
+/**
+ * The nav, which went missing on a phone.
+ *
+ * It borrowed `.tabs` from the hand-written page, and that class is
+ * `display: none` below 720px — the header's own JavaScript opens it as
+ * a drawer, and there is no header JavaScript any more. So the site
+ * shipped with no navigation on the device most used to read it.
+ */
+class NavTest {
+
+    private val roots = mutableListOf<org.w3c.dom.HTMLElement>()
+
+    @AfterTest
+    fun cleanUp() {
+        roots.forEach { it.remove() }
+        roots.clear()
+    }
+
+    private suspend fun settle() = repeat(3) {
+        Promise<Unit> { resolve, _ -> kotlinx.browser.window.requestAnimationFrame { resolve(Unit) } }.await()
+    }
+
+    private fun mount(state: AppState): org.w3c.dom.HTMLElement {
+        val root = document.createElement("div") as org.w3c.dom.HTMLElement
+        document.body!!.appendChild(root)
+        roots += root
+        renderComposable(root = root) { AppShell(state, {}, {}, {}, {}, {}, {}, {}) }
+        return root
+    }
+
+    @Test
+    fun theNavDoesNotBorrowTheClassThatHidesItselfOnAPhone() = runTest {
+        val root = mount(AppState())
+        settle()
+        val nav = root.querySelector("nav") as org.w3c.dom.HTMLElement
+        assertFalse(nav.className.contains("tabs"), nav.className)
+        assertTrue(nav.className.contains("app-nav"), nav.className)
+    }
+
+    @Test
+    fun andItIsVisibleAtPhoneWidth() = runTest {
+        val root = mount(AppState())
+        settle()
+        val nav = root.querySelector("nav") as org.w3c.dom.HTMLElement
+        // Whatever the stylesheet says at this width, the nav has to be
+        // laid out. A display:none element has no boxes at all.
+        // A display:none element has no box at all, so a zero height
+        // and width is the shape of the bug this is here for.
+        val box = nav.getBoundingClientRect()
+        assertTrue(box.width > 0 && box.height > 0, "the nav is not rendered: $box")
+        assertEquals(6, root.querySelectorAll("nav button").length)
+    }
+
+    @Test
+    fun theOwnerPickerIsASegmentedControlNotThreeChoiceCards() = runTest {
+        val root = document.createElement("div") as org.w3c.dom.HTMLElement
+        document.body!!.appendChild(root)
+        roots += root
+        renderComposable(root = root) {
+            LibraryPage(Library().loaded(emptyList(), 0), {}, {}, {})
+        }
+        settle()
+        // `owner-opt` is the wizard's one-big-decision styling: 130px
+        // minimum each, which wrapped onto two lines on a phone.
+        assertEquals(0, root.querySelectorAll(".owner-opt").length)
+        assertEquals(3, root.querySelectorAll(".seg button").length)
+    }
+}
