@@ -239,7 +239,7 @@ internal class Clauses {
 
     /** A LIKE whose pattern was built by `like`, so the escape holds. */
     fun addLike(column: String, value: String) {
-        where += "$column LIKE ? ESCAPE '\\\\'"
+        where += "$column LIKE ? ESCAPE '\\'"
         params += like(value)
     }
 
@@ -328,10 +328,16 @@ fun conditions(s: Filters): Sql {
     if (s.owner.isNotBlank() && s.owner != "both") c.add("c.owner = ?", s.owner)
 
     s.q.trim().takeIf { it.isNotEmpty() }?.let {
+        // Three placeholders, not `?1` three times. A numbered
+        // parameter renumbers every bare `?` around it, so the owner
+        // clause added just above ended up bound to the name and the
+        // whole statement came back "wrong number of parameter
+        // bindings" the moment both were set.
+        val pattern = c.like(it)
         c.add(
-            "(c.name_norm LIKE ?1 ESCAPE '\\\\' OR lower(c.face1) LIKE ?1 ESCAPE '\\\\' " +
-                "OR lower(c.face2) LIKE ?1 ESCAPE '\\\\')",
-            c.like(it),
+            "(c.name_norm LIKE ? ESCAPE '\\' OR lower(c.face1) LIKE ? ESCAPE '\\' " +
+                "OR lower(c.face2) LIKE ? ESCAPE '\\')",
+            pattern, pattern, pattern,
         )
     }
     s.text.trim().takeIf { it.isNotEmpty() }

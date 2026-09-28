@@ -330,6 +330,34 @@ class FilterCoverageTest {
         }
     }
 
+    /**
+     * As many placeholders as bound values, always.
+     *
+     * A numbered placeholder renumbers every bare `?` in the same
+     * statement, so one `?1` in the name clause silently rebound the
+     * owner filter beside it and the server answered "wrong number of
+     * parameter bindings".
+     */
+    @Test
+    fun everyStatementBindsExactlyAsManyValuesAsItHasHoles() {
+        val cases = listOf(
+            Filters(owner = "matt", q = "bolt"),
+            Filters(q = "bolt", artist = "guay", sets = listOf("MH3", "2X2")),
+            Filters(
+                owner = "matt", q = "a", text = "draw", cmcMin = "1", types = listOf("Creature"),
+                colors = listOf("G"), colorMode = ColorMode.ATLEAST, rarities = listOf("rare"),
+                format = "commander", priceMin = "1", qtyMin = "2",
+            ),
+        )
+        cases.forEach { f ->
+            listOf(buildQuery(f), buildQuery(f, countOnly = true)).forEach { sql ->
+                assertFalse(sql.sql.contains("?1"), "numbered placeholder in:\n${sql.sql}")
+                val holes = sql.sql.count { it == '?' }
+                assertEquals(holes, sql.params.size, "$holes holes, ${sql.params.size} values:\n${sql.sql}")
+            }
+        }
+    }
+
     /** Every control on the panel has to reach the SQL. */
     @Test
     fun everyFieldOnThePanelChangesTheQuery() {

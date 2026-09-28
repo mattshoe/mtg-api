@@ -35,6 +35,14 @@ class FilterSweepDump {
 
         // words
         case("name contains bolt", Filters(q = "bolt"))
+        // LIKE's own wildcards, which must be characters rather than
+        // patterns — and which need an ESCAPE clause SQLite accepts.
+        case("name contains a percent", Filters(q = "%"))
+        case("name contains an underscore", Filters(q = "_"))
+        case("name contains a backslash", Filters(q = "\\"))
+        case("oracle text with punctuation", Filters(text = "+1/+1"))
+        case("oracle text with an apostrophe", Filters(text = "opponent's"))
+        case("oracle text with a hyphen", Filters(text = "non-creature"))
         case("oracle text draw", Filters(text = "draw"))
         case("literal text enters tapped", Filters(textLike = "enters tapped"))
         case("flavour goblin", Filters(flavor = "goblin"))

@@ -116,10 +116,11 @@ class CardFiltersTest {
         val f = Filters(q = "Bolt")
         val sql = where(f)
         assertTrue(sql.contains("c.face2"))
-        // One placeholder, reused. Three copies of the same value was
-        // three chances for them to drift apart.
-        assertEquals(3, Regex("\\?1").findAll(sql).count())
-        assertEquals(listOf<Any?>("%bolt%"), params(f))
+        // Three plain placeholders. A numbered one renumbers every
+        // bare `?` in the same statement, which misbound the owner
+        // filter next to it.
+        assertFalse(sql.contains("?1"), sql)
+        assertEquals(listOf<Any?>("%bolt%", "%bolt%", "%bolt%"), params(f))
     }
 
     @Test

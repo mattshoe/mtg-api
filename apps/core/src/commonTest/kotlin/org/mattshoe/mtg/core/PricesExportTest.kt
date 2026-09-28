@@ -106,7 +106,7 @@ class ExportTest {
 
     @Test
     fun theExportKeepsTheSearchItWasMadeFrom() {
-        assertEquals(listOf<Any?>("%bolt%"), Export.query(Filters(q = "bolt")).params)
+        assertEquals(listOf<Any?>("%bolt%", "%bolt%", "%bolt%"), Export.query(Filters(q = "bolt")).params)
     }
 
     /** No set code: a row is a card summed over every printing owned. */
