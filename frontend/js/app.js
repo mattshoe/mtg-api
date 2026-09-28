@@ -9,8 +9,7 @@ import {
 import { openCard, closeCard, openCardId, hideCardForRoute } from './card.js';
 import { pushOverlay, dropOverlay } from './overlay.js';
 import {
-  registerWorker, loadShare, sharedNow, watchShares, reportShare, workerVersion,
-  reportArrival, watchLaunches,
+  registerWorker, loadShare, sharedNow, watchShares, watchLaunches,
 } from './share.js';
 import * as search from './search.js';
 import * as decks from './decks.js';
@@ -265,51 +264,11 @@ registerWorker();
 // share somewhere after routing meant two navigations fighting over the
 // same history entry, and the login dialog's own entry lost.
 async function boot() {
-  // Which copy of the app is this? An installed app launches at the
-  // start_url compiled into it, so the marker in the query string says
-  // whether Android is running a build made from the current manifest or
-  // one Chrome reused. Without that, a stale install and a Chrome bug
-  // look identical from here.
-  reportShare('page: launched', {
-    href: location.href.slice(0, 160),
-    build: new URLSearchParams(location.search).get('b') || 'none — older install',
-    standalone: matchMedia('(display-mode: standalone)').matches,
-    referrer: document.referrer ? document.referrer.slice(0, 80) : null,
-  });
-
   if (!location.hash) location.hash = '#/search';
   // Before the first render, because the add page takes the list without
   // awaiting anything — it has to already be in hand by then.
   await loadShare();
 
-  // Arriving on the add page as a fresh navigation is the share target's
-  // redirect, and an empty inbox at that point means the worker never
-  // wrote anything. That failure leaves no other trace, so it gets a line
-  // in the log rather than an unexplained empty box.
-  const nav = performance.getEntriesByType('navigation')[0];
-  const onAdd = parseHash().view === 'add';
-  const fresh = nav?.type === 'navigate';
-
-  // Narrated on every boot that could be a share, not only the failures.
-  // Knowing what a working one looks like is half of reading the broken one.
-  if (onAdd || sharedNow()) {
-    reportArrival({
-      navType: nav?.type || null,
-      navUrl: nav?.name?.slice(0, 200) || null,
-      view: parseHash().view,
-      admin: isAdmin(),
-      controlled: Boolean(navigator.serviceWorker?.controller),
-      sw: await workerVersion(),
-    });
-  }
-
-  if (!sharedNow() && onAdd && fresh) {
-    reportShare('page: landed on add with nothing to show for it', {
-      controlled: Boolean(navigator.serviceWorker?.controller),
-      sw: await workerVersion(),
-      url: nav.name?.slice(0, 200),
-    });
-  }
   if (sharedNow() && parseHash().view !== 'add') {
     location.replace('#/add');   // fires hashchange, which routes
     return;

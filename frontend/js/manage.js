@@ -11,7 +11,7 @@
 import * as api from './api.js';
 import { h, $, fill, num, toast, store, errorBox } from './util.js';
 import { isAdmin } from './admin.js';
-import { sharedNow, shareUsed, reportShare } from './share.js';
+import { sharedNow, shareUsed } from './share.js';
 
 const HISTORY_KEY = 'history';
 const MAX_HISTORY = 30;
@@ -124,34 +124,6 @@ function historyPanel() {
         }, 'Reuse'))))))));
 }
 
-/**
- * The worker's account of a share that produced nothing, on the page.
- *
- * Reading it out of a server log is fine for me and useless to the person
- * holding the phone, so it says the whole thing here: what went wrong,
- * what actually arrived, and which build of the worker handled it.
- */
-function shareTrouble() {
-  const shared = sharedNow();
-  if (!shared?.problem) return null;
-  const r = shared.report || {};
-  const bits = [];
-  if (r.files?.length) {
-    bits.push(r.files.map((f) => `${f.name || 'unnamed'} · ${f.type || 'no type'} · ${f.size}B`).join('; '));
-  } else if (r.files) {
-    bits.push('no files in the share');
-  }
-  if (r.fields?.length) bits.push(`text fields: ${r.fields.join(', ')}`);
-  if (r.req) bits.push(`body: ${r.req.rawLen} bytes, ${r.req.ct || 'no content-type'}`);
-  if (r.req?.partsSeen?.length) {
-    bits.push(`parts: ${r.req.partsSeen.map((x) => `${x.field}${x.filename ? `=${x.filename}` : ''} ${x.type || '?'} ${x.bytes}B`).join('; ')}`);
-  }
-  if (r.failure) bits.push(`error: ${r.failure}`);
-  if (r.rescued) bits.push('parsed by hand');
-  if (r.v) bits.push(r.v);
-  return { problem: shared.problem, detail: bits.join(' — ') };
-}
-
 // One flow at a time, reset on every mount. It lives outside paint() so a
 // step change can repaint without threading state through every caller.
 let flow = null;
@@ -164,9 +136,6 @@ const blank = (mode) => ({
   // filling the box after the render is what makes it survive being
   // rendered twice, which is the normal case on a phone.
   list: mode === 'add' ? (sharedNow()?.list || '') : '',
-  // Set when a share arrived that the worker could not make anything of.
-  // An empty box with no explanation is the worst possible outcome here.
-  shareNote: mode === 'add' ? shareTrouble() : null,
   // Deliberately nothing. Remembering the last choice, or defaulting to
   // matt, is how a list lands in the wrong person's collection — the
   // whole reason this is its own step is to make it a decision.
@@ -230,44 +199,24 @@ function fileDrop(listInput, onChange) {
       position: 'absolute', width: '1px', height: '1px',
       opacity: '0', overflow: 'hidden', pointerEvents: 'none',
     },
-    onchange: (e) => {
-      const picked = [...e.target.files];
-      reportShare('page: file picker returned', {
-        count: picked.length,
-        files: picked.map((f) => ({ name: f.name, type: f.type, size: f.size })),
-      });
-      take(picked);
-      e.target.value = '';
-    },
+    onchange: (e) => { take([...e.target.files]); e.target.value = ''; },
   });
 
   async function take(files) {
-    reportShare('page: reading picked files', { count: files.length });
     if (!files.length) return;
     const chunks = [];
     for (const f of files) {
       if (f.size > MAX_UPLOAD) {
-        reportShare('page: picked file over the cap', { name: f.name, size: f.size }, 'warn');
         toast(`${f.name} is too big (${(f.size / 1e6).toFixed(1)} MB)`, 'bad');
         continue;
       }
       try {
-        const text = await f.text();
-        reportShare('page: picked file read', {
-          name: f.name, type: f.type, size: f.size, chars: text.length, sample: text.slice(0, 200),
-        });
-        chunks.push(text);
-      } catch (e) {
-        reportShare('page: picked file would not read', {
-          name: f.name, type: f.type, size: f.size, error: String(e && e.message),
-        }, 'error');
+        chunks.push(await f.text());
+      } catch {
         toast(`could not read ${f.name}`, 'bad');
       }
     }
-    if (!chunks.length) {
-      reportShare('page: nothing came out of the picked files', { count: files.length }, 'warn');
-      return;
-    }
+    if (!chunks.length) return;
 
     const incoming = chunks.join('\n');
     // Append rather than replace, so a file never eats something typed.
@@ -282,16 +231,7 @@ function fileDrop(listInput, onChange) {
     status.textContent = `${names} — ${kind}, ${n} card${n === 1 ? '' : 's'}`;
     toast(`Loaded ${n} card${n === 1 ? '' : 's'} from ${kind}`, 'ok');
     if (onChange) onChange();
-    // The share note was about a file that never arrived. One has now, so
-    // the panel asking for it has to go, which means a repaint.
-    reportShare('page: picked files landed in the box', {
-      chars: listInput.value.length, cards: n, names,
-    });
-    if (flow.shareNote) {
-      shareUsed();
-      flow.shareNote = null;
-      paint();
-    }
+    shareUsed();
   }
 
   const zone = h('div.dropzone', {
@@ -344,65 +284,11 @@ function stepList() {
   };
   listInput.addEventListener('input', updateCount);
   updateCount();
-  // Not on a share that came up empty: the thing to do there is tap the
-  // big button, and raising the keyboard over it helps nobody.
-  if (!flow.shareNote) queueMicrotask(() => listInput.focus());
+  queueMicrotask(() => listInput.focus());
 
   const zone = fileDrop(listInput, updateCount);
 
-  /**
-   * The rescue, for a share that arrived without its file.
-   *
-   * Offering a file picker first was wrong: ManaBox builds its export in
-   * memory and hands it straight to the share sheet, so there is no file
-   * on disk to browse to. Paste is the one that always has something
-   * behind it, so paste goes first.
-   */
-  async function pasteIn() {
-    try {
-      const text = await navigator.clipboard.readText();
-      reportShare('page: pasted from clipboard', { chars: text.length, sample: text.slice(0, 200) });
-      if (!text.trim()) { toast('The clipboard is empty', 'bad'); return; }
-      listInput.value = text;
-      updateCount();
-      shareUsed();
-      flow.shareNote = null;
-      paint();
-      toast(`Pasted ${countCards(text)} cards`, 'ok');
-    } catch (e) {
-      reportShare('page: clipboard read refused', { error: String(e && e.message) }, 'warn');
-      toast('Could not read the clipboard — long-press the box and paste', 'bad');
-    }
-  }
-
-  const rescue = flow.shareNote
-    ? h('div.panel', { style: { marginBottom: '14px', borderColor: 'var(--accent)' } },
-      h('div.panel-body',
-        h('h2', { style: { marginBottom: '6px' } }, 'The file did not come through'),
-        h('div.says', { style: { marginBottom: '12px' } },
-          'Android handed the share over with nothing attached. Share the export to '
-          + 'My Files first, then open it here.'),
-        h('button.btn.primary', {
-          style: { width: '100%', padding: '16px', fontSize: '1.05rem' },
-          onclick: () => {
-            const picker = zone.querySelector('input[type=file]');
-            reportShare('page: choose file tapped', { found: Boolean(picker) });
-            if (picker) picker.click();
-          },
-        }, 'Choose a saved file'),
-        h('button.btn.ghost', {
-          style: { width: '100%', padding: '12px', marginTop: '8px' },
-          onclick: pasteIn,
-        }, 'Or paste'),
-        h('details', { style: { marginTop: '12px' } },
-          h('summary.small.muted', 'Why'),
-          h('div.small.muted', { style: { marginTop: '6px' } }, flow.shareNote.problem),
-          flow.shareNote.detail
-            ? h('div.small.mono', { style: { marginTop: '6px', opacity: '.8' } }, flow.shareNote.detail)
-            : null)))
-    : null;
-
-  return h('div.stack', rescue, h('div.panel',
+  return h('div.panel',
     h('div.panel-head',
       h('h2', isAdd ? 'What are you adding?' : 'What are you removing?'),
       h('span.spacer'), count),
@@ -419,7 +305,7 @@ function stepList() {
             updateCount();
             listInput.focus();
           },
-        }, 'Clear')))));
+        }, 'Clear'))));
 }
 
 // -------------------------------------------------------------- 2. who
@@ -607,13 +493,6 @@ export function show(mode) {
   // The list is already in the box by now; this only says where it came
   // from, once, however many times the page gets rendered.
   const shared = flow.mode === 'add' ? sharedNow() : null;
-  reportShare('page: add page rendered', {
-    mode,
-    hasShare: Boolean(shared),
-    boxChars: flow.list.length,
-    note: flow.shareNote?.problem || null,
-    id: shared?.report?.id || null,
-  });
   if (!shared || shared.announced) return;
   shared.announced = true;
   if (!shared.list) {
