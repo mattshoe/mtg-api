@@ -1,7 +1,7 @@
 // The page half of the Android share target.
 //
 // `sw.js` catches the share POST and hands the list over in the URL
-// fragment — `#/add?share=<encoded>`. That is read here, synchronously, at
+// fragment — `#/entry?share=<encoded>`. That is read here, synchronously, at
 // module load, before a single thing has rendered. It used to come through
 // Cache Storage and that is what kept failing on the phone: the redirect
 // arrived on the add page and the cache read came back empty, with nothing
@@ -61,7 +61,7 @@ let arrival = null;
   // Take it back out of the URL. Leaving a whole decklist in the address
   // bar means a reload re-applies it, and any link copied out of here
   // carries it.
-  const clean = location.hash.replace(/[?&]share=[^&]*/, '').replace(/\?$/, '') || '#/add';
+  const clean = location.hash.replace(/[?&]share=[^&]*/, '').replace(/\?$/, '') || '#/entry';
   try { history.replaceState(history.state, '', clean); } catch { /* not worth failing over */ }
 }());
 

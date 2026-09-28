@@ -27,13 +27,12 @@ api.useAuth(authHeader, rejected);
 // Views that do nothing without a token. While locked they are not
 // reachable and their tabs are not in the DOM's flow at all — the lock in
 // the header is the only sign they exist.
-const GATED = new Set(['add', 'remove', 'logs']);
+const GATED = new Set(['entry', 'logs']);
 
 const ROUTES = {
   search: (rest) => search.show(rest),
   decks: (rest) => decks.show(rest),
-  add: () => manage.show('add'),
-  remove: () => manage.show('remove'),
+  entry: () => manage.show(),
   stats: (rest) => stats.show(rest),
   console: () => sqlConsole.show(),
   logs: () => logs.show(),
@@ -48,8 +47,14 @@ function parseHash() {
 
 let currentView = null;
 
+// Add and remove were separate pages and are one now. Anything still
+// pointing at the old names — a bookmark, an older service worker's share
+// redirect — lands on the wizard rather than on nothing.
+const MOVED = { add: 'entry', remove: 'entry' };
+
 async function route() {
   const { view, rest, query } = parseHash();
+  if (MOVED[view]) { location.replace(`#/${MOVED[view]}`); return; }
   const fn = ROUTES[view];
 
   // Navigating out from under the drawer closes it. Leaving it up over a
@@ -191,7 +196,7 @@ addEventListener('keydown', (e) => {
 
   if (typing) return;
 
-  const go = { s: 'search', d: 'decks', a: 'add', r: 'remove', g: 'stats', c: 'console', v: 'logs' }[e.key];
+  const go = { s: 'search', d: 'decks', e: 'entry', g: 'stats', c: 'console', v: 'logs' }[e.key];
   if (go) {
     // The shortcuts for gated views are as hidden as their tabs.
     if (!GATED.has(go) || isAdmin()) location.hash = `#/${go}`;
@@ -200,7 +205,7 @@ addEventListener('keydown', (e) => {
   if (e.key === 'l') (isAdmin() ? lock() : promptUnlock());
   if (e.key === '/') { e.preventDefault(); openPalette(); }
   if (e.key === '?') {
-    toast(`s search · d decks${isAdmin() ? ' · a add · r remove' : ''} · g stats · c console`
+    toast(`s search · d decks${isAdmin() ? ' · e entry' : ''} · g stats · c console`
       + `${isAdmin() ? ' · v logs' : ''} · l ${isAdmin() ? 'lock' : 'unlock'}`
       + ' · / or ⌘K find · esc close');
   }
@@ -258,7 +263,7 @@ $('#palette-input').addEventListener('input', (e) => searchPalette(e.target.valu
 registerWorker();
 
 // A decklist or CSV shared from another Android app lands on the add page
-// with the list already in the box. The worker's redirect puts us on #/add
+// with the list already in the box. The worker's redirect puts us on #/entry
 // directly, so on boot this only has to cover the app being resumed
 // somewhere else. It must happen before the first route(): sending the
 // share somewhere after routing meant two navigations fighting over the
@@ -269,8 +274,8 @@ async function boot() {
   // awaiting anything — it has to already be in hand by then.
   await loadShare();
 
-  if (sharedNow() && parseHash().view !== 'add') {
-    location.replace('#/add');   // fires hashchange, which routes
+  if (sharedNow() && parseHash().view !== 'entry') {
+    location.replace('#/entry');   // fires hashchange, which routes
     return;
   }
   route();
@@ -279,8 +284,8 @@ async function boot() {
 // A share arriving while the app is already open. The list itself stays in
 // the cache either way, so this only has to get the user to the page.
 const toAdd = () => {
-  if (parseHash().view === 'add') route();
-  else location.hash = '#/add';
+  if (parseHash().view === 'entry') route();
+  else location.hash = '#/entry';
 };
 watchShares(toAdd);
 // And the same for a file opened with the app rather than shared to it.

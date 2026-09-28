@@ -31,7 +31,7 @@
 //     is no way to tell an empty POST from a body it declined to parse, so
 //     the raw bytes get split by hand as well and the two are compared.
 
-const VERSION = 'sw-10';
+const VERSION = 'sw-11';
 
 const API = 'https://mtg-api.mattshoe81.workers.dev';
 const CACHE = 'share-inbox';
@@ -93,7 +93,7 @@ self.addEventListener('fetch', (event) => {
   if (url.pathname !== SHARE) return;
   if (event.request.method === 'POST') { event.respondWith(receive(event.request, event)); return; }
   // Nothing lives at this path, so a stray GET goes home rather than 404.
-  event.respondWith(Response.redirect(`${BASE}#/add`, 303));
+  event.respondWith(Response.redirect(`${BASE}#/entry`, 303));
 });
 
 // ------------------------------------------------------------- reading
@@ -386,16 +386,16 @@ async function receive(request, event) {
   }, list ? 'info' : 'warn');
 
   if (encoded.length <= MAX_FRAGMENT) {
-    return Response.redirect(`${BASE}#/add?share=${encoded}`, 303);
+    return Response.redirect(`${BASE}#/entry?share=${encoded}`, 303);
   }
 
   // Too big for a URL. The cache is the only thing left, and if that fails
   // as well the page still gets told why its box is empty.
-  if (await park(payload)) return Response.redirect(`${BASE}#/add`, 303);
+  if (await park(payload)) return Response.redirect(`${BASE}#/entry`, 303);
   const note = encodeURIComponent(JSON.stringify({
     at: Date.now(),
     problem: `the list came to ${size(list.length)} of text, too big to hand over.`,
     report: { v: VERSION, id: shareId, files: seen, chars: list.length, parked: false },
   }));
-  return Response.redirect(`${BASE}#/add?share=${note}`, 303);
+  return Response.redirect(`${BASE}#/entry?share=${note}`, 303);
 }

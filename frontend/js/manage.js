@@ -1,12 +1,17 @@
-// Add and remove. Same three steps either way, in order, no skipping:
+// Mass entry: cards in or cards out, one wizard, in order, no skipping:
 //
-//   1. List    paste it, or drop a file in
-//   2. Who     whose collection it lands in
-//   3. Review  a real dry run against the server, then Apply
+//   1. Which   adding these or removing them
+//   2. List    paste it, or drop a file in
+//   3. Who     whose collection it lands in
+//   4. Review  a real dry run against the server, then Apply
 //
-// Nothing reaches the write without passing through step 3, and step 3
+// Nothing reaches the write without passing through step 4, and step 4
 // shows what the server did when told not to commit — so what you approve
 // is what happens.
+//
+// Add and remove were two pages that differed in one word and a verb. The
+// direction is a decision like any other, so it is a step like any other,
+// and it is not preselected either.
 
 import * as api from './api.js';
 import { h, $, fill, num, toast, store, errorBox } from './util.js';
@@ -120,7 +125,12 @@ function historyPanel() {
         h('td.num', e.count),
         h('td', h('button.btn.sm.ghost', {
           title: 'Put this list back in the box',
-          onclick: () => { flow.list = e.list; flow.step = 'list'; paint(); },
+          onclick: () => {
+            flow.list = e.list;
+            flow.mode = e.mode;   // the same direction it was used in before
+            flow.step = 'list';
+            paint();
+          },
         }, 'Reuse'))))))));
 }
 
@@ -128,14 +138,16 @@ function historyPanel() {
 // step change can repaint without threading state through every caller.
 let flow = null;
 
-const blank = (mode) => ({
-  mode,
-  step: 'list',
-  // A decklist shared in from another Android app is just a list somebody
-  // already typed, so it starts in the box. Seeding it here rather than
-  // filling the box after the render is what makes it survive being
-  // rendered twice, which is the normal case on a phone.
-  list: mode === 'add' ? (sharedNow()?.list || '') : '',
+const blank = () => ({
+  // Nothing preselected. Which direction this goes is the first thing
+  // asked and the first thing that can be got wrong.
+  mode: null,
+  step: 'mode',
+  // A decklist shared in from another app is just a list somebody already
+  // typed, so it starts in the box. Seeding it here rather than filling
+  // the box after the render is what makes it survive being rendered
+  // twice, which is the normal case on a phone.
+  list: sharedNow()?.list || '',
   // Deliberately nothing. Remembering the last choice, or defaulting to
   // matt, is how a list lands in the wrong person's collection — the
   // whole reason this is its own step is to make it a decision.
@@ -146,9 +158,11 @@ const blank = (mode) => ({
   busy: false,
 });
 
-const STEPS = [['list', 'List'], ['who', 'Who'], ['review', 'Review']];
+const STEPS = [
+  ['mode', 'Which'], ['list', 'List'], ['who', 'Who'], ['review', 'Review'],
+];
 
-/** The 1-2-3 across the top. You can go back, never forward. */
+/** The 1-2-3-4 across the top. You can go back, never forward. */
 function stepper() {
   const at = flow.step === 'done' ? STEPS.length : STEPS.findIndex(([k]) => k === flow.step);
   return h('div.steps', STEPS.map(([key, label], i) => h('button', {
@@ -159,10 +173,16 @@ function stepper() {
 }
 
 function goto(step) {
-  // Past step one the list belongs to the flow, so the share it came from
-  // is spent and must not seed the box again.
-  if (step !== 'list') shareUsed();
-  // Nothing past step two happens without an owner, whatever calls this.
+  // Past the list step the list belongs to the flow, so the share it came
+  // from is spent and must not seed the box again.
+  if (step !== 'mode' && step !== 'list') shareUsed();
+  // No direction, nowhere to go. Whatever calls this.
+  if (step !== 'mode' && !flow.mode) {
+    flow.step = 'mode';
+    paint();
+    return;
+  }
+  // Nothing past the owner step happens without an owner, same rule.
   if ((step === 'review' || step === 'done') && !flow.owner) {
     flow.step = 'who';
     paint();
@@ -253,7 +273,33 @@ function fileDrop(listInput, onChange) {
   return zone;
 }
 
-// ------------------------------------------------------------- 1. list
+// ------------------------------------------------------------ 1. which
+
+function stepMode() {
+  const n = countCards(flow.list);
+  const picked = Boolean(flow.mode);
+  return h('div.panel',
+    h('div.panel-head',
+      h('h2', 'Adding or removing?'),
+      h('span.spacer'),
+      n ? h('span.muted.small', `${num(n)} card${n === 1 ? '' : 's'} already in the box`) : null),
+    h('div.panel-body',
+      h('div.owner-pick', [
+        ['add', 'Add to the collection'],
+        ['remove', 'Remove from the collection'],
+      ].map(([key, label]) => h('button', {
+        class: `owner-opt${flow.mode === key ? ' on' : ''}`,
+        onclick: () => { flow.mode = key; paint(); },
+      }, label))),
+      h('div.flex-wrap', { style: { marginTop: '16px' } },
+        h('button.btn.primary', {
+          disabled: !picked,
+          onclick: () => goto('list'),
+        }, picked ? 'Continue →' : 'Pick one to continue'),
+        picked ? null : h('span.small.says', 'Nothing is preselected on purpose.'))));
+}
+
+// ------------------------------------------------------------- 2. list
 
 function stepList() {
   const isAdd = flow.mode === 'add';
@@ -296,6 +342,7 @@ function stepList() {
       h('div.field', zone),
       h('div.field', listInput),
       h('div.flex-wrap',
+        h('button.btn.ghost', { onclick: () => goto('mode') }, '← Back'),
         next,
         h('span.spacer'),
         h('button.btn.sm.ghost', {
@@ -308,7 +355,7 @@ function stepList() {
         }, 'Clear'))));
 }
 
-// -------------------------------------------------------------- 2. who
+// -------------------------------------------------------------- 3. who
 
 function stepWho() {
   const n = countCards(flow.list);
@@ -334,7 +381,7 @@ function stepWho() {
         picked ? null : h('span.small.says', 'Pick whose collection this goes to.'))));
 }
 
-// ----------------------------------------------------------- 3. review
+// ----------------------------------------------------------- 4. review
 
 async function runPreview() {
   if (!flow.owner) { goto('who'); return; }
@@ -422,15 +469,14 @@ function stepReview() {
 // --------------------------------------------------------------- done
 
 function stepDone() {
-  const isAdd = flow.mode === 'add';
   return h('div.panel',
     h('div.panel-head', h('h2', flow.result?.applied ? 'Applied' : 'Nothing applied')),
     h('div.panel-body',
       resultBlock(flow.result, flow.mode),
       h('div.flex-wrap', { style: { marginTop: '16px' } },
         h('button.btn.primary', {
-          onclick: () => { flow = blank(flow.mode); paint(); },
-        }, isAdd ? 'Add more' : 'Remove more'),
+          onclick: () => { flow = blank(); paint(); },
+        }, 'Enter more'),
         h('button.btn.ghost', {
           onclick: () => { location.hash = '#/search'; },
         }, 'Back to search'))));
@@ -438,7 +484,9 @@ function stepDone() {
 
 // -------------------------------------------------------------- paint
 
-const BODIES = { list: stepList, who: stepWho, review: stepReview, done: stepDone };
+const BODIES = {
+  mode: stepMode, list: stepList, who: stepWho, review: stepReview, done: stepDone,
+};
 
 function paint() {
   const isAdd = flow.mode === 'add';
@@ -447,18 +495,20 @@ function paint() {
 
   fill(root, h('div.wrap',
     h('div.page-head',
-      h('h1', isAdd ? 'Add cards' : 'Remove cards'),
-      h('span.sub', isAdd
-        ? 'Resolved against Scryfall, then written to the collection.'
-        : 'Matched against printings you already own.')),
+      h('h1', 'Mass entry'),
+      h('span.sub', flow.mode === null
+        ? 'Cards in or cards out, from a list or a file.'
+        : (isAdd
+          ? 'Resolved against Scryfall, then written to the collection.'
+          : 'Matched against printings you already own.'))),
 
     stepper(),
 
     h('div.split',
       h('div.stack',
         BODIES[flow.step](),
-        // The history table is a way back into step one, so it only
-        // belongs on step one.
+        // The history table puts an old list back in the box, so it
+        // belongs beside the box and nowhere else.
         flow.step === 'list' ? h('div', { id: 'history-slot' }, historyPanel()) : null),
 
       h('div.sticky-side',
@@ -467,9 +517,11 @@ function paint() {
           h('div.panel-body',
             h('pre.out', EXAMPLES.join('\n')),
             h('div.small.muted', { style: { marginTop: '10px' } },
-              isAdd
-                ? 'A set code plus collector number pins an exact printing. Without one, Scryfall picks the most recent paper printing. A bad line does not sink the rest — it comes back in the errors list.'
-                : 'Without a set code, copies are taken from the plainest printing first. Removing more than you own is refused outright and changes nothing.'))),
+              flow.mode === null
+                ? 'The same list works either way. A set code plus collector number pins an exact printing; without one the plainest or most recent is used.'
+                : (isAdd
+                  ? 'A set code plus collector number pins an exact printing. Without one, Scryfall picks the most recent paper printing. A bad line does not sink the rest — it comes back in the errors list.'
+                  : 'Without a set code, copies are taken from the plainest printing first. Removing more than you own is refused outright and changes nothing.')))),
 
         h('div.panel', { style: { marginTop: '12px' } },
           h('div.panel-head', h('h2', 'Files it understands')),
@@ -482,17 +534,13 @@ function paint() {
               + 'CSV columns are matched by name, so their order does not matter.')))))));
 }
 
-function render(mode) {
-  flow = blank(mode);
+export function show() {
+  flow = blank();
   paint();
-}
-
-export function show(mode) {
-  render(mode === 'remove' ? 'remove' : 'add');
 
   // The list is already in the box by now; this only says where it came
   // from, once, however many times the page gets rendered.
-  const shared = flow.mode === 'add' ? sharedNow() : null;
+  const shared = sharedNow();
   if (!shared || shared.announced) return;
   shared.announced = true;
   if (!shared.list) {
