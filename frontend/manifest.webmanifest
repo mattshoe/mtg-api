@@ -20,7 +20,7 @@
     }
   ],
   "share_target": {
-    "action": "share",
+    "action": "/share",
     "method": "POST",
     "enctype": "multipart/form-data",
     "params": {
@@ -31,15 +31,19 @@
         {
           "name": "file",
           "accept": [
-            "text/*",
-            "application/*",
-            "application/octet-stream",
+            "text/csv",
+            "text/plain",
+            "text/comma-separated-values",
             "application/csv",
             "application/vnd.ms-excel",
+            "application/octet-stream",
             "application/json",
-            "text/plain",
-            "text/csv",
-            "*/*"
+            ".csv",
+            ".txt",
+            ".tsv",
+            ".dek",
+            ".dec",
+            ".json"
           ]
         }
       ]

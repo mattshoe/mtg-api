@@ -380,20 +380,20 @@ function stepList() {
       h('div.panel-body',
         h('h2', { style: { marginBottom: '6px' } }, 'The file did not come through'),
         h('div.says', { style: { marginBottom: '12px' } },
-          'Android handed the share over with nothing attached. In ManaBox, copy the '
-          + 'export instead of sharing it, then tap Paste.'),
+          'Android handed the share over with nothing attached. Share the export to '
+          + 'My Files first, then open it here.'),
         h('button.btn.primary', {
           style: { width: '100%', padding: '16px', fontSize: '1.05rem' },
-          onclick: pasteIn,
-        }, 'Paste'),
-        h('button.btn.ghost', {
-          style: { width: '100%', padding: '12px', marginTop: '8px' },
           onclick: () => {
             const picker = zone.querySelector('input[type=file]');
             reportShare('page: choose file tapped', { found: Boolean(picker) });
             if (picker) picker.click();
           },
-        }, 'Or choose a saved file'),
+        }, 'Choose a saved file'),
+        h('button.btn.ghost', {
+          style: { width: '100%', padding: '12px', marginTop: '8px' },
+          onclick: pasteIn,
+        }, 'Or paste'),
         h('details', { style: { marginTop: '12px' } },
           h('summary.small.muted', 'Why'),
           h('div.small.muted', { style: { marginTop: '6px' } }, flow.shareNote.problem),
