@@ -2,7 +2,7 @@
   "name": "MTG Collection",
   "short_name": "Collection",
   "id": "/mtg-collection-2",
-  "start_url": "./#/search",
+  "start_url": "./?b=3#/search",
   "scope": "./",
   "display": "standalone",
   "background_color": "#0e1116",
@@ -34,16 +34,11 @@
             "text/csv",
             "text/plain",
             "text/comma-separated-values",
+            "text/tab-separated-values",
             "application/csv",
             "application/vnd.ms-excel",
             "application/octet-stream",
-            "application/json",
-            ".csv",
-            ".txt",
-            ".tsv",
-            ".dek",
-            ".dec",
-            ".json"
+            "application/json"
           ]
         }
       ]

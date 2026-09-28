@@ -265,6 +265,18 @@ registerWorker();
 // share somewhere after routing meant two navigations fighting over the
 // same history entry, and the login dialog's own entry lost.
 async function boot() {
+  // Which copy of the app is this? An installed app launches at the
+  // start_url compiled into it, so the marker in the query string says
+  // whether Android is running a build made from the current manifest or
+  // one Chrome reused. Without that, a stale install and a Chrome bug
+  // look identical from here.
+  reportShare('page: launched', {
+    href: location.href.slice(0, 160),
+    build: new URLSearchParams(location.search).get('b') || 'none — older install',
+    standalone: matchMedia('(display-mode: standalone)').matches,
+    referrer: document.referrer ? document.referrer.slice(0, 80) : null,
+  });
+
   if (!location.hash) location.hash = '#/search';
   // Before the first render, because the add page takes the list without
   // awaiting anything — it has to already be in hand by then.
