@@ -43,9 +43,11 @@ fun FilterPanel(
     facets: Facets = Facets(),
     onChange: (Filters) -> Unit,
 ) {
-    // Groups holding a filter start open, so a link that arrives with a
-    // search in it shows where that search came from.
-    var open by remember { mutableStateOf(Facet.OPEN_BY_DEFAULT + Facet.inUse(f)) }
+    // Folded away to start. Ten open groups is a wall, and the whole
+    // point of the accordion is that you open the one you want. A
+    // group already holding a filter opens itself, so a link that
+    // arrives with a search in it shows where the search came from.
+    var open by remember { mutableStateOf(Facet.inUse(f)) }
     fun toggle(g: Facet) { open = if (g in open) open - g else open + g }
 
     Div(attrs = { classes("fgrid") }) {

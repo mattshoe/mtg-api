@@ -151,6 +151,15 @@ data class Library(
     fun next() = if (hasNext) goToPage(page + 1) else this
     fun prev() = if (hasPrev) goToPage(page - 1) else this
 
+    /**
+     * Pick the column, leaving the direction alone.
+     *
+     * `sortBy` below flips when the same column is chosen again, which
+     * is right for a row of buttons and wrong for a dropdown — picking
+     * "Price" from a list should not silently reverse it.
+     */
+    fun sortedBy(sort: Sort) = where(filters.copy(sort = sort))
+
     fun sortBy(sort: Sort): Library {
         // Same column twice flips the direction, the way every table does.
         val flip = filters.sort == sort

@@ -9,6 +9,8 @@ import org.jetbrains.compose.web.dom.Div
 import org.jetbrains.compose.web.dom.H1
 import org.jetbrains.compose.web.dom.Img
 import org.jetbrains.compose.web.dom.Input
+import org.jetbrains.compose.web.dom.Option
+import org.jetbrains.compose.web.dom.Select
 import org.jetbrains.compose.web.dom.Span
 import org.jetbrains.compose.web.dom.Text
 import org.mattshoe.mtg.core.CardQueries
@@ -43,17 +45,29 @@ fun LibraryPage(
     onComplete: (Completion) -> Unit = {},
     facets: Facets = Facets(),
 ) {
+    // One rule: anything that changes the filters asks the database
+    // again. The page debounces, so typing does not fire per keystroke
+    // — and without this, choosing a colour changed the state and left
+    // the same hundred cards on screen, which reads as a filter that
+    // does nothing.
+    fun apply(next: Library) {
+        onState(next)
+        onSearch()
+    }
+
     Div(attrs = { classes("wrap") }) {
         Div(attrs = { classes("page-head") }) { H1 { Text("Library") } }
 
         Div(attrs = { classes("panel") }) {
-            Div(attrs = { classes("panel-body") }) {
+            // `stack` is what puts air between the rows. Without it
+            // every control in here sits flush against the next.
+            Div(attrs = { classes("panel-body", "stack") }) {
                 AutocompleteField(
                     hint = "Card name",
                     state = complete,
                     onState = { c ->
                         onComplete(c)
-                        onState(state.where(state.filters.copy(q = c.term)))
+                        apply(state.where(state.filters.copy(q = c.term)))
                     },
                     onPick = { onSearch() },
                 )
@@ -67,7 +81,7 @@ fun LibraryPage(
                             .forEach { (slug, label) ->
                                 Button(attrs = {
                                     if (state.filters.owner == slug) classes("on")
-                                    onClick { onState(state.where(state.filters.copy(owner = slug))) }
+                                    onClick { apply(state.where(state.filters.copy(owner = slug))) }
                                 }) { Text(label) }
                             }
                     }
@@ -87,24 +101,13 @@ fun LibraryPage(
                     Button(attrs = {
                         classes("btn", "sm", "ghost")
                         onClick { onExport() }
-                    }) { Text("Export decklist") }
+                    }) { Text("Export") }
                 }
-                Div(attrs = { classes("flex-wrap") }) {
-                    listOf(Sort.PRICE, Sort.NAME, Sort.CMC, Sort.QTY).forEach { sort ->
-                        val on = state.filters.sort == sort
-                        Button(attrs = {
-                            classes("btn", "sm", "ghost")
-                            if (on) classes("on")
-                            onClick { onState(state.sortBy(sort)); onSearch() }
-                        }) {
-                            Text(sort.label + if (on) (if (state.filters.descending) " ↓" else " ↑") else "")
-                        }
-                    }
-                }
+                SortPicker(state, ::apply)
             }
         }
 
-        if (showFilters) FilterPanel(state.filters, facets) { onState(state.where(it)) }
+        if (showFilters) FilterPanel(state.filters, facets) { apply(state.where(it)) }
 
         when {
             state.busy -> Div(attrs = { classes("empty") }) { Text("Searching…") }
@@ -115,9 +118,46 @@ fun LibraryPage(
                     Text("${state.showing.first}–${state.showing.last} of ${state.total}")
                 }
                 Div(attrs = { classes("grid") }) { state.rows.forEach { Tile(it, onOpen) } }
-                Pager(state) { onState(it); onSearch() }
+                Pager(state, ::apply)
             }
         }
+    }
+}
+
+/**
+ * Sort as a dropdown rather than a row of buttons.
+ *
+ * Fourteen sorts do not fit across a phone, and four of them chosen
+ * arbitrarily is a worse answer than all of them behind one control.
+ * The arrow beside it flips the direction, which is the other half of
+ * the question.
+ */
+@Composable
+private fun SortPicker(state: Library, apply: (Library) -> Unit) {
+    // Its own row. Floated to the right of the buttons it wrapped
+    // onto a second line anyway and left the arrow stranded.
+    Div(attrs = { classes("flex-wrap") }) {
+        Span(attrs = { classes("muted", "small") }) { Text("Sort") }
+        Select(attrs = {
+            classes("field", "sort")
+            // `.field` is full width, which pushed the direction
+            // arrow onto a line of its own.
+            style { property("width", "auto") }
+            onChange { e ->
+                Sort.of(e.value ?: "").let { apply(state.sortedBy(it)) }
+            }
+        }) {
+            Sort.entries.forEach { sort ->
+                Option(sort.slug, attrs = {
+                    if (state.filters.sort == sort) attr("selected", "")
+                }) { Text(sort.label) }
+            }
+        }
+        Button(attrs = {
+            classes("btn", "sm", "ghost")
+            attr("title", if (state.filters.descending) "Largest first" else "Smallest first")
+            onClick { apply(state.where(state.filters.copy(descending = !state.filters.descending))) }
+        }) { Text(if (state.filters.descending) "↓" else "↑") }
     }
 }
 

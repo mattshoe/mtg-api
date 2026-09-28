@@ -59,8 +59,12 @@ class FilterPanelTest {
         decks = listOf(org.mattshoe.mtg.core.DeckRef2("alela", "Alela", "matt")),
     )
 
-    /** Mounts the panel wired to real state, the way the page wires it. */
-    private fun mount(start: Filters = Filters()): Panel {
+    /**
+     * Mounts the panel wired to real state, the way the page wires it,
+     * and opens the group under test — everything is folded away to
+     * start, so that is the first thing a person does too.
+     */
+    private fun mount(start: Filters = Filters(), open: String? = null): Panel {
         val root = document.createElement("div") as HTMLElement
         document.body!!.appendChild(root)
         roots += root
@@ -69,7 +73,9 @@ class FilterPanelTest {
             var f by remember { mutableStateOf(start) }
             FilterPanel(f, facets) { f = it; held = it }
         }
-        return Panel(root) { held }
+        val panel = Panel(root) { held }
+        open?.let { panel.fold(it) }
+        return panel
     }
 
     private class Panel(val root: HTMLElement, val filters: () -> Filters) {
@@ -120,7 +126,7 @@ class FilterPanelTest {
 
     @Test
     fun coloursAccumulateRatherThanReplacingEachOther() = runTest {
-        val p = mount()
+        val p = mount(open = "colour")
         settle()
         p.pip("W").click(); settle()
         p.pip("U").click(); settle()
@@ -130,7 +136,7 @@ class FilterPanelTest {
 
     @Test
     fun clickingAColourTwiceTakesItBackOff() = runTest {
-        val p = mount()
+        val p = mount(open = "colour")
         settle()
         p.pip("G").click(); settle()
         p.pip("G").click(); settle()
@@ -139,7 +145,7 @@ class FilterPanelTest {
 
     @Test
     fun aChosenColourIsMarkedSoTheStylesheetCanPaintIt() = runTest {
-        val p = mount()
+        val p = mount(open = "colour")
         settle()
         p.pip("R").click(); settle()
         // `.pip[data-c=R].on` is what turns it red. Without the
@@ -162,7 +168,7 @@ class FilterPanelTest {
         style.textContent = ".pip[data-c=W].on { background-color: rgb(1, 2, 3); }"
         document.head!!.appendChild(style)
 
-        val p = mount()
+        val p = mount(open = "colour")
         settle()
         p.pip("W").click()
         settle()
@@ -176,7 +182,7 @@ class FilterPanelTest {
 
     @Test
     fun colourlessIsItsOwnPipAndNotASixthColour() = runTest {
-        val p = mount()
+        val p = mount(open = "colour")
         settle()
         p.pip("C").click(); settle()
         assertEquals(listOf("C"), p.filters().colors)
@@ -184,7 +190,7 @@ class FilterPanelTest {
 
     @Test
     fun allFourModesAreOfferedAndStick() = runTest {
-        val p = mount()
+        val p = mount(open = "colour")
         settle()
         ColorMode.entries.forEach { mode ->
             p.button(mode.label).click(); settle()
@@ -194,7 +200,7 @@ class FilterPanelTest {
 
     @Test
     fun theShortcutsSetWholeSelections() = runTest {
-        val p = mount()
+        val p = mount(open = "colour")
         settle()
         p.button("all five").click(); settle()
         assertEquals(listOf("W", "U", "B", "R", "G"), p.filters().colors)
@@ -207,7 +213,7 @@ class FilterPanelTest {
 
     @Test
     fun producesIsItsOwnSetOfPips() = runTest {
-        val p = mount()
+        val p = mount(open = "colour")
         settle()
         val pips = p.root.querySelectorAll("button.pip[data-c=G]")
         assertEquals(2, pips.length, "colours and produces each get a row")
@@ -220,28 +226,33 @@ class FilterPanelTest {
     // --------------------------------------------------------- the folds
 
     @Test
+    fun everythingIsFoldedAwayToStart() = runTest {
+        val p = mount()
+        settle()
+        org.mattshoe.mtg.core.Facet.entries.forEach {
+            assertFalse(p.open(it.id), "${it.title} should start closed")
+        }
+    }
+
+    @Test
     fun eachGroupFoldsOnItsOwn() = runTest {
         val p = mount()
         settle()
-        // Collection and Colour start open; the rest do not.
-        assertTrue(p.open("collection"))
-        assertTrue(p.open("colour"))
-        assertFalse(p.open("mana"))
-
+        p.fold("colour"); settle()
         p.fold("mana"); settle()
         assertTrue(p.open("mana"), "opening one group")
         assertTrue(p.open("colour"), "and it must not close another")
 
         p.fold("colour"); settle()
         assertFalse(p.open("colour"))
-        assertTrue(p.open("mana"))
+        assertTrue(p.open("mana"), "closing one must not close another")
     }
 
     @Test
     fun aClosedGroupDoesNotRenderItsControls() = runTest {
         val p = mount()
         settle()
-        assertFalse(p.has("Reset everything").not(), "sanity: the panel rendered")
+        assertTrue(p.has("Reset everything"), "sanity: the panel rendered")
         assertFalse(p.text().contains("Mana cost contains"))
         p.fold("mana"); settle()
         assertTrue(p.text().contains("Mana cost contains"))
@@ -268,7 +279,7 @@ class FilterPanelTest {
 
     @Test
     fun theCollectionGroupWritesItsFields() = runTest {
-        val p = mount()
+        val p = mount(open = "collection")
         settle()
         p.button("Kayla").click(); settle()
         assertEquals("kayla", p.filters().owner)
@@ -282,12 +293,8 @@ class FilterPanelTest {
 
     @Test
     fun theRangesWriteBothEnds() = runTest {
-        val p = mount()
+        val p = mount(open = "mana")
         settle()
-        p.fold("mana"); settle()
-        val mins = p.root.querySelectorAll("input[placeholder=min]")
-        val maxes = p.root.querySelectorAll("input[placeholder=max]")
-        assertTrue(mins.length >= 4, "collection and mana both have ranges")
         // The mana value range is the first one inside the mana group.
         val group = p.group("mana")
         (group.querySelector("input[placeholder=min]") as HTMLInputElement).let {
@@ -302,7 +309,6 @@ class FilterPanelTest {
         }
         settle()
         assertEquals("6", p.filters().cmcMax)
-        assertTrue(maxes.length >= 4)
     }
 
     @Test
@@ -394,5 +400,109 @@ class FilterPanelTest {
         // it costs nothing and is tested, but there is no box.
         assertFalse(p.text().contains("Query language"))
         assertEquals(0, p.root.querySelectorAll("input.qbox").length)
+    }
+}
+
+/**
+ * The panel wired to the page, which is where it was broken.
+ *
+ * The panel itself was fine — every control wrote its field, and the
+ * SQL those fields produce is checked in the core and against the real
+ * collection. What was missing is the step after: nothing re-ran the
+ * search, so choosing a colour changed the state and left the same
+ * hundred cards on screen. Indistinguishable from a filter that does
+ * nothing.
+ */
+class FilterApplyTest {
+
+    private val roots = mutableListOf<HTMLElement>()
+
+    @AfterTest
+    fun cleanUp() {
+        roots.forEach { it.remove() }
+        roots.clear()
+    }
+
+    private suspend fun settle() = repeat(3) {
+        Promise<Unit> { resolve, _ -> kotlinx.browser.window.requestAnimationFrame { resolve(Unit) } }.await()
+    }
+
+    private class Page(val root: HTMLElement) {
+        var library = org.mattshoe.mtg.core.Library()
+        var searches = 0
+
+        fun buttons() = root.querySelectorAll("button")
+            .let { n -> (0 until n.length).mapNotNull { n[it] as? HTMLButtonElement } }
+
+        fun button(label: String) = buttons().first { it.textContent?.trim() == label }
+        fun pip(c: String) = root.querySelector("button.pip[data-c=$c]") as HTMLButtonElement
+
+        /** What the app would actually ask the database for. */
+        fun query() = org.mattshoe.mtg.core.buildQuery(library.filters)
+    }
+
+    private fun mount(open: String? = null): Page {
+        val root = document.createElement("div") as HTMLElement
+        document.body!!.appendChild(root)
+        roots += root
+        val page = Page(root)
+        renderComposable(root = root) {
+            var lib by remember { mutableStateOf(org.mattshoe.mtg.core.Library()) }
+            LibraryPage(
+                state = lib,
+                onState = { lib = it; page.library = it },
+                onSearch = { page.searches++ },
+                onOpen = {},
+                showFilters = true,
+            )
+        }
+        open?.let {
+            (root.querySelector("details[data-facet=$it] summary") as HTMLElement).click()
+        }
+        return page
+    }
+
+    @Test
+    fun choosingAColourReachesTheQuery() = runTest {
+        val p = mount(open = "colour")
+        settle()
+        p.pip("W").click(); settle()
+        p.pip("U").click(); settle()
+        val sql = p.query()
+        assertTrue(sql.sql.contains("color_identity"), sql.sql)
+        // At most, the default, excludes the three not chosen.
+        assertEquals(listOf("%B%", "%R%", "%G%"), sql.params)
+    }
+
+    @Test
+    fun andSomethingHasToGoAndFetchIt() = runTest {
+        val p = mount(open = "colour")
+        settle()
+        p.pip("W").click(); settle()
+        // This is the whole bug: the filter was applied to the state
+        // and nobody asked the database again.
+        assertTrue(p.searches > 0, "choosing a colour did not re-run the search")
+    }
+
+    @Test
+    fun soDoesEveryOtherToggle() = runTest {
+        val p = mount()
+        settle()
+        val before = p.searches
+        p.button("Matt").click(); settle()
+        assertTrue(p.searches > before, "choosing an owner did not re-run the search")
+    }
+
+    @Test
+    fun andChangingTheSortDoesNotRunItTwice() = runTest {
+        val p = mount()
+        settle()
+        val before = p.searches
+        p.root.querySelector("select.sort")?.let {
+            (it as HTMLSelectElement).value = "name"
+            it.dispatchEvent(Event("change", js("({bubbles: true})")))
+        }
+        settle()
+        assertEquals(before + 1, p.searches, "a sort change asked the database twice")
     }
 }

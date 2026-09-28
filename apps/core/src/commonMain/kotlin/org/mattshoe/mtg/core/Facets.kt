@@ -168,9 +168,6 @@ enum class Facet(val id: String, val title: String) {
     }
 
     companion object {
-        /** Open on a first visit: the two people actually use. */
-        val OPEN_BY_DEFAULT = setOf(COLLECTION, COLOUR)
-
         /** Any group holding a filter opens, so an arriving link shows its work. */
         fun inUse(f: Filters): Set<Facet> = entries.filter { it.countIn(f) > 0 }.toSet()
     }

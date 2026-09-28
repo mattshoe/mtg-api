@@ -76,6 +76,13 @@ object MtgApp {
     private var app by mutableStateOf(AppState())
 
     private var listening = false
+    /**
+     * Long enough to finish a word, short enough that a toggle feels
+     * immediate. Every filter change asks for a search and a text
+     * field changes on every keystroke.
+     */
+    private val searchDebounceMs = 250L
+    private var searchJob: Job? = null
     private var lookupJob: Job? = null
     private var findJob: Job? = null
 
@@ -116,7 +123,7 @@ object MtgApp {
                         app.copy(admin = app.admin.unlock(t)).say("Admin mode on")
                     }
                 },
-                onSearch = { work { search(app) } },
+                onSearch = { searchSoon() },
                 onOpenDeck = { slug -> work { openDeck(app, slug) } },
                 onRunSql = { work { runSql(app) } },
                 onPreviewEntry = {
@@ -247,10 +254,25 @@ object MtgApp {
 
     private fun loadFor(s: AppState) {
         when (s.view) {
-            View.LIBRARY -> work { search(s) }
+            View.LIBRARY -> searchSoon()
             View.DECKS -> work { if (s.route.rest.isEmpty()) loadDecks(s) else openDeck(s, s.route.rest) }
             View.STATS -> work { loadStats(s) }
             else -> Unit
+        }
+    }
+
+    /** The only path to a search, so a burst of changes is one read. */
+    private fun searchSoon() {
+        searchJob?.cancel()
+        searchJob = scope.launch {
+            delay(searchDebounceMs)
+            app = try {
+                search(app)
+            } catch (e: ApiFailure) {
+                app.copy(library = app.library.failed(e.message ?: "something went wrong"))
+            } catch (e: Exception) {
+                app.copy(library = app.library.failed(e.message ?: e.toString()))
+            }
         }
     }
 

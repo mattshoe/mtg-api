@@ -174,7 +174,10 @@ class ScreensTest {
         org.mattshoe.mtg.core.Facet.entries.forEach { facet ->
             assertTrue(root.text().contains(facet.title), "${facet.title} is missing from the panel")
         }
-        // The four colour modes are the whole point of it for Commander.
+        // The four colour modes are the whole point of it for
+        // Commander, and they live inside the group once it is open.
+        (root.querySelector("details[data-facet=colour] summary") as HTMLElement).click()
+        settle()
         listOf("Exactly", "At most", "At least", "Any of").forEach {
             assertTrue(root.buttons().any { b -> b.textContent?.contains(it) == true }, it)
         }
@@ -204,7 +207,7 @@ class ScreensTest {
             )
         }
         settle()
-        root.button("Export decklist").click()
+        root.button("Export").click()
         settle()
         assertTrue(exported)
     }

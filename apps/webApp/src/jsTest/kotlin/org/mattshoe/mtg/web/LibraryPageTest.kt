@@ -117,22 +117,39 @@ class LibraryPageTest {
     }
 
     @Test
-    fun theActiveSortIsMarkedWithItsDirection() = runTest {
+    fun theSortIsADropdownOfEverySortWithTheCurrentOneChosen() = runTest {
+        // Fourteen sorts do not fit across a phone as buttons, and
+        // four of them picked arbitrarily is a worse answer.
         val root = mount(Library().loaded(listOf(card("A")), 1))
         settle()
-        // Price descending is the default, so it is the marked one.
-        assertTrue(root.buttons().any { it.textContent?.trim() == "Price ↓" }, root.textContent!!)
-        assertTrue(root.buttons().any { it.textContent?.trim() == "Name" })
+        val select = root.querySelector("select.sort") as org.w3c.dom.HTMLSelectElement
+        assertEquals(Sort.entries.size, select.options.length)
+        assertEquals("price", select.value, "price descending is the default")
+        // And the arrow beside it is the direction.
+        assertTrue(root.buttons().any { it.textContent?.trim() == "↓" }, root.textContent!!)
     }
 
     @Test
-    fun clickingASortAsksForItThroughTheSharedState() = runTest {
+    fun pickingASortAsksForItThroughTheSharedState() = runTest {
         val root = mount(Library().loaded(listOf(card("A")), 1))
         settle()
-        root.button("Name").click()
+        val select = root.querySelector("select.sort") as org.w3c.dom.HTMLSelectElement
+        select.value = "name"
+        select.dispatchEvent(org.w3c.dom.events.Event("change", js("({bubbles: true})")))
         settle()
         assertEquals(Sort.NAME, last?.filters?.sort)
-        assertTrue(last!!.filters.descending, "a new column starts descending")
+        // Picking a column from a list must not silently reverse it.
+        assertTrue(last!!.filters.descending)
+    }
+
+    @Test
+    fun theArrowFlipsTheDirectionWithoutChangingTheColumn() = runTest {
+        val root = mount(Library().loaded(listOf(card("A")), 1))
+        settle()
+        root.button("↓").click()
+        settle()
+        assertEquals(Sort.PRICE, last?.filters?.sort)
+        assertFalse(last!!.filters.descending)
     }
 
     @Test
