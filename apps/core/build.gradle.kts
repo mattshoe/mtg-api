@@ -4,7 +4,12 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
-// Everything that is not a pixel.
+// Everything that is not a pixel and not a socket.
+//
+// No Ktor here on purpose. The shipping app wants the decklist rules and
+// nothing else, and it has no dependencies today — dragging an HTTP
+// stack in behind a line-counting function would be a poor trade. The
+// network lives in :core-net.
 //
 // The models, the API client, the decklist parsing and — the part that
 // actually stops the platforms drifting — the wizard's state machine. Two
@@ -30,20 +35,11 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
-            implementation("io.ktor:ktor-client-core:3.0.3")
-            implementation("io.ktor:ktor-client-content-negotiation:3.0.3")
-            implementation("io.ktor:ktor-serialization-kotlinx-json:3.0.3")
-            implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+            api("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
-            implementation("io.ktor:ktor-client-mock:3.0.3")
-            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
         }
-        androidMain.dependencies { implementation("io.ktor:ktor-client-okhttp:3.0.3") }
-        jvmMain.dependencies { implementation("io.ktor:ktor-client-okhttp:3.0.3") }
-        jsMain.dependencies { implementation("io.ktor:ktor-client-js:3.0.3") }
-        iosMain.dependencies { implementation("io.ktor:ktor-client-darwin:3.0.3") }
     }
 }
 

@@ -31,6 +31,7 @@ android {
 
 dependencies {
     implementation(project(":core"))
+    implementation(project(":core-net"))
     implementation(compose.runtime)
     implementation(compose.foundation)
     implementation(compose.material3)

@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.OpenableColumns
+import org.mattshoe.mtg.core.DeckList
 
 /**
  * Pulling a card list out of whatever Android hands over.
@@ -94,34 +95,14 @@ object SharedList {
         return Result(list, sources, problem)
     }
 
-    /** How many cards a list represents, however it is shaped. */
-    fun countCards(text: String): Int {
-        if (text.isBlank()) return 0
-        if (looksLikeCsv(text)) return text.lines().count { it.isNotBlank() } - 1
-        return text.lines().count {
-            val t = it.trim()
-            t.isNotEmpty() && !t.startsWith("#") && !t.startsWith("//")
-        }
-    }
+    // The rules themselves live in :core, shared with the web build and
+    // with the multiplatform app. These stay as the names this file's
+    // callers already use.
+    fun countCards(text: String) = DeckList.countCards(text)
 
-    fun looksLikeCsv(text: String): Boolean {
-        val first = text.lineSequence().firstOrNull { it.isNotBlank() } ?: return false
-        if (!first.contains(',')) return false
-        val cols = first.lowercase().replace("\"", "").split(",").map { it.filter(Char::isLetter) }
-        return cols.contains("name") || cols.contains("cardname")
-    }
+    fun looksLikeCsv(text: String) = DeckList.looksLikeCsv(text)
 
-    /**
-     * Bytes that are not UTF-8 decode to replacement characters, so a few
-     * is a file with an odd character in it and a great many is a JPEG. A
-     * NUL settles it alone — no text file has one.
-     */
-    fun looksTextual(s: String): Boolean {
-        if (s.isEmpty()) return false
-        if (s.contains('\u0000')) return false
-        val head = s.take(4096)
-        return head.count { it == '\uFFFD' }.toDouble() / head.length < 0.02
-    }
+    fun looksTextual(s: String) = DeckList.looksTextual(s)
 
     private fun String.isHttpLink() = Regex("^https?://\\S+$", RegexOption.IGNORE_CASE).matches(this)
 

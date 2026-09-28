@@ -30,6 +30,7 @@ kotlin {
         }
         jsMain.dependencies {
             implementation(project(":core"))
+            implementation(project(":core-net"))
             implementation(compose.runtime)
             implementation(compose.html.core)
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")

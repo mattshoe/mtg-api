@@ -59,9 +59,16 @@ android {
     }
 
     // The instrumentation tests use the framework's own runner and
-    // assertions, so the app has no third-party dependencies at all —
+    // assertions, so the app carries no third-party dependencies —
     // nothing to resolve, nothing to go stale, nothing to break a build at
     // two in the morning.
     useLibrary("android.test.runner")
     useLibrary("android.test.base")
+}
+
+dependencies {
+    // The decklist rules, shared with the web and with the multiplatform
+    // build, rather than a third private copy of them. :core deliberately
+    // has no HTTP stack in it, so this stays a small app.
+    implementation(project(":core"))
 }
