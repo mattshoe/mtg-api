@@ -1,0 +1,315 @@
+package org.mattshoe.mtg.android
+
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.Typography
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import org.mattshoe.mtg.core.Design
+
+/**
+ * The website's look, on Android.
+ *
+ * Every colour and radius comes from `Design` in the shared core, which
+ * is the same set of numbers `app.css` declares — `DesignTest` fails if
+ * the two ever disagree. Material 3's own palette is replaced wholesale
+ * rather than tinted: the default purple is nothing like the site, and
+ * "looks broadly similar" is how two apps end up feeling like two apps.
+ *
+ * The composables below are the stylesheet's vocabulary — panel, pill,
+ * seg, ghost, tag — so a screen reads the same here as the web one does
+ * and neither invents its own spacing.
+ */
+
+fun c(argb: Long) = Color(argb)
+
+/**
+ * A button that is text with a background.
+ *
+ * Material's own buttons cannot be made to look like the site without
+ * fighting every default, so these are drawn directly — but they still
+ * have to announce themselves as buttons, and say when they are off, or
+ * a screen reader and every UI test would see decoration.
+ */
+private fun Modifier.pressable(enabled: Boolean, onClick: () -> Unit) = this
+    .semantics { role = Role.Button; if (!enabled) disabled() }
+    .clickable(enabled = enabled, onClick = onClick)
+
+val Bg = c(Design.BG)
+val Bg2 = c(Design.BG_2)
+val Bg3 = c(Design.BG_3)
+val Line = c(Design.LINE)
+val Line2 = c(Design.LINE_2)
+val Ink = c(Design.TEXT)
+val Ink2 = c(Design.TEXT_2)
+val Ink3 = c(Design.TEXT_3)
+val Accent = c(Design.ACCENT)
+val Accent2 = c(Design.ACCENT_2)
+val AccentDim = c(Design.ACCENT_DIM)
+val Ok = c(Design.OK)
+val Warn = c(Design.WARN)
+val Bad = c(Design.BAD)
+val Info = c(Design.INFO)
+
+val Radius = RoundedCornerShape(Design.RADIUS.dp)
+val RadiusSm = RoundedCornerShape(Design.RADIUS_SM.dp)
+val Pill = RoundedCornerShape(Design.RADIUS_PILL.dp)
+
+private val scheme = darkColorScheme(
+    primary = Accent,
+    onPrimary = c(Design.ON_ACCENT),
+    primaryContainer = AccentDim,
+    onPrimaryContainer = Accent2,
+    secondary = Ink2,
+    onSecondary = Bg,
+    background = Bg,
+    onBackground = Ink,
+    surface = Bg2,
+    onSurface = Ink,
+    surfaceVariant = Bg3,
+    onSurfaceVariant = Ink2,
+    outline = Line2,
+    outlineVariant = Line,
+    error = Bad,
+    onError = Bg,
+)
+
+// 14px/1.5 system sans, the same as the body rule.
+private val type = Typography().run {
+    copy(
+        bodyLarge = bodyLarge.copy(fontSize = Design.BODY.sp, lineHeight = 21.sp),
+        bodyMedium = bodyMedium.copy(fontSize = Design.SMALL.sp, lineHeight = 19.sp),
+        bodySmall = bodySmall.copy(fontSize = Design.MINI.sp, lineHeight = 17.sp),
+        titleLarge = titleLarge.copy(fontSize = Design.H1.sp, fontWeight = FontWeight.SemiBold),
+        titleMedium = titleMedium.copy(fontSize = Design.H2.sp, fontWeight = FontWeight.SemiBold),
+        titleSmall = titleSmall.copy(fontSize = Design.H3.sp, fontWeight = FontWeight.SemiBold),
+    )
+}
+
+@Composable
+fun MtgTheme(content: @Composable () -> Unit) {
+    MaterialTheme(colorScheme = scheme, typography = type) {
+        androidx.compose.runtime.CompositionLocalProvider(
+            androidx.compose.material3.LocalContentColor provides Ink,
+        ) {
+            androidx.compose.material3.Surface(color = Bg, contentColor = Ink) { content() }
+        }
+    }
+}
+
+// ------------------------------------------------------------- pieces
+
+/** `h1`, and the page it names. */
+@Composable
+fun PageHead(title: String, trailing: @Composable (() -> Unit)? = null) {
+    Row(
+        Modifier.fillMaxWidth().padding(bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(title, fontSize = Design.H1.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+        trailing?.invoke()
+    }
+}
+
+/** `.panel`: a bordered surface a shade above the page. */
+@Composable
+fun Panel(
+    modifier: Modifier = Modifier,
+    head: String? = null,
+    note: String? = null,
+    content: @Composable () -> Unit,
+) {
+    Column(
+        modifier.fillMaxWidth()
+            .background(Bg2, Radius)
+            .border(1.dp, Line, Radius)
+            .padding(Design.PANEL_PAD.dp),
+        verticalArrangement = Arrangement.spacedBy(Design.GAP.dp),
+    ) {
+        head?.let { Text(it, fontSize = Design.H2.sp, fontWeight = FontWeight.SemiBold, color = Ink) }
+        note?.let { Text(it, fontSize = Design.SMALL.sp, color = Ink3) }
+        content()
+    }
+}
+
+/** `.app-tab`: a nav pill, gold while it is the current view. */
+@Composable
+fun NavPill(label: String, on: Boolean, onClick: () -> Unit) {
+    Text(
+        label,
+        Modifier
+            .background(if (on) AccentDim else Bg2, Pill)
+            .border(1.dp, if (on) Accent else Line2, Pill)
+            .pressable(true, onClick)
+            .padding(horizontal = 13.dp, vertical = 7.dp),
+        color = if (on) Accent2 else Ink2,
+        fontSize = Design.SMALL.sp,
+        fontWeight = FontWeight.Medium,
+    )
+}
+
+/** `.seg`: one row, one choice, hairlines between. */
+@Composable
+fun Seg(options: List<Pair<String, String>>, selected: String?, onPick: (String) -> Unit) {
+    Row(
+        Modifier.background(Bg, RadiusSm).border(1.dp, Line2, RadiusSm),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        options.forEachIndexed { i, (value, label) ->
+            val on = selected == value
+            if (i > 0) {
+                Column(Modifier.background(Line2).padding(horizontal = 0.5.dp)) {
+                    Text("", fontSize = Design.MINI.sp)
+                }
+            }
+            Text(
+                label,
+                Modifier
+                    .background(if (on) AccentDim else Color.Transparent)
+                    .pressable(true) { onPick(value) }
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                color = if (on) Accent2 else Ink2,
+                fontSize = 12.5.sp,
+                fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
+            )
+        }
+    }
+}
+
+/** `.btn.primary`: gold, dark text. */
+@Composable
+fun Primary(label: String, enabled: Boolean = true, onClick: () -> Unit) {
+    Text(
+        label,
+        Modifier
+            .background(if (enabled) Accent else Bg3, RadiusSm)
+            .pressable(enabled, onClick)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        color = if (enabled) c(Design.ON_ACCENT) else Ink3,
+        fontSize = 13.5.sp,
+        fontWeight = FontWeight.SemiBold,
+    )
+}
+
+/** `.btn`: bordered, a shade above the page. */
+@Composable
+fun Btn(label: String, enabled: Boolean = true, danger: Boolean = false, onClick: () -> Unit) {
+    Text(
+        label,
+        Modifier
+            .background(Bg3, RadiusSm)
+            .border(1.dp, if (danger) Bad.copy(alpha = 0.6f) else Line2, RadiusSm)
+            .pressable(enabled, onClick)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        color = if (!enabled) Ink3 else if (danger) Bad else Ink,
+        fontSize = 13.5.sp,
+        fontWeight = FontWeight.Medium,
+    )
+}
+
+/** `.btn.sm.ghost`, and `.on` when it is in force. */
+@Composable
+fun Ghost(label: String, on: Boolean = false, enabled: Boolean = true, onClick: () -> Unit) {
+    Text(
+        label,
+        Modifier
+            .background(if (on) AccentDim else Color.Transparent, RadiusSm)
+            .border(1.dp, if (on) Accent else Color.Transparent, RadiusSm)
+            .pressable(enabled, onClick)
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+        color = if (on) Accent2 else if (enabled) Ink2 else Ink3,
+        fontSize = 12.5.sp,
+        fontWeight = FontWeight.Medium,
+    )
+}
+
+/** `.tag`: a small stated fact, not a control. */
+@Composable
+fun Tag(label: String, tone: Color = Ink2) {
+    Text(
+        label,
+        Modifier
+            .background(Bg3, RadiusSm)
+            .border(1.dp, tone.copy(alpha = 0.4f), RadiusSm)
+            .padding(horizontal = 7.dp, vertical = 2.dp),
+        color = tone,
+        fontSize = Design.TINY.sp,
+    )
+}
+
+/** `.muted.small`, which is most of the prose on the site. */
+@Composable
+fun Muted(text: String, modifier: Modifier = Modifier, size: Int = Design.SMALL) {
+    Text(text, modifier, color = Ink3, fontSize = size.sp)
+}
+
+/** `.field`, and it has to look like the web's inputs, not Material's. */
+@Composable
+fun Field(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    modifier: Modifier = Modifier,
+    singleLine: Boolean = true,
+    mono: Boolean = false,
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = modifier.fillMaxWidth(),
+        singleLine = singleLine,
+        shape = RadiusSm,
+        textStyle = LocalTextStyle.current.copy(
+            fontSize = Design.BODY.sp,
+            fontFamily = if (mono) androidx.compose.ui.text.font.FontFamily.Monospace else null,
+        ),
+        placeholder = { Text(placeholder, color = Ink3, fontSize = Design.BODY.sp) },
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedContainerColor = Bg,
+            unfocusedContainerColor = Bg,
+            focusedBorderColor = Accent,
+            unfocusedBorderColor = Line2,
+            focusedTextColor = Ink,
+            unfocusedTextColor = Ink,
+            cursorColor = Accent,
+        ),
+    )
+}
+
+/** The card frame's own corner, so the art does not square off. */
+val cardColors
+    @Composable get() = CardDefaults.cardColors(containerColor = Bg2, contentColor = Ink)
+
+val panelBorder = BorderStroke(1.dp, Line)
+
+/** The text style tables use. */
+val monoSmall = TextStyle(
+    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+    fontSize = 12.5.sp,
+)

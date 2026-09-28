@@ -1,5 +1,8 @@
 package org.mattshoe.mtg.android
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,8 +14,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -66,7 +67,7 @@ fun MassEntryScreen(
         Stepper(state) { onState(state.goTo(it)) }
 
         when {
-            state.busy != null -> Card { Text(state.busy!!, Modifier.padding(16.dp)) }
+            state.busy != null -> Panel { Line(state.busy!!) }
             state.step == Step.WHICH -> Which(state, onState)
             state.step == Step.LIST -> {
                 ListStep(state, onState, onPickFile)
@@ -100,7 +101,7 @@ private fun Stepper(s: MassEntry, go: (Step) -> Unit) {
 
 @Composable
 private fun Which(s: MassEntry, onState: (MassEntry) -> Unit) {
-    Panel("Adding or removing?", if (s.cardCount > 0) "${s.cardCount} cards already in the box" else null) {
+    Panel(head = "Adding or removing?", note = if (s.cardCount > 0) "${s.cardCount} cards already in the box" else null) {
         Choice("Add to the collection", s.direction == Direction.ADD) { onState(s.choose(Direction.ADD)) }
         Choice("Remove from the collection", s.direction == Direction.REMOVE) { onState(s.choose(Direction.REMOVE)) }
         Spacer(Modifier.height(8.dp))
@@ -116,7 +117,7 @@ private fun Which(s: MassEntry, onState: (MassEntry) -> Unit) {
 private fun ListStep(s: MassEntry, onState: (MassEntry) -> Unit, onPickFile: () -> Unit) {
     val kind = if (s.isCsv) " · CSV" else ""
     val over = if (s.overLimit) " — over the ${MassEntry.MAX_CARDS} limit" else ""
-    Panel(s.direction!!.question, "${s.cardCount} cards$kind$over") {
+    Panel(head = s.direction!!.question, note = "${s.cardCount} cards$kind$over") {
         OutlinedTextField(
             value = s.list,
             onValueChange = { onState(s.type(it)) },
@@ -137,7 +138,7 @@ private fun ListStep(s: MassEntry, onState: (MassEntry) -> Unit, onPickFile: () 
 
 @Composable
 private fun Who(s: MassEntry, onState: (MassEntry) -> Unit, preview: () -> Unit) {
-    Panel("Whose collection?", "${s.cardCount} cards on the list") {
+    Panel(head = "Whose collection?", note = "${s.cardCount} cards on the list") {
         Owner.entries.forEach { o -> Choice(o.label, s.owner == o) { onState(s.assign(o)) } }
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -155,7 +156,7 @@ private fun Who(s: MassEntry, onState: (MassEntry) -> Unit, preview: () -> Unit)
 @Composable
 private fun Review(s: MassEntry, onState: (MassEntry) -> Unit, apply: () -> Unit) {
     val p = s.preview
-    Panel("Preview — nothing written yet", s.owner?.slug) {
+    Panel(head = "Preview — nothing written yet", note = s.owner?.slug) {
         if (p == null) {
             Text("No preview yet.")
         } else {
@@ -193,7 +194,7 @@ private fun Review(s: MassEntry, onState: (MassEntry) -> Unit, apply: () -> Unit
 @Composable
 private fun Done(s: MassEntry, again: () -> Unit) {
     val r = s.result!!
-    Panel(if (r.applied) "Applied" else "Nothing applied", null) {
+    Panel(head = if (r.applied) "Applied" else "Nothing applied") {
         Text("${r.resolved} resolved, ${r.failed} failed, ${r.changes.size} printings")
         if (r.errors.isNotEmpty()) Text(r.errors.joinToString("\n"), fontSize = 13.sp)
         Spacer(Modifier.height(8.dp))
@@ -203,30 +204,23 @@ private fun Done(s: MassEntry, again: () -> Unit) {
 
 // -------------------------------------------------------------- pieces
 
-@Composable
-private fun Panel(title: String, note: String?, body: @Composable () -> Unit) {
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp)) {
-            Text(title, fontSize = 18.sp)
-            note?.let { Text(it, fontSize = 13.sp) }
-            Spacer(Modifier.height(12.dp))
-            body()
-        }
-    }
-}
-
+/**
+ * One big decision per screen, which is what the wizard is for. The
+ * same `.owner-opt` shape the web uses on these steps.
+ */
 @Composable
 private fun Choice(label: String, on: Boolean, click: () -> Unit) {
-    Button(
-        onClick = click,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
-        colors = if (on) ButtonDefaults.buttonColors() else ButtonDefaults.outlinedButtonColors(),
-    ) { Text(label) }
-}
-
-@Composable
-private fun Primary(label: String, enabled: Boolean, click: () -> Unit) {
-    Button(onClick = click, enabled = enabled) { Text(label) }
+    Line(
+        label,
+        color = if (on) Accent2 else Ink,
+        size = 15,
+        modifier = Modifier.fillMaxWidth()
+            .padding(vertical = 3.dp)
+            .background(if (on) AccentDim else Bg2, Radius)
+            .border(1.dp, if (on) Accent else Line2, Radius)
+            .clickable(onClick = click)
+            .padding(horizontal = 16.dp, vertical = 18.dp),
+    )
 }
 
 /** What was entered recently, and putting it back in the box. */
@@ -237,7 +231,7 @@ private fun HistoryPanel(
     onClear: () -> Unit,
 ) {
     if (history.isEmpty) return
-    Panel("Recent", "${history.entries.size} kept on this device") {
+    Panel(head = "Recent", note = "${history.entries.size} kept on this device") {
         history.recent.forEach { e ->
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(e.at.replace('T', ' ').take(16), fontSize = 12.sp)

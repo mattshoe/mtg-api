@@ -3,6 +3,7 @@ package org.mattshoe.mtg.android
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -10,16 +11,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.mattshoe.mtg.core.ConsoleState
+import org.mattshoe.mtg.core.Design
 import org.mattshoe.mtg.core.LogsState
 
 /** The query console, on Android. Sibling of `ConsolePage`. */
@@ -30,41 +30,55 @@ fun ConsoleScreen(
     onRun: () -> Unit,
     onCheatsheet: () -> Unit = {},
 ) {
-    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("Query", fontSize = 26.sp)
-        OutlinedTextField(
-            value = state.sql,
-            onValueChange = { onState(state.type(it)) },
-            modifier = Modifier.fillMaxWidth().height(180.dp),
-            placeholder = { Text("SELECT name, qty FROM cards LIMIT 10") },
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = onRun, enabled = state.canRun) {
-                Text(if (state.busy) "Running…" else "Run")
+    Column(
+        Modifier.fillMaxWidth().padding(Design.WRAP_PAD_NARROW.dp),
+        verticalArrangement = Arrangement.spacedBy(Design.GAP.dp),
+    ) {
+        PageHead("Query") { Ghost("Cheatsheet", onClick = onCheatsheet) }
+
+        Panel {
+            Field(
+                value = state.sql,
+                onValueChange = { onState(state.type(it)) },
+                placeholder = "SELECT name, qty FROM cards LIMIT 10",
+                modifier = Modifier.height(180.dp),
+                singleLine = false,
+                mono = true,
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(Design.GAP.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Primary(if (state.busy) "Running…" else "Run", enabled = state.canRun, onClick = onRun)
+                state.result?.let { Line("${it.rows.size} rows in ${state.took}ms", Ink3) }
             }
-            OutlinedButton(onClick = onCheatsheet) { Text("Cheatsheet", fontSize = 12.sp) }
-            state.result?.let { Text("${it.rows.size} rows in ${state.took}ms", fontSize = 13.sp) }
-        }
-        state.error?.let { Text(it, fontSize = 13.sp) }
-        state.result?.let { t ->
-            if (t.isEmpty) {
-                Text("No rows.", fontSize = 13.sp)
-            } else {
-                // Selectable and scrollable sideways, because a result is
-                // something you copy out of.
-                SelectionContainer {
-                    Column(
-                        Modifier.fillMaxWidth().height(380.dp)
-                            .verticalScroll(rememberScrollState())
-                            .horizontalScroll(rememberScrollState()),
-                    ) {
-                        Text(t.cols.joinToString("  |  "), fontFamily = FontFamily.Monospace, fontSize = 12.sp)
-                        t.rows.forEach { r ->
+            state.error?.let { Line(it, Bad) }
+            state.result?.let { t ->
+                if (t.isEmpty) {
+                    Line("No rows.", Ink3)
+                } else {
+                    // Selectable and scrollable sideways, because a
+                    // result is something you copy out of.
+                    SelectionContainer {
+                        Column(
+                            Modifier.fillMaxWidth().height(380.dp)
+                                .verticalScroll(rememberScrollState())
+                                .horizontalScroll(rememberScrollState()),
+                        ) {
                             Text(
-                                r.joinToString("  |  ") { it ?: "null" },
+                                t.cols.joinToString("  |  "),
+                                color = Ink2,
                                 fontFamily = FontFamily.Monospace,
                                 fontSize = 12.sp,
                             )
+                            t.rows.forEach { r ->
+                                Text(
+                                    r.joinToString("  |  ") { it ?: "null" },
+                                    color = Ink,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 12.sp,
+                                )
+                            }
                         }
                     }
                 }
@@ -77,24 +91,31 @@ fun ConsoleScreen(
 @Composable
 fun LogsScreen(state: LogsState, onState: (LogsState) -> Unit) {
     Column(
-        Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        Modifier.fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .padding(Design.WRAP_PAD_NARROW.dp),
+        verticalArrangement = Arrangement.spacedBy(Design.GAP.dp),
     ) {
-        Text("Server logs", fontSize = 26.sp)
-        OutlinedButton(onClick = { onState(state.toggleErrors()) }) {
-            Text("Errors only (${state.errorCount})", fontSize = 13.sp)
+        PageHead("Server logs")
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Ghost("Errors only (${state.errorCount})", on = state.onlyErrors) {
+                onState(state.toggleErrors())
+            }
         }
         when {
-            state.busy -> Text("Loading…")
-            state.error != null -> Text(state.error!!, fontSize = 13.sp)
-            state.shown.isEmpty() -> Text("Nothing logged.", fontSize = 13.sp)
-            else -> state.shown.forEach { l ->
-                Text(
-                    "${l.ts.substringAfter('T').take(8)}  ${l.level}  ${l.method ?: ""} ${l.path ?: ""}  " +
-                        "${l.status ?: ""}  ${l.ms ?: ""}ms",
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 12.sp,
-                )
+            state.busy -> Line("Loading…", Ink3)
+            state.error != null -> Line(state.error!!, Bad)
+            state.shown.isEmpty() -> Line("Nothing logged.", Ink3)
+            else -> Panel {
+                state.shown.forEach { l ->
+                    Text(
+                        "${l.ts.substringAfter('T').take(8)}  ${l.level}  ${l.method ?: ""} " +
+                            "${l.path ?: ""}  ${l.status ?: ""}  ${l.ms ?: ""}ms",
+                        color = if (l.failed) Bad else Ink2,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 12.sp,
+                    )
+                }
             }
         }
     }

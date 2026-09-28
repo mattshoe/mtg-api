@@ -170,7 +170,7 @@ class ScreensTest {
     @Test
     fun theQueryBoxIsOnTheScreen() {
         content { LibraryScreen(Library().loaded(listOf(card("Sol Ring")), 1), {}, {}, {}) }
-        rule.onNodeWithText("Query box — c<=wu t:creature mv<=3").assertExists()
+        rule.onNodeWithText("Query box — c<=wu t:creature mv<=3 -is:reprint").assertExists()
     }
 
     @Test
@@ -207,7 +207,11 @@ class ScreensTest {
         )
         content { DecksScreen(DecksState().loaded(listOf(deck)), {}, {}) }
         rule.onNodeWithText("Alela").assertExists()
-        rule.onNodeWithText("BGRUW · Alela, Artful Provocateur · Bracket 3").assertExists()
+        rule.onNodeWithText("Alela, Artful Provocateur").assertExists()
+        rule.onNodeWithText("bracket 3").assertExists()
+        // Five pips, one per colour — not one per letter of "Five-color
+        // (WUBRG)", which is what reading the column naively produced.
+        listOf("B", "G", "R", "U", "W").forEach { rule.onNodeWithText(it).assertExists() }
     }
 
     // ------------------------------------------------------------- card

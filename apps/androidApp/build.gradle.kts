@@ -18,8 +18,8 @@ android {
         applicationId = "org.mattshoe.mtg.share"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "2.0.0"
+        versionCode = 4
+        versionName = "2.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     // Kept outside the repo, in ~/.mtg-android.env, so the key and its

@@ -121,22 +121,15 @@ fun AppShell(
             // Only the views the lock allows. Gated ones are absent, not
             // greyed out — the same as the web.
             state.admin.visible.forEach { view ->
-                val on = state.view == view
-                if (on) {
-                    Button(onClick = {}) { Text(view.label, fontSize = 13.sp) }
-                } else {
-                    OutlinedButton(onClick = { onState(state.navigate(view)) }) {
-                        Text(view.label, fontSize = 13.sp)
-                    }
-                }
+                NavPill(view.label, state.view == view) { onState(state.navigate(view)) }
             }
-            OutlinedButton(onClick = {
+            Ghost(if (state.admin.unlocked) "Lock" else "Unlock") {
                 if (state.admin.unlocked) onState(state.copy(admin = state.admin.lock()).navigate(state.route))
                 else onState(state.opening(Overlay.UNLOCK))
-            }) { Text(if (state.admin.unlocked) "Lock" else "Unlock", fontSize = 13.sp) }
-            OutlinedButton(onClick = {
+            }
+            Ghost("Find") {
                 onState(state.opening(Overlay.PALETTE).copy(palette = state.palette.opened()))
-            }) { Text("Find", fontSize = 13.sp) }
+            }
         }
 
         when (state.view) {
@@ -191,7 +184,7 @@ fun AppShell(
             )
         }
 
-        state.toast?.let { Text(it, Modifier.padding(16.dp), fontSize = 13.sp) }
+        state.toast?.let { Muted(it, Modifier.padding(16.dp)) }
     }
 
     // ------------------------------------------------------- overlays
