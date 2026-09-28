@@ -95,7 +95,7 @@ object MtgApp {
         app = AppState(admin = Admin(token.ifBlank { null }), history = EntryHistory.load(store))
             // A search is a link: the filters travel in the hash, so a
             // URL somebody sent opens the search they were looking at.
-            .let { it.copy(library = it.library.where(FilterUrl.fromHash(opening.query))) }
+            .let { it.copy(library = it.library.restoredFrom(FilterUrl.fromHash(opening.query))) }
             .let { if (sharedList.isNullOrBlank()) it.navigate(opening) else it.withShare(sharedList) }
         listen()
         loadFor(app)
@@ -117,7 +117,7 @@ object MtgApp {
                     val was = app
                     app = next
                     if (next.view != was.view || next.route.rest != was.route.rest) {
-                        window.location.hash = next.route.toHash().removePrefix("#")
+                        window.location.hash = next.hash().removePrefix("#")
                         loadFor(next)
                     } else if (next.view == View.LIBRARY && next.library.filters != was.library.filters) {
                         // Replace rather than push: a filter changes on
@@ -199,7 +199,7 @@ object MtgApp {
                 val was = app
                 app = next
                 if (next.view != was.view) {
-                    window.location.hash = next.route.toHash().removePrefix("#")
+                    window.location.hash = next.hash().removePrefix("#")
                     loadFor(next)
                 }
             }
@@ -218,7 +218,7 @@ object MtgApp {
                 app = app.navigate(route)
                     .let {
                         if (route.view != View.LIBRARY) it
-                        else it.copy(library = it.library.where(FilterUrl.fromHash(route.query)))
+                        else it.copy(library = it.library.restoredFrom(FilterUrl.fromHash(route.query)))
                     }
                 loadFor(app)
             }
@@ -282,7 +282,7 @@ object MtgApp {
      * keeps the link shareable and the back button useful.
      */
     private fun rememberSearch(s: AppState) {
-        val hash = FilterUrl.toHash(s.library.filters)
+        val hash = s.hash()
         try {
             window.history.replaceState(window.history.state, "", hash)
         } catch (e: Throwable) {
@@ -293,10 +293,16 @@ object MtgApp {
     /** The only path to a search, so a burst of changes is one read. */
     private fun searchSoon() {
         searchJob?.cancel()
+        app = app.copy(library = app.library.loading())
         searchJob = scope.launch {
             delay(searchDebounceMs)
             app = try {
                 search(app)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // A newer search replaced this one. Not a failure, and
+                // writing one put "Search failed: Job was cancelled"
+                // over the grid every time a filter changed mid-flight.
+                throw e
             } catch (e: ApiFailure) {
                 app.copy(library = app.library.failed(e.message ?: "something went wrong"))
             } catch (e: Exception) {

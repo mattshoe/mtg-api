@@ -40,6 +40,8 @@ data class CardRow(
     val free: Int?,
     val price: Double?,
     val value: Double?,
+    /** Copies with no market price, so a partial total can say so. */
+    val unpriced: Int = 0,
 ) {
     /** Both faces, the way the card is actually named. */
     val fullName: String get() = if (face2.isNullOrBlank()) name else "$name // $face2"
@@ -48,6 +50,13 @@ data class CardRow(
 
     /** Copies not committed to a deck. Null means the view had nothing to say. */
     val isFree: Boolean get() = (free ?: 0) > 0
+
+    /**
+     * `value` sums only the copies that have a price, so when some do
+     * not it is a floor rather than the total. Worth saying out loud
+     * next to the number.
+     */
+    val valueIsPartial: Boolean get() = unpriced > 0 && value != null
 }
 
 /**
@@ -102,6 +111,7 @@ object Rows {
                 free = r.int("free"),
                 price = r.num("price"),
                 value = r.num("value"),
+                unpriced = r.int("unpriced") ?: 0,
             )
         }
     }
@@ -132,14 +142,30 @@ data class Library(
     val page: Int get() = filters.page
     val size: Int get() = filters.size
 
-    val pages: Int get() = if (total <= 0) 1 else ((total + size - 1) / size)
+    /** Never divides by zero: `size` is a field and 0 is constructible. */
+    private val pageSize: Int get() = if (size > 0) size else PAGE_SIZE
+
+    val pages: Int get() = if (total <= 0) 1 else ((total + pageSize - 1) / pageSize)
     val hasPrev: Boolean get() = page > 1
     val hasNext: Boolean get() = page < pages
 
-    /** "101–200 of 6,607", the way a person reads it. */
+    /**
+     * "101–200 of 6,607", the way a person reads it.
+     *
+     * Clamped to a page that exists: an out-of-range page produced a
+     * backwards range, which rendered as "9801–250 of 250" over an
+     * empty grid.
+     */
     val showing: IntRange
-        get() = if (total == 0) IntRange.EMPTY
-        else ((page - 1) * size + 1)..minOf(page * size, total)
+        get() {
+            if (total == 0) return IntRange.EMPTY
+            val p = page.coerceIn(1, pages)
+            return ((p - 1) * pageSize + 1)..minOf(p * pageSize, total)
+        }
+
+    /** The range as the page states it, or nothing when there is none. */
+    val showingLabel: String
+        get() = if (total == 0) "No cards" else "${showing.first}–${showing.last} of $total"
 
     val isEmpty: Boolean get() = !busy && error == null && rows.isEmpty()
 
@@ -148,6 +174,16 @@ data class Library(
     fun where(f: Filters) = copy(filters = f.copy(page = 1), error = null)
 
     fun goToPage(n: Int) = copy(filters = filters.copy(page = n.coerceIn(1, pages)), error = null)
+
+    /**
+     * A whole search arriving from a link.
+     *
+     * Not `where`: that resets to page one because it is the right
+     * thing to do when somebody narrows a filter, and the wrong thing
+     * when they were sent `?page=4` — which was ignored on every cold
+     * load and every hashchange.
+     */
+    fun restoredFrom(f: Filters) = copy(filters = f, error = null)
     fun next() = if (hasNext) goToPage(page + 1) else this
     fun prev() = if (hasPrev) goToPage(page - 1) else this
 

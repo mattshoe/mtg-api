@@ -206,16 +206,41 @@ data class Filters(
 /** A statement and the values bound into it. */
 data class Sql(val sql: String, val params: List<Any?>)
 
+/**
+ * What the user typed, as one FTS5 phrase.
+ *
+ * FTS5 parses its argument as a query expression, so a colon makes it
+ * a column filter, a hyphen a negation, and `+1/+1` a syntax error —
+ * all of which came back as `fts5: syntax error` over an empty grid.
+ * Quoting the whole thing makes it a phrase, which is what somebody
+ * typing into a "rules text" box means. Internal quotes are doubled,
+ * which is how FTS5 escapes them.
+ */
+internal fun ftsPhrase(raw: String): String = "\"" + raw.replace("\"", "\"\"") + "\""
+
 internal class Clauses {
     val where = mutableListOf<String>()
     val params = mutableListOf<Any?>()
+
+    /** A LIKE whose pattern was built by `like`, so the escape holds. */
+    fun addLike(column: String, value: String) {
+        where += "$column LIKE ? ESCAPE '\\\\'"
+        params += like(value)
+    }
 
     fun add(clause: String, vararg values: Any?) {
         where += clause
         params.addAll(values)
     }
 
-    fun like(v: String) = "%${v.lowercase()}%"
+    /**
+     * A substring match on what was typed, with LIKE's own wildcards
+     * neutered — `%` and `_` are ordinary characters to someone
+     * searching for "50%" or "Chandra_", and treating them otherwise
+     * silently matched everything.
+     */
+    fun like(v: String) = "%" + v.lowercase().replace("\\", "\\\\")
+        .replace("%", "\\%").replace("_", "\\_") + "%"
 
     fun numeric(column: String, op: String, value: String) {
         val n = value.trim().toDoubleOrNull() ?: return
@@ -289,17 +314,18 @@ fun conditions(s: Filters): Sql {
 
     s.q.trim().takeIf { it.isNotEmpty() }?.let {
         c.add(
-            "(c.name_norm LIKE ? OR lower(c.face1) LIKE ? OR lower(c.face2) LIKE ?)",
-            c.like(it), c.like(it), c.like(it),
+            "(c.name_norm LIKE ?1 ESCAPE '\\\\' OR lower(c.face1) LIKE ?1 ESCAPE '\\\\' " +
+                "OR lower(c.face2) LIKE ?1 ESCAPE '\\\\')",
+            c.like(it),
         )
     }
     s.text.trim().takeIf { it.isNotEmpty() }
-        ?.let { c.add("c.id IN (SELECT rowid FROM card_search WHERE card_search MATCH ?)", it) }
-    s.textLike.trim().takeIf { it.isNotEmpty() }?.let { c.add("lower(c.oracle_text) LIKE ?", c.like(it)) }
-    s.flavor.trim().takeIf { it.isNotEmpty() }?.let { c.add("lower(c.flavor_text) LIKE ?", c.like(it)) }
-    s.artist.trim().takeIf { it.isNotEmpty() }?.let { c.add("lower(c.artist) LIKE ?", c.like(it)) }
-    s.watermark.trim().takeIf { it.isNotEmpty() }?.let { c.add("lower(c.watermark) LIKE ?", c.like(it)) }
-    s.typeLine.trim().takeIf { it.isNotEmpty() }?.let { c.add("lower(c.type_line) LIKE ?", c.like(it)) }
+        ?.let { c.add("c.id IN (SELECT rowid FROM card_search WHERE card_search MATCH ?)", ftsPhrase(it)) }
+    s.textLike.trim().takeIf { it.isNotEmpty() }?.let { c.addLike("lower(c.oracle_text)", it) }
+    s.flavor.trim().takeIf { it.isNotEmpty() }?.let { c.addLike("lower(c.flavor_text)", it) }
+    s.artist.trim().takeIf { it.isNotEmpty() }?.let { c.addLike("lower(c.artist)", it) }
+    s.watermark.trim().takeIf { it.isNotEmpty() }?.let { c.addLike("lower(c.watermark)", it) }
+    s.typeLine.trim().takeIf { it.isNotEmpty() }?.let { c.addLike("lower(c.type_line)", it) }
     s.manaCost.trim().takeIf { it.isNotEmpty() }
         ?.let { c.add("replace(c.mana_cost, ' ', '') LIKE ?", c.like(it.replace(Regex("\\s"), ""))) }
     s.collnum.trim().takeIf { it.isNotEmpty() }?.let { c.add("c.collector_number = ?", it) }
@@ -328,11 +354,11 @@ fun conditions(s: Filters): Sql {
     s.supertypes.forEach {
         c.add("EXISTS (SELECT 1 FROM card_types ct WHERE ct.card_id = c.id AND ct.kind = 'supertype' AND ct.type = ?)", it)
     }
-    s.subtypes.forEach {
-        c.add(
-            "EXISTS (SELECT 1 FROM card_types ct WHERE ct.card_id = c.id AND ct.kind = 'subtype' AND lower(ct.type) = ?)",
-            it.lowercase(),
-        )
+    if (s.subtypes.isNotEmpty()) {
+        val holes = s.subtypes.joinToString(",") { "?" }
+        c.where += "EXISTS (SELECT 1 FROM card_types ct WHERE ct.card_id = c.id " +
+            "AND ct.kind = 'subtype' AND lower(ct.type) IN ($holes))"
+        c.params.addAll(s.subtypes.map { it.lowercase() })
     }
     s.keywords.forEach {
         c.add("EXISTS (SELECT 1 FROM card_keywords k WHERE k.card_id = c.id AND lower(k.keyword) = ?)", it.lowercase())
@@ -348,7 +374,11 @@ fun conditions(s: Filters): Sql {
     c.inList("c.frame", s.frames)
     c.inList("c.border_color", s.borders)
     if (s.finish.isNotBlank()) c.add("c.finish = ?", s.finish)
-    s.games.forEach { c.add("EXISTS (SELECT 1 FROM card_games g WHERE g.card_id = c.id AND g.game = ?)", it) }
+    if (s.games.isNotEmpty()) {
+        val holes = s.games.joinToString(",") { "?" }
+        c.where += "EXISTS (SELECT 1 FROM card_games g WHERE g.card_id = c.id AND g.game IN ($holes))"
+        c.params.addAll(s.games)
+    }
 
     if (s.yearMin.isNotBlank()) c.add("c.released_at >= ?", "${s.yearMin}-01-01")
     if (s.yearMax.isNotBlank()) c.add("c.released_at <= ?", "${s.yearMax}-12-31")
@@ -459,10 +489,24 @@ fun buildQuery(s: Filters, countOnly: Boolean = false): Sql {
     // One row per card, never one per printing. MIN(c.id) makes SQLite
     // take the other bare columns from that same row, which is the
     // representative printing shown.
+    // Every number on a tile describes the same set of printings: the
+    // ones that survived the filter and were grouped into this row.
+    //
+    //   price  the best copy owned, not whichever printing SQLite
+    //          happened to hand a bare expression — that produced
+    //          "3 copies · $2.00 each · $45.00 total" on one tile.
+    //   free   never more than are owned. `card_usage.free` counts the
+    //          whole collection, so filtering to one finish showed
+    //          "1 owned, 4 free".
+    //   unpriced  how many copies have no market price, so a partial
+    //          `value` can say it is partial instead of reading as
+    //          the whole answer.
     val select = """SELECT MIN(c.id) AS id, $SELECT_COLS,
-              SUM(c.qty) AS qty, COUNT(*) AS printings, u.free AS free,
-              ($PRICE_EXPR) AS price,
-              ROUND(SUM(c.qty * ($PRICE_EXPR)), 2) AS value"""
+              SUM(c.qty) AS qty, COUNT(*) AS printings,
+              MIN(COALESCE(u.free, 0), SUM(c.qty)) AS free,
+              MAX($PRICE_EXPR) AS price,
+              ROUND(SUM(c.qty * ($PRICE_EXPR)), 2) AS value,
+              SUM(CASE WHEN ($PRICE_EXPR) IS NULL THEN c.qty ELSE 0 END) AS unpriced"""
 
     return Sql(
         "$select\nFROM cards c\n$USAGE_JOIN\n$PRICE_JOIN\n$clause" +

@@ -100,9 +100,7 @@ fun LibraryPage(
             state.error != null -> Div(attrs = { classes("err") }) { Text("Search failed: ${state.error}") }
             state.isEmpty -> Div(attrs = { classes("empty") }) { Text("Nothing matches that.") }
             else -> {
-                Div(attrs = { classes("muted", "small") }) {
-                    Text("${state.showing.first}–${state.showing.last} of ${state.total}")
-                }
+                Div(attrs = { classes("muted", "small") }) { Text(state.showingLabel) }
                 Div(attrs = { classes("grid") }) { state.rows.forEach { Tile(it, onOpen) } }
                 Pager(state, ::apply)
             }

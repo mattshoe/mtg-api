@@ -137,7 +137,7 @@ class FilterCoverageTest {
     fun subtypesAreMatchedCaseInsensitively() {
         // Typed by hand, so "elf" has to find "Elf".
         assertEquals(listOf("elf"), params(Filters(subtypes = listOf("Elf"))))
-        assertTrue(where(Filters(subtypes = listOf("Elf"))).contains("lower(ct.type) = ?"))
+        assertTrue(where(Filters(subtypes = listOf("Elf"))).contains("lower(ct.type) IN (?)"))
     }
 
     // -------------------------------------------------- keywords and tags
@@ -180,11 +180,40 @@ class FilterCoverageTest {
         assertEquals("", where(Filters(finish = "")))
     }
 
+    /**
+     * Ticking two boxes in one list means "either", the way every
+     * other checkbox list on the panel behaves. As one ANDed EXISTS
+     * each, ticking paper and arena returned only the cards that are
+     * both.
+     */
     @Test
-    fun gamesGoThroughTheirOwnTable() {
+    fun gamesAreAlternativesNotRequirements() {
         val f = Filters(games = listOf("paper", "mtgo"))
-        assertEquals(2, Regex("card_games").findAll(where(f)).count())
+        val sql = where(f)
+        assertEquals(1, Regex("card_games").findAll(sql).count())
+        assertTrue(sql.contains("g.game IN (?,?)"), sql)
         assertEquals(listOf("paper", "mtgo"), params(f))
+    }
+
+    @Test
+    fun subtypesAreAlternativesToo() {
+        // Elf and Goblin, not Elf-that-is-also-a-Goblin, which is
+        // nothing.
+        val f = Filters(subtypes = listOf("Elf", "Goblin"))
+        val sql = where(f)
+        assertEquals(1, Regex("kind = 'subtype'").findAll(sql).count())
+        assertTrue(sql.contains("lower(ct.type) IN (?,?)"), sql)
+        assertEquals(listOf("elf", "goblin"), params(f))
+    }
+
+    /** Types and supertypes stay conjunctive: they compose. */
+    @Test
+    fun typesAndSupertypesStillMeanAllOfThese() {
+        assertEquals(2, Regex("kind = 'type'").findAll(where(Filters(types = listOf("Artifact", "Creature")))).count())
+        assertEquals(
+            2,
+            Regex("kind = 'supertype'").findAll(where(Filters(supertypes = listOf("Legendary", "Snow")))).count(),
+        )
     }
 
     @Test

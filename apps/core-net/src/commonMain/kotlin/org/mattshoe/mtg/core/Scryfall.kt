@@ -49,6 +49,10 @@ class Scryfall internal constructor(private val http: HttpClient) {
                 header("User-Agent", USER_AGENT)
             }.bodyAsText()
             json.decodeFromString<Names>(text).data.take(limit)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // The next keystroke replacing this lookup. Swallowing it
+            // let the dead job come back and close the live list.
+            throw e
         } catch (e: Exception) {
             // Being offline is not worth an error in a convenience.
             emptyList()

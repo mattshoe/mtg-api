@@ -39,6 +39,16 @@ data class AppState(
 
     fun navigate(view: View, rest: String = "") = navigate(Route(view, rest))
 
+    /**
+     * Where the address bar should point right now.
+     *
+     * The Library's filters live in the query string, so a plain
+     * `Route.toHash()` for that view drops them — leave the tab and
+     * come back and the URL no longer describes what is on screen.
+     */
+    fun hash(): String =
+        if (view == View.LIBRARY) FilterUrl.toHash(library.filters) else route.toHash()
+
     fun say(message: String?) = copy(toast = message)
 
     /**

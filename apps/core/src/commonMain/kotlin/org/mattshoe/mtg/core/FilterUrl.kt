@@ -70,7 +70,9 @@ object FilterUrl {
         put("finish", f.finish, DEFAULT.finish)
         put("format", f.format, DEFAULT.format)
         put("legality", f.legality, DEFAULT.legality)
-        put("adv", f.adv, DEFAULT.adv)
+        // `adv` is deliberately absent. The query box was removed, so
+        // a link carrying one would apply a filter that no control
+        // shows and no control can clear.
 
         put("qtyMin", f.qtyMin, ""); put("qtyMax", f.qtyMax, "")
         put("freeMin", f.freeMin, "")
@@ -177,7 +179,7 @@ object FilterUrl {
             format = m["format"].orEmpty(), legality = m["legality"] ?: DEFAULT.legality,
             edhrecMin = m["edhrecMin"].orEmpty(), edhrecMax = m["edhrecMax"].orEmpty(),
             hasRulings = tri("hasRulings"),
-            adv = m["adv"].orEmpty(),
+            // `adv` is deliberately not read — see `pairs`.
             sort = m["sort"]?.let { Sort.of(it) } ?: DEFAULT.sort,
             descending = m["dir"]?.let { it == "desc" } ?: DEFAULT.descending,
             page = m["page"]?.toIntOrNull()?.coerceAtLeast(1) ?: 1,

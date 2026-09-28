@@ -58,7 +58,6 @@ class FilterUrlTest {
             keywords = listOf("Flying"), tags = listOf("ramp"),
             format = "commander", legality = "banned",
             edhrecMin = "1", edhrecMax = "500", hasRulings = Tri.YES,
-            adv = "t:creature -is:reprint",
             sort = Sort.CMC, descending = false, page = 4,
         )
         assertEquals(f, roundTrip(f))
@@ -84,8 +83,19 @@ class FilterUrlTest {
 
     @Test
     fun anEqualsSignInAValueDoesNotSplitThePair() {
-        val f = Filters(adv = "mv<=3 pow>=4")
+        val f = Filters(textLike = "power <= 3 and toughness >= 4")
         assertEquals(f, roundTrip(f))
+    }
+
+    /**
+     * The query box was removed, so a link must not be able to apply
+     * one — it would filter the results with no control on the page
+     * showing it or able to clear it.
+     */
+    @Test
+    fun theQueryBoxDoesNotTravelInALink() {
+        assertEquals("", FilterUrl.fromHash("adv=is%3Areprint").adv)
+        assertFalse(FilterUrl.toHash(Filters(adv = "is:reprint")).contains("adv"))
     }
 
     @Test

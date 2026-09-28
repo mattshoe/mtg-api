@@ -114,8 +114,12 @@ class CardFiltersTest {
     @Test
     fun aNameSearchLooksAtBothFacesAndIsBound() {
         val f = Filters(q = "Bolt")
-        assertTrue(where(f).contains("c.face2"))
-        assertEquals(listOf<Any?>("%bolt%", "%bolt%", "%bolt%"), params(f))
+        val sql = where(f)
+        assertTrue(sql.contains("c.face2"))
+        // One placeholder, reused. Three copies of the same value was
+        // three chances for them to drift apart.
+        assertEquals(3, Regex("\\?1").findAll(sql).count())
+        assertEquals(listOf<Any?>("%bolt%"), params(f))
     }
 
     @Test
@@ -127,6 +131,9 @@ class CardFiltersTest {
     fun aLiteralTextSearchIsALikeNotAMatch() {
         val sql = where(Filters(textLike = "draw a card"))
         assertTrue(sql.contains("lower(c.oracle_text) LIKE ?"))
+        // LIKE's own wildcards are escaped, so the clause declares
+        // what the escape character is.
+        assertTrue(sql.contains("ESCAPE"), sql)
         assertFalse(sql.contains("MATCH"))
     }
 
@@ -270,7 +277,7 @@ class CardFiltersTest {
         assertFalse(sql.contains("DROP"), sql)
         assertFalse(sql.contains("DELETE"), sql)
         assertFalse(sql.contains("1=1"), sql)
-        assertTrue(params(f).size >= 5)
+        assertTrue(params(f).size >= 4, params(f).toString())
     }
 
     @Test

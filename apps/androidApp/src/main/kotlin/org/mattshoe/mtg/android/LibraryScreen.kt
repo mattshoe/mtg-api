@@ -81,7 +81,7 @@ fun LibraryScreen(
                     state.busy -> Line("Searching…", Ink3)
                     state.error != null -> Line("Search failed: ${state.error}", Bad)
                     state.isEmpty -> Line("Nothing matches that.", Ink3)
-                    else -> Line("${state.showing.first}–${state.showing.last} of ${state.total}", Ink3)
+                    else -> Line(state.showingLabel, Ink3)
                 }
             }
         }
