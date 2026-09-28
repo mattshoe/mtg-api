@@ -57,7 +57,7 @@ object Inventory {
 
     val features: List<Feature> = listOf(
         // ---------------------------------------------------------- shell
-        Feature(Area.SHELL, "Hash routing between the six views", "app.js"),
+        Feature(Area.SHELL, "Hash routing between the six views", "app.js", logic = true),
         Feature(Area.SHELL, "Nav tabs, with the admin group hidden until unlocked", "app.js, index.html"),
         Feature(Area.SHELL, "Keyboard shortcuts and the ? help toast", "app.js"),
         Feature(Area.SHELL, "Quick find palette on ⌘K and /", "app.js"),
@@ -74,17 +74,17 @@ object Inventory {
         Feature(Area.LIBRARY, "Advanced query box with its own parser", "filters.js parseAdvanced", logic = true),
         Feature(Area.LIBRARY, "Sorting, price descending by default", "filters.js SORTS", logic = true, done = true),
         Feature(Area.LIBRARY, "Filter state in the URL, so a search is a link", "filters.js toHash/fromHash", logic = true, done = true),
-        Feature(Area.LIBRARY, "Name autocomplete against all of Scryfall", "complete.js"),
-        Feature(Area.LIBRARY, "Export the whole result as a decklist or to the clipboard", "search.js"),
-        Feature(Area.LIBRARY, "Prices fetched and shown, with a reason when missing", "prices.js"),
+        Feature(Area.LIBRARY, "Name autocomplete against all of Scryfall", "complete.js", logic = true),
+        Feature(Area.LIBRARY, "Export the whole result as a decklist or to the clipboard", "search.js", logic = true),
+        Feature(Area.LIBRARY, "Prices fetched and shown, with a reason when missing", "prices.js", logic = true),
 
         // ---------------------------------------------------------- decks
         Feature(Area.DECKS, "Deck tiles: name, colour pips, commander, bracket, art banner", "decks.js", logic = true, done = true),
         Feature(Area.DECKS, "Deck detail with its card list", "decks.js", logic = true, done = true),
         Feature(Area.DECKS, "Edit a deck's list, commander as its own field", "decks.js"),
         Feature(Area.DECKS, "Disassemble a deck back into bulk", "decks.js"),
-        Feature(Area.DECKS, "New deck wizard: format, owner, name, commander, cards, sourcing", "newdeck.js"),
-        Feature(Area.DECKS, "Card name validation against Scryfall in the wizard", "newdeck.js"),
+        Feature(Area.DECKS, "New deck wizard: format, owner, name, commander, cards, sourcing", "newdeck.js", logic = true),
+        Feature(Area.DECKS, "Card name validation against Scryfall in the wizard", "newdeck.js", logic = true),
 
         // ---------------------------------------------------------- stats
         Feature(Area.STATS, "Collection totals and breakdowns", "stats.js", logic = true, done = true),
@@ -111,8 +111,8 @@ object Inventory {
         Feature(Area.LOGS, "Log summary counts", "logs.js", logic = true, done = true),
 
         // ---------------------------------------------------------- admin
-        Feature(Area.ADMIN, "Password unlock, token kept until locked", "admin.js"),
-        Feature(Area.ADMIN, "Gated views unreachable and invisible while locked", "app.js, admin.js"),
+        Feature(Area.ADMIN, "Password unlock, token kept until locked", "admin.js", logic = true),
+        Feature(Area.ADMIN, "Gated views unreachable and invisible while locked", "app.js, admin.js", logic = true),
 
         // ---------------------------------------------------------- share
         Feature(Area.SHARE, "Receive a shared file from another Android app", "SharedFile.kt", logic = true, done = true),

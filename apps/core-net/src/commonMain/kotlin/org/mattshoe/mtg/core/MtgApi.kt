@@ -51,6 +51,29 @@ class MtgApi internal constructor(
     )
 
     @Serializable
+    private data class DeckListRequest(
+        val slug: String,
+        val list: String,
+        @SerialName("dry_run") val dryRun: Boolean,
+    )
+
+    @Serializable
+    private data class DisassembleRequest(
+        val slug: String,
+        @SerialName("dry_run") val dryRun: Boolean,
+    )
+
+    @Serializable
+    private data class CreateDeckRequest(
+        val name: String,
+        val format: String,
+        val owner: String,
+        val commander: String?,
+        val list: String,
+        @SerialName("dry_run") val dryRun: Boolean,
+    )
+
+    @Serializable
     private data class ErrorBody(val error: String = "")
 
     /** Password in, token out. The password is never kept. */
@@ -92,6 +115,58 @@ class MtgApi internal constructor(
         val res = http.post("$base/query") {
             contentType(ContentType.Application.Json)
             setBody(QueryRequest(sql, bind(params)))
+        }
+        return res.decode()
+    }
+
+    /** Replace a deck's list. Moves real cards, so it is gated like a write. */
+    suspend fun setDeckList(token: String, slug: String, list: String, dryRun: Boolean): Applied {
+        val res = http.post("$base/decks/list") {
+            contentType(ContentType.Application.Json)
+            header("Authorization", "Bearer $token")
+            setBody(DeckListRequest(slug, list, dryRun))
+        }
+        return res.decode()
+    }
+
+    /** Delete a deck; its cards go back to the owner's bulk. */
+    suspend fun disassemble(token: String, slug: String, dryRun: Boolean): Applied {
+        val res = http.post("$base/decks/disassemble") {
+            contentType(ContentType.Application.Json)
+            header("Authorization", "Bearer $token")
+            setBody(DisassembleRequest(slug, dryRun))
+        }
+        return res.decode()
+    }
+
+    /** Create a deck, pulling from bulk and buying what bulk cannot cover. */
+    suspend fun createDeck(
+        token: String,
+        name: String,
+        format: String,
+        owner: Owner,
+        commander: String?,
+        list: String,
+        dryRun: Boolean,
+    ): Applied {
+        val res = http.post("$base/decks/create") {
+            contentType(ContentType.Application.Json)
+            header("Authorization", "Bearer $token")
+            setBody(CreateDeckRequest(name, format, owner.slug, commander, list, dryRun))
+        }
+        return res.decode()
+    }
+
+    /**
+     * Check a list of names before anything is written.
+     *
+     * The Worker checks the collection first, which is free and needs no
+     * network, and only asks Scryfall about what is left.
+     */
+    suspend fun validateRaw(list: String): Validation {
+        val res = http.post("$base/cards/validate") {
+            contentType(ContentType.Application.Json)
+            setBody(mapOf("list" to list))
         }
         return res.decode()
     }
