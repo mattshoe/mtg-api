@@ -102,8 +102,8 @@ fun LibraryPage(
                         classes("btn", "sm", "ghost")
                         onClick { onExport() }
                     }) { Text("Export") }
+                    SortPicker(state, ::apply)
                 }
-                SortPicker(state, ::apply)
             }
         }
 
@@ -134,31 +134,26 @@ fun LibraryPage(
  */
 @Composable
 private fun SortPicker(state: Library, apply: (Library) -> Unit) {
-    // Its own row. Floated to the right of the buttons it wrapped
-    // onto a second line anyway and left the arrow stranded.
-    Div(attrs = { classes("flex-wrap") }) {
-        Span(attrs = { classes("muted", "small") }) { Text("Sort") }
-        Select(attrs = {
-            classes("field", "sort")
-            // `.field` is full width, which pushed the direction
-            // arrow onto a line of its own.
-            style { property("width", "auto") }
-            onChange { e ->
-                Sort.of(e.value ?: "").let { apply(state.sortedBy(it)) }
-            }
-        }) {
-            Sort.entries.forEach { sort ->
-                Option(sort.slug, attrs = {
-                    if (state.filters.sort == sort) attr("selected", "")
-                }) { Text(sort.label) }
-            }
+    // Sits in the same row as Filters and Export. `.field` is full
+    // width by default, which is what pushed the direction arrow onto
+    // a line of its own and left it stranded in the middle.
+    Select(attrs = {
+        classes("field", "sort")
+        style { property("width", "auto") }
+        attr("title", "Sort by")
+        onChange { e -> apply(state.sortedBy(Sort.of(e.value ?: ""))) }
+    }) {
+        Sort.entries.forEach { sort ->
+            Option(sort.slug, attrs = {
+                if (state.filters.sort == sort) attr("selected", "")
+            }) { Text(sort.label) }
         }
-        Button(attrs = {
-            classes("btn", "sm", "ghost")
-            attr("title", if (state.filters.descending) "Largest first" else "Smallest first")
-            onClick { apply(state.where(state.filters.copy(descending = !state.filters.descending))) }
-        }) { Text(if (state.filters.descending) "↓" else "↑") }
     }
+    Button(attrs = {
+        classes("btn", "sm", "ghost")
+        attr("title", if (state.filters.descending) "Largest first" else "Smallest first")
+        onClick { apply(state.where(state.filters.copy(descending = !state.filters.descending))) }
+    }) { Text(if (state.filters.descending) "↓" else "↑") }
 }
 
 @Composable

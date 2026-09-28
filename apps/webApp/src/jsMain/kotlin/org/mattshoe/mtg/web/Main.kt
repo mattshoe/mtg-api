@@ -27,6 +27,7 @@ import org.mattshoe.mtg.core.DisassembleState
 import org.mattshoe.mtg.core.EntryHistory
 import org.mattshoe.mtg.core.Export
 import org.mattshoe.mtg.core.FacetQueries
+import org.mattshoe.mtg.core.FilterUrl
 import org.mattshoe.mtg.core.Found
 import org.mattshoe.mtg.core.HistoryEntry
 import org.mattshoe.mtg.core.Load
@@ -90,8 +91,12 @@ object MtgApp {
 
     fun mount(root: HTMLElement, sharedList: String?, token: String) {
         unmount()
+        val opening = routeFromHash()
         app = AppState(admin = Admin(token.ifBlank { null }), history = EntryHistory.load(store))
-            .let { if (sharedList.isNullOrBlank()) it.navigate(routeFromHash()) else it.withShare(sharedList) }
+            // A search is a link: the filters travel in the hash, so a
+            // URL somebody sent opens the search they were looking at.
+            .let { it.copy(library = it.library.where(FilterUrl.fromHash(opening.query))) }
+            .let { if (sharedList.isNullOrBlank()) it.navigate(opening) else it.withShare(sharedList) }
         listen()
         loadFor(app)
         loadFacets()
@@ -114,6 +119,11 @@ object MtgApp {
                     if (next.view != was.view || next.route.rest != was.route.rest) {
                         window.location.hash = next.route.toHash().removePrefix("#")
                         loadFor(next)
+                    } else if (next.view == View.LIBRARY && next.library.filters != was.library.filters) {
+                        // Replace rather than push: a filter changes on
+                        // every keystroke and the back button should
+                        // still reach the page you came from.
+                        rememberSearch(next)
                     }
                 },
                 onUnlock = { password ->
@@ -206,6 +216,10 @@ object MtgApp {
             val route = routeFromHash()
             if (route.view != app.view || route.rest != app.route.rest) {
                 app = app.navigate(route)
+                    .let {
+                        if (route.view != View.LIBRARY) it
+                        else it.copy(library = it.library.where(FilterUrl.fromHash(route.query)))
+                    }
                 loadFor(app)
             }
         })
@@ -258,6 +272,21 @@ object MtgApp {
             View.DECKS -> work { if (s.route.rest.isEmpty()) loadDecks(s) else openDeck(s, s.route.rest) }
             View.STATS -> work { loadStats(s) }
             else -> Unit
+        }
+    }
+
+    /**
+     * Put the search in the address bar without adding a history step.
+     *
+     * `location.hash =` would push one per keystroke; `replaceState`
+     * keeps the link shareable and the back button useful.
+     */
+    private fun rememberSearch(s: AppState) {
+        val hash = FilterUrl.toHash(s.library.filters)
+        try {
+            window.history.replaceState(window.history.state, "", hash)
+        } catch (e: Throwable) {
+            // Not worth failing a search over.
         }
     }
 

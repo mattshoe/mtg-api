@@ -770,3 +770,10 @@ details.adv > div { padding-top: 12px; }
    loses to it and a selected toggle shows nothing at all. */
 .btn.on { background: var(--accent-dim); border-color: var(--accent); color: var(--accent-2); }
 .btn.ghost.on { background: var(--accent-dim); border-color: var(--accent); color: var(--accent-2); }
+
+/* The sort picker sits in a row of small ghost buttons, so it has to
+   be their height rather than a full-width form field. */
+select.sort {
+  width: auto; padding: 5px 26px 5px 10px; font-size: 12.5px;
+  background-color: var(--bg-3); border-color: var(--line-2);
+}
