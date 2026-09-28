@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:label="Fake ManaBox">
+        <activity android:name=".SendActivity" android:exported="true" />
+        <provider
+            android:name=".ExportProvider"
+            android:authorities="org.mattshoe.mtg.sender.files"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+    </application>
+</manifest>
