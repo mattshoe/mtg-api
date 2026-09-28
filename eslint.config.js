@@ -17,7 +17,7 @@ export default [
         'queueMicrotask', 'requestAnimationFrame', 'performance', 'console',
         'addEventListener', 'removeEventListener', 'matchMedia', 'getComputedStyle',
         'alert', 'confirm', 'prompt', 'structuredClone', 'TextEncoder', 'crypto',
-        'CSS', 'history', 'FileReader', 'DataTransfer', 'caches', 'MessageChannel', 'File',
+        'CSS', 'history', 'FileReader', 'DataTransfer', 'caches', 'MessageChannel', 'File', 'clipboard',
       ].map((g) => [g, 'readonly'])),
     },
     rules: {

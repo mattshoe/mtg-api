@@ -351,28 +351,49 @@ function stepList() {
   const zone = fileDrop(listInput, updateCount);
 
   /**
-   * The rescue.
+   * The rescue, for a share that arrived without its file.
    *
-   * Android drops the file out of the share before any of this runs, and
-   * nothing on this side can reach that decision. What it can do is put
-   * the file picker one large tap away instead of leaving someone staring
-   * at an empty box — this has to work for Kayla, not for whoever is
-   * willing to go reinstall a web app.
+   * Offering a file picker first was wrong: ManaBox builds its export in
+   * memory and hands it straight to the share sheet, so there is no file
+   * on disk to browse to. Paste is the one that always has something
+   * behind it, so paste goes first.
    */
+  async function pasteIn() {
+    try {
+      const text = await navigator.clipboard.readText();
+      reportShare('page: pasted from clipboard', { chars: text.length, sample: text.slice(0, 200) });
+      if (!text.trim()) { toast('The clipboard is empty', 'bad'); return; }
+      listInput.value = text;
+      updateCount();
+      shareUsed();
+      flow.shareNote = null;
+      paint();
+      toast(`Pasted ${countCards(text)} cards`, 'ok');
+    } catch (e) {
+      reportShare('page: clipboard read refused', { error: String(e && e.message) }, 'warn');
+      toast('Could not read the clipboard — long-press the box and paste', 'bad');
+    }
+  }
+
   const rescue = flow.shareNote
     ? h('div.panel', { style: { marginBottom: '14px', borderColor: 'var(--accent)' } },
       h('div.panel-body',
-        h('h2', { style: { marginBottom: '6px' } }, 'Pick the file'),
+        h('h2', { style: { marginBottom: '6px' } }, 'The file did not come through'),
         h('div.says', { style: { marginBottom: '12px' } },
-          'It came through without the file attached. Tap here and choose it.'),
+          'Android handed the share over with nothing attached. In ManaBox, copy the '
+          + 'export instead of sharing it, then tap Paste.'),
         h('button.btn.primary', {
           style: { width: '100%', padding: '16px', fontSize: '1.05rem' },
+          onclick: pasteIn,
+        }, 'Paste'),
+        h('button.btn.ghost', {
+          style: { width: '100%', padding: '12px', marginTop: '8px' },
           onclick: () => {
             const picker = zone.querySelector('input[type=file]');
             reportShare('page: choose file tapped', { found: Boolean(picker) });
             if (picker) picker.click();
           },
-        }, 'Choose file'),
+        }, 'Or choose a saved file'),
         h('details', { style: { marginTop: '12px' } },
           h('summary.small.muted', 'Why'),
           h('div.small.muted', { style: { marginTop: '6px' } }, flow.shareNote.problem),
