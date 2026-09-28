@@ -1,6 +1,7 @@
 {
   "name": "MTG Collection",
   "short_name": "Collection",
+  "id": "/mtg-collection-2",
   "start_url": "./#/search",
   "scope": "./",
   "display": "standalone",
