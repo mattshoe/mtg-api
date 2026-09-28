@@ -401,3 +401,104 @@ class LibraryDriverTest {
         assertTrue(exported)
     }
 }
+
+/**
+ * Probes for things reported but not yet proved.
+ *
+ * Each of these is a claim about the Library page that a catalogue
+ * entry rests on. They are here so the entry cites a test rather than
+ * an opinion — several are expected to be red until the thing they
+ * describe is dealt with.
+ */
+class LibraryProbeTest {
+
+    private val roots = mutableListOf<HTMLElement>()
+
+    @AfterTest
+    fun cleanUp() {
+        roots.forEach { it.remove() }
+        roots.clear()
+    }
+
+    private suspend fun settle() = repeat(4) {
+        Promise<Unit> { resolve, _ -> window.requestAnimationFrame { resolve(Unit) } }.await()
+    }
+
+    private fun panel(start: Filters = Filters()): Pair<HTMLElement, () -> Filters> {
+        val root = document.createElement("div") as HTMLElement
+        document.body!!.appendChild(root)
+        roots += root
+        var held = start
+        renderComposable(root = root) {
+            var f by remember { mutableStateOf(start) }
+            FilterPanel(
+                f,
+                Facets(formats = listOf("commander", "modern"), types = listOf("Creature")),
+            ) { f = it; held = it }
+        }
+        return root to { held }
+    }
+
+    private fun HTMLElement.all(css: String) =
+        querySelectorAll(css).let { n -> (0 until n.length).mapNotNull { n[it] as? HTMLElement } }
+
+    private fun HTMLElement.open(id: String) =
+        (querySelector("details[data-facet=$id] summary") as HTMLElement).click()
+
+    @Test
+    fun aDropdownFollowsTheStateWhenSomethingElseChangesIt() = runTest {
+        // `Option(selected)` is a content attribute. Once the user has
+        // picked from a select, the browser sets its dirty flag and
+        // later attribute changes no longer move the selection — so a
+        // reset clears the filter and leaves the control showing the
+        // old pick.
+        val (root, filters) = panel()
+        settle()
+        root.open("legality")
+        settle()
+        val format = root.all("select").first { it.textContent.orEmpty().contains("any format") }
+            as HTMLSelectElement
+        format.value = "modern"
+        format.dispatchEvent(Event("change", js("({bubbles: true})")))
+        settle()
+        assertEquals("modern", filters().format)
+
+        (root.all("button").first { it.textContent?.trim() == "Reset everything" }).click()
+        settle()
+        assertEquals("", filters().format, "reset did not clear the filter")
+        val after = root.all("select").firstOrNull { it.textContent.orEmpty().contains("any format") }
+            as? HTMLSelectElement
+        assertEquals("", after?.value, "the dropdown still shows the cleared pick")
+    }
+
+    @Test
+    fun aRangeRowsTwoBoxesAreTheSameSize() = runTest {
+        // `.field` carries a 13px bottom margin that `:last-child`
+        // strips from the second box only, so inside `.row`'s
+        // stretch the right-hand box grows taller than the left.
+        val (root, _) = panel()
+        settle()
+        root.open("mana")
+        settle()
+        val row = root.all("div.row").first()
+        val boxes = row.all("input").map { it.getBoundingClientRect() }
+        assertEquals(2, boxes.size)
+        assertTrue(
+            kotlin.math.abs(boxes[0].height - boxes[1].height) <= 1,
+            "min is ${boxes[0].height}px tall and max is ${boxes[1].height}px",
+        )
+    }
+
+    @Test
+    fun theColourPipsAndTheirShortcutsAreNotTouching() = runTest {
+        // `.frow` has no rule of its own, so two children of one row
+        // sit flush against each other.
+        val (root, _) = panel()
+        settle()
+        root.open("colour")
+        settle()
+        val pips = root.all("div.pips").first().getBoundingClientRect()
+        val chips = root.all("div.chips").first().getBoundingClientRect()
+        assertTrue(chips.top - pips.bottom >= 4, "only ${chips.top - pips.bottom}px between them")
+    }
+}
