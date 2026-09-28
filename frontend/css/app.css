@@ -35,6 +35,10 @@
   --topbar-h: 54px;
 }
 * { box-sizing: border-box; }
+/* Nothing with a picture in it gets to be wider than what holds it.
+   The drawer's card scan is 745px from Scryfall and ran off the side
+   of a phone; this is the net under every other image too. */
+img, svg, video { max-width: 100%; }
 
 /* .drawer and .palette-scrim set display, which would beat the default
    [hidden] rule. Toggling .hidden via the property must actually hide them. */

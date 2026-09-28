@@ -48,7 +48,10 @@ fun CardSheet(card: CardDetail, onClose: () -> Unit) {
 @Composable
 private fun Body(card: CardDetail) {
     CardQueries.art(card.printings.firstOrNull()?.scryfallId)?.let { url ->
-        Img(src = url, alt = card.name, attrs = { classes("card-art") })
+        // `drawer-art`, not `card-art`. The latter is the grid tile's
+        // wrapper and sets no width at all, so Scryfall's 745px scan
+        // rendered at 745px and ran off the side of a phone.
+        Img(src = url, alt = card.name, attrs = { classes("drawer-art") })
     }
 
     Div(attrs = { classes("flex-wrap", "small") }) {
