@@ -10,6 +10,9 @@ on:
     paths:
       - 'frontend/**'
       - '.github/workflows/pages.yml'
+      # The stamper rewrites the frontend on the way out, so a change to it
+      # changes what gets published even when nothing under frontend/ moved.
+      - 'scripts/stamp_assets.py'
   workflow_dispatch:
 
 permissions:
