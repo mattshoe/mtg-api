@@ -10,10 +10,27 @@ class PricesTest {
     fun centsMatterUnderTenAndDoNotAboveIt() {
         assertEquals("$0.37", Prices.money(0.37))
         assertEquals("$9.99", Prices.money(9.99))
-        // Under ten keeps its cents, whatever they round to.
-        assertEquals("$9.99", Prices.money(9.995))
+        // Rounded on the value as written. `9.995 * 100` is
+        // 999.4999999999999 in binary, which floored to $9.99 while
+        // every other formatter says $10.00.
+        assertEquals("$10.00", Prices.money(9.995))
+        assertEquals("$2.68", Prices.money(2.675))
+        assertEquals("$0.15", Prices.money(0.145))
         assertEquals("$10", Prices.money(10.0), "ten and up is whole")
         assertEquals("$412", Prices.money(411.62))
+    }
+
+    @Test
+    fun negativesPutTheSignBeforeTheSymbol() {
+        assertEquals("-$5.00", Prices.money(-5.0))
+        assertEquals("-$4,000", Prices.money(-4000.0), "under ten has to mean small, not negative")
+        assertEquals("-$2.50", Prices.exact(-2.5))
+    }
+
+    @Test
+    fun aPartialTotalSaysSo() {
+        assertEquals("$18.20", Prices.atLeast(18.2, 0))
+        assertEquals("$18.20 + 2 unpriced", Prices.atLeast(18.2, 2))
     }
 
     @Test

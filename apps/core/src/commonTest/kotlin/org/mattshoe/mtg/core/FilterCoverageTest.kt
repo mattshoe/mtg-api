@@ -429,3 +429,98 @@ class FilterCoverageTest {
         assertTrue(Facet.inUse(Filters()).isEmpty())
     }
 }
+
+/**
+ * The three claims that had no test behind them.
+ *
+ * Each was named in `CoverageGateTest` as covered in part; these are
+ * the parts that were missing.
+ */
+class TheRestOfTheClaimsTest {
+
+    @Test
+    fun theDrawerAsksForLegalitiesAndRulings() {
+        val queries = Load.card("sol ring", "matt")
+        assertEquals(4, queries.size, "printings, decks, legalities, rulings")
+        assertTrue(queries[2].sql.contains("FROM legalities"), queries[2].sql)
+        assertTrue(queries[3].sql.contains("FROM rulings"), queries[3].sql)
+        // Both key on the oracle id, which is what a ruling belongs
+        // to — a printing does not have its own rulings.
+        assertTrue(queries[2].sql.contains("oracle_id"))
+        assertTrue(queries[3].sql.contains("oracle_id"))
+        assertEquals(listOf("sol ring"), queries[2].params)
+    }
+
+    @Test
+    fun aLegalityKnowsWhetherItIsOneAndReadsAsEnglish() {
+        assertTrue(Legality("commander", "legal").legal)
+        assertFalse(Legality("legacy", "banned").legal)
+        assertEquals("not legal", Legality("standard", "not_legal").label)
+    }
+
+    @Test
+    fun theDrawerDecodesWhatThoseQueriesReturn() {
+        val legal = CardQueries.decodeLegalities(
+            listOf("format", "status"),
+            rows("""["commander","legal"]""", """["legacy","banned"]"""),
+        )
+        assertEquals(listOf(Legality("commander", "legal"), Legality("legacy", "banned")), legal)
+
+        val rules = CardQueries.decodeRulings(
+            listOf("published_at", "comment"),
+            rows("""["2018-12-07","It checks the battlefield."]"""),
+        )
+        assertEquals(listOf(Ruling("2018-12-07", "It checks the battlefield.")), rules)
+    }
+
+    /**
+     * Export produces the text that goes on the clipboard, which is
+     * the whole of what "or to the clipboard" means here — the
+     * platform call is one line either side of it.
+     */
+    @Test
+    fun theExportTextIsWhatGoesOnTheClipboard() {
+        val rows = listOf(
+            row("Sol Ring", 3),
+            row("Jetmir, Nexus of Revels", 1, face2 = "Jetmir"),
+        )
+        assertEquals(
+            "3 Sol Ring\n1 Jetmir, Nexus of Revels // Jetmir",
+            Export.decklist(rows),
+        )
+        assertEquals("mtg-decklist-2026-09-28.txt", Export.filename("2026-09-28"))
+        // Unpaged: the clipboard gets the whole search, not the page
+        // that happens to be on screen.
+        assertTrue(Export.query(Filters(page = 7)).sql.contains("LIMIT ${Export.CAP} OFFSET 0"))
+    }
+
+    /**
+     * The console is read-only because the server refuses a write,
+     * not because anything here checks the text. Worth pinning what
+     * the console does and does not promise.
+     */
+    @Test
+    fun theConsoleSendsWhatWasTypedAndLetsTheServerRefuseIt() {
+        val s = ConsoleState().type("DELETE FROM cards")
+        assertEquals("DELETE FROM cards", s.sql)
+        assertTrue(s.canRun, "the client does not pre-judge the statement")
+        // And it shows the refusal rather than swallowing it. The
+        // Worker runs EXPLAIN and rejects any statement that opens a
+        // write cursor; `test/query.test.js` is where that is proved.
+        val refused = s.running().failed("this endpoint is read-only")
+        assertEquals("this endpoint is read-only", refused.error)
+        assertEquals(null, refused.result)
+    }
+
+    private fun rows(vararg json: String) =
+        json.map { kotlinx.serialization.json.Json.parseToJsonElement(it) as kotlinx.serialization.json.JsonArray }
+
+    private fun row(name: String, qty: Int, face2: String? = null) = CardRow(
+        id = 1, owner = "matt", name = name, nameNorm = name.lowercase(), face2 = face2,
+        layout = "normal", scryfallId = null, manaCost = null, cmc = 1.0,
+        typeLine = null, colorIdentity = null, rarity = null, setCode = null,
+        setName = null, collectorNumber = null, edhrecRank = null, releasedAt = null,
+        finish = null, power = null, toughness = null, artist = null,
+        qty = qty, printings = 1, free = 0, price = null, value = null,
+    )
+}

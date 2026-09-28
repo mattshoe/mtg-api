@@ -143,7 +143,11 @@ fun AppShell(
         )
     }
 
-    state.toast?.let { Div(attrs = { classes("toast") }) { Text(it) } }
+    // The `.toasts` wrapper is what `position: fixed` lives on; a
+    // bare `.toast` rendered in flow, off the bottom of the page.
+    state.toast?.let {
+        Div(attrs = { classes("toasts") }) { Div(attrs = { classes("toast") }) { Text(it) } }
+    }
 
     // ------------------------------------------------------- overlays
 

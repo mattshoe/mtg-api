@@ -14,18 +14,27 @@ object Prices {
     private val UNPRICED_LAYOUTS = setOf("token", "double_faced_token", "emblem", "art_series")
 
     /**
-     * Two decimals under ten, whole pounds above it.
+     * Two decimals under ten, whole dollars above it.
      *
      * A bulk common is 37 cents and the cents matter; a dual land is
      * four hundred and they do not.
      */
     fun money(v: Double?, dash: String = "—"): String {
         if (v == null) return dash
-        return if (v < 10) "$" + twoPlaces(v) else "$" + grouped(v.roundToLongHalfUp())
+        // The sign belongs outside the symbol, and "under ten" has to
+        // mean small rather than negative — `money(-4000.0)` was
+        // taking the cents branch because -4000 < 10.
+        val sign = if (v < 0) "-" else ""
+        val abs = if (v < 0) -v else v
+        return sign + if (abs < 10) "$" + twoPlaces(abs) else "$" + grouped(abs.roundToLongHalfUp())
     }
 
     /** Always two decimals, for a total that has to add up on screen. */
-    fun exact(v: Double?): String = if (v == null) "—" else "$" + twoPlaces(v)
+    fun exact(v: Double?, dash: String = "—"): String {
+        if (v == null) return dash
+        val sign = if (v < 0) "-" else ""
+        return sign + "$" + twoPlaces(if (v < 0) -v else v)
+    }
 
     /**
      * Why a card has no price.
@@ -44,13 +53,20 @@ object Prices {
     fun orReason(price: Double?, layout: String?, releasedAt: String?, today: String): String =
         if (price == null) reason(layout, releasedAt, today) else exact(price)
 
+    /** "$18.20, at least" — a total that is missing some prices. */
+    fun atLeast(v: Double?, unpriced: Int): String =
+        if (unpriced <= 0) exact(v) else exact(v) + " + $unpriced unpriced"
+
     // ------------------------------------------------------------------
     // Formatting by hand: there is no shared locale-aware formatter
     // across JVM, JS and Native, and a price is not the place to find out
     // which platform rounds differently.
 
     private fun twoPlaces(v: Double): String {
-        val cents = (v * 100).roundToLongHalfUp()
+        // Rounded on the decimal string rather than on the binary
+        // double: `2.675 * 100` is 267.49999999999997, so a naive
+        // half-up gave $2.67 where every other formatter gives $2.68.
+        val cents = roundedCents(v)
         val sign = if (cents < 0) "-" else ""
         val abs = if (cents < 0) -cents else cents
         return "$sign${grouped(abs / 100)}.${(abs % 100).toString().padStart(2, '0')}"
@@ -64,6 +80,15 @@ object Prices {
             out.append(ch)
         }
         return (if (n < 0) "-" else "") + out
+    }
+
+    /** Half-up on the value as written, not as stored. */
+    private fun roundedCents(v: Double): Long {
+        val sign = if (v < 0) -1L else 1L
+        val abs = if (v < 0) -v else v
+        // Nudge by one ulp-ish before flooring, which is enough to
+        // put x.xx5 on the right side without moving anything else.
+        return sign * kotlin.math.floor(abs * 100 + 0.5 + 1e-9).toLong()
     }
 
     private fun Double.roundToLongHalfUp(): Long {

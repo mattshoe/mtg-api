@@ -112,8 +112,21 @@ class FilterUrlTest {
     }
 
     @Test
-    fun anUnknownSortFallsBackRatherThanBreakingTheQuery() {
-        assertEquals(Sort.NAME, FilterUrl.fromHash("sort=nonsense").sort)
+    fun anUnknownSortFallsBackToTheDefaultRatherThanAThirdThing() {
+        // It used to fall back to Name while an *absent* sort fell
+        // back to Price, so a typo in a link silently chose neither
+        // the default nor what was asked for.
+        assertEquals(Sort.PRICE, FilterUrl.fromHash("sort=nonsense").sort)
+        assertEquals(Sort.PRICE, FilterUrl.fromHash("").sort)
+    }
+
+    @Test
+    fun onlyTheTwoSpellingsOfADirectionMeanAnything() {
+        assertEquals(false, FilterUrl.fromHash("dir=asc").descending)
+        assertEquals(true, FilterUrl.fromHash("dir=desc").descending)
+        // `dir=sideways` used to mean ascending, which reversed the
+        // order of a hand-typed link for no stated reason.
+        assertEquals(true, FilterUrl.fromHash("dir=sideways").descending)
     }
 
     @Test

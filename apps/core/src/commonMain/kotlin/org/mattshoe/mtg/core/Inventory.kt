@@ -177,6 +177,7 @@ object Inventory {
                 "aDecklistIsQuantityAndName", "aTwoFacedCardExportsWithBothNames",
                 "anEmptySearchExportsNothingRatherThanABlankLine", "theFilenameCarriesTheDate", "exportIsOffered",
                 "exportAsksForAnExport",
+                "theExportTextIsWhatGoesOnTheClipboard",
             )),
         Feature(Area.LIBRARY, "Prices fetched and shown, with a reason when missing", "prices.js", logic = true, done = true,
             tests = listOf(
@@ -247,6 +248,7 @@ object Inventory {
                 "aFailureClearsTheStaleResultRatherThanLeavingItOnScreen", "runIsRefusedWithNothingToRun",
                 "aResultRendersAsARealTable", "anErrorReplacesTheStaleResultRatherThanSittingAboveIt",
                 "anEmptyResultSaysSoRatherThanShowingAnEmptyTable",
+                "theConsoleSendsWhatWasTypedAndLetsTheServerRefuseIt",
             )),
 
         // ---------------------------------------------------------- entry
@@ -294,6 +296,7 @@ object Inventory {
                 "artIsDerivedFromTheIdAlreadyOnTheRow", "aMissingOrShortIdGivesNoUrlRatherThanABrokenOne",
                 "printingsDecodeAndSumToWhatIsOwned", "theQueriesBindNameAndOwner",
                 "theCardSheetSaysWhatIsOwnedAndWhatIsFree", "theArtComesOffScryfallByTheIdOnTheRow",
+                "theDrawerAsksForLegalitiesAndRulings", "aLegalityKnowsWhetherItIsOneAndReadsAsEnglish", "theDrawerDecodesWhatThoseQueriesReturn",
             )),
         Feature(Area.CARD, "Which decks a card is in, and how many are free", "card.js", logic = true, done = true,
             tests = listOf(

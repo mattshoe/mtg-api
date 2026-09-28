@@ -165,8 +165,13 @@ object Load {
 
     fun stats(scope: StatsScope): Sql = StatsQueries.totals(scope)
 
-    fun card(nameNorm: String, owner: String): Pair<Sql, Sql> =
-        CardQueries.printings(nameNorm, owner) to CardQueries.usedIn(nameNorm, owner)
+    /** Everything the drawer shows: printings, decks, legality, rulings. */
+    fun card(nameNorm: String, owner: String): List<Sql> = listOf(
+        CardQueries.printings(nameNorm, owner),
+        CardQueries.usedIn(nameNorm, owner),
+        CardQueries.legalities(nameNorm),
+        CardQueries.rulings(nameNorm),
+    )
 
     fun find(term: String): Sql = PaletteQueries.find(term)
 

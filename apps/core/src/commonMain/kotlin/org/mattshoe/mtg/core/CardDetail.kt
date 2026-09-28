@@ -31,11 +31,21 @@ data class DeckUse(
     val isProxy: Boolean,
 )
 
+/** One line of a card's legality, as the format sheet shows it. */
+data class Legality(val format: String, val status: String) {
+    val legal: Boolean get() = status == "legal"
+    val label: String get() = status.replace('_', ' ')
+}
+
+data class Ruling(val date: String, val text: String)
+
 data class CardDetail(
     val name: String = "",
     val owner: String = "",
     val printings: List<Printing> = emptyList(),
     val usedIn: List<DeckUse> = emptyList(),
+    val legalities: List<Legality> = emptyList(),
+    val rulings: List<Ruling> = emptyList(),
     val busy: Boolean = false,
     val error: String? = null,
 ) {
@@ -83,6 +93,41 @@ object CardQueries {
             val c = b.toInt().toChar()
             if (c.isLetterOrDigit() && b.toInt() in 0..127 || c in "-_.~") append(c)
             else append('%').append((b.toInt() and 0xFF).toString(16).uppercase().padStart(2, '0'))
+        }
+    }
+
+    /** Where a card may be played, in the order people ask about. */
+    fun legalities(nameNorm: String) = Sql(
+        """SELECT l.format, l.status
+             FROM legalities l
+            WHERE l.oracle_id = (SELECT oracle_id FROM cards WHERE name_norm = ? LIMIT 1)
+            ORDER BY CASE l.format
+                       WHEN 'commander' THEN 0 WHEN 'modern' THEN 1
+                       WHEN 'legacy' THEN 2 WHEN 'vintage' THEN 3
+                       WHEN 'standard' THEN 4 WHEN 'pauper' THEN 5
+                       ELSE 9 END, l.format""",
+        listOf(nameNorm),
+    )
+
+    fun rulings(nameNorm: String) = Sql(
+        """SELECT r.published_at, r.comment
+             FROM rulings r
+            WHERE r.oracle_id = (SELECT oracle_id FROM cards WHERE name_norm = ? LIMIT 1)
+            ORDER BY r.published_at""",
+        listOf(nameNorm),
+    )
+
+    fun decodeLegalities(cols: List<String>, rows: List<JsonArray>): List<Legality> {
+        val at = cols.withIndex().associate { (i, n) -> n to i }
+        return rows.map {
+            Legality(it.at(at, "format").orEmpty(), it.at(at, "status").orEmpty())
+        }
+    }
+
+    fun decodeRulings(cols: List<String>, rows: List<JsonArray>): List<Ruling> {
+        val at = cols.withIndex().associate { (i, n) -> n to i }
+        return rows.map {
+            Ruling(it.at(at, "published_at").orEmpty(), it.at(at, "comment").orEmpty())
         }
     }
 

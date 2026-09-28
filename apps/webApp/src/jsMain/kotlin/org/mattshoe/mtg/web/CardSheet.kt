@@ -80,6 +80,20 @@ private fun Body(card: CardDetail) {
         }
     }
 
+    H3 { Text("Legal in") }
+    if (card.legalities.isEmpty()) {
+        Div(attrs = { classes("muted", "small") }) { Text("Nothing recorded.") }
+    } else {
+        Div(attrs = { classes("chips") }) {
+            card.legalities.forEach { l ->
+                Span(attrs = {
+                    classes("chip", "mini")
+                    if (!l.legal) classes("bad")
+                }) { Text("${l.format} ${l.label}") }
+            }
+        }
+    }
+
     H3 { Text("In decks") }
     if (card.usedIn.isEmpty()) {
         Div(attrs = { classes("muted", "small") }) { Text("Not in a deck.") }
@@ -93,6 +107,20 @@ private fun Body(card: CardDetail) {
                 // read like one that does.
                 if (use.isProxy) Span(attrs = { classes("tag", "mini") }) { Text("proxy") }
             }
+        }
+    }
+
+    Rulings(card)
+}
+
+@Composable
+private fun Rulings(card: CardDetail) {
+    if (card.rulings.isEmpty()) return
+    H3 { Text("Rulings") }
+    card.rulings.forEach { r ->
+        Div(attrs = { classes("small") }) {
+            Span(attrs = { classes("muted") }) { Text("${r.date} ") }
+            Text(r.text)
         }
     }
 }

@@ -119,29 +119,19 @@ class CoverageGateTest {
     /**
      * Claims that are covered in part.
      *
-     * Every feature names a test, but three of the sentences promise
-     * more than the tests behind them deliver. Naming the shortfall
-     * here keeps it visible and stops it growing — the alternative is
-     * a green gate over a sentence nobody has checked.
+     * Empty, and it has to stay that way: a sentence in the inventory
+     * that promises more than its tests deliver goes here or gets a
+     * test. Three lived here — the drawer's legalities and rulings,
+     * the clipboard half of Export, and the console's read-only
+     * promise — and all three have one now.
      */
     @Test
-    fun theKnownPartialClaimsHaveNotGrown() {
-        val known = mapOf(
-            "Card detail drawer with art, prices, legalities, rulings" to
-                "art, prices and the owned/free counts are tested; legalities and rulings are not rendered by any test",
-            "Export the whole result as a decklist or to the clipboard" to
-                "the decklist, the unpaged query and the filename are tested; nothing touches the clipboard",
-            "Free SQL against the collection, read-only" to
-                "the console state and its rendering are tested; nothing asserts a write statement is refused",
+    fun noClaimIsOnlyPartlyCovered() {
+        val partial = emptyMap<String, String>()
+        assertTrue(
+            partial.isEmpty(),
+            "covered in part:\n  " + partial.entries.joinToString("\n  ") { "${it.key} — ${it.value}" },
         )
-        known.keys.forEach { what ->
-            assertTrue(
-                Inventory.features.any { it.what == what },
-                "\"$what\" is no longer in the inventory — drop it from the partial list too",
-            )
-        }
-        println("\nPartially covered claims (${known.size}):")
-        known.forEach { (what, why) -> println("  $what\n      $why") }
     }
 
     private companion object {

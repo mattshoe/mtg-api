@@ -50,14 +50,21 @@ fun FilterPanel(
     var open by remember { mutableStateOf(Facet.inUse(f)) }
     fun toggle(g: Facet) { open = if (g in open) open - g else open + g }
 
+    // Half-typed token text, held by the panel rather than by the
+    // field it belongs to. A `remember` inside the field leaves the
+    // composition when its group folds, and takes the text with it.
+    var drafts by remember { mutableStateOf(mapOf<String, String>()) }
+    fun draft(key: String) = drafts[key].orEmpty()
+    fun setDraft(key: String, v: String) { drafts = drafts + (key to v) }
+
     Div(attrs = { classes("fgrid") }) {
         Group(Facet.COLLECTION, f, open, ::toggle) { Collection(f, facets, onChange) }
         Group(Facet.COLOUR, f, open, ::toggle) { Colour(f, onChange) }
-        Group(Facet.TYPE, f, open, ::toggle) { Types(f, facets, onChange) }
+        Group(Facet.TYPE, f, open, ::toggle) { Types(f, facets, onChange, ::draft, ::setDraft) }
         Group(Facet.MANA, f, open, ::toggle) { Mana(f, onChange) }
         Group(Facet.TEXT, f, open, ::toggle) { Words(f, onChange) }
-        Group(Facet.TAGS, f, open, ::toggle) { Tags(f, onChange) }
-        Group(Facet.PRINTING, f, open, ::toggle) { Printing(f, facets, onChange) }
+        Group(Facet.TAGS, f, open, ::toggle) { Tags(f, onChange, ::draft, ::setDraft) }
+        Group(Facet.PRINTING, f, open, ::toggle) { Printing(f, facets, onChange, ::draft, ::setDraft) }
         Group(Facet.PHYSICAL, f, open, ::toggle) { Physical(f, facets, onChange) }
         Group(Facet.FLAGS, f, open, ::toggle) { Flags(f, onChange) }
         Group(Facet.LEGALITY, f, open, ::toggle) { Legality(f, facets, onChange) }
@@ -202,12 +209,22 @@ private fun Colour(f: Filters, onChange: (Filters) -> Unit) {
 }
 
 @Composable
-private fun Types(f: Filters, facets: Facets, onChange: (Filters) -> Unit) {
+private fun Types(
+    f: Filters,
+    facets: Facets,
+    onChange: (Filters) -> Unit,
+    draft: (String) -> String,
+    setDraft: (String, String) -> Unit,
+) {
     Row(null) { Checks(facets.types, f.types) { onChange(f.copy(types = it)) } }
     Row("Supertype") {
         Checks(Facets.SUPERTYPES, f.supertypes) { onChange(f.copy(supertypes = it)) }
     }
-    Row("Subtypes") { Tokens(f.subtypes, "Elf, Equipment…") { onChange(f.copy(subtypes = it)) } }
+    Row("Subtypes") {
+        Tokens(f.subtypes, "Elf, Equipment…", draft("subtypes"), { setDraft("subtypes", it) }) {
+            onChange(f.copy(subtypes = it))
+        }
+    }
     Row("Exclude type") { Checks(facets.types, f.typesNot) { onChange(f.copy(typesNot = it)) } }
     Row("Type line contains") {
         TextBox(f.typeLine, "Artifact Creature") { onChange(f.copy(typeLine = it)) }
@@ -242,17 +259,38 @@ private fun Words(f: Filters, onChange: (Filters) -> Unit) {
 }
 
 @Composable
-private fun Tags(f: Filters, onChange: (Filters) -> Unit) {
-    Row("Keywords") { Tokens(f.keywords, "Flying, Ward…") { onChange(f.copy(keywords = it)) } }
-    Row("Scryfall tags") { Tokens(f.tags, "mana-rock, spot-removal…") { onChange(f.copy(tags = it)) } }
+private fun Tags(
+    f: Filters,
+    onChange: (Filters) -> Unit,
+    draft: (String) -> String,
+    setDraft: (String, String) -> Unit,
+) {
+    Row("Keywords") {
+        Tokens(f.keywords, "Flying, Ward…", draft("keywords"), { setDraft("keywords", it) }) {
+            onChange(f.copy(keywords = it))
+        }
+    }
+    Row("Scryfall tags") {
+        Tokens(f.tags, "mana-rock, spot-removal…", draft("tags"), { setDraft("tags", it) }) {
+            onChange(f.copy(tags = it))
+        }
+    }
     Div(attrs = { classes("hint") }) { Text("every one listed must match") }
 }
 
 @Composable
-private fun Printing(f: Filters, facets: Facets, onChange: (Filters) -> Unit) {
+private fun Printing(
+    f: Filters,
+    facets: Facets,
+    onChange: (Filters) -> Unit,
+    draft: (String) -> String,
+    setDraft: (String, String) -> Unit,
+) {
     Row("Rarity") { Checks(Facets.RARITIES, f.rarities) { onChange(f.copy(rarities = it)) } }
     Row("Finish") { Seg(Facets.FINISHES, f.finish) { onChange(f.copy(finish = it)) } }
-    Row("Sets") { Tokens(f.sets, "MH3") { onChange(f.copy(sets = it)) } }
+    Row("Sets") {
+        Tokens(f.sets, "MH3", draft("sets"), { setDraft("sets", it) }) { onChange(f.copy(sets = it)) }
+    }
     Row("Set type") { Checks(facets.setTypes, f.setTypes) { onChange(f.copy(setTypes = it)) } }
     Row("Release year") {
         Range(f.yearMin, f.yearMax, { onChange(f.copy(yearMin = it)) }, { onChange(f.copy(yearMax = it)) })
@@ -356,31 +394,42 @@ private fun TextBox(value: String, hint: String, onInput: (String) -> Unit) {
     }
 }
 
+/**
+ * A number, typed as text.
+ *
+ * `InputType.Number` reports a null value for anything not yet a
+ * valid number — `-`, `1.`, `1e` — and the controlled binding then
+ * wrote `""` back and erased what was being typed. Text with an
+ * `inputmode` gets the numeric keypad on a phone without fighting
+ * the person using it.
+ */
 @Composable
 private fun Num(value: String, hint: String, onInput: (String) -> Unit) {
-    Input(type = InputType.Number) {
+    Input(type = InputType.Text) {
         classes("field")
         placeholder(hint)
-        attr("min", "0")
+        attr("inputmode", "numeric")
         value(value)
-        onInput { onInput(it.value?.toString().orEmpty()) }
+        onInput { onInput(it.value) }
     }
 }
 
 @Composable
 private fun Range(min: String, max: String, onMin: (String) -> Unit, onMax: (String) -> Unit) {
     Div(attrs = { classes("row") }) {
-        Input(type = InputType.Number) {
+        Input(type = InputType.Text) {
             classes("field")
             placeholder("min")
+            attr("inputmode", "numeric")
             value(min)
-            onInput { onMin(it.value?.toString().orEmpty()) }
+            onInput { onMin(it.value) }
         }
-        Input(type = InputType.Number) {
+        Input(type = InputType.Text) {
             classes("field")
             placeholder("max")
+            attr("inputmode", "numeric")
             value(max)
-            onInput { onMax(it.value?.toString().orEmpty()) }
+            onInput { onMax(it.value) }
         }
     }
 }
@@ -405,6 +454,11 @@ private fun Dropdown(
     enabled: Boolean = true,
     onPick: (String) -> Unit,
 ) {
+    // Same reason as `Checks`: a value chosen before its list arrived
+    // has to still be the one showing.
+    @Suppress("NAME_SHADOWING")
+    val options = if (selected.isBlank() || options.any { it.first == selected }) options
+    else options + (selected to selected)
     Select(attrs = {
         classes("field")
         if (!enabled) attr("disabled", "")
@@ -424,7 +478,11 @@ private fun Checks(
     cols: Int = 2,
     onChange: (List<String>) -> Unit,
 ) {
-    if (values.isEmpty()) {
+    // Whatever is already chosen is an option, even before the facet
+    // queries land — otherwise a link arrives with a filter applied
+    // and every box beneath it unticked.
+    val options = (values + selected.filterNot { it in values }).distinct()
+    if (options.isEmpty()) {
         Div(attrs = { classes("hint") }) { Text("loading…") }
         return
     }
@@ -432,7 +490,7 @@ private fun Checks(
         classes("checks")
         style { property("--cols", cols.toString()) }
     }) {
-        values.forEach { v ->
+        options.forEach { v ->
             Label(attrs = { classes("check") }) {
                 Input(type = InputType.Checkbox) {
                     checked(v in selected)
@@ -449,20 +507,25 @@ private fun Checks(
  * picker with six hundred tags is worse than typing two of them.
  */
 @Composable
-private fun Tokens(values: List<String>, hint: String, onChange: (List<String>) -> Unit) {
-    var typed by remember { mutableStateOf("") }
+private fun Tokens(
+    values: List<String>,
+    hint: String,
+    typed: String,
+    onTyped: (String) -> Unit,
+    onChange: (List<String>) -> Unit,
+) {
     Div {
         Input(type = InputType.Text) {
             classes("field")
             placeholder(hint)
             value(typed)
-            onInput { typed = it.value }
+            onInput { onTyped(it.value) }
             onKeyDown { e ->
                 if (e.key == "Enter") {
                     e.preventDefault()
                     val v = typed.trim()
                     if (v.isNotEmpty() && v !in values) onChange(values + v)
-                    typed = ""
+                    onTyped("")
                 }
             }
         }

@@ -135,8 +135,12 @@ h3 { font-size: 14px; }
 }
 .app-tab:hover { background: var(--bg-3); color: var(--text); }
 .app-tab.on { background: var(--accent-dim); border-color: var(--accent); color: var(--accent-2); }
-/* The lock and the finder are not places to go, so they are quieter. */
-.app-nav .app-tool { flex: none; margin-left: 4px; }
+/* The lock and the finder are not places to go, so they are quieter —
+   but the same size and shape as the tabs beside them. */
+.app-nav .app-tool {
+  flex: none; margin-left: 4px;
+  padding: 7px 13px; border-radius: 99px; font-size: 13.5px;
+}
 @media (max-width: 720px) { .app-nav { padding: 8px 12px 0; } }
 
 
@@ -224,7 +228,8 @@ select { appearance: none; background-image:
 .chips { display: flex; flex-wrap: wrap; gap: 5px; }
 .chip {
   padding: 4px 9px; border-radius: 99px; border: 1px solid var(--line-2);
-  background: var(--bg); color: var(--text-2); font-size: 12px; cursor: pointer;
+  background: var(--bg); color: var(--text-2);
+  font: inherit; font-size: 12px; cursor: pointer;
   user-select: none; white-space: nowrap;
 }
 .chip:hover { border-color: var(--text-3); color: var(--text); }
@@ -236,7 +241,7 @@ select { appearance: none; background-image:
 /* pip toggles, one per colour */
 .pips { display: flex; gap: 5px; }
 .pip {
-  width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center;
+  width: 30px; height: 30px; padding: 0; border-radius: 50%; display: grid; place-items: center;
   border: 1.5px solid var(--line-2); background: var(--bg);
   font-weight: 800; font-size: 12.5px; cursor: pointer; color: var(--text-3);
   font-family: var(--mono);
@@ -288,8 +293,10 @@ td.mono { font-family: var(--mono); font-size: 12.5px; }
   position: relative; cursor: pointer; border-radius: 9px;
   transition: transform .12s ease;
 }
-.card:hover { transform: translateY(-3px); }
-.card:hover .card-img { box-shadow: 0 10px 24px rgba(0,0,0,.4); }
+@media (hover: hover) {
+  .card:hover { transform: translateY(-3px); }
+  .card:hover .card-img { box-shadow: 0 10px 24px rgba(0,0,0,.4); }
+}
 .card-img {
   width: 100%; aspect-ratio: 488/680; border-radius: 4.75% / 3.4%;
   background: var(--bg-3) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7889' stroke-width='1.2'%3E%3Crect x='4' y='2' width='16' height='20' rx='2'/%3E%3C/svg%3E") center/32px no-repeat;
@@ -301,7 +308,10 @@ td.mono { font-family: var(--mono); font-size: 12.5px; }
 .card-art { position: relative; display: block; }
 
 .card-meta { margin-top: 6px; font-size: 12px; line-height: 1.35; }
-.card-meta .nm { font-weight: 550; display: block; }
+.card-meta .nm {
+  font-weight: 550; display: -webkit-box; -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
+}
 .card-meta .sb { color: var(--text-3); display: flex; gap: 6px; align-items: center; }
 .card-meta .qty {
   margin-left: auto; color: var(--text-2);
@@ -543,9 +553,10 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
 .fmt-pick { display: grid; gap: 9px; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); }
 .fmt-pick .owner-opt { min-width: 0; padding: 13px 14px; font-size: 14px; }
 
-label.check { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; cursor: pointer; }
-label.check input { width: auto; margin: 0; }
-label.check .small { flex-basis: 100%; }
+/* `.check` below is the one definition of this component. This rule
+   exists only for labels that are not checkboxes. */
+.check input { width: auto; margin: 0; }
+.check .small { flex-basis: 100%; }
 
 /* deck list */
 .deck-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(272px, 1fr)); }
@@ -683,6 +694,11 @@ details.adv > div { padding-top: 12px; }
 .fgroup-body > * + * { margin-top: 11px; }
 .fgroup-color[open] { background: color-mix(in srgb, var(--accent) 5%, var(--bg-2)); }
 
+/* An open group takes the whole row. Left in its column it stretched
+   the grid row to its own height and left every shorter sibling as a
+   bare header over several hundred pixels of nothing. */
+.fgroup[open] { grid-column: 1 / -1; }
+
 .frow > * + * { margin-top: 7px; }
 .frow > label {
   display: block; font-size: 10.5px; font-weight: 600; text-transform: uppercase;
@@ -693,7 +709,7 @@ details.adv > div { padding-top: 12px; }
 /* real checkboxes, because a checkbox should look like a checkbox */
 .checks { display: grid; grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr)); gap: 3px 10px; }
 .check {
-  display: flex; align-items: center; gap: 7px; cursor: pointer;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 7px; cursor: pointer;
   font-size: 12.5px; color: var(--text-2); text-transform: none;
   letter-spacing: 0; font-weight: 400; margin: 0; padding: 2px 0;
   min-width: 0;
@@ -778,8 +794,8 @@ details.adv > div { padding-top: 12px; }
    only rescues the final control, and the sort select is followed by
    its direction arrow. */
 .flex-wrap > .field,
-.flex-wrap > .ac > .field,
-.row > .field { margin-bottom: 0; }
+.row > .field,
+.ac > .field { margin-bottom: 0; }
 
 /* The sort picker sits in a row of small ghost buttons, so it has to
    be their height rather than a full-width form field. */

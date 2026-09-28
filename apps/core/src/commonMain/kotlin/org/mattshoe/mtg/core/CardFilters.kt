@@ -96,8 +96,24 @@ enum class Sort(val slug: String, val label: String, val keys: List<String>) {
     VALUE("value", "Stack value", listOf("value")),
     ;
 
+    /**
+     * What the direction arrow means for this column.
+     *
+     * "Largest first" is nothing to a Name or an Artist, and the
+     * tooltip said it for all fourteen.
+     */
+    fun directionLabel(descending: Boolean): String = when (this) {
+        NAME, ARTIST, SET -> if (descending) "Z to A" else "A to Z"
+        RELEASED -> if (descending) "Newest first" else "Oldest first"
+        EDHREC -> if (descending) "Least played first" else "Most played first"
+        else -> if (descending) "Largest first" else "Smallest first"
+    }
+
     companion object {
-        fun of(slug: String) = entries.firstOrNull { it.slug == slug } ?: NAME
+        /** The default, so a typo in a link behaves like no sort at all. */
+        val DEFAULT = PRICE
+
+        fun of(slug: String) = entries.firstOrNull { it.slug == slug } ?: DEFAULT
     }
 }
 
@@ -125,8 +141,7 @@ const val PRICE_EXPR = """CASE c.finish
 private const val SELECT_COLS = """c.owner, c.name, c.name_norm, c.face2, c.layout,
        c.scryfall_id, c.mana_cost, c.cmc, c.type_line,
        c.color_identity, c.rarity, c.setcode, c.set_name, c.collector_number,
-       c.edhrec_rank, c.released_at, c.finish, c.power, c.toughness, c.artist,
-       pr.tcg_url, pr.updated_at AS priced_at"""
+       c.edhrec_rank, c.released_at, c.finish, c.power, c.toughness, c.artist"""
 
 private val NUM_OPS = setOf(">=", "<=", "=", ">", "<", "!=")
 

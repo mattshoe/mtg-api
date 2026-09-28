@@ -137,8 +137,10 @@ private fun SortPicker(state: Library, apply: (Library) -> Unit) {
         // `dir` gives it the same box as the select it is paired with.
         // A bare glyph next to a chunky dropdown reads as an accident.
         classes("btn", "sm", "ghost", "dir")
-        attr("title", if (state.filters.descending) "Largest first" else "Smallest first")
-        onClick { apply(state.where(state.filters.copy(descending = !state.filters.descending))) }
+        attr("title", state.filters.sort.directionLabel(state.filters.descending))
+        // Not `where`: reversing the order does not change which
+        // cards match, so it should not throw away the page.
+        onClick { apply(state.copy(filters = state.filters.copy(descending = !state.filters.descending))) }
     }) { Text(if (state.filters.descending) "↓" else "↑") }
 }
 
@@ -180,13 +182,16 @@ private fun Tile(card: CardRow, onOpen: (CardRow) -> Unit) {
 
 @Composable
 private fun Pager(state: Library, go: (Library) -> Unit) {
-    Div(attrs = { classes("flex-wrap") }) {
+    // `.pager`, not `.flex-wrap`: the stylesheet centres it, gives it
+    // room above the grid and sets tabular numerals so the Next
+    // button stops jogging sideways as the page number widens.
+    Div(attrs = { classes("pager") }) {
         Button(attrs = {
             classes("btn", "ghost")
             if (!state.hasPrev) disabled()
             onClick { go(state.prev()) }
         }) { Text("← Previous") }
-        Span(attrs = { classes("muted", "small") }) { Text("Page ${state.page} of ${state.pages}") }
+        Span(attrs = { classes("info") }) { Text("Page ${state.page} of ${state.pages}") }
         Button(attrs = {
             classes("btn", "ghost")
             if (!state.hasNext) disabled()

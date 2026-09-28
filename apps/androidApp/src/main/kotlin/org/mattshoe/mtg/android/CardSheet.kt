@@ -84,6 +84,15 @@ private fun Body(card: CardDetail) {
         }
     }
 
+    Text("Legal in", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+    if (card.legalities.isEmpty()) {
+        Text("Nothing recorded.", fontSize = 13.sp)
+    } else {
+        card.legalities.forEach { l ->
+            Text("${l.format} — ${l.label}", fontSize = 13.sp)
+        }
+    }
+
     Text("In decks", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
     if (card.usedIn.isEmpty()) {
         Text("Not in a deck.", fontSize = 13.sp)
@@ -101,5 +110,10 @@ private fun Body(card: CardDetail) {
                 fontSize = 13.sp,
             )
         }
+    }
+
+    if (card.rulings.isNotEmpty()) {
+        Text("Rulings", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+        card.rulings.forEach { r -> Text("${r.date}  ${r.text}", fontSize = 12.sp) }
     }
 }

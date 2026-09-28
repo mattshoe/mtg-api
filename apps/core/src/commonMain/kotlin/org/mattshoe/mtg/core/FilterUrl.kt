@@ -181,7 +181,13 @@ object FilterUrl {
             hasRulings = tri("hasRulings"),
             // `adv` is deliberately not read — see `pairs`.
             sort = m["sort"]?.let { Sort.of(it) } ?: DEFAULT.sort,
-            descending = m["dir"]?.let { it == "desc" } ?: DEFAULT.descending,
+            // Only the two spellings mean anything; `dir=sideways` keeps
+        // the default rather than silently reversing the order.
+        descending = when (m["dir"]) {
+            "desc" -> true
+            "asc" -> false
+            else -> DEFAULT.descending
+        },
             page = m["page"]?.toIntOrNull()?.coerceAtLeast(1) ?: 1,
         )
     }

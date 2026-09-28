@@ -224,15 +224,19 @@ class MainActivity : ComponentActivity() {
     }
 
     private suspend fun loadCard(nameNorm: String, owner: String, label: String): AppState {
-        val (printings, uses) = Load.card(nameNorm, owner)
+        val (printings, uses, legal, rules) = Load.card(nameNorm, owner)
         val p = api.query(printings)
         val u = api.query(uses)
+        val l = api.query(legal)
+        val r = api.query(rules)
         return app.copy(
             card = CardDetail(
                 name = label,
                 owner = owner,
                 printings = CardQueries.decodePrintings(p.cols, p.rows),
                 usedIn = CardQueries.decodeUses(u.cols, u.rows),
+                legalities = CardQueries.decodeLegalities(l.cols, l.rows),
+                rulings = CardQueries.decodeRulings(r.cols, r.rows),
             ),
         )
     }
