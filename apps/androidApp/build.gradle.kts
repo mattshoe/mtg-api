@@ -5,22 +5,52 @@ plugins {
     id("org.jetbrains.compose")
 }
 
-// The Compose rewrite of the share app, on the shared core.
+// The app. Not "the Compose rewrite" any more — this is what ships.
 //
-// A different applicationId from :app on purpose — both can sit on the
-// phone at once so this can be tried against the one that already works,
-// and removed without touching it.
+// It carries :app's applicationId and is signed with the same key, so
+// it upgrades the share-only build in place rather than sitting next to
+// it. :app stays in the repo as the rollback: it still builds, and
+// installing its APK puts the old one back.
 android {
     namespace = "org.mattshoe.mtg.android"
     compileSdk = 35
     defaultConfig {
-        applicationId = "org.mattshoe.mtg.share.next"
+        applicationId = "org.mattshoe.mtg.share"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1"
+        versionCode = 3
+        versionName = "2.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
+    // Kept outside the repo, in ~/.mtg-android.env, so the key and its
+    // password are never in git. Android refuses to upgrade an app
+    // signed with a different key, so this has to be the same one :app
+    // was signed with.
+    val creds = file(System.getProperty("user.home") + "/.mtg-android.env")
+        .takeIf { it.exists() }
+        ?.readLines()
+        ?.mapNotNull { line -> line.split("=", limit = 2).takeIf { it.size == 2 } }
+        ?.associate { it[0].trim() to it[1].trim() }
+        .orEmpty()
+
+    signingConfigs {
+        if (creds.containsKey("MTG_ANDROID_KEYSTORE")) {
+            create("release") {
+                storeFile = file(creds.getValue("MTG_ANDROID_KEYSTORE"))
+                storePassword = creds.getValue("MTG_ANDROID_KEYSTORE_PASSWORD")
+                keyAlias = creds.getValue("MTG_ANDROID_KEY_ALIAS")
+                keyPassword = creds.getValue("MTG_ANDROID_KEYSTORE_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            signingConfigs.findByName("release")?.let { signingConfig = it }
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
