@@ -349,6 +349,84 @@ class LibraryDriverTest {
         assertTrue(app.pip("U").className.contains("on"))
     }
 
+    // --------------------------------------------------- the token boxes
+
+    /**
+     * Type a word, press enter, get a chip.
+     *
+     * Four filters are driven by the same `Tokens` box and they were
+     * only ever tested one composable at a time, with the draft state
+     * handed in from the test rather than held where the real panel
+     * holds it. That is exactly the blind spot the name box fell into.
+     */
+    private suspend fun App.openGroup(group: String) {
+        val details = facet(group)
+        if (!details.hasAttribute("open")) {
+            (details.querySelector("summary") as HTMLElement).click()
+            settle()
+        }
+    }
+
+    private suspend fun App.token(group: String, placeholder: String, word: String) {
+        openGroup(group)
+        val el = input(placeholder)
+        el.value = word
+        el.dispatchEvent(Event("input", js("({bubbles: true})")))
+        settle()
+        el.dispatchEvent(
+            org.w3c.dom.events.KeyboardEvent(
+                "keydown",
+                js("({key: 'Enter', bubbles: true, cancelable: true})"),
+            ),
+        )
+        settle()
+    }
+
+    @Test
+    fun theKeywordBoxTakesAWordAndKeepsIt() = runTest {
+        val app = mount()
+        settle()
+        app.button("Filters").click()
+        settle()
+        app.token("tags", "Flying, Ward…", "Flying")
+        assertEquals(listOf("Flying"), app.state.library.filters.keywords)
+        assertTrue(app.text().contains("Flying ×"), "no chip for the word: ${app.text()}")
+    }
+
+    @Test
+    fun theScryfallTagBoxTakesAWordAndKeepsIt() = runTest {
+        val app = mount()
+        settle()
+        app.button("Filters").click()
+        settle()
+        app.token("tags", "mana-rock, spot-removal…", "mana-rock")
+        assertEquals(listOf("mana-rock"), app.state.library.filters.tags)
+    }
+
+    @Test
+    fun theSetBoxTakesACodeAndKeepsIt() = runTest {
+        val app = mount()
+        settle()
+        app.button("Filters").click()
+        settle()
+        app.token("printing", "MH3", "MH3")
+        assertEquals(listOf("MH3"), app.state.library.filters.sets)
+    }
+
+    @Test
+    fun aTokenBoxClearsItselfReadyForTheNextWord() = runTest {
+        // The chip and the empty box are one update. Done as two, the
+        // second is built on a copy that predates the first.
+        val app = mount()
+        settle()
+        app.button("Filters").click()
+        settle()
+        app.token("tags", "Flying, Ward…", "Flying")
+        assertEquals("", app.input("Flying, Ward…").value, "the box kept the word it turned into a chip")
+        app.token("tags", "Flying, Ward…", "Ward")
+        assertEquals(listOf("Flying", "Ward"), app.state.library.filters.keywords)
+    }
+
     // -------------------------------------------------------- the results
 
     @Test

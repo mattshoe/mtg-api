@@ -228,7 +228,7 @@ object MtgApp {
     /**
      * The lists the filter panel offers, read once.
      *
-     * Thirteen small reads rather than a bespoke endpoint that would
+     * Twelve small reads rather than a bespoke endpoint that would
      * have to be kept in step with the panel. A failure is silent: the
      * panel falls back to its typed fields and the rest of the app does
      * not care.

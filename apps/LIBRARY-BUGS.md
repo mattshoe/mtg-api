@@ -168,6 +168,10 @@ all of these. Tick Elf and Goblin in the subtype picker and you get
 nothing. Tick paper and arena and every paper-only card vanishes. The
 same-looking control means two different things.
 
+The subtype box is gone entirely now — "type line contains" already
+answers the same question, and two boxes for one question is one more
+box to get wrong.
+
 ### W7. Raw FTS5 syntax reaches `MATCH` from the oracle-text box  · REPORTED
 
 `CardFilters.kt:276-277`. Typing `Landfall:` gives

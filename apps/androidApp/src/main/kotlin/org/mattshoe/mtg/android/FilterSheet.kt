@@ -94,7 +94,6 @@ fun FilterSheet(f: Filters, onChange: (Filters) -> Unit, onDone: () -> Unit) {
         CommaList("Types", f.types) { onChange(f.copy(types = it)) }
         CommaList("Not types", f.typesNot) { onChange(f.copy(typesNot = it)) }
         CommaList("Supertypes", f.supertypes) { onChange(f.copy(supertypes = it)) }
-        CommaList("Subtypes", f.subtypes) { onChange(f.copy(subtypes = it)) }
         CommaList("Keywords", f.keywords) { onChange(f.copy(keywords = it)) }
         CommaList("Tags", f.tags) { onChange(f.copy(tags = it)) }
         Field("Collector number", f.collnum) { onChange(f.copy(collnum = it)) }

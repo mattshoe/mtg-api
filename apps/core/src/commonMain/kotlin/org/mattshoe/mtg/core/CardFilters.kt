@@ -184,7 +184,6 @@ data class Filters(
     val types: List<String> = emptyList(),
     val typesNot: List<String> = emptyList(),
     val supertypes: List<String> = emptyList(),
-    val subtypes: List<String> = emptyList(),
 
     // printing
     val rarities: List<String> = emptyList(),
@@ -374,12 +373,6 @@ fun conditions(s: Filters): Sql {
     }
     s.supertypes.forEach {
         c.add("EXISTS (SELECT 1 FROM card_types ct WHERE ct.card_id = c.id AND ct.kind = 'supertype' AND ct.type = ?)", it)
-    }
-    if (s.subtypes.isNotEmpty()) {
-        val holes = s.subtypes.joinToString(",") { "?" }
-        c.where += "EXISTS (SELECT 1 FROM card_types ct WHERE ct.card_id = c.id " +
-            "AND ct.kind = 'subtype' AND lower(ct.type) IN ($holes))"
-        c.params.addAll(s.subtypes.map { it.lowercase() })
     }
     s.keywords.forEach {
         c.add("EXISTS (SELECT 1 FROM card_keywords k WHERE k.card_id = c.id AND lower(k.keyword) = ?)", it.lowercase())

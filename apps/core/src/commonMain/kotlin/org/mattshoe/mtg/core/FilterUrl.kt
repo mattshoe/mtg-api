@@ -95,7 +95,6 @@ object FilterUrl {
         putList("types", f.types, DEFAULT.types)
         putList("typesNot", f.typesNot, DEFAULT.typesNot)
         putList("supertypes", f.supertypes, DEFAULT.supertypes)
-        putList("subtypes", f.subtypes, DEFAULT.subtypes)
         putList("rarities", f.rarities, DEFAULT.rarities)
         putList("sets", f.sets, DEFAULT.sets)
         putList("setTypes", f.setTypes, DEFAULT.setTypes)
@@ -167,7 +166,7 @@ object FilterUrl {
             touOp = m["touOp"] ?: DEFAULT.touOp, tou = m["tou"].orEmpty(),
             loyOp = m["loyOp"] ?: DEFAULT.loyOp, loy = m["loy"].orEmpty(),
             types = list("types"), typesNot = list("typesNot"),
-            supertypes = list("supertypes"), subtypes = list("subtypes"),
+            supertypes = list("supertypes"),
             rarities = list("rarities"), sets = list("sets"), setTypes = list("setTypes"),
             layouts = list("layouts"), frames = list("frames"), borders = list("borders"),
             games = list("games"),

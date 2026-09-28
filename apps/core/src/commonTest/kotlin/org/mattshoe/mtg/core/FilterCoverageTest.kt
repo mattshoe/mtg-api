@@ -128,16 +128,28 @@ class FilterCoverageTest {
     }
 
     @Test
-    fun supertypesAndSubtypesUseTheirOwnKind() {
+    fun supertypesUseTheirOwnKind() {
         assertTrue(where(Filters(supertypes = listOf("Legendary"))).contains("kind = 'supertype'"))
-        assertTrue(where(Filters(subtypes = listOf("Elf"))).contains("kind = 'subtype'"))
     }
 
     @Test
-    fun subtypesAreMatchedCaseInsensitively() {
-        // Typed by hand, so "elf" has to find "Elf".
-        assertEquals(listOf("elf"), params(Filters(subtypes = listOf("Elf"))))
-        assertTrue(where(Filters(subtypes = listOf("Elf"))).contains("lower(ct.type) IN (?)"))
+    fun thereIsNoSubtypeFilterAnyMore() {
+        // Dropped: "type line contains" already does the job, and two
+        // boxes that answer the same question is one more box to get
+        // wrong. Asserted on the SQL rather than on the panel, so the
+        // clause cannot come back without the box.
+        val types = Filters(
+            types = listOf("Creature"),
+            typesNot = listOf("Land"),
+            supertypes = listOf("Legendary"),
+            typeLine = "elf",
+        )
+        assertTrue(!where(types).contains("subtype"), "the subtype clause is back: ${where(types)}")
+        // The URL cannot carry one either, so an old link degrades to
+        // the rest of its filters rather than failing.
+        assertEquals(listOf("Creature"), FilterUrl.fromHash("#/search?subtypes=Elf&types=Creature").types)
+        // And the thing that replaced it still works.
+        assertTrue(where(Filters(typeLine = "elf")).contains("type_line"))
     }
 
     // -------------------------------------------------- keywords and tags
@@ -193,17 +205,6 @@ class FilterCoverageTest {
         assertEquals(1, Regex("card_games").findAll(sql).count())
         assertTrue(sql.contains("g.game IN (?,?)"), sql)
         assertEquals(listOf("paper", "mtgo"), params(f))
-    }
-
-    @Test
-    fun subtypesAreAlternativesToo() {
-        // Elf and Goblin, not Elf-that-is-also-a-Goblin, which is
-        // nothing.
-        val f = Filters(subtypes = listOf("Elf", "Goblin"))
-        val sql = where(f)
-        assertEquals(1, Regex("kind = 'subtype'").findAll(sql).count())
-        assertTrue(sql.contains("lower(ct.type) IN (?,?)"), sql)
-        assertEquals(listOf("elf", "goblin"), params(f))
     }
 
     /** Types and supertypes stay conjunctive: they compose. */
@@ -374,7 +375,6 @@ class FilterCoverageTest {
         addsAClause("types", Filters(types = listOf("Creature")))
         addsAClause("typesNot", Filters(typesNot = listOf("Land")))
         addsAClause("supertypes", Filters(supertypes = listOf("Legendary")))
-        addsAClause("subtypes", Filters(subtypes = listOf("Elf")))
         addsAClause("typeLine", Filters(typeLine = "artifact"))
         addsAClause("cmc", Filters(cmcMin = "1"))
         addsAClause("manaCost", Filters(manaCost = "{G}"))
@@ -424,7 +424,6 @@ class FilterCoverageTest {
             Facet.TYPE to Filters(types = listOf("Creature")),
             Facet.TYPE to Filters(typesNot = listOf("Land")),
             Facet.TYPE to Filters(supertypes = listOf("Legendary")),
-            Facet.TYPE to Filters(subtypes = listOf("Elf")),
             Facet.TYPE to Filters(typeLine = "artifact"),
             Facet.MANA to Filters(cmcMin = "1"),
             Facet.MANA to Filters(manaCost = "{G}"),

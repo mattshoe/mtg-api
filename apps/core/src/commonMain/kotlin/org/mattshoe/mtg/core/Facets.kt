@@ -16,7 +16,6 @@ data class DeckRef2(val slug: String, val name: String, val owner: String) {
 
 data class Facets(
     val types: List<String> = emptyList(),
-    val subtypes: List<String> = emptyList(),
     val sets: List<String> = emptyList(),
     val keywords: List<String> = emptyList(),
     val tags: List<String> = emptyList(),
@@ -43,7 +42,7 @@ data class Facets(
 
 /**
  * One statement per list. They are small and cacheable, and running them
- * as thirteen reads once beats a bespoke endpoint that would have to be
+ * as twelve reads once beats a bespoke endpoint that would have to be
  * kept in step with the panel.
  */
 object FacetQueries {
@@ -52,7 +51,6 @@ object FacetQueries {
         "SELECT DISTINCT type FROM card_types WHERE kind='type' AND type GLOB '[A-Za-z]*' ORDER BY type",
         emptyList(),
     )
-    val subtypes = Sql("SELECT DISTINCT type FROM card_types WHERE kind='subtype' ORDER BY 1", emptyList())
     val sets = Sql("SELECT DISTINCT upper(setcode) FROM cards ORDER BY 1", emptyList())
     val keywords = Sql("SELECT DISTINCT keyword FROM card_keywords ORDER BY 1", emptyList())
     val tags = Sql("SELECT tag_slug FROM card_tags GROUP BY 1 ORDER BY COUNT(*) DESC LIMIT 600", emptyList())
@@ -70,7 +68,7 @@ object FacetQueries {
 
     /** In the order `assemble` expects them back. */
     val all: List<Sql> = listOf(
-        types, subtypes, sets, keywords, tags, formats, artists,
+        types, sets, keywords, tags, formats, artists,
         watermarks, setTypes, layouts, frames, borders, decks,
     )
 
@@ -82,20 +80,19 @@ object FacetQueries {
         return rows.map { DeckRef2(it.str("slug"), it.str("name"), it.str("owner")) }
     }
 
-    /** The thirteen answers, in the order `all` asked for them. */
+    /** The twelve answers, in the order `all` asked for them. */
     fun assemble(columns: List<List<String>>, decks: List<DeckRef2>) = Facets(
         types = columns.getOrElse(0) { emptyList() },
-        subtypes = columns.getOrElse(1) { emptyList() },
-        sets = columns.getOrElse(2) { emptyList() },
-        keywords = columns.getOrElse(3) { emptyList() },
-        tags = columns.getOrElse(4) { emptyList() },
-        formats = columns.getOrElse(5) { emptyList() },
-        artists = columns.getOrElse(6) { emptyList() },
-        watermarks = columns.getOrElse(7) { emptyList() },
-        setTypes = columns.getOrElse(8) { emptyList() },
-        layouts = columns.getOrElse(9) { emptyList() },
-        frames = columns.getOrElse(10) { emptyList() },
-        borders = columns.getOrElse(11) { emptyList() },
+        sets = columns.getOrElse(1) { emptyList() },
+        keywords = columns.getOrElse(2) { emptyList() },
+        tags = columns.getOrElse(3) { emptyList() },
+        formats = columns.getOrElse(4) { emptyList() },
+        artists = columns.getOrElse(5) { emptyList() },
+        watermarks = columns.getOrElse(6) { emptyList() },
+        setTypes = columns.getOrElse(7) { emptyList() },
+        layouts = columns.getOrElse(8) { emptyList() },
+        frames = columns.getOrElse(9) { emptyList() },
+        borders = columns.getOrElse(10) { emptyList() },
         decks = decks,
     )
 }
@@ -136,7 +133,7 @@ enum class Facet(val id: String, val title: String) {
 
         TYPE -> listOf(
             f.types.isNotEmpty(), f.typesNot.isNotEmpty(), f.supertypes.isNotEmpty(),
-            f.subtypes.isNotEmpty(), f.typeLine.isNotBlank(),
+            f.typeLine.isNotBlank(),
         ).count { it }
 
         MANA -> listOf(

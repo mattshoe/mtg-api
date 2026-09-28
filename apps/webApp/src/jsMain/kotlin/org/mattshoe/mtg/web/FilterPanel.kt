@@ -220,11 +220,6 @@ private fun Types(
     Row("Supertype") {
         Checks(Facets.SUPERTYPES, f.supertypes) { onChange(f.copy(supertypes = it)) }
     }
-    Row("Subtypes") {
-        Tokens(f.subtypes, "Elf, Equipment…", draft("subtypes"), { setDraft("subtypes", it) }) {
-            onChange(f.copy(subtypes = it))
-        }
-    }
     Row("Exclude type") { Checks(facets.types, f.typesNot) { onChange(f.copy(typesNot = it)) } }
     Row("Type line contains") {
         TextBox(f.typeLine, "Artifact Creature") { onChange(f.copy(typeLine = it)) }

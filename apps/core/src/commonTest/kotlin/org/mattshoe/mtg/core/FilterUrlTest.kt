@@ -48,7 +48,7 @@ class FilterUrlTest {
             cmcMin = "1", cmcMax = "5", manaCost = "{1}{U}",
             powOp = "<=", pow = "3", touOp = ">", tou = "2", loyOp = "=", loy = "4",
             types = listOf("Creature"), typesNot = listOf("Land"),
-            supertypes = listOf("Legendary"), subtypes = listOf("Faerie"),
+            supertypes = listOf("Legendary"),
             rarities = listOf("rare", "mythic"), sets = listOf("M3C"),
             setTypes = listOf("expansion"), layouts = listOf("normal"),
             frames = listOf("2015"), borders = listOf("black"), games = listOf("paper"),

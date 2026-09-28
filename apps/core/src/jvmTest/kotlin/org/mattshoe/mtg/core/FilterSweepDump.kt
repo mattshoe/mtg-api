@@ -67,7 +67,6 @@ class FilterSweepDump {
         case("two types", Filters(types = listOf("Artifact", "Creature")))
         case("not type Land", Filters(typesNot = listOf("Land")))
         case("supertype Legendary", Filters(supertypes = listOf("Legendary")))
-        case("subtype Elf", Filters(subtypes = listOf("Elf")))
 
         // printing
         case("rarity mythic", Filters(rarities = listOf("mythic")))
