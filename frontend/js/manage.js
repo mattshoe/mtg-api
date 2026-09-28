@@ -222,25 +222,52 @@ function fileDrop(listInput, onChange) {
     // after it is read.
     accept: '*/*',
     multiple: true,
-    style: { display: 'none' },
-    onchange: (e) => { take([...e.target.files]); e.target.value = ''; },
+    // Hidden by being tiny and transparent, NOT by `display: none`.
+    // Android Chrome will not open a picker for an input that is not
+    // rendered, so a display:none input is a button that does nothing at
+    // all — no error, no picker, no event.
+    style: {
+      position: 'absolute', width: '1px', height: '1px',
+      opacity: '0', overflow: 'hidden', pointerEvents: 'none',
+    },
+    onchange: (e) => {
+      const picked = [...e.target.files];
+      reportShare('page: file picker returned', {
+        count: picked.length,
+        files: picked.map((f) => ({ name: f.name, type: f.type, size: f.size })),
+      });
+      take(picked);
+      e.target.value = '';
+    },
   });
 
   async function take(files) {
+    reportShare('page: reading picked files', { count: files.length });
     if (!files.length) return;
     const chunks = [];
     for (const f of files) {
       if (f.size > MAX_UPLOAD) {
+        reportShare('page: picked file over the cap', { name: f.name, size: f.size }, 'warn');
         toast(`${f.name} is too big (${(f.size / 1e6).toFixed(1)} MB)`, 'bad');
         continue;
       }
       try {
-        chunks.push(await f.text());
-      } catch {
+        const text = await f.text();
+        reportShare('page: picked file read', {
+          name: f.name, type: f.type, size: f.size, chars: text.length, sample: text.slice(0, 200),
+        });
+        chunks.push(text);
+      } catch (e) {
+        reportShare('page: picked file would not read', {
+          name: f.name, type: f.type, size: f.size, error: String(e && e.message),
+        }, 'error');
         toast(`could not read ${f.name}`, 'bad');
       }
     }
-    if (!chunks.length) return;
+    if (!chunks.length) {
+      reportShare('page: nothing came out of the picked files', { count: files.length }, 'warn');
+      return;
+    }
 
     const incoming = chunks.join('\n');
     // Append rather than replace, so a file never eats something typed.
@@ -255,6 +282,16 @@ function fileDrop(listInput, onChange) {
     status.textContent = `${names} — ${kind}, ${n} card${n === 1 ? '' : 's'}`;
     toast(`Loaded ${n} card${n === 1 ? '' : 's'} from ${kind}`, 'ok');
     if (onChange) onChange();
+    // The share note was about a file that never arrived. One has now, so
+    // the panel asking for it has to go, which means a repaint.
+    reportShare('page: picked files landed in the box', {
+      chars: listInput.value.length, cards: n, names,
+    });
+    if (flow.shareNote) {
+      shareUsed();
+      flow.shareNote = null;
+      paint();
+    }
   }
 
   const zone = h('div.dropzone', {
@@ -330,7 +367,11 @@ function stepList() {
           'It came through without the file attached. Tap here and choose it.'),
         h('button.btn.primary', {
           style: { width: '100%', padding: '16px', fontSize: '1.05rem' },
-          onclick: () => zone.querySelector('input[type=file]').click(),
+          onclick: () => {
+            const picker = zone.querySelector('input[type=file]');
+            reportShare('page: choose file tapped', { found: Boolean(picker) });
+            if (picker) picker.click();
+          },
         }, 'Choose file'),
         h('details', { style: { marginTop: '12px' } },
           h('summary.small.muted', 'Why'),
