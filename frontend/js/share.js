@@ -116,6 +116,45 @@ export async function loadShare() {
   return held;
 }
 
+/**
+ * The other way in: Open with, from a file manager.
+ *
+ * `file_handlers` in the manifest routes an opened file here through the
+ * Launch Queue, which has nothing to do with the share sheet and nothing
+ * to do with the service worker. If Android is mishandling one of them it
+ * is unlikely to be mishandling both.
+ */
+export function watchLaunches(fn) {
+  const queue = window.launchQueue;
+  if (!queue || typeof queue.setConsumer !== 'function') return;
+  queue.setConsumer(async (params) => {
+    const handles = params?.files || [];
+    reportShare('page: launched with files', { count: handles.length });
+    if (!handles.length) return;
+    const texts = [];
+    const names = [];
+    for (const handle of handles) {
+      try {
+        const file = await handle.getFile();
+        const text = await file.text();
+        reportShare('page: launch file read', {
+          name: file.name, type: file.type, size: file.size, chars: text.length,
+        });
+        if (text.trim()) { texts.push(text); names.push(file.name); }
+      } catch (e) {
+        reportShare('page: launch file would not read', { error: String(e && e.message) }, 'error');
+      }
+    }
+    const list = texts.join('\n').trim();
+    held = list
+      ? { list, names, at: Date.now(), report: { v: 'launch-queue', files: names } }
+      : { at: Date.now(), problem: 'the file opened, but there was no text in it.', report: { v: 'launch-queue' } };
+    reported = false;
+    announce();
+    fn();
+  });
+}
+
 /** The share in hand, with no waiting. Repaint-safe because of it. */
 export const sharedNow = () => held;
 

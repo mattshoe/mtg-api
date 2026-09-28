@@ -35,5 +35,26 @@
         }
       ]
     }
-  }
+  },
+  "file_handlers": [
+    {
+      "action": "open",
+      "accept": {
+        "text/plain": [
+          ".txt",
+          ".dek",
+          ".dec",
+          ".cod",
+          ".mwdeck",
+          ".md"
+        ],
+        "text/csv": [
+          ".csv"
+        ],
+        "application/json": [
+          ".json"
+        ]
+      }
+    }
+  ]
 }

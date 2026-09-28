@@ -10,7 +10,7 @@ import { openCard, closeCard, openCardId, hideCardForRoute } from './card.js';
 import { pushOverlay, dropOverlay } from './overlay.js';
 import {
   registerWorker, loadShare, sharedNow, watchShares, reportShare, workerVersion,
-  reportArrival,
+  reportArrival, watchLaunches,
 } from './share.js';
 import * as search from './search.js';
 import * as decks from './decks.js';
@@ -307,9 +307,12 @@ async function boot() {
 
 // A share arriving while the app is already open. The list itself stays in
 // the cache either way, so this only has to get the user to the page.
-watchShares(() => {
+const toAdd = () => {
   if (parseHash().view === 'add') route();
   else location.hash = '#/add';
-});
+};
+watchShares(toAdd);
+// And the same for a file opened with the app rather than shared to it.
+watchLaunches(toAdd);
 
 boot();
