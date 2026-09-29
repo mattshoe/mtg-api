@@ -111,6 +111,46 @@ class CardRefTest {
         assertEquals("#/decks/alela?card=matt:sol+ring", s.hash())
     }
 
+    // --------------------------------------------- back, and the X
+
+    @Test
+    fun theHistoryDoesNotGiveTheCardAnEntryOfItsOwn() {
+        // Two things both owning "back closes the card" is why Close
+        // did not. The drawer shut, the overlay history popped an
+        // entry, and the entry it popped to still said `card=` — so
+        // the hashchange that followed opened it straight back up.
+        assertEquals(0, opened().overlays.historyDepth)
+        assertEquals(1, AppState().opening(Overlay.CHEATSHEET).overlays.historyDepth)
+        assertEquals(
+            1,
+            AppState().opening(Overlay.CHEATSHEET).opening(Overlay.CARD).overlays.historyDepth,
+        )
+    }
+
+    @Test
+    fun openingACardIsAStepBackCanUndo() {
+        val shut = AppState()
+        val open = opened()
+        assertTrue(open.opensACardOver(shut))
+        // Closing is not: it rewrites where you are, so back does not
+        // land on an address that still names the card.
+        assertTrue(!shut.opensACardOver(open))
+        // Nor is changing a filter with one already open.
+        val moved = open.copy(library = Library(Filters(q = "x")))
+        assertTrue(!moved.opensACardOver(open))
+    }
+
+    @Test
+    fun aDifferentCardOverTheFirstIsNotANewStep() {
+        // Tapping a card inside the drawer's "in decks" list replaces
+        // it. One entry, not one per card looked at.
+        val first = opened()
+        val second = first.copy(
+            card = CardDetail(name = "Arcane Signet", owner = "matt", nameNorm = "arcane signet"),
+        )
+        assertTrue(!second.opensACardOver(first))
+    }
+
     @Test
     fun aCardHeldButNotOpenIsNotInTheAddress() {
         // `navigate` clears the card, but a state that still holds one

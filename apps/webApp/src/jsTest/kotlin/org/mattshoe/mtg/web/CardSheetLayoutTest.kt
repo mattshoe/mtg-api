@@ -5,7 +5,11 @@ import kotlinx.browser.window
 import kotlinx.coroutines.await
 import kotlinx.coroutines.test.runTest
 import org.jetbrains.compose.web.renderComposable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.CardDetail
+import org.mattshoe.mtg.core.Overlay
 import org.mattshoe.mtg.core.Printing
 import org.w3c.dom.HTMLElement
 import org.w3c.dom.HTMLImageElement
@@ -112,6 +116,30 @@ class CardSheetLayoutTest {
             .filter { it.getBoundingClientRect().right > limit }
             .map { it.tagName.lowercase() + "." + it.className }
         assertTrue(over.isEmpty(), "hanging off the right edge: $over")
+    }
+
+    @Test
+    fun closeClosesIt() = runTest {
+        // Through the shell, over a real AppState, because the button
+        // itself was never the suspect.
+        val root = document.createElement("HTMLElement".let { "div" }) as HTMLElement
+        document.body!!.appendChild(root)
+        roots += root
+        var state = AppState()
+            .copy(card = CardDetail(name = "Sol Ring", owner = "matt", nameNorm = "sol ring"))
+            .opening(Overlay.CARD)
+        renderComposable(root = root) {
+            var s by androidx.compose.runtime.remember {
+                androidx.compose.runtime.mutableStateOf(state)
+            }
+            AppShell(s, { s = it; state = it }, {}, {}, {}, {}, {}, {})
+        }
+        settle()
+        assertEquals(1, root.all("div.drawer").size, "the drawer is not open")
+        root.all("button").first { it.textContent?.trim() == "Close" }.click()
+        settle()
+        assertEquals(0, root.all("div.drawer").size, "Close left the drawer open")
+        assertTrue(Overlay.CARD !in state.overlays, "the overlay is still on the stack")
     }
 
     @Test

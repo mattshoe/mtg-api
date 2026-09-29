@@ -264,6 +264,8 @@ object Inventory {
                 "itIsAppendedToWhateverTheRouteAlreadySays", "anOpenCardIsInTheAppsOwnAddress",
                 "andItLeavesTheAddressWhenTheDrawerShuts", "theSearchUnderneathIsStillInTheLinkAsWell",
                 "aCardOpenOverADeckIsAlsoALink", "aCardHeldButNotOpenIsNotInTheAddress",
+                "theHistoryDoesNotGiveTheCardAnEntryOfItsOwn", "openingACardIsAStepBackCanUndo",
+                "aDifferentCardOverTheFirstIsNotANewStep", "closeClosesIt",
                 "aRestoredSearchFillsTheBoxThatShowsIt",
                 "andItDoesNotArriveWithASuggestionListHangingOpen",
                 "anEmptySearchClearsTheBoxRatherThanLeavingTheLastWordInIt",

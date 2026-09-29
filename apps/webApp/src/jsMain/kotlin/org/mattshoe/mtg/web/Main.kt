@@ -96,7 +96,11 @@ object MtgApp {
         set(value) {
             val was = held
             held = value
-            if (value.hash() != was.hash()) rememberSearch(value)
+            if (value.hash() == was.hash()) return
+            // Opening a card is a step, so back closes it. Everything
+            // else — a filter on every keystroke, the card closing —
+            // rewrites where you already are.
+            if (value.opensACardOver(was)) pushSearch(value) else rememberSearch(value)
         }
 
     private var listening = false
@@ -265,6 +269,11 @@ object MtgApp {
             // An entry this code popped on purpose, closing an overlay
             // by its own X. The overlay is already gone.
             if (OverlayHistory.expected()) return@addEventListener
+            // The card is in the address, so the hashchange firing
+            // alongside this already knows what to do with it. Closing
+            // it here as well would take the overlay underneath with
+            // it.
+            if (app.overlays.top == Overlay.CARD) return@addEventListener
             app.dismissTop()?.let { app = it }
         })
 
@@ -283,7 +292,7 @@ object MtgApp {
             // it opens the drawer without a reload.
             val want = CardRef.from(route.query)
             if (want != app.cardRef) {
-                if (want == null) app.dismissTop()?.let { app = it } else reopen(want)
+                if (want == null) held = app.closing(Overlay.CARD) else reopen(want)
             }
         })
     }
@@ -388,6 +397,15 @@ object MtgApp {
      * `location.hash =` would push one per keystroke; `replaceState`
      * keeps the link shareable and the back button useful.
      */
+    /** A card opening. Back should take it off again. */
+    private fun pushSearch(s: AppState) {
+        try {
+            window.history.pushState(window.history.state, "", s.hash())
+        } catch (e: Throwable) {
+            rememberSearch(s)
+        }
+    }
+
     private fun rememberSearch(s: AppState) {
         val hash = s.hash()
         try {

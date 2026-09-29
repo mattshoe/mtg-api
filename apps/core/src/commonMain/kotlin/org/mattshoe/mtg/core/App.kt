@@ -52,6 +52,16 @@ data class AppState(
     }
 
     /**
+     * Is this state a card opening over the one before it?
+     *
+     * The one case where the address bar should gain a history entry
+     * rather than rewrite the one it is on, so back closes the card.
+     * Everything else — a filter changing on every keystroke, the
+     * card closing again — replaces in place.
+     */
+    fun opensACardOver(was: AppState): Boolean = was.cardRef == null && cardRef != null
+
+    /**
      * The open card, if one is. Null when the drawer is shut, so the
      * address goes back to the page underneath when it closes.
      */
