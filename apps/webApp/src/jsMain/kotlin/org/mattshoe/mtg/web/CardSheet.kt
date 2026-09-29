@@ -20,7 +20,7 @@ import org.mattshoe.mtg.core.Prices
  * so the number cannot come out different on a phone.
  */
 @Composable
-fun CardSheet(card: CardDetail, onClose: () -> Unit) {
+fun CardSheet(card: CardDetail, onShare: () -> Unit = {}, onClose: () -> Unit) {
     Div(attrs = {
         classes("drawer-scrim")
         onClick { onClose() }
@@ -29,6 +29,11 @@ fun CardSheet(card: CardDetail, onClose: () -> Unit) {
         Div(attrs = { classes("panel-head") }) {
             H2 { Text(card.name) }
             Span(attrs = { classes("spacer") }) {}
+            Button(attrs = {
+                classes("btn", "sm", "ghost")
+                attr("title", "Copy a link to this card")
+                onClick { onShare() }
+            }) { Text("Share") }
             Button(attrs = {
                 classes("btn", "sm", "ghost")
                 onClick { onClose() }

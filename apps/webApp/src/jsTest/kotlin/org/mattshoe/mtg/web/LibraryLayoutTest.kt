@@ -116,22 +116,27 @@ class LibraryLayoutTest {
         val frame = render(390)
         settle()
         if (!styled()) return@runTest
-        // Filters, Export, the sort dropdown and the direction arrow
+        // The sort dropdown, its direction arrow and the two exports
         // share a row. Their centres have to agree or the row reads as
         // broken, which is exactly what it was reported as.
         val row = frame.all("div.flex-wrap")
-            .firstOrNull { it.textContent.orEmpty().contains("Export") }
+            .firstOrNull { it.querySelector("select.sort") != null }
             ?: error("could not find the control row")
         val kids = row.all("button, select").map { Box(it) }
-        assertTrue(kids.size >= 3, "expected at least Filters, Export and the sort picker")
+        assertTrue(kids.size >= 3, "expected the sort, its arrow and the two exports")
 
-        val top = kids.minOf { it.centre }
-        val off = kids.filter { abs(it.centre - top) > 2 }
-        assertTrue(
-            off.isEmpty(),
-            "the control row is not aligned:\n" +
-                kids.joinToString("\n") { "  ${it.what} centre=${it.centre} height=${it.r.height}" },
-        )
+        // `.flex-wrap` is allowed to wrap, so alignment is a claim
+        // about each visual line rather than about all four controls.
+        val lines = kids.groupBy { kotlin.math.round(it.r.top / 6) }
+        lines.forEach { (_, line) ->
+            val top = line.minOf { it.centre }
+            val off = line.filter { abs(it.centre - top) > 2 }
+            assertTrue(
+                off.isEmpty(),
+                "the control row is not aligned:\n" +
+                    line.joinToString("\n") { "  ${it.what} centre=${it.centre} height=${it.r.height}" },
+            )
+        }
     }
 
     @Test
@@ -140,7 +145,7 @@ class LibraryLayoutTest {
         settle()
         if (!styled()) return@runTest
         val row = frame.all("div.flex-wrap")
-            .firstOrNull { it.textContent.orEmpty().contains("Export") }
+            .firstOrNull { it.querySelector("select.sort") != null }
             ?: error("could not find the control row")
         val kids = row.all("button, select").map { Box(it) }
         val tallest = kids.maxOf { it.r.height }
@@ -239,7 +244,7 @@ class LibraryLayoutTest {
         if (!styled()) return@runTest
         val row = frame.all("div.flex-wrap").first { it.querySelector("select.sort") != null }
         val sort = row.all("select.sort").first().getBoundingClientRect()
-        val export = row.all("button").first { it.textContent?.trim() == "Export" }.getBoundingClientRect()
+        val export = row.all("button").first { it.textContent?.trim() == "Download" }.getBoundingClientRect()
         assertTrue(sort.left < export.left, "Export is not to the right of the sort")
         // Actually pushed to the edge, not merely next in line.
         val edge = row.getBoundingClientRect().right

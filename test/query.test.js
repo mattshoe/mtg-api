@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { post, postAnon, get, sql, count, snapshot, stubScryfall } from './helpers.js';
+import { env } from 'cloudflare:test';
 import { isSingleStatement } from '../src/query.js';
 
 describe('POST /query response shapes', () => {
@@ -443,5 +444,75 @@ describe('the test harness itself', () => {
     const r = await post('/cards/add', { list: '1 Sol Ring' }, stubScryfall({ fail: true }));
     expect(r.status).toBeGreaterThanOrEqual(400);
     expect(await count('cards', "name_norm = 'sol ring'")).toBe(before);
+  });
+});
+
+// D1 under load is not the statement's fault.
+//
+// Reported as a 400 it reached the screen as "Search failed: D1 DB is
+// overloaded"; reported as a 503 the client's own backoff absorbs it and
+// nobody sees anything. The distinction is the whole reason the retry
+// policy exists.
+describe('when the database is busy rather than wrong', () => {
+  it('knows which messages mean busy', async () => {
+    const { isOverloaded } = await import('../src/query.js');
+    expect(isOverloaded('D1 DB is overloaded. Requests queued for too long.')).toBe(true);
+    expect(isOverloaded('Network connection lost.')).toBe(true);
+    expect(isOverloaded('too many API requests by single worker invocation')).toBe(true);
+    expect(isOverloaded('storage caused object to be reset because of overload')).toBe(true);
+  });
+
+  it('and which mean the statement is wrong', async () => {
+    const { isOverloaded } = await import('../src/query.js');
+    expect(isOverloaded('no such column: t.qty')).toBe(false);
+    expect(isOverloaded('near "SELEC": syntax error')).toBe(false);
+    expect(isOverloaded('')).toBe(false);
+    expect(isOverloaded(null)).toBe(false);
+  });
+
+  it('a broken statement is still a 400', async () => {
+    const r = await post('/query', { sql: 'SELEC 1' });
+    expect(r.status).toBe(400);
+  });
+});
+
+describe('every query reports what it did', () => {
+  it('carries how long the database itself took', async () => {
+    const { runQuery } = await import('../src/query.js');
+    const out = await runQuery(env.DB, { sql: 'SELECT COUNT(*) AS n FROM cards' });
+    expect(out.status).toBe(200);
+    expect(typeof out.ms).toBe('number');
+    expect(out.ms).toBeGreaterThanOrEqual(0);
+  });
+
+  it('and says so on a failure too, with the reason', async () => {
+    const { runQuery } = await import('../src/query.js');
+    const out = await runQuery(env.DB, { sql: 'SELECT nope FROM cards' });
+    expect(out.status).toBe(400);
+    expect(typeof out.ms).toBe('number');
+    expect(out.failed).toMatch(/nope/);
+  });
+
+  it('writes the statement, its duration and its error into the log', async () => {
+    await post('/query', { sql: 'SELECT nope FROM cards' });
+    const rows = await sql(
+      "SELECT detail, status FROM logs WHERE event = 'query' ORDER BY id DESC LIMIT 1",
+    );
+    expect(rows.length).toBe(1);
+    const d = JSON.parse(rows[0].detail);
+    expect(d.sql).toMatch(/SELECT nope FROM cards/);
+    expect(d).toHaveProperty('db_ms');
+    expect(d.error).toMatch(/nope/);
+  });
+
+  it('and the statement and row count on one that worked', async () => {
+    await post('/query', { sql: 'SELECT name FROM cards LIMIT 3' });
+    const rows = await sql(
+      "SELECT detail FROM logs WHERE event = 'query' ORDER BY id DESC LIMIT 1",
+    );
+    const d = JSON.parse(rows[0].detail);
+    expect(d.sql).toMatch(/SELECT name FROM cards/);
+    expect(d.n).toBe(3);
+    expect(typeof d.db_ms).toBe('number');
   });
 });

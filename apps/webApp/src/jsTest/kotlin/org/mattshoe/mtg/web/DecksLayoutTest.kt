@@ -240,6 +240,18 @@ class DecksLayoutTest {
         assertTrue(text.bottom <= hero.getBoundingClientRect().bottom + 1, "the name hangs out of the band")
     }
 
+    @Test
+    fun anOpenDeckOffersAShare() = runTest {
+        var shared = 0
+        val frame = mount(1000) { DecksPage(opened(), {}, {}, onShare = { shared++ }) }
+        settle()
+        val button = frame.all("button").firstOrNull { it.textContent?.trim() == "Share" }
+            ?: error("no Share button on the deck")
+        button.click()
+        settle()
+        assertEquals(1, shared)
+    }
+
     // ------------------------------------------------- grouped by type
 
     @Test

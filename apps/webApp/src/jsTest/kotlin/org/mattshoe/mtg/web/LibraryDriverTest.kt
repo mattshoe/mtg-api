@@ -216,7 +216,8 @@ class LibraryDriverTest {
     fun theTopRowHasExactlyTheControlsItShouldHave() = runTest {
         val app = mount()
         settle()
-        assertTrue(app.maybeButton("Export") != null, "no Export button")
+        assertTrue(app.maybeButton("Copy") != null, "no clipboard export")
+        assertTrue(app.maybeButton("Download") != null, "no file export")
         assertTrue(app.maybeButton("Search") == null, "the Search button is back")
         assertTrue(app.maybeButton("Filters") == null, "the Filters collapser is back")
         assertTrue(app.maybeButton("Kayla") == null, "the owner picker is back above the panel")
@@ -461,21 +462,31 @@ class LibraryDriverTest {
     }
 
     @Test
-    fun exportAsksForAnExport() = runTest {
-        var exported = false
+    fun exportAsksWhereItIsGoing() = runTest {
+        // Two places a list is ever wanted: the clipboard, to paste
+        // into a deckbuilder, and a file, to keep.
+        val asked = mutableListOf<org.mattshoe.mtg.core.ExportTo>()
         val root = document.createElement("div") as HTMLElement
         document.body!!.appendChild(root)
         roots += root
         renderComposable(root = root) {
             var s by remember { mutableStateOf(AppState()) }
-            AppShell(s, { s = it }, {}, {}, {}, {}, {}, {}, onExport = { exported = true })
+            AppShell(s, { s = it }, {}, {}, {}, {}, {}, {}, onExport = { asked += it })
         }
         settle()
-        (root.querySelectorAll("button").let { n ->
-            (0 until n.length).map { n[it] as HTMLButtonElement }
-        }.first { it.textContent?.trim() == "Export" }).click()
+        fun press(label: String) = (
+            root.querySelectorAll("button").let { n ->
+                (0 until n.length).map { n[it] as HTMLButtonElement }
+            }.first { it.textContent?.trim() == label }
+            ).click()
+        press("Copy")
         settle()
-        assertTrue(exported)
+        press("Download")
+        settle()
+        assertEquals(
+            listOf(org.mattshoe.mtg.core.ExportTo.CLIPBOARD, org.mattshoe.mtg.core.ExportTo.FILE),
+            asked,
+        )
     }
 }
 

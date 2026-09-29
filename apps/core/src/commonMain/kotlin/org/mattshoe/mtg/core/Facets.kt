@@ -72,6 +72,91 @@ object FacetQueries {
         watermarks, setTypes, layouts, frames, borders, decks,
     )
 
+    /**
+     * The eleven lists, in as few reads as D1 allows.
+     *
+     * Eleven round trips on every cold load is eleven queries queued
+     * behind each other at the one database the search is also using —
+     * which is what "D1 is overloaded, requests queued for too long"
+     * looks like from the outside. Stacked with `UNION ALL` they are
+     * three, and the rows say which list they came from.
+     *
+     * Five and not eleven because D1 refuses a compound SELECT with
+     * more than five terms — measured, not guessed: six answers "too
+     * many terms in compound SELECT".
+     */
+    const val MAX_UNION = 5
+
+    val everything: List<Sql> by lazy {
+        lists.chunked(MAX_UNION).map { group ->
+            Sql(
+                group.joinToString("\nUNION ALL\n") { (kind, inner) ->
+                    "SELECT '$kind' AS kind, v AS value, rn FROM (" +
+                        "SELECT value AS v, ROW_NUMBER() OVER () AS rn FROM ($inner))"
+                } + "\nORDER BY kind, rn",
+                emptyList(),
+            )
+        }
+    }
+
+    /**
+     * Each list as `SELECT ... AS value`, so they can be stacked.
+     *
+     * Spelled out rather than derived from `all`: the statements above
+     * name their own columns, and rewriting somebody else's SELECT list
+     * with a regular expression is how a column quietly goes missing.
+     */
+    private val lists: List<Pair<String, String>> = listOf(
+        "types" to "SELECT DISTINCT type AS value FROM card_types WHERE kind='type' AND type GLOB '[A-Za-z]*' ORDER BY 1",
+        "sets" to "SELECT DISTINCT upper(setcode) AS value FROM cards ORDER BY 1",
+        "keywords" to "SELECT DISTINCT keyword AS value FROM card_keywords ORDER BY 1",
+        "tags" to "SELECT tag_slug AS value FROM card_tags GROUP BY 1 ORDER BY COUNT(*) DESC LIMIT 600",
+        "formats" to "SELECT DISTINCT format AS value FROM legalities ORDER BY 1",
+        "artists" to "SELECT DISTINCT artist AS value FROM cards WHERE artist IS NOT NULL ORDER BY 1",
+        "watermarks" to "SELECT DISTINCT watermark AS value FROM cards WHERE watermark IS NOT NULL ORDER BY 1",
+        "setTypes" to "SELECT set_type AS value FROM cards WHERE set_type IS NOT NULL GROUP BY 1 ORDER BY COUNT(*) DESC",
+        "layouts" to "SELECT layout AS value FROM cards GROUP BY 1 ORDER BY COUNT(*) DESC",
+        "frames" to "SELECT DISTINCT frame AS value FROM cards WHERE frame IS NOT NULL ORDER BY 1",
+        "borders" to "SELECT DISTINCT border_color AS value FROM cards WHERE border_color IS NOT NULL ORDER BY 1",
+    )
+
+    /** Those reads' rows, back into the eleven lists. */
+    fun decodeEverything(
+        answers: List<Pair<List<String>, List<JsonArray>>>,
+        decks: List<DeckRef2>,
+    ): Facets {
+        val by = mutableMapOf<String, MutableList<String>>()
+        answers.forEach { (cols, rows) ->
+            val at = cols.withIndex().associate { (i, n) -> n to i }
+            fun JsonArray.str(n: String) = at[n]?.let { i ->
+                (getOrNull(i) as? kotlinx.serialization.json.JsonPrimitive)
+                    ?.takeIf { it !is kotlinx.serialization.json.JsonNull }?.content
+            }
+            rows.forEach { row ->
+                val kind = row.str("kind").orEmpty()
+                val value = row.str("value").orEmpty()
+                if (kind.isNotBlank() && value.isNotBlank()) {
+                    by.getOrPut(kind) { mutableListOf() } += value
+                }
+            }
+        }
+        fun of(kind: String): List<String> = by[kind].orEmpty()
+        return Facets(
+            types = of("types"),
+            sets = of("sets"),
+            keywords = of("keywords"),
+            tags = of("tags"),
+            formats = of("formats"),
+            artists = of("artists"),
+            watermarks = of("watermarks"),
+            setTypes = of("setTypes"),
+            layouts = of("layouts"),
+            frames = of("frames"),
+            borders = of("borders"),
+            decks = decks,
+        )
+    }
+
     fun decodeDecks(cols: List<String>, rows: List<JsonArray>): List<DeckRef2> {
         val at = cols.withIndex().associate { (i, n) -> n to i }
         fun JsonArray.str(n: String) = at[n]?.let { i ->

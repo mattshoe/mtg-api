@@ -185,6 +185,10 @@ function toTsv(cols, rows) {
 const cleanError = (e) => String(e.cause?.message || e.message || e)
   .replace(/^D1_(ERROR|EXEC_ERROR):\s*/, '');
 
+/** D1 under load, rather than anything wrong with the statement. */
+export const isOverloaded = (message) => /overload|queued for too long|too many|network connection lost|reset because of/i
+  .test(String(message || ''));
+
 /**
  * A statement that is one bare word almost never means what it says.
  *
@@ -278,11 +282,19 @@ export async function runQuery(db, body, { readOnly = false } = {}) {
   }
 
   let res;
+  const started = Date.now();
   try {
     res = await db.prepare(effective).bind(...params).all();
   } catch (e) {
-    return { status: 400, body: { error: await truthfulError(db, e, sql, capped, params) } };
+    const said = await truthfulError(db, e, sql, capped, params);
+    // D1 saying it is busy is not the statement's fault and not a
+    // permanent answer. Reported as a 400 it reached the screen as
+    // "Search failed"; as a 503 the client's backoff absorbs it.
+    return isOverloaded(said)
+      ? { status: 503, body: { error: said }, ms: Date.now() - started, failed: said }
+      : { status: 400, body: { error: said }, ms: Date.now() - started, failed: said };
   }
+  const ms = Date.now() - started;
 
   let results = res.results || [];
   let truncated = false;
@@ -297,7 +309,7 @@ export async function runQuery(db, body, { readOnly = false } = {}) {
   const rows = results.map((r) => cols.map((c) => r[c] ?? null));
 
   if (fmt === 'tsv') {
-    return { status: 200, text: toTsv(cols, rows), contentType: 'text/tab-separated-values' };
+    return { status: 200, text: toTsv(cols, rows), contentType: 'text/tab-separated-values', ms };
   }
 
   const out = fmt === 'objects'
@@ -309,5 +321,5 @@ export async function runQuery(db, body, { readOnly = false } = {}) {
     out.changes = res.meta.changes ?? 0;
     if (res.meta.last_row_id) out.last_row_id = res.meta.last_row_id;
   }
-  return { status: 200, body: out };
+  return { status: 200, body: out, ms };
 }

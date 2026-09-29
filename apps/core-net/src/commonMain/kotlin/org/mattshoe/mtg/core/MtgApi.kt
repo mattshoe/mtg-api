@@ -109,6 +109,7 @@ class MtgApi internal constructor(
         val res = http.post("$base${direction.path}") {
             contentType(ContentType.Application.Json)
             header("Authorization", "Bearer $token")
+            header(Idempotency.HEADER, Idempotency.key())
             setBody(CardsRequest(owner.slug, list, dryRun))
         }
         return res.decode()
@@ -140,6 +141,7 @@ class MtgApi internal constructor(
         val res = http.post("$base/decks/list") {
             contentType(ContentType.Application.Json)
             header("Authorization", "Bearer $token")
+            header(Idempotency.HEADER, Idempotency.key())
             setBody(DeckListRequest(slug, commander, list, dryRun))
         }
         return res.decode()
@@ -150,6 +152,7 @@ class MtgApi internal constructor(
         val res = http.post("$base/decks/disassemble") {
             contentType(ContentType.Application.Json)
             header("Authorization", "Bearer $token")
+            header(Idempotency.HEADER, Idempotency.key())
             setBody(DisassembleRequest(slug, dryRun))
         }
         return res.decode()
@@ -168,6 +171,7 @@ class MtgApi internal constructor(
         val res = http.post("$base/decks/create") {
             contentType(ContentType.Application.Json)
             header("Authorization", "Bearer $token")
+            header(Idempotency.HEADER, Idempotency.key())
             setBody(CreateDeckRequest(name, format, owner.slug, commander, list, dryRun))
         }
         return res.decode()

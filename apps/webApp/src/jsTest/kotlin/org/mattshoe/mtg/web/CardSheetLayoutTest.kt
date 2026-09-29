@@ -14,6 +14,7 @@ import kotlin.js.Promise
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
@@ -111,6 +112,24 @@ class CardSheetLayoutTest {
             .filter { it.getBoundingClientRect().right > limit }
             .map { it.tagName.lowercase() + "." + it.className }
         assertTrue(over.isEmpty(), "hanging off the right edge: $over")
+    }
+
+    @Test
+    fun theCardDrawerOffersAShare() = runTest {
+        // An overlay with no address could not be sent to anybody.
+        var shared = 0
+        val frame = document.createElement("div") as HTMLElement
+        document.body!!.appendChild(frame)
+        roots += frame
+        renderComposable(root = frame) {
+            CardSheet(detail(), onShare = { shared++ }) {}
+        }
+        settle()
+        val button = frame.all("button").firstOrNull { it.textContent?.trim() == "Share" }
+            ?: error("no Share button on the card drawer")
+        button.click()
+        settle()
+        assertEquals(1, shared)
     }
 
     @Test

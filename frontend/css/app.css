@@ -323,7 +323,10 @@ td.mono { font-family: var(--mono); font-size: 12.5px; }
 
 /* ---------------------------------------------------------------- cards */
 .grid {
-  display: grid; gap: 14px;
+  display: grid;
+  /* A little more between rows than columns: the caption under each
+     card ran almost into the picture below it. */
+  gap: 22px 14px;
   grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
 }
 .card {
@@ -344,17 +347,21 @@ td.mono { font-family: var(--mono); font-size: 12.5px; }
    picture and not somewhere under the caption. */
 .card-art { position: relative; display: block; }
 
-.card-meta { margin-top: 6px; font-size: 12px; line-height: 1.35; }
-.card-meta .nm {
-  font-weight: 550; display: -webkit-box; -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
+/* The name and how many, on one line. The name is the part that
+   gives way — a quantity cut in half is the one thing here that
+   cannot be guessed from the picture. */
+.card-meta {
+  margin-top: 7px; font-size: 12px; line-height: 1.35;
+  display: flex; align-items: baseline; gap: 7px;
 }
-.card-meta .sb { color: var(--text-3); display: flex; gap: 6px; align-items: center; }
+.card-meta .nm {
+  flex: 1; min-width: 0; font-weight: 550;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .card-meta .qty {
-  margin-left: auto; color: var(--text-2);
+  flex: none; color: var(--text-2);
   font: 700 11.5px/1 var(--mono); white-space: nowrap;
 }
-.card-meta .set { font-size: 11px; }
 
 .free-badge {
   position: absolute; left: 6px; bottom: 6px; padding: 2px 6px; border-radius: 5px;

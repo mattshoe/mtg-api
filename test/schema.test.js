@@ -4,7 +4,7 @@ import { get, post, sql, count, stubScryfall } from './helpers.js';
 const TABLES = [
   'aliases', 'card_faces', 'card_colors', 'card_finishes', 'card_frame_effects',
   'card_games', 'card_keywords', 'card_promo_types', 'card_search', 'card_tags',
-  'card_types', 'cards', 'deck_cards', 'deck_notes', 'decks', 'legalities',
+  'card_types', 'cards', 'deck_cards', 'deck_notes', 'decks', 'idempotency', 'legalities',
   'logs', 'maintenance_log', 'prices', 'rulings', 'tags',
 ];
 

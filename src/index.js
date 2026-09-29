@@ -29,13 +29,17 @@ import { mintToken, verifyToken, bearer } from './admin.js';
 import { lookupPrices } from './prices.js';
 import { runMaintenance, CRON_TASKS } from './maintenance.js';
 import { newEntry, writeEntry, buildLogQuery, logStats } from './log.js';
+import { keyFrom, claim, remember, release } from './idempotency.js';
 
 const JSON_HEADERS = {
   'content-type': 'application/json; charset=utf-8',
   'access-control-allow-origin': '*',
 };
 
-const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
+const json = (body, status = 200, extra) => new Response(JSON.stringify(body), {
+  status,
+  headers: extra ? { ...JSON_HEADERS, ...extra } : JSON_HEADERS,
+});
 
 const text = (body, contentType, status = 200) => new Response(body, {
   status,
@@ -117,20 +121,122 @@ export default {
     const entry = newEntry(request);
     let res;
     try {
-      res = await route(request, env, ctx, entry);
+      res = await guarded(request, env, ctx, entry);
     } catch (e) {
       // Nothing here is secret, so the real message is more useful than a
       // generic 500 — this is a private card database, not a public service.
       entry.level = 'error';
       entry.message = String(e.cause?.message || e.message || e);
       entry.detail = { stack: String(e.stack || '').split('\n').slice(0, 4).join(' | ') };
-      res = json({ error: entry.message }, 500);
+      // D1 saying it is busy is not the request's fault and not a
+      // permanent answer. As a 500 the client retried it; as a 400 it
+      // reached the screen. 503 is what it is, and what the client's
+      // backoff is for.
+      res = overloaded(entry.message)
+        ? json({ error: entry.message }, 503, { 'retry-after': '1' })
+        : json({ error: entry.message }, 500);
     }
     // After the response, never in front of it.
     ctx.waitUntil(writeEntry(env, entry, res.status));
     return res;
   },
 };
+
+/**
+ * What a query did, for the log.
+ *
+ * The statement, how long SQLite itself took, how many rows came back,
+ * and the error when there was one — the four things needed to answer
+ * "why was the app slow at 8pm" without guessing. `entry.ms` is the
+ * whole request; `db_ms` is the database's share of it.
+ */
+function queryDetail(body, out) {
+  const d = {
+    sql: String(body.sql || '').replace(/\s+/g, ' ').slice(0, 400),
+    params: Array.isArray(body.params) ? body.params.length : 0,
+    db_ms: out.ms ?? null,
+    n: out.body?.n ?? null,
+  };
+  if (out.body?.changes !== undefined) d.changes = out.body.changes;
+  if (out.body?.truncated) d.truncated = out.body.truncated;
+  if (out.failed) d.error = String(out.failed).slice(0, 300);
+  return d;
+}
+
+/** Worth a warning rather than a debug line. */
+const SLOW_MS = 1000;
+const slow = (out) => (out.ms ?? 0) >= SLOW_MS;
+
+/** D1 under load, rather than anything wrong with the request. */
+export function overloaded(message) {
+  return /overload|queued for too long|too many|network connection lost|reset because of/i
+    .test(String(message || ''));
+}
+
+/** Paths where sending the same request twice must not do the thing twice. */
+const MUTATIONS = new Set([
+  '/cards/add', '/cards/remove',
+  '/decks/list', '/decks/create', '/decks/disassemble',
+]);
+
+/**
+ * The idempotency wrapper.
+ *
+ * A retried write is only safe if the second attempt can be recognised as
+ * the same write. The client sends one key per logical mutation and keeps
+ * it across its own retries; the first attempt claims it and stores its
+ * reply, and anything after that gets the reply back without running.
+ *
+ * No key means no protection, which is the old behaviour — it is opt-in by
+ * the caller rather than something the server can invent.
+ */
+async function guarded(request, env, ctx, entry) {
+  const url = new URL(request.url);
+  const path = url.pathname.replace(/\/+$/, '') || '/';
+  const key = request.method.toUpperCase() === 'POST' && MUTATIONS.has(path)
+    ? keyFrom(request)
+    : null;
+
+  if (!key) return route(request, env, ctx, entry);
+
+  const held = await claim(env.DB, key, path);
+  if (held.conflict) {
+    entry.message = held.conflict;
+    return json({ error: held.conflict }, 409);
+  }
+  if (held.inFlight) {
+    entry.message = 'that write is already running';
+    return json({ error: 'that write is already in progress' }, 409, { 'retry-after': '1' });
+  }
+  if (held.replay) {
+    // Not counted as a write: nothing happened this time.
+    entry.detail = { ...(entry.detail || {}), idempotent_replay: true };
+    entry.message = 'replayed an earlier answer';
+    return json(held.replay.body, held.replay.status);
+  }
+
+  let res;
+  try {
+    res = await route(request, env, ctx, entry);
+  } catch (e) {
+    await release(env.DB, key);
+    throw e;
+  }
+
+  // Only an answer worth repeating is kept. A 5xx means try again for
+  // real, and holding it would turn one bad minute into a permanent one.
+  if (res.status < 500) {
+    const copy = res.clone();
+    ctx.waitUntil((async () => {
+      let body = null;
+      try { body = await copy.json(); } catch { body = null; }
+      await remember(env.DB, key, res.status, body);
+    })());
+  } else {
+    await release(env.DB, key);
+  }
+  return res;
+}
 
 async function route(request, env, ctx, entry) {
   const url = new URL(request.url);
@@ -143,7 +249,7 @@ async function route(request, env, ctx, entry) {
       headers: {
         'access-control-allow-origin': '*',
         'access-control-allow-methods': 'GET, POST, OPTIONS',
-        'access-control-allow-headers': 'content-type, authorization',
+        'access-control-allow-headers': 'content-type, authorization, idempotency-key',
       },
     });
   }
@@ -342,7 +448,9 @@ async function route(request, env, ctx, entry) {
           entry.admin = true;
         }
         const out = await runQuery(env.DB, body, { readOnly: true });
-        entry.detail = { sql: String(body.sql || '').slice(0, 300), n: out.body?.n };
+        entry.detail = queryDetail(body, out);
+        if (out.status >= 500) entry.level = 'error';
+        else if (slow(out)) entry.level = 'warn';
         // Without this a rejected GET logged no reason at all, which is how
         // two 400s went unexplained.
         if (out.status >= 400) entry.message = out.body?.error;
@@ -361,7 +469,9 @@ async function route(request, env, ctx, entry) {
     }
     entry.write = writes;
     const out = await runQuery(env.DB, body);
-    entry.detail = { sql: String(body.sql || '').slice(0, 300), n: out.body?.n, changes: out.body?.changes };
+    entry.detail = queryDetail(body, out);
+    if (out.status >= 500) entry.level = 'error';
+    else if (slow(out)) entry.level = 'warn';
     if (out.status >= 400) entry.message = out.body?.error;
     return send(out);
     }

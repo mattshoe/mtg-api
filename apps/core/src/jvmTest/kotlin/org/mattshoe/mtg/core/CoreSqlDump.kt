@@ -65,6 +65,7 @@ class CoreSqlDump {
         Load.card("sol ring", "matt").forEachIndexed { i, s -> case("card detail $i", s) }
         case("palette find", Load.find("sol"))
         FacetQueries.all.forEachIndexed { i, s -> case("facet $i", s) }
+        FacetQueries.everything.forEachIndexed { i, s -> case("facet lists, batch $i", s) }
         // `parseQueryBox` answers with a WHERE fragment rather than a
         // statement, so it is run the only way it is ever run: folded
         // into the Library's own query.

@@ -139,6 +139,28 @@ CREATE TABLE logs (
     admin   INTEGER
 );
 
+-- A write that was already applied, so a retry does not apply it twice.
+--
+-- Every mutation is one atomic batch, so a 5xx means nothing landed and
+-- retrying is free. The dangerous case is the other one: the batch
+-- committed and the response never arrived. The client cannot tell those
+-- apart, so it sends the same key both times and this table answers the
+-- second attempt with the first attempt's reply.
+--
+-- Rows are pruned by the daily job; a key is only useful for as long as a
+-- client might still be retrying.
+CREATE TABLE idempotency (
+    key      TEXT PRIMARY KEY,
+    path     TEXT NOT NULL,
+    ts       TEXT NOT NULL,
+    -- Null while the first attempt is still running. A second request
+    -- arriving on a claimed but unanswered key is told to wait rather
+    -- than being allowed to run the same write alongside it.
+    status   INTEGER,
+    body     TEXT
+);
+CREATE INDEX idx_idem_ts ON idempotency(ts);
+
 -- ============================================================ full text
 CREATE VIRTUAL TABLE card_search USING fts5(
     name, type_line, oracle_text, flavor_text, keywords, tags,

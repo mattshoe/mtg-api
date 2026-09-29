@@ -84,6 +84,19 @@ export async function refreshPrices(db, { fetchImpl = fetch } = {}) {
 }
 
 /** Drop price rows for printings nobody owns any more. */
+/**
+ * Yesterday's idempotency keys.
+ *
+ * A key is only useful while a client might still be retrying under it,
+ * which is seconds. Keeping a day of them costs nothing and means a
+ * replay is still possible for anything that went very wrong.
+ */
+export async function pruneIdempotency(db, days = 1) {
+  const cutoff = new Date(Date.now() - days * 86400_000).toISOString();
+  const r = await db.prepare('DELETE FROM idempotency WHERE ts < ?').bind(cutoff).run();
+  return { deleted: r.meta?.changes ?? 0 };
+}
+
 export async function prunePrices(db) {
   const r = await db.prepare(
     'DELETE FROM prices WHERE scryfall_id NOT IN (SELECT scryfall_id FROM cards WHERE scryfall_id IS NOT NULL)',
@@ -175,7 +188,7 @@ export async function healthCheck(db) {
  * scripts/refresh_prices.py. Everything here touches only D1 and therefore
  * cannot be rate-limited by anyone.
  */
-export const CRON_TASKS = ['prune-prices', 'prune-logs', 'orphans', 'search', 'health'];
+export const CRON_TASKS = ['prune-prices', 'prune-logs', 'prune-idempotency', 'orphans', 'search', 'health'];
 
 /**
  * Everything, in order, each logged separately so one failure does not
@@ -187,6 +200,10 @@ export async function runMaintenance(db, { fetchImpl = fetch, only, tasks: want 
     ['prune-prices', () => prunePrices(db)],
     // Logs are kept for a week. Without this they would grow forever.
     ['prune-logs', () => pruneLogs(db, RETENTION_DAYS)],
+    // An idempotency key only matters for as long as a client might
+    // still be retrying under it, which is seconds. A day is generous
+    // and keeps the table from growing forever.
+    ['prune-idempotency', () => pruneIdempotency(db)],
     ['orphans', () => sweepOrphans(db)],
     ['search', () => repairSearch(db)],
     ['health', () => healthCheck(db)],

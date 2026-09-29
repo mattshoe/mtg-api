@@ -87,6 +87,20 @@ object Inventory {
                 "theHeaderSaysWhatYouAreLookingAt", "andAnOpenDeckPutsItsOwnNameThere",
                 "theMarkIsTheSameSizeAsTheHamburgerBesideIt",
             )),
+        Feature(Area.ADMIN, "A retried write applies once, not twice",
+            "api.js", logic = true, done = true,
+            tests = listOf(
+                "aKeyIsThirtyTwoHexCharacters", "everyKeyIsItsOwn",
+                "everyWriteCarriesOne", "aReadCarriesNone",
+            )),
+        Feature(Area.CARD, "Share a link to the card or the deck you are looking at",
+            "card.js", logic = true, done = true,
+            tests = listOf(
+                "aLinkIsTheWholeAddressNotJustTheFragment",
+                "theLinkToACardCarriesTheCardAndTheSearchUnderIt",
+                "theTitleIsTheCardWhenOneIsOpenAndThePageWhenNot",
+                "theCardDrawerOffersAShare", "anOpenDeckOffersAShare",
+            )),
         Feature(Area.ADMIN, "Every call retries a flaky network before it gives up",
             "api.js", logic = true, done = true,
             tests = listOf(
@@ -200,8 +214,8 @@ object Inventory {
             tests = listOf(
                 "theExportQueryIsUnpagedAndCapped", "theExportKeepsTheSearchItWasMadeFrom",
                 "aDecklistIsQuantityAndName", "aTwoFacedCardExportsWithBothNames",
-                "anEmptySearchExportsNothingRatherThanABlankLine", "theFilenameCarriesTheDate", "exportIsOffered",
-                "exportAsksForAnExport",
+                "anEmptySearchExportsNothingRatherThanABlankLine", "theFilenameCarriesTheDate", "bothWaysOutOfALibraryAreOffered",
+                "exportAsksWhereItIsGoing",
                 "theExportTextIsWhatGoesOnTheClipboard",
             )),
         Feature(Area.LIBRARY, "Prices fetched and shown, with a reason when missing", "prices.js", logic = true, done = true,

@@ -156,12 +156,12 @@ describe('runMaintenance', () => {
     const out = await runMaintenance(env.DB, { fetchImpl: stubPricer() });
     expect(out.ok).toBe(true);
     expect(Object.keys(out.results)).toEqual(
-      ['prices', 'prune-prices', 'prune-logs', 'orphans', 'search', 'health'],
+      ['prices', 'prune-prices', 'prune-logs', 'prune-idempotency', 'orphans', 'search', 'health'],
     );
 
     const logged = await sql('SELECT task, ok FROM maintenance_log ORDER BY id');
     expect(logged.map((l) => l.task)).toEqual(
-      ['prices', 'prune-prices', 'prune-logs', 'orphans', 'search', 'health', 'run'],
+      ['prices', 'prune-prices', 'prune-logs', 'prune-idempotency', 'orphans', 'search', 'health', 'run'],
     );
     expect(logged.every((l) => l.ok === 1)).toBe(true);
   });

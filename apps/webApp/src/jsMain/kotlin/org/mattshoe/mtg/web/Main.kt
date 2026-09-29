@@ -11,6 +11,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.await
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.jetbrains.compose.web.renderComposable
@@ -27,6 +28,7 @@ import org.mattshoe.mtg.core.DeckQueries
 import org.mattshoe.mtg.core.DisassembleState
 import org.mattshoe.mtg.core.EntryHistory
 import org.mattshoe.mtg.core.Export
+import org.mattshoe.mtg.core.ExportTo
 import org.mattshoe.mtg.core.FacetQueries
 import org.mattshoe.mtg.core.FilterUrl
 import org.mattshoe.mtg.core.Found
@@ -38,6 +40,7 @@ import org.mattshoe.mtg.core.PaletteQueries
 import org.mattshoe.mtg.core.Route
 import org.mattshoe.mtg.core.Rows
 import org.mattshoe.mtg.core.Scryfall
+import org.mattshoe.mtg.core.Share
 import org.mattshoe.mtg.core.StatsQueries
 import org.mattshoe.mtg.core.Store
 import org.mattshoe.mtg.core.Table
@@ -76,7 +79,25 @@ object MtgApp {
      * it, and a listener registered per recomposition is a listener
      * registered a hundred times.
      */
-    private var app by mutableStateOf(AppState())
+    private var held by mutableStateOf(AppState())
+
+    /**
+     * The state, and the address bar following it.
+     *
+     * Every write goes through here rather than through the one
+     * callback the composition owns. That callback only fires for
+     * things the user clicked *in* a screen — opening a card writes
+     * `app` directly from `openNamed`, so the card-in-the-URL support
+     * existed and nothing ever drove it. A link to a card was
+     * unshareable because the bar never said there was one.
+     */
+    private var app: AppState
+        get() = held
+        set(value) {
+            val was = held
+            held = value
+            if (value.hash() != was.hash()) rememberSearch(value)
+        }
 
     private var listening = false
     /**
@@ -119,17 +140,14 @@ object MtgApp {
                 state = state,
                 onState = { next ->
                     val was = app
-                    app = next
+                    // A real navigation pushes; everything else the
+                    // setter has already replaced in place.
                     if (next.view != was.view || next.route.rest != was.route.rest) {
+                        held = next
                         window.location.hash = next.hash().removePrefix("#")
                         loadFor(next)
-                    } else if (next.hash() != was.hash()) {
-                        // Replace rather than push: a filter changes on
-                        // every keystroke and the back button should
-                        // still reach the page you came from. Compared
-                        // on the whole hash, so closing the card takes
-                        // it back out of the address as well.
-                        rememberSearch(next)
+                    } else {
+                        app = next
                     }
                 },
                 onUnlock = { password ->
@@ -164,7 +182,8 @@ object MtgApp {
                         done
                     }
                 },
-                onExport = { work { exportList(app) } },
+                onExport = { where -> work { exportList(app, where) } },
+                onShare = { share() },
                 onOpenCard = { row -> openCard(row) },
                 onOpenFound = { found -> openFound(found) },
                 onOpenNamed = { name, norm, owner -> openNamed(name, norm, owner) },
@@ -200,10 +219,12 @@ object MtgApp {
         navComposition = renderComposable(root = root) {
             AppNav(app) { next ->
                 val was = app
-                app = next
                 if (next.view != was.view || next.route.rest != was.route.rest) {
+                    held = next
                     window.location.hash = next.hash().removePrefix("#")
                     loadFor(next)
+                } else {
+                    app = next
                 }
             }
         }
@@ -230,10 +251,12 @@ object MtgApp {
             if (next != null) {
                 e.preventDefault()
                 val was = app
-                app = next
                 if (next.view != was.view) {
+                    held = next
                     window.location.hash = next.hash().removePrefix("#")
                     loadFor(next)
+                } else {
+                    app = next
                 }
             }
         })
@@ -246,9 +269,12 @@ object MtgApp {
         })
 
         window.addEventListener("hashchange", {
+            // `held` rather than `app` throughout: the setter would
+            // write the address back while the browser is telling us
+            // it changed.
             val route = routeFromHash()
             if (route.view != app.view || route.rest != app.route.rest) {
-                app = app.navigate(route)
+                held = app.navigate(route)
                     .let { if (route.view != View.LIBRARY) it else it.restoredSearch(FilterUrl.fromHash(route.query)) }
                 loadFor(app)
             }
@@ -274,10 +300,17 @@ object MtgApp {
         if (app.facets.loaded) return
         scope.launch {
             try {
-                val columns = FacetQueries.all.dropLast(1).map { Rows.column(api.query(it).rows) }
+                // Four reads, not thirteen. Eleven round trips on
+                // every cold load queued behind each other at the one
+                // database the search was also using, which is what
+                // "D1 is overloaded" looked like from here.
+                val all = FacetQueries.everything.map { api.query(it).let { r -> r.cols to r.rows } }
                 val d = api.query(FacetQueries.decks)
                 app = app.copy(
-                    facets = FacetQueries.assemble(columns, FacetQueries.decodeDecks(d.cols, d.rows)),
+                    facets = FacetQueries.decodeEverything(
+                        all,
+                        FacetQueries.decodeDecks(d.cols, d.rows),
+                    ),
                 )
             } catch (e: Exception) {
                 // A panel with typed fields instead of checkbox lists is
@@ -506,11 +539,56 @@ object MtgApp {
 
     // ---------------------------------------------------------- export
 
-    private suspend fun exportList(s: AppState): AppState {
+    private suspend fun exportList(s: AppState, where: ExportTo): AppState {
         val r = api.query(Export.query(s.library.filters))
         val text = Export.decklist(Rows.cards(r.cols, r.rows))
-        download(Export.filename(today()), text)
-        return app.say("Exported ${r.rows.size} rows")
+        return when (where) {
+            ExportTo.FILE -> {
+                download(Export.filename(today()), text)
+                app.say("Exported ${r.rows.size} cards")
+            }
+
+            ExportTo.CLIPBOARD -> {
+                if (copy(text)) app.say("${r.rows.size} cards copied")
+                else app.say("could not reach the clipboard")
+            }
+        }
+    }
+
+    /**
+     * A link to what is on screen, on the clipboard.
+     *
+     * The share sheet where there is one — a phone browser — and the
+     * clipboard everywhere else, which is what a desk actually wants.
+     */
+    private fun share() {
+        val url = Share.link(app)
+        val nav = window.navigator.asDynamic()
+        if (nav.share != null) {
+            try {
+                nav.share(js("({})").unsafeCast<Any>().also {
+                    it.asDynamic().title = Share.title(app)
+                    it.asDynamic().url = url
+                })
+                return
+            } catch (e: Throwable) {
+                // No share sheet after all. The clipboard still works.
+            }
+        }
+        scope.launch { app = if (copy(url)) app.say("Link copied") else app.say(url) }
+    }
+
+    /** True when it landed. `writeText` is a promise and can be refused. */
+    private suspend fun copy(text: String): Boolean = try {
+        val clip = window.navigator.asDynamic().clipboard
+        if (clip == null) {
+            false
+        } else {
+            (clip.writeText(text) as kotlin.js.Promise<Unit>).await()
+            true
+        }
+    } catch (e: Throwable) {
+        false
     }
 
     private fun download(name: String, text: String) {

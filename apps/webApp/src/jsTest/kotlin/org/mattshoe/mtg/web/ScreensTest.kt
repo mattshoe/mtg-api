@@ -198,19 +198,23 @@ class ScreensTest {
     }
 
     @Test
-    fun exportIsOffered() = runTest {
-        var exported = false
+    fun bothWaysOutOfALibraryAreOffered() = runTest {
+        val asked = mutableListOf<org.mattshoe.mtg.core.ExportTo>()
         val root = mount {
             LibraryPage(
                 Library().loaded(listOf(card("Sol Ring")), 1),
                 {}, {}, {},
-                onExport = { exported = true },
+                onExport = { asked += it },
             )
         }
         settle()
-        root.button("Export").click()
+        root.button("Copy").click()
+        root.button("Download").click()
         settle()
-        assertTrue(exported)
+        assertEquals(
+            listOf(org.mattshoe.mtg.core.ExportTo.CLIPBOARD, org.mattshoe.mtg.core.ExportTo.FILE),
+            asked,
+        )
     }
 
     @Test

@@ -16,6 +16,7 @@ import org.jetbrains.compose.web.dom.Text
 import org.mattshoe.mtg.core.CardQueries
 import org.mattshoe.mtg.core.CardRow
 import org.mattshoe.mtg.core.Completion
+import org.mattshoe.mtg.core.ExportTo
 import org.mattshoe.mtg.core.Facets
 import org.mattshoe.mtg.core.Library
 import org.mattshoe.mtg.core.Prices
@@ -38,7 +39,7 @@ fun LibraryPage(
     onState: (Library) -> Unit,
     onSearch: () -> Unit,
     onOpen: (CardRow) -> Unit,
-    onExport: () -> Unit = {},
+    onExport: (ExportTo) -> Unit = {},
     complete: Completion = Completion(),
     onName: (Completion) -> Unit = {},
     facets: Facets = Facets(),
@@ -84,10 +85,15 @@ fun LibraryPage(
                 Div(attrs = { classes("flex-wrap") }) {
                     SortPicker(state, ::apply)
                     Span(attrs = { classes("spacer") }) {}
-                    Button(attrs = {
-                        classes("btn", "sm", "ghost")
-                        onClick { onExport() }
-                    }) { Text("Export") }
+                    // Two places a list is ever wanted: the
+                    // clipboard, to paste into a deckbuilder, and a
+                    // file, to keep.
+                    ExportTo.entries.forEach { where ->
+                        Button(attrs = {
+                            classes("btn", "sm", "ghost")
+                            onClick { onExport(where) }
+                        }) { Text(where.label) }
+                    }
                 }
             }
         }
@@ -168,13 +174,13 @@ private fun Tile(card: CardRow, onOpen: (CardRow) -> Unit) {
             }
             Div(attrs = { classes("price-badge") }) { Text(Prices.money(card.price, dash = "")) }
         }
+        // The name and how many, on one line. The mana cost was a
+        // string of `{1}{G}` with no symbols behind it and the set
+        // code meant nothing next to a picture that already shows it.
+        // The name gives way so the quantity is always readable.
         Div(attrs = { classes("card-meta") }) {
-            Span(attrs = { classes("nm") }) { Text(card.fullName) }
-            Span(attrs = { classes("sb") }) {
-                Span { Text(card.manaCost.orEmpty()) }
-                Span(attrs = { classes("qty") }) { Text("×${card.qty}") }
-                Span(attrs = { classes("set") }) { Text(card.setCode?.uppercase().orEmpty()) }
-            }
+            Span(attrs = { classes("nm"); attr("title", card.fullName) }) { Text(card.fullName) }
+            Span(attrs = { classes("qty") }) { Text("×${card.qty}") }
         }
     }
 }

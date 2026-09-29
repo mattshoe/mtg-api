@@ -24,6 +24,7 @@ fun DecksPage(
     onEdit: (Deck) -> Unit = {},
     onDisassemble: (Deck) -> Unit = {},
     onOpenCard: (DeckCard, String) -> Unit = { _, _ -> },
+    onShare: () -> Unit = {},
 ) {
     Div(attrs = { classes("wrap") }) {
         val open = state.open
@@ -74,6 +75,11 @@ fun DecksPage(
                     )
                 }
                 Span(attrs = { classes("spacer") }) {}
+                Button(attrs = {
+                    classes("btn", "sm", "ghost")
+                    attr("title", "Copy a link to this deck")
+                    onClick { onShare() }
+                }) { Text("Share") }
                 if (admin) {
                     // Both of these move real cards, and both show the
                     // server's own dry run before they are allowed to.

@@ -16,6 +16,7 @@ import org.jetbrains.compose.web.dom.Text
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.CardRow
 import org.mattshoe.mtg.core.EntryHistory
+import org.mattshoe.mtg.core.ExportTo
 import org.mattshoe.mtg.core.Found
 import org.mattshoe.mtg.core.HistoryEntry
 import org.mattshoe.mtg.core.Overlay
@@ -43,11 +44,13 @@ fun AppShell(
     onRunSql: () -> Unit,
     onPreviewEntry: () -> Unit,
     onApplyEntry: () -> Unit,
-    onExport: () -> Unit = {},
+    onExport: (ExportTo) -> Unit = {},
     onOpenCard: (CardRow) -> Unit = {},
     onOpenFound: (Found) -> Unit = {},
     /** A card tapped in a deck list. Carries its own `name_norm`. */
     onOpenNamed: (String, String, String) -> Unit = { _, _, _ -> },
+    /** Copy a link to whatever is on screen. */
+    onShare: () -> Unit = {},
     onFind: (String) -> Unit = {},
     onLookup: (String) -> Unit = {},
     onFiles: (List<File>) -> Unit = {},
@@ -101,6 +104,7 @@ fun AppShell(
             onEdit = { onEditDeck(it.slug) },
             onDisassemble = { onAskDisassemble(it.slug) },
             onOpenCard = { card, owner -> onOpenNamed(card.name, card.nameNorm, owner) },
+            onShare = onShare,
         )
 
         View.STATS -> StatsPage(state.stats) { owner: Owner? ->
@@ -137,7 +141,11 @@ fun AppShell(
     // ------------------------------------------------------- overlays
 
     state.card?.takeIf { Overlay.CARD in state.overlays }?.let { card ->
-        CardSheet(card) { onState(state.closing(Overlay.CARD)) }
+        CardSheet(
+            card = card,
+            onClose = { onState(state.closing(Overlay.CARD)) },
+            onShare = onShare,
+        )
     }
 
     if (Overlay.PALETTE in state.overlays) {
