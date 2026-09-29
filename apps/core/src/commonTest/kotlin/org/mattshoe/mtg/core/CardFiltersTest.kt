@@ -131,7 +131,7 @@ class CardFiltersTest {
     @Test
     fun aLiteralTextSearchIsALikeNotAMatch() {
         val sql = where(Filters(textLike = "draw a card"))
-        assertTrue(sql.contains("lower(c.oracle_text) LIKE ?"))
+        assertTrue(sql.contains("COALESCE(lower(c.oracle_text), '') LIKE ?"), sql)
         // LIKE's own wildcards are escaped, so the clause declares
         // what the escape character is.
         assertTrue(sql.contains("ESCAPE"), sql)

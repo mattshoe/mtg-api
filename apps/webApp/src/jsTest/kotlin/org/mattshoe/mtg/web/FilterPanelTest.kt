@@ -330,7 +330,7 @@ class FilterPanelTest {
         p.fold("text"); settle()
         p.type("sol ring", "bolt"); settle()
         assertEquals("bolt", p.filters().q)
-        p.type("draw a card", "draw"); settle()
+        p.type("draw card", "draw"); settle()
         assertEquals("draw", p.filters().text)
         p.type("enters tapped", "enters the battlefield tapped"); settle()
         assertEquals("enters the battlefield tapped", p.filters().textLike)

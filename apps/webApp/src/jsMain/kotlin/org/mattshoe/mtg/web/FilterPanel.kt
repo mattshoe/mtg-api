@@ -244,14 +244,20 @@ private fun Mana(f: Filters, onChange: (Filters) -> Unit) {
 
 @Composable
 private fun Words(f: Filters, onChange: (Filters) -> Unit) {
-    Row("Name contains") { TextBox(f.q, "sol ring") { onChange(f.copy(q = it)) } }
+    Row("Name contains") {
+        TextBox(f.q, "sol ring") { onChange(f.copy(q = it)) }
+        Div(attrs = { classes("hint") }) { Text("every word, in either face. \"phrase\", !exclude") }
+    }
     Row("Rules text") {
-        TextBox(f.text, "draw a card") { onChange(f.copy(text = it)) }
-        Div(attrs = { classes("hint") }) { Text("full-text, stemmed") }
+        TextBox(f.text, "draw card") { onChange(f.copy(text = it)) }
+        Div(attrs = { classes("hint") }) {
+            Text("full-text and stemmed. every word must match; ")
+            Text("\"quote a phrase\"; !exclude")
+        }
     }
     Row("Exact text") {
         TextBox(f.textLike, "enters tapped") { onChange(f.copy(textLike = it)) }
-        Div(attrs = { classes("hint") }) { Text("literal substring") }
+        Div(attrs = { classes("hint") }) { Text("literal, not stemmed. same quoting and !") }
     }
     Row("Flavour text") { TextBox(f.flavor, "") { onChange(f.copy(flavor = it)) } }
     Row("Artist") { TextBox(f.artist, "Rebecca Guay") { onChange(f.copy(artist = it)) } }

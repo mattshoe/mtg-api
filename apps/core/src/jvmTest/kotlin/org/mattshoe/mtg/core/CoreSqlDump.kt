@@ -56,6 +56,28 @@ class CoreSqlDump {
         }
         case("export", Load.export(Filters(owner = "matt")))
 
+        // The search box, every shape it can take. These are the ones
+        // only a database can vet: an fts5 expression is a little
+        // language, and a `MATCH` it dislikes is a runtime error the
+        // Kotlin side cannot see.
+        listOf(
+            "two words" to Filters(text = "draw card"),
+            "a phrase" to Filters(text = "\"draw a card\""),
+            "a word and an exclusion" to Filters(text = "draw !token"),
+            "only exclusions" to Filters(text = "!token !proliferate"),
+            "an excluded phrase" to Filters(text = "!\"enters the battlefield tapped\""),
+            "punctuation" to Filters(text = "+1/+1"),
+            "a colon" to Filters(text = "Landfall:"),
+            "a quote inside a phrase" to Filters(text = "\"it's\""),
+            "a name in two words" to Filters(q = "sol ring"),
+            "a name excluded" to Filters(q = "ring !sol"),
+            "every text box at once" to Filters(
+                q = "a !z", text = "draw !token", textLike = "enters !tapped",
+                flavor = "the !never", artist = "guay !nobody",
+                watermark = "boros !izzet", typeLine = "creature !land",
+            ),
+        ).forEach { (name, f) -> case("search: $name", Load.library(Library(f)).first) }
+
         // --- everything else, which no test has ever executed
         case("decks", Load.decks())
         case("one deck", Load.deck("a-deck"))

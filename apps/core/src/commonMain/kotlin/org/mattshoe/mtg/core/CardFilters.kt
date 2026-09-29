@@ -232,6 +232,33 @@ data class Sql(val sql: String, val params: List<Any?>)
  */
 internal fun ftsPhrase(raw: String): String = "\"" + raw.replace("\"", "\"\"") + "\""
 
+/**
+ * The oracle-text box, as two FTS5 lookups.
+ *
+ * Positive terms are ANDed into one `MATCH`; negative terms are ORed
+ * into a second and subtracted. Two clauses rather than FTS5's own
+ * `NOT`, which is a binary operator and therefore has nothing to
+ * subtract from when every term is negative — `!token` on its own was
+ * the case that made the one-expression version impossible.
+ */
+internal fun ftsClause(raw: String, c: Clauses) {
+    val terms = TextQuery.parse(raw)
+    if (terms.isEmpty()) return
+    val (no, yes) = terms.partition { it.negated }
+    if (yes.isNotEmpty()) {
+        c.add(
+            "c.id IN (SELECT rowid FROM card_search WHERE card_search MATCH ?)",
+            TextQuery.fts(yes, "AND"),
+        )
+    }
+    if (no.isNotEmpty()) {
+        c.add(
+            "c.id NOT IN (SELECT rowid FROM card_search WHERE card_search MATCH ?)",
+            TextQuery.fts(no, "OR"),
+        )
+    }
+}
+
 internal class Clauses {
     val where = mutableListOf<String>()
     val params = mutableListOf<Any?>()
@@ -240,6 +267,28 @@ internal class Clauses {
     fun addLike(column: String, value: String) {
         where += "$column LIKE ? ESCAPE '\\'"
         params += like(value)
+    }
+
+    /**
+     * A search box, over one or more columns.
+     *
+     * Every word has to match somewhere; a quoted run has to match as
+     * written; a `!` word must match nowhere. Across several columns a
+     * positive term is an OR — "bolt" may be in the front face or the
+     * back — and a negative term has to be absent from all of them,
+     * which is the same OR with a NOT in front.
+     *
+     * `COALESCE` because a NULL column is not "does not contain": in
+     * SQL `NULL NOT LIKE '%x%'` is NULL, which is not true, so a card
+     * with no flavour text would be filtered out by `!goblin`.
+     */
+    fun search(columns: List<String>, raw: String) {
+        TextQuery.parse(raw).forEach { term ->
+            val pattern = like(term.text)
+            val any = columns.joinToString(" OR ") { "COALESCE($it, '') LIKE ? ESCAPE '\\'" }
+            where += if (term.negated) "NOT ($any)" else "($any)"
+            repeat(columns.size) { params += pattern }
+        }
     }
 
     fun add(clause: String, vararg values: Any?) {
@@ -326,26 +375,15 @@ fun conditions(s: Filters): Sql {
 
     if (s.owner.isNotBlank() && s.owner != "both") c.add("c.owner = ?", s.owner)
 
-    s.q.trim().takeIf { it.isNotEmpty() }?.let {
-        // Three placeholders, not `?1` three times. A numbered
-        // parameter renumbers every bare `?` around it, so the owner
-        // clause added just above ended up bound to the name and the
-        // whole statement came back "wrong number of parameter
-        // bindings" the moment both were set.
-        val pattern = c.like(it)
-        c.add(
-            "(c.name_norm LIKE ? ESCAPE '\\' OR lower(c.face1) LIKE ? ESCAPE '\\' " +
-                "OR lower(c.face2) LIKE ? ESCAPE '\\')",
-            pattern, pattern, pattern,
-        )
-    }
-    s.text.trim().takeIf { it.isNotEmpty() }
-        ?.let { c.add("c.id IN (SELECT rowid FROM card_search WHERE card_search MATCH ?)", ftsPhrase(it)) }
-    s.textLike.trim().takeIf { it.isNotEmpty() }?.let { c.addLike("lower(c.oracle_text)", it) }
-    s.flavor.trim().takeIf { it.isNotEmpty() }?.let { c.addLike("lower(c.flavor_text)", it) }
-    s.artist.trim().takeIf { it.isNotEmpty() }?.let { c.addLike("lower(c.artist)", it) }
-    s.watermark.trim().takeIf { it.isNotEmpty() }?.let { c.addLike("lower(c.watermark)", it) }
-    s.typeLine.trim().takeIf { it.isNotEmpty() }?.let { c.addLike("lower(c.type_line)", it) }
+    // Both faces, so "bolt" finds a card whose back is the bolt.
+    // `name_norm` is stored lowercased; the other two are lowered here.
+    c.search(listOf("c.name_norm", "lower(c.face1)", "lower(c.face2)"), s.q)
+    ftsClause(s.text, c)
+    c.search(listOf("lower(c.oracle_text)"), s.textLike)
+    c.search(listOf("lower(c.flavor_text)"), s.flavor)
+    c.search(listOf("lower(c.artist)"), s.artist)
+    c.search(listOf("lower(c.watermark)"), s.watermark)
+    c.search(listOf("lower(c.type_line)"), s.typeLine)
     s.manaCost.trim().takeIf { it.isNotEmpty() }
         ?.let { c.add("replace(c.mana_cost, ' ', '') LIKE ?", c.like(it.replace(Regex("\\s"), ""))) }
     s.collnum.trim().takeIf { it.isNotEmpty() }?.let { c.add("c.collector_number = ?", it) }
