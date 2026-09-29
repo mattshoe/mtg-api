@@ -19,6 +19,7 @@ import org.mattshoe.mtg.core.ApiFailure
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.CardDetail
 import org.mattshoe.mtg.core.CardQueries
+import org.mattshoe.mtg.core.CardRef
 import org.mattshoe.mtg.core.CardRow
 import org.mattshoe.mtg.core.Completion
 import org.mattshoe.mtg.core.DeckEditState
@@ -95,11 +96,13 @@ object MtgApp {
         app = AppState(admin = Admin(token.ifBlank { null }), history = EntryHistory.load(store))
             // A search is a link: the filters travel in the hash, so a
             // URL somebody sent opens the search they were looking at.
-            .let { it.copy(library = it.library.restoredFrom(FilterUrl.fromHash(opening.query))) }
+            .let { it.restoredSearch(FilterUrl.fromHash(opening.query)) }
             .let { if (sharedList.isNullOrBlank()) it.navigate(opening) else it.withShare(sharedList) }
         listen()
         loadFor(app)
         loadFacets()
+        // And the card, if the link had one open over the page.
+        CardRef.from(opening.query)?.let { reopen(it) }
 
         composition = renderComposable(root = root) {
             val state = app
@@ -119,10 +122,12 @@ object MtgApp {
                     if (next.view != was.view || next.route.rest != was.route.rest) {
                         window.location.hash = next.hash().removePrefix("#")
                         loadFor(next)
-                    } else if (next.view == View.LIBRARY && next.library.filters != was.library.filters) {
+                    } else if (next.hash() != was.hash()) {
                         // Replace rather than push: a filter changes on
                         // every keystroke and the back button should
-                        // still reach the page you came from.
+                        // still reach the page you came from. Compared
+                        // on the whole hash, so closing the card takes
+                        // it back out of the address as well.
                         rememberSearch(next)
                     }
                 },
@@ -219,11 +224,15 @@ object MtgApp {
             val route = routeFromHash()
             if (route.view != app.view || route.rest != app.route.rest) {
                 app = app.navigate(route)
-                    .let {
-                        if (route.view != View.LIBRARY) it
-                        else it.copy(library = it.library.restoredFrom(FilterUrl.fromHash(route.query)))
-                    }
+                    .let { if (route.view != View.LIBRARY) it else it.restoredSearch(FilterUrl.fromHash(route.query)) }
                 loadFor(app)
+            }
+            // The card is not part of the route, so it is checked
+            // separately — a link pasted into the bar with `card=` on
+            // it opens the drawer without a reload.
+            val want = CardRef.from(route.query)
+            if (want != app.cardRef) {
+                if (want == null) app.dismissTop()?.let { app = it } else reopen(want)
             }
         })
     }
@@ -269,12 +278,49 @@ object MtgApp {
 
     private fun token() = app.admin.token.orEmpty()
 
+    /**
+     * Fetch what a view needs, and say so while it is happening.
+     *
+     * Decks and Stats used to go straight to `work`, which leaves
+     * `busy` false — so the page rendered its empty state, "No decks
+     * yet", over a load that was still in flight, and kept rendering
+     * it if the load failed because the failure went to a toast
+     * instead of to the page. It read as the decks having vanished.
+     */
     private fun loadFor(s: AppState) {
         when (s.view) {
             View.LIBRARY -> searchSoon()
-            View.DECKS -> work { if (s.route.rest.isEmpty()) loadDecks(s) else openDeck(s, s.route.rest) }
-            View.STATS -> work { loadStats(s) }
+
+            View.DECKS -> {
+                app = app.fetching(View.DECKS)
+                intoPage(View.DECKS) {
+                    if (s.route.rest.isEmpty()) loadDecks(s) else openDeck(s, s.route.rest)
+                }
+            }
+
+            View.STATS -> {
+                app = app.fetching(View.STATS)
+                intoPage(View.STATS) { loadStats(s) }
+            }
+
             else -> Unit
+        }
+    }
+
+    /**
+     * Like `work`, but a failure lands on the screen that asked for it
+     * rather than in a toast that has already gone by the time the
+     * empty state is read.
+     */
+    private fun intoPage(view: View, block: suspend () -> AppState) {
+        scope.launch {
+            app = try {
+                block()
+            } catch (e: ApiFailure) {
+                app.fetchFailed(e.message ?: "something went wrong", view)
+            } catch (e: Exception) {
+                app.fetchFailed(e.message ?: e.toString(), view)
+            }
         }
     }
 
@@ -329,9 +375,13 @@ object MtgApp {
     }
 
     private suspend fun openDeck(s: AppState, slug: String): AppState {
-        val all = if (app.decks.decks.isEmpty()) loadDecks(s) else app
+        // The list first, because the header needs the deck's own row.
+        if (app.decks.decks.isEmpty()) app = loadDecks(s)
         val r = api.query(DeckQueries.cards(slug))
-        return all.copy(decks = all.decks.opened(slug, DeckQueries.decodeCards(r.cols, r.rows)))
+        // Read `app` again rather than the copy captured before the
+        // query: anything that landed while it was in flight — the
+        // facet lists, a toast — would otherwise be thrown away.
+        return app.copy(decks = app.decks.opened(slug, DeckQueries.decodeCards(r.cols, r.rows)))
             .navigate(Route(View.DECKS, slug))
     }
 
@@ -349,9 +399,7 @@ object MtgApp {
     // ------------------------------------------------------ card detail
 
     private fun openCard(row: CardRow) {
-        app = app.copy(card = CardDetail(name = row.fullName, owner = row.owner).loading())
-            .opening(Overlay.CARD)
-        work { loadCard(row.nameNorm, row.owner, row.fullName) }
+        openNamed(row.fullName, row.nameNorm, row.owner)
     }
 
     /**
@@ -362,16 +410,28 @@ object MtgApp {
      * accent or an em dash in it. A deck list has the real column.
      */
     private fun openNamed(name: String, nameNorm: String, owner: String) {
-        app = app.copy(card = CardDetail(name = name, owner = owner).loading())
+        app = app.copy(card = CardDetail(name = name, owner = owner, nameNorm = nameNorm).loading())
             .opening(Overlay.CARD)
         work { loadCard(nameNorm, owner, name) }
     }
 
+    /**
+     * A card that arrived in the address bar.
+     *
+     * All a link carries is `owner:name_norm`, so the title starts as
+     * the normalised name and is replaced by the real one as soon as a
+     * printing says what it is.
+     */
+    private fun reopen(ref: CardRef) {
+        openNamed(ref.nameNorm, ref.nameNorm, ref.owner)
+    }
+
     private fun openFound(found: Found) {
+        val norm = found.name.lowercase()
         app = app.closing(Overlay.PALETTE)
-            .copy(card = CardDetail(name = found.name, owner = found.owner).loading())
+            .copy(card = CardDetail(name = found.name, owner = found.owner, nameNorm = norm).loading())
             .opening(Overlay.CARD)
-        work { loadCard(found.name.lowercase(), found.owner, found.name) }
+        work { loadCard(norm, found.owner, found.name) }
     }
 
     private suspend fun loadCard(nameNorm: String, owner: String, label: String): AppState {
@@ -380,15 +440,17 @@ object MtgApp {
         val u = api.query(uses)
         val l = api.query(legal)
         val r = api.query(rules)
+        val owned = CardQueries.decodePrintings(p.cols, p.rows)
         return app.copy(
             card = CardDetail(
                 name = label,
                 owner = owner,
-                printings = CardQueries.decodePrintings(p.cols, p.rows),
+                nameNorm = nameNorm,
+                printings = owned,
                 usedIn = CardQueries.decodeUses(u.cols, u.rows),
                 legalities = CardQueries.decodeLegalities(l.cols, l.rows),
                 rulings = CardQueries.decodeRulings(r.cols, r.rows),
-            ),
+            ).named(owned),
         )
     }
 

@@ -44,11 +44,16 @@ fun FilterPanel(
     onChange: (Filters) -> Unit,
 ) {
     // Folded away to start. Ten open groups is a wall, and the whole
-    // point of the accordion is that you open the one you want. A
-    // group already holding a filter opens itself, so a link that
-    // arrives with a search in it shows where the search came from.
-    var open by remember { mutableStateOf(Facet.inUse(f)) }
-    fun toggle(g: Facet) { open = if (g in open) open - g else open + g }
+    // point of the accordion is that you open the one you want.
+    //
+    // Derived rather than held: a group holding a filter opens itself
+    // unless it has been closed by hand, so a search restored from a
+    // link shows where it came from — and `remember { inUse(f) }`
+    // could not, because it is evaluated once and a link restored
+    // after the first composition never reached it.
+    var touched by remember { mutableStateOf(mapOf<Facet, Boolean>()) }
+    val open = Facet.entries.filter { touched[it] ?: (it.countIn(f) > 0) }.toSet()
+    fun toggle(g: Facet) { touched = touched + (g to (g !in open)) }
 
     // Half-typed token text, held by the panel rather than by the
     // field it belongs to. A `remember` inside the field leaves the

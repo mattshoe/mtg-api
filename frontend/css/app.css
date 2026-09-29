@@ -129,28 +129,57 @@ h3 { font-size: 14px; }
 
 /* ------------------------------------------------------------ app nav */
 /* The nav the shared build draws, inside the page rather than in the top
-   bar. Deliberately not `.tabs`: that one collapses into a hamburger
-   drawer below 720px and needs JavaScript in the header to open it, so
-   reusing it left the phone with no navigation at all. This one is a row
-   of pills that scrolls sideways and is visible at every width. */
+   bar. Not `.tabs` itself: that one is opened by the hand-written
+   header's own JavaScript, which the shared build does not run. Same
+   behaviour though — a row of tabs on a desk, a hamburger on a phone —
+   with the open/closed state held in the composition. */
+/* A row of tabs on a desk, a hamburger on a phone — the same shape the
+   hand-written header had. The pills that replaced it read as chips
+   rather than navigation. */
 .app-nav {
-  display: flex; flex-wrap: wrap; gap: 6px; row-gap: 6px; align-items: center;
+  display: flex; align-items: center; gap: 6px;
   padding: 10px 18px 0;
 }
+.app-tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; min-width: 0; }
+.app-tabs::-webkit-scrollbar { display: none; }
 .app-tab {
-  flex: none; padding: 7px 13px; border-radius: 99px;
-  border: 1px solid var(--line-2); background: var(--bg-2); color: var(--text-2);
-  font: inherit; font-size: 13.5px; font-weight: 550; white-space: nowrap; cursor: pointer;
+  flex: none; padding: 7px 13px; border-radius: 7px;
+  border: 0; background: transparent; color: var(--text-2);
+  font: inherit; font-weight: 500; white-space: nowrap; cursor: pointer;
 }
 .app-tab:hover { background: var(--bg-3); color: var(--text); }
-.app-tab.on { background: var(--accent-dim); border-color: var(--accent); color: var(--accent-2); }
-/* The lock and the finder are not places to go, so they are quieter —
-   but the same size and shape as the tabs beside them. */
-.app-nav .app-tool {
-  flex: none; margin-left: 4px;
-  padding: 7px 13px; border-radius: 99px; font-size: 13.5px;
+.app-tab.on { background: var(--accent-dim); color: var(--accent-2); }
+/* The lock and the finder are not places to go, so they sit apart. */
+.app-nav .app-tool { flex: none; margin-left: auto; }
+
+/* Off on a desk: the tabs are already all visible. */
+.nav-burger { display: none; }
+
+@media (max-width: 720px) {
+  .app-nav { padding: 8px 12px 0; }
+  .nav-burger {
+    display: grid; place-items: center; width: 34px; height: 34px; padding: 0;
+    border: 1px solid var(--line); border-radius: 8px;
+    background: var(--bg-3); color: var(--text-2); cursor: pointer; font: inherit;
+  }
+  .nav-burger { gap: 4px; grid-auto-rows: 2px; align-content: center; }
+  .nav-burger .bar {
+    display: block; width: 16px; height: 2px;
+    background: currentColor; border-radius: 1px;
+  }
+  /* The menu itself: hidden until the burger opens it, and over the
+     page rather than shoving it down. */
+  .app-tabs {
+    position: absolute; top: 100%; left: 12px; right: 12px; z-index: 39;
+    flex-direction: column; gap: 2px; padding: 8px; overflow: visible;
+    background: var(--bg-2); border: 1px solid var(--line);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+    display: none;
+  }
+  .app-tabs.open { display: flex; }
+  .app-tab { text-align: left; padding: 9px 12px; }
+  .app-nav { position: relative; }
 }
-@media (max-width: 720px) { .app-nav { padding: 8px 12px 0; } }
 
 
 

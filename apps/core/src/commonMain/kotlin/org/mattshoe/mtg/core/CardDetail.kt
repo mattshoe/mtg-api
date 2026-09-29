@@ -20,6 +20,12 @@ data class Printing(
     val finish: String,
     val qty: Int,
     val scryfallId: String?,
+    /**
+     * Both faces, as the card is actually named. Last and defaulted
+     * because every caller writes these positionally and the name is
+     * only needed by a card that arrived from a link.
+     */
+    val cardName: String = "",
 )
 
 data class DeckUse(
@@ -42,6 +48,13 @@ data class Ruling(val date: String, val text: String)
 data class CardDetail(
     val name: String = "",
     val owner: String = "",
+    /**
+     * What the queries are keyed by. Held rather than derived: the
+     * display name lowercased is not `name_norm` for anything with an
+     * accent or an em dash in it, and the drawer has to be able to
+     * write its own URL.
+     */
+    val nameNorm: String = "",
     val printings: List<Printing> = emptyList(),
     val usedIn: List<DeckUse> = emptyList(),
     val legalities: List<Legality> = emptyList(),
@@ -60,6 +73,18 @@ data class CardDetail(
 
     fun loading() = copy(busy = true, error = null)
     fun failed(message: String) = copy(busy = false, error = message)
+
+    /**
+     * The real name, once a printing has told us one.
+     *
+     * A card opened from a link has only its `name_norm`, which is
+     * lowercase. Showing that as the title is ugly, and title-casing
+     * it is wrong for "Jötun Grunt" and every card with a // in it.
+     */
+    fun named(printings: List<Printing>): CardDetail {
+        val real = printings.firstOrNull { it.cardName.isNotBlank() }?.cardName
+        return if (real.isNullOrBlank() || real == name) this else copy(name = real)
+    }
 }
 
 object CardQueries {
@@ -132,7 +157,8 @@ object CardQueries {
     }
 
     fun printings(nameNorm: String, owner: String) = Sql(
-        """SELECT c.id, c.setcode, c.set_name, c.collector_number, c.finish, c.qty, c.scryfall_id
+        """SELECT c.id, c.name, c.face2, c.setcode, c.set_name, c.collector_number,
+                  c.finish, c.qty, c.scryfall_id
              FROM cards c
             WHERE c.name_norm = ? AND c.owner = ?
             ORDER BY c.released_at DESC, c.setcode, c.collector_number""",
@@ -156,15 +182,25 @@ object CardQueries {
 
     fun decodePrintings(cols: List<String>, rows: List<JsonArray>): List<Printing> {
         val at = cols.withIndex().associate { (i, n) -> n to i }
-        return rows.map {
+        return rows.map { row ->
+            val front = row.at(at, "name").orEmpty()
+            val back = row.at(at, "face2")
             Printing(
-                id = it.at(at, "id")?.toLongOrNull() ?: 0,
-                setCode = it.at(at, "setcode").orEmpty(),
-                setName = it.at(at, "set_name"),
-                collectorNumber = it.at(at, "collector_number"),
-                finish = it.at(at, "finish") ?: "nonfoil",
-                qty = it.at(at, "qty")?.toIntOrNull() ?: 0,
-                scryfallId = it.at(at, "scryfall_id"),
+                id = row.at(at, "id")?.toLongOrNull() ?: 0,
+                // Both faces, the way `CardRow.fullName` spells it, so
+                // the drawer's title does not change depending on
+                // whether it was opened from the grid or from a link.
+                cardName = if (front.isNotBlank() && !back.isNullOrBlank() && "//" !in front) {
+                    "$front // $back"
+                } else {
+                    front
+                },
+                setCode = row.at(at, "setcode").orEmpty(),
+                setName = row.at(at, "set_name"),
+                collectorNumber = row.at(at, "collector_number"),
+                finish = row.at(at, "finish") ?: "nonfoil",
+                qty = row.at(at, "qty")?.toIntOrNull() ?: 0,
+                scryfallId = row.at(at, "scryfall_id"),
             )
         }
     }

@@ -140,4 +140,62 @@ class FilterUrlTest {
     fun anEmptyListIsNotWritten() {
         assertFalse(FilterUrl.toHash(Filters(colors = emptyList())).contains("colors"))
     }
+
+    // ------------------------------------------- restoring, not just parsing
+
+    @Test
+    fun aRestoredSearchFillsTheBoxThatShowsIt() {
+        // The bug: the name box is bound to `complete.term`, not to
+        // `filters.q`. Restoring only the filters left the search
+        // applied with an empty box above it — no way to see what was
+        // filtering and no way to clear it by hand.
+        val restored = AppState().restoredSearch(FilterUrl.fromHash("?q=bolt&colors=R"))
+        assertEquals("bolt", restored.library.filters.q)
+        assertEquals("bolt", restored.complete.term, "the name box came back empty")
+        assertEquals(listOf("R"), restored.library.filters.colors)
+    }
+
+    @Test
+    fun andItDoesNotArriveWithASuggestionListHangingOpen() {
+        val restored = AppState().restoredSearch(FilterUrl.fromHash("?q=bolt"))
+        assertTrue(!restored.complete.open, "the autocomplete opened itself on a cold start")
+        assertTrue(restored.complete.items.isEmpty())
+    }
+
+    @Test
+    fun anEmptySearchClearsTheBoxRatherThanLeavingTheLastWordInIt() {
+        val typed = AppState().restoredSearch(FilterUrl.fromHash("?q=bolt"))
+        assertEquals("", typed.restoredSearch(Filters()).complete.term)
+    }
+
+    @Test
+    fun aRestoredSearchKeepsThePageItWasSentOn() {
+        // `where` resets to page one, which is right for changing a
+        // filter and wrong for a link that said page four.
+        val restored = AppState().restoredSearch(FilterUrl.fromHash("?q=bolt&page=4"))
+        assertEquals(4, restored.library.page)
+    }
+
+    @Test
+    fun everyFieldThePanelShowsSurvivesTheRoundTrip() {
+        // The whole point: what comes back has to be what went in, or
+        // the page renders a filter it cannot show.
+        val full = Filters(
+            owner = "matt", q = "bolt", text = "draw", textLike = "enters", flavor = "goblin",
+            artist = "guay", watermark = "boros", typeLine = "artifact creature",
+            manaCost = "{G}{G}", collnum = "117", deck = "_any", finish = "foil",
+            format = "commander", qtyMin = "2", qtyMax = "8", freeMin = "1",
+            ciMin = "1", ciMax = "3", cmcMin = "2", cmcMax = "5",
+            pow = "3", tou = "4", loy = "5", yearMin = "2015", yearMax = "2024",
+            priceMin = "1", priceMax = "50", edhrecMin = "10", edhrecMax = "900",
+            colors = listOf("G", "U"), produces = listOf("R"),
+            types = listOf("Creature"), typesNot = listOf("Land"), supertypes = listOf("Legendary"),
+            rarities = listOf("rare"), sets = listOf("MH3"), setTypes = listOf("expansion"),
+            layouts = listOf("normal"), frames = listOf("2015"), borders = listOf("black"),
+            games = listOf("paper"), keywords = listOf("Flying"), tags = listOf("ramp"),
+            flags = mapOf(Flag.RESERVED to Tri.YES), hasRulings = Tri.NO,
+            sort = Sort.EDHREC, descending = false, page = 3,
+        )
+        assertEquals(full, FilterUrl.fromHash(FilterUrl.toHash(full).substringAfter('?')))
+    }
 }

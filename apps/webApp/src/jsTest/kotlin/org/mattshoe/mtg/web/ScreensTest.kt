@@ -152,19 +152,18 @@ class ScreensTest {
 
     @Test
     fun theFilterButtonRevealsThePanel() = runTest {
-        var shown = false
+        // The Filters button is gone: the groups are folded away
+        // already, so all it bought was a way to lose track of a
+        // filter that was still applied.
         val root = mount {
-            LibraryPage(
-                Library().loaded(listOf(card("Sol Ring")), 1),
-                {}, {}, {},
-                showFilters = shown,
-                onToggleFilters = { shown = !shown },
-            )
+            LibraryPage(Library().loaded(listOf(card("Sol Ring")), 1), {}, {}, {})
         }
         settle()
-        root.button("Filters").click()
-        settle()
-        assertTrue(shown)
+        assertTrue(!root.hasButton("Filters"), "the Filters button is back")
+        assertTrue(
+            root.querySelectorAll("details[data-facet]").length > 0,
+            "the filter groups are not on the page",
+        )
     }
 
     @Test
@@ -585,11 +584,14 @@ class NavTest {
     }
 
     @Test
-    fun theNavDoesNotBorrowTheClassThatHidesItselfOnAPhone() = runTest {
+    fun theNavDoesNotBorrowTheClassTheHeadersOwnScriptOpens() = runTest {
+        // `.tabs` is the hand-written header's, and it is opened by
+        // the header's own JavaScript, which the shared build does not
+        // run. Borrowing it left the phone with no navigation at all.
         val root = mount(AppState())
         settle()
         val nav = root.querySelector("nav") as org.w3c.dom.HTMLElement
-        assertFalse(nav.className.contains("tabs"), nav.className)
+        assertFalse(nav.className.split(" ").contains("tabs"), nav.className)
         assertTrue(nav.className.contains("app-nav"), nav.className)
     }
 
@@ -598,13 +600,53 @@ class NavTest {
         val root = mount(AppState())
         settle()
         val nav = root.querySelector("nav") as org.w3c.dom.HTMLElement
-        // Whatever the stylesheet says at this width, the nav has to be
-        // laid out. A display:none element has no boxes at all.
         // A display:none element has no box at all, so a zero height
         // and width is the shape of the bug this is here for.
         val box = nav.getBoundingClientRect()
         assertTrue(box.width > 0 && box.height > 0, "the nav is not rendered: $box")
-        assertEquals(6, root.querySelectorAll("nav button").length)
+        // Four views while locked, plus the burger, Lock and Find.
+        assertEquals(4, root.querySelectorAll(".app-tabs button").length)
+        assertEquals(1, root.querySelectorAll("button.nav-burger").length, "no hamburger")
+    }
+
+    @Test
+    fun theHamburgerOpensAndClosesTheMenu() = runTest {
+        val root = mount(AppState())
+        settle()
+        val burger = root.querySelector("button.nav-burger") as org.w3c.dom.HTMLElement
+        val tabs = root.querySelector("div.app-tabs") as org.w3c.dom.HTMLElement
+        assertFalse(tabs.className.contains("open"))
+        assertEquals("false", burger.getAttribute("aria-expanded"))
+
+        burger.click()
+        settle()
+        assertTrue(tabs.className.contains("open"), "the menu did not open")
+        assertEquals("true", burger.getAttribute("aria-expanded"))
+
+        burger.click()
+        settle()
+        assertFalse(
+            (root.querySelector("div.app-tabs") as org.w3c.dom.HTMLElement).className.contains("open"),
+            "the menu did not close again",
+        )
+    }
+
+    @Test
+    fun pickingTheTabYouAreAlreadyOnStillClosesTheMenu() = runTest {
+        // The old header closed the menu on a route change, so tapping
+        // the tab you were already on left it sitting over the page.
+        val root = mount(AppState())
+        settle()
+        (root.querySelector("button.nav-burger") as org.w3c.dom.HTMLElement).click()
+        settle()
+        val here = (0 until root.querySelectorAll(".app-tabs button").length)
+            .map { root.querySelectorAll(".app-tabs button")[it] as org.w3c.dom.HTMLElement }
+            .first { it.className.contains("on") }
+        here.click()
+        settle()
+        assertFalse(
+            (root.querySelector("div.app-tabs") as org.w3c.dom.HTMLElement).className.contains("open"),
+        )
     }
 
     @Test

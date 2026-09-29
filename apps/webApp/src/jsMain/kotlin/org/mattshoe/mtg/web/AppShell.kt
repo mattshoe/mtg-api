@@ -13,6 +13,7 @@ import org.jetbrains.compose.web.dom.Div
 import org.jetbrains.compose.web.dom.H2
 import org.jetbrains.compose.web.dom.Input
 import org.jetbrains.compose.web.dom.Nav
+import org.jetbrains.compose.web.dom.Span
 import org.jetbrains.compose.web.dom.Text
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.CardRow
@@ -63,7 +64,6 @@ fun AppShell(
     onCreateDeck: () -> Unit = {},
 ) {
     var password by remember { mutableStateOf("") }
-    var showFilters by remember { mutableStateOf(false) }
 
     // The page underneath an overlay holds still. `overscroll-behavior`
     // on the drawer only stops the chaining once the drawer itself
@@ -78,17 +78,38 @@ fun AppShell(
     // `.tabs` into a hamburger drawer below 720px and opens it from the
     // header's own JavaScript, so borrowing that class left the phone
     // with no navigation at all.
+    // A row of tabs on a desk, a hamburger on a phone. The stylesheet
+    // decides which; this only has to know whether the menu is open,
+    // and to shut it when something in it is picked.
+    var navOpen by remember { mutableStateOf(false) }
     Nav(attrs = { classes("app-nav") }) {
-        state.admin.visible.forEach { view ->
-            Button(attrs = {
-                classes("app-tab")
-                if (state.view == view) classes("on")
-                onClick { onState(state.navigate(view)) }
-            }) { Text(view.label) }
+        Button(attrs = {
+            classes("nav-burger")
+            attr("aria-label", "Menu")
+            attr("aria-expanded", navOpen.toString())
+            onClick { navOpen = !navOpen }
+        }) { BurgerIcon() }
+
+        Div(attrs = {
+            classes("app-tabs")
+            if (navOpen) classes("open")
+        }) {
+            state.admin.visible.forEach { view ->
+                Button(attrs = {
+                    classes("app-tab")
+                    if (state.view == view) classes("on")
+                    // Closes even when the tab picked is the one
+                    // already showing — otherwise the menu sits open
+                    // over the page.
+                    onClick { navOpen = false; onState(state.navigate(view)) }
+                }) { Text(view.label) }
+            }
         }
+
         Button(attrs = {
             classes("btn", "sm", "ghost", "app-tool")
             onClick {
+                navOpen = false
                 if (state.admin.unlocked) {
                     onState(state.copy(admin = state.admin.lock()).navigate(state.route))
                 } else {
@@ -98,7 +119,10 @@ fun AppShell(
         }) { Text(if (state.admin.unlocked) "Lock" else "Unlock") }
         Button(attrs = {
             classes("btn", "sm", "ghost", "app-tool")
-            onClick { onState(state.opening(Overlay.PALETTE).copy(palette = state.palette.opened())) }
+            onClick {
+                navOpen = false
+                onState(state.opening(Overlay.PALETTE).copy(palette = state.palette.opened()))
+            }
         }) { Text("Find") }
     }
 
@@ -108,8 +132,6 @@ fun AppShell(
             onState = { onState(state.copy(library = it)) },
             onSearch = onSearch,
             onOpen = onOpenCard,
-            showFilters = showFilters,
-            onToggleFilters = { showFilters = !showFilters },
             onExport = onExport,
             complete = state.complete,
             onName = { c ->
@@ -263,4 +285,13 @@ fun AppState.withHistory(h: EntryHistory) = copy(history = h)
 private fun lockPage(locked: Boolean) {
     val body = kotlinx.browser.document.body ?: return
     if (locked) body.classList.add("overlay-open") else body.classList.remove("overlay-open")
+}
+
+/**
+ * Three lines. Three spans rather than an SVG or an icon font, so the
+ * nav draws with no network and no dependency.
+ */
+@Composable
+private fun BurgerIcon() {
+    repeat(3) { Span(attrs = { classes("bar") }) {} }
 }

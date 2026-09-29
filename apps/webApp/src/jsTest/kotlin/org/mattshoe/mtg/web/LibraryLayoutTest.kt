@@ -171,8 +171,6 @@ class LibraryLayoutTest {
         val frame = render(390)
         settle()
         if (!styled()) return@runTest
-        (frame.all("button").first { it.textContent?.trim() == "Filters" }).click()
-        settle()
         val groups = frame.all("details[data-facet]")
         assertTrue(groups.size == 10, "expected ten groups, saw ${groups.size}")
         assertTrue(groups.none { it.hasAttribute("open") }, "a group started open")
@@ -187,8 +185,6 @@ class LibraryLayoutTest {
         val frame = render(390)
         settle()
         if (!styled()) return@runTest
-        (frame.all("button").first { it.textContent?.trim() == "Filters" }).click()
-        settle()
         val limit = frame.getBoundingClientRect().right + 1
         val bad = mutableListOf<String>()
         org.mattshoe.mtg.core.Facet.entries.forEach { facet ->

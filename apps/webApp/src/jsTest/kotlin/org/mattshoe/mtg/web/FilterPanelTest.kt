@@ -453,7 +453,6 @@ class FilterApplyTest {
                 onState = { lib = it; page.library = it },
                 onSearch = { page.searches++ },
                 onOpen = {},
-                showFilters = true,
             )
         }
         open?.let {

@@ -216,30 +216,43 @@ class LibraryDriverTest {
     fun theTopRowHasExactlyTheControlsItShouldHave() = runTest {
         val app = mount()
         settle()
-        assertTrue(app.maybeButton("Filters") != null, "no Filters button")
         assertTrue(app.maybeButton("Export") != null, "no Export button")
         assertTrue(app.maybeButton("Search") == null, "the Search button is back")
+        assertTrue(app.maybeButton("Filters") == null, "the Filters collapser is back")
         assertTrue(app.maybeButton("Kayla") == null, "the owner picker is back above the panel")
     }
 
     @Test
-    fun theFiltersButtonRevealsAndHidesThePanel() = runTest {
+    fun theFilterGroupsAreAlwaysOnThePage() = runTest {
+        // Hiding the whole panel behind a button was a way to leave a
+        // filter applied with nothing on screen saying so.
         val app = mount()
         settle()
-        assertEquals(0, app.root.querySelectorAll("details[data-facet]").length)
-        app.button("Filters").click()
-        settle()
         assertEquals(10, app.root.querySelectorAll("details[data-facet]").length)
-        app.button("Hide filters").click()
+    }
+
+    @Test
+    fun andTheyAllStartFoldedAway() = runTest {
+        val app = mount()
         settle()
-        assertEquals(0, app.root.querySelectorAll("details[data-facet]").length)
+        val open = org.mattshoe.mtg.core.Facet.entries.filter { app.facet(it.id).hasAttribute("open") }
+        assertEquals(emptyList(), open, "these opened themselves with nothing set")
+    }
+
+    @Test
+    fun aGroupHoldingAFilterOpensItselfSoTheFilterCanBeSeen() = runTest {
+        // The state this is here for: a link restores a search, and
+        // the group holding it has to show what is filtering or there
+        // is no way to clear it.
+        val app = mount(AppState(library = Library(Filters(colors = listOf("G")))))
+        settle()
+        assertTrue(app.facet("colour").hasAttribute("open"), "the colour group stayed shut")
+        assertTrue(!app.facet("mana").hasAttribute("open"), "a group with nothing set opened")
     }
 
     @Test
     fun everyFilterGroupOpensAndClosesOnItsOwn() = runTest {
         val app = mount()
-        settle()
-        app.button("Filters").click()
         settle()
         org.mattshoe.mtg.core.Facet.entries.forEach { facet ->
             val summary = app.facet(facet.id).querySelector("summary") as HTMLElement
@@ -294,8 +307,6 @@ class LibraryDriverTest {
     fun everyControlThatChangesAFilterAsksForAFreshSearch() = runTest {
         val app = mount()
         settle()
-        app.button("Filters").click()
-        settle()
 
         suspend fun run(what: String, act: () -> Unit) {
             val before = app.searches
@@ -324,8 +335,6 @@ class LibraryDriverTest {
     fun aColourChosenInThePanelShowsAsChosen() = runTest {
         val app = mount()
         settle()
-        app.button("Filters").click()
-        settle()
         (app.facet("colour").querySelector("summary") as HTMLElement).click()
         settle()
         app.pip("G").click()
@@ -337,8 +346,6 @@ class LibraryDriverTest {
     @Test
     fun andASecondColourJoinsItRatherThanReplacingIt() = runTest {
         val app = mount()
-        settle()
-        app.button("Filters").click()
         settle()
         (app.facet("colour").querySelector("summary") as HTMLElement).click()
         settle()
@@ -386,8 +393,6 @@ class LibraryDriverTest {
     fun theKeywordBoxTakesAWordAndKeepsIt() = runTest {
         val app = mount()
         settle()
-        app.button("Filters").click()
-        settle()
         app.token("tags", "Flying, Ward…", "Flying")
         assertEquals(listOf("Flying"), app.state.library.filters.keywords)
         assertTrue(app.text().contains("Flying ×"), "no chip for the word: ${app.text()}")
@@ -397,8 +402,6 @@ class LibraryDriverTest {
     fun theScryfallTagBoxTakesAWordAndKeepsIt() = runTest {
         val app = mount()
         settle()
-        app.button("Filters").click()
-        settle()
         app.token("tags", "mana-rock, spot-removal…", "mana-rock")
         assertEquals(listOf("mana-rock"), app.state.library.filters.tags)
     }
@@ -406,8 +409,6 @@ class LibraryDriverTest {
     @Test
     fun theSetBoxTakesACodeAndKeepsIt() = runTest {
         val app = mount()
-        settle()
-        app.button("Filters").click()
         settle()
         app.token("printing", "MH3", "MH3")
         assertEquals(listOf("MH3"), app.state.library.filters.sets)
@@ -418,8 +419,6 @@ class LibraryDriverTest {
         // The chip and the empty box are one update. Done as two, the
         // second is built on a copy that predates the first.
         val app = mount()
-        settle()
-        app.button("Filters").click()
         settle()
         app.token("tags", "Flying, Ward…", "Flying")
         assertEquals("", app.input("Flying, Ward…").value, "the box kept the word it turned into a chip")

@@ -87,6 +87,53 @@ class DecksTest {
         assertEquals(2, s.byOwner.last().second.size)
     }
 
+    // --------------------------------------- saying it is still loading
+
+    @Test
+    fun aScreenBeingFetchedSaysSoRatherThanSayingItIsEmpty() {
+        // The bug this is here for: Decks rendered "No decks yet" over
+        // a load that was still in flight, because nothing marked it
+        // busy. Intermittent, so it looked like the decks vanishing at
+        // random.
+        val s = AppState().navigate(View.DECKS)
+        assertTrue(s.decks.decks.isEmpty())
+        assertTrue(!s.decks.busy, "nothing has asked for anything yet")
+
+        val fetching = s.fetching()
+        assertTrue(fetching.decks.busy, "the decks screen does not say it is loading")
+        assertNull(fetching.decks.error)
+    }
+
+    @Test
+    fun andAFailedFetchSaysWhyRatherThanSayingItIsEmpty() {
+        val failed = AppState().navigate(View.DECKS).fetching().fetchFailed("network down")
+        assertTrue(!failed.decks.busy)
+        assertEquals("network down", failed.decks.error)
+        // Not a toast that has gone by the time the page is read.
+        assertNull(failed.toast)
+    }
+
+    @Test
+    fun everyScreenThatFetchesCanSayBothThings() {
+        listOf(View.LIBRARY, View.DECKS, View.STATS).forEach { v ->
+            val busy = AppState().navigate(v).fetching(v)
+            val sick = busy.fetchFailed("nope", v)
+            val says = when (v) {
+                View.LIBRARY -> busy.library.busy to sick.library.error
+                View.DECKS -> busy.decks.busy to sick.decks.error
+                else -> busy.stats.busy to sick.stats.error
+            }
+            assertTrue(says.first, "$v does not say it is loading")
+            assertEquals("nope", says.second, "$v does not say what went wrong")
+        }
+    }
+
+    @Test
+    fun aScreenWithNothingToFetchIsLeftAlone() {
+        val s = AppState().navigate(View.CONSOLE)
+        assertEquals(s, s.fetching(View.CONSOLE))
+    }
+
     // ------------------------------------------------ grouped by type
 
     private fun card(

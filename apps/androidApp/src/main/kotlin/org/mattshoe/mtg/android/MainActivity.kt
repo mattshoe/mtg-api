@@ -169,12 +169,48 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Fetch what a view needs, and say so while it is happening.
+     *
+     * `fetching`/`fetchFailed` are the core's, shared with the
+     * website: going straight to `work` leaves `busy` false, so the
+     * screen renders its empty state — "No decks yet" — over a load
+     * still in flight, and keeps rendering it when the load fails
+     * because the failure goes to a toast that has already gone.
+     */
     private fun loadFor(s: AppState) {
         when (s.view) {
-            View.LIBRARY -> work { search() }
-            View.DECKS -> work { if (s.route.rest.isEmpty()) loadDecks() else openDeck(s.route.rest) }
-            View.STATS -> work { loadStats() }
+            View.LIBRARY -> {
+                app = app.fetching(View.LIBRARY)
+                intoPage(View.LIBRARY) { search() }
+            }
+
+            View.DECKS -> {
+                app = app.fetching(View.DECKS)
+                intoPage(View.DECKS) {
+                    if (s.route.rest.isEmpty()) loadDecks() else openDeck(s.route.rest)
+                }
+            }
+
+            View.STATS -> {
+                app = app.fetching(View.STATS)
+                intoPage(View.STATS) { loadStats() }
+            }
+
             else -> Unit
+        }
+    }
+
+    /** Like `work`, but the failure lands on the screen that asked. */
+    private fun intoPage(view: View, block: suspend () -> AppState) {
+        lifecycleScope.launch {
+            app = try {
+                block()
+            } catch (e: ApiFailure) {
+                app.fetchFailed(e.message ?: "something went wrong", view)
+            } catch (e: Exception) {
+                app.fetchFailed(e.message ?: e.toString(), view)
+            }
         }
     }
 

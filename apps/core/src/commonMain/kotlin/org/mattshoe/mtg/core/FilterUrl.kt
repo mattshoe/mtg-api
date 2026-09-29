@@ -22,6 +22,11 @@ object FilterUrl {
      * Android and iOS too. The unreserved set is from RFC 3986; a space
      * becomes `+` the way a query string expects.
      */
+    /** Shared with `CardRef`, which has the same encoding problem. */
+    internal fun encode(s: String): String = enc(s)
+
+    internal fun decode(s: String): String = dec(s)
+
     private fun enc(s: String): String = buildString {
         for (b in s.encodeToByteArray()) {
             val c = b.toInt().toChar()

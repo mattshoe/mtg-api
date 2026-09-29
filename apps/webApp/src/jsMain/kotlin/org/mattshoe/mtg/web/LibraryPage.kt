@@ -38,8 +38,6 @@ fun LibraryPage(
     onState: (Library) -> Unit,
     onSearch: () -> Unit,
     onOpen: (CardRow) -> Unit,
-    showFilters: Boolean = false,
-    onToggleFilters: () -> Unit = {},
     onExport: () -> Unit = {},
     complete: Completion = Completion(),
     onName: (Completion) -> Unit = {},
@@ -78,12 +76,10 @@ fun LibraryPage(
                 // every other filter, and everything applies as it is
                 // typed — a button that re-runs what already ran is
                 // just a thing to forget to press.
+                // No Filters button. Every group is already folded
+                // away, so the one thing hiding them bought was a way
+                // to lose track of a filter that was still applied.
                 Div(attrs = { classes("flex-wrap") }) {
-                    Button(attrs = {
-                        classes("btn", "sm", "ghost")
-                        if (showFilters) classes("on")
-                        onClick { onToggleFilters() }
-                    }) { Text(if (showFilters) "Hide filters" else "Filters") }
                     Button(attrs = {
                         classes("btn", "sm", "ghost")
                         onClick { onExport() }
@@ -93,7 +89,7 @@ fun LibraryPage(
             }
         }
 
-        if (showFilters) FilterPanel(state.filters, facets) { apply(state.where(it)) }
+        FilterPanel(state.filters, facets) { apply(state.where(it)) }
 
         when {
             state.busy -> Div(attrs = { classes("empty") }) { Text("Searching…") }
