@@ -22,6 +22,10 @@
 <a class="skip" href="#main">Skip to content</a>
 
 <header class="topbar">
+  <!-- The menu belongs in the bar, not floating under it. The shared
+       build draws it here; the slot is static only because the header
+       itself is. -->
+  <div id="nav" class="topbar-nav"></div>
   <a class="brand" href="#/search">
     <img class="brand-mark" src="icons/icon-32.png" alt="" width="22" height="22">
     <span class="brand-text">Collection</span>
@@ -61,6 +65,7 @@
   }
 
   window.mtgApp.mount(document.getElementById('view'), sharedList(), token());
+  window.mtgApp.mountNav(document.getElementById('nav'));
 
   // Only for the share target. It intercepts nothing else.
   if ('serviceWorker' in navigator) {

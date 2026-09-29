@@ -65,6 +65,7 @@ import kotlin.coroutines.resume
 object MtgApp {
 
     private var composition: Composition? = null
+    private var navComposition: Composition? = null
     private val api = MtgApi()
     private val scryfall = Scryfall()
     private val scope = CoroutineScope(Dispatchers.Main)
@@ -186,7 +187,31 @@ object MtgApp {
         }
     }
 
+    /**
+     * The menu, into the top bar's own slot.
+     *
+     * A second composition rather than part of the shell, because the
+     * header is static markup and a menu drawn at the top of the page
+     * hangs below the bar it belongs to. Both read the one `app`, so
+     * they cannot disagree about which view is current.
+     */
+    fun mountNav(root: HTMLElement) {
+        navComposition?.dispose()
+        navComposition = renderComposable(root = root) {
+            AppNav(app) { next ->
+                val was = app
+                app = next
+                if (next.view != was.view || next.route.rest != was.route.rest) {
+                    window.location.hash = next.hash().removePrefix("#")
+                    loadFor(next)
+                }
+            }
+        }
+    }
+
     fun unmount() {
+        navComposition?.dispose()
+        navComposition = null
         composition?.dispose()
         composition = null
         // Nothing to unlock here: the shell's `DisposableEffect`

@@ -102,7 +102,11 @@ class ScreensTest {
     private fun deck() = Deck("alela", "Alela", "matt", "Alela, Artful Provocateur", "UWB", 3, null)
     private fun deckCard() = DeckCard("Sol Ring", 1, null, 1)
 
+    // Both, over one state — the arrangement the real app has. The
+    // menu lives in the header's own slot, so the shell alone has
+    // nothing to navigate with.
     private fun shell(state: AppState, onState: (AppState) -> Unit = {}) = mount {
+        AppNav(state, onState)
         AppShell(state, onState, {}, {}, {}, {}, {}, {})
     }
 
@@ -129,14 +133,12 @@ class ScreensTest {
     }
 
     @Test
-    fun theFindButtonOpensTheFinder() = runTest {
-        var state = AppState()
-        val root = shell(state) { state = it }
+    fun thereIsNoFindButton() = runTest {
+        // The palette is still on ⌘K and `/`. A button for it in the
+        // nav was one more thing in the bar that nobody asked for.
+        val root = shell(AppState())
         settle()
-        root.button("Find").click()
-        settle()
-        assertEquals(Overlay.PALETTE, state.overlays.top)
-        assertTrue(state.palette.open)
+        assertFalse(root.hasButton("Find"), "the Find button is back")
     }
 
     // ---------------------------------------------------------- library
@@ -579,7 +581,7 @@ class NavTest {
         val root = document.createElement("div") as org.w3c.dom.HTMLElement
         document.body!!.appendChild(root)
         roots += root
-        renderComposable(root = root) { AppShell(state, {}, {}, {}, {}, {}, {}, {}) }
+        renderComposable(root = root) { AppNav(state) {} }
         return root
     }
 
@@ -596,7 +598,7 @@ class NavTest {
     }
 
     @Test
-    fun andItIsVisibleAtPhoneWidth() = runTest {
+    fun itIsOneHamburgerAndNothingElse() = runTest {
         val root = mount(AppState())
         settle()
         val nav = root.querySelector("nav") as org.w3c.dom.HTMLElement
@@ -604,9 +606,10 @@ class NavTest {
         // and width is the shape of the bug this is here for.
         val box = nav.getBoundingClientRect()
         assertTrue(box.width > 0 && box.height > 0, "the nav is not rendered: $box")
-        // Four views while locked, plus the burger, Lock and Find.
-        assertEquals(4, root.querySelectorAll(".app-tabs button").length)
         assertEquals(1, root.querySelectorAll("button.nav-burger").length, "no hamburger")
+        // Four views while locked, plus Unlock. Nothing loose beside
+        // the burger.
+        assertEquals(5, root.querySelectorAll(".app-menu button").length)
     }
 
     @Test
@@ -614,20 +617,32 @@ class NavTest {
         val root = mount(AppState())
         settle()
         val burger = root.querySelector("button.nav-burger") as org.w3c.dom.HTMLElement
-        val tabs = root.querySelector("div.app-tabs") as org.w3c.dom.HTMLElement
-        assertFalse(tabs.className.contains("open"))
+        fun menu() = root.querySelector("div.app-menu") as org.w3c.dom.HTMLElement
+        assertFalse(menu().className.contains("open"))
         assertEquals("false", burger.getAttribute("aria-expanded"))
 
         burger.click()
         settle()
-        assertTrue(tabs.className.contains("open"), "the menu did not open")
+        assertTrue(menu().className.contains("open"), "the menu did not open")
         assertEquals("true", burger.getAttribute("aria-expanded"))
 
         burger.click()
         settle()
+        assertFalse(menu().className.contains("open"), "the menu did not close again")
+    }
+
+    @Test
+    fun aPressAnywhereElseClosesIt() = runTest {
+        val root = mount(AppState())
+        settle()
+        (root.querySelector("button.nav-burger") as org.w3c.dom.HTMLElement).click()
+        settle()
+        val backdrop = root.querySelector("div.nav-backdrop") as? org.w3c.dom.HTMLElement
+            ?: error("nothing catches a press outside the menu")
+        backdrop.click()
+        settle()
         assertFalse(
-            (root.querySelector("div.app-tabs") as org.w3c.dom.HTMLElement).className.contains("open"),
-            "the menu did not close again",
+            (root.querySelector("div.app-menu") as org.w3c.dom.HTMLElement).className.contains("open"),
         )
     }
 
@@ -639,14 +654,43 @@ class NavTest {
         settle()
         (root.querySelector("button.nav-burger") as org.w3c.dom.HTMLElement).click()
         settle()
-        val here = (0 until root.querySelectorAll(".app-tabs button").length)
-            .map { root.querySelectorAll(".app-tabs button")[it] as org.w3c.dom.HTMLElement }
+        val items = root.querySelectorAll(".app-menu button")
+        val here = (0 until items.length)
+            .map { items[it] as org.w3c.dom.HTMLElement }
             .first { it.className.contains("on") }
         here.click()
         settle()
         assertFalse(
-            (root.querySelector("div.app-tabs") as org.w3c.dom.HTMLElement).className.contains("open"),
+            (root.querySelector("div.app-menu") as org.w3c.dom.HTMLElement).className.contains("open"),
         )
+    }
+
+    @Test
+    fun theAdminHalfIsItsOwnSectionWithTheLockInIt() = runTest {
+        val root = mount(AppState())
+        settle()
+        assertEquals(1, root.querySelectorAll(".app-menu-sep").length, "no rule between the halves")
+        assertEquals(
+            "Admin",
+            (root.querySelector(".app-menu-group") as org.w3c.dom.HTMLElement).textContent?.trim(),
+        )
+        assertEquals(1, root.querySelectorAll("button.app-lock").length, "the lock is not in the menu")
+    }
+
+    @Test
+    fun theGatedViewsSitUnderTheRuleAndTheOthersAbove() = runTest {
+        val root = mount(AppState(admin = org.mattshoe.mtg.core.Admin("t")))
+        settle()
+        val items = root.querySelectorAll(".app-menu > *")
+        val labels = (0 until items.length).map { (items[it] as org.w3c.dom.HTMLElement) }
+        val rule = labels.indexOfFirst { it.className.contains("app-menu-sep") }
+        assertTrue(rule > 0, "no rule in the menu")
+        val above = labels.take(rule).mapNotNull { it.textContent?.trim() }
+        val below = labels.drop(rule).mapNotNull { it.textContent?.trim() }
+        assertEquals(listOf("Library", "Decks", "Stats", "Query"), above)
+        assertTrue(below.contains("Mass Entry"), below.toString())
+        assertTrue(below.contains("Server Logs"), below.toString())
+        assertTrue(below.contains("Lock"), below.toString())
     }
 
     @Test

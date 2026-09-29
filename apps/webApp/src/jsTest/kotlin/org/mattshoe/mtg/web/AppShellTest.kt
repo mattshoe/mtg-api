@@ -43,6 +43,10 @@ class AppShellTest {
         roots += root
         renderComposable(root = root) {
             val s = remember { mutableStateOf(initial) }
+            // Both, over one state — the arrangement the real app has.
+            // The menu lives in the header's own slot, so mounting the
+            // shell alone would leave nothing to navigate with.
+            AppNav(s.value) { s.value = it }
             AppShell(
                 state = s.value,
                 onState = { s.value = it },

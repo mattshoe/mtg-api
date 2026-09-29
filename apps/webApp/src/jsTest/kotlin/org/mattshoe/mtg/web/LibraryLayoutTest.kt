@@ -233,17 +233,25 @@ class LibraryLayoutTest {
     }
 
     @Test
-    fun everyNavItemIsOnScreenAtPhoneWidth() = runTest {
-        val frame = render(390)
+    fun theMenuStaysOnScreenAtPhoneWidth() = runTest {
+        // The nav lives in the header now, so it is mounted on its
+        // own here. Opened, the menu must not run off the side.
+        val frame = document.createElement("div") as HTMLElement
+        frame.style.width = "390px"
+        frame.style.position = "absolute"
+        frame.style.left = "0px"
+        document.body!!.appendChild(frame)
+        roots += frame
+        renderComposable(root = frame) { AppNav(AppState()) {} }
         settle()
         if (!styled()) return@runTest
-        val nav = frame.all("nav").first()
-        val box = nav.getBoundingClientRect()
-        assertTrue(box.height > 0 && box.width > 0, "the nav has no box at phone width")
-        // It used to scroll sideways, which put "Find" past the right
-        // edge with nothing on screen saying it was there.
+
+        (frame.querySelector("button.nav-burger") as HTMLElement).click()
+        settle()
+        val menu = frame.all("div.app-menu").first()
+        assertTrue(menu.getBoundingClientRect().height > 0, "the menu did not open")
         val limit = frame.getBoundingClientRect().right + 1
-        val off = nav.all("button").filter { it.getBoundingClientRect().right > limit }
+        val off = menu.all("button").filter { it.getBoundingClientRect().right > limit }
         assertTrue(off.isEmpty(), "off the edge: ${off.map { Box(it).what }}")
     }
 }

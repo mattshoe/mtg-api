@@ -128,61 +128,52 @@ h3 { font-size: 14px; }
 .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
 
 /* ------------------------------------------------------------ app nav */
-/* The nav the shared build draws, inside the page rather than in the top
-   bar. Not `.tabs` itself: that one is opened by the hand-written
-   header's own JavaScript, which the shared build does not run. Same
-   behaviour though — a row of tabs on a desk, a hamburger on a phone —
-   with the open/closed state held in the composition. */
-/* A row of tabs on a desk, a hamburger on a phone — the same shape the
-   hand-written header had. The pills that replaced it read as chips
-   rather than navigation. */
-.app-nav {
-  display: flex; align-items: center; gap: 6px;
-  padding: 10px 18px 0;
+/* The menu, drawn by the shared build into the top bar's own slot.
+   Not `.tabs`: that one is opened by the hand-written header's
+   JavaScript, which the shared build does not run. One hamburger at
+   every width — the row of tabs only ever fitted on a desk, and two
+   behaviours to keep straight is how the phone ended up with no
+   navigation at all. */
+.topbar-nav { display: flex; align-items: center; flex: none; }
+.app-nav { position: relative; display: flex; align-items: center; }
+
+.nav-burger {
+  display: grid; gap: 4px; grid-auto-rows: 2px; align-content: center;
+  place-items: center; width: 34px; height: 34px; padding: 0;
+  border: 1px solid var(--line); border-radius: 8px;
+  background: var(--bg-3); color: var(--text-2); cursor: pointer; font: inherit;
 }
-.app-tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; min-width: 0; }
-.app-tabs::-webkit-scrollbar { display: none; }
+.nav-burger:hover { color: var(--text); border-color: var(--line-2); }
+.nav-burger .bar { display: block; width: 16px; height: 2px; background: currentColor; border-radius: 1px; }
+
+/* A press anywhere else closes the menu. */
+.nav-backdrop { position: fixed; inset: 0; z-index: 44; }
+
+.app-menu {
+  display: none;
+  position: absolute; top: calc(100% + 7px); left: 0; z-index: 45;
+  min-width: 190px; padding: 7px;
+  background: var(--bg-2); border: 1px solid var(--line-2);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.app-menu.open { display: flex; flex-direction: column; gap: 1px; }
+
 .app-tab {
-  flex: none; padding: 7px 13px; border-radius: 7px;
-  border: 0; background: transparent; color: var(--text-2);
+  display: block; width: 100%; text-align: left;
+  padding: 8px 11px; border: 0; border-radius: 7px;
+  background: transparent; color: var(--text-2);
   font: inherit; font-weight: 500; white-space: nowrap; cursor: pointer;
 }
 .app-tab:hover { background: var(--bg-3); color: var(--text); }
 .app-tab.on { background: var(--accent-dim); color: var(--accent-2); }
-/* The lock and the finder are not places to go, so they sit apart. */
-.app-nav .app-tool { flex: none; margin-left: auto; }
 
-/* Off on a desk: the tabs are already all visible. */
-.nav-burger { display: none; }
-
-@media (max-width: 720px) {
-  .app-nav { padding: 8px 12px 0; }
-  .nav-burger {
-    display: grid; place-items: center; width: 34px; height: 34px; padding: 0;
-    border: 1px solid var(--line); border-radius: 8px;
-    background: var(--bg-3); color: var(--text-2); cursor: pointer; font: inherit;
-  }
-  .nav-burger { gap: 4px; grid-auto-rows: 2px; align-content: center; }
-  .nav-burger .bar {
-    display: block; width: 16px; height: 2px;
-    background: currentColor; border-radius: 1px;
-  }
-  /* The menu itself: hidden until the burger opens it, and over the
-     page rather than shoving it down. */
-  .app-tabs {
-    position: absolute; top: 100%; left: 12px; right: 12px; z-index: 39;
-    flex-direction: column; gap: 2px; padding: 8px; overflow: visible;
-    background: var(--bg-2); border: 1px solid var(--line);
-    border-radius: var(--radius); box-shadow: var(--shadow);
-    display: none;
-  }
-  .app-tabs.open { display: flex; }
-  .app-tab { text-align: left; padding: 9px 12px; }
-  .app-nav { position: relative; }
+/* The admin half, set apart so it reads as a different kind of thing
+   rather than three more places to go. */
+.app-menu-sep { height: 1px; margin: 6px 4px 2px; background: var(--line-2); }
+.app-menu-group {
+  padding: 3px 11px 5px; font-size: 10.5px; font-weight: 700;
+  letter-spacing: .07em; text-transform: uppercase; color: var(--text-3);
 }
-
-
-
 
 .icon-btn {
   display: grid; place-items: center; width: 32px; height: 32px;

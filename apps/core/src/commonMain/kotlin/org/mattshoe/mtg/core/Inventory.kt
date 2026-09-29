@@ -77,9 +77,13 @@ object Inventory {
             tests = listOf(
                 "lockedHidesTheAdminViewsEntirely", "unlockedShowsThemAll", "noViewIsLostBetweenTheNavAndTheRouter",
                 "lockedShowsFourTabsAndNoAdminOnes", "theCurrentTabIsMarked", "gatedTabsAreAbsentWhileLocked",
-                "unlockingBringsTheGatedTabsBack", "andItIsVisibleAtPhoneWidth",
+                "unlockingBringsTheGatedTabsBack",
                 "theNavDoesNotBorrowTheClassTheHeadersOwnScriptOpens",
-                "theHamburgerOpensAndClosesTheMenu", "pickingTheTabYouAreAlreadyOnStillClosesTheMenu",
+                "itIsOneHamburgerAndNothingElse", "theHamburgerOpensAndClosesTheMenu",
+                "aPressAnywhereElseClosesIt", "pickingTheTabYouAreAlreadyOnStillClosesTheMenu",
+                "theAdminHalfIsItsOwnSectionWithTheLockInIt",
+                "theGatedViewsSitUnderTheRuleAndTheOthersAbove",
+                "theMenuStaysOnScreenAtPhoneWidth", "thereIsNoFindButton",
             )),
         Feature(Area.SHELL, "Keyboard shortcuts and the ? help toast", "app.js", logic = true, done = true,
             tests = listOf(
@@ -87,11 +91,13 @@ object Inventory {
                 "theHelpToastListsOnlyWhatIsReachable", "questionMarkToasts", "aBareLetterNavigates",
                 "theSameLetterInATextFieldDoesNot", "theHelpKeyToasts",
             )),
+        // The website reaches it by ⌘K and `/`. A phone has neither, so
+        // Android keeps the button the web nav lost.
         Feature(Area.SHELL, "Quick find palette on ⌘K and /", "app.js", logic = true, done = true,
             tests = listOf(
                 "theFirstRowIsChosenUntilYouMove", "theHighlightStopsAtBothEnds", "itLooksAtBothFacesAndBothOwners",
                 "theTermIsBoundNotPasted", "slashOpensTheFinder", "theChordWorksWhileTyping",
-                "theFindButtonOpensTheFinder", "theFinderListsWhatWasFound",
+                "theFinderListsWhatWasFound", "theFindButtonOpensTheFinder",
             )),
         Feature(Area.SHELL, "Back button dismisses overlays instead of navigating", "overlay.js", logic = true, done = true,
             tests = listOf(
