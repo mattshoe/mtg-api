@@ -176,6 +176,8 @@ object Inventory {
                 "aQuotedOracleSearchIsStillAPhrase", "punctuationInTheOracleBoxIsNotFtsSyntax",
                 "anExcludedOracleWordIsSubtractedRatherThanMatched", "onlyExclusionsStillWorks",
                 "severalExclusionsAreOredBeforeBeingSubtracted", "everyBoxIsCaseInsensitive",
+                "aRulesTextSearchLooksAtTheRulesTextAndNothingElse",
+                "andAnExclusionIsScopedTheSameWay",
                 "theWildcardsOfLikeAreStillCharacters",
             )),
         Feature(Area.LIBRARY, "Filter panel: name, oracle text, flavour, artist, watermark, type line", "filters.js", logic = true, done = true,

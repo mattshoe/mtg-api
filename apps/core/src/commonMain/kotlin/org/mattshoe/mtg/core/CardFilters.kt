@@ -238,6 +238,14 @@ internal fun ftsPhrase(raw: String): String = "\"" + raw.replace("\"", "\"\"") +
  * subtract from when every term is negative — `!token` on its own was
  * the case that made the one-expression version impossible.
  */
+/**
+ * The column the rules-text box searches.
+ *
+ * `card_search` indexes six fields in one row and a bare `MATCH` is
+ * happy with any of them, which made an ANDed search look like an OR.
+ */
+private const val ORACLE = "oracle_text"
+
 internal fun ftsClause(raw: String, c: Clauses) {
     val terms = TextQuery.parse(raw)
     if (terms.isEmpty()) return
@@ -245,13 +253,13 @@ internal fun ftsClause(raw: String, c: Clauses) {
     if (yes.isNotEmpty()) {
         c.add(
             "c.id IN (SELECT rowid FROM card_search WHERE card_search MATCH ?)",
-            TextQuery.fts(yes, "AND"),
+            TextQuery.fts(yes, "AND", ORACLE),
         )
     }
     if (no.isNotEmpty()) {
         c.add(
             "c.id NOT IN (SELECT rowid FROM card_search WHERE card_search MATCH ?)",
-            TextQuery.fts(no, "OR"),
+            TextQuery.fts(no, "OR", ORACLE),
         )
     }
 }

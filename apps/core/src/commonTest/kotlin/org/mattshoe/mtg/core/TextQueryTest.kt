@@ -119,20 +119,20 @@ class TextQueryTest {
     @Test
     fun theOracleBoxAndsItsWordsInsteadOfQuotingTheLot() {
         val f = Filters(text = "draw card")
-        assertEquals(listOf("\"draw\" AND \"card\""), params(f))
+        assertEquals(listOf("oracle_text : \"draw\" AND oracle_text : \"card\""), params(f))
     }
 
     @Test
     fun aQuotedOracleSearchIsStillAPhrase() {
-        assertEquals(listOf("\"draw a card\""), params(Filters(text = "\"draw a card\"")))
+        assertEquals(listOf("oracle_text : \"draw a card\""), params(Filters(text = "\"draw a card\"")))
     }
 
     @Test
     fun punctuationInTheOracleBoxIsNotFtsSyntax() {
         // `+1/+1` and `Landfall:` are fts5 syntax errors bare. Quoted,
         // they are what somebody meant.
-        assertEquals(listOf("\"+1/+1\""), params(Filters(text = "+1/+1")))
-        assertEquals(listOf("\"Landfall:\""), params(Filters(text = "Landfall:")))
+        assertEquals(listOf("oracle_text : \"+1/+1\""), params(Filters(text = "+1/+1")))
+        assertEquals(listOf("oracle_text : \"Landfall:\""), params(Filters(text = "Landfall:")))
     }
 
     @Test
@@ -141,7 +141,7 @@ class TextQueryTest {
         val sql = where(f)
         assertTrue(sql.contains("c.id IN (SELECT rowid FROM card_search"), sql)
         assertTrue(sql.contains("c.id NOT IN (SELECT rowid FROM card_search"), sql)
-        assertEquals(listOf("\"draw\"", "\"token\""), params(f))
+        assertEquals(listOf("oracle_text : \"draw\"", "oracle_text : \"token\""), params(f))
     }
 
     @Test
@@ -153,14 +153,41 @@ class TextQueryTest {
         val sql = where(f)
         assertTrue(!sql.contains("c.id IN (SELECT"), sql)
         assertTrue(sql.contains("c.id NOT IN (SELECT"), sql)
-        assertEquals(listOf("\"token\""), params(f))
+        assertEquals(listOf("oracle_text : \"token\""), params(f))
     }
 
     @Test
     fun severalExclusionsAreOredBeforeBeingSubtracted() {
         // Exclude a card that says either one, not only cards that say
         // both.
-        assertEquals(listOf("\"token\" OR \"proliferate\""), params(Filters(text = "!token !proliferate")))
+        assertEquals(
+            listOf("oracle_text : \"token\" OR oracle_text : \"proliferate\""),
+            params(Filters(text = "!token !proliferate")),
+        )
+    }
+
+    @Test
+    fun aRulesTextSearchLooksAtTheRulesTextAndNothingElse() {
+        // `card_search` indexes the name, the type line, the oracle
+        // text, the flavour text, the keywords and the tags in one
+        // row, and a bare MATCH is satisfied by any of them. So
+        // "creature token" came back with a card whose type line said
+        // Creature and whose oracle said token — every term matched,
+        // each in a different field, which reads exactly like an OR.
+        val one = params(Filters(text = "token")).single() as String
+        assertTrue(one.startsWith("oracle_text : "), one)
+
+        val two = params(Filters(text = "creature token")).single() as String
+        assertEquals(2, Regex("oracle_text :").findAll(two).count(), two)
+        assertTrue(two.contains(" AND "), two)
+    }
+
+    @Test
+    fun andAnExclusionIsScopedTheSameWay() {
+        // Otherwise `!token` would throw out every card with Token in
+        // its type line.
+        val no = params(Filters(text = "!token")).single() as String
+        assertTrue(no.startsWith("oracle_text : "), no)
     }
 
     @Test

@@ -83,14 +83,29 @@ object TextQuery {
     fun isEmpty(raw: String): Boolean = parse(raw).isEmpty()
 
     /**
-     * The terms as an FTS5 expression.
+     * The terms as an FTS5 expression, against one column.
      *
      * Every term is quoted, including single words: FTS5 parses its
      * argument as a query, so a bare `+1/+1` or `Landfall:` is a
      * syntax error rather than a search. Quoting makes it a phrase,
      * and a one-word phrase is the same as the bare token — stemming
      * included, because a phrase is matched through the tokenizer too.
+     *
+     * The column matters more than it looks. `card_search` indexes
+     * the name, the type line, the oracle text, the flavour text, the
+     * keywords and the tags all in one row, and a bare `MATCH` is
+     * satisfied by any of them. So "creature token" in the rules-text
+     * box came back with Ashling, the Limitless — "creature" from its
+     * type line, "token" from somewhere else, neither of them in its
+     * rules text. Every term ANDed, and every one of them found in a
+     * different field, which reads exactly like an OR.
      */
-    fun fts(terms: List<Term>, joiner: String): String =
-        terms.joinToString(" $joiner ") { "\"" + it.text.replace("\"", "\"\"") + "\"" }
+    fun fts(terms: List<Term>, joiner: String, column: String): String {
+        val quoted = terms.map { "\"" + it.text.replace("\"", "\"\"") + "\"" }
+        return if (quoted.size == 1) {
+            "$column : ${quoted[0]}"
+        } else {
+            quoted.joinToString(" $joiner ") { "$column : $it" }
+        }
+    }
 }
