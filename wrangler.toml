@@ -12,6 +12,10 @@ cpu_ms = 30000
 binding = "DB"
 database_name = "mtg"
 database_id = "b7053e24-b783-46fe-9dc6-32772d42e274"
+# `schema.sql` is what a fresh database is built from; these are the
+# changes made to the one that already exists. Applied by the deploy
+# before the code that needs them goes out.
+migrations_dir = "migrations"
 
 # Daily maintenance: re-price the collection, prune, sweep, health check.
 # 08:10 UTC is a little after Scryfall publishes its daily price update.
