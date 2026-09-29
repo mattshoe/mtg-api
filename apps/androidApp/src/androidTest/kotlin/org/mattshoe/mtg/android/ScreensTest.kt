@@ -80,8 +80,25 @@ class ScreensTest {
         artist = null, qty = qty, printings = 1, free = 1, price = 1.5, value = 1.5,
     )
 
+    /**
+     * Mount, and wait until it is actually mounted.
+     *
+     * `setContent` returns before the host activity has necessarily
+     * finished launching on a cold emulator, and a finder that runs
+     * first fails with "No compose hierarchies found in the app" —
+     * which reads exactly like a real failure and is not one. Every
+     * text finder waits by itself; `onRoot().performKeyInput` does
+     * not, which is why the keyboard tests were the ones that flaked
+     * in CI.
+     */
     private fun content(body: @androidx.compose.runtime.Composable () -> Unit) {
         rule.setContent { MaterialTheme(colorScheme = darkColorScheme()) { Surface { body() } } }
+        rule.waitForIdle()
+        // Something — anything — in the tree. Every screen mounted
+        // here has at least one thing you can press.
+        rule.waitUntil(timeoutMillis = 10_000) {
+            rule.onAllNodes(hasClickAction()).fetchSemanticsNodes().isNotEmpty()
+        }
     }
 
     // ------------------------------------------------------------ shell
