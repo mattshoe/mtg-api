@@ -127,6 +127,7 @@ class MainActivity : ComponentActivity() {
                         onExport = { work { exportList() } },
                         onOpenCard = { row -> openCard(row) },
                         onOpenFound = { found -> openFound(found) },
+                        onOpenNamed = { name, norm, owner -> openNamed(name, norm, owner) },
                         onFind = { term -> find(term) },
                         onLookup = { term -> lookup(term) },
                         onPickFile = { pickFiles.launch(arrayOf("*/*")) },
@@ -214,6 +215,19 @@ class MainActivity : ComponentActivity() {
         app = app.copy(card = CardDetail(name = row.fullName, owner = row.owner).loading())
             .opening(Overlay.CARD)
         work { loadCard(row.nameNorm, row.owner, row.fullName) }
+    }
+
+    /**
+     * A card opened from somewhere that knows its `name_norm`.
+     *
+     * `openFound` lowercases the display name to get one, which is
+     * near enough for the palette and wrong for anything with an
+     * accent or an em dash in it. A deck list has the real column.
+     */
+    private fun openNamed(name: String, nameNorm: String, owner: String) {
+        app = app.copy(card = CardDetail(name = name, owner = owner).loading())
+            .opening(Overlay.CARD)
+        work { loadCard(nameNorm, owner, name) }
     }
 
     private fun openFound(found: Found) {

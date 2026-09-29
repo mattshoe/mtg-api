@@ -68,14 +68,23 @@ class DecksLayoutTest {
         ),
     )
 
+    private fun card(name: String, type: String?, role: String? = null, owned: Int = 1) =
+        DeckCard(
+            name, qty = 1, role = role, owned = owned,
+            nameNorm = name.lowercase(), typeLine = type, scryfallId = "abcdef12-3456",
+        )
+
     private fun opened() = DecksState()
         .loaded(listOf(deck("a", "matt", "Alela")))
         .opened(
             "a",
             listOf(
-                DeckCard("Sol Ring", 1, "ramp", 1),
-                DeckCard("Arcane Signet", 1, "ramp", 1),
-                DeckCard("Rhystic Study", 1, "draw", 0),
+                card("Alela, Artful Provocateur", "Legendary Creature — Faerie", "commander"),
+                card("Sol Ring", "Artifact"),
+                card("Zulaport Cutthroat", "Creature — Human Rogue"),
+                card("Birds of Paradise", "Creature — Bird"),
+                card("Rhystic Study", "Enchantment", owned = 0),
+                card("Island", "Basic Land — Island"),
             ),
         )
 
@@ -130,16 +139,21 @@ class DecksLayoutTest {
         val frame = mount(1000) { DecksPage(opened(), {}, {}) }
         settle()
         if (!Stylesheet.applied()) return@runTest
-        val lines = frame.all("div.deck-line")
-        assertEquals(3, lines.size)
-        val gap = lines[1].getBoundingClientRect().top - lines[0].getBoundingClientRect().bottom
+        assertEquals(6, frame.all("div.deck-line").size, "not every card is listed")
+        // Within a group. The first row of a panel has nothing above
+        // it to be ruled off from.
+        val creatures = frame.all("div.panel")
+            .first { it.textContent.orEmpty().startsWith("Creatures") }
+            .all("div.deck-line")
+        assertEquals(2, creatures.size)
+        val gap = creatures[1].getBoundingClientRect().top - creatures[0].getBoundingClientRect().bottom
         assertTrue(gap >= 0, "the rows overlap")
         assertTrue(
-            lines[0].getBoundingClientRect().height >= 20,
-            "a card line is only ${lines[0].getBoundingClientRect().height}px tall",
+            creatures[0].getBoundingClientRect().height >= 20,
+            "a card line is only ${creatures[0].getBoundingClientRect().height}px tall",
         )
         assertTrue(
-            window.getComputedStyle(lines[1]).borderTopWidth != "0px",
+            window.getComputedStyle(creatures[1]).borderTopWidth != "0px",
             "nothing separates one card from the next",
         )
     }
@@ -179,5 +193,117 @@ class DecksLayoutTest {
             .filter { it.getBoundingClientRect().right > limit }
             .map { it.tagName.lowercase() + "." + it.className }
         assertTrue(over.isEmpty(), "hanging off the right edge: $over")
+    }
+
+    // ------------------------------------------------------ the banner
+
+    @Test
+    fun theCommanderGetsABannerAcrossTheTop() = runTest {
+        val frame = mount(1000) { DecksPage(opened(), {}, {}) }
+        settle()
+        val hero = frame.all("div.deck-hero").firstOrNull() ?: error("no banner")
+        assertTrue(
+            hero.textContent.orEmpty().contains("Alela, Artful Provocateur"),
+            "the banner does not name the commander: ${hero.textContent}",
+        )
+        assertEquals(1, hero.all("img").size, "the banner has no picture")
+        if (!Stylesheet.applied()) return@runTest
+        assertTrue(hero.getBoundingClientRect().height >= 100, "the band is barely there")
+    }
+
+    @Test
+    fun aDeckWithNoCommanderGetsNoEmptyBand() = runTest {
+        // A 60-card list has no commander and nothing to crop. An
+        // empty grey band is worse than none.
+        val bare = Deck("a", "Sixty", "matt", null, "UW", null, null)
+        val s = DecksState().loaded(listOf(bare)).opened("a", listOf(card("Sol Ring", "Artifact")))
+        val frame = mount(1000) { DecksPage(s, {}, {}) }
+        settle()
+        assertEquals(0, frame.all("div.deck-hero").size)
+        assertTrue(frame.textContent.orEmpty().contains("Sixty"), "the deck lost its name")
+    }
+
+    @Test
+    fun theBannerTextSitsOverAWashSoItCanBeRead() = runTest {
+        val frame = mount(1000) { DecksPage(opened(), {}, {}) }
+        settle()
+        if (!Stylesheet.applied()) return@runTest
+        val hero = frame.all("div.deck-hero").first()
+        assertEquals(1, hero.all("div.deck-hero-wash").size, "nothing darkens the art under the name")
+        val text = hero.all("div.deck-hero-text").first().getBoundingClientRect()
+        assertTrue(text.bottom <= hero.getBoundingClientRect().bottom + 1, "the name hangs out of the band")
+    }
+
+    // ------------------------------------------------- grouped by type
+
+    @Test
+    fun theListIsGroupedByTypeInReadingOrder() = runTest {
+        val frame = mount(1000) { DecksPage(opened(), {}, {}) }
+        settle()
+        val headings = frame.all("div.panel-head h2").map { it.textContent.orEmpty() }
+        assertEquals(listOf("Commander", "Creatures", "Artifacts", "Enchantments", "Lands"), headings)
+    }
+
+    @Test
+    fun eachGroupIsAlphabeticalInside() = runTest {
+        val frame = mount(1000) { DecksPage(opened(), {}, {}) }
+        settle()
+        val creatures = frame.all("div.panel")
+            .first { it.textContent.orEmpty().startsWith("Creatures") }
+            .all("span.t-name").map { it.textContent.orEmpty() }
+        assertEquals(listOf("Birds of Paradise", "Zulaport Cutthroat"), creatures)
+    }
+
+    // ---------------------------------------------------- the card rows
+
+    @Test
+    fun everyCardHasASquareThumbnail() = runTest {
+        val frame = mount(1000) { DecksPage(opened(), {}, {}) }
+        settle()
+        val thumbs = frame.all("div.deck-line div.thumb")
+        assertEquals(6, thumbs.size, "not every card has one")
+        if (!Stylesheet.applied()) return@runTest
+        val r = thumbs.first().getBoundingClientRect()
+        assertTrue(r.width > 24, "the thumbnail is ${r.width}px wide")
+        assertTrue(
+            kotlin.math.abs(r.width - r.height) <= 1,
+            "the thumbnail is ${r.width} by ${r.height}, which is not square",
+        )
+    }
+
+    @Test
+    fun tappingACardAsksForItsDetail() = runTest {
+        var asked: Pair<String, String>? = null
+        val frame = mount(1000) {
+            DecksPage(opened(), {}, {}, onOpenCard = { c, owner -> asked = c.nameNorm to owner })
+        }
+        settle()
+        val row = frame.all("div.deck-line").first { it.textContent.orEmpty().contains("Sol Ring") }
+        row.click()
+        settle()
+        // The real `name_norm`, not the display name lowercased, and
+        // the deck's owner rather than a guess.
+        assertEquals("sol ring" to "matt", asked)
+    }
+
+    @Test
+    fun aCardRowSaysItIsSomethingYouCanPress() = runTest {
+        val frame = mount(1000) { DecksPage(opened(), {}, {}) }
+        settle()
+        val row = frame.all("div.deck-line").first()
+        assertEquals("button", row.getAttribute("role"))
+        assertEquals("0", row.getAttribute("tabindex"), "it cannot be reached by keyboard")
+    }
+
+    @Test
+    fun aCardNobodyOwnsStillListsWithoutABrokenPicture() = runTest {
+        val s = DecksState()
+            .loaded(listOf(deck("a", "matt", "Alela")))
+            .opened("a", listOf(DeckCard("Unowned Thing", 1, null, 0, nameNorm = "unowned thing")))
+        val frame = mount(1000) { DecksPage(s, {}, {}) }
+        settle()
+        assertTrue(frame.textContent.orEmpty().contains("Unowned Thing"))
+        assertEquals(1, frame.all("div.deck-line div.thumb").size, "no thumbnail box")
+        assertEquals(0, frame.all("div.deck-line div.thumb img").size, "an img with no source")
     }
 }

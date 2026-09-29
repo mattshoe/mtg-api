@@ -69,6 +69,8 @@ fun AppShell(
     onExport: () -> Unit = {},
     onOpenCard: (CardRow) -> Unit = {},
     onOpenFound: (Found) -> Unit = {},
+    /** A card tapped in a deck list. Carries its own `name_norm`. */
+    onOpenNamed: (String, String, String) -> Unit = { _, _, _ -> },
     onFind: (String) -> Unit = {},
     onLookup: (String) -> Unit = {},
     onPickFile: () -> Unit = {},
@@ -158,6 +160,7 @@ fun AppShell(
                 onNew = { onState(state.opening(Overlay.NEW_DECK)) },
                 onEdit = { onEditDeck(it.slug) },
                 onDisassemble = { onAskDisassemble(it.slug) },
+                onOpenCard = { card, owner -> onOpenNamed(card.name, card.nameNorm, owner) },
             )
 
             View.STATS -> StatsScreen(state.stats) { owner: Owner? ->

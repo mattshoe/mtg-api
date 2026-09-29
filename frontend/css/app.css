@@ -601,15 +601,61 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
   object-fit: cover; object-position: center 38%;
 }
 
+/* The commander, across the top of its own deck. The art is a
+   landscape crop, so the band is a fixed height with the picture
+   covering it and a wash under the text — white-on-art is unreadable
+   over half the commanders in the game. */
+.deck-hero {
+  position: relative; height: 168px; margin-bottom: 14px;
+  border: 1px solid var(--line); border-radius: var(--radius);
+  overflow: hidden; background: var(--bg-3);
+}
+.deck-hero img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%; object-fit: cover; object-position: center 34%;
+}
+.deck-hero-wash {
+  position: absolute; inset: 0;
+  background: linear-gradient(to top, rgba(4,6,10,.92) 0%, rgba(4,6,10,.55) 42%, rgba(4,6,10,0) 78%);
+}
+.deck-hero-text {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  padding: 12px 14px; display: flex; flex-direction: column; gap: 2px;
+}
+.deck-hero-text .who { font-size: 17px; font-weight: 600; line-height: 1.2; }
+.deck-hero-text .what { font-size: 12px; color: var(--text-2); }
+@media (max-width: 560px) { .deck-hero { height: 132px; } }
+
 /* One line of a deck's list. Flush rows with no rule between them
    read as a paragraph rather than a list. */
-.deck-line { display: flex; align-items: center; gap: 9px; padding: 7px 0; }
+.deck-line { display: flex; align-items: center; gap: 10px; padding: 7px 0; }
 .deck-line + .deck-line { border-top: 1px solid var(--line); }
 .deck-line .num {
   flex: none; min-width: 26px; color: var(--text-3);
   font: 600 12px/1 var(--mono); text-align: right;
 }
 .deck-line .t-name { flex: 1; min-width: 0; }
+
+/* Clickable, so it has to look and behave like it. */
+.deck-line[role="button"] { cursor: pointer; }
+.deck-line[role="button"]:hover { background: var(--bg-3); }
+.deck-line[role="button"]:focus-visible { outline: 2px solid var(--info); outline-offset: -2px; }
+
+/* `art_crop` is a landscape band; the square is this box cropping it. */
+.deck-line .thumb {
+  flex: none; width: 40px; height: 40px; border-radius: 6px;
+  overflow: hidden; background: var(--bg-3); border: 1px solid var(--line);
+}
+.deck-line .thumb img {
+  display: block; width: 100%; height: 100%;
+  object-fit: cover; object-position: center 32%;
+}
+.deck-line .line-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.deck-line .line-text .t-name { font-size: 13.5px; }
+.deck-line .line-type {
+  color: var(--text-3); font-size: 11.5px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 
 .deck-body { padding: 11px 13px 13px; display: flex; flex-direction: column; gap: 7px; }
 .deck-top { display: flex; align-items: flex-start; gap: 8px; }

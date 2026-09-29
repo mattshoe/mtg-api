@@ -85,7 +85,67 @@ data class DeckCard(
     val qty: Int,
     val role: String?,
     val owned: Int,
-)
+    /** What the card drawer is opened by. Not `name.lowercase()`. */
+    val nameNorm: String = "",
+    val typeLine: String? = null,
+    val scryfallId: String? = null,
+) {
+    val isCommander: Boolean get() = role == "commander"
+
+    /** Cropped art, square in the page, or null when nobody owns a printing. */
+    val art: String? get() = CardQueries.art(scryfallId, "art_crop")
+
+    /**
+     * Which section it belongs under.
+     *
+     * Read off the printed type line, most specific first — a card is
+     * an Artifact Creature before it is an Artifact, and a land that
+     * happens to be legendary is still a land.
+     */
+    val group: DeckGroup get() = DeckGroup.of(this)
+}
+
+/**
+ * The sections a deck list is read in.
+ *
+ * Fixed order rather than alphabetical: this is the order every deck
+ * list on every site is written in, and shuffling it because somebody
+ * added a Battle would be wrong.
+ */
+enum class DeckGroup(val title: String) {
+    COMMANDER("Commander"),
+    CREATURES("Creatures"),
+    PLANESWALKERS("Planeswalkers"),
+    INSTANTS("Instants"),
+    SORCERIES("Sorceries"),
+    ARTIFACTS("Artifacts"),
+    ENCHANTMENTS("Enchantments"),
+    BATTLES("Battles"),
+    LANDS("Lands"),
+    OTHER("Other"),
+    ;
+
+    companion object {
+        fun of(card: DeckCard): DeckGroup {
+            if (card.isCommander) return COMMANDER
+            // Only the front face decides. A creature whose back is a
+            // land is a creature in the list.
+            val t = card.typeLine.orEmpty().substringBefore("//").lowercase()
+            return when {
+                t.isBlank() -> OTHER
+                "creature" in t -> CREATURES
+                "planeswalker" in t -> PLANESWALKERS
+                "instant" in t -> INSTANTS
+                "sorcery" in t -> SORCERIES
+                "battle" in t -> BATTLES
+                "land" in t -> LANDS
+                "artifact" in t -> ARTIFACTS
+                "enchantment" in t -> ENCHANTMENTS
+                else -> OTHER
+            }
+        }
+    }
+}
 
 object DeckQueries {
 
@@ -111,16 +171,33 @@ object DeckQueries {
         emptyList(),
     )
 
-    /** One deck's list, with how many of each the owner actually has. */
+    /**
+     * One deck's list, with how many of each the owner actually has,
+     * its type line and a printing to take art from.
+     *
+     * Two joins rather than one: `mine` is the owner's own printing,
+     * which is the art they should see, and `alt` is anybody's, so a
+     * card the deck wants but nobody owns still has a picture and a
+     * type. Both collapse to one row per name first — a card with nine
+     * printings would otherwise appear nine times.
+     */
     fun cards(slug: String) = Sql(
-        """SELECT dc.name, dc.qty, dc.role,
+        """SELECT dc.name, dc.name_norm, dc.qty, dc.role,
                   -- `totals` is already one row per owner and name, and
                   -- the column is `total_qty`. `SUM(t.qty)` was neither,
                   -- so opening any deck answered "no such column".
                   COALESCE((SELECT t.total_qty FROM totals t
-                             WHERE t.name_norm = dc.name_norm AND t.owner = d.owner), 0) AS owned
+                             WHERE t.name_norm = dc.name_norm AND t.owner = d.owner), 0) AS owned,
+                  COALESCE(mine.type_line, alt.type_line)     AS type_line,
+                  COALESCE(mine.scryfall_id, alt.scryfall_id) AS scryfall_id
              FROM deck_cards dc
              JOIN decks d ON d.id = dc.deck_id
+             LEFT JOIN (SELECT owner, name_norm, MIN(id) AS id, scryfall_id, type_line
+                          FROM cards GROUP BY owner, name_norm) mine
+               ON mine.name_norm = dc.name_norm AND mine.owner = d.owner
+             LEFT JOIN (SELECT name_norm, MIN(id) AS id, scryfall_id, type_line
+                          FROM cards GROUP BY name_norm) alt
+               ON alt.name_norm = dc.name_norm
             WHERE d.slug = ?
             ORDER BY dc.role IS NULL, dc.role, dc.name""",
         listOf(slug),
@@ -159,6 +236,9 @@ object DeckQueries {
                 qty = it.str("qty")?.toIntOrNull() ?: 0,
                 role = it.str("role"),
                 owned = it.str("owned")?.toIntOrNull() ?: 0,
+                nameNorm = it.str("name_norm").orEmpty(),
+                typeLine = it.str("type_line"),
+                scryfallId = it.str("scryfall_id"),
             )
         }
     }
@@ -180,6 +260,20 @@ data class DecksState(
 
     /** A card the deck wants more of than its owner has. */
     val gaps: List<DeckCard> get() = cards.filter { it.owned < it.qty }
+
+    /** The one the deck is built around, for the banner. */
+    val commander: DeckCard? get() = cards.firstOrNull { it.isCommander }
+
+    /**
+     * The list as it is read: by type, in the order deck lists are
+     * always written, alphabetical inside each section. The sections
+     * nothing falls into are not shown at all.
+     */
+    val byType: List<Pair<DeckGroup, List<DeckCard>>>
+        get() = cards.groupBy { it.group }
+            .toList()
+            .sortedBy { (group, _) -> group.ordinal }
+            .map { (group, list) -> group to list.sortedBy { it.name.lowercase() } }
 
     val totalCards: Int get() = cards.sumOf { it.qty }
 

@@ -10,6 +10,7 @@ import org.jetbrains.compose.web.dom.Text
 import org.jetbrains.compose.web.dom.Img
 import org.mattshoe.mtg.core.CardQueries
 import org.mattshoe.mtg.core.Deck
+import org.mattshoe.mtg.core.DeckCard
 import org.mattshoe.mtg.core.DecksState
 
 /** Decks, on the web. Sibling of `DecksScreen`. */
@@ -22,6 +23,7 @@ fun DecksPage(
     onNew: () -> Unit = {},
     onEdit: (Deck) -> Unit = {},
     onDisassemble: (Deck) -> Unit = {},
+    onOpenCard: (DeckCard, String) -> Unit = { _, _ -> },
 ) {
     Div(attrs = { classes("wrap") }) {
         val open = state.open
@@ -87,6 +89,8 @@ fun DecksPage(
                 }
             }
 
+            Banner(open, state)
+
             Div(attrs = { classes("stack") }) {
                 Div(attrs = { classes("flex-wrap", "small") }) {
                     Span(attrs = { classes("tag", "mini") }) { Text("${state.totalCards} cards") }
@@ -96,19 +100,20 @@ fun DecksPage(
                         }
                     }
                 }
-                Div(attrs = { classes("panel") }) {
-                    Div(attrs = { classes("panel-head") }) { H2 { Text("Cards") } }
-                    Div(attrs = { classes("panel-body") }) {
-                        state.cards.forEach { c ->
-                            Div(attrs = { classes("deck-line", "small") }) {
-                                Span(attrs = { classes("num") }) { Text("${c.qty}×") }
-                                Span(attrs = { classes("t-name") }) { Text(c.name) }
-                                if (c.owned < c.qty) {
-                                    Span(attrs = { classes("tag", "bad", "mini") }) {
-                                        Text("has ${c.owned}")
-                                    }
-                                }
+                // By type, in the order every deck list is written in,
+                // alphabetical inside each section. The grouping is in
+                // the core so the phone cannot sort it differently.
+                state.byType.forEach { (group, cards) ->
+                    Div(attrs = { classes("panel") }) {
+                        Div(attrs = { classes("panel-head") }) {
+                            H2 { Text(group.title) }
+                            Span(attrs = { classes("spacer") }) {}
+                            Span(attrs = { classes("tag", "mini") }) {
+                                Text("${cards.sumOf { it.qty }}")
                             }
+                        }
+                        Div(attrs = { classes("panel-body") }) {
+                            cards.forEach { CardLine(it, open.owner, onOpenCard) }
                         }
                     }
                 }
@@ -149,5 +154,68 @@ private fun Tile(deck: Deck, onOpen: (Deck) -> Unit) {
                 Span(attrs = { classes("cmdr") }) { Text(deck.commanderName ?: "—") }
             }
         }
+    }
+}
+
+/**
+ * The commander, across the top.
+ *
+ * Its own art rather than the deck tile's, because by the time the
+ * deck is open the list has a real printing to take one from — and a
+ * deck with no commander (a 60-card list) gets no band at all rather
+ * than an empty grey one.
+ */
+@Composable
+private fun Banner(deck: Deck, state: DecksState) {
+    val cmdr = state.commander
+    val art = cmdr?.art ?: CardQueries.banner(deck.artId, deck.commanderName) ?: return
+    Div(attrs = { classes("deck-hero") }) {
+        Img(src = art, alt = "", attrs = { attr("loading", "lazy") })
+        Div(attrs = { classes("deck-hero-wash") }) {}
+        Div(attrs = { classes("deck-hero-text") }) {
+            Span(attrs = { classes("who") }) { Text(cmdr?.name ?: deck.commanderName.orEmpty()) }
+            Span(attrs = { classes("what") }) {
+                Text(
+                    listOfNotNull(
+                        deck.bracket?.let { "Bracket $it" },
+                        deck.colorPips.takeIf { it.isNotEmpty() }?.joinToString(""),
+                        "${state.totalCards} cards",
+                    ).joinToString(" · "),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * One card in the list: a square crop of its art, the name, and how
+ * many. The whole row opens the card, the way the grid tiles do.
+ */
+@Composable
+private fun CardLine(card: DeckCard, owner: String, onOpen: (DeckCard, String) -> Unit) {
+    Div(attrs = {
+        classes("deck-line")
+        attr("role", "button")
+        attr("tabindex", "0")
+        attr("title", card.name)
+        onClick { onOpen(card, owner) }
+        onKeyDown { e -> if (e.key == "Enter" || e.key == " ") onOpen(card, owner) }
+    }) {
+        // `art_crop` is a landscape band; the square comes from the box
+        // cropping it, which is why there is a wrapper rather than a
+        // bare img.
+        Div(attrs = { classes("thumb") }) {
+            card.art?.let { Img(src = it, alt = "", attrs = { attr("loading", "lazy") }) }
+        }
+        Div(attrs = { classes("line-text") }) {
+            Span(attrs = { classes("t-name") }) { Text(card.name) }
+            card.typeLine?.takeIf { it.isNotBlank() }?.let {
+                Span(attrs = { classes("line-type") }) { Text(it) }
+            }
+        }
+        if (card.owned < card.qty) {
+            Span(attrs = { classes("tag", "bad", "mini") }) { Text("has ${card.owned}") }
+        }
+        Span(attrs = { classes("num") }) { Text("${card.qty}×") }
     }
 }

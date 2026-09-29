@@ -87,6 +87,109 @@ class DecksTest {
         assertEquals(2, s.byOwner.last().second.size)
     }
 
+    // ------------------------------------------------ grouped by type
+
+    private fun card(
+        name: String,
+        type: String?,
+        role: String? = null,
+        qty: Int = 1,
+    ) = DeckCard(name, qty, role, owned = qty, nameNorm = name.lowercase(), typeLine = type)
+
+    @Test
+    fun aCardGoesUnderTheMostSpecificTypeItHas() {
+        // Most specific wins, or an Artifact Creature files under
+        // Artifacts and the creature count is a lie.
+        assertEquals(DeckGroup.CREATURES, card("Solemn Simulacrum", "Artifact Creature — Golem").group)
+        assertEquals(DeckGroup.LANDS, card("Ancient Tomb", "Land").group)
+        assertEquals(DeckGroup.LANDS, card("Dryad Arbor", "Legendary Land").group)
+        assertEquals(DeckGroup.ARTIFACTS, card("Sol Ring", "Artifact").group)
+        assertEquals(DeckGroup.ENCHANTMENTS, card("Rhystic Study", "Enchantment").group)
+        assertEquals(DeckGroup.INSTANTS, card("Swords to Plowshares", "Instant").group)
+        assertEquals(DeckGroup.SORCERIES, card("Toxic Deluge", "Sorcery").group)
+        assertEquals(DeckGroup.PLANESWALKERS, card("Teferi", "Legendary Planeswalker — Teferi").group)
+        assertEquals(DeckGroup.BATTLES, card("Invasion of Ravnica", "Battle — Siege").group)
+    }
+
+    @Test
+    fun onlyTheFrontFaceDecidesWhichSectionItIsIn() {
+        // A creature whose back is a land is a creature in the list.
+        assertEquals(
+            DeckGroup.CREATURES,
+            card("Jwari Disruption", "Creature — Merfolk // Land").group,
+        )
+    }
+
+    @Test
+    fun aCardWithNoTypeLineAtAllStillLandsSomewhere() {
+        // Nobody owns a printing, so the joins came back empty. It
+        // must not vanish from the list.
+        assertEquals(DeckGroup.OTHER, card("Something Unowned", null).group)
+        assertEquals(DeckGroup.OTHER, card("Something Unowned", "").group)
+    }
+
+    @Test
+    fun theCommanderIsItsOwnSectionWhateverItIsMadeOf() {
+        val c = card("Alela", "Legendary Creature — Faerie", role = "commander")
+        assertEquals(DeckGroup.COMMANDER, c.group)
+        assertTrue(c.isCommander)
+    }
+
+    @Test
+    fun theSectionsComeOutInReadingOrderAndAlphabeticalInside() {
+        val s = DecksState().opened(
+            "alela",
+            listOf(
+                card("Sol Ring", "Artifact"),
+                card("Zulaport Cutthroat", "Creature — Human"),
+                card("Island", "Basic Land — Island", qty = 10),
+                card("Alela", "Legendary Creature — Faerie", role = "commander"),
+                card("Birds of Paradise", "Creature — Bird"),
+            ),
+        )
+        assertEquals(
+            listOf(DeckGroup.COMMANDER, DeckGroup.CREATURES, DeckGroup.ARTIFACTS, DeckGroup.LANDS),
+            s.byType.map { it.first },
+        )
+        assertEquals(
+            listOf("Birds of Paradise", "Zulaport Cutthroat"),
+            s.byType.first { it.first == DeckGroup.CREATURES }.second.map { it.name },
+        )
+    }
+
+    @Test
+    fun anEmptySectionIsNotShownAtAll() {
+        val s = DecksState().opened("alela", listOf(card("Sol Ring", "Artifact")))
+        assertEquals(listOf(DeckGroup.ARTIFACTS), s.byType.map { it.first })
+    }
+
+    @Test
+    fun theCommanderIsAlsoOfferedOnItsOwnForTheBanner() {
+        val s = DecksState().opened(
+            "alela",
+            listOf(
+                card("Sol Ring", "Artifact"),
+                card("Alela", "Legendary Creature — Faerie", role = "commander"),
+            ),
+        )
+        assertEquals("Alela", s.commander?.name)
+        assertNull(DecksState().opened("x", listOf(card("Sol Ring", "Artifact"))).commander)
+    }
+
+    @Test
+    fun aCardCarriesEnoughToOpenItsDrawerAndDrawItsThumbnail() {
+        // `name.lowercase()` is not `name_norm`, and a thumbnail with
+        // no printing to take art from must be absent rather than a
+        // broken image.
+        val owned = DeckCard(
+            "Jötun Grunt", 1, null, 1,
+            nameNorm = "jotun grunt", scryfallId = "abcdef12-3456",
+        )
+        assertEquals("jotun grunt", owned.nameNorm)
+        assertTrue(owned.art.orEmpty().contains("art_crop"), owned.art.orEmpty())
+        assertNull(DeckCard("Nobody Owns This", 1, null, 0).art)
+    }
+
     @Test
     fun closingADeckForgetsItsCards() {
         val s = DecksState().opened("alela", listOf(DeckCard("Sol Ring", 1, null, 1))).close()
