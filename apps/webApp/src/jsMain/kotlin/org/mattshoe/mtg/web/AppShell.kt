@@ -185,34 +185,45 @@ fun AppShell(
     }
 
     if (Overlay.UNLOCK in state.overlays) {
-        Div(attrs = { classes("palette-scrim") }) {
-            Div(attrs = { classes("palette") }) {
-                H2 { Text("Admin mode") }
-                Div(attrs = { classes("muted", "small") }) {
-                    Text(
-                        "The password, once. It is exchanged for a token that does not " +
-                            "expire, and the password itself is never stored.",
-                    )
-                }
-                Input(type = InputType.Password) {
-                    classes("field")
-                    placeholder("Password")
-                    value(password)
-                    onInput { password = it.value }
-                }
-                Div(attrs = { classes("flex") }) {
-                    Button(attrs = {
-                        classes("btn", "primary")
-                        onClick {
-                            onState(state.closing(Overlay.UNLOCK))
-                            onUnlock(password)
-                            password = ""
-                        }
-                    }) { Text("Unlock") }
-                    Button(attrs = {
-                        classes("btn", "ghost")
-                        onClick { onState(state.closing(Overlay.UNLOCK)); password = "" }
-                    }) { Text("Cancel") }
+        Div(attrs = {
+            classes("palette-scrim")
+            onClick { onState(state.closing(Overlay.UNLOCK)); password = "" }
+        }) {
+            // `panel-head` and `panel-body`, the same as every other
+            // dialog. Loose children of `.palette` get no padding at
+            // all, which is why this one had its text against the edge.
+            Div(attrs = {
+                classes("palette")
+                onClick { it.stopPropagation() }
+            }) {
+                Div(attrs = { classes("panel-head") }) { H2 { Text("Admin mode") } }
+                Div(attrs = { classes("panel-body", "stack") }) {
+                    Div(attrs = { classes("muted", "small") }) {
+                        Text(
+                            "The password, once. It is exchanged for a token that does not " +
+                                "expire, and the password itself is never stored.",
+                        )
+                    }
+                    Input(type = InputType.Password) {
+                        classes("field")
+                        placeholder("Password")
+                        value(password)
+                        onInput { password = it.value }
+                    }
+                    Div(attrs = { classes("flex-wrap") }) {
+                        Button(attrs = {
+                            classes("btn", "primary")
+                            onClick {
+                                onState(state.closing(Overlay.UNLOCK))
+                                onUnlock(password)
+                                password = ""
+                            }
+                        }) { Text("Unlock") }
+                        Button(attrs = {
+                            classes("btn", "ghost")
+                            onClick { onState(state.closing(Overlay.UNLOCK)); password = "" }
+                        }) { Text("Cancel") }
+                    }
                 }
             }
         }

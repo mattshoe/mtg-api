@@ -54,8 +54,6 @@ fun LibraryPage(
     }
 
     Div(attrs = { classes("wrap") }) {
-        Div(attrs = { classes("page-head") }) { H1 { Text("Library") } }
-
         Div(attrs = { classes("panel") }) {
             // `stack` is what puts air between the rows. Without it
             // every control in here sits flush against the next.
@@ -79,12 +77,17 @@ fun LibraryPage(
                 // No Filters button. Every group is already folded
                 // away, so the one thing hiding them bought was a way
                 // to lose track of a filter that was still applied.
+                //
+                // Sort and its direction on the left because they are
+                // what you reach for; Export pushed to the right
+                // because it is the one thing here that leaves.
                 Div(attrs = { classes("flex-wrap") }) {
+                    SortPicker(state, ::apply)
+                    Span(attrs = { classes("spacer") }) {}
                     Button(attrs = {
                         classes("btn", "sm", "ghost")
                         onClick { onExport() }
                     }) { Text("Export") }
-                    SortPicker(state, ::apply)
                 }
             }
         }

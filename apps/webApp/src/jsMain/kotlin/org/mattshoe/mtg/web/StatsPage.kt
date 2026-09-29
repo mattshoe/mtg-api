@@ -13,8 +13,6 @@ import org.mattshoe.mtg.core.StatsState
 @Composable
 fun StatsPage(state: StatsState, onScope: (Owner?) -> Unit) {
     Div(attrs = { classes("wrap") }) {
-        Div(attrs = { classes("page-head") }) { H1 { Text("Stats") } }
-
         Div(attrs = { classes("flex-wrap") }) {
             listOf(null to "Both", Owner.MATT to "Matt", Owner.KAYLA to "Kayla").forEach { (o, label) ->
                 Button(attrs = {

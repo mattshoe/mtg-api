@@ -22,14 +22,10 @@
 <a class="skip" href="#main">Skip to content</a>
 
 <header class="topbar">
-  <!-- The menu belongs in the bar, not floating under it. The shared
-       build draws it here; the slot is static only because the header
-       itself is. -->
+  <!-- The menu, the mark and the page title belong in the bar. The
+       shared build draws all three here; the slot is static only
+       because the header itself is. -->
   <div id="nav" class="topbar-nav"></div>
-  <a class="brand" href="#/search">
-    <img class="brand-mark" src="icons/icon-32.png" alt="" width="22" height="22">
-    <span class="brand-text">Collection</span>
-  </a>
   <div class="topbar-right">
     <!-- Leaves the app entirely, so it is not a view and never lights
          up as the current one. -->

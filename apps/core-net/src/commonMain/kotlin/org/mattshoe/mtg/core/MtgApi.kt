@@ -224,10 +224,12 @@ class MtgApi internal constructor(
 
         /** A client with no JSON plugin, for callers that parse by hand. */
         internal fun plainClient() = HttpClient {
+            retries()
             install(HttpTimeout) { requestTimeoutMillis = 20_000 }
         }
 
         private fun defaultClient() = HttpClient {
+            retries()
             install(ContentNegotiation) { json(json) }
             install(HttpTimeout) {
                 connectTimeoutMillis = 20_000

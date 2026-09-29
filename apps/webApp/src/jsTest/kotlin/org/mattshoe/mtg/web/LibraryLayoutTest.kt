@@ -233,6 +233,43 @@ class LibraryLayoutTest {
     }
 
     @Test
+    fun theSortIsOnTheLeftAndExportOnTheRight() = runTest {
+        val frame = render(1000)
+        settle()
+        if (!styled()) return@runTest
+        val row = frame.all("div.flex-wrap").first { it.querySelector("select.sort") != null }
+        val sort = row.all("select.sort").first().getBoundingClientRect()
+        val export = row.all("button").first { it.textContent?.trim() == "Export" }.getBoundingClientRect()
+        assertTrue(sort.left < export.left, "Export is not to the right of the sort")
+        // Actually pushed to the edge, not merely next in line.
+        val edge = row.getBoundingClientRect().right
+        assertTrue(edge - export.right < 4, "Export sits ${edge - export.right}px off the right edge")
+    }
+
+    @Test
+    fun theUnlockDialogHasPaddingRoundItsWords() = runTest {
+        // It rendered its children straight into `.palette`, which has
+        // none, so the text sat against the edge of the box.
+        val frame = document.createElement("div") as HTMLElement
+        frame.style.width = "390px"
+        frame.style.position = "absolute"
+        document.body!!.appendChild(frame)
+        roots += frame
+        renderComposable(root = frame) {
+            AppShell(AppState().opening(org.mattshoe.mtg.core.Overlay.UNLOCK), {}, {}, {}, {}, {}, {}, {})
+        }
+        settle()
+        if (!styled()) return@runTest
+
+        val panel = frame.all("div.palette").first().getBoundingClientRect()
+        val words = frame.all("div.palette h2").first().getBoundingClientRect()
+        assertTrue(words.left - panel.left >= 10, "only ${words.left - panel.left}px to the left of the words")
+        val box = frame.all("input[type=password]").first().getBoundingClientRect()
+        assertTrue(box.left - panel.left >= 10, "the password field runs to the edge of the dialog")
+        assertTrue(panel.right - box.right >= 10, "and off the other side")
+    }
+
+    @Test
     fun theMenuStaysOnScreenAtPhoneWidth() = runTest {
         // The nav lives in the header now, so it is mounted on its
         // own here. Opened, the menu must not run off the side.

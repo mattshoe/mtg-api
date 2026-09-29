@@ -666,6 +666,41 @@ class NavTest {
     }
 
     @Test
+    fun theHeaderSaysWhatYouAreLookingAt() = runTest {
+        // It used to be a heading floating at the top of every page,
+        // saying the same thing the address bar already said.
+        assertEquals("Library", title(mount(AppState())))
+        assertEquals("Decks", title(mount(AppState().navigate(org.mattshoe.mtg.core.View.DECKS))))
+        assertEquals("Stats", title(mount(AppState().navigate(org.mattshoe.mtg.core.View.STATS))))
+    }
+
+    @Test
+    fun andAnOpenDeckPutsItsOwnNameThere() = runTest {
+        val decks = org.mattshoe.mtg.core.DecksState()
+            .loaded(listOf(org.mattshoe.mtg.core.Deck("a", "Feather Storm", "matt", null, "RW", 3, null)))
+            .opened("a", emptyList())
+        val s = AppState().navigate(org.mattshoe.mtg.core.Route(org.mattshoe.mtg.core.View.DECKS, "a")).copy(decks = decks)
+        assertEquals("Feather Storm", title(mount(s)))
+    }
+
+    @Test
+    fun theMarkIsTheSameSizeAsTheHamburgerBesideIt() = runTest {
+        Stylesheet.load()
+        val root = mount(AppState())
+        settle()
+        if (!Stylesheet.applied()) return@runTest
+        val mark = (root.querySelector("img.brand-mark") as org.w3c.dom.HTMLElement).getBoundingClientRect()
+        val burger = (root.querySelector("button.nav-burger") as org.w3c.dom.HTMLElement).getBoundingClientRect()
+        assertTrue(
+            kotlin.math.abs(mark.height - burger.height) <= 1,
+            "the mark is ${mark.height}px against a ${burger.height}px button",
+        )
+    }
+
+    private fun title(root: org.w3c.dom.HTMLElement) =
+        (root.querySelector(".topbar-title") as? org.w3c.dom.HTMLElement)?.textContent?.trim()
+
+    @Test
     fun theAdminHalfIsItsOwnSectionWithTheLockInIt() = runTest {
         val root = mount(AppState())
         settle()

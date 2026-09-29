@@ -7,7 +7,10 @@ import kotlinx.coroutines.test.runTest
 import org.jetbrains.compose.web.renderComposable
 import org.mattshoe.mtg.core.Deck
 import org.mattshoe.mtg.core.DeckCard
+import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.DecksState
+import org.mattshoe.mtg.core.Route
+import org.mattshoe.mtg.core.View
 import org.w3c.dom.HTMLElement
 import org.w3c.dom.get
 import kotlin.js.Promise
@@ -220,7 +223,10 @@ class DecksLayoutTest {
         val frame = mount(1000) { DecksPage(s, {}, {}) }
         settle()
         assertEquals(0, frame.all("div.deck-hero").size)
-        assertTrue(frame.textContent.orEmpty().contains("Sixty"), "the deck lost its name")
+        // The name lives in the header now, so what the page has to
+        // still show is the list.
+        assertTrue(frame.textContent.orEmpty().contains("Sol Ring"), "the deck lost its list")
+        assertEquals("Sixty", AppState().navigate(Route(View.DECKS, "a")).copy(decks = s).title)
     }
 
     @Test

@@ -59,6 +59,19 @@ data class AppState(
         get() = card?.takeIf { Overlay.CARD in overlays.stack }
             ?.let { CardRef(it.owner, it.nameNorm) }
 
+    /**
+     * What the header says you are looking at.
+     *
+     * In the bar rather than repeated as a heading at the top of
+     * every page — a label floating over the content was saying the
+     * same thing the address bar already said, twice.
+     */
+    val title: String
+        get() = when {
+            view == View.DECKS && decks.open != null -> decks.open!!.title
+            else -> view.label
+        }
+
     fun say(message: String?) = copy(toast = message)
 
     /**

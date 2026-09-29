@@ -28,11 +28,11 @@ fun DecksPage(
     Div(attrs = { classes("wrap") }) {
         val open = state.open
         if (open == null) {
-            Div(attrs = { classes("page-head") }) {
-                H1 { Text("Decks") }
-                if (admin) {
+            if (admin) {
+                Div(attrs = { classes("page-head") }) {
+                    Span(attrs = { classes("spacer") }) {}
                     Button(attrs = {
-                        classes("btn", "primary")
+                        classes("btn", "sm", "primary")
                         onClick { onNew() }
                     }) { Text("New deck") }
                 }
@@ -64,7 +64,6 @@ fun DecksPage(
                     classes("btn", "sm", "ghost")
                     onClick { onClose() }
                 }) { Text("← Decks") }
-                H1 { Text(open.name) }
                 Span(attrs = { classes("sub") }) {
                     Text(
                         listOfNotNull(

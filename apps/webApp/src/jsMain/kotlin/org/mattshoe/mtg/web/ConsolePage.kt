@@ -9,6 +9,7 @@ import org.jetbrains.compose.web.dom.H1
 import org.jetbrains.compose.web.dom.Table
 import org.jetbrains.compose.web.dom.Tbody
 import org.jetbrains.compose.web.dom.Td
+import org.jetbrains.compose.web.dom.Span
 import org.jetbrains.compose.web.dom.Text
 import org.jetbrains.compose.web.dom.TextArea
 import org.jetbrains.compose.web.dom.Th
@@ -27,7 +28,7 @@ fun ConsolePage(
 ) {
     Div(attrs = { classes("wrap") }) {
         Div(attrs = { classes("page-head") }) {
-            H1 { Text("Query") }
+            Span(attrs = { classes("spacer") }) {}
             Button(attrs = {
                 classes("btn", "sm", "ghost")
                 onClick { onCheatsheet() }
@@ -81,7 +82,6 @@ private fun ResultTable(t: org.mattshoe.mtg.core.Table) {
 @Composable
 fun LogsPage(state: LogsState, onState: (LogsState) -> Unit) {
     Div(attrs = { classes("wrap") }) {
-        Div(attrs = { classes("page-head") }) { H1 { Text("Server logs") } }
         Div(attrs = { classes("flex-wrap") }) {
             Button(attrs = {
                 classes("btn", "sm", "ghost")

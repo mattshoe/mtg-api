@@ -87,14 +87,15 @@ h3 { font-size: 14px; }
   border-bottom: 1px solid var(--line);
 }
 
-.brand { display: flex; align-items: center; gap: 9px; color: var(--text); font-weight: 650; letter-spacing: -.01em; }
+.brand { display: flex; align-items: center; flex: none; color: var(--text); }
 .brand:hover { text-decoration: none; }
-/* The app's own icon, rather than a gold rectangle standing in for one. */
+/* The app's own icon, rather than a gold rectangle standing in for one.
+   Sized to the hamburger beside it — at 22px against a 34px button it
+   read as an afterthought. */
 .brand-mark {
-  width: 22px; height: 22px; border-radius: 5px; flex: none;
+  width: 34px; height: 34px; border-radius: 8px; flex: none;
   display: block; object-fit: contain;
 }
-.brand-text { white-space: nowrap; }
 
 .tabs { display: flex; gap: 2px; margin-left: 6px; overflow-x: auto; scrollbar-width: none; }
 .tabs::-webkit-scrollbar { display: none; }
@@ -134,7 +135,14 @@ h3 { font-size: 14px; }
    every width — the row of tabs only ever fitted on a desk, and two
    behaviours to keep straight is how the phone ended up with no
    navigation at all. */
-.topbar-nav { display: flex; align-items: center; flex: none; }
+.topbar-nav { display: flex; align-items: center; gap: 11px; min-width: 0; }
+/* What you are looking at, in the bar. One line, cut rather than
+   wrapped — a deck called "League of Legends Proxy Deck" must not
+   push the header to two rows. */
+.topbar-title {
+  min-width: 0; font-size: 16px; font-weight: 650; letter-spacing: -.01em;
+  color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .app-nav { position: relative; display: flex; align-items: center; }
 
 .nav-burger {
@@ -465,15 +473,22 @@ pre.out {
 /* command palette */
 .palette-scrim {
   position: fixed; inset: 0; background: rgba(4,6,10,.6); z-index: 80;
-  display: grid; place-items: start center; padding-top: 12vh;
+  display: grid; place-items: start center;
+  /* Side padding as well as top. Without it a dialog at 92vw sits
+     four pixels off each edge on a phone and reads as broken. */
+  padding: 12vh 14px 14px;
   overflow-y: auto; overscroll-behavior: contain;
 }
 .palette { width: min(560px, 92vw); background: var(--bg-2); border: 1px solid var(--line-2);
            border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
 .palette.wide { width: min(760px, 94vw); max-height: 82vh; overflow-y: auto; }
 .palette.wide textarea { font-family: var(--mono); font-size: 12.5px; line-height: 1.5; }
-.palette input { border: none; border-radius: 0; border-bottom: 1px solid var(--line); padding: 14px 16px; font-size: 15px; }
-.palette input:focus { border-color: var(--line); }
+/* The finder's own box, which is the whole top of that dialog. Scoped
+   to a direct child: as `.palette input` it also flattened the
+   password field and every field in the deck dialogs, which is what
+   made them look like unpadded grey slabs. */
+.palette > input { border: none; border-radius: 0; border-bottom: 1px solid var(--line); padding: 14px 16px; font-size: 15px; }
+.palette > input:focus { border-color: var(--line); }
 .palette ul { list-style: none; margin: 0; padding: 0; max-height: 46vh; overflow-y: auto; }
 .palette li { padding: 9px 16px; cursor: pointer; display: flex; gap: 10px; align-items: center; font-size: 13.5px; }
 .palette li.on { background: var(--accent-dim); }

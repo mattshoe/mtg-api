@@ -5,8 +5,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import org.jetbrains.compose.web.dom.A
 import org.jetbrains.compose.web.dom.Button
 import org.jetbrains.compose.web.dom.Div
+import org.jetbrains.compose.web.dom.Img
 import org.jetbrains.compose.web.dom.Nav
 import org.jetbrains.compose.web.dom.Span
 import org.jetbrains.compose.web.dom.Text
@@ -90,4 +92,13 @@ fun AppNav(state: AppState, onState: (AppState) -> Unit) {
             }) { Text(if (state.admin.unlocked) "Lock" else "Unlock") }
         }
     }
+
+    // Home, then what you are looking at. Drawn here rather than left
+    // in the static header because the title changes with the route,
+    // and repeated as a heading on every page it was saying the same
+    // thing twice.
+    A(href = "#/search", attrs = { classes("brand") }) {
+        Img(src = "icons/icon-32.png", alt = "Home", attrs = { classes("brand-mark") })
+    }
+    Span(attrs = { classes("topbar-title") }) { Text(state.title) }
 }

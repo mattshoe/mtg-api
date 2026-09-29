@@ -52,7 +52,6 @@ fun MassEntryPage(
 
     Div(attrs = { classes("wrap") }) {
         Div(attrs = { classes("page-head") }) {
-            H1 { Text("Mass entry") }
             Span(attrs = { classes("sub") }) {
                 Text(
                     when (s.direction) {
