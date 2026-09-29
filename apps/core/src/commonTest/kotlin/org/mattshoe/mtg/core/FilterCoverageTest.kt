@@ -121,15 +121,25 @@ class FilterCoverageTest {
     }
 
     @Test
-    fun excludedTypesAreNotExists() {
-        val sql = where(Filters(typesNot = listOf("Land")))
-        assertTrue(sql.startsWith("NOT EXISTS"), sql)
-        assertTrue(sql.contains("kind = 'type'"))
-    }
-
-    @Test
-    fun supertypesUseTheirOwnKind() {
-        assertTrue(where(Filters(supertypes = listOf("Legendary"))).contains("kind = 'supertype'"))
+    fun theTypeAxisHasOneListAndOneBox() {
+        // Supertype and Exclude-type were both the type line said
+        // twice: `legendary`, `creature !land`. A tappable list of
+        // what the collection holds earns its place; a second one for
+        // the same axis does not.
+        // The query string, which is what `fromHash` reads — an old
+        // link carrying all four still opens, and only the one that
+        // still exists survives.
+        val everything = FilterUrl.fromHash(
+            "?types=Creature&typesNot=Land&supertypes=Legendary&subtypes=Elf&typeLine=elf",
+        )
+        assertEquals(listOf("Creature"), everything.types)
+        val sql = where(everything)
+        assertTrue(!sql.contains("kind = 'supertype'"), sql)
+        assertTrue(!sql.contains("NOT EXISTS"), sql)
+        assertTrue(!sql.contains("subtype"), sql)
+        // And what replaced them.
+        assertTrue(where(Filters(typeLine = "legendary")).contains("type_line"))
+        assertTrue(where(Filters(typeLine = "!land")).contains("NOT ("))
     }
 
     @Test
@@ -138,16 +148,11 @@ class FilterCoverageTest {
         // boxes that answer the same question is one more box to get
         // wrong. Asserted on the SQL rather than on the panel, so the
         // clause cannot come back without the box.
-        val types = Filters(
-            types = listOf("Creature"),
-            typesNot = listOf("Land"),
-            supertypes = listOf("Legendary"),
-            typeLine = "elf",
-        )
+        val types = Filters(types = listOf("Creature"), typeLine = "elf")
         assertTrue(!where(types).contains("subtype"), "the subtype clause is back: ${where(types)}")
         // The URL cannot carry one either, so an old link degrades to
         // the rest of its filters rather than failing.
-        assertEquals(listOf("Creature"), FilterUrl.fromHash("#/search?subtypes=Elf&types=Creature").types)
+        assertEquals(listOf("Creature"), FilterUrl.fromHash("?subtypes=Elf&types=Creature").types)
         // And the thing that replaced it still works.
         assertTrue(where(Filters(typeLine = "elf")).contains("type_line"))
     }
@@ -207,14 +212,10 @@ class FilterCoverageTest {
         assertEquals(listOf("paper", "mtgo"), params(f))
     }
 
-    /** Types and supertypes stay conjunctive: they compose. */
+    /** Ticking two types means both, not either. */
     @Test
-    fun typesAndSupertypesStillMeanAllOfThese() {
+    fun typesStillMeanAllOfThese() {
         assertEquals(2, Regex("kind = 'type'").findAll(where(Filters(types = listOf("Artifact", "Creature")))).count())
-        assertEquals(
-            2,
-            Regex("kind = 'supertype'").findAll(where(Filters(supertypes = listOf("Legendary", "Snow")))).count(),
-        )
     }
 
     @Test
@@ -373,8 +374,6 @@ class FilterCoverageTest {
         addsAClause("produces", Filters(produces = listOf("G")))
         addsAClause("ci count", Filters(ciMin = "2"))
         addsAClause("types", Filters(types = listOf("Creature")))
-        addsAClause("typesNot", Filters(typesNot = listOf("Land")))
-        addsAClause("supertypes", Filters(supertypes = listOf("Legendary")))
         addsAClause("typeLine", Filters(typeLine = "artifact"))
         addsAClause("cmc", Filters(cmcMin = "1"))
         addsAClause("manaCost", Filters(manaCost = "{G}"))
@@ -383,7 +382,6 @@ class FilterCoverageTest {
         addsAClause("loyalty", Filters(loy = "3"))
         addsAClause("q", Filters(q = "bolt"))
         addsAClause("text", Filters(text = "draw"))
-        addsAClause("textLike", Filters(textLike = "enters"))
         addsAClause("flavor", Filters(flavor = "goblin"))
         addsAClause("artist", Filters(artist = "guay"))
         addsAClause("watermark", Filters(watermark = "prismari"))
@@ -422,8 +420,6 @@ class FilterCoverageTest {
             Facet.COLOUR to Filters(produces = listOf("G")),
             Facet.COLOUR to Filters(ciMin = "2"),
             Facet.TYPE to Filters(types = listOf("Creature")),
-            Facet.TYPE to Filters(typesNot = listOf("Land")),
-            Facet.TYPE to Filters(supertypes = listOf("Legendary")),
             Facet.TYPE to Filters(typeLine = "artifact"),
             Facet.MANA to Filters(cmcMin = "1"),
             Facet.MANA to Filters(manaCost = "{G}"),

@@ -169,7 +169,6 @@ class TextQueryTest {
         // statement.
         listOf(
             Filters(q = "SOL") to "%sol%",
-            Filters(textLike = "ENTERS") to "%enters%",
             Filters(flavor = "GOBLIN") to "%goblin%",
             Filters(artist = "GUAY") to "%guay%",
             Filters(watermark = "BOROS") to "%boros%",

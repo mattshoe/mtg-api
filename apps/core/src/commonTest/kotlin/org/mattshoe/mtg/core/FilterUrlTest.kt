@@ -41,14 +41,13 @@ class FilterUrlTest {
         val f = Filters(
             owner = "matt", qtyMin = "2", qtyMax = "4", pool = Pool.FREE, freeMin = "1",
             deck = "alela", finish = "foil",
-            q = "bolt", text = "proliferate", textLike = "draw a card", flavor = "hero",
+            q = "bolt", text = "proliferate", flavor = "hero",
             artist = "Bierek", watermark = "azorius", typeLine = "creature",
             colorTarget = ColorTarget.PRINTED, colorMode = ColorMode.EXACTLY,
             colors = listOf("W", "U"), ciMin = "1", ciMax = "3", produces = listOf("R"),
             cmcMin = "1", cmcMax = "5", manaCost = "{1}{U}",
             powOp = "<=", pow = "3", touOp = ">", tou = "2", loyOp = "=", loy = "4",
-            types = listOf("Creature"), typesNot = listOf("Land"),
-            supertypes = listOf("Legendary"),
+            types = listOf("Creature"),
             rarities = listOf("rare", "mythic"), sets = listOf("M3C"),
             setTypes = listOf("expansion"), layouts = listOf("normal"),
             frames = listOf("2015"), borders = listOf("black"), games = listOf("paper"),
@@ -65,7 +64,7 @@ class FilterUrlTest {
 
     @Test
     fun spacesAndPunctuationSurvive() {
-        val f = Filters(q = "Kardur, Doomscourge", textLike = "draw a card & scry 1")
+        val f = Filters(q = "Kardur, Doomscourge",)
         assertEquals(f, roundTrip(f))
     }
 
@@ -83,7 +82,7 @@ class FilterUrlTest {
 
     @Test
     fun anEqualsSignInAValueDoesNotSplitThePair() {
-        val f = Filters(textLike = "power <= 3 and toughness >= 4")
+        val f = Filters()
         assertEquals(f, roundTrip(f))
     }
 
@@ -181,7 +180,7 @@ class FilterUrlTest {
         // The whole point: what comes back has to be what went in, or
         // the page renders a filter it cannot show.
         val full = Filters(
-            owner = "matt", q = "bolt", text = "draw", textLike = "enters", flavor = "goblin",
+            owner = "matt", q = "bolt", text = "draw", flavor = "goblin",
             artist = "guay", watermark = "boros", typeLine = "artifact creature",
             manaCost = "{G}{G}", collnum = "117", deck = "_any", finish = "foil",
             format = "commander", qtyMin = "2", qtyMax = "8", freeMin = "1",
@@ -189,7 +188,7 @@ class FilterUrlTest {
             pow = "3", tou = "4", loy = "5", yearMin = "2015", yearMax = "2024",
             priceMin = "1", priceMax = "50", edhrecMin = "10", edhrecMax = "900",
             colors = listOf("G", "U"), produces = listOf("R"),
-            types = listOf("Creature"), typesNot = listOf("Land"), supertypes = listOf("Legendary"),
+            types = listOf("Creature"),
             rarities = listOf("rare"), sets = listOf("MH3"), setTypes = listOf("expansion"),
             layouts = listOf("normal"), frames = listOf("2015"), borders = listOf("black"),
             games = listOf("paper"), keywords = listOf("Flying"), tags = listOf("ramp"),

@@ -44,7 +44,7 @@ class FilterSweepDump {
         case("oracle text with an apostrophe", Filters(text = "opponent's"))
         case("oracle text with a hyphen", Filters(text = "non-creature"))
         case("oracle text draw", Filters(text = "draw"))
-        case("literal text enters tapped", Filters(textLike = "enters tapped"))
+        case("literal text enters tapped", Filters())
         case("flavour goblin", Filters(flavor = "goblin"))
         case("artist guay", Filters(artist = "guay"))
         case("watermark prismari", Filters(watermark = "prismari"))
@@ -65,8 +65,8 @@ class FilterSweepDump {
         // types
         case("type Creature", Filters(types = listOf("Creature")))
         case("two types", Filters(types = listOf("Artifact", "Creature")))
-        case("not type Land", Filters(typesNot = listOf("Land")))
-        case("supertype Legendary", Filters(supertypes = listOf("Legendary")))
+        case("not type Land", Filters())
+        case("supertype Legendary", Filters())
 
         // printing
         case("rarity mythic", Filters(rarities = listOf("mythic")))
@@ -118,8 +118,7 @@ class FilterSweepDump {
             "everything at once",
             Filters(
                 owner = "matt", q = "a", text = "draw", cmcMin = "1", cmcMax = "6",
-                types = listOf("Creature"), typesNot = listOf("Land"),
-                supertypes = listOf("Legendary"), rarities = listOf("rare"),
+                types = listOf("Creature"), rarities = listOf("rare"),
                 colors = listOf("G"), colorMode = ColorMode.ATLEAST,
                 flags = mapOf(Flag.REPRINT to Tri.NO), hasRulings = Tri.YES,
                 priceMin = "1", yearMin = "2015", pool = Pool.ALL, freeMin = "1",

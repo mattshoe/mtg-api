@@ -64,7 +64,6 @@ object FilterUrl {
         put("owner", f.owner, DEFAULT.owner)
         put("q", f.q, DEFAULT.q)
         put("text", f.text, DEFAULT.text)
-        put("textLike", f.textLike, DEFAULT.textLike)
         put("flavor", f.flavor, DEFAULT.flavor)
         put("artist", f.artist, DEFAULT.artist)
         put("watermark", f.watermark, DEFAULT.watermark)
@@ -98,8 +97,6 @@ object FilterUrl {
         putList("colors", f.colors, DEFAULT.colors)
         putList("produces", f.produces, DEFAULT.produces)
         putList("types", f.types, DEFAULT.types)
-        putList("typesNot", f.typesNot, DEFAULT.typesNot)
-        putList("supertypes", f.supertypes, DEFAULT.supertypes)
         putList("rarities", f.rarities, DEFAULT.rarities)
         putList("sets", f.sets, DEFAULT.sets)
         putList("setTypes", f.setTypes, DEFAULT.setTypes)
@@ -155,7 +152,6 @@ object FilterUrl {
             finish = m["finish"].orEmpty(),
             q = m["q"].orEmpty(),
             text = m["text"].orEmpty(),
-            textLike = m["textLike"].orEmpty(),
             flavor = m["flavor"].orEmpty(),
             artist = m["artist"].orEmpty(),
             watermark = m["watermark"].orEmpty(),
@@ -170,8 +166,7 @@ object FilterUrl {
             powOp = m["powOp"] ?: DEFAULT.powOp, pow = m["pow"].orEmpty(),
             touOp = m["touOp"] ?: DEFAULT.touOp, tou = m["tou"].orEmpty(),
             loyOp = m["loyOp"] ?: DEFAULT.loyOp, loy = m["loy"].orEmpty(),
-            types = list("types"), typesNot = list("typesNot"),
-            supertypes = list("supertypes"),
+            types = list("types"),
             rarities = list("rarities"), sets = list("sets"), setTypes = list("setTypes"),
             layouts = list("layouts"), frames = list("frames"), borders = list("borders"),
             games = list("games"),

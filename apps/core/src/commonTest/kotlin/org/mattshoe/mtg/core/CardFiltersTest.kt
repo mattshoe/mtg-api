@@ -129,13 +129,15 @@ class CardFiltersTest {
     }
 
     @Test
-    fun aLiteralTextSearchIsALikeNotAMatch() {
-        val sql = where(Filters(textLike = "draw a card"))
-        assertTrue(sql.contains("COALESCE(lower(c.oracle_text), '') LIKE ?"), sql)
-        // LIKE's own wildcards are escaped, so the clause declares
-        // what the escape character is.
-        assertTrue(sql.contains("ESCAPE"), sql)
-        assertFalse(sql.contains("MATCH"))
+    fun thereIsNoSeparateLiteralTextBoxAnyMore() {
+        // A quoted phrase in the rules-text box does what "Exact
+        // text" did, so the second box was one more thing to keep in
+        // step for nothing.
+        val sql = where(FilterUrl.fromHash("?textLike=enters+tapped"))
+        assertFalse(sql.contains("oracle_text"), sql)
+        // And the phrase that replaced it.
+        val phrase = where(Filters(text = "\"enters tapped\""))
+        assertTrue(phrase.contains("card_search MATCH ?"), phrase)
     }
 
     @Test

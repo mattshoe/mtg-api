@@ -32,7 +32,6 @@ data class Facets(
 
     companion object {
         /** Somewhere to start before the queries come back. */
-        val SUPERTYPES = listOf("Legendary", "Basic", "Snow", "World")
         val RARITIES = listOf("common", "uncommon", "rare", "mythic", "special", "bonus")
         val GAMES = listOf("paper", "arena", "mtgo")
         val FINISHES = listOf("" to "Any", "nonfoil" to "Nonfoil", "foil" to "Foil", "etched" to "Etched")
@@ -216,10 +215,7 @@ enum class Facet(val id: String, val title: String) {
             f.ciMin.isNotBlank(), f.ciMax.isNotBlank(),
         ).count { it }
 
-        TYPE -> listOf(
-            f.types.isNotEmpty(), f.typesNot.isNotEmpty(), f.supertypes.isNotEmpty(),
-            f.typeLine.isNotBlank(),
-        ).count { it }
+        TYPE -> listOf(f.types.isNotEmpty(), f.typeLine.isNotBlank()).count { it }
 
         MANA -> listOf(
             f.cmcMin.isNotBlank(), f.cmcMax.isNotBlank(), f.manaCost.isNotBlank(),
@@ -227,7 +223,7 @@ enum class Facet(val id: String, val title: String) {
         ).count { it }
 
         TEXT -> listOf(
-            f.q.isNotBlank(), f.text.isNotBlank(), f.textLike.isNotBlank(),
+            f.q.isNotBlank(), f.text.isNotBlank(),
             f.flavor.isNotBlank(), f.artist.isNotBlank(), f.watermark.isNotBlank(),
         ).count { it }
 

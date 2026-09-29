@@ -43,7 +43,6 @@ fun FilterSheet(f: Filters, onChange: (Filters) -> Unit, onDone: () -> Unit) {
         Label("Words")
         Field("Name", f.q) { onChange(f.copy(q = it)) }
         Field("Oracle text", f.text) { onChange(f.copy(text = it)) }
-        Field("Text contains", f.textLike) { onChange(f.copy(textLike = it)) }
         Field("Flavour", f.flavor) { onChange(f.copy(flavor = it)) }
         Field("Artist", f.artist) { onChange(f.copy(artist = it)) }
         Field("Watermark", f.watermark) { onChange(f.copy(watermark = it)) }
@@ -92,8 +91,6 @@ fun FilterSheet(f: Filters, onChange: (Filters) -> Unit, onDone: () -> Unit) {
         CommaList("Rarities", f.rarities) { onChange(f.copy(rarities = it)) }
         CommaList("Sets", f.sets) { onChange(f.copy(sets = it)) }
         CommaList("Types", f.types) { onChange(f.copy(types = it)) }
-        CommaList("Not types", f.typesNot) { onChange(f.copy(typesNot = it)) }
-        CommaList("Supertypes", f.supertypes) { onChange(f.copy(supertypes = it)) }
         CommaList("Keywords", f.keywords) { onChange(f.copy(keywords = it)) }
         CommaList("Tags", f.tags) { onChange(f.copy(tags = it)) }
         Field("Collector number", f.collnum) { onChange(f.copy(collnum = it)) }

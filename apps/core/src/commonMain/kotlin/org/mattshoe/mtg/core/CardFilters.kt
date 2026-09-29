@@ -160,7 +160,6 @@ data class Filters(
     // words
     val q: String = "",
     val text: String = "",
-    val textLike: String = "",
     val flavor: String = "",
     val artist: String = "",
     val watermark: String = "",
@@ -182,8 +181,6 @@ data class Filters(
 
     // types
     val types: List<String> = emptyList(),
-    val typesNot: List<String> = emptyList(),
-    val supertypes: List<String> = emptyList(),
 
     // printing
     val rarities: List<String> = emptyList(),
@@ -379,7 +376,6 @@ fun conditions(s: Filters): Sql {
     // `name_norm` is stored lowercased; the other two are lowered here.
     c.search(listOf("c.name_norm", "lower(c.face1)", "lower(c.face2)"), s.q)
     ftsClause(s.text, c)
-    c.search(listOf("lower(c.oracle_text)"), s.textLike)
     c.search(listOf("lower(c.flavor_text)"), s.flavor)
     c.search(listOf("lower(c.artist)"), s.artist)
     c.search(listOf("lower(c.watermark)"), s.watermark)
@@ -405,12 +401,6 @@ fun conditions(s: Filters): Sql {
 
     s.types.forEach {
         c.add("EXISTS (SELECT 1 FROM card_types ct WHERE ct.card_id = c.id AND ct.kind = 'type' AND ct.type = ?)", it)
-    }
-    s.typesNot.forEach {
-        c.add("NOT EXISTS (SELECT 1 FROM card_types ct WHERE ct.card_id = c.id AND ct.kind = 'type' AND ct.type = ?)", it)
-    }
-    s.supertypes.forEach {
-        c.add("EXISTS (SELECT 1 FROM card_types ct WHERE ct.card_id = c.id AND ct.kind = 'supertype' AND ct.type = ?)", it)
     }
     s.keywords.forEach {
         c.add("EXISTS (SELECT 1 FROM card_keywords k WHERE k.card_id = c.id AND lower(k.keyword) = ?)", it.lowercase())

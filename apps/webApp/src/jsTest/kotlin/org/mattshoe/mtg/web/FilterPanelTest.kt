@@ -332,10 +332,10 @@ class FilterPanelTest {
         assertEquals("bolt", p.filters().q)
         p.type("draw card", "draw"); settle()
         assertEquals("draw", p.filters().text)
-        p.type("enters tapped", "enters the battlefield tapped"); settle()
-        assertEquals("enters the battlefield tapped", p.filters().textLike)
         p.type("Rebecca Guay", "guay"); settle()
         assertEquals("guay", p.filters().artist)
+        // And no box for the one a quoted phrase replaced.
+        assertEquals(null, p.root.querySelector("input[placeholder='enters tapped']"))
     }
 
     @Test

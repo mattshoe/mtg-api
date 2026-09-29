@@ -37,8 +37,7 @@ class CoreSqlDump {
         val loaded = Library(
             Filters(
                 owner = "matt", q = "a", text = "draw", cmcMin = "1", cmcMax = "6",
-                types = listOf("Creature"), typesNot = listOf("Land"),
-                supertypes = listOf("Legendary"), rarities = listOf("rare"),
+                types = listOf("Creature"), rarities = listOf("rare"),
                 colors = listOf("G"), colorMode = ColorMode.ATLEAST,
                 flags = mapOf(Flag.REPRINT to Tri.NO), hasRulings = Tri.YES,
                 priceMin = "1", yearMin = "2015", pool = Pool.FREE, freeMin = "1",
@@ -72,7 +71,7 @@ class CoreSqlDump {
             "a name in two words" to Filters(q = "sol ring"),
             "a name excluded" to Filters(q = "ring !sol"),
             "every text box at once" to Filters(
-                q = "a !z", text = "draw !token", textLike = "enters !tapped",
+                q = "a !z", text = "draw !token",
                 flavor = "the !never", artist = "guay !nobody",
                 watermark = "boros !izzet", typeLine = "creature !land",
             ),

@@ -222,12 +222,13 @@ private fun Types(
     setDraft: (String, String) -> Unit,
 ) {
     Row(null) { Checks(facets.types, f.types) { onChange(f.copy(types = it)) } }
-    Row("Supertype") {
-        Checks(Facets.SUPERTYPES, f.supertypes) { onChange(f.copy(supertypes = it)) }
-    }
-    Row("Exclude type") { Checks(facets.types, f.typesNot) { onChange(f.copy(typesNot = it)) } }
+    // No Supertype list and no Exclude-type list. Both said what the
+    // box below already says: `legendary`, `artifact creature`,
+    // `creature !land`. A tappable list of what the collection holds
+    // earns its place; a second one for the same axis does not.
     Row("Type line contains") {
-        TextBox(f.typeLine, "Artifact Creature") { onChange(f.copy(typeLine = it)) }
+        TextBox(f.typeLine, "creature !land") { onChange(f.copy(typeLine = it)) }
+        Div(attrs = { classes("hint") }) { Text("every word. \"phrase\", !exclude") }
     }
 }
 
@@ -254,10 +255,6 @@ private fun Words(f: Filters, onChange: (Filters) -> Unit) {
             Text("full-text and stemmed. every word must match; ")
             Text("\"quote a phrase\"; !exclude")
         }
-    }
-    Row("Exact text") {
-        TextBox(f.textLike, "enters tapped") { onChange(f.copy(textLike = it)) }
-        Div(attrs = { classes("hint") }) { Text("literal, not stemmed. same quoting and !") }
     }
     Row("Flavour text") { TextBox(f.flavor, "") { onChange(f.copy(flavor = it)) } }
     Row("Artist") { TextBox(f.artist, "Rebecca Guay") { onChange(f.copy(artist = it)) } }
