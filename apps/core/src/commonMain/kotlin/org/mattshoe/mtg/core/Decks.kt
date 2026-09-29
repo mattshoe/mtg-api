@@ -114,7 +114,10 @@ object DeckQueries {
     /** One deck's list, with how many of each the owner actually has. */
     fun cards(slug: String) = Sql(
         """SELECT dc.name, dc.qty, dc.role,
-                  COALESCE((SELECT SUM(t.qty) FROM totals t
+                  -- `totals` is already one row per owner and name, and
+                  -- the column is `total_qty`. `SUM(t.qty)` was neither,
+                  -- so opening any deck answered "no such column".
+                  COALESCE((SELECT t.total_qty FROM totals t
                              WHERE t.name_norm = dc.name_norm AND t.owner = d.owner), 0) AS owned
              FROM deck_cards dc
              JOIN decks d ON d.id = dc.deck_id

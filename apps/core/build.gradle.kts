@@ -88,3 +88,14 @@ kover {
         }
     }
 }
+
+// `CoreSqlDump` compares the SQL the core emits against the committed
+// `test/fixtures/core-sql.json` that the Worker's suite executes. Nothing
+// else tells Gradle that file matters, so an edit to it left `jvmTest`
+// UP-TO-DATE and the check silently did not run — which is the same as
+// not having it.
+tasks.named<Test>("jvmTest") {
+    inputs.file(rootProject.file("../test/fixtures/core-sql.json"))
+        .withPropertyName("coreSqlFixture")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+}
