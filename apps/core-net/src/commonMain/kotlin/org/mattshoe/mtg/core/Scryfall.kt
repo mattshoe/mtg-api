@@ -60,6 +60,9 @@ class Scryfall internal constructor(private val http: HttpClient) {
     }
 
     companion object {
+        /** Over a caller-supplied engine. See `MtgApi.withEngine`. */
+        fun withEngine(http: HttpClient): Scryfall = Scryfall(http)
+
         const val BASE = "https://api.scryfall.com"
         const val USER_AGENT = "mtg-collection/1.0 (+https://mtg.mattshoe.org)"
         const val MIN_TERM = 2

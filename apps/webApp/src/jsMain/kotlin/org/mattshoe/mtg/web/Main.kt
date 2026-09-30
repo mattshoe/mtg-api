@@ -69,8 +69,24 @@ object MtgApp {
 
     private var composition: Composition? = null
     private var navComposition: Composition? = null
-    private val api = MtgApi()
-    private val scryfall = Scryfall()
+
+    /**
+     * The network, swappable.
+     *
+     * Not for tidiness: the shell is where the bugs have been — the
+     * address bar, the history stack, what back and Close do to each
+     * other — and none of that was reachable by a test because
+     * mounting the real thing meant hitting the real database. A test
+     * can now drive `MtgApp` itself over a stub and press the buttons.
+     */
+    private var api = MtgApi()
+    private var scryfall = Scryfall()
+
+    internal fun useForTesting(api: MtgApi, scryfall: Scryfall) {
+        this.api = api
+        this.scryfall = scryfall
+    }
+
     private val scope = CoroutineScope(Dispatchers.Main)
 
     /**
@@ -136,8 +152,14 @@ object MtgApp {
             // Every overlay that opens pushes a history entry, so the
             // back gesture dismisses what is on top instead of
             // navigating out from under it.
-            LaunchedEffect(state.overlays.stack.size) {
-                OverlayHistory.sync(state.overlays.stack.size)
+            //
+            // Except the card, which is in the address bar and gets
+            // its entry from there. Counted here as well, it pushed a
+            // second one — and Close then popped back to an address
+            // that still said `card=`, which the hashchange after it
+            // dutifully reopened.
+            LaunchedEffect(state.overlays.historyDepth) {
+                OverlayHistory.sync(state.overlays.historyDepth)
             }
 
             AppShell(

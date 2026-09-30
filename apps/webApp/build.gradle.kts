@@ -19,6 +19,9 @@ kotlin {
             // off requestAnimationFrame and a browser that is not
             // painting never ticks it. Anything that clicks a button has
             // to run somewhere frames actually happen.
+            // The mocha timeout lives in `karma.config.d`: the two
+            // cannot both be configured here, and two seconds is not
+            // enough for a test that mounts the whole app.
             testTask { useKarma { useChromeHeadless() } }
         }
         binaries.executable()
@@ -32,6 +35,13 @@ kotlin {
         jsTest.dependencies {
             implementation(kotlin("test"))
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+            // So a test can mount the real `MtgApp` over a stubbed
+            // network. The shell is where the bugs have been and none
+            // of it was reachable without this.
+            implementation("io.ktor:ktor-client-core:3.0.3")
+            implementation("io.ktor:ktor-client-mock:3.0.3")
+            implementation("io.ktor:ktor-client-content-negotiation:3.0.3")
+            implementation("io.ktor:ktor-serialization-kotlinx-json:3.0.3")
         }
         jsMain.dependencies {
             implementation(project(":core"))

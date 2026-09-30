@@ -221,6 +221,19 @@ class MtgApi internal constructor(
     companion object {
         const val DEFAULT_BASE = "https://mtg-api.mattshoe81.workers.dev"
 
+        /**
+         * A client over a caller-supplied engine, for tests in other
+         * modules.
+         *
+         * Ktor stays out of the ordinary constructor so nothing has
+         * to depend on it to say the word; this names it on purpose,
+         * because the alternative was that the web shell — the
+         * address bar, the history stack, what Close does — could
+         * only be exercised against the real database, which means
+         * not at all.
+         */
+        fun withEngine(base: String, http: HttpClient): MtgApi = MtgApi(base, http)
+
         internal val json = Json {
             ignoreUnknownKeys = true
             isLenient = true
