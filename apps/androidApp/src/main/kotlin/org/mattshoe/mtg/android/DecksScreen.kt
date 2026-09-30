@@ -425,10 +425,20 @@ private fun Bars(title: String, bars: List<Bar>, total: Int) {
 private fun TokenList(tokens: List<org.mattshoe.mtg.core.TokenCard>) {
     if (tokens.isEmpty()) return
     Line("Tokens", Ink, Design.H3, FontWeight.SemiBold, Modifier.padding(top = 6.dp))
+    val open = androidx.compose.ui.platform.LocalUriHandler.current
     Panel {
         tokens.forEach { token ->
             Row(
-                Modifier.fillMaxWidth().padding(vertical = 5.dp),
+                Modifier.fillMaxWidth()
+                    // Where to buy one, when Scryfall has a listing.
+                    // A token from a set nobody sells singles of stays
+                    // a row rather than becoming a tap to nowhere.
+                    .then(
+                        token.tcgplayer?.let { url ->
+                            Modifier.clickable { runCatching { open.openUri(url) } }
+                        } ?: Modifier,
+                    )
+                    .padding(vertical = 5.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -453,6 +463,7 @@ private fun TokenList(tokens: List<org.mattshoe.mtg.core.TokenCard>) {
                     }
                     Line(token.shortType, Ink3, Design.MINI)
                 }
+                if (token.tcgplayer != null) Line("↗", Ink3, Design.MINI)
                 Line("${token.madeBy}×", Ink3, Design.MINI)
             }
         }

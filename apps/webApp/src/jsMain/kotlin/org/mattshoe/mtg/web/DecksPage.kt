@@ -1,6 +1,9 @@
 package org.mattshoe.mtg.web
 
 import androidx.compose.runtime.Composable
+import org.jetbrains.compose.web.attributes.ATarget
+import org.jetbrains.compose.web.attributes.target
+import org.jetbrains.compose.web.dom.A
 import org.jetbrains.compose.web.dom.Button
 import org.jetbrains.compose.web.dom.Div
 import org.jetbrains.compose.web.dom.H1
@@ -13,6 +16,7 @@ import org.mattshoe.mtg.core.Deck
 import org.mattshoe.mtg.core.DeckAnalysis
 import org.mattshoe.mtg.core.DeckCard
 import org.mattshoe.mtg.core.DecksState
+import org.mattshoe.mtg.core.TokenCard
 
 /** Decks, on the web. Sibling of `DecksScreen`. */
 @Composable
@@ -231,38 +235,58 @@ private fun Tokens(state: DecksState) {
             Span(attrs = { classes("tag", "mini") }) { Text("${state.tokens.size}") }
         }
         Div(attrs = { classes("panel-body") }) {
-            state.tokens.forEach { token ->
-                Div(attrs = { classes("deck-line"); attr("title", token.name) }) {
-                    Div(attrs = { classes("thumb") }) {
-                        token.art?.let {
-                            Img(src = it, alt = "", attrs = { attr("loading", "lazy") })
-                        }
-                    }
-                    Div(attrs = { classes("line-text") }) {
-                        Div(attrs = { classes("line-top") }) {
-                            Span(attrs = { classes("t-name") }) { Text(token.name) }
-                            token.stats?.let {
-                                Span(attrs = { classes("tag", "mini", "mono") }) { Text(it) }
-                            }
-                            // Two 1/1 Warriors that differ only by
-                            // colour are two tokens, and without this
-                            // they are two identical rows.
-                            Span(attrs = { classes("mana-cost") }) {
-                                token.colors.ifEmpty { "C" }.forEach { ManaPip(it.toString(), "sm") }
-                            }
-                        }
-                        Span(attrs = { classes("line-type") }) { Text(token.shortType) }
-                    }
-                    Span(attrs = { classes("num") }) {
-                        Text("${token.madeBy}×")
-                    }
-                }
-            }
+            state.tokens.forEach { token -> TokenLine(token) }
         }
         Div(attrs = { classes("panel-body") }) {
             Div(attrs = { classes("muted", "small") }) {
-                Text("Made by the cards in this deck. You will want these to hand.")
+                Text("Made by the cards in this deck. You will want these to hand — ")
+                Text("each one goes to TCGplayer.")
             }
         }
+    }
+}
+
+/**
+ * One token, linking out to where you can buy it.
+ *
+ * An anchor when Scryfall has a listing and a plain row when it does
+ * not — a token from a set nobody sells singles of should stay a row
+ * rather than become a link to nowhere. It leaves the site, so it
+ * says so: a new tab, `rel=noopener`, and the arrow the stylesheet
+ * already uses for a link that goes away.
+ */
+@Composable
+private fun TokenLine(token: TokenCard) {
+    val body: @Composable () -> Unit = {
+        Div(attrs = { classes("thumb") }) {
+            token.art?.let { Img(src = it, alt = "", attrs = { attr("loading", "lazy") }) }
+        }
+        Div(attrs = { classes("line-text") }) {
+            Div(attrs = { classes("line-top") }) {
+                Span(attrs = { classes("t-name") }) { Text(token.name) }
+                token.stats?.let {
+                    Span(attrs = { classes("tag", "mini", "mono") }) { Text(it) }
+                }
+                // Two 1/1 Warriors that differ only by colour are two
+                // tokens, and without this they are two identical rows.
+                Span(attrs = { classes("mana-cost") }) {
+                    token.colors.ifEmpty { "C" }.forEach { ManaPip(it.toString(), "sm") }
+                }
+            }
+            Span(attrs = { classes("line-type") }) { Text(token.shortType) }
+        }
+        Span(attrs = { classes("num") }) { Text("${token.madeBy}×") }
+    }
+
+    val shop = token.tcgplayer
+    if (shop == null) {
+        Div(attrs = { classes("deck-line"); attr("title", token.name) }) { body() }
+    } else {
+        A(href = shop, attrs = {
+            classes("deck-line", "away")
+            target(ATarget.Blank)
+            attr("rel", "noopener noreferrer")
+            attr("title", "Buy ${token.name} on TCGplayer")
+        }) { body() }
     }
 }

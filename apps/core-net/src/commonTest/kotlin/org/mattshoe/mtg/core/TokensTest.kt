@@ -55,7 +55,8 @@ class TokensTest {
     private val theBirdsThemselves = """
         {"data":[
           {"id":"t-white-bird","name":"Bird","type_line":"Token Creature — Bird",
-           "power":"1","toughness":"1","colors":["W"]},
+           "power":"1","toughness":"1","colors":["W"],
+           "purchase_uris":{"tcgplayer":"https://tcg.example/white-bird"}},
           {"id":"t-green-bird","name":"Bird","type_line":"Token Creature — Bird",
            "power":"2","toughness":"2","colors":["G"]}
         ]}
@@ -105,6 +106,20 @@ class TokensTest {
         val found = scryfall(cards, tokens).tokens(listOf("c1"))
         assertEquals(1, found.size, "the same Soldier from two sets is one Soldier")
         assertEquals(2, found.first().madeBy)
+    }
+
+    @Test
+    fun aTokenCarriesWhereToBuyOne() = runTest {
+        val found = scryfall(twoCardsMakingBirds, theBirdsThemselves).tokens(listOf("c1", "c2"))
+        assertEquals("https://tcg.example/white-bird", found.first { it.colors == "W" }.tcgplayer)
+    }
+
+    @Test
+    fun andNullWhenScryfallHasNoListing() = runTest {
+        // A token from a set nobody sells singles of. The row stays a
+        // row rather than becoming a link to nowhere.
+        val found = scryfall(twoCardsMakingBirds, theBirdsThemselves).tokens(listOf("c1", "c2"))
+        assertEquals(null, found.first { it.colors == "G" }.tcgplayer)
     }
 
     @Test

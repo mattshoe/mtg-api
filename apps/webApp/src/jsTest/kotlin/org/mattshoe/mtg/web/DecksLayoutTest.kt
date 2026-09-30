@@ -293,7 +293,8 @@ class DecksLayoutTest {
     private fun withTokens() = opened().withTokens(
         listOf(
             org.mattshoe.mtg.core.TokenCard(
-                "abcdef12-3456", "Bird", "Token Creature — Bird", "1", "1", "W", madeBy = 2,
+                "abcdef12-3456", "Bird", "Token Creature — Bird", "1", "1", "W",
+                tcgplayer = "https://tcg.example/bird", madeBy = 2,
             ),
             org.mattshoe.mtg.core.TokenCard(
                 "bbcdef12-3456", "Bird", "Token Creature — Bird", "2", "2", "G",
@@ -310,7 +311,7 @@ class DecksLayoutTest {
         assertEquals("Tokens", heads.last(), "the tokens are not the last thing on the page")
         val rows = frame.all("div.panel")
             .first { it.textContent.orEmpty().startsWith("Tokens") }
-            .all("div.deck-line")
+            .all("div.deck-line, a.deck-line")
         assertEquals(3, rows.size)
         // A card, the same as every other row: art, a name, a type.
         assertEquals(3, rows.count { it.querySelector("div.thumb img") != null }, "a token with no art")
@@ -325,7 +326,7 @@ class DecksLayoutTest {
         settle()
         val rows = frame.all("div.panel")
             .first { it.textContent.orEmpty().startsWith("Tokens") }
-            .all("div.deck-line")
+            .all("div.deck-line, a.deck-line")
         val birds = rows.filter { it.textContent.orEmpty().contains("Bird") }
         assertEquals(2, birds.size)
         val pips = birds.map { row ->
@@ -347,6 +348,33 @@ class DecksLayoutTest {
         )
         // An artifact token has no power and toughness to show.
         assertTrue(!clue.textContent.orEmpty().contains("/"), clue.textContent.orEmpty())
+    }
+
+    @Test
+    fun aTokenYouCanBuyLinksToTcgplayer() = runTest {
+        val frame = mount(1000) { DecksPage(withTokens(), {}, {}) }
+        settle()
+        val link = frame.all("a.deck-line").firstOrNull() ?: error("no token links at all")
+        assertEquals("https://tcg.example/bird", link.getAttribute("href"))
+        // It leaves the site, so it opens away and cannot reach back
+        // through `window.opener`.
+        assertEquals("_blank", link.getAttribute("target"))
+        assertTrue(
+            link.getAttribute("rel").orEmpty().contains("noopener"),
+            "a new tab with no rel=noopener",
+        )
+    }
+
+    @Test
+    fun aTokenNobodySellsStaysARowRatherThanALinkToNowhere() = runTest {
+        val frame = mount(1000) { DecksPage(withTokens(), {}, {}) }
+        settle()
+        // One of the three has a listing; the other two are plain.
+        assertEquals(1, frame.all("a.deck-line").size)
+        val rows = frame.all("div.panel")
+            .first { it.textContent.orEmpty().startsWith("Tokens") }
+            .all("div.deck-line, a.deck-line")
+        assertEquals(3, rows.size, "a token without a listing went missing")
     }
 
     @Test

@@ -834,6 +834,12 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
 }
 .deck-line .t-name { flex: 1; min-width: 0; }
 
+/* A row that leaves the site says so, with the same mark the nav
+   uses for a link that goes away. */
+a.deck-line { color: inherit; text-decoration: none; }
+a.deck-line:hover { background: var(--bg-3); text-decoration: none; }
+a.deck-line .t-name::after { content: " \2197"; color: var(--text-3); font-size: .85em; }
+
 /* Clickable, so it has to look and behave like it. */
 .deck-line[role="button"] { cursor: pointer; }
 .deck-line[role="button"]:hover { background: var(--bg-3); }

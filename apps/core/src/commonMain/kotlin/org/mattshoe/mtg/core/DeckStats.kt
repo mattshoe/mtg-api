@@ -23,6 +23,14 @@ data class TokenCard(
     val power: String? = null,
     val toughness: String? = null,
     val colors: String = "",
+    /**
+     * Where to buy one, from Scryfall's own purchase link.
+     *
+     * Null when Scryfall has no listing — a token from a set nobody
+     * sells singles of, mostly. The row then stays a row rather than
+     * becoming a link to nowhere.
+     */
+    val tcgplayer: String? = null,
     /** How many cards in the deck make it. */
     val madeBy: Int = 1,
 ) {

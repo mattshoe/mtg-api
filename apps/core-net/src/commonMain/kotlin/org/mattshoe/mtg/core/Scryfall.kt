@@ -68,6 +68,9 @@ class Scryfall internal constructor(private val http: HttpClient) {
     )
 
     @Serializable
+    private data class Purchase(val tcgplayer: String? = null)
+
+    @Serializable
     private data class Card(
         val id: String = "",
         val name: String = "",
@@ -76,6 +79,7 @@ class Scryfall internal constructor(private val http: HttpClient) {
         val toughness: String? = null,
         val colors: List<String> = emptyList(),
         @SerialName("all_parts") val allParts: List<Part> = emptyList(),
+        @SerialName("purchase_uris") val purchase: Purchase? = null,
     )
 
     @Serializable
@@ -131,6 +135,7 @@ class Scryfall internal constructor(private val http: HttpClient) {
                     power = card.power,
                     toughness = card.toughness,
                     colors = card.colors.sorted().joinToString(""),
+                    tcgplayer = card.purchase?.tcgplayer?.takeIf { it.isNotBlank() },
                     madeBy = refs[card.id] ?: 1,
                 )
                 val had = byIdentity[token.identity]
