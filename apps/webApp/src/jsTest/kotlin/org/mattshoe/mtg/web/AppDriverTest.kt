@@ -44,15 +44,29 @@ class AppDriverTest {
 
     @BeforeTest
     fun stubTheNetwork() {
-        val engine = MockEngine { _ ->
+        val engine = MockEngine { request ->
             // Enough of an answer for every read the shell makes. The
-            // shapes matter, the contents do not.
-            respond(
-                """{"cols":["id","owner","name","name_norm","qty","printings"],""" +
-                    """"rows":[[1,"matt","Sol Ring","sol ring",1,1]],"n":1}""",
-                HttpStatusCode.OK,
-                headersOf(HttpHeaders.ContentType, "application/json"),
-            )
+            // shapes matter, the contents do not — except that a
+            // deck query has to come back looking like a deck, or
+            // there is nothing to click.
+            // `.toString()` on an OutgoingContent is its class name,
+            // not the payload — which quietly gave every query the
+            // same answer and made a deck list of one nameless deck.
+            val body = (request.body as? io.ktor.http.content.TextContent)?.text.orEmpty()
+            val json = when {
+                body.contains("FROM decks d") && body.contains("art_id") ->
+                    """{"cols":["slug","name","owner","commander","colors","bracket","art_id"],""" +
+                        """"rows":[["alela","Fairy Deck","matt","Alela","UB",3,"abcdef12-3456"]],"n":1}"""
+
+                body.contains("FROM deck_cards dc") ->
+                    """{"cols":["name","name_norm","qty","role","owned","type_line","scryfall_id"],""" +
+                        """"rows":[["Sol Ring","sol ring",1,null,1,"Artifact",null]],"n":1}"""
+
+                else ->
+                    """{"cols":["id","owner","name","name_norm","qty","printings"],""" +
+                        """"rows":[[1,"matt","Sol Ring","sol ring",1,1]],"n":1}"""
+            }
+            respond(json, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
         }
         val http = HttpClient(engine) {
             install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true; isLenient = true }) }
@@ -224,6 +238,62 @@ class AppDriverTest {
             settle()
             assertEquals(0, drawers(), "round $round: the drawer did not close")
         }
+    }
+
+    // ----------------------------------------------- opening a deck
+
+    @Test
+    fun openingADeckIsAStepBackComesBackFrom() = runTest {
+        // It was not. The push lived in the one callback the
+        // composition owns and `openDeck` writes the state directly,
+        // so the deck replaced the list in the address bar and back
+        // skipped straight past it to whatever came before Decks.
+        val view = mount("#/decks")
+        waitFor("the deck list") { view.all("div.deck-card").isNotEmpty() }
+        assertEquals("#/decks", hash())
+
+        view.all("div.deck-card").first().click()
+        waitFor("the deck") { hash() == "#/decks/alela" }
+
+        window.history.back()
+        waitFor("the list again") { hash() == "#/decks" }
+        waitFor("the tiles") { view.all("div.deck-card").isNotEmpty() }
+    }
+
+    @Test
+    fun andForwardGoesBackIntoIt() = runTest {
+        val view = mount("#/decks")
+        waitFor("the deck list") { view.all("div.deck-card").isNotEmpty() }
+        view.all("div.deck-card").first().click()
+        waitFor("the deck") { hash() == "#/decks/alela" }
+        window.history.back()
+        waitFor("the list") { hash() == "#/decks" }
+        window.history.forward()
+        waitFor("the deck again") { hash() == "#/decks/alela" }
+    }
+
+    @Test
+    fun aDeckOpenedFromALinkShowsItsCards() = runTest {
+        val view = mount("#/decks/alela")
+        settle()
+        waitFor("the deck") { view.textContent.orEmpty().contains("Sol Ring") }
+        assertEquals("#/decks/alela", hash())
+    }
+
+    @Test
+    fun changingAFilterIsNotAStepBackHasToUndo() = runTest {
+        // Every keystroke would otherwise be a history entry and the
+        // back button would take a hundred presses to leave a search.
+        val view = mount("#/search")
+        waitFor("the grid") { view.all("div.card").isNotEmpty() }
+        val before = js("window.history.length") as Int
+        view.all("input[placeholder='Card name']").first().let { box ->
+            (box as org.w3c.dom.HTMLInputElement).value = "bolt"
+            box.dispatchEvent(org.w3c.dom.events.Event("input", js("({bubbles: true})")))
+        }
+        settle()
+        assertTrue(hash().contains("q=bolt"), hash())
+        assertEquals(before, js("window.history.length") as Int, "typing pushed history entries")
     }
 
     @Test

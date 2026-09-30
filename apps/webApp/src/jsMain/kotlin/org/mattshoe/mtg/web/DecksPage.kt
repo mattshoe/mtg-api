@@ -68,10 +68,11 @@ fun DecksPage(
                 }) { Text("← Decks") }
                 Span(attrs = { classes("spacer") }) {}
                 Button(attrs = {
-                    classes("btn", "sm", "ghost")
+                    classes("btn", "sm", "ghost", "icon-only")
                     attr("title", "Copy a link to this deck")
+                    attr("aria-label", "Share this deck")
                     onClick { onShare() }
-                }) { Text("Share") }
+                }) { ShareIcon() }
                 if (admin) {
                     // Both of these move real cards, and both show the
                     // server's own dry run before they are allowed to.

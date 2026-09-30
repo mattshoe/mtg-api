@@ -34,8 +34,20 @@ data class AppState(
     val view: View get() = route.view
 
     /** Where a route actually lands, given the lock. */
-    fun navigate(to: Route) =
-        copy(route = admin.land(to), toast = null, overlays = overlays.clear(), card = null)
+    fun navigate(to: Route): AppState {
+        val landed = admin.land(to)
+        return copy(
+            route = landed,
+            toast = null,
+            overlays = overlays.clear(),
+            card = null,
+            // A route that does not name a deck has no deck open.
+            // The open deck lives in `decks`, not in the route, so
+            // going back from a deck to the list left the detail on
+            // screen over an address that said list.
+            decks = if (landed.namesADeck) decks else decks.close(),
+        )
+    }
 
     fun navigate(view: View, rest: String = "") = navigate(Route(view, rest))
 
@@ -60,6 +72,18 @@ data class AppState(
      * card closing again — replaces in place.
      */
     fun opensACardOver(was: AppState): Boolean = was.cardRef == null && cardRef != null
+
+    /**
+     * Is this somewhere new, rather than the same place rewritten?
+     *
+     * The address bar gains an entry for a step and rewrites one for
+     * everything else. A different screen is a step; so is opening a
+     * deck, which is a different route; so is opening a card, which
+     * is not a route at all but is still somewhere back should come
+     * back from. A filter changing on every keystroke is not.
+     */
+    fun isAStepFrom(was: AppState): Boolean =
+        route.view != was.route.view || route.rest != was.route.rest || opensACardOver(was)
 
     /**
      * The open card, if one is. Null when the drawer is shut, so the

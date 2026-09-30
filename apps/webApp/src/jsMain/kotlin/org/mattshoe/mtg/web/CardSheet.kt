@@ -30,10 +30,11 @@ fun CardSheet(card: CardDetail, onShare: () -> Unit = {}, onClose: () -> Unit) {
             H2 { Text(card.name) }
             Span(attrs = { classes("spacer") }) {}
             Button(attrs = {
-                classes("btn", "sm", "ghost")
+                classes("btn", "sm", "ghost", "icon-only")
                 attr("title", "Copy a link to this card")
+                attr("aria-label", "Share this card")
                 onClick { onShare() }
-            }) { Text("Share") }
+            }) { ShareIcon() }
             Button(attrs = {
                 classes("btn", "sm", "ghost")
                 onClick { onClose() }

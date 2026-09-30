@@ -113,10 +113,17 @@ object MtgApp {
             val was = held
             held = value
             if (value.hash() == was.hash()) return
-            // Opening a card is a step, so back closes it. Everything
-            // else — a filter on every keystroke, the card closing —
-            // rewrites where you already are.
-            if (value.opensACardOver(was)) pushSearch(value) else rememberSearch(value)
+            // One rule for the whole app: going somewhere is a step
+            // you can come back from, and everything else rewrites
+            // where you already are.
+            //
+            // Opening a deck used to go through here as "everything
+            // else", because the push lived in the one callback the
+            // composition owns and `openDeck` writes `app` directly.
+            // So the deck replaced the list in the address bar and
+            // back skipped straight past it — the card drawer had the
+            // same bug for the same reason.
+            if (value.isAStepFrom(was)) pushHash(value) else replaceHash(value)
         }
 
     private var listening = false
@@ -166,15 +173,8 @@ object MtgApp {
                 state = state,
                 onState = { next ->
                     val was = app
-                    // A real navigation pushes; everything else the
-                    // setter has already replaced in place.
-                    if (next.view != was.view || next.route.rest != was.route.rest) {
-                        held = next
-                        window.location.hash = next.hash().removePrefix("#")
-                        loadFor(next)
-                    } else {
-                        app = next
-                    }
+                    app = next
+                    if (next.view != was.view || next.route.rest != was.route.rest) loadFor(next)
                 },
                 onUnlock = { password ->
                     work {
@@ -245,13 +245,8 @@ object MtgApp {
         navComposition = renderComposable(root = root) {
             AppNav(app) { next ->
                 val was = app
-                if (next.view != was.view || next.route.rest != was.route.rest) {
-                    held = next
-                    window.location.hash = next.hash().removePrefix("#")
-                    loadFor(next)
-                } else {
-                    app = next
-                }
+                app = next
+                if (next.view != was.view || next.route.rest != was.route.rest) loadFor(next)
             }
         }
     }
@@ -277,13 +272,8 @@ object MtgApp {
             if (next != null) {
                 e.preventDefault()
                 val was = app
-                if (next.view != was.view) {
-                    held = next
-                    window.location.hash = next.hash().removePrefix("#")
-                    loadFor(next)
-                } else {
-                    app = next
-                }
+                app = next
+                if (next.view != was.view) loadFor(next)
             }
         })
 
@@ -419,16 +409,16 @@ object MtgApp {
      * `location.hash =` would push one per keystroke; `replaceState`
      * keeps the link shareable and the back button useful.
      */
-    /** A card opening. Back should take it off again. */
-    private fun pushSearch(s: AppState) {
+    /** Somewhere new. Back should come back here. */
+    private fun pushHash(s: AppState) {
         try {
             window.history.pushState(window.history.state, "", s.hash())
         } catch (e: Throwable) {
-            rememberSearch(s)
+            replaceHash(s)
         }
     }
 
-    private fun rememberSearch(s: AppState) {
+    private fun replaceHash(s: AppState) {
         val hash = s.hash()
         try {
             window.history.replaceState(window.history.state, "", hash)

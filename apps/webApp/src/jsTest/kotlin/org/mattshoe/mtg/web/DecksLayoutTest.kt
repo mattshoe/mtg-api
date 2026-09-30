@@ -276,8 +276,13 @@ class DecksLayoutTest {
         var shared = 0
         val frame = mount(1000) { DecksPage(opened(), {}, {}, onShare = { shared++ }) }
         settle()
-        val button = frame.all("button").firstOrNull { it.textContent?.trim() == "Share" }
-            ?: error("no Share button on the deck")
+        val button = frame.all("button[aria-label='Share this deck']").firstOrNull()
+            ?: error("no share button on the deck")
+        assertTrue(button.querySelector(".icon-share") != null, "the share button has no icon")
+        assertTrue(
+            button.textContent.orEmpty().isBlank(),
+            "the word is back: '${button.textContent}'",
+        )
         button.click()
         settle()
         assertEquals(1, shared)

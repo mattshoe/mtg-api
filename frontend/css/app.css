@@ -627,6 +627,27 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
 .check input { width: auto; margin: 0; }
 .check .small { flex-basis: 100%; }
 
+/* ----------------------------------------------------------- icons */
+/* A span masked to a shape, so the icon is the colour of the text
+   around it and dims with the button it sits in. Not an inline
+   `<svg>`: Compose HTML builds elements in the HTML namespace and an
+   `<svg>` there renders as nothing at all. */
+.icon {
+  width: 1.15em; height: 1.15em; display: block; flex: none;
+  background: currentColor;
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  -webkit-mask-position: center; mask-position: center;
+  -webkit-mask-size: contain; mask-size: contain;
+}
+.icon-share {
+  -webkit-mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'><circle cx='18' cy='5' r='3'/><circle cx='6' cy='12' r='3'/><circle cx='18' cy='19' r='3'/><path d='M8.6 13.5l6.8 4'/><path d='M15.4 6.5l-6.8 4'/></svg>");
+  mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'><circle cx='18' cy='5' r='3'/><circle cx='6' cy='12' r='3'/><circle cx='18' cy='19' r='3'/><path d='M8.6 13.5l6.8 4'/><path d='M15.4 6.5l-6.8 4'/></svg>");
+}
+/* A button that is only an icon is square, and says what it is
+   through its title rather than through a word taking three times
+   the room. */
+.btn.icon-only { padding: 0; width: 30px; height: 30px; display: inline-grid; place-items: center; }
+
 /* --------------------------------------------------------- mana art */
 /* Scryfall's own symbols. They carry their own shape as well as their
    colour, which is the part a coloured dot cannot do for somebody who

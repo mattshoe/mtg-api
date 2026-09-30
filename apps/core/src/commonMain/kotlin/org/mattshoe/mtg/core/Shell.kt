@@ -35,6 +35,9 @@ enum class View(val slug: String, val label: String, val gated: Boolean = false)
 /** A parsed route: which view, what after it, and any query string. */
 data class Route(val view: View, val rest: String = "", val query: String = "") {
 
+    /** `#/decks/alela` rather than `#/decks`. */
+    val namesADeck: Boolean get() = view == View.DECKS && rest.isNotEmpty()
+
     fun toHash(): String = buildString {
         append("#/").append(view.slug)
         if (rest.isNotEmpty()) append('/').append(rest)

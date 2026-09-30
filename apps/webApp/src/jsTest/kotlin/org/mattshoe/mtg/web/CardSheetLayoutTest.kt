@@ -153,8 +153,11 @@ class CardSheetLayoutTest {
             CardSheet(detail(), onShare = { shared++ }) {}
         }
         settle()
-        val button = frame.all("button").firstOrNull { it.textContent?.trim() == "Share" }
-            ?: error("no Share button on the card drawer")
+        // An icon, not the word. It says what it is through its
+        // label, which is the part that has to keep working.
+        val button = frame.all("button[aria-label='Share this card']").firstOrNull()
+            ?: error("no share button on the card drawer")
+        assertTrue(button.querySelector(".icon-share") != null, "the share button has no icon")
         button.click()
         settle()
         assertEquals(1, shared)

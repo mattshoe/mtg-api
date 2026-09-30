@@ -267,6 +267,8 @@ object Inventory {
                 "theHistoryDoesNotGiveTheCardAnEntryOfItsOwn", "openingACardIsAStepBackCanUndo",
                 "aDifferentCardOverTheFirstIsNotANewStep", "closeClosesIt",
                 "closingACardDoesNotMoveThroughHistory", "closeShutsTheDrawerAndLeavesItShut",
+                "openingADeckIsAStepBackComesBackFrom", "andForwardGoesBackIntoIt",
+                "aDeckOpenedFromALinkShowsItsCards", "changingAFilterIsNotAStepBackHasToUndo",
                 "theScrimShutsItToo", "aCardOpenedFromALinkAlsoCloses",
                 "openingAndClosingTwiceStillWorks", "backClosesTheCardRatherThanLeavingThePage",
                 "aCardOpensFromTheGridAndTheAddressSaysSo",
