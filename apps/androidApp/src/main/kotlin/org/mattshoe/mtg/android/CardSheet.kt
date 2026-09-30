@@ -5,12 +5,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -30,27 +28,26 @@ import org.mattshoe.mtg.core.Prices
  */
 @Composable
 fun CardSheet(card: CardDetail, onClose: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onClose,
-        confirmButton = { TextButton(onClick = onClose) { Text("Close") } },
-        title = {
-            // Selectable, the same as the web. Copying a card name out
-            // of the drawer is most of what the drawer is for.
-            SelectionContainer { Text(card.name, fontSize = 18.sp) }
-        },
-        text = {
-            Column(
-                Modifier.fillMaxWidth().heightIn(max = 460.dp).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                when {
-                    card.busy -> Text("Loading…")
-                    card.error != null -> Text(card.error!!)
-                    else -> Body(card)
-                }
-            }
-        },
-    )
+    Column(
+        Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+        ) {
+            TextButton(onClick = onClose) { Text("← Back") }
+        }
+        // Selectable, the same as the web. Copying a card name off the
+        // page is most of what the page is for.
+        SelectionContainer { Text(card.name, fontSize = 18.sp, fontWeight = FontWeight.SemiBold) }
+        when {
+            card.busy -> Text("Loading…")
+            card.error != null -> Text(card.error!!)
+            else -> Body(card)
+        }
+    }
 }
 
 @Composable

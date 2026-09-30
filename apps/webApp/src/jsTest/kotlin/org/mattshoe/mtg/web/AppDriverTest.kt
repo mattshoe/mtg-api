@@ -129,115 +129,101 @@ class AppDriverTest {
             .firstOrNull { it.textContent?.trim() == label }
             ?: error("no button labelled \"$label\"")
 
-    private fun drawers() = document.querySelectorAll("div.drawer").length
+    private fun cardPages() = document.querySelectorAll("div.card-page").length
 
     private fun hash() = window.location.hash
 
     // ------------------------------------------------- opening a card
 
-    @Test
-    fun closingACardDoesNotMoveThroughHistory() = runTest {
-        // The mechanism, not the symptom. Close rewrites the address
-        // where it stands; it must not pop an entry, because the entry
-        // underneath still names the card and the hashchange that
-        // follows a pop reopens it. That is what "the Close button
-        // does nothing" was, twice.
-        mount("#/search?card=matt:sol+ring")
-        waitFor("the drawer") { drawers() == 1 }
-        js(
-            "window.__backs = 0;" +
-                "var h = window.history; var orig = h.back.bind(h);" +
-                "h.back = function () { window.__backs++; return orig(); };",
-        )
-        (document.querySelectorAll("div.drawer button").let { n ->
+    /** The ← Back button on the card page, wherever it is. */
+    private fun backButton(): HTMLButtonElement =
+        document.querySelectorAll("button").let { n ->
             (0 until n.length).mapNotNull { n[it] as? HTMLButtonElement }
-        }.first { it.getAttribute("aria-label") == "Close" }).click()
-        settle()
-        assertEquals(0, drawers(), "Close left the drawer open")
-        assertEquals(0, js("window.__backs") as Int, "closing the card walked back through history")
-    }
+        }.firstOrNull { it.textContent?.trim() == "← Back" } ?: error("no back button on the card")
 
     @Test
-    fun aCardOpensFromTheGridAndTheAddressSaysSo() = runTest {
+    fun aCardOpensFromTheGridAndTheAddressIsTheCardAlone() = runTest {
         val view = mount("#/search")
         settle()
         waitFor("the grid") { view.all("div.card").isNotEmpty() }
         view.all("div.card").first().click()
-        settle()
-        assertEquals(1, drawers(), "the drawer did not open")
-        assertTrue(hash().contains("card=matt:sol+ring"), hash())
+        waitFor("the card page") { cardPages() == 1 }
+        assertEquals("#/card/matt:sol+ring", hash())
     }
 
-    // ------------------------------------------------- and closing it
+    @Test
+    fun aCardOpenedFromALinkLoadsItself() = runTest {
+        // Nothing clicked it, so the route is the only thing that
+        // knows a card is wanted.
+        mount("#/card/matt:sol+ring")
+        waitFor("the card page") { cardPages() == 1 }
+        waitFor("the card") { document.body!!.textContent.orEmpty().contains("Sol Ring") }
+    }
 
     @Test
-    fun closeShutsTheDrawerAndLeavesItShut() = runTest {
-        // The one that was "fixed" twice. Settling well past the
-        // click is the point: the failure was never the click, it was
-        // what the history did a frame or two later.
+    fun backLeavesTheCardWithoutLeavingTheSite() = runTest {
         val view = mount("#/search")
         settle()
         waitFor("the grid") { view.all("div.card").isNotEmpty() }
         view.all("div.card").first().click()
-        waitFor("the drawer") { drawers() == 1 }
+        waitFor("the card page") { cardPages() == 1 }
 
-        (document.querySelectorAll("div.drawer button").let { n ->
-            (0 until n.length).mapNotNull { n[it] as? HTMLButtonElement }
-        }.first { it.getAttribute("aria-label") == "Close" }).click()
-        settle()
-        assertEquals(0, drawers(), "Close left the drawer open")
-
-        // And it stays shut. A history pop landing on an address that
-        // still named the card is what put it back last time.
-        settle()
-        settle()
-        assertEquals(0, drawers(), "the drawer came back on its own")
-        assertTrue(!hash().contains("card="), "the address still names a card: ${hash()}")
+        window.history.back()
+        waitFor("the search again") { cardPages() == 0 }
+        assertEquals("#/search", hash())
     }
 
     @Test
-    fun theScrimShutsItToo() = runTest {
+    fun theBackButtonGoesWhereTheBrowsersDoes() = runTest {
         val view = mount("#/search")
         settle()
         waitFor("the grid") { view.all("div.card").isNotEmpty() }
         view.all("div.card").first().click()
-        waitFor("the drawer") { drawers() == 1 }
-        (document.querySelector("div.drawer-scrim") as HTMLElement).click()
-        settle()
-        settle()
-        assertEquals(0, drawers(), "a press outside left the drawer open")
+        waitFor("the card page") { cardPages() == 1 }
+
+        backButton().click()
+        waitFor("the search again") { cardPages() == 0 }
+        assertEquals("#/search", hash())
     }
 
     @Test
-    fun aCardOpenedFromALinkAlsoCloses() = runTest {
-        // No history behind it at all, which is the case a back-based
-        // close cannot handle.
-        mount("#/search?card=matt:sol+ring")
-        settle()
-        waitFor("the drawer") { drawers() == 1 }
-        (document.querySelectorAll("div.drawer button").let { n ->
-            (0 until n.length).mapNotNull { n[it] as? HTMLButtonElement }
-        }.first { it.getAttribute("aria-label") == "Close" }).click()
-        settle()
-        settle()
-        assertEquals(0, drawers(), "Close did nothing on a card opened from a link")
+    fun aCardOpenedFromALinkStillHasSomewhereToGoBackTo() = runTest {
+        // There is no page behind it, so ← Back cannot mean "the page
+        // before". It means the library rather than nothing at all.
+        mount("#/card/matt:sol+ring")
+        waitFor("the card page") { cardPages() == 1 }
+        backButton().click()
+        waitFor("the library") { cardPages() == 0 }
+        assertEquals("#/search", hash())
     }
 
     @Test
-    fun openingAndClosingTwiceStillWorks() = runTest {
+    fun openingAndLeavingThreeTimesStillWorks() = runTest {
         val view = mount("#/search")
         settle()
-        waitFor("the grid") { view.all("div.card").isNotEmpty() }
         repeat(3) { round ->
+            waitFor("round $round: the grid") { view.all("div.card").isNotEmpty() }
             view.all("div.card").first().click()
-            waitFor("round $round: the drawer") { drawers() == 1 }
-            (document.querySelectorAll("div.drawer button").let { n ->
-                (0 until n.length).mapNotNull { n[it] as? HTMLButtonElement }
-            }.first { it.getAttribute("aria-label") == "Close" }).click()
+            waitFor("round $round: the card page") { cardPages() == 1 }
+            backButton().click()
+            waitFor("round $round: back on the search") { cardPages() == 0 }
             settle()
-            settle()
-            assertEquals(0, drawers(), "round $round: the drawer did not close")
+            assertEquals(0, cardPages(), "round $round: the card came back on its own")
         }
+    }
+
+    @Test
+    fun aCardFromADeckGoesBackToThatDeck() = runTest {
+        val view = mount("#/decks/alela")
+        settle()
+        waitFor("the deck") { view.textContent.orEmpty().contains("Sol Ring") }
+        view.all("div.deck-line, a.deck-line").first { it.textContent.orEmpty().contains("Sol Ring") }.click()
+        waitFor("the card page") { cardPages() == 1 }
+        assertEquals("#/card/matt:sol+ring", hash(), "the link to the card carried the deck")
+
+        backButton().click()
+        waitFor("the deck again") { cardPages() == 0 }
+        assertEquals("#/decks/alela", hash())
     }
 
     // ----------------------------------------------- opening a deck
@@ -336,17 +322,20 @@ class AppDriverTest {
     }
 
     @Test
-    fun backClosesTheCardRatherThanLeavingThePage() = runTest {
+    fun aCardOpensAtTheTopOfItself() = runTest {
         val view = mount("#/search")
         settle()
         waitFor("the grid") { view.all("div.card").isNotEmpty() }
-        val before = hash()
-        view.all("div.card").first().click()
-        waitFor("the drawer") { drawers() == 1 }
+        val filler = document.createElement("div") as HTMLElement
+        filler.style.height = "4000px"
+        document.body!!.appendChild(filler)
+        roots += filler
+        window.scrollTo(0.0, 1300.0)
+        assertTrue(window.scrollY > 1000, "the page would not scroll, nothing to test")
 
-        window.history.back()
+        view.all("div.card").first().click()
+        waitFor("the card page") { cardPages() == 1 }
         settle()
-        assertEquals(0, drawers(), "back did not close the card")
-        assertEquals(before, hash(), "back left the page as well")
+        assertTrue(window.scrollY < 10, "the card opened at ${window.scrollY}")
     }
 }

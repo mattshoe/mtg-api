@@ -12,6 +12,7 @@ import org.jetbrains.compose.web.renderComposable
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.CardDetail
 import org.mattshoe.mtg.core.Overlay
+import org.mattshoe.mtg.core.View
 import org.w3c.dom.HTMLElement
 import org.w3c.dom.get
 import kotlin.js.Promise
@@ -63,39 +64,39 @@ class OverlayScrollTest {
         return root
     }
 
-    private fun withCardOpen() = AppState(card = CardDetail(name = "Sol Ring", owner = "matt"))
-        .opening(Overlay.CARD)
+    private fun withAnOverlayOpen() = AppState().navigate(View.CONSOLE).opening(Overlay.CHEATSHEET)
 
     // ------------------------------------------------- the stylesheet
 
     @Test
-    fun theDrawerDoesNotHandItsLeftoverScrollToThePage() = runTest {
-        val root = mount(withCardOpen())
+    fun anOverlayDoesNotHandItsLeftoverScrollToThePage() = runTest {
+        val root = mount(withAnOverlayOpen())
         settle()
         if (!Stylesheet.applied()) return@runTest
-        val drawer = root.querySelector("div.drawer") as? HTMLElement ?: error("no drawer")
-        assertEquals("contain", css(drawer, "overscroll-behavior-y"))
-        assertEquals("auto", css(drawer, "overflow-y"), "the drawer stopped scrolling at all")
+        val panel = root.querySelector("div.palette.wide") as? HTMLElement ?: error("no panel")
+        assertEquals("contain", css(panel, "overscroll-behavior-y"))
     }
 
     @Test
     fun aSwipeOnTheScrimIsNotASwipeOnThePage() = runTest {
-        val root = mount(withCardOpen())
+        val root = mount(withAnOverlayOpen())
         settle()
         if (!Stylesheet.applied()) return@runTest
-        val scrim = root.querySelector("div.drawer-scrim") as? HTMLElement ?: error("no scrim")
-        assertEquals("none", css(scrim, "touch-action"))
+        // The scrim is the scroller here, so it cannot refuse touch
+        // outright — it has to refuse to hand the swipe onward.
+        val scrim = root.querySelector("div.palette-scrim") as? HTMLElement ?: error("no scrim")
+        assertEquals("contain", css(scrim, "overscroll-behavior-y"))
     }
 
     // ------------------------------------------------------- the lock
 
     @Test
     fun anOpenOverlayHoldsThePageStill() = runTest {
-        mount(withCardOpen())
+        mount(withAnOverlayOpen())
         settle()
         assertTrue(
             document.body!!.classList.contains("overlay-open"),
-            "the page behind the drawer is still free to scroll",
+            "the page behind the overlay is still free to scroll",
         )
         if (!Stylesheet.applied()) return@runTest
         assertEquals("hidden", css(document.body!!, "overflow"))
@@ -103,7 +104,7 @@ class OverlayScrollTest {
 
     @Test
     fun andClosingItLetsThePageGoAgain() = runTest {
-        val root = mount(withCardOpen())
+        val root = mount(withAnOverlayOpen())
         settle()
         assertTrue(document.body!!.classList.contains("overlay-open"))
 

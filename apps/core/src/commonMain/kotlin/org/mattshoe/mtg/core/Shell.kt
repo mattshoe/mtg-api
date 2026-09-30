@@ -9,13 +9,30 @@ package org.mattshoe.mtg.core
  * apart is how a build ends up with a screen the other platform does not
  * have, or an admin page reachable while locked.
  */
-enum class View(val slug: String, val label: String, val gated: Boolean = false) {
+enum class View(
+    val slug: String,
+    val label: String,
+    val gated: Boolean = false,
+    /** Whether the menu offers it. A card is reached from a card, not from a list of places. */
+    val inNav: Boolean = true,
+) {
     LIBRARY("search", "Library"),
     DECKS("decks", "Decks"),
     STATS("stats", "Stats"),
     CONSOLE("console", "Query"),
     ENTRY("entry", "Mass Entry", gated = true),
     LOGS("logs", "Server Logs", gated = true),
+
+    /**
+     * One card, as its own destination.
+     *
+     * It was a drawer over whatever was underneath, with its address
+     * riding in the query string of that page. Every navigation bug
+     * of the last week came out of that: a link to a card carried the
+     * deck it was opened from, back had to guess whether to dismiss
+     * or navigate, and the page behind it kept its own scroll.
+     */
+    CARD("card", "Card", inNav = false),
     ;
 
     companion object {
@@ -37,6 +54,9 @@ data class Route(val view: View, val rest: String = "", val query: String = "") 
 
     /** `#/decks/alela` rather than `#/decks`. */
     val namesADeck: Boolean get() = view == View.DECKS && rest.isNotEmpty()
+
+    /** `#/card/matt:sol+ring`. The whole address of one card. */
+    val namesACard: Boolean get() = view == View.CARD && rest.isNotEmpty()
 
     fun toHash(): String = buildString {
         append("#/").append(view.slug)
@@ -78,7 +98,7 @@ data class Admin(val token: String? = null) {
     /** Which views are reachable right now. */
     fun reachable(view: View): Boolean = !view.gated || unlocked
 
-    val visible: List<View> get() = View.entries.filter { reachable(it) }
+    val visible: List<View> get() = View.entries.filter { it.inNav && reachable(it) }
 
     /**
      * Where a route actually lands.

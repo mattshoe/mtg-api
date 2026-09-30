@@ -176,6 +176,13 @@ fun AppShell(
 
             View.LOGS -> LogsScreen(state.logs) { onState(state.copy(logs = it)) }
 
+            // A card is a destination here too, so the system back
+            // gesture leaves it the way it leaves any other screen.
+            View.CARD -> CardSheet(
+                card = state.card ?: org.mattshoe.mtg.core.CardDetail(name = state.route.rest).loading(),
+                onClose = { onState(state.leaveCard()) },
+            )
+
             View.ENTRY -> MassEntryScreen(
                 state = state.entry,
                 onState = { onState(state.copy(entry = it)) },
@@ -192,10 +199,6 @@ fun AppShell(
     }
 
     // ------------------------------------------------------- overlays
-
-    state.card?.takeIf { Overlay.CARD in state.overlays }?.let { card ->
-        CardSheet(card) { onState(state.closing(Overlay.CARD)) }
-    }
 
     if (Overlay.PALETTE in state.overlays) {
         PaletteDialog(

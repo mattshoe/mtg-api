@@ -8,11 +8,15 @@ import kotlin.test.assertTrue
 /**
  * A card you can send somebody.
  *
- * The drawer is an overlay, so it was not part of any URL — open a
- * card, copy the address, and what you had sent was the page behind
- * it. These are the cases that made the obvious fix wrong: a name
- * with a colon in it, a name with a space, and the address going back
- * to what it was when the drawer shuts.
+ * It was a drawer whose address rode in the query string of whatever
+ * page it opened over, so a link to a card carried the deck somebody
+ * happened to have open, back had to guess between dismissing and
+ * navigating, and the page behind kept its own scroll. It is a
+ * destination now: `#/card/matt:sol+ring`, naming the card and
+ * nothing else.
+ *
+ * These are the cases that make the encoding worth having: a name
+ * with a colon in it, one with a space, and one with an accent.
  */
 class CardRefTest {
 
@@ -32,9 +36,6 @@ class CardRefTest {
 
     @Test
     fun aColonInTheNameDoesNotSplitTheReferenceInTwo() {
-        // "Chandra, Torch of Defiance" is fine; a planeswalker deck
-        // card called "Nahiri: the Lithomancer" is not, and neither is
-        // anything with a slash in it.
         val ref = CardRef("kayla", "nahiri: the lithomancer // x")
         val round = CardRef.parse(ref.encoded())
         assertEquals(ref, round)
@@ -56,106 +57,93 @@ class CardRefTest {
         assertNull(CardRef.parse("matt:"))
     }
 
+    // ------------------------------------------------- as a destination
+
+    private val ref = CardRef("matt", "sol ring")
+
+    private fun opened(from: AppState = AppState()) = from.openCard(ref, "Sol Ring")
+
     @Test
-    fun itIsFoundInAQueryStringWithEverythingElseInIt() {
-        val q = "q=bolt&colors=G%2CU&card=matt:sol+ring&sort=price"
-        assertEquals(CardRef("matt", "sol ring"), CardRef.from(q))
-        assertNull(CardRef.from("q=bolt&sort=price"))
+    fun aCardIsItsOwnAddressAndNothingElses() {
+        assertEquals("#/card/matt:sol+ring", opened().hash())
+        assertEquals(ref, CardRef.parse(Route.parse(opened().hash()).rest))
     }
 
     @Test
-    fun itIsAppendedToWhateverTheRouteAlreadySays() {
-        val ref = CardRef("matt", "sol ring")
-        // A route with a query already, and one without.
-        assertEquals("#/search?q=bolt&card=matt:sol+ring", CardRef.appendTo("#/search?q=bolt", ref))
-        assertEquals("#/stats?card=matt:sol+ring", CardRef.appendTo("#/stats", ref))
-        assertEquals("#/stats", CardRef.appendTo("#/stats", null))
-    }
-
-    // ------------------------------------------------- through the state
-
-    private fun opened() = AppState()
-        .copy(card = CardDetail(name = "Sol Ring", owner = "matt", nameNorm = "sol ring"))
-        .opening(Overlay.CARD)
-
-    @Test
-    fun anOpenCardIsInTheAppsOwnAddress() {
-        val hash = opened().hash()
-        assertTrue(hash.contains("card=matt:sol+ring"), hash)
-        assertEquals(CardRef("matt", "sol ring"), CardRef.from(hash.substringAfter('?', "")))
+    fun aLinkToACardDoesNotCarryTheDeckItWasOpenedFrom() {
+        // The whole reason it moved out of the query string.
+        val fromADeck = opened(AppState().navigate(Route(View.DECKS, "alela")))
+        assertEquals("#/card/matt:sol+ring", fromADeck.hash())
+        assertTrue("alela" !in fromADeck.hash(), fromADeck.hash())
     }
 
     @Test
-    fun andItLeavesTheAddressWhenTheDrawerShuts() {
-        val shut = opened().dismissTop()!!
-        assertNull(shut.cardRef)
-        assertTrue(!shut.hash().contains("card="), shut.hash())
+    fun aLinkToACardDoesNotCarryTheSearchEither() {
+        val fromASearch = opened(AppState().copy(library = Library(Filters(q = "sol", colors = listOf("C")))))
+        assertEquals("#/card/matt:sol+ring", fromASearch.hash())
     }
 
     @Test
-    fun theSearchUnderneathIsStillInTheLinkAsWell() {
-        // Both halves, or sharing a card loses the search you found it
-        // in.
-        val s = opened().copy(library = Library(Filters(q = "sol", colors = listOf("C"))))
-        val hash = s.hash()
-        assertTrue(hash.contains("q=sol"), hash)
-        assertTrue(hash.contains("card=matt:sol+ring"), hash)
-        assertEquals("sol", FilterUrl.fromHash(hash.substringAfter('?')).q)
+    fun theAddressSaysWhichCardTheStateIsShowing() {
+        assertEquals(ref, opened().cardRef)
+        assertNull(AppState().cardRef)
     }
 
     @Test
-    fun aCardOpenOverADeckIsAlsoALink() {
-        val s = AppState().navigate(Route(View.DECKS, "alela"))
-            .copy(card = CardDetail(name = "Sol Ring", owner = "matt", nameNorm = "sol ring"))
-            .opening(Overlay.CARD)
-        assertEquals("#/decks/alela?card=matt:sol+ring", s.hash())
+    fun aCardHeldWhileSomewhereElseIsNotTheCardOnScreen() {
+        // The detail survives a navigation away in memory; the
+        // address is what decides what is being shown.
+        val elsewhere = opened().navigate(Route(View.STATS)).copy(card = opened().card)
+        assertNull(elsewhere.cardRef)
     }
 
-    // --------------------------------------------- back, and the X
-
-    @Test
-    fun theHistoryDoesNotGiveTheCardAnEntryOfItsOwn() {
-        // Two things both owning "back closes the card" is why Close
-        // did not. The drawer shut, the overlay history popped an
-        // entry, and the entry it popped to still said `card=` — so
-        // the hashchange that followed opened it straight back up.
-        assertEquals(0, opened().overlays.historyDepth)
-        assertEquals(1, AppState().opening(Overlay.CHEATSHEET).overlays.historyDepth)
-        assertEquals(
-            1,
-            AppState().opening(Overlay.CHEATSHEET).opening(Overlay.CARD).overlays.historyDepth,
-        )
-    }
+    // --------------------------------------------------- back, and ← Back
 
     @Test
     fun openingACardIsAStepBackCanUndo() {
-        val shut = AppState()
-        val open = opened()
-        assertTrue(open.opensACardOver(shut))
-        // Closing is not: it rewrites where you are, so back does not
-        // land on an address that still names the card.
-        assertTrue(!shut.opensACardOver(open))
-        // Nor is changing a filter with one already open.
-        val moved = open.copy(library = Library(Filters(q = "x")))
-        assertTrue(!moved.opensACardOver(open))
+        assertTrue(opened().isAStepFrom(AppState()))
     }
 
     @Test
-    fun aDifferentCardOverTheFirstIsNotANewStep() {
-        // Tapping a card inside the drawer's "in decks" list replaces
-        // it. One entry, not one per card looked at.
+    fun anotherCardIsAnotherStep() {
+        // Tapping a card in the "in decks" list is going somewhere,
+        // so back comes back to the card you were reading.
         val first = opened()
-        val second = first.copy(
-            card = CardDetail(name = "Arcane Signet", owner = "matt", nameNorm = "arcane signet"),
-        )
-        assertTrue(!second.opensACardOver(first))
+        val second = first.openCard(CardRef("matt", "arcane signet"), "Arcane Signet")
+        assertTrue(second.isAStepFrom(first))
     }
 
     @Test
-    fun aCardHeldButNotOpenIsNotInTheAddress() {
-        // `navigate` clears the card, but a state that still holds one
-        // with the overlay closed must not advertise it.
-        val s = AppState().copy(card = CardDetail(name = "Sol Ring", owner = "matt", nameNorm = "sol ring"))
-        assertNull(s.cardRef)
+    fun backGoesToThePageTheCardWasOpenedFrom() {
+        val fromADeck = opened(AppState().navigate(Route(View.DECKS, "alela")))
+        assertEquals(Route(View.DECKS, "alela"), fromADeck.from)
+        assertEquals("#/decks/alela", fromADeck.leaveCard().hash())
+    }
+
+    @Test
+    fun aCardOpenedFromALinkGoesBackToTheLibrary() {
+        // Nothing behind it, so "back" cannot mean the page before.
+        val fromALink = AppState().navigate(Route(View.CARD, ref.encoded()))
+        assertNull(fromALink.from)
+        assertEquals(View.DEFAULT, fromALink.leaveCard().view)
+    }
+
+    @Test
+    fun theDeckIsStillThereWhenYouComeBackToIt() {
+        // Opening a card off a deck list used to close the deck,
+        // which meant reading all of its cards again on the way back.
+        val deck = AppState().navigate(Route(View.DECKS, "alela"))
+            .copy(decks = DecksState(decks = listOf(Deck("alela", "Alela", "matt", null, "UB", null, null))))
+            .let { it.copy(decks = it.decks.opened("alela", listOf(DeckCard("Sol Ring", 1, null, 1)))) }
+        val card = deck.openCard(ref, "Sol Ring")
+        assertEquals(1, card.decks.cards.size, "the deck's cards were thrown away")
+        assertEquals("alela", card.leaveCard().decks.openSlug)
+    }
+
+    @Test
+    fun aCardIsNotSomewhereTheMenuOffers() {
+        // It is reached from a card, not from a list of places to go.
+        assertTrue(View.CARD !in Admin(token = "t").visible)
+        assertTrue(Admin().reachable(View.CARD), "a link to a card must open while locked")
     }
 }

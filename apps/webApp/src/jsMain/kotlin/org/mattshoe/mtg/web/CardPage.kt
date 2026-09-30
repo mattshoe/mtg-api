@@ -17,21 +17,27 @@ import org.mattshoe.mtg.core.Printing
 import org.mattshoe.mtg.core.Prices
 
 /**
- * One card, opened.
+ * One card, as its own page.
  *
- * Sibling of `CardSheet` on Android. Both are handed a `CardDetail` and
- * neither works out how many copies are spare — `free` is on the state,
- * so the number cannot come out different on a phone.
+ * It was a drawer over whatever page you happened to be on, with its
+ * address in that page's query string. That is where the navigation
+ * bugs came from: the link carried the deck underneath, back had to
+ * choose between dismissing and navigating, and the page behind kept
+ * its own scroll. A card is a place now, so none of those are
+ * questions any more.
+ *
+ * Sibling of `CardSheet` on Android. Both are handed a `CardDetail`
+ * and neither works out how many copies are spare — `free` is on the
+ * state, so the number cannot come out different on a phone.
  */
 @Composable
-fun CardSheet(card: CardDetail, onShare: () -> Unit = {}, onClose: () -> Unit) {
-    Div(attrs = {
-        classes("drawer-scrim")
-        onClick { onClose() }
-    })
-    Div(attrs = { classes("drawer") }) {
-        Div(attrs = { classes("panel-head") }) {
-            H2 { Text(card.name) }
+fun CardPage(card: CardDetail, onShare: () -> Unit = {}, onBack: () -> Unit = {}) {
+    Div(attrs = { classes("wrap") }) {
+        Div(attrs = { classes("page-head") }) {
+            Button(attrs = {
+                classes("btn", "sm", "ghost")
+                onClick { onBack() }
+            }) { Text("← Back") }
             Span(attrs = { classes("spacer") }) {}
             Button(attrs = {
                 classes("btn", "sm", "ghost", "icon-only")
@@ -39,15 +45,9 @@ fun CardSheet(card: CardDetail, onShare: () -> Unit = {}, onClose: () -> Unit) {
                 attr("aria-label", "Share this card")
                 onClick { onShare() }
             }) { ShareIcon() }
-            Button(attrs = {
-                classes("btn", "sm", "ghost", "icon-only")
-                attr("title", "Close")
-                attr("aria-label", "Close")
-                onClick { onClose() }
-            }) { CloseIcon() }
         }
 
-        Div(attrs = { classes("panel-body", "stack") }) {
+        Div(attrs = { classes("card-page", "stack") }) {
             when {
                 card.busy -> Div(attrs = { classes("empty") }) { Text("Loading…") }
                 card.error != null -> Div(attrs = { classes("err") }) { Text(card.error!!) }
@@ -60,10 +60,10 @@ fun CardSheet(card: CardDetail, onShare: () -> Unit = {}, onClose: () -> Unit) {
 @Composable
 private fun Body(card: CardDetail) {
     CardQueries.art(card.printings.firstOrNull()?.scryfallId)?.let { url ->
-        // `drawer-art`, not `card-art`. The latter is the grid tile's
+        // `card-scan`, not `card-art`. The latter is the grid tile's
         // wrapper and sets no width at all, so Scryfall's 745px scan
         // rendered at 745px and ran off the side of a phone.
-        Img(src = url, alt = card.name, attrs = { classes("drawer-art") })
+        Img(src = url, alt = card.name, attrs = { classes("card-scan") })
     }
 
     Div(attrs = { classes("flex-wrap", "small") }) {

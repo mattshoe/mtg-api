@@ -242,9 +242,10 @@ class ScreensTest {
             printings = listOf(Printing(1, "m3c", "Modern Horizons 3", "409", "nonfoil", 3, null)),
             usedIn = listOf(DeckUse("alela", "Alela", "matt", 1, "ramp", false)),
         )
-        val root = mount { CardSheet(detail) {} }
+        val root = mount { CardPage(detail) }
         settle()
-        assertTrue(root.text().contains("Sol Ring"))
+        // The name is in the header bar, the same as every other
+        // page's title, rather than repeated at the top of the body.
         assertTrue(root.text().contains("3 owned"), root.text())
         assertTrue(root.text().contains("2 free"))
         assertTrue(root.text().contains("Alela"))
@@ -258,7 +259,7 @@ class ScreensTest {
             printings = listOf(Printing(1, "m3c", null, "409", "nonfoil", 1, null)),
             usedIn = listOf(DeckUse("p", "Proxy deck", "matt", 1, null, true)),
         )
-        val root = mount { CardSheet(detail) {} }
+        val root = mount { CardPage(detail) }
         settle()
         assertTrue(root.text().contains("1 free"), root.text())
     }

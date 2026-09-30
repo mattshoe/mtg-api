@@ -51,12 +51,12 @@
    scrim never touched the overlay at all and went straight through. */
 body.overlay-open { overflow: hidden; }
 /* Nothing with a picture in it gets to be wider than what holds it.
-   The drawer's card scan is 745px from Scryfall and ran off the side
-   of a phone; this is the net under every other image too. */
+   A card scan is 745px from Scryfall and ran off the side of a
+   phone; this is the net under every other image too. */
 img, svg, video { max-width: 100%; }
 
-/* .drawer and .palette-scrim set display, which would beat the default
-   [hidden] rule. Toggling .hidden via the property must actually hide them. */
+/* .palette-scrim sets display, which would beat the default [hidden]
+   rule. Toggling .hidden via the property must actually hide it. */
 [hidden] { display: none !important; }
 
 html, body { height: 100%; }
@@ -402,25 +402,14 @@ td.mono { font-family: var(--mono); font-size: 12.5px; }
 }
 .price-badge:empty { display: none; }
 
-/* ---------------------------------------------------------------- drawer */
-.drawer-scrim {
-  position: fixed; inset: 0; background: rgba(4,6,10,.62); z-index: 60;
-  backdrop-filter: blur(2px); overscroll-behavior: contain; touch-action: none;
+/* ------------------------------------------------------------ card page */
+/* One card, as a page. It was a drawer sliding over whatever was
+   underneath, which is where the scroll, back and link bugs lived. */
+.card-page { padding: 0 0 24px; }
+.card-scan {
+  width: 100%; max-width: 300px; border-radius: 4.75% / 3.4%;
+  display: block; margin: 0 auto 8px; box-shadow: var(--shadow);
 }
-.drawer {
-  position: fixed; top: 0; right: 0; bottom: 0; width: min(560px, 100%);
-  background: var(--bg-2); border-left: 1px solid var(--line);
-  z-index: 61; overflow-y: auto; overscroll-behavior: contain; box-shadow: var(--shadow);
-  animation: slide .16s ease;
-}
-@keyframes slide { from { transform: translateX(24px); opacity: .4; } }
-.drawer-head {
-  position: sticky; top: 0; z-index: 2; display: flex; gap: 10px; align-items: flex-start;
-  padding: 14px 16px; background: var(--bg-2); border-bottom: 1px solid var(--line);
-}
-.drawer-head h2 { flex: 1; font-size: 16px; }
-.drawer-body { padding: 16px; }
-.drawer-art { width: 100%; max-width: 300px; border-radius: 4.75% / 3.4%; display: block; margin: 0 auto 8px; box-shadow: var(--shadow); }
 
 .oracle { white-space: pre-wrap; font-size: 13.5px; line-height: 1.6; }
 .flavor { white-space: pre-wrap; font-style: italic; color: var(--text-3); font-size: 12.5px; margin-top: 8px; }
@@ -513,7 +502,7 @@ pre.out {
 }
 .palette { width: min(560px, 92vw); background: var(--bg-2); border: 1px solid var(--line-2);
            border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
-.palette.wide { width: min(760px, 94vw); max-height: 82vh; overflow-y: auto; }
+.palette.wide { width: min(760px, 94vw); max-height: 82vh; overflow-y: auto; overscroll-behavior: contain; }
 .palette.wide textarea { font-family: var(--mono); font-size: 12.5px; line-height: 1.5; }
 /* The finder's own box, which is the whole top of that dialog. Scoped
    to a direct child: as `.palette input` it also flattened the
@@ -850,7 +839,7 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
 }
 .deck-line .t-name { flex: 1; min-width: 0; }
 
-/* One printing in the card drawer. Same shape as a deck row: a line
+/* One printing on the card page. Same shape as a deck row: a line
    you can read across, and a link out where there is one to follow. */
 .print-line {
   display: flex; align-items: center; gap: 8px; padding: 7px 0;
@@ -1092,7 +1081,6 @@ details.adv > div { padding-top: 12px; }
                 color: var(--text-2); cursor: pointer; }
   .nav-toggle svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; }
   .grid { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 10px; }
-  .drawer { width: 100%; }
   .bar-row { grid-template-columns: 78px 1fr 44px; }
   .toasts { left: 12px; right: 12px; bottom: 12px; }
   .toast { max-width: none; }

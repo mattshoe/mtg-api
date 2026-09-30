@@ -20,13 +20,13 @@ class OverlayTest {
     @Test
     fun backTakesTheTopOneOff() {
         val s = AppState()
-            .opening(Overlay.CARD)
+            .opening(Overlay.PALETTE)
             .opening(Overlay.CHEATSHEET)
         assertEquals(Overlay.CHEATSHEET, s.overlays.top)
 
         val once = s.dismissTop()
         assertNotNull(once)
-        assertEquals(Overlay.CARD, once.overlays.top)
+        assertEquals(Overlay.PALETTE, once.overlays.top)
 
         val twice = once.dismissTop()
         assertNotNull(twice)
@@ -48,23 +48,23 @@ class OverlayTest {
 
     @Test
     fun closingAnOverlayThrowsAwayWhatItWasHolding() {
-        val s = AppState(card = CardDetail(name = "Sol Ring"))
-            .opening(Overlay.CARD)
-            .closing(Overlay.CARD)
-        assertNull(s.card)
-        assertFalse(Overlay.CARD in s.overlays)
+        val s = AppState(newDeck = NewDeck(name = "Half typed"))
+            .opening(Overlay.NEW_DECK)
+            .closing(Overlay.NEW_DECK)
+        assertEquals(NewDeck(), s.newDeck)
+        assertFalse(Overlay.NEW_DECK in s.overlays)
     }
 
     @Test
     fun closingOneUnderneathLeavesTheTopAlone() {
-        val s = AppState().opening(Overlay.CARD).opening(Overlay.CHEATSHEET).closing(Overlay.CARD)
+        val s = AppState().opening(Overlay.PALETTE).opening(Overlay.CHEATSHEET).closing(Overlay.PALETTE)
         assertEquals(listOf(Overlay.CHEATSHEET), s.overlays.stack)
     }
 
     @Test
     fun navigatingTakesEveryOverlayWithIt() {
         val s = AppState(card = CardDetail(name = "Bolt"))
-            .opening(Overlay.CARD)
+            .opening(Overlay.PALETTE)
             .navigate(View.DECKS)
         assertFalse(s.overlays.any)
         assertNull(s.card)

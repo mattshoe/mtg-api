@@ -21,6 +21,7 @@ import org.mattshoe.mtg.core.ApiFailure
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.CardDetail
 import org.mattshoe.mtg.core.CardQueries
+import org.mattshoe.mtg.core.CardRef
 import org.mattshoe.mtg.core.CardRow
 import org.mattshoe.mtg.core.Completion
 import org.mattshoe.mtg.core.DeckEditState
@@ -248,8 +249,7 @@ class MainActivity : ComponentActivity() {
     // ------------------------------------------------------ card detail
 
     private fun openCard(row: CardRow) {
-        app = app.copy(card = CardDetail(name = row.fullName, owner = row.owner).loading())
-            .opening(Overlay.CARD)
+        app = app.openCard(CardRef(row.owner, row.nameNorm), row.fullName)
         work { loadCard(row.nameNorm, row.owner, row.fullName) }
     }
 
@@ -261,16 +261,14 @@ class MainActivity : ComponentActivity() {
      * accent or an em dash in it. A deck list has the real column.
      */
     private fun openNamed(name: String, nameNorm: String, owner: String) {
-        app = app.copy(card = CardDetail(name = name, owner = owner).loading())
-            .opening(Overlay.CARD)
+        app = app.openCard(CardRef(owner, nameNorm), name)
         work { loadCard(nameNorm, owner, name) }
     }
 
     private fun openFound(found: Found) {
-        app = app.closing(Overlay.PALETTE)
-            .copy(card = CardDetail(name = found.name, owner = found.owner).loading())
-            .opening(Overlay.CARD)
-        work { loadCard(found.name.lowercase(), found.owner, found.name) }
+        val norm = found.name.lowercase()
+        app = app.closing(Overlay.PALETTE).openCard(CardRef(found.owner, norm), found.name)
+        work { loadCard(norm, found.owner, found.name) }
     }
 
     private suspend fun loadCard(nameNorm: String, owner: String, label: String): AppState {

@@ -15,12 +15,14 @@ import kotlin.test.assertTrue
 class ShellTest {
 
     @Test
-    fun theSixViewsAndWhichOfThemAreGated() {
-        assertEquals(6, View.entries.size)
+    fun theViewsAndWhichOfThemAreGated() {
+        assertEquals(7, View.entries.size)
         assertEquals(
             listOf(View.ENTRY, View.LOGS),
             View.entries.filter { it.gated },
         )
+        // A card is a destination, not a place the menu offers.
+        assertEquals(listOf(View.CARD), View.entries.filterNot { it.inNav })
     }
 
     @Test

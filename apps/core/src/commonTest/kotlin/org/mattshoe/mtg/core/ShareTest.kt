@@ -8,11 +8,8 @@ import kotlin.test.assertTrue
 class ShareTest {
 
     private fun openCard() = AppState()
-        .copy(
-            library = Library(Filters(q = "sol")),
-            card = CardDetail(name = "Sol Ring", owner = "matt", nameNorm = "sol ring"),
-        )
-        .opening(Overlay.CARD)
+        .copy(library = Library(Filters(q = "sol")))
+        .openCard(CardRef("matt", "sol ring"), "Sol Ring")
 
     @Test
     fun aLinkIsTheWholeAddressNotJustTheFragment() {
@@ -22,11 +19,11 @@ class ShareTest {
     }
 
     @Test
-    fun theLinkToACardCarriesTheCardAndTheSearchUnderIt() {
-        // Sharing a card must not lose the search it was found in.
-        val link = Share.link(openCard())
-        assertTrue(link.contains("q=sol"), link)
-        assertTrue(link.contains("card=matt:sol+ring"), link)
+    fun theLinkToACardIsTheCardAndNothingElse() {
+        // It used to be the card appended to whatever page the drawer
+        // was open over, so what arrived was somebody else's search
+        // or somebody else's deck with a card on top of it.
+        assertEquals("https://mtg.mattshoe.org/#/card/matt:sol+ring", Share.link(openCard()))
     }
 
     @Test

@@ -29,6 +29,12 @@ data class AppState(
     val overlays: Overlays = Overlays(),
     /** Set when a share arrived and has not been used yet. */
     val sharedList: String? = null,
+    /**
+     * The page a card was opened from, for the button that goes back
+     * to it. Null when the card was opened from a link somebody sent,
+     * which has nothing behind it.
+     */
+    val from: Route? = null,
     val toast: String? = null,
 ) {
     val view: View get() = route.view
@@ -45,7 +51,10 @@ data class AppState(
             // The open deck lives in `decks`, not in the route, so
             // going back from a deck to the list left the detail on
             // screen over an address that said list.
-            decks = if (landed.namesADeck) decks else decks.close(),
+            // A card is opened from a deck as often as from the
+            // library, and closing the deck here would throw its
+            // cards away and re-read them on the way back.
+            decks = if (landed.namesADeck || landed.view == View.CARD) decks else decks.close(),
         )
     }
 
@@ -58,40 +67,39 @@ data class AppState(
      * `Route.toHash()` for that view drops them — leave the tab and
      * come back and the URL no longer describes what is on screen.
      */
-    fun hash(): String {
-        val base = if (view == View.LIBRARY) FilterUrl.toHash(library.filters) else route.toHash()
-        return CardRef.appendTo(base, cardRef)
-    }
-
-    /**
-     * Is this state a card opening over the one before it?
-     *
-     * The one case where the address bar should gain a history entry
-     * rather than rewrite the one it is on, so back closes the card.
-     * Everything else — a filter changing on every keystroke, the
-     * card closing again — replaces in place.
-     */
-    fun opensACardOver(was: AppState): Boolean = was.cardRef == null && cardRef != null
+    fun hash(): String =
+        if (view == View.LIBRARY) FilterUrl.toHash(library.filters) else route.toHash()
 
     /**
      * Is this somewhere new, rather than the same place rewritten?
      *
      * The address bar gains an entry for a step and rewrites one for
-     * everything else. A different screen is a step; so is opening a
-     * deck, which is a different route; so is opening a card, which
-     * is not a route at all but is still somewhere back should come
-     * back from. A filter changing on every keystroke is not.
+     * everything else. A different screen is a step, and so is a
+     * different deck or a different card, because each is its own
+     * route. A filter changing on every keystroke is not.
      */
     fun isAStepFrom(was: AppState): Boolean =
-        route.view != was.route.view || route.rest != was.route.rest || opensACardOver(was)
+        route.view != was.route.view || route.rest != was.route.rest
+
+    /** Which card the address names, if it names one. */
+    val cardRef: CardRef? get() = if (view == View.CARD) CardRef.parse(route.rest) else null
 
     /**
-     * The open card, if one is. Null when the drawer is shut, so the
-     * address goes back to the page underneath when it closes.
+     * Open a card, remembering the page it was opened from.
+     *
+     * The card is its own destination, so this is an ordinary
+     * navigation: the address says the card and nothing else, back
+     * leaves the way it came, and the link is the card alone rather
+     * than the card plus whatever deck happened to be underneath.
      */
-    val cardRef: CardRef?
-        get() = card?.takeIf { Overlay.CARD in overlays.stack }
-            ?.let { CardRef(it.owner, it.nameNorm) }
+    fun openCard(ref: CardRef, name: String = ref.nameNorm): AppState =
+        navigate(Route(View.CARD, ref.encoded())).copy(
+            card = CardDetail(name = name, owner = ref.owner, nameNorm = ref.nameNorm).loading(),
+            from = route.takeIf { it.view != View.CARD },
+        )
+
+    /** Where the card's back button goes. The library, for a link with nothing behind it. */
+    fun leaveCard(): AppState = navigate(from ?: Route(View.DEFAULT))
 
     /**
      * What the header says you are looking at.
@@ -103,6 +111,7 @@ data class AppState(
     val title: String
         get() = when {
             view == View.DECKS && decks.open != null -> decks.open!!.title
+            view == View.CARD -> card?.name.orEmpty().ifBlank { View.CARD.label }
             else -> view.label
         }
 
@@ -123,6 +132,7 @@ data class AppState(
         View.DECKS -> copy(decks = decks.loading())
         View.STATS -> copy(stats = stats.loading())
         View.LOGS -> copy(logs = logs.loading())
+        View.CARD -> copy(card = card?.loading())
         View.CONSOLE, View.ENTRY -> this
     }
 
@@ -132,6 +142,7 @@ data class AppState(
         View.DECKS -> copy(decks = decks.failed(message))
         View.STATS -> copy(stats = stats.failed(message))
         View.LOGS -> copy(logs = logs.failed(message))
+        View.CARD -> copy(card = card?.failed(message))
         View.CONSOLE, View.ENTRY -> say(message)
     }
 
@@ -168,7 +179,6 @@ data class AppState(
 
     /** Closing an overlay throws away whatever it was holding. */
     private fun forget(o: Overlay): AppState = when (o) {
-        Overlay.CARD -> copy(card = null)
         Overlay.PALETTE -> copy(palette = palette.closed())
         Overlay.DECK_EDIT -> copy(deckEdit = null)
         Overlay.DISASSEMBLE -> copy(disassemble = null)
@@ -287,6 +297,7 @@ object Load {
         View.DECKS -> if (route.rest.isEmpty()) listOf("decks") else listOf("decks", "deck")
         View.STATS -> listOf("totals")
         View.LOGS -> listOf("logs")
+        View.CARD -> listOf("card")
         View.CONSOLE, View.ENTRY -> emptyList()
     }
 

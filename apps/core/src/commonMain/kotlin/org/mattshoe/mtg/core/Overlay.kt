@@ -10,7 +10,6 @@ package org.mattshoe.mtg.core
  * than a rendering detail, so it lives here.
  */
 enum class Overlay {
-    CARD,
     PALETTE,
     CHEATSHEET,
     DECK_EDIT,
@@ -29,13 +28,8 @@ data class Overlays(val stack: List<Overlay> = emptyList()) {
     val top: Overlay? get() = stack.lastOrNull()
     val any: Boolean get() = stack.isNotEmpty()
 
-    /**
-     * How many of these the history stack should have an entry for.
-     *
-     * Not the card: it rides in the query string, so the address bar
-     * already gives it one, and a second entry fights the first.
-     */
-    val historyDepth: Int get() = stack.count { it != Overlay.CARD }
+    /** How many of these the history stack should have an entry for. */
+    val historyDepth: Int get() = stack.size
 
     operator fun contains(o: Overlay) = o in stack
 

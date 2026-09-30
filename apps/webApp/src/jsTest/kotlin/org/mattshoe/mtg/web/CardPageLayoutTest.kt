@@ -9,7 +9,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.CardDetail
-import org.mattshoe.mtg.core.Overlay
 import org.mattshoe.mtg.core.Printing
 import org.w3c.dom.HTMLElement
 import org.w3c.dom.HTMLImageElement
@@ -22,15 +21,15 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * The card drawer, measured.
+ * The card page, measured.
  *
  * The art that ships is Scryfall's `normal` scan — 745 pixels wide,
- * larger than any phone. The drawer carried the grid tile's class,
+ * larger than any phone. The page carried the grid tile's class,
  * which sets no width at all, so the picture rendered at its natural
  * size and ran off the side of the screen. Nothing caught it because
- * the drawer had never been measured, only read.
+ * the card had never been measured, only read.
  */
-class CardSheetLayoutTest {
+class CardPageLayoutTest {
 
     private val roots = mutableListOf<HTMLElement>()
 
@@ -56,7 +55,7 @@ class CardSheetLayoutTest {
         val frame = document.createElement("div") as HTMLElement
         document.body!!.appendChild(frame)
         roots += frame
-        renderComposable(root = frame) { CardSheet(card) {} }
+        renderComposable(root = frame) { CardPage(card) }
         return frame
     }
 
@@ -79,7 +78,7 @@ class CardSheetLayoutTest {
     /** Swaps in the local picture and waits for the browser to lay it out. */
     private suspend fun artIn(frame: HTMLElement): HTMLImageElement {
         val img = frame.querySelector("img") as? HTMLImageElement
-            ?: error("the drawer has no picture in it at all")
+            ?: error("the card page has no picture in it at all")
         img.src = wideArt
         Promise<Unit> { resolve, _ ->
             if (img.complete) resolve(Unit) else img.onload = { resolve(Unit) }
@@ -89,45 +88,43 @@ class CardSheetLayoutTest {
     }
 
     @Test
-    fun theArtNeverGrowsWiderThanTheDrawerHoldingIt() = runTest {
+    fun theArtNeverGrowsWiderThanThePageHoldingIt() = runTest {
         val frame = open(detail())
         settle()
         if (!Stylesheet.applied()) return@runTest
         val img = artIn(frame)
-        val drawer = frame.all("div.drawer").firstOrNull() ?: error("no drawer")
-        val body = frame.all("div.drawer-body,div.panel-body").firstOrNull() ?: drawer
+        val body = frame.all("div.card-page").firstOrNull() ?: error("no card page")
         val inner = body.clientWidth.toDouble()
         val shown = img.getBoundingClientRect().width
         assertTrue(
             shown <= inner,
-            "the 745px scan rendered ${shown}px wide inside a ${inner}px drawer",
+            "the 745px scan rendered ${shown}px wide inside a ${inner}px page",
         )
     }
 
     @Test
-    fun andNothingElseInTheDrawerHangsOffTheSide() = runTest {
+    fun andNothingElseOnThePageHangsOffTheSide() = runTest {
         val frame = open(detail())
         settle()
         if (!Stylesheet.applied()) return@runTest
         artIn(frame)
-        val drawer = frame.all("div.drawer").firstOrNull() ?: error("no drawer")
-        val limit = drawer.getBoundingClientRect().right + 1
-        val over = drawer.all("*")
+        val page = frame.all("div.card-page").firstOrNull() ?: error("no card page")
+        val limit = page.getBoundingClientRect().right + 1
+        val over = page.all("*")
             .filter { it.getBoundingClientRect().right > limit }
             .map { it.tagName.lowercase() + "." + it.className }
         assertTrue(over.isEmpty(), "hanging off the right edge: $over")
     }
 
     @Test
-    fun closeClosesIt() = runTest {
+    fun backLeavesTheCardForThePageItWasOpenedFrom() = runTest {
         // Through the shell, over a real AppState, because the button
         // itself was never the suspect.
-        val root = document.createElement("HTMLElement".let { "div" }) as HTMLElement
+        val root = document.createElement("div") as HTMLElement
         document.body!!.appendChild(root)
         roots += root
-        var state = AppState()
-            .copy(card = CardDetail(name = "Sol Ring", owner = "matt", nameNorm = "sol ring"))
-            .opening(Overlay.CARD)
+        var state = AppState().navigate(org.mattshoe.mtg.core.Route(org.mattshoe.mtg.core.View.DECKS, "alela"))
+            .openCard(org.mattshoe.mtg.core.CardRef("matt", "sol ring"), "Sol Ring")
         renderComposable(root = root) {
             var s by androidx.compose.runtime.remember {
                 androidx.compose.runtime.mutableStateOf(state)
@@ -135,28 +132,27 @@ class CardSheetLayoutTest {
             AppShell(s, { s = it; state = it }, {}, {}, {}, {}, {}, {})
         }
         settle()
-        assertEquals(1, root.all("div.drawer").size, "the drawer is not open")
-        root.all("button").first { it.getAttribute("aria-label") == "Close" }.click()
+        assertTrue(root.all("div.card-page").isNotEmpty(), "the card page is not showing")
+        root.all("button").first { it.textContent?.trim() == "← Back" }.click()
         settle()
-        assertEquals(0, root.all("div.drawer").size, "Close left the drawer open")
-        assertTrue(Overlay.CARD !in state.overlays, "the overlay is still on the stack")
+        assertEquals(org.mattshoe.mtg.core.View.DECKS, state.view, "back went somewhere else")
+        assertEquals("alela", state.route.rest)
     }
 
     @Test
-    fun theCardDrawerOffersAShare() = runTest {
-        // An overlay with no address could not be sent to anybody.
+    fun theCardPageOffersAShare() = runTest {
         var shared = 0
         val frame = document.createElement("div") as HTMLElement
         document.body!!.appendChild(frame)
         roots += frame
         renderComposable(root = frame) {
-            CardSheet(detail(), onShare = { shared++ }) {}
+            CardPage(detail(), onShare = { shared++ })
         }
         settle()
         // An icon, not the word. It says what it is through its
         // label, which is the part that has to keep working.
         val button = frame.all("button[aria-label='Share this card']").firstOrNull()
-            ?: error("no share button on the card drawer")
+            ?: error("no share button on the card page")
         assertTrue(button.querySelector(".icon-share") != null, "the share button has no icon")
         button.click()
         settle()
@@ -231,23 +227,6 @@ class CardSheetLayoutTest {
     }
 
     @Test
-    fun closeIsTheIconEverySinceWindowsHadCorners() = runTest {
-        var closed = 0
-        val frame = document.createElement("div") as HTMLElement
-        document.body!!.appendChild(frame)
-        roots += frame
-        renderComposable(root = frame) { CardSheet(detail()) { closed++ } }
-        settle()
-        val button = frame.all("button[aria-label='Close']").firstOrNull()
-            ?: error("no close control on the card drawer")
-        assertTrue(button.querySelector(".icon-close") != null, "the close button has no icon")
-        assertTrue(button.textContent.orEmpty().isBlank(), "the word is back: '${button.textContent}'")
-        button.click()
-        settle()
-        assertEquals(1, closed)
-    }
-
-    @Test
     fun aPrintingNobodySellsStaysARowRatherThanALinkToNowhere() = runTest {
         val frame = open(shoppable())
         settle()
@@ -273,16 +252,15 @@ class CardSheetLayoutTest {
         val frame = open(shoppable())
         settle()
         if (!Stylesheet.applied()) return@runTest
-        // The drawer is fixed to the viewport, and headless Chrome will
-        // not go below 500 pixels wide, so the panel itself is narrowed
-        // to a phone rather than the window.
-        frame.all("div.drawer").first().style.width = "340px"
+        // Headless Chrome will not go below 500 pixels wide, so the
+        // page itself is narrowed to a phone rather than the window.
+        frame.all("div.card-page").first().style.width = "340px"
         settle()
         val rows = frame.all("div.print-line, a.print-line")
         assertTrue(rows.isNotEmpty(), "no printings to measure")
         rows.forEach { row ->
             val r = row.getBoundingClientRect()
-            assertTrue(r.width < 350, "the panel did not narrow: ${r.width}")
+            assertTrue(r.width < 350, "the page did not narrow: ${r.width}")
             val tops = row.all("span").map { it.getBoundingClientRect().top }
             assertTrue((tops.max() - tops.min()) < 4, "a printing wrapped on a phone")
             val price = row.all("span.num").first().getBoundingClientRect()

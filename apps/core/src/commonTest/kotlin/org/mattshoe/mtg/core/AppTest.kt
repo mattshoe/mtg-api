@@ -96,7 +96,7 @@ class AppTest {
 
     @Test
     fun noViewIsLostBetweenTheNavAndTheRouter() {
-        assertEquals(View.entries.size, Admin("t").visible.size)
+        assertEquals(View.entries.count { it.inNav }, Admin("t").visible.size)
         assertFalse(Admin().visible.any { it.gated })
     }
 }

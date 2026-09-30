@@ -125,15 +125,11 @@ object MtgApp {
             // back skipped straight past it — the card drawer had the
             // same bug for the same reason.
             if (value.isAStepFrom(was)) pushHash(value) else replaceHash(value)
-            // A new screen starts at the top. The card is left out on
-            // purpose: it floats over the page in its own scroller, so
-            // moving the page under it would only lose the reader's
-            // place for when they close it.
+            // A new screen starts at the top.
             if (value.route.view != was.route.view || value.route.rest != was.route.rest) {
                 Scroll.remember(was.hash())
                 Scroll.top()
             }
-            if (value.cardRef != null && value.cardRef != was.cardRef) Scroll.drawerToTop()
         }
 
     private var listening = false
@@ -160,8 +156,6 @@ object MtgApp {
         listen()
         loadFor(app)
         loadFacets()
-        // And the card, if the link had one open over the page.
-        CardRef.from(opening.query)?.let { reopen(it) }
 
         composition = renderComposable(root = root) {
             val state = app
@@ -292,11 +286,6 @@ object MtgApp {
             // An entry this code popped on purpose, closing an overlay
             // by its own X. The overlay is already gone.
             if (OverlayHistory.expected()) return@addEventListener
-            // The card is in the address, so the hashchange firing
-            // alongside this already knows what to do with it. Closing
-            // it here as well would take the overlay underneath with
-            // it.
-            if (app.overlays.top == Overlay.CARD) return@addEventListener
             app.dismissTop()?.let { app = it }
         })
 
@@ -314,13 +303,6 @@ object MtgApp {
                 // offset for, so going back lands wherever the screen
                 // being left happened to be.
                 Scroll.restore(app.hash())
-            }
-            // The card is not part of the route, so it is checked
-            // separately — a link pasted into the bar with `card=` on
-            // it opens the drawer without a reload.
-            val want = CardRef.from(route.query)
-            if (want != app.cardRef) {
-                if (want == null) held = app.closing(Overlay.CARD) else reopen(want)
             }
         })
     }
@@ -397,6 +379,23 @@ object MtgApp {
                 app = app.fetching(View.STATS)
                 intoPage(View.STATS) { loadStats(s) }
             }
+
+            // A card reached by its own address — a link somebody
+            // sent, a reload, the back button — rather than by a tap
+            // that already knew the card's real name.
+            View.CARD -> s.cardRef?.let { ref ->
+                if (app.card?.nameNorm != ref.nameNorm || app.card?.owner != ref.owner) {
+                    app = app.copy(
+                        card = CardDetail(
+                            name = ref.nameNorm,
+                            owner = ref.owner,
+                            nameNorm = ref.nameNorm,
+                        ).loading(),
+                    )
+                }
+                val label = app.card?.name ?: ref.nameNorm
+                intoPage(View.CARD) { loadCard(ref.nameNorm, ref.owner, label) }
+            } ?: Unit
 
             else -> Unit
         }
@@ -531,27 +530,13 @@ object MtgApp {
      * accent or an em dash in it. A deck list has the real column.
      */
     private fun openNamed(name: String, nameNorm: String, owner: String) {
-        app = app.copy(card = CardDetail(name = name, owner = owner, nameNorm = nameNorm).loading())
-            .opening(Overlay.CARD)
+        app = app.openCard(CardRef(owner, nameNorm), name)
         work { loadCard(nameNorm, owner, name) }
-    }
-
-    /**
-     * A card that arrived in the address bar.
-     *
-     * All a link carries is `owner:name_norm`, so the title starts as
-     * the normalised name and is replaced by the real one as soon as a
-     * printing says what it is.
-     */
-    private fun reopen(ref: CardRef) {
-        openNamed(ref.nameNorm, ref.nameNorm, ref.owner)
     }
 
     private fun openFound(found: Found) {
         val norm = found.name.lowercase()
-        app = app.closing(Overlay.PALETTE)
-            .copy(card = CardDetail(name = found.name, owner = found.owner, nameNorm = norm).loading())
-            .opening(Overlay.CARD)
+        app = app.closing(Overlay.PALETTE).openCard(CardRef(found.owner, norm), found.name)
         work { loadCard(norm, found.owner, found.name) }
     }
 

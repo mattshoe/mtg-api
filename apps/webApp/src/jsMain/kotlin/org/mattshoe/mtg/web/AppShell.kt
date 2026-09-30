@@ -16,6 +16,7 @@ import org.jetbrains.compose.web.dom.Text
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.CardRow
 import org.mattshoe.mtg.core.EntryHistory
+import org.mattshoe.mtg.core.CardDetail
 import org.mattshoe.mtg.core.ExportTo
 import org.mattshoe.mtg.core.Found
 import org.mattshoe.mtg.core.HistoryEntry
@@ -70,9 +71,9 @@ fun AppShell(
     var password by remember { mutableStateOf("") }
 
     // The page underneath an overlay holds still. `overscroll-behavior`
-    // on the drawer only stops the chaining once the drawer itself
+    // on the overlay only stops the chaining once the overlay itself
     // reaches its end; a swipe that starts on the scrim never touches
-    // the drawer at all and went straight through to the results.
+    // the overlay at all and went straight through to the results.
     DisposableEffect(state.overlays.stack.isEmpty()) {
         lockPage(state.overlays.stack.isNotEmpty())
         onDispose { lockPage(false) }
@@ -123,6 +124,12 @@ fun AppShell(
 
         View.LOGS -> LogsPage(state.logs) { onState(state.copy(logs = it)) }
 
+        View.CARD -> CardPage(
+            card = state.card ?: CardDetail(name = state.route.rest).loading(),
+            onShare = onShare,
+            onBack = { onState(state.leaveCard()) },
+        )
+
         View.ENTRY -> MassEntryPage(
             state = state.entry,
             onState = { onState(state.copy(entry = it)) },
@@ -142,14 +149,6 @@ fun AppShell(
     }
 
     // ------------------------------------------------------- overlays
-
-    state.card?.takeIf { Overlay.CARD in state.overlays }?.let { card ->
-        CardSheet(
-            card = card,
-            onClose = { onState(state.closing(Overlay.CARD)) },
-            onShare = onShare,
-        )
-    }
 
     if (Overlay.PALETTE in state.overlays) {
         PaletteDialog(
