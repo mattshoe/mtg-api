@@ -124,6 +124,15 @@ object MtgApp {
             // back skipped straight past it — the card drawer had the
             // same bug for the same reason.
             if (value.isAStepFrom(was)) pushHash(value) else replaceHash(value)
+            // A new screen starts at the top. The card is left out on
+            // purpose: it floats over the page in its own scroller, so
+            // moving the page under it would only lose the reader's
+            // place for when they close it.
+            if (value.route.view != was.route.view || value.route.rest != was.route.rest) {
+                Scroll.remember(was.hash())
+                Scroll.top()
+            }
+            if (value.cardRef != null && value.cardRef != was.cardRef) Scroll.drawerToTop()
         }
 
     private var listening = false
@@ -295,9 +304,14 @@ object MtgApp {
             // it changed.
             val route = routeFromHash()
             if (route.view != app.view || route.rest != app.route.rest) {
+                Scroll.remember(app.hash())
                 held = app.navigate(route)
                     .let { if (route.view != View.LIBRARY) it else it.restoredSearch(FilterUrl.fromHash(route.query)) }
                 loadFor(app)
+                // The browser has no navigation to restore a scroll
+                // offset for, so going back lands wherever the screen
+                // being left happened to be.
+                Scroll.restore(app.hash())
             }
             // The card is not part of the route, so it is checked
             // separately — a link pasted into the bar with `card=` on

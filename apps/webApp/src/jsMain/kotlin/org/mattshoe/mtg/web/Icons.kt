@@ -23,3 +23,17 @@ fun ShareIcon() {
         attr("aria-hidden", "true")
     }) {}
 }
+
+/**
+ * The X every window has had since windows had corners.
+ *
+ * Same mask trick as the share mark: an inline `<svg>` built through
+ * `TagElement` lands in the HTML namespace and renders as nothing.
+ */
+@Composable
+fun CloseIcon() {
+    Span(attrs = {
+        classes("icon", "icon-close")
+        attr("aria-hidden", "true")
+    }) {}
+}

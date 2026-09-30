@@ -93,6 +93,20 @@ object Inventory {
                 "aKeyIsThirtyTwoHexCharacters", "everyKeyIsItsOwn",
                 "everyWriteCarriesOne", "aReadCarriesNone",
             )),
+        Feature(Area.CARD, "A new screen opens at the top, and back returns to where you were",
+            "app.js", logic = true, done = true,
+            tests = listOf(
+                "somewhereNewStartsAtTheTop", "comingBackGoesBackToWhereYouWere",
+                "aScreenNeverVisitedStartsAtTheTop", "theOffsetIsChasedUntilTheRowsArrive",
+                "aSecondRequestWinsOverTheOneStillChasing",
+                "aDeckOpensAtTheTopOfItself", "andBackReturnsToWhereTheListWas",
+            )),
+        Feature(Area.CARD, "Close is the X, not the word",
+            "app.js", logic = true, done = true,
+            tests = listOf(
+                "closeIsTheIconEverySinceWindowsHadCorners",
+                "closingACardDoesNotMoveThroughHistory", "aCardOpenedFromALinkAlsoCloses",
+            )),
         Feature(Area.CARD, "Share a link to the card or the deck you are looking at",
             "card.js", logic = true, done = true,
             tests = listOf(
@@ -451,7 +465,7 @@ object Inventory {
                 "aPrintingYouCanBuyLinksToTcgplayer",
                 "aPrintingNobodySellsStaysARowRatherThanALinkToNowhere",
                 "aPrintingQuotesThePriceForTheFinishItIsIn", "aPrintingLineStaysOnOneLine",
-                "aPrintingLineSurvivesAPhone",
+                "aPrintingLineSurvivesAPhone", "aPrintingSaysWhereTheLinkGoes",
             )),
         Feature(Area.CARD, "Which decks a card is in, and how many are free", "card.js", logic = true, done = true,
             tests = listOf(

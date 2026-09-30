@@ -649,6 +649,11 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
 /* A button that is only an icon is square, and says what it is
    through its title rather than through a word taking three times
    the room. */
+.icon-close {
+  -webkit-mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.1' stroke-linecap='round'><path d='M6 6l12 12'/><path d='M18 6L6 18'/></svg>");
+  mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.1' stroke-linecap='round'><path d='M6 6l12 12'/><path d='M18 6L6 18'/></svg>");
+}
+
 .btn.icon-only { padding: 0; width: 30px; height: 30px; display: inline-grid; place-items: center; }
 
 /* --------------------------------------------------------- mana art */
@@ -846,7 +851,11 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
 .print-line .t-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .print-line .num { flex: none; color: var(--text); font-weight: 600; }
 a.print-line:hover { background: var(--bg-3); text-decoration: none; }
-a.print-line::after { content: "\2197"; color: var(--text-3); font-size: 11px; }
+.print-line .buy {
+  flex: none; color: var(--accent-2); font-weight: 600;
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+}
+a.print-line:hover .buy { background: var(--accent-dim); }
 
 /* A row that leaves the site says so, with the same mark the nav
    uses for a link that goes away. */

@@ -136,7 +136,7 @@ class CardSheetLayoutTest {
         }
         settle()
         assertEquals(1, root.all("div.drawer").size, "the drawer is not open")
-        root.all("button").first { it.textContent?.trim() == "Close" }.click()
+        root.all("button").first { it.getAttribute("aria-label") == "Close" }.click()
         settle()
         assertEquals(0, root.all("div.drawer").size, "Close left the drawer open")
         assertTrue(Overlay.CARD !in state.overlays, "the overlay is still on the stack")
@@ -211,6 +211,40 @@ class CardSheetLayoutTest {
             link.getAttribute("rel").orEmpty().contains("noopener"),
             "a new tab with no rel=noopener",
         )
+    }
+
+    @Test
+    fun aPrintingSaysWhereTheLinkGoes() = runTest {
+        // A row that is only subtly a link is a link nobody finds.
+        val frame = open(shoppable())
+        settle()
+        val link = frame.all("a.print-line").first()
+        assertTrue(
+            link.textContent.orEmpty().contains("TCGplayer"),
+            "nothing on the row names the shop: ${link.textContent}",
+        )
+        val plain = frame.all("div.print-line").first()
+        assertTrue(
+            !plain.textContent.orEmpty().contains("TCGplayer"),
+            "a printing nobody sells offers a shop anyway",
+        )
+    }
+
+    @Test
+    fun closeIsTheIconEverySinceWindowsHadCorners() = runTest {
+        var closed = 0
+        val frame = document.createElement("div") as HTMLElement
+        document.body!!.appendChild(frame)
+        roots += frame
+        renderComposable(root = frame) { CardSheet(detail()) { closed++ } }
+        settle()
+        val button = frame.all("button[aria-label='Close']").firstOrNull()
+            ?: error("no close control on the card drawer")
+        assertTrue(button.querySelector(".icon-close") != null, "the close button has no icon")
+        assertTrue(button.textContent.orEmpty().isBlank(), "the word is back: '${button.textContent}'")
+        button.click()
+        settle()
+        assertEquals(1, closed)
     }
 
     @Test

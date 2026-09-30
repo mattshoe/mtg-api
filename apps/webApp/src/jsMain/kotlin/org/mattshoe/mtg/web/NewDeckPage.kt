@@ -46,9 +46,11 @@ fun NewDeckDialog(
                 H2 { Text("New deck") }
                 Span(attrs = { classes("spacer") }) {}
                 Button(attrs = {
-                    classes("btn", "sm", "ghost")
+                    classes("btn", "sm", "ghost", "icon-only")
+                    attr("title", "Close")
+                    attr("aria-label", "Close")
                     onClick { onClose() }
-                }) { Text("Close") }
+                }) { CloseIcon() }
             }
 
             Div(attrs = { classes("panel-body", "stack") }) {

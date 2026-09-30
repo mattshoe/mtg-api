@@ -40,9 +40,11 @@ fun CardSheet(card: CardDetail, onShare: () -> Unit = {}, onClose: () -> Unit) {
                 onClick { onShare() }
             }) { ShareIcon() }
             Button(attrs = {
-                classes("btn", "sm", "ghost")
+                classes("btn", "sm", "ghost", "icon-only")
+                attr("title", "Close")
+                attr("aria-label", "Close")
                 onClick { onClose() }
-            }) { Text("Close") }
+            }) { CloseIcon() }
         }
 
         Div(attrs = { classes("panel-body", "stack") }) {
@@ -154,6 +156,12 @@ private fun PrintingLine(p: Printing) {
         }
         Span(attrs = { classes("tag", "mini", "mono") }) { Text("${p.qty}×") }
         Span(attrs = { classes("num", "mono") }) { Text(Prices.money(p.price, dash = "—")) }
+        // Say where it goes. A row that is only subtly a link is a
+        // link nobody finds, so the shop is named rather than hinted
+        // at with an arrow in the corner.
+        if (p.tcgplayer != null) {
+            Span(attrs = { classes("tag", "mini", "buy") }) { Text("TCGplayer ↗") }
+        }
     }
 
     val shop = p.tcgplayer

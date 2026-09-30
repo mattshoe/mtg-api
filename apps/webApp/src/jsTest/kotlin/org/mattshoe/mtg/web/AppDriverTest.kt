@@ -151,7 +151,7 @@ class AppDriverTest {
         )
         (document.querySelectorAll("div.drawer button").let { n ->
             (0 until n.length).mapNotNull { n[it] as? HTMLButtonElement }
-        }.first { it.textContent?.trim() == "Close" }).click()
+        }.first { it.getAttribute("aria-label") == "Close" }).click()
         settle()
         assertEquals(0, drawers(), "Close left the drawer open")
         assertEquals(0, js("window.__backs") as Int, "closing the card walked back through history")
@@ -183,7 +183,7 @@ class AppDriverTest {
 
         (document.querySelectorAll("div.drawer button").let { n ->
             (0 until n.length).mapNotNull { n[it] as? HTMLButtonElement }
-        }.first { it.textContent?.trim() == "Close" }).click()
+        }.first { it.getAttribute("aria-label") == "Close" }).click()
         settle()
         assertEquals(0, drawers(), "Close left the drawer open")
 
@@ -217,7 +217,7 @@ class AppDriverTest {
         waitFor("the drawer") { drawers() == 1 }
         (document.querySelectorAll("div.drawer button").let { n ->
             (0 until n.length).mapNotNull { n[it] as? HTMLButtonElement }
-        }.first { it.textContent?.trim() == "Close" }).click()
+        }.first { it.getAttribute("aria-label") == "Close" }).click()
         settle()
         settle()
         assertEquals(0, drawers(), "Close did nothing on a card opened from a link")
@@ -233,7 +233,7 @@ class AppDriverTest {
             waitFor("round $round: the drawer") { drawers() == 1 }
             (document.querySelectorAll("div.drawer button").let { n ->
                 (0 until n.length).mapNotNull { n[it] as? HTMLButtonElement }
-            }.first { it.textContent?.trim() == "Close" }).click()
+            }.first { it.getAttribute("aria-label") == "Close" }).click()
             settle()
             settle()
             assertEquals(0, drawers(), "round $round: the drawer did not close")
@@ -270,6 +270,45 @@ class AppDriverTest {
         waitFor("the list") { hash() == "#/decks" }
         window.history.forward()
         waitFor("the deck again") { hash() == "#/decks/alela" }
+    }
+
+    @Test
+    fun aDeckOpensAtTheTopOfItself() = runTest {
+        // It opened wherever the list happened to be scrolled to,
+        // because a hash change is not a navigation and the browser
+        // has nothing to restore.
+        val view = mount("#/decks")
+        waitFor("the deck list") { view.all("div.deck-card").isNotEmpty() }
+        val filler = document.createElement("div") as HTMLElement
+        filler.style.height = "4000px"
+        document.body!!.appendChild(filler)
+        roots += filler
+        window.scrollTo(0.0, 1400.0)
+        assertTrue(window.scrollY > 1000, "the page would not scroll, nothing to test")
+
+        view.all("div.deck-card").first().click()
+        waitFor("the deck") { hash() == "#/decks/alela" }
+        settle()
+        assertTrue(window.scrollY < 10, "the deck opened at ${window.scrollY}")
+    }
+
+    @Test
+    fun andBackReturnsToWhereTheListWas() = runTest {
+        val view = mount("#/decks")
+        waitFor("the deck list") { view.all("div.deck-card").isNotEmpty() }
+        val filler = document.createElement("div") as HTMLElement
+        filler.style.height = "4000px"
+        document.body!!.appendChild(filler)
+        roots += filler
+        window.scrollTo(0.0, 1200.0)
+
+        view.all("div.deck-card").first().click()
+        waitFor("the deck") { hash() == "#/decks/alela" }
+        settle()
+        window.history.back()
+        waitFor("the list again") { hash() == "#/decks" }
+        settle()
+        assertTrue(window.scrollY > 1100, "came back to the top instead of to ${1200}")
     }
 
     @Test

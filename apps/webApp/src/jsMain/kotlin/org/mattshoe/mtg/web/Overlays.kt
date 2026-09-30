@@ -80,9 +80,11 @@ fun CheatsheetDialog(onClose: () -> Unit) {
                 H2 { Text("Query box") }
                 Span(attrs = { classes("spacer") }) {}
                 Button(attrs = {
-                    classes("btn", "sm", "ghost")
+                    classes("btn", "sm", "ghost", "icon-only")
+                    attr("title", "Close")
+                    attr("aria-label", "Close")
                     onClick { onClose() }
-                }) { Text("Close") }
+                }) { CloseIcon() }
             }
             Div(attrs = { classes("panel-body", "stack") }) {
                 Div(attrs = { classes("small", "muted") }) { Text(Cheatsheet.PREAMBLE) }

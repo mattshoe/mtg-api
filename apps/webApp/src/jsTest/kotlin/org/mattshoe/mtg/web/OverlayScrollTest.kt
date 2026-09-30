@@ -109,7 +109,7 @@ class OverlayScrollTest {
 
         val close = root.querySelectorAll("button").let { n ->
             (0 until n.length).mapNotNull { n[it] as? org.w3c.dom.HTMLButtonElement }
-        }.first { it.textContent?.trim() == "Close" }
+        }.first { it.getAttribute("aria-label") == "Close" }
         close.click()
         settle()
 
