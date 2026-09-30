@@ -125,10 +125,13 @@ object MtgApp {
             // back skipped straight past it — the card drawer had the
             // same bug for the same reason.
             if (value.isAStepFrom(was)) pushHash(value) else replaceHash(value)
-            // A new screen starts at the top.
+            // A new screen starts at the top, and one you have been
+            // on before opens where you left it — the same rule the
+            // back button follows, so the page's own ← Back and the
+            // browser's do not land in two different places.
             if (value.route.view != was.route.view || value.route.rest != was.route.rest) {
                 Scroll.remember(was.hash())
-                Scroll.top()
+                Scroll.restore(value.hash())
             }
         }
 

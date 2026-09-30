@@ -100,6 +100,7 @@ object Inventory {
                 "aScreenNeverVisitedStartsAtTheTop", "theOffsetIsChasedUntilTheRowsArrive",
                 "aSecondRequestWinsOverTheOneStillChasing",
                 "aDeckOpensAtTheTopOfItself", "andBackReturnsToWhereTheListWas",
+                "thePagesOwnBackButtonLandsWhereTheBrowsersDoes",
             )),
         Feature(Area.CARD, "Share a link to the card or the deck you are looking at",
             "card.js", logic = true, done = true,

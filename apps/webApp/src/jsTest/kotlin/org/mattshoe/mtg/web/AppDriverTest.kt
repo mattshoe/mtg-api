@@ -298,6 +298,30 @@ class AppDriverTest {
     }
 
     @Test
+    fun thePagesOwnBackButtonLandsWhereTheBrowsersDoes() = runTest {
+        // Two ways back that leave you in two different places is the
+        // same bug as no scroll handling at all.
+        val view = mount("#/search")
+        settle()
+        waitFor("the grid") { view.all("div.card").isNotEmpty() }
+        val filler = document.createElement("div") as HTMLElement
+        filler.style.height = "4000px"
+        document.body!!.appendChild(filler)
+        roots += filler
+        window.scrollTo(0.0, 1100.0)
+
+        view.all("div.card").first().click()
+        waitFor("the card page") { cardPages() == 1 }
+        settle()
+        assertTrue(window.scrollY < 10, "the card opened at ${window.scrollY}")
+
+        backButton().click()
+        waitFor("the search again") { cardPages() == 0 }
+        settle()
+        assertTrue(window.scrollY > 1000, "← Back landed at ${window.scrollY}, not where the list was")
+    }
+
+    @Test
     fun aDeckOpenedFromALinkShowsItsCards() = runTest {
         val view = mount("#/decks/alela")
         settle()
