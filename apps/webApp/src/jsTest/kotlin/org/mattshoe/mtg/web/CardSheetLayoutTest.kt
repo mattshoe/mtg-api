@@ -184,14 +184,14 @@ class CardSheetLayoutTest {
         printings = listOf(
             Printing(
                 id = 1,
-                setCode = "akh", setName = "Amonkhet", collectorNumber = "2",
+                setCode = "lcc", setName = "The Lost Caverns of Ixalan Commander", collectorNumber = "124",
                 finish = "nonfoil", qty = 3,
                 scryfallId = "abcdef12-3456-7890-abcd-ef1234567890",
                 price = 5.36, tcgplayer = "https://tcg.example/anointed",
             ),
             Printing(
                 id = 2,
-                setCode = "sld", setName = "Secret Lair", collectorNumber = "17",
+                setCode = "sld", setName = "Secret Lair Drop Series: Artist Series", collectorNumber = "17",
                 finish = "foil", qty = 1,
                 scryfallId = "bbcdef12-3456-7890-abcd-ef1234567890",
             ),
@@ -229,6 +229,36 @@ class CardSheetLayoutTest {
         assertTrue(rows[0].textContent.orEmpty().contains("$5.36"), rows[0].textContent.orEmpty())
         // Nothing known is a dash, never a zero — a card is not free.
         assertTrue(rows[1].textContent.orEmpty().contains("\u2014"), rows[1].textContent.orEmpty())
+    }
+
+    @Test
+    fun aPrintingLineSurvivesAPhone() = runTest {
+        // Long set names are the common case, so on a narrow screen
+        // the name gives way and the price stays put rather than the
+        // row wrapping or the number sliding off the edge.
+        val frame = open(shoppable())
+        settle()
+        if (!Stylesheet.applied()) return@runTest
+        // The drawer is fixed to the viewport, and headless Chrome will
+        // not go below 500 pixels wide, so the panel itself is narrowed
+        // to a phone rather than the window.
+        frame.all("div.drawer").first().style.width = "340px"
+        settle()
+        val rows = frame.all("div.print-line, a.print-line")
+        assertTrue(rows.isNotEmpty(), "no printings to measure")
+        rows.forEach { row ->
+            val r = row.getBoundingClientRect()
+            assertTrue(r.width < 350, "the panel did not narrow: ${r.width}")
+            val tops = row.all("span").map { it.getBoundingClientRect().top }
+            assertTrue((tops.max() - tops.min()) < 4, "a printing wrapped on a phone")
+            val price = row.all("span.num").first().getBoundingClientRect()
+            assertTrue(price.right <= r.right + 1, "the price ran off a narrow row")
+            // The set name is what gives way, and it gives way by being
+            // cut short rather than by pushing the price off the row.
+            val name = row.all("span.t-name").first().getBoundingClientRect()
+            assertTrue(name.height < 22, "the set name wrapped to ${name.height} tall")
+            assertTrue(r.height < 40, "the row grew to ${r.height} tall")
+        }
     }
 
     @Test

@@ -451,6 +451,7 @@ object Inventory {
                 "aPrintingYouCanBuyLinksToTcgplayer",
                 "aPrintingNobodySellsStaysARowRatherThanALinkToNowhere",
                 "aPrintingQuotesThePriceForTheFinishItIsIn", "aPrintingLineStaysOnOneLine",
+                "aPrintingLineSurvivesAPhone",
             )),
         Feature(Area.CARD, "Which decks a card is in, and how many are free", "card.js", logic = true, done = true,
             tests = listOf(
