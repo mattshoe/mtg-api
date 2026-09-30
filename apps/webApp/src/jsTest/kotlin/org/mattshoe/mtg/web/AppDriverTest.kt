@@ -148,14 +148,14 @@ class AppDriverTest {
         waitFor("the grid") { view.all("div.card").isNotEmpty() }
         view.all("div.card").first().click()
         waitFor("the card page") { cardPages() == 1 }
-        assertEquals("#/card/matt:sol+ring", hash())
+        assertEquals("#/card/sol+ring", hash())
     }
 
     @Test
     fun aCardOpenedFromALinkLoadsItself() = runTest {
         // Nothing clicked it, so the route is the only thing that
         // knows a card is wanted.
-        mount("#/card/matt:sol+ring")
+        mount("#/card/sol+ring")
         waitFor("the card page") { cardPages() == 1 }
         waitFor("the card") { document.body!!.textContent.orEmpty().contains("Sol Ring") }
     }
@@ -190,7 +190,7 @@ class AppDriverTest {
     fun aCardOpenedFromALinkStillHasSomewhereToGoBackTo() = runTest {
         // There is no page behind it, so ← Back cannot mean "the page
         // before". It means the library rather than nothing at all.
-        mount("#/card/matt:sol+ring")
+        mount("#/card/sol+ring")
         waitFor("the card page") { cardPages() == 1 }
         backButton().click()
         waitFor("the library") { cardPages() == 0 }
@@ -219,7 +219,7 @@ class AppDriverTest {
         waitFor("the deck") { view.textContent.orEmpty().contains("Sol Ring") }
         view.all("div.deck-line, a.deck-line").first { it.textContent.orEmpty().contains("Sol Ring") }.click()
         waitFor("the card page") { cardPages() == 1 }
-        assertEquals("#/card/matt:sol+ring", hash(), "the link to the card carried the deck")
+        assertEquals("#/card/sol+ring", hash(), "the link to the card carried the deck")
 
         backButton().click()
         waitFor("the deck again") { cardPages() == 0 }

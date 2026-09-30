@@ -69,7 +69,6 @@ private fun Body(card: CardDetail) {
     Div(attrs = { classes("flex-wrap", "small") }) {
         Span(attrs = { classes("tag", "mini") }) { Text("${card.owned} owned") }
         Span(attrs = { classes("tag", "mini") }) { Text("${card.free} free") }
-        Span(attrs = { classes("tag", "mini") }) { Text(card.owner) }
         if (card.overCommitted) {
             // More decks want it than exist. Worth saying out loud.
             Span(attrs = { classes("tag", "bad", "mini") }) {
@@ -78,9 +77,11 @@ private fun Body(card: CardDetail) {
         }
     }
 
+    Owners(card)
+
     H3 { Text("Printings") }
     if (card.printings.isEmpty()) {
-        Div(attrs = { classes("muted", "small") }) { Text("None owned.") }
+        Div(attrs = { classes("muted", "small") }) { Text("Nobody owns one.") }
     } else {
         card.printings.forEach { p -> PrintingLine(p) }
     }
@@ -106,6 +107,7 @@ private fun Body(card: CardDetail) {
         card.usedIn.forEach { use ->
             Div(attrs = { classes("flex-wrap", "small") }) {
                 Span(attrs = { classes("t-name") }) { Text(use.name) }
+                Span(attrs = { classes("tag", "mini") }) { Text(use.owner) }
                 Span(attrs = { classes("tag", "mini") }) { Text("${use.qty}×") }
                 use.role?.let { Span(attrs = { classes("tag", "mini") }) { Text(it) } }
                 // A proxy does not consume a real card, so it must not
@@ -116,6 +118,37 @@ private fun Body(card: CardDetail) {
     }
 
     Rulings(card)
+}
+
+/**
+ * Who owns how many, and how much of it is spare.
+ *
+ * The page was scoped to one person, so the other half of the
+ * collection was simply invisible: Matt's page for a card said "1
+ * owned" while Kayla had three of it sitting in a box. A card
+ * belongs to nobody in particular, so it says who has it instead.
+ */
+@Composable
+private fun Owners(card: CardDetail) {
+    val holdings = card.byOwner
+    if (holdings.isEmpty()) return
+    H3 { Text("Who owns it") }
+    holdings.forEach { h ->
+        Div(attrs = { classes("owner-line") }) {
+            Span(attrs = { classes("t-name") }) { Text(h.owner) }
+            Span(attrs = { classes("tag", "mini", "mono") }) { Text("${h.owned} owned") }
+            Span(attrs = {
+                classes("tag", "mini", "mono")
+                // Nought spare is worth reading differently from
+                // three spare, and it is the number people are
+                // actually here for.
+                if (h.free > 0) classes("ok")
+            }) { Text("${h.free} free") }
+            if (h.short > 0) {
+                Span(attrs = { classes("tag", "mini", "bad", "mono") }) { Text("${h.short} short") }
+            }
+        }
+    }
 }
 
 @Composable
@@ -151,6 +184,9 @@ private fun PrintingLine(p: Printing) {
         Span(attrs = { classes("mono", "set") }) { Text(p.setCode.uppercase()) }
         Span(attrs = { classes("mono", "cn") }) { Text(p.collectorNumber.orEmpty()) }
         Span(attrs = { classes("t-name") }) { Text(p.setName.orEmpty()) }
+        if (p.owner.isNotBlank()) {
+            Span(attrs = { classes("tag", "mini") }) { Text(p.owner) }
+        }
         if (p.finish != "nonfoil") {
             Span(attrs = { classes("tag", "mini") }) { Text(p.finish) }
         }

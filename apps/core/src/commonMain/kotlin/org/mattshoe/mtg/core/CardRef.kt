@@ -3,15 +3,16 @@ package org.mattshoe.mtg.core
 /**
  * Which card a card page is showing.
  *
- * `#/card/matt:lightning+bolt` — the whole address, naming the card
- * and nothing else. It used to ride in the query string of whichever
- * page the drawer was open over, so a link to a card carried the deck
- * somebody happened to have open when they copied it.
+ * `#/card/lightning+bolt` — the card, and nothing about who is
+ * looking at it. It used to carry an owner as well, which gave the
+ * same card two addresses and hid Kayla's copies from Matt's page.
+ * Who owns how many is a section on the page, not part of its
+ * identity.
  */
-data class CardRef(val owner: String, val nameNorm: String) {
+data class CardRef(val nameNorm: String) {
 
-    /** `owner:name_norm`, both halves encoded so a colon in a name is safe. */
-    fun encoded(): String = FilterUrl.encode(owner) + ":" + FilterUrl.encode(nameNorm)
+    /** Encoded, so a name with a slash or a space in it survives the hash. */
+    fun encoded(): String = FilterUrl.encode(nameNorm)
 
     /** The address of this card's page. */
     fun route(): Route = Route(View.CARD, encoded())
@@ -19,14 +20,9 @@ data class CardRef(val owner: String, val nameNorm: String) {
     companion object {
 
         fun parse(raw: String?): CardRef? {
-            val v = raw.orEmpty()
-            val i = v.indexOf(':')
-            if (i <= 0 || i == v.length - 1) return null
-            val owner = FilterUrl.decode(v.substring(0, i))
-            val norm = FilterUrl.decode(v.substring(i + 1))
-            if (owner.isBlank() || norm.isBlank()) return null
-            return CardRef(owner, norm)
+            val norm = FilterUrl.decode(raw.orEmpty()).trim()
+            if (norm.isBlank()) return null
+            return CardRef(norm)
         }
-
     }
 }

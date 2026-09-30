@@ -38,7 +38,7 @@ class CardDetailTest {
             cols,
             rows("""[1,"m3c","MH3","409","nonfoil",2,"abc"]""", """[2,"2x2","2X2","117","foil",1,"def"]"""),
         )
-        val card = CardDetail(name = "Sol Ring", owner = "matt", printings = p)
+        val card = CardDetail(name = "Sol Ring", printings = p)
         assertEquals(2, card.printings.size)
         assertEquals(3, card.owned)
     }
@@ -73,9 +73,75 @@ class CardDetailTest {
     /** The shop link and the price are read out of the database, not fetched. */
     @Test
     fun printingsAskTheFinishAwarePriceView() {
-        val sql = CardQueries.printings("sol ring", "matt").sql
+        val sql = CardQueries.printings("sol ring").sql
         assertTrue("card_prices" in sql, "the nonfoil price would be quoted for a foil")
         assertTrue("tcg_url" in sql, "no shop link comes back at all")
+    }
+
+    // ------------------------------------------------ who owns how many
+
+    private fun copy(owner: String, qty: Int) =
+        Printing(1, "m3c", "MH3", "409", "nonfoil", qty, "abc", owner = owner)
+
+    private fun deck(owner: String, qty: Int, proxy: Boolean = false) =
+        DeckUse("d$owner$qty", "A deck", owner, qty, null, proxy)
+
+    @Test
+    fun aCardSaysWhoOwnsHowManyRatherThanBelongingToOnePerson() {
+        // The page was scoped to one owner, so Kayla's three copies
+        // were invisible on Matt's page and the same card had two
+        // different addresses.
+        val card = CardDetail(
+            printings = listOf(copy("matt", 1), copy("kayla", 3)),
+            usedIn = listOf(deck("kayla", 1)),
+        )
+        assertEquals(listOf("kayla", "matt"), card.byOwner.map { it.owner }, "most copies first")
+        assertEquals(4, card.owned)
+        assertEquals(Holding("kayla", 3, 1), card.byOwner[0])
+        assertEquals(2, card.byOwner[0].free)
+        assertEquals(Holding("matt", 1, 0), card.byOwner[1])
+    }
+
+    @Test
+    fun somebodyWhoOwnsNoneButWantsOneStillGetsALine() {
+        // Nought owned against two wanted is the most useful thing
+        // this page can say, so it must not be the line it drops.
+        val card = CardDetail(printings = listOf(copy("matt", 1)), usedIn = listOf(deck("kayla", 2)))
+        assertEquals(listOf("matt", "kayla"), card.byOwner.map { it.owner })
+        assertEquals(0, card.byOwner[1].owned)
+        assertEquals(2, card.byOwner[1].short)
+        assertEquals(0, card.byOwner[1].free, "free never goes negative")
+    }
+
+    @Test
+    fun aProxyDoesNotEatAnyonesCopy() {
+        val card = CardDetail(printings = listOf(copy("matt", 1)), usedIn = listOf(deck("matt", 1, proxy = true)))
+        assertEquals(1, card.byOwner.single().free)
+        assertEquals(0, card.byOwner.single().short)
+    }
+
+    @Test
+    fun aCardNobodyOwnsAndNobodyWantsHasNoOwners() {
+        assertEquals(emptyList(), CardDetail(name = "Black Lotus").byOwner)
+    }
+
+    @Test
+    fun theOwnersAddUpToWhatTheWholeCollectionHas() {
+        val card = CardDetail(
+            printings = listOf(copy("matt", 2), copy("kayla", 3), copy("matt", 1)),
+            usedIn = listOf(deck("matt", 1), deck("kayla", 2)),
+        )
+        assertEquals(card.owned, card.byOwner.sumOf { it.owned })
+        assertEquals(card.committed, card.byOwner.sumOf { it.committed })
+    }
+
+    /** The card is the card. Its queries must not be scoped to one person. */
+    @Test
+    fun theCardQueriesAskAboutEverybody() {
+        val printings = CardQueries.printings("sol ring")
+        assertEquals(listOf<Any?>("sol ring"), printings.params, "still filtered by owner")
+        assertTrue("c.owner" in printings.sql, "no owner comes back on a printing")
+        assertEquals(listOf<Any?>("sol ring"), CardQueries.usedIn("sol ring").params)
     }
 
     /** A proxy in a deck does not consume a real card. */
@@ -110,9 +176,9 @@ class CardDetailTest {
     }
 
     @Test
-    fun theQueriesBindNameAndOwner() {
-        assertEquals(listOf<Any?>("sol ring", "matt"), CardQueries.printings("sol ring", "matt").params)
-        assertEquals(listOf<Any?>("sol ring", "matt"), CardQueries.usedIn("sol ring", "matt").params)
+    fun theQueriesBindTheNameAndNothingElse() {
+        assertEquals(listOf<Any?>("sol ring"), CardQueries.printings("sol ring").params)
+        assertEquals(listOf<Any?>("sol ring"), CardQueries.usedIn("sol ring").params)
     }
 }
 

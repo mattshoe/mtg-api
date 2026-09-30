@@ -294,8 +294,8 @@ object Inventory {
         Feature(Area.CARD, "A card is its own page, at its own address",
             "app.js", logic = true, done = true,
             tests = listOf(
-                "aCardGoesIntoTheAddressAndComesBackOut", "theSeparatorIsTheOnlyLiteralColon",
-                "aColonInTheNameDoesNotSplitTheReferenceInTwo", "anAccentSurvivesTheTrip",
+                "aCardGoesIntoTheAddressAndComesBackOut", "aColonInTheNameIsEncodedNotLeftInThePath",
+                "aSlashInTheNameSurvivesThePath", "anAccentSurvivesTheTrip",
                 "rubbishIsNoCardRatherThanAWrongOne", "aCardIsItsOwnAddressAndNothingElses",
                 "aLinkToACardDoesNotCarryTheDeckItWasOpenedFrom",
                 "aLinkToACardDoesNotCarryTheSearchEither",
@@ -480,7 +480,7 @@ object Inventory {
         Feature(Area.CARD, "Card detail drawer with art, prices, legalities, rulings", "card.js", logic = true, done = true,
             tests = listOf(
                 "artIsDerivedFromTheIdAlreadyOnTheRow", "aMissingOrShortIdGivesNoUrlRatherThanABrokenOne",
-                "printingsDecodeAndSumToWhatIsOwned", "theQueriesBindNameAndOwner",
+                "printingsDecodeAndSumToWhatIsOwned", "theQueriesBindTheNameAndNothingElse",
                 "theCardSheetSaysWhatIsOwnedAndWhatIsFree", "theArtComesOffScryfallByTheIdOnTheRow",
                 "theDrawerAsksForLegalitiesAndRulings", "aLegalityKnowsWhetherItIsOneAndReadsAsEnglish", "theDrawerDecodesWhatThoseQueriesReturn",
             )),
@@ -496,7 +496,13 @@ object Inventory {
         Feature(Area.CARD, "Which decks a card is in, and how many are free", "card.js", logic = true, done = true,
             tests = listOf(
                 "proxiesDoNotCountAgainstWhatIsFree", "moreDecksThanCopiesIsFlaggedAndFreeNeverGoesNegative",
-                "theQueriesBindNameAndOwner", "theCardSheetSaysWhatIsOwnedAndWhatIsFree", "aProxyDoesNotEatACopy",
+                "theQueriesBindTheNameAndNothingElse", "theCardSheetSaysWhatIsOwnedAndWhatIsFree", "aProxyDoesNotEatACopy",
+                "aCardSaysWhoOwnsHowManyRatherThanBelongingToOnePerson",
+                "somebodyWhoOwnsNoneButWantsOneStillGetsALine", "aProxyDoesNotEatAnyonesCopy",
+                "aCardNobodyOwnsAndNobodyWantsHasNoOwners",
+                "theOwnersAddUpToWhatTheWholeCollectionHas", "theCardQueriesAskAboutEverybody", "thePageSaysWhoOwnsHowMany",
+                "aPrintingSaysWhoseCopyItIs", "aDeckRowSaysWhoseDeckItIs",
+                "theOwnerLinesStayOnOneLineOnAPhone",
                 "aCardWithNoSpareCopySaysWhereTheyWent",
             )),
 

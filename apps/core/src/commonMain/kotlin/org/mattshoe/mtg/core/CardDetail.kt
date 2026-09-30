@@ -20,6 +20,8 @@ data class Printing(
     val finish: String,
     val qty: Int,
     val scryfallId: String?,
+    /** Whose copy this is. A card is not one person's. */
+    val owner: String = "",
     /**
      * Both faces, as the card is actually named. Last and defaulted
      * because every caller writes these positionally and the name is
@@ -53,9 +55,24 @@ data class Legality(val format: String, val status: String) {
 
 data class Ruling(val date: String, val text: String)
 
+/**
+ * What one person has of a card, and how much of it is spare.
+ *
+ * The page used to be scoped to a single owner — `#/card/matt:sol+ring`
+ * — which meant Kayla's copies were invisible and the same card had
+ * two different addresses. The card is the card; who owns how many is
+ * something it says, not something it is.
+ */
+data class Holding(val owner: String, val owned: Int, val committed: Int) {
+    /** Copies no deck of theirs has claimed. Never negative. */
+    val free: Int get() = (owned - committed).coerceAtLeast(0)
+
+    /** More of their decks want it than they own. */
+    val short: Int get() = (committed - owned).coerceAtLeast(0)
+}
+
 data class CardDetail(
     val name: String = "",
-    val owner: String = "",
     /**
      * What the queries are keyed by. Held rather than derived: the
      * display name lowercased is not `name_norm` for anything with an
@@ -78,6 +95,27 @@ data class CardDetail(
 
     /** More decks want it than exist. Worth saying out loud. */
     val overCommitted: Boolean get() = committed > owned
+
+    /**
+     * Who has how many, most copies first.
+     *
+     * Anyone who owns none of it but has a deck asking for it still
+     * gets a line: nought owned against two wanted is the most
+     * useful thing this page can tell you.
+     */
+    val byOwner: List<Holding>
+        get() {
+            val owners = (printings.map { it.owner } + usedIn.map { it.owner })
+                .filter { it.isNotBlank() }
+                .distinct()
+            return owners.map { who ->
+                Holding(
+                    owner = who,
+                    owned = printings.filter { it.owner == who }.sumOf { it.qty },
+                    committed = usedIn.filter { it.owner == who && !it.isProxy }.sumOf { it.qty },
+                )
+            }.sortedWith(compareByDescending<Holding> { it.owned }.thenBy { it.owner })
+        }
 
     fun loading() = copy(busy = true, error = null)
     fun failed(message: String) = copy(busy = false, error = message)
@@ -164,27 +202,36 @@ object CardQueries {
         }
     }
 
-    fun printings(nameNorm: String, owner: String) = Sql(
-        // `card_prices` rather than `prices`: it already works out
-        // which of usd, usd_foil and usd_etched applies to the
-        // finish this copy is in, and it carries the shop link.
-        """SELECT c.id, c.name, c.face2, c.setcode, c.set_name, c.collector_number,
+    /**
+     * Every printing of it anybody owns.
+     *
+     * Not scoped to one person: the page shows who has how many, so
+     * filtering by owner here would be asking the question twice and
+     * answering it wrong the second time.
+     *
+     * `card_prices` rather than `prices`: it already works out which
+     * of usd, usd_foil and usd_etched applies to the finish this copy
+     * is in, and it carries the shop link.
+     */
+    fun printings(nameNorm: String) = Sql(
+        """SELECT c.id, c.name, c.face2, c.owner, c.setcode, c.set_name, c.collector_number,
                   c.finish, c.qty, c.scryfall_id,
                   cp.price, cp.tcg_url
              FROM cards c
              LEFT JOIN card_prices cp ON cp.card_id = c.id
-            WHERE c.name_norm = ? AND c.owner = ?
-            ORDER BY c.released_at DESC, c.setcode, c.collector_number""",
-        listOf(nameNorm, owner),
+            WHERE c.name_norm = ?
+            ORDER BY c.owner, c.released_at DESC, c.setcode, c.collector_number""",
+        listOf(nameNorm),
     )
 
-    fun usedIn(nameNorm: String, owner: String) = Sql(
+    /** Every deck that wants it, whoever built it. */
+    fun usedIn(nameNorm: String) = Sql(
         """SELECT d.slug, d.name, d.owner, d.is_proxy, dc.qty, dc.role
              FROM deck_cards dc
              JOIN decks d ON d.id = dc.deck_id
-            WHERE dc.name_norm = ? AND d.owner = ?
-            ORDER BY d.name""",
-        listOf(nameNorm, owner),
+            WHERE dc.name_norm = ?
+            ORDER BY d.owner, d.name""",
+        listOf(nameNorm),
     )
 
     private fun JsonArray.at(cols: Map<String, Int>, n: String): String? {
@@ -214,6 +261,7 @@ object CardQueries {
                 finish = row.at(at, "finish") ?: "nonfoil",
                 qty = row.at(at, "qty")?.toIntOrNull() ?: 0,
                 scryfallId = row.at(at, "scryfall_id"),
+                owner = row.at(at, "owner").orEmpty(),
                 price = row.at(at, "price")?.toDoubleOrNull(),
                 tcgplayer = row.at(at, "tcg_url"),
             )

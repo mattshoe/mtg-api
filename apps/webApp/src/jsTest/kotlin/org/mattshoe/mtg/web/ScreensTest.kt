@@ -238,8 +238,9 @@ class ScreensTest {
     fun theCardSheetSaysWhatIsOwnedAndWhatIsFree() = runTest {
         val detail = CardDetail(
             name = "Sol Ring",
-            owner = "matt",
-            printings = listOf(Printing(1, "m3c", "Modern Horizons 3", "409", "nonfoil", 3, null)),
+            printings = listOf(
+                Printing(1, "m3c", "Modern Horizons 3", "409", "nonfoil", 3, null, owner = "matt"),
+            ),
             usedIn = listOf(DeckUse("alela", "Alela", "matt", 1, "ramp", false)),
         )
         val root = mount { CardPage(detail) }
@@ -255,8 +256,7 @@ class ScreensTest {
     fun aProxyDoesNotEatACopy() = runTest {
         val detail = CardDetail(
             name = "Sol Ring",
-            owner = "matt",
-            printings = listOf(Printing(1, "m3c", null, "409", "nonfoil", 1, null)),
+            printings = listOf(Printing(1, "m3c", null, "409", "nonfoil", 1, null, owner = "matt")),
             usedIn = listOf(DeckUse("p", "Proxy deck", "matt", 1, null, true)),
         )
         val root = mount { CardPage(detail) }

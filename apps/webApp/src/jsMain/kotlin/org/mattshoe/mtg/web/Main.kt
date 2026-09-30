@@ -387,17 +387,13 @@ object MtgApp {
             // sent, a reload, the back button — rather than by a tap
             // that already knew the card's real name.
             View.CARD -> s.cardRef?.let { ref ->
-                if (app.card?.nameNorm != ref.nameNorm || app.card?.owner != ref.owner) {
+                if (app.card?.nameNorm != ref.nameNorm) {
                     app = app.copy(
-                        card = CardDetail(
-                            name = ref.nameNorm,
-                            owner = ref.owner,
-                            nameNorm = ref.nameNorm,
-                        ).loading(),
+                        card = CardDetail(name = ref.nameNorm, nameNorm = ref.nameNorm).loading(),
                     )
                 }
                 val label = app.card?.name ?: ref.nameNorm
-                intoPage(View.CARD) { loadCard(ref.nameNorm, ref.owner, label) }
+                intoPage(View.CARD) { loadCard(ref.nameNorm, label) }
             } ?: Unit
 
             else -> Unit
@@ -533,18 +529,20 @@ object MtgApp {
      * accent or an em dash in it. A deck list has the real column.
      */
     private fun openNamed(name: String, nameNorm: String, owner: String) {
-        app = app.openCard(CardRef(owner, nameNorm), name)
-        work { loadCard(nameNorm, owner, name) }
+        // The owner is what the row was found under, not part of the
+        // card: the page shows every owner's copies.
+        app = app.openCard(CardRef(nameNorm), name)
+        work { loadCard(nameNorm, name) }
     }
 
     private fun openFound(found: Found) {
         val norm = found.name.lowercase()
-        app = app.closing(Overlay.PALETTE).openCard(CardRef(found.owner, norm), found.name)
-        work { loadCard(norm, found.owner, found.name) }
+        app = app.closing(Overlay.PALETTE).openCard(CardRef(norm), found.name)
+        work { loadCard(norm, found.name) }
     }
 
-    private suspend fun loadCard(nameNorm: String, owner: String, label: String): AppState {
-        val (printings, uses, legal, rules) = Load.card(nameNorm, owner)
+    private suspend fun loadCard(nameNorm: String, label: String): AppState {
+        val (printings, uses, legal, rules) = Load.card(nameNorm)
         val p = api.query(printings)
         val u = api.query(uses)
         val l = api.query(legal)
@@ -553,7 +551,6 @@ object MtgApp {
         return app.copy(
             card = CardDetail(
                 name = label,
-                owner = owner,
                 nameNorm = nameNorm,
                 printings = owned,
                 usedIn = CardQueries.decodeUses(u.cols, u.rows),

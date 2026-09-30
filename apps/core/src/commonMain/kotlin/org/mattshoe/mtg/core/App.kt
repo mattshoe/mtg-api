@@ -94,7 +94,7 @@ data class AppState(
      */
     fun openCard(ref: CardRef, name: String = ref.nameNorm): AppState =
         navigate(Route(View.CARD, ref.encoded())).copy(
-            card = CardDetail(name = name, owner = ref.owner, nameNorm = ref.nameNorm).loading(),
+            card = CardDetail(name = name, nameNorm = ref.nameNorm).loading(),
             from = route.takeIf { it.view != View.CARD },
         )
 
@@ -273,9 +273,9 @@ object Load {
     fun stats(scope: StatsScope): Sql = StatsQueries.totals(scope)
 
     /** Everything the drawer shows: printings, decks, legality, rulings. */
-    fun card(nameNorm: String, owner: String): List<Sql> = listOf(
-        CardQueries.printings(nameNorm, owner),
-        CardQueries.usedIn(nameNorm, owner),
+    fun card(nameNorm: String): List<Sql> = listOf(
+        CardQueries.printings(nameNorm),
+        CardQueries.usedIn(nameNorm),
         CardQueries.legalities(nameNorm),
         CardQueries.rulings(nameNorm),
     )

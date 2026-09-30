@@ -9,7 +9,7 @@ class ShareTest {
 
     private fun openCard() = AppState()
         .copy(library = Library(Filters(q = "sol")))
-        .openCard(CardRef("matt", "sol ring"), "Sol Ring")
+        .openCard(CardRef("sol ring"), "Sol Ring")
 
     @Test
     fun aLinkIsTheWholeAddressNotJustTheFragment() {
@@ -23,7 +23,7 @@ class ShareTest {
         // It used to be the card appended to whatever page the drawer
         // was open over, so what arrived was somebody else's search
         // or somebody else's deck with a card on top of it.
-        assertEquals("https://mtg.mattshoe.org/#/card/matt:sol+ring", Share.link(openCard()))
+        assertEquals("https://mtg.mattshoe.org/#/card/sol+ring", Share.link(openCard()))
     }
 
     @Test

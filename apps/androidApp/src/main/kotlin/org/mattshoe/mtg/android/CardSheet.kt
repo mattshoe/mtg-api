@@ -55,7 +55,23 @@ private fun Body(card: CardDetail) {
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("${card.owned} owned", fontSize = 13.sp)
         Text("${card.free} free", fontSize = 13.sp)
-        Text(card.owner, fontSize = 13.sp)
+    }
+
+    // Who has how many. The page used to be one person's, which made
+    // the other half of the collection invisible.
+    if (card.byOwner.isNotEmpty()) {
+        Text("Who owns it", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+        card.byOwner.forEach { h ->
+            Text(
+                listOfNotNull(
+                    h.owner,
+                    "${h.owned} owned",
+                    "${h.free} free",
+                    if (h.short > 0) "${h.short} short" else null,
+                ).joinToString(" · "),
+                fontSize = 13.sp,
+            )
+        }
     }
     if (card.overCommitted) {
         Text(

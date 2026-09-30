@@ -15,28 +15,29 @@ import kotlin.test.assertTrue
  * destination now: `#/card/matt:sol+ring`, naming the card and
  * nothing else.
  *
+ * It does not name an owner either. It used to, which gave the same
+ * card two addresses and hid Kayla's copies from Matt's page.
+ *
  * These are the cases that make the encoding worth having: a name
- * with a colon in it, one with a space, and one with an accent.
+ * with a colon in it, one with a slash, and one with an accent.
  */
 class CardRefTest {
 
     @Test
     fun aCardGoesIntoTheAddressAndComesBackOut() {
-        val ref = CardRef("matt", "sol ring")
+        val ref = CardRef("sol ring")
         assertEquals(ref, CardRef.parse(ref.encoded()))
     }
 
     @Test
-    fun theSeparatorIsTheOnlyLiteralColon() {
-        // So `indexOf(':')` finds the separator and not a colon that
-        // is part of the name.
-        val ref = CardRef("matt", "nahiri: the lithomancer")
-        assertEquals("matt:nahiri%3A+the+lithomancer", ref.encoded())
+    fun aColonInTheNameIsEncodedNotLeftInThePath() {
+        val ref = CardRef("nahiri: the lithomancer")
+        assertEquals("nahiri%3A+the+lithomancer", ref.encoded())
     }
 
     @Test
-    fun aColonInTheNameDoesNotSplitTheReferenceInTwo() {
-        val ref = CardRef("kayla", "nahiri: the lithomancer // x")
+    fun aSlashInTheNameSurvivesThePath() {
+        val ref = CardRef("nahiri: the lithomancer // x")
         val round = CardRef.parse(ref.encoded())
         assertEquals(ref, round)
         assertEquals("nahiri: the lithomancer // x", round?.nameNorm)
@@ -44,7 +45,7 @@ class CardRefTest {
 
     @Test
     fun anAccentSurvivesTheTrip() {
-        val ref = CardRef("matt", "jötun grunt")
+        val ref = CardRef("jötun grunt")
         assertEquals(ref, CardRef.parse(ref.encoded()))
     }
 
@@ -52,20 +53,18 @@ class CardRefTest {
     fun rubbishIsNoCardRatherThanAWrongOne() {
         assertNull(CardRef.parse(null))
         assertNull(CardRef.parse(""))
-        assertNull(CardRef.parse("noseparator"))
-        assertNull(CardRef.parse(":no owner"))
-        assertNull(CardRef.parse("matt:"))
+        assertNull(CardRef.parse("   "))
     }
 
     // ------------------------------------------------- as a destination
 
-    private val ref = CardRef("matt", "sol ring")
+    private val ref = CardRef("sol ring")
 
     private fun opened(from: AppState = AppState()) = from.openCard(ref, "Sol Ring")
 
     @Test
     fun aCardIsItsOwnAddressAndNothingElses() {
-        assertEquals("#/card/matt:sol+ring", opened().hash())
+        assertEquals("#/card/sol+ring", opened().hash())
         assertEquals(ref, CardRef.parse(Route.parse(opened().hash()).rest))
     }
 
@@ -73,14 +72,14 @@ class CardRefTest {
     fun aLinkToACardDoesNotCarryTheDeckItWasOpenedFrom() {
         // The whole reason it moved out of the query string.
         val fromADeck = opened(AppState().navigate(Route(View.DECKS, "alela")))
-        assertEquals("#/card/matt:sol+ring", fromADeck.hash())
+        assertEquals("#/card/sol+ring", fromADeck.hash())
         assertTrue("alela" !in fromADeck.hash(), fromADeck.hash())
     }
 
     @Test
     fun aLinkToACardDoesNotCarryTheSearchEither() {
         val fromASearch = opened(AppState().copy(library = Library(Filters(q = "sol", colors = listOf("C")))))
-        assertEquals("#/card/matt:sol+ring", fromASearch.hash())
+        assertEquals("#/card/sol+ring", fromASearch.hash())
     }
 
     @Test
@@ -109,7 +108,7 @@ class CardRefTest {
         // Tapping a card in the "in decks" list is going somewhere,
         // so back comes back to the card you were reading.
         val first = opened()
-        val second = first.openCard(CardRef("matt", "arcane signet"), "Arcane Signet")
+        val second = first.openCard(CardRef("arcane signet"), "Arcane Signet")
         assertTrue(second.isAStepFrom(first))
     }
 

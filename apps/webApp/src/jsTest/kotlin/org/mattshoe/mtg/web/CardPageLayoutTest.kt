@@ -64,7 +64,6 @@ class CardPageLayoutTest {
 
     private fun detail() = CardDetail(
         name = "Anointed Procession",
-        owner = "matt",
         printings = listOf(
             Printing(
                 id = 1,
@@ -124,7 +123,7 @@ class CardPageLayoutTest {
         document.body!!.appendChild(root)
         roots += root
         var state = AppState().navigate(org.mattshoe.mtg.core.Route(org.mattshoe.mtg.core.View.DECKS, "alela"))
-            .openCard(org.mattshoe.mtg.core.CardRef("matt", "sol ring"), "Sol Ring")
+            .openCard(org.mattshoe.mtg.core.CardRef("sol ring"), "Sol Ring")
         renderComposable(root = root) {
             var s by androidx.compose.runtime.remember {
                 androidx.compose.runtime.mutableStateOf(state)
@@ -137,6 +136,64 @@ class CardPageLayoutTest {
         settle()
         assertEquals(org.mattshoe.mtg.core.View.DECKS, state.view, "back went somewhere else")
         assertEquals("alela", state.route.rest)
+    }
+
+    /** Two people, one card, the numbers that differ between them. */
+    private fun shared() = CardDetail(
+        name = "Sol Ring",
+        nameNorm = "sol ring",
+        printings = listOf(
+            Printing(1, "lcc", "The Lost Caverns of Ixalan Commander", "4", "nonfoil", 10, null, owner = "kayla"),
+            Printing(2, "m3c", "Modern Horizons 3", "409", "nonfoil", 24, null, owner = "matt"),
+        ),
+        usedIn = listOf(
+            org.mattshoe.mtg.core.DeckUse("a", "Alela", "kayla", 5, null, false),
+            org.mattshoe.mtg.core.DeckUse("b", "Bello", "matt", 24, null, false),
+        ),
+    )
+
+    @Test
+    fun thePageSaysWhoOwnsHowMany() = runTest {
+        // It used to be one person's page, so the other half of the
+        // collection was simply not there.
+        val frame = open(shared())
+        settle()
+        val rows = frame.all("div.owner-line")
+        assertEquals(2, rows.size, "the page shows ${rows.size} owners")
+        val matt = rows.first { it.textContent.orEmpty().contains("matt") }.textContent.orEmpty()
+        val kayla = rows.first { it.textContent.orEmpty().contains("kayla") }.textContent.orEmpty()
+        assertTrue("24 owned" in matt && "0 free" in matt, matt)
+        assertTrue("10 owned" in kayla && "5 free" in kayla, kayla)
+    }
+
+    @Test
+    fun aPrintingSaysWhoseCopyItIs() = runTest {
+        val frame = open(shared())
+        settle()
+        val lines = frame.all("div.print-line, a.print-line").map { it.textContent.orEmpty() }
+        assertTrue(lines.any { "kayla" in it }, lines.toString())
+        assertTrue(lines.any { "matt" in it }, lines.toString())
+    }
+
+    @Test
+    fun aDeckRowSaysWhoseDeckItIs() = runTest {
+        val frame = open(shared())
+        settle()
+        val text = frame.all("div.card-page").first().textContent.orEmpty()
+        assertTrue("Alela" in text && "Bello" in text, text)
+    }
+
+    @Test
+    fun theOwnerLinesStayOnOneLineOnAPhone() = runTest {
+        val frame = open(shared())
+        settle()
+        if (!Stylesheet.applied()) return@runTest
+        frame.all("div.card-page").first().style.width = "340px"
+        settle()
+        frame.all("div.owner-line").forEach { row ->
+            val tops = row.all("span").map { it.getBoundingClientRect().top }
+            assertTrue((tops.max() - tops.min()) < 4, "an owner wrapped on a phone")
+        }
     }
 
     @Test
