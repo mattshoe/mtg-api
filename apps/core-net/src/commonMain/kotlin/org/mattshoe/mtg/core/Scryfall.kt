@@ -135,7 +135,11 @@ class Scryfall internal constructor(private val http: HttpClient) {
                     power = card.power,
                     toughness = card.toughness,
                     colors = card.colors.sorted().joinToString(""),
-                    tcgplayer = card.purchase?.tcgplayer?.takeIf { it.isNotBlank() },
+                    // A token's name is the name of whatever makes
+                    // it, so an unnarrowed search lists the card too.
+                    tcgplayer = card.purchase?.tcgplayer
+                        ?.takeIf { it.isNotBlank() }
+                        ?.let { Tcg.tokensOnly(it) },
                     madeBy = refs[card.id] ?: 1,
                 )
                 val had = byIdentity[token.identity]

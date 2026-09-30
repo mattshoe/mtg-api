@@ -132,4 +132,61 @@ class ExportTest {
     fun theFilenameCarriesTheDate() {
         assertEquals("mtg-decklist-2026-09-28.txt", Export.filename("2026-09-28"))
     }
+
+    // -------------------------------------------------- a whole deck
+
+    private fun inDeck(name: String, qty: Int = 1, role: String? = null) =
+        DeckCard(name = name, qty = qty, role = role, owned = qty)
+
+    @Test
+    fun aDeckLeadsWithItsCommander() {
+        // Every builder reads the commander off the top, set apart
+        // from the rest by a blank line.
+        assertEquals(
+            "1 Alela, Cunning Conqueror\n\n1 Opt\n3 Sol Ring",
+            Export.deck(
+                listOf(
+                    inDeck("Sol Ring", 3),
+                    inDeck("Alela, Cunning Conqueror", role = "commander"),
+                    inDeck("Opt"),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun aDeckWithNoCommanderHasNoBlankLineAtTheTop() {
+        assertEquals("1 Opt\n3 Sol Ring", Export.deck(listOf(inDeck("Sol Ring", 3), inDeck("Opt"))))
+    }
+
+    @Test
+    fun twoCommandersBothLead() {
+        val out = Export.deck(
+            listOf(
+                inDeck("Sol Ring"),
+                inDeck("Zndrsplt, Eye of Wisdom", role = "commander"),
+                inDeck("Okaun, Eye of Chaos", role = "commander"),
+            ),
+        )
+        assertEquals("1 Okaun, Eye of Chaos\n1 Zndrsplt, Eye of Wisdom\n\n1 Sol Ring", out)
+    }
+
+    @Test
+    fun aDeckExportPastesBackIntoTheEntryBox() {
+        // Quantity first, one card a line, nothing else on the line —
+        // the form the mass entry box here already parses.
+        Export.deck(listOf(inDeck("Sol Ring", 3), inDeck("Alela", role = "commander")))
+            .lines().filter { it.isNotBlank() }
+            .forEach { assertTrue(Regex("""^\d+ \S.*$""").matches(it), "unparseable line: '$it'") }
+    }
+
+    @Test
+    fun anEmptyDeckExportsNothing() {
+        assertEquals("", Export.deck(emptyList()))
+    }
+
+    @Test
+    fun theDeckFilenameIsTheDeckAndTheDate() {
+        assertEquals("alela-2026-09-30.txt", Export.deckFilename("alela", "2026-09-30"))
+    }
 }

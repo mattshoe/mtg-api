@@ -20,6 +20,7 @@ import org.mattshoe.mtg.core.ExportTo
 import org.mattshoe.mtg.core.Found
 import org.mattshoe.mtg.core.HistoryEntry
 import org.mattshoe.mtg.core.Overlay
+import org.mattshoe.mtg.core.ShareWhat
 import org.mattshoe.mtg.core.Owner
 import org.mattshoe.mtg.core.Route
 import org.mattshoe.mtg.core.View
@@ -51,6 +52,8 @@ fun AppShell(
     onOpenNamed: (String, String, String) -> Unit = { _, _, _ -> },
     /** Copy a link to whatever is on screen. */
     onShare: () -> Unit = {},
+    /** The deck has four ways to hand itself over rather than one. */
+    onShareDeck: (ShareWhat, ExportTo) -> Unit = { _, _ -> },
     onFind: (String) -> Unit = {},
     onLookup: (String) -> Unit = {},
     onFiles: (List<File>) -> Unit = {},
@@ -104,7 +107,7 @@ fun AppShell(
             onEdit = { onEditDeck(it.slug) },
             onDisassemble = { onAskDisassemble(it.slug) },
             onOpenCard = { card, owner -> onOpenNamed(card.name, card.nameNorm, owner) },
-            onShare = onShare,
+            onShare = onShareDeck,
         )
 
         View.STATS -> StatsPage(state.stats) { owner: Owner? ->

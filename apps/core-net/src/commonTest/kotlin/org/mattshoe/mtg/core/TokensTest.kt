@@ -56,7 +56,7 @@ class TokensTest {
         {"data":[
           {"id":"t-white-bird","name":"Bird","type_line":"Token Creature — Bird",
            "power":"1","toughness":"1","colors":["W"],
-           "purchase_uris":{"tcgplayer":"https://tcg.example/white-bird"}},
+           "purchase_uris":{"tcgplayer":"https://tcg.example/product/8891"}},
           {"id":"t-green-bird","name":"Bird","type_line":"Token Creature — Bird",
            "power":"2","toughness":"2","colors":["G"]}
         ]}
@@ -111,7 +111,23 @@ class TokensTest {
     @Test
     fun aTokenCarriesWhereToBuyOne() = runTest {
         val found = scryfall(twoCardsMakingBirds, theBirdsThemselves).tokens(listOf("c1", "c2"))
-        assertEquals("https://tcg.example/white-bird", found.first { it.colors == "W" }.tcgplayer)
+        assertEquals("https://tcg.example/product/8891", found.first { it.colors == "W" }.tcgplayer)
+    }
+
+    @Test
+    fun aSearchLinkIsNarrowedToTokensBeforeItLeaves() = runTest {
+        // Scryfall falls back to a name search when TCGplayer has no
+        // matched product, and a token's name is the name of whatever
+        // makes it — so the search listed the card as well.
+        val cards = """{"data":[{"id":"c1","name":"A","all_parts":[
+            {"id":"t1","name":"Sculpture Treasure","component":"token","type_line":"Token Artifact"}]}]}"""
+        val tokens = """{"data":[{"id":"t1","name":"Sculpture Treasure","type_line":"Token Artifact",
+            "purchase_uris":{"tcgplayer":"https://tcg.example/search/magic/product?q=Sculpture+Treasure"}}]}"""
+        val found = scryfall(cards, tokens).tokens(listOf("c1"))
+        assertEquals(
+            "https://tcg.example/search/magic/product?q=Sculpture+Treasure&Rarity=Token",
+            found.single().tcgplayer,
+        )
     }
 
     @Test

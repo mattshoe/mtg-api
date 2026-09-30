@@ -1,6 +1,10 @@
 package org.mattshoe.mtg.web
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import org.jetbrains.compose.web.attributes.ATarget
 import org.jetbrains.compose.web.attributes.target
 import org.jetbrains.compose.web.dom.A
@@ -16,6 +20,8 @@ import org.mattshoe.mtg.core.Deck
 import org.mattshoe.mtg.core.DeckAnalysis
 import org.mattshoe.mtg.core.DeckCard
 import org.mattshoe.mtg.core.DecksState
+import org.mattshoe.mtg.core.ExportTo
+import org.mattshoe.mtg.core.ShareWhat
 import org.mattshoe.mtg.core.TokenCard
 
 /** Decks, on the web. Sibling of `DecksScreen`. */
@@ -29,7 +35,7 @@ fun DecksPage(
     onEdit: (Deck) -> Unit = {},
     onDisassemble: (Deck) -> Unit = {},
     onOpenCard: (DeckCard, String) -> Unit = { _, _ -> },
-    onShare: () -> Unit = {},
+    onShare: (ShareWhat, ExportTo) -> Unit = { _, _ -> },
 ) {
     Div(attrs = { classes("wrap") }) {
         val open = state.open
@@ -71,12 +77,7 @@ fun DecksPage(
                     onClick { onClose() }
                 }) { Text("← Decks") }
                 Span(attrs = { classes("spacer") }) {}
-                Button(attrs = {
-                    classes("btn", "sm", "ghost", "icon-only")
-                    attr("title", "Copy a link to this deck")
-                    attr("aria-label", "Share this deck")
-                    onClick { onShare() }
-                }) { ShareIcon() }
+                ShareMenu(onShare)
                 if (admin) {
                     // Both of these move real cards, and both show the
                     // server's own dry run before they are allowed to.
@@ -288,5 +289,52 @@ private fun TokenLine(token: TokenCard) {
             attr("rel", "noopener noreferrer")
             attr("title", "Buy ${token.name} on TCGplayer")
         }) { body() }
+    }
+}
+
+/**
+ * Share, with something to say about what.
+ *
+ * A deck is worth handing over two ways: as a link to this page, and
+ * as the list itself for somebody to paste into their own builder.
+ * Each can go to the clipboard or come down as a file, so the four
+ * are a menu rather than four buttons crowding the header.
+ */
+@Composable
+private fun ShareMenu(onShare: (ShareWhat, ExportTo) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+
+    Div(attrs = { classes("menu-anchor") }) {
+        Button(attrs = {
+            classes("btn", "sm", "ghost", "icon-only")
+            attr("title", "Share this deck")
+            attr("aria-label", "Share this deck")
+            attr("aria-expanded", open.toString())
+            onClick { open = !open }
+        }) { ShareIcon() }
+
+        if (open) {
+            // A press anywhere else closes it. A backdrop rather than
+            // a document listener, so there is nothing to unregister.
+            Div(attrs = {
+                classes("nav-backdrop")
+                onClick { open = false }
+            }) {}
+        }
+
+        Div(attrs = {
+            classes("app-menu", "right")
+            if (open) classes("open")
+        }) {
+            ShareWhat.entries.forEach { what ->
+                Div(attrs = { classes("app-menu-group") }) { Text(what.label) }
+                ExportTo.entries.forEach { where ->
+                    Button(attrs = {
+                        classes("app-tab")
+                        onClick { open = false; onShare(what, where) }
+                    }) { Text(where.label) }
+                }
+            }
+        }
     }
 }

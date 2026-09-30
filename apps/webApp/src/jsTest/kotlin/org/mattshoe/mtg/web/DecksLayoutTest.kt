@@ -4,6 +4,8 @@ import kotlinx.browser.document
 import kotlinx.browser.window
 import kotlinx.coroutines.await
 import kotlinx.coroutines.test.runTest
+import org.mattshoe.mtg.core.ExportTo
+import org.mattshoe.mtg.core.ShareWhat
 import org.jetbrains.compose.web.renderComposable
 import org.mattshoe.mtg.core.Deck
 import org.mattshoe.mtg.core.DeckCard
@@ -273,8 +275,7 @@ class DecksLayoutTest {
 
     @Test
     fun anOpenDeckOffersAShare() = runTest {
-        var shared = 0
-        val frame = mount(1000) { DecksPage(opened(), {}, {}, onShare = { shared++ }) }
+        val frame = mount(1000) { DecksPage(opened(), {}, {}) }
         settle()
         val button = frame.all("button[aria-label='Share this deck']").firstOrNull()
             ?: error("no share button on the deck")
@@ -283,9 +284,78 @@ class DecksLayoutTest {
             button.textContent.orEmpty().isBlank(),
             "the word is back: '${button.textContent}'",
         )
-        button.click()
+    }
+
+    @Test
+    fun theShareOffersALinkOrTheListEitherWay() = runTest {
+        // Four ways to hand a deck over, and the menu has to say which
+        // is which — "Copy" twice with nothing above it is a coin toss.
+        val picked = mutableListOf<Pair<ShareWhat, ExportTo>>()
+        val frame = mount(1000) { DecksPage(opened(), {}, {}, onShare = { w, e -> picked += w to e }) }
         settle()
-        assertEquals(1, shared)
+        frame.all("button[aria-label='Share this deck']").first().click()
+        settle()
+        val menu = frame.all("div.app-menu.open").firstOrNull() ?: error("the menu did not open")
+        assertEquals(
+            listOf("Link", "Deck list"),
+            menu.all("div.app-menu-group").map { it.textContent.orEmpty() },
+        )
+        assertEquals(
+            listOf("Copy", "Download", "Copy", "Download"),
+            menu.all("button.app-tab").map { it.textContent.orEmpty() },
+        )
+
+        menu.all("button.app-tab")[3].click()
+        settle()
+        assertEquals(listOf(ShareWhat.DECKLIST to ExportTo.FILE), picked)
+        assertTrue(frame.all("div.app-menu.open").isEmpty(), "the menu stayed open over the page")
+    }
+
+    @Test
+    fun eachOfTheFourReportsItself() = runTest {
+        val picked = mutableListOf<Pair<ShareWhat, ExportTo>>()
+        val frame = mount(1000) { DecksPage(opened(), {}, {}, onShare = { w, e -> picked += w to e }) }
+        settle()
+        repeat(4) { n ->
+            frame.all("button[aria-label='Share this deck']").first().click()
+            settle()
+            frame.all("div.app-menu.open").first().all("button.app-tab")[n].click()
+            settle()
+        }
+        assertEquals(
+            listOf(
+                ShareWhat.LINK to ExportTo.CLIPBOARD,
+                ShareWhat.LINK to ExportTo.FILE,
+                ShareWhat.DECKLIST to ExportTo.CLIPBOARD,
+                ShareWhat.DECKLIST to ExportTo.FILE,
+            ),
+            picked,
+        )
+    }
+
+    @Test
+    fun aPressOutsideShutsTheShareMenu() = runTest {
+        val frame = mount(1000) { DecksPage(opened(), {}, {}) }
+        settle()
+        frame.all("button[aria-label='Share this deck']").first().click()
+        settle()
+        assertTrue(frame.all("div.app-menu.open").isNotEmpty())
+        (frame.all("div.nav-backdrop").firstOrNull() ?: error("nothing to press outside")).click()
+        settle()
+        assertTrue(frame.all("div.app-menu.open").isEmpty(), "the menu is stuck open")
+    }
+
+    @Test
+    fun theShareMenuStaysOnScreenAtPhoneWidth() = runTest {
+        val frame = mount(400) { DecksPage(opened(), {}, {}) }
+        settle()
+        if (!Stylesheet.applied()) return@runTest
+        frame.all("button[aria-label='Share this deck']").first().click()
+        settle()
+        val menu = frame.all("div.app-menu.open").first().getBoundingClientRect()
+        val page = frame.getBoundingClientRect()
+        assertTrue(menu.right <= page.right + 1, "the menu runs off the right: ${menu.right} > ${page.right}")
+        assertTrue(menu.left >= page.left - 1, "the menu runs off the left")
     }
 
     // ---------------------------------------------------- the tokens

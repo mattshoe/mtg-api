@@ -41,6 +41,7 @@ import org.mattshoe.mtg.core.Route
 import org.mattshoe.mtg.core.Rows
 import org.mattshoe.mtg.core.Scryfall
 import org.mattshoe.mtg.core.Share
+import org.mattshoe.mtg.core.ShareWhat
 import org.mattshoe.mtg.core.StatsQueries
 import org.mattshoe.mtg.core.Store
 import org.mattshoe.mtg.core.Table
@@ -219,6 +220,7 @@ object MtgApp {
                 },
                 onExport = { where -> work { exportList(app, where) } },
                 onShare = { share() },
+                onShareDeck = { what, where -> work { shareDeck(app, what, where) } },
                 onOpenCard = { row -> openCard(row) },
                 onOpenFound = { found -> openFound(found) },
                 onOpenNamed = { name, norm, owner -> openNamed(name, norm, owner) },
@@ -613,6 +615,39 @@ object MtgApp {
                 if (copy(text)) app.say("${r.rows.size} cards copied")
                 else app.say("could not reach the clipboard")
             }
+        }
+    }
+
+    /**
+     * The open deck, handed over.
+     *
+     * The link is this page. The list is the deck itself, which is
+     * what somebody wants when they are going to build it rather than
+     * read about it — and it needs no read, because the cards are
+     * already on screen.
+     */
+    private suspend fun shareDeck(s: AppState, what: ShareWhat, where: ExportTo): AppState {
+        val deck = s.decks.open ?: return s.say("No deck open")
+        val text = when (what) {
+            ShareWhat.LINK -> Share.link(s)
+            ShareWhat.DECKLIST -> Export.deck(s.decks.cards)
+        }
+        val name = when (what) {
+            ShareWhat.LINK -> "${deck.slug}-link.txt"
+            ShareWhat.DECKLIST -> Export.deckFilename(deck.slug, today())
+        }
+        return when (where) {
+            ExportTo.FILE -> {
+                download(name, text)
+                app.say(if (what == ShareWhat.LINK) "Link downloaded" else "${s.decks.totalCards} cards exported")
+            }
+
+            ExportTo.CLIPBOARD ->
+                if (copy(text)) {
+                    app.say(if (what == ShareWhat.LINK) "Link copied" else "${s.decks.totalCards} cards copied")
+                } else {
+                    app.say("could not reach the clipboard")
+                }
         }
     }
 

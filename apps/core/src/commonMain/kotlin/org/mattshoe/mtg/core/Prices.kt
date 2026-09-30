@@ -117,4 +117,23 @@ object Export {
 
     /** `mtg-decklist-2026-09-28.txt`. */
     fun filename(today: String) = "mtg-decklist-$today.txt"
+
+    /**
+     * One deck, written the way a deck list is written.
+     *
+     * The commander on its own at the top with a blank line under it,
+     * because that is the form every builder reads a commander from,
+     * and the rest alphabetical. Quantities first so the whole thing
+     * pastes straight back into the mass entry box here.
+     */
+    fun deck(cards: List<DeckCard>): String {
+        fun line(c: DeckCard) = "${c.qty} ${c.shown}"
+        val leaders = cards.filter { it.isCommander }.sortedBy { it.shown.lowercase() }
+        val rest = cards.filterNot { it.isCommander }.sortedBy { it.shown.lowercase() }
+        return (leaders.map(::line) + listOf("").takeIf { leaders.isNotEmpty() && rest.isNotEmpty() }.orEmpty() + rest.map(::line))
+            .joinToString("\n")
+    }
+
+    /** `alela-2026-09-30.txt`. */
+    fun deckFilename(slug: String, today: String) = "$slug-$today.txt"
 }

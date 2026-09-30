@@ -26,3 +26,15 @@ enum class ExportTo(val slug: String, val label: String) {
     CLIPBOARD("clipboard", "Copy"),
     FILE("file", "Download"),
 }
+
+/**
+ * What a share hands over.
+ *
+ * A link is for sending somebody the page. A deck list is for putting
+ * the deck into somebody else's builder, which is the other half of
+ * what a share button is ever pressed for.
+ */
+enum class ShareWhat(val slug: String, val label: String) {
+    LINK("link", "Link"),
+    DECKLIST("decklist", "Deck list"),
+}
