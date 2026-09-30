@@ -67,10 +67,13 @@ class DecksTest {
             listOf(
                 DeckCard("Sol Ring", qty = 1, role = null, owned = 1),
                 DeckCard("Mana Crypt", qty = 1, role = null, owned = 0),
-                DeckCard("Island", qty = 10, role = null, owned = 4),
+                DeckCard("Island", qty = 10, role = null, owned = 4, nameNorm = "island"),
             ),
         )
-        assertEquals(listOf("Mana Crypt", "Island"), s.gaps.map { it.name })
+        // Not the Island. Nobody inventories basics, so every deck
+        // reads as owning none of them — and a Plains is not a card
+        // to go and get.
+        assertEquals(listOf("Mana Crypt"), s.gaps.map { it.name })
         assertEquals(12, s.totalCards)
     }
 
@@ -168,11 +171,17 @@ class DecksTest {
     }
 
     @Test
-    fun aCardWithNoTypeLineAtAllStillLandsSomewhere() {
-        // Nobody owns a printing, so the joins came back empty. It
-        // must not vanish from the list.
-        assertEquals(DeckGroup.OTHER, card("Something Unowned", null).group)
-        assertEquals(DeckGroup.OTHER, card("Something Unowned", "").group)
+    fun aCardWithNoTypeLineAtAllSaysSoRatherThanHiding() {
+        // Nobody owns a printing, so the joins came back empty. Its
+        // own section, not "Other": as one of those it was drawn as a
+        // nought-drop in the mana curve, which is a lie about the
+        // deck rather than a gap in the data.
+        assertEquals(DeckGroup.UNKNOWN, card("Something Unowned", null).group)
+        assertEquals(DeckGroup.UNKNOWN, card("Something Unowned", "").group)
+        assertEquals("Not in the collection", DeckGroup.UNKNOWN.title)
+        // And a type line that simply is not a type we bucket still
+        // lands in Other.
+        assertEquals(DeckGroup.OTHER, card("Odd", "Dungeon").group)
     }
 
     @Test

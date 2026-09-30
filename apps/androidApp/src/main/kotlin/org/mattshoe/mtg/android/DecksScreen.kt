@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -27,7 +28,11 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import org.mattshoe.mtg.core.CardQueries
 import org.mattshoe.mtg.core.Deck
+import org.mattshoe.mtg.core.Bar
+import org.mattshoe.mtg.core.DeckAnalysis
 import org.mattshoe.mtg.core.DeckCard
+import org.mattshoe.mtg.core.Pip
+import org.mattshoe.mtg.core.Prices
 import org.mattshoe.mtg.core.DecksState
 import org.mattshoe.mtg.core.Design
 
@@ -92,6 +97,7 @@ fun DecksScreen(
                     Btn("Disassemble", danger = true) { onDisassemble(open) }
                 }
             }
+            DeckStats(DeckAnalysis.of(state.cards))
             // `byType` is the core's, the same list the website reads,
             // so the two cannot group or order a deck differently.
             state.byType.forEach { (group, cards) ->
@@ -209,7 +215,7 @@ private fun Hero(deck: Deck, state: DecksState) {
             Line(deck.title, Ink, Design.H2, FontWeight.SemiBold)
             Line(
                 listOfNotNull(
-                    cmdr?.name ?: deck.commanderName,
+                    cmdr?.shown ?: deck.commanderName,
                     deck.bracket?.let { "Bracket $it" },
                 ).joinToString(" · "),
                 Ink2,
@@ -243,10 +249,177 @@ private fun CardLine(card: DeckCard, owner: String, onOpen: (DeckCard, String) -
             }
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-            Line(card.name, Ink, Design.SMALL)
+            Line(card.shown, Ink, Design.SMALL)
             card.typeLine?.takeIf { it.isNotBlank() }?.let { Line(it, Ink3, Design.MINI) }
         }
-        if (card.owned < card.qty) Tag("has ${card.owned}", Bad)
+        if (card.short > 0) Tag("has ${card.owned}", Bad)
         Line("${card.qty}×", Ink3, Design.MINI)
     }
+}
+
+/**
+ * What the deck is made of, on a phone.
+ *
+ * Every number is `DeckAnalysis`, the same object the website reads,
+ * so the two cannot disagree about a deck's curve. Drawn plainer than
+ * the web's: a phone has one column and no room for five panels side
+ * by side.
+ */
+@Composable
+private fun DeckStats(s: org.mattshoe.mtg.core.DeckStats) {
+    Panel {
+        Line("The deck at a glance", Ink, Design.H3, FontWeight.SemiBold)
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(top = 8.dp),
+        ) {
+            Figure("${s.totalCards}", "cards")
+            Figure("${s.lands}", "lands · ${s.landShare}%")
+            Figure(s.averageManaValue.toString(), "avg mana")
+            Figure("${s.spells}", "spells")
+            s.value?.let { Figure(Prices.money(it), "value") }
+            if (s.missing > 0) Figure("${s.missing}", "not owned", Warn)
+        }
+    }
+
+    if (s.hasCurve) {
+        Panel {
+            Line("Mana curve", Ink3, Design.MINI, FontWeight.SemiBold)
+            val most = s.curve.maxOfOrNull { it.value } ?: 0
+            Row(
+                Modifier.fillMaxWidth().height(110.dp).padding(top = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                s.curve.forEach { bar ->
+                    Column(
+                        Modifier.weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Bottom,
+                    ) {
+                        Line(if (bar.value > 0) "${bar.value}" else "", Ink2, Design.MINI)
+                        Box(
+                            Modifier.fillMaxWidth()
+                                .fillMaxHeight(if (most <= 0) 0f else bar.value.toFloat() / most)
+                                .background(if (bar.value > 0) Accent else Bg3, Radius),
+                        )
+                        Line(bar.label, Ink3, Design.MINI)
+                    }
+                }
+            }
+            Line("Median ${s.medianManaValue}. Lands excluded.", Ink3, Design.MINI)
+        }
+    }
+
+    if (s.pips.isNotEmpty() || s.sources.isNotEmpty()) {
+        Panel {
+            Line("Colour", Ink3, Design.MINI, FontWeight.SemiBold)
+            val most = maxOf(
+                s.pips.maxOfOrNull { it.value } ?: 0,
+                s.sources.maxOfOrNull { it.value } ?: 0,
+            )
+            Pip.entries.forEach { pip ->
+                val needs = s.pips.firstOrNull { it.label == pip.label }?.value ?: 0
+                val makes = s.sources.firstOrNull { it.label == pip.label }?.value ?: 0
+                if (needs == 0 && makes == 0) return@forEach
+                Row(
+                    Modifier.fillMaxWidth().padding(top = 7.dp),
+                    horizontalArrangement = Arrangement.spacedBy(9.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        Modifier.size(18.dp).background(c(Design.pip(pip.letter)), CircleShape),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        androidx.compose.material3.Text(
+                            pip.letter, color = Bg, fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                        )
+                    }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Track(needs, most, pip, "needs")
+                        Track(makes, most, pip, "makes")
+                    }
+                }
+            }
+            if (s.unsupported.isNotEmpty()) {
+                Line("No source for ${s.unsupported.joinToString(", ")}.", Warn, Design.MINI)
+            }
+        }
+    }
+
+    if (s.types.isNotEmpty()) Panel { Bars("Card types", s.types, s.totalCards) }
+    if (s.rarities.isNotEmpty()) Panel { Bars("Rarity", s.rarities, s.totalCards) }
+
+    if (s.tokens.isNotEmpty()) {
+        Panel {
+            Line("Tokens it makes", Ink3, Design.MINI, FontWeight.SemiBold)
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.padding(top = 8.dp),
+            ) {
+                s.tokens.forEach { t -> Tag("${t.cards}× ${t.what}") }
+            }
+        }
+    }
+
+    if (s.unknown > 0) {
+        Line(
+            "${s.unknown} card${if (s.unknown == 1) "" else "s"} here have no printing in the " +
+                "collection, so they are counted in the total and left out of every chart.",
+            Ink3,
+            Design.MINI,
+        )
+    }
+}
+
+@Composable
+private fun Figure(n: String, k: String, tint: androidx.compose.ui.graphics.Color = Ink) {
+    Column {
+        Line(n, tint, Design.H2, FontWeight.SemiBold)
+        Line(k, Ink3, Design.MINI)
+    }
+}
+
+@Composable
+private fun Track(n: Int, most: Int, pip: Pip, what: String) {
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.weight(1f).height(9.dp).background(Bg3, Radius)) {
+            Box(
+                Modifier.fillMaxWidth(if (most <= 0) 0f else n.toFloat() / most)
+                    .height(9.dp)
+                    .background(c(Design.pip(pip.letter)), Radius),
+            )
+        }
+        Line("$n $what", Ink3, Design.MINI)
+    }
+}
+
+@Composable
+private fun Bars(title: String, bars: List<Bar>, total: Int) {
+    Line(title, Ink3, Design.MINI, FontWeight.SemiBold)
+    val most = bars.maxOfOrNull { it.value } ?: 0
+    bars.forEach { bar ->
+        Row(
+            Modifier.fillMaxWidth().padding(top = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Line(bar.label, Ink2, Design.MINI, modifier = Modifier.weight(0.42f))
+            Box(Modifier.weight(1f).height(8.dp).background(Bg3, Radius)) {
+                Box(
+                    Modifier.fillMaxWidth(if (most <= 0) 0f else bar.value.toFloat() / most)
+                        .height(8.dp)
+                        .background(Accent, Radius),
+                )
+            }
+            Line("${bar.value}", Ink3, Design.MINI)
+        }
+    }
+    Line("Of $total cards.", Ink3, Design.MINI)
 }

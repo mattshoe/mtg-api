@@ -170,9 +170,13 @@ class DecksLayoutTest {
         val body = frame.all("div.stack").first().getBoundingClientRect()
         assertTrue(body.top - head.bottom >= 8, "only ${body.top - head.bottom}px under the header")
 
-        val tags = frame.all("div.flex-wrap").first().getBoundingClientRect()
-        val panel = frame.all("div.panel").first().getBoundingClientRect()
-        assertTrue(panel.top - tags.bottom >= 8, "only ${panel.top - tags.bottom}px above the card list")
+        // The analysis, then the list. Neither flush against the other.
+        val panels = frame.all("div.panel").map { it.getBoundingClientRect() }
+        assertTrue(panels.size >= 2, "expected the analysis and at least one group")
+        assertTrue(
+            panels[1].top - panels[0].bottom >= 8,
+            "only ${panels[1].top - panels[0].bottom}px between the analysis and the list",
+        )
     }
 
     @Test
@@ -184,6 +188,33 @@ class DecksLayoutTest {
             head.textContent.orEmpty().contains("← Decks"),
             "the back button is not in the header: ${head.textContent}",
         )
+    }
+
+    @Test
+    fun anOpenedDeckFitsOnAPhoneHoweverLongItsCommanderIsCalled() = runTest {
+        // A double-faced name whose halves are identical — "Jetmir,
+        // Nexus of Revels // Jetmir, Nexus of Revels" — pushed the
+        // whole page sideways, header and all. Nothing on this screen
+        // may be wider than the screen.
+        val long = "Jetmir, Nexus of Revels // Jetmir, Nexus of Revels"
+        val deck = Deck("a", "Feather Storm", "matt", long, "GRW", 3, null)
+        val s = DecksState().loaded(listOf(deck)).opened(
+            "a",
+            listOf(
+                DeckCard(long, 1, "commander", 1, nameNorm = long.lowercase(),
+                    typeLine = "Legendary Creature — Cat Demon", manaCost = "{1}{R}{G}{W}", cmc = 4.0),
+                DeckCard("Plains", 20, null, 20, nameNorm = "plains",
+                    typeLine = "Basic Land — Plains", cmc = 0.0, producedMana = "W"),
+            ),
+        )
+        val frame = mount(414) { DecksPage(s, {}, {}, admin = true) }
+        settle()
+        if (!Stylesheet.applied()) return@runTest
+        val limit = frame.getBoundingClientRect().right + 1
+        val over = frame.all("*")
+            .filter { it.getBoundingClientRect().right > limit }
+            .map { "${it.tagName.lowercase()}.${it.className} -> ${it.getBoundingClientRect().right}" }
+        assertTrue(over.isEmpty(), "wider than the phone (limit $limit):\n  " + over.joinToString("\n  "))
     }
 
     @Test
@@ -258,8 +289,13 @@ class DecksLayoutTest {
     fun theListIsGroupedByTypeInReadingOrder() = runTest {
         val frame = mount(1000) { DecksPage(opened(), {}, {}) }
         settle()
+        // The analysis panel heads the page; the groups follow it.
         val headings = frame.all("div.panel-head h2").map { it.textContent.orEmpty() }
-        assertEquals(listOf("Commander", "Creatures", "Artifacts", "Enchantments", "Lands"), headings)
+        assertEquals("The deck at a glance", headings.first())
+        assertEquals(
+            listOf("Commander", "Creatures", "Artifacts", "Enchantments", "Lands"),
+            headings.drop(1),
+        )
     }
 
     @Test

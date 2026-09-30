@@ -52,12 +52,12 @@ object Design {
     //
     // The five, plus colourless. Used for the identity pips.
 
-    const val W = 0xFFF8F2DC
-    const val U = 0xFF9DD0F2
-    const val B = 0xFFA99FAE
-    const val R = 0xFFF0A08C
-    const val G = 0xFF92CFA4
-    const val C = 0xFFC3CCD8
+    const val W = 0xFFF5DA64
+    const val U = 0xFF3FA9FF
+    const val B = 0xFFB87CFF
+    const val R = 0xFFFF5C33
+    const val G = 0xFF2ED98F
+    const val C = 0xFF9DB2CC
 
     fun pip(letter: String): Long = when (letter.uppercase()) {
         "W" -> W

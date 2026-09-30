@@ -10,6 +10,7 @@ import org.jetbrains.compose.web.dom.Text
 import org.jetbrains.compose.web.dom.Img
 import org.mattshoe.mtg.core.CardQueries
 import org.mattshoe.mtg.core.Deck
+import org.mattshoe.mtg.core.DeckAnalysis
 import org.mattshoe.mtg.core.DeckCard
 import org.mattshoe.mtg.core.DecksState
 
@@ -65,15 +66,6 @@ fun DecksPage(
                     classes("btn", "sm", "ghost")
                     onClick { onClose() }
                 }) { Text("← Decks") }
-                Span(attrs = { classes("sub") }) {
-                    Text(
-                        listOfNotNull(
-                            open.commanderName,
-                            open.bracket?.let { "Bracket $it" },
-                            open.colorPips.takeIf { it.isNotEmpty() }?.joinToString(""),
-                        ).joinToString(" · "),
-                    )
-                }
                 Span(attrs = { classes("spacer") }) {}
                 Button(attrs = {
                     classes("btn", "sm", "ghost")
@@ -97,14 +89,7 @@ fun DecksPage(
             Banner(open, state)
 
             Div(attrs = { classes("stack") }) {
-                Div(attrs = { classes("flex-wrap", "small") }) {
-                    Span(attrs = { classes("tag", "mini") }) { Text("${state.totalCards} cards") }
-                    if (state.gaps.isNotEmpty()) {
-                        Span(attrs = { classes("tag", "bad", "mini") }) {
-                            Text("${state.gaps.size} not owned")
-                        }
-                    }
-                }
+                DeckStatsPanel(DeckAnalysis.of(state.cards))
                 // By type, in the order every deck list is written in,
                 // alphabetical inside each section. The grouping is in
                 // the core so the phone cannot sort it differently.
@@ -178,7 +163,7 @@ private fun Banner(deck: Deck, state: DecksState) {
         Img(src = art, alt = "", attrs = { attr("loading", "lazy") })
         Div(attrs = { classes("deck-hero-wash") }) {}
         Div(attrs = { classes("deck-hero-text") }) {
-            Span(attrs = { classes("who") }) { Text(cmdr?.name ?: deck.commanderName.orEmpty()) }
+            Span(attrs = { classes("who") }) { Text(cmdr?.shown ?: deck.commanderName.orEmpty()) }
             Span(attrs = { classes("what") }) {
                 Text(
                     listOfNotNull(
@@ -213,12 +198,12 @@ private fun CardLine(card: DeckCard, owner: String, onOpen: (DeckCard, String) -
             card.art?.let { Img(src = it, alt = "", attrs = { attr("loading", "lazy") }) }
         }
         Div(attrs = { classes("line-text") }) {
-            Span(attrs = { classes("t-name") }) { Text(card.name) }
+            Span(attrs = { classes("t-name") }) { Text(card.shown) }
             card.typeLine?.takeIf { it.isNotBlank() }?.let {
                 Span(attrs = { classes("line-type") }) { Text(it) }
             }
         }
-        if (card.owned < card.qty) {
+        if (card.short > 0) {
             Span(attrs = { classes("tag", "bad", "mini") }) { Text("has ${card.owned}") }
         }
         Span(attrs = { classes("num") }) { Text("${card.qty}×") }

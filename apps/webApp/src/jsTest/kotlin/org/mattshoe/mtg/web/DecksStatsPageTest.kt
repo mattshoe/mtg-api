@@ -93,8 +93,13 @@ class DecksStatsPageTest {
         )
         val root = mount { DecksPage(s, {}, {}) }
         settle()
-        assertTrue(root.textContent!!.contains("2 cards"))
-        assertTrue(root.textContent!!.contains("1 not owned"))
+        // The figures say it now, and they count copies rather than
+        // distinct names — which is why the old tag saying "1 not
+        // owned" sat next to a figure saying something else.
+        // Uppercase on screen is `text-transform`, which the text
+        // content does not carry.
+        assertTrue(root.textContent!!.contains("2cards"), root.textContent!!.take(200))
+        assertTrue(root.textContent!!.contains("1not owned"))
         assertTrue(root.textContent!!.contains("has 0"))
     }
 

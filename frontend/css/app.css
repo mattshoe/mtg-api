@@ -25,7 +25,14 @@
   --bad:       #d6636b;
   --info:      #5b9bd5;
 
-  --w: #f8f2dc; --u: #9dd0f2; --b: #a99fae; --r: #f0a08c; --g: #92cfa4; --c: #c3ccd8;
+  /* The five and colourless. Saturated rather than pastel: the old
+     set was washed out to the point of being hard to tell apart,
+     and red against green is the pairing colourblindness takes
+     first — so those two are separated by lightness as well as
+     hue. Six hues cannot all survive a red-green deficiency, so
+     every pip in this app carries its letter too and colour is
+     never the only thing saying which one it is. */
+  --w: #F5DA64; --u: #3FA9FF; --b: #B87CFF; --r: #FF5C33; --g: #2ED98F; --c: #9DB2CC;
 
   --radius: 10px;
   --radius-sm: 7px;
@@ -219,7 +226,10 @@ main { min-height: calc(100vh - var(--topbar-h)); }
 .sticky-side { position: sticky; top: calc(var(--topbar-h) + 18px); max-height: calc(100vh - var(--topbar-h) - 36px); overflow-y: auto; }
 
 .page-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
-.page-head .sub { color: var(--text-2); font-size: 13px; }
+.page-head .sub {
+  color: var(--text-2); font-size: 13px;
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 
 /* ---------------------------------------------------------------- forms */
 /* A field label is not decoration — it is the question being asked. */
@@ -284,12 +294,12 @@ select { appearance: none; background-image:
   font-family: var(--mono);
 }
 .pip:hover { border-color: var(--text-2); }
-.pip[data-c=W].on { background: var(--w); border-color: var(--w); color: #3a3312; }
-.pip[data-c=U].on { background: var(--u); border-color: var(--u); color: #08283c; }
-.pip[data-c=B].on { background: var(--b); border-color: var(--b); color: #241f28; }
-.pip[data-c=R].on { background: var(--r); border-color: var(--r); color: #451a10; }
-.pip[data-c=G].on { background: var(--g); border-color: var(--g); color: #103320; }
-.pip[data-c=C].on { background: var(--c); border-color: var(--c); color: #1d2630; }
+.pip[data-c=W].on { background: var(--w); border-color: var(--w); color: #2E2708; }
+.pip[data-c=U].on { background: var(--u); border-color: var(--u); color: #04203A; }
+.pip[data-c=B].on { background: var(--b); border-color: var(--b); color: #2A0D46; }
+.pip[data-c=R].on { background: var(--r); border-color: var(--r); color: #3A0F04; }
+.pip[data-c=G].on { background: var(--g); border-color: var(--g); color: #04331F; }
+.pip[data-c=C].on { background: var(--c); border-color: var(--c); color: #131A24; }
 
 /* inline mana cost */
 .mana { display: inline-flex; gap: 2px; vertical-align: -2px; flex-wrap: wrap; }
@@ -298,11 +308,11 @@ select { appearance: none; background-image:
   font: 700 9.5px/1 var(--mono); background: var(--c); color: #1d2630; flex: none;
   box-shadow: inset 0 -1px 0 rgba(0,0,0,.2);
 }
-.ms[data-s=W] { background: var(--w); color: #3a3312; }
-.ms[data-s=U] { background: var(--u); color: #08283c; }
-.ms[data-s=B] { background: var(--b); color: #241f28; }
-.ms[data-s=R] { background: var(--r); color: #451a10; }
-.ms[data-s=G] { background: var(--g); color: #103320; }
+.ms[data-s=W] { background: var(--w); color: #2E2708; }
+.ms[data-s=U] { background: var(--u); color: #04203A; }
+.ms[data-s=B] { background: var(--b); color: #2A0D46; }
+.ms[data-s=R] { background: var(--r); color: #3A0F04; }
+.ms[data-s=G] { background: var(--g); color: #04331F; }
 .ms.hybrid { background: linear-gradient(135deg, var(--a1) 50%, var(--a2) 50%); font-size: 8px; }
 
 /* ---------------------------------------------------------------- tables */
@@ -616,6 +626,88 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
 .check input { width: auto; margin: 0; }
 .check .small { flex-basis: 100%; }
 
+/* ------------------------------------------------------- deck stats */
+/* Charts drawn in CSS rather than by a library: every bar here is a
+   div with a width or a height, which is a tenth of the bytes of a
+   charting dependency and needs no CDN the page is allowed to reach. */
+/* The dividers are the cards' own borders rather than a grid gap
+   showing the background through. A gap needs every cell filled to
+   look right, and the last row never is — it left a slab of a
+   different colour beside whatever came last. */
+.stats-grid {
+  display: grid; background: var(--bg-2);
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+.stats-card {
+  padding: 14px 15px 16px; min-width: 0;
+  border-top: 1px solid var(--line); border-right: 1px solid var(--line);
+}
+/* A list of chips is a row, not a column. Left in the grid it sat in
+   one narrow cell with several hundred pixels of empty panel beside
+   it. */
+.stats-card.wide { grid-column: 1 / -1; }
+.stats-card > h3 {
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--text-3); margin-bottom: 12px;
+}
+.stats-card .sub { font-size: 11.5px; color: var(--text-3); margin-top: 10px; line-height: 1.45; }
+
+/* The headline numbers. Big, because they are the answer to the
+   question somebody opened the deck to ask. */
+.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 1px; background: var(--line); }
+.figure { background: var(--bg-2); padding: 12px 14px; min-width: 0; }
+.figure .n { font-size: 21px; font-weight: 650; letter-spacing: -.02em; line-height: 1.1; }
+.figure .k {
+  margin-top: 3px; font-size: 10.5px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .05em; color: var(--text-3); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.figure.warn .n { color: var(--warn); }
+
+/* The mana curve: columns, tallest to scale, the count above each. */
+.curve { display: flex; align-items: flex-end; gap: 6px; height: 132px; }
+.curve .col { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; height: 100%; gap: 5px; min-width: 0; }
+.curve .n { font: 600 11px/1 var(--mono); color: var(--text-2); text-align: center; }
+.curve .bar {
+  background: linear-gradient(to top, var(--accent), color-mix(in srgb, var(--accent) 55%, var(--bg-3)));
+  border-radius: 4px 4px 0 0; min-height: 2px;
+}
+.curve .col.none .bar { background: var(--bg-3); }
+.curve .x { font: 600 10.5px/1 var(--mono); color: var(--text-3); text-align: center; }
+
+/* Needs against makes, one row per colour. Two bars on one track so
+   the comparison is a glance rather than arithmetic. */
+.mana-row { display: grid; grid-template-columns: 18px 1fr; gap: 9px; align-items: center; }
+.mana-row + .mana-row { margin-top: 9px; }
+.mana-row .sym {
+  width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center;
+  font: 700 10px/1 var(--mono); color: #10141a;
+}
+.mana-row .pair { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.mana-track { display: grid; grid-template-columns: 1fr 42px; gap: 7px; align-items: center; }
+.mana-track .rail { height: 9px; background: var(--bg-3); border-radius: 5px; overflow: hidden; }
+.mana-track .fill { height: 100%; border-radius: 5px; }
+.mana-track .fill.makes { opacity: .5; }
+.mana-track .v { font: 600 10.5px/1 var(--mono); color: var(--text-3); white-space: nowrap; }
+
+/* Anything counted against a total: types, rarity. */
+.hbar { display: grid; grid-template-columns: minmax(64px, auto) 1fr 34px; gap: 9px; align-items: center; font-size: 12.5px; }
+.hbar + .hbar { margin-top: 7px; }
+.hbar .k { color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hbar .rail { height: 8px; background: var(--bg-3); border-radius: 4px; overflow: hidden; }
+.hbar .fill { height: 100%; background: var(--accent); border-radius: 4px; opacity: .8; }
+.hbar .v { font: 600 11px/1 var(--mono); color: var(--text-3); text-align: right; }
+
+/* What the deck puts on the battlefield that is not a card. */
+.tokens { display: flex; flex-wrap: wrap; gap: 6px; }
+.token {
+  display: inline-flex; align-items: baseline; gap: 6px; max-width: 100%;
+  padding: 4px 9px; border-radius: 99px; font-size: 12px;
+  background: var(--bg-3); border: 1px solid var(--line);
+}
+.token .n { font: 700 10.5px/1 var(--mono); color: var(--accent-2); flex: none; }
+.token .w { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 /* deck list */
 /* Decks are grouped by whose they are, and that heading used to be a
    bare h2 — `margin: 0` like every other heading here — so one
@@ -664,7 +756,11 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
   position: absolute; left: 0; right: 0; bottom: 0;
   padding: 12px 14px; display: flex; flex-direction: column; gap: 2px;
 }
-.deck-hero-text .who { font-size: 17px; font-weight: 600; line-height: 1.2; }
+.deck-hero-text .who {
+  font-size: 17px; font-weight: 600; line-height: 1.25;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  line-clamp: 2; overflow: hidden;
+}
 .deck-hero-text .what { font-size: 12px; color: var(--text-2); }
 @media (max-width: 560px) { .deck-hero { height: 132px; } }
 

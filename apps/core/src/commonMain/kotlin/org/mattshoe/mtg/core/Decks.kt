@@ -63,7 +63,7 @@ data class Deck(
      * matching on the whole string finds nothing.
      */
     val commanderName: String?
-        get() = commander?.substringBefore(" (")?.trim()?.takeIf { it.isNotEmpty() }
+        get() = commander?.substringBefore(" (")?.trim()?.takeIf { it.isNotEmpty() }?.let(::oneName)
 
     private companion object {
         val SYMBOL = Regex("""\{([WUBRG])\}""", RegexOption.IGNORE_CASE)
@@ -89,11 +89,62 @@ data class DeckCard(
     val nameNorm: String = "",
     val typeLine: String? = null,
     val scryfallId: String? = null,
+    // Everything the deck's own analysis reads. All nullable: a card
+    // the deck wants that nobody owns has no printing to read from,
+    // and it still has to appear in the list.
+    val manaCost: String? = null,
+    val cmc: Double? = null,
+    val producedMana: String? = null,
+    val oracleText: String? = null,
+    val colorIdentity: String? = null,
+    val rarity: String? = null,
+    val price: Double? = null,
 ) {
     val isCommander: Boolean get() = role == "commander"
 
+    /**
+     * The name to show.
+     *
+     * Some rows carry a double-faced name whose halves are identical
+     * — "Jetmir, Nexus of Revels // Jetmir, Nexus of Revels" — which
+     * is the same word twice and long enough to push a phone's whole
+     * page sideways.
+     */
+    val shown: String get() = oneName(name)
+
     /** Cropped art, square in the page, or null when nobody owns a printing. */
     val art: String? get() = CardQueries.art(scryfallId, "art_crop")
+
+    /**
+     * The basic land this is, if it is one.
+     *
+     * Basics are missing from the collection because nobody counts
+     * them, so the joins come back empty and the card arrives with no
+     * type and no colour. Their names are the one thing that can be
+     * looked up without a printing.
+     */
+    private val basic: Basic? get() = Basic.of(nameNorm.ifEmpty { name.lowercase() })
+
+    /** The type line, or the one a basic land has by definition. */
+    val knownTypeLine: String? get() = typeLine ?: basic?.typeLine
+
+    /** What it taps for, including a basic nobody has a printing of. */
+    val knownProducedMana: String? get() = producedMana ?: basic?.produces
+
+    /** Its mana value. A land's is nought, printing or no printing. */
+    val knownManaValue: Double? get() = cmc ?: basic?.let { 0.0 }
+
+    val isBasicLand: Boolean get() = basic != null
+
+    /**
+     * Copies the owner is short of, and would have to go and get.
+     *
+     * Basics are never short. Nobody inventories them, so every deck
+     * reads as owning none — Feather Storm's "18 not owned" was nine
+     * Plains, four Snow-Covered Plains, three Forests and two
+     * Mountains, and not one of them is something to go and buy.
+     */
+    val short: Int get() = if (isBasicLand) 0 else (qty - owned).coerceAtLeast(0)
 
     /**
      * Which section it belongs under.
@@ -123,6 +174,16 @@ enum class DeckGroup(val title: String) {
     BATTLES("Battles"),
     LANDS("Lands"),
     OTHER("Other"),
+
+    /**
+     * A card in the list that no printing in the collection matches,
+     * so nothing is known about it — not its type, not its cost.
+     *
+     * Its own section rather than "Other": eighteen cards nobody owns
+     * were being drawn as eighteen nought-drops in the mana curve,
+     * which is a lie about the deck rather than a gap in the data.
+     */
+    UNKNOWN("Not in the collection"),
     ;
 
     companion object {
@@ -130,9 +191,9 @@ enum class DeckGroup(val title: String) {
             if (card.isCommander) return COMMANDER
             // Only the front face decides. A creature whose back is a
             // land is a creature in the list.
-            val t = card.typeLine.orEmpty().substringBefore("//").lowercase()
+            val t = card.knownTypeLine.orEmpty().substringBefore("//").lowercase()
             return when {
-                t.isBlank() -> OTHER
+                t.isBlank() -> UNKNOWN
                 "creature" in t -> CREATURES
                 "planeswalker" in t -> PLANESWALKERS
                 "instant" in t -> INSTANTS
@@ -188,16 +249,27 @@ object DeckQueries {
                   -- so opening any deck answered "no such column".
                   COALESCE((SELECT t.total_qty FROM totals t
                              WHERE t.name_norm = dc.name_norm AND t.owner = d.owner), 0) AS owned,
-                  COALESCE(mine.type_line, alt.type_line)     AS type_line,
-                  COALESCE(mine.scryfall_id, alt.scryfall_id) AS scryfall_id
+                  COALESCE(mine.type_line, alt.type_line)         AS type_line,
+                  COALESCE(mine.scryfall_id, alt.scryfall_id)     AS scryfall_id,
+                  COALESCE(mine.mana_cost, alt.mana_cost)         AS mana_cost,
+                  COALESCE(mine.cmc, alt.cmc)                     AS cmc,
+                  COALESCE(mine.produced_mana, alt.produced_mana) AS produced_mana,
+                  COALESCE(mine.oracle_text, alt.oracle_text)     AS oracle_text,
+                  COALESCE(mine.color_identity, alt.color_identity) AS color_identity,
+                  COALESCE(mine.rarity, alt.rarity)               AS rarity,
+                  COALESCE(pm.usd, pa.usd)                        AS price
              FROM deck_cards dc
              JOIN decks d ON d.id = dc.deck_id
-             LEFT JOIN (SELECT owner, name_norm, MIN(id) AS id, scryfall_id, type_line
+             LEFT JOIN (SELECT owner, name_norm, MIN(id) AS id, scryfall_id, type_line,
+                               mana_cost, cmc, produced_mana, oracle_text, color_identity, rarity
                           FROM cards GROUP BY owner, name_norm) mine
                ON mine.name_norm = dc.name_norm AND mine.owner = d.owner
-             LEFT JOIN (SELECT name_norm, MIN(id) AS id, scryfall_id, type_line
+             LEFT JOIN (SELECT name_norm, MIN(id) AS id, scryfall_id, type_line,
+                               mana_cost, cmc, produced_mana, oracle_text, color_identity, rarity
                           FROM cards GROUP BY name_norm) alt
                ON alt.name_norm = dc.name_norm
+             LEFT JOIN prices pm ON pm.scryfall_id = mine.scryfall_id
+             LEFT JOIN prices pa ON pa.scryfall_id = alt.scryfall_id
             WHERE d.slug = ?
             ORDER BY dc.role IS NULL, dc.role, dc.name""",
         listOf(slug),
@@ -239,9 +311,27 @@ object DeckQueries {
                 nameNorm = it.str("name_norm").orEmpty(),
                 typeLine = it.str("type_line"),
                 scryfallId = it.str("scryfall_id"),
+                manaCost = it.str("mana_cost"),
+                cmc = it.str("cmc")?.toDoubleOrNull(),
+                producedMana = it.str("produced_mana"),
+                oracleText = it.str("oracle_text"),
+                colorIdentity = it.str("color_identity"),
+                rarity = it.str("rarity"),
+                price = it.str("price")?.toDoubleOrNull(),
             )
         }
     }
+}
+
+/**
+ * A double-faced name whose halves are the same is one name.
+ *
+ * "Jetmir, Nexus of Revels // Jetmir, Nexus of Revels" is the same
+ * word twice, and long enough to fill a phone's header with it.
+ */
+internal fun oneName(raw: String): String {
+    val halves = raw.split(" // ")
+    return if (halves.size == 2 && halves[0].trim() == halves[1].trim()) halves[0].trim() else raw
 }
 
 /** The decks screen: a list, or one deck opened. */
@@ -258,8 +348,8 @@ data class DecksState(
     val byOwner: List<Pair<String, List<Deck>>>
         get() = decks.groupBy { it.owner }.toList().sortedBy { it.first }
 
-    /** A card the deck wants more of than its owner has. */
-    val gaps: List<DeckCard> get() = cards.filter { it.owned < it.qty }
+    /** A card the deck wants more of than its owner has. Basics never count. */
+    val gaps: List<DeckCard> get() = cards.filter { it.short > 0 }
 
     /** The one the deck is built around, for the banner. */
     val commander: DeckCard? get() = cards.firstOrNull { it.isCommander }
