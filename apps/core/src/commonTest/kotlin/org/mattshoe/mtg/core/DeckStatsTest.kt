@@ -277,57 +277,41 @@ class DeckStatsTest {
 
     // --------------------------------------------------------- tokens
 
-    private fun makes(text: String) = DeckAnalysis.tokens(listOf(card("x", text = text))).map { it.what }
-
     @Test
-    fun aTokenIsReadOutOfTheRulesText() {
-        assertEquals(listOf("1/1 white Soldier creature"), makes("create a 1/1 white Soldier creature token."))
-        assertEquals(listOf("Treasure"), makes("Create a Treasure token."))
+    fun aTokenIsARealCardWithRealArt() {
+        // Read out of the rules text this was a description, and a
+        // bad one — "Or more", "Twice that many of those", and never
+        // any art. Scryfall names the token components of every card
+        // in `all_parts`, which is the authoritative answer.
+        val t = TokenCard("aae7bdfe-1234", "Soldier", "Token Creature — Soldier", madeBy = 3)
+        assertEquals("Soldier", t.name)
+        assertEquals(3, t.madeBy)
+        // "Token Creature — Soldier" on every one of them is noise.
+        assertEquals("Creature — Soldier", t.shortType)
+        assertTrue(t.art.orEmpty().contains("art_crop"), t.art.orEmpty())
     }
 
     @Test
-    fun theCountInFrontOfItIsNotPartOfIt() {
-        // "two 1/1 Soldiers" and "a 1/1 Soldier" are the same token.
-        assertEquals(makes("create a 1/1 white Soldier creature token."),
-            makes("create three 1/1 white Soldier creature tokens with vigilance."))
-    }
-
-    @Test
-    fun aCopyEffectSaysSoRatherThanNothing() {
-        assertEquals(listOf("Copy of another permanent"), makes("create a token that's a copy of it."))
-    }
-
-    @Test
-    fun sentenceFragmentsAreNotTokens() {
-        // Real wording that used to come out as tokens called "Or
-        // more" and "Twice that many of those".
-        assertEquals(emptyList(), makes("create two or more tokens this turn"))
-        assertEquals(emptyList(), makes("create twice that many of those tokens instead"))
-    }
-
-    @Test
-    fun createdIsNotCreate() {
-        assertEquals(emptyList(), makes("a token created this way gains haste"))
-    }
-
-    @Test
-    fun theSameTokenFromTwoCardsCountsTwice() {
-        val t = DeckAnalysis.tokens(
+    fun aDeckCarriesTheIdsItsTokensAreLookedUpBy() {
+        val s = DecksState().opened(
+            "d",
             listOf(
-                card("a", text = "create a 1/1 white Soldier creature token."),
-                card("b", text = "Create a 1/1 white Soldier creature token.", qty = 2),
+                card("a").copy(scryfallId = "aaa"),
+                card("b").copy(scryfallId = "bbb"),
+                card("c").copy(scryfallId = "aaa"),
+                card("d").copy(scryfallId = null),
             ),
         )
-        assertEquals(1, t.size)
-        assertEquals(3, t.first().cards)
+        assertEquals(listOf("aaa", "bbb"), s.scryfallIds)
     }
 
     @Test
-    fun oneCardMakingTheSameTokenTwiceIsCountedOnce() {
-        val t = DeckAnalysis.tokens(
-            listOf(card("a", text = "Create a Treasure token. Later, create a Treasure token.")),
-        )
-        assertEquals(listOf(TokenMade("Treasure", 1)), t)
+    fun openingADeckClearsTheTokensOfTheLastOne() {
+        val first = DecksState().opened("a", listOf(card("x")))
+            .withTokens(listOf(TokenCard("1", "Soldier", "Token Creature — Soldier")))
+        assertEquals(1, first.tokens.size)
+        assertEquals(0, first.opened("b", listOf(card("y"))).tokens.size)
+        assertEquals(0, first.close().tokens.size)
     }
 
     @Test

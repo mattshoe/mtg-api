@@ -91,7 +91,6 @@ class DeckStatsProbe {
         println("types:    " + s.types.joinToString(" ") { "${it.label}:${it.value}" })
         println("rarity:   " + s.rarities.joinToString(" ") { "${it.label}:${it.value}" })
         println("unsupported: " + s.unsupported)
-        println("tokens (${s.tokens.size}):")
-        s.tokens.take(20).forEach { println("   ${it.cards}x  ${it.what}") }
+        println("(tokens come from Scryfall now, not from this)")
     }
 }

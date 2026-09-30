@@ -479,8 +479,25 @@ object MtgApp {
         // Read `app` again rather than the copy captured before the
         // query: anything that landed while it was in flight — the
         // facet lists, a toast — would otherwise be thrown away.
-        return app.copy(decks = app.decks.opened(slug, DeckQueries.decodeCards(r.cols, r.rows)))
+        val opened = app.copy(decks = app.decks.opened(slug, DeckQueries.decodeCards(r.cols, r.rows)))
             .navigate(Route(View.DECKS, slug))
+        // The tokens come from Scryfall and land behind the list
+        // rather than holding it up. A deck that shows its cards and
+        // fills in its tokens a moment later is right; one that waits
+        // on a second service to show anything is not.
+        loadTokens(slug)
+        return opened
+    }
+
+    private fun loadTokens(slug: String) {
+        scope.launch {
+            val found = scryfall.tokens(app.decks.scryfallIds)
+            // Still the same deck? Opening another one while this was
+            // in flight must not hang the first deck's tokens on it.
+            if (app.decks.openSlug == slug) {
+                app = app.copy(decks = app.decks.withTokens(found))
+            }
+        }
     }
 
     private suspend fun loadStats(s: AppState): AppState {

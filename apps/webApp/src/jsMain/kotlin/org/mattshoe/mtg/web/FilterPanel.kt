@@ -365,7 +365,10 @@ private fun Pips(selected: List<String>, onToggle: (String) -> Unit) {
                 if (c in selected) classes("on")
                 attr("title", NAMES[c] ?: c)
                 onClick { onToggle(c) }
-            }) { Text(c) }
+            }) {
+                ManaPip(c)
+                Text(NAMES[c] ?: c)
+            }
         }
     }
 }

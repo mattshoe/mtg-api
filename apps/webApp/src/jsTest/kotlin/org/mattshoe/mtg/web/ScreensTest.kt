@@ -555,7 +555,8 @@ class CardGridTest {
         // The name is the tile-width half, and the pips are the five
         // colours rather than one per letter of the sentence.
         assertEquals("Alela", (root.querySelector(".deck-name") as org.w3c.dom.HTMLElement).textContent)
-        assertEquals(5, root.querySelectorAll(".mana .ms").length)
+        // Scryfall's own symbols now, not letters in coloured circles.
+        assertEquals(5, root.querySelectorAll(".mana-cost img.mana-sym").length)
     }
 }
 

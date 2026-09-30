@@ -63,6 +63,29 @@ object ManaCost {
         }
     }
 
+    /**
+     * Scryfall's own artwork for a symbol.
+     *
+     * `{W}` is `W.svg`, `{W/U}` is `WU.svg`, `{2/W}` is `2W.svg` —
+     * the symbol with its braces and slashes taken out. Checked
+     * against Scryfall's `/symbology`, which is where the rule comes
+     * from rather than a guess.
+     *
+     * The real symbols rather than a letter in a circle: a mana cost
+     * drawn as `{1}{G}` is something to decode, and everybody who
+     * plays this game already reads the pictures.
+     */
+    fun symbolArt(symbol: String): String {
+        val key = symbol.uppercase().filter { it.isLetterOrDigit() }
+        return "$SYMBOL_BASE/$key.svg"
+    }
+
+    /** Every symbol of a cost, as artwork, in the order they are printed. */
+    fun art(cost: String?): List<Pair<String, String>> =
+        symbols(cost).map { it to symbolArt(it) }
+
+    const val SYMBOL_BASE = "https://svgs.scryfall.io/card-symbols"
+
     /** What the cost costs, ignoring colour. `{X}` counts as nothing. */
     fun manaValue(cost: String?): Int = symbols(cost).sumOf { symbol ->
         val first = symbol.split("/").first()

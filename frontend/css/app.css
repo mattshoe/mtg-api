@@ -294,6 +294,7 @@ select { appearance: none; background-image:
   font-family: var(--mono);
 }
 .pip:hover { border-color: var(--text-2); }
+.pip { display: inline-flex; align-items: center; gap: 6px; }
 .pip[data-c=W].on { background: var(--w); border-color: var(--w); color: #2E2708; }
 .pip[data-c=U].on { background: var(--u); border-color: var(--u); color: #04203A; }
 .pip[data-c=B].on { background: var(--b); border-color: var(--b); color: #2A0D46; }
@@ -626,6 +627,18 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
 .check input { width: auto; margin: 0; }
 .check .small { flex-basis: 100%; }
 
+/* --------------------------------------------------------- mana art */
+/* Scryfall's own symbols. They carry their own shape as well as their
+   colour, which is the part a coloured dot cannot do for somebody who
+   cannot separate the hues. */
+.mana-cost { display: inline-flex; align-items: center; gap: 2px; vertical-align: -1px; white-space: nowrap; }
+.mana-sym {
+  width: 14px; height: 14px; display: inline-block; flex: none;
+  border-radius: 50%; box-shadow: 0 1px 1px rgba(0,0,0,.45);
+}
+.mana-sym.lg { width: 19px; height: 19px; }
+.mana-sym.sm { width: 12px; height: 12px; }
+
 /* ------------------------------------------------------- deck stats */
 /* Charts drawn in CSS rather than by a library: every bar here is a
    div with a width or a height, which is a tenth of the bytes of a
@@ -684,6 +697,26 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
   font: 700 10px/1 var(--mono); color: #10141a;
 }
 .mana-row .pair { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+
+/* Needs and makes as a share of the whole, beside the bars that say
+   how many. A bar answers "how much white"; a pie answers "how much
+   of this deck is white", and those are different questions. */
+/* Two rings on one row. Sized so both fit the narrowest column the
+   grid can give them rather than stacking into a tower. */
+.pies { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+.pie-set { display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0; }
+.pie {
+  width: 76px; height: 76px; border-radius: 50%; flex: none;
+  border: 1px solid var(--line-2);
+  /* The slices themselves come from an inline conic-gradient, which
+     is the whole chart: no canvas, no library, no script. */
+}
+.pie-cap {
+  font-size: 10.5px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .05em; color: var(--text-3);
+}
+.pie-key { display: flex; flex-wrap: wrap; gap: 3px 8px; justify-content: center; }
+.pie-key .k { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-2); }
 .mana-track { display: grid; grid-template-columns: 1fr 42px; gap: 7px; align-items: center; }
 .mana-track .rail { height: 9px; background: var(--bg-3); border-radius: 5px; overflow: hidden; }
 .mana-track .fill { height: 100%; border-radius: 5px; }
@@ -788,7 +821,8 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
   display: block; width: 100%; height: 100%;
   object-fit: cover; object-position: center 32%;
 }
-.deck-line .line-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.deck-line .line-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.deck-line .line-top { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .deck-line .line-text .t-name { font-size: 13.5px; }
 .deck-line .line-type {
   color: var(--text-3); font-size: 11.5px;

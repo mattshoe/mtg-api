@@ -112,6 +112,8 @@ fun DecksScreen(
                     cards.forEach { c -> CardLine(c, open.owner, onOpenCard) }
                 }
             }
+
+            TokenList(state.tokens)
         }
     }
 }
@@ -351,19 +353,6 @@ private fun DeckStats(s: org.mattshoe.mtg.core.DeckStats) {
     if (s.types.isNotEmpty()) Panel { Bars("Card types", s.types, s.totalCards) }
     if (s.rarities.isNotEmpty()) Panel { Bars("Rarity", s.rarities, s.totalCards) }
 
-    if (s.tokens.isNotEmpty()) {
-        Panel {
-            Line("Tokens it makes", Ink3, Design.MINI, FontWeight.SemiBold)
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier.padding(top = 8.dp),
-            ) {
-                s.tokens.forEach { t -> Tag("${t.cards}× ${t.what}") }
-            }
-        }
-    }
-
     if (s.unknown > 0) {
         Line(
             "${s.unknown} card${if (s.unknown == 1) "" else "s"} here have no printing in the " +
@@ -422,4 +411,50 @@ private fun Bars(title: String, bars: List<Bar>, total: Int) {
         }
     }
     Line("Of $total cards.", Ink3, Design.MINI)
+}
+
+/**
+ * The tokens the deck makes, below the list, as real cards.
+ *
+ * Scryfall names them in every card's `all_parts`, so these are
+ * printed tokens with their own art rather than a phrase read out of
+ * the rules text. Two 1/1 Warriors that differ only by colour are two
+ * tokens, which is why the colour is on the row.
+ */
+@Composable
+private fun TokenList(tokens: List<org.mattshoe.mtg.core.TokenCard>) {
+    if (tokens.isEmpty()) return
+    Line("Tokens", Ink, Design.H3, FontWeight.SemiBold, Modifier.padding(top = 6.dp))
+    Panel {
+        tokens.forEach { token ->
+            Row(
+                Modifier.fillMaxWidth().padding(vertical = 5.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(Modifier.size(40.dp).background(Bg3, Radius).clip(Radius)) {
+                    token.art?.let {
+                        AsyncImage(
+                            model = it,
+                            contentDescription = null,
+                            modifier = Modifier.size(40.dp),
+                            contentScale = ContentScale.Crop,
+                        )
+                    }
+                }
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Line(token.name, Ink, Design.SMALL)
+                        token.stats?.let { Line(it, Ink2, Design.MINI) }
+                        Identity(token.colors)
+                    }
+                    Line(token.shortType, Ink3, Design.MINI)
+                }
+                Line("${token.madeBy}×", Ink3, Design.MINI)
+            }
+        }
+    }
 }

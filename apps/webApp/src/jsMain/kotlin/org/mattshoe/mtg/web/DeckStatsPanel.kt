@@ -38,7 +38,6 @@ fun DeckStatsPanel(s: DeckStats) {
             if (s.pips.isNotEmpty() || s.sources.isNotEmpty()) card("Colour") { Colours(s) }
             if (s.types.isNotEmpty()) card("Card types") { Bars(s.types, s.totalCards) }
             if (s.rarities.isNotEmpty()) card("Rarity") { Bars(s.rarities, s.totalCards) }
-            if (s.tokens.isNotEmpty()) card("Tokens it makes", wide = true) { Tokens(s) }
         }
 
         if (s.unknown > 0) {
@@ -129,16 +128,16 @@ private fun Colours(s: DeckStats) {
         val makes = s.sources.firstOrNull { it.label == pip.label }?.value ?: 0
         if (needs == 0 && makes == 0) return@forEach
         Div(attrs = { classes("mana-row") }) {
-            Span(attrs = {
-                classes("sym")
-                style { property("background", "var(--${pip.letter.lowercase()})") }
-                attr("title", pip.label)
-            }) { Text(pip.letter) }
+            ManaPip(pip.letter, "lg")
             Div(attrs = { classes("pair") }) {
                 track(needs, most, pip, "needs", faded = false)
                 track(makes, most, pip, "makes", faded = true)
             }
         }
+    }
+    Div(attrs = { classes("pies") }) {
+        Pie("Needs", s.pips)
+        Pie("Makes", s.sources)
     }
     Div(attrs = { classes("sub") }) {
         Text("Pips the deck asks for, against cards that can produce them. ")
@@ -182,17 +181,44 @@ private fun Bars(bars: List<Bar>, total: Int) {
     Div(attrs = { classes("sub") }) { Text("Of $total cards.") }
 }
 
+
+/**
+ * One colour split, as a ring.
+ *
+ * A bar says how many white pips there are; a ring says what share of
+ * the deck's colour is white, which is the question you ask when
+ * deciding whether a splash is really a splash. Drawn with a single
+ * `conic-gradient`, so the chart is one CSS property and no script.
+ */
 @Composable
-private fun Tokens(s: DeckStats) {
-    Div(attrs = { classes("tokens") }) {
-        s.tokens.forEach { t ->
-            Span(attrs = { classes("token"); attr("title", t.what) }) {
-                Span(attrs = { classes("n") }) { Text("${t.cards}×") }
-                Span(attrs = { classes("w") }) { Text(t.what) }
+private fun Pie(caption: String, bars: List<Bar>) {
+    val total = bars.sumOf { it.value }
+    if (total <= 0) return
+    var at = 0.0
+    val stops = bars.joinToString(", ") { bar ->
+        val from = at
+        at += (bar.value * 100.0) / total
+        val colour = Pip.entries.firstOrNull { it.label == bar.label }?.letter?.lowercase() ?: "c"
+        "var(--$colour) ${from}% ${at}%"
+    }
+    Div(attrs = { classes("pie-set") }) {
+        Div(attrs = {
+            classes("pie")
+            style { property("background", "conic-gradient($stops)") }
+            attr(
+                "title",
+                bars.joinToString(", ") { "${it.label} ${(it.value * 100) / total}%" },
+            )
+        }) {}
+        Span(attrs = { classes("pie-cap") }) { Text("$caption · $total") }
+        Div(attrs = { classes("pie-key") }) {
+            bars.forEach { bar ->
+                val letter = Pip.entries.firstOrNull { it.label == bar.label }?.letter ?: "C"
+                Span(attrs = { classes("k") }) {
+                    ManaPip(letter, "sm")
+                    Text("${(bar.value * 100) / total}%")
+                }
             }
         }
-    }
-    Div(attrs = { classes("sub") }) {
-        Text("Read out of the rules text, so it is wording rather than a token list.")
     }
 }

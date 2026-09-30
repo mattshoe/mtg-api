@@ -283,6 +283,75 @@ class DecksLayoutTest {
         assertEquals(1, shared)
     }
 
+    // ---------------------------------------------------- the tokens
+
+    private fun withTokens() = opened().withTokens(
+        listOf(
+            org.mattshoe.mtg.core.TokenCard(
+                "abcdef12-3456", "Bird", "Token Creature — Bird", "1", "1", "W", madeBy = 2,
+            ),
+            org.mattshoe.mtg.core.TokenCard(
+                "bbcdef12-3456", "Bird", "Token Creature — Bird", "2", "2", "G",
+            ),
+            org.mattshoe.mtg.core.TokenCard("ccdef123-4567", "Clue", "Token Artifact — Clue"),
+        ),
+    )
+
+    @Test
+    fun theTokensAreCardsBelowTheList() = runTest {
+        val frame = mount(1000) { DecksPage(withTokens(), {}, {}) }
+        settle()
+        val heads = frame.all("div.panel-head h2").map { it.textContent.orEmpty() }
+        assertEquals("Tokens", heads.last(), "the tokens are not the last thing on the page")
+        val rows = frame.all("div.panel")
+            .first { it.textContent.orEmpty().startsWith("Tokens") }
+            .all("div.deck-line")
+        assertEquals(3, rows.size)
+        // A card, the same as every other row: art, a name, a type.
+        assertEquals(3, rows.count { it.querySelector("div.thumb img") != null }, "a token with no art")
+    }
+
+    @Test
+    fun twoTokensThatDifferOnlyByColourDoNotLookIdentical() = runTest {
+        // Two 2/2 Birds, one green and one blue, are two tokens. With
+        // nothing on the row saying which, they are two identical
+        // lines and the list reads as a bug.
+        val frame = mount(1000) { DecksPage(withTokens(), {}, {}) }
+        settle()
+        val rows = frame.all("div.panel")
+            .first { it.textContent.orEmpty().startsWith("Tokens") }
+            .all("div.deck-line")
+        val birds = rows.filter { it.textContent.orEmpty().contains("Bird") }
+        assertEquals(2, birds.size)
+        val pips = birds.map { row ->
+            row.all("img.mana-sym").joinToString("") { it.getAttribute("alt").orEmpty() }
+        }
+        assertEquals(listOf("{W}", "{G}"), pips)
+        assertTrue(birds[0].textContent.orEmpty().contains("1/1"), birds[0].textContent.orEmpty())
+        assertTrue(birds[1].textContent.orEmpty().contains("2/2"))
+    }
+
+    @Test
+    fun aColourlessTokenSaysSoRatherThanShowingNothing() = runTest {
+        val frame = mount(1000) { DecksPage(withTokens(), {}, {}) }
+        settle()
+        val clue = frame.all("div.deck-line").first { it.textContent.orEmpty().contains("Clue") }
+        assertEquals(
+            "{C}",
+            clue.all("img.mana-sym").joinToString("") { it.getAttribute("alt").orEmpty() },
+        )
+        // An artifact token has no power and toughness to show.
+        assertTrue(!clue.textContent.orEmpty().contains("/"), clue.textContent.orEmpty())
+    }
+
+    @Test
+    fun aDeckWithNoTokensHasNoTokenPanel() = runTest {
+        val frame = mount(1000) { DecksPage(opened(), {}, {}) }
+        settle()
+        val heads = frame.all("div.panel-head h2").map { it.textContent.orEmpty() }
+        assertTrue("Tokens" !in heads, heads.toString())
+    }
+
     // ------------------------------------------------- grouped by type
 
     @Test

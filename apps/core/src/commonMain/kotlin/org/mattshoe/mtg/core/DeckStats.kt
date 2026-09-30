@@ -8,8 +8,45 @@ data class Bar(val label: String, val value: Int, val note: String = "") {
     fun share(most: Int): Int = if (most <= 0) 0 else ((value * 100.0) / most).roundToInt()
 }
 
-/** A token the deck makes, and how many cards make it. */
-data class TokenMade(val what: String, val cards: Int)
+/**
+ * A token the deck makes — the real card, not a description of one.
+ *
+ * Scryfall names the token components of every card in `all_parts`,
+ * so these are actual printed tokens with their own art. Reading them
+ * out of the rules text, which is what this did first, produced
+ * things like "Or more" and could never find the art.
+ */
+data class TokenCard(
+    val id: String,
+    val name: String,
+    val typeLine: String,
+    val power: String? = null,
+    val toughness: String? = null,
+    val colors: String = "",
+    /** How many cards in the deck make it. */
+    val madeBy: Int = 1,
+) {
+    val art: String? get() = CardQueries.art(id, "art_crop")
+
+    /** "Creature — Soldier", without the "Token" every one of them starts with. */
+    val shortType: String get() = typeLine.removePrefix("Token ").trim()
+
+    /** `1/1`, when it has them. */
+    val stats: String? get() =
+        if (power.isNullOrBlank() || toughness.isNullOrBlank()) null else "$power/$toughness"
+
+    /**
+     * What makes one token different from another.
+     *
+     * Not the id: a Bird token printed in four sets is four ids and
+     * one token, and the deck page listed it four times. A 1/1 white
+     * Bird and a 2/2 blue Bird are genuinely two, and only the power,
+     * the toughness and the colours tell them apart — `all_parts`
+     * carries none of that, which is why the tokens themselves are
+     * fetched rather than just their names.
+     */
+    val identity: String get() = listOf(name, shortType, stats.orEmpty(), colors).joinToString("|")
+}
 
 /**
  * What a deck is made of.
@@ -28,7 +65,6 @@ data class DeckStats(
     val sources: List<Bar>,
     val types: List<Bar>,
     val rarities: List<Bar>,
-    val tokens: List<TokenMade>,
     val lands: Int,
     val spells: Int,
     /**
@@ -83,7 +119,6 @@ object DeckAnalysis {
             sources = sources(cards),
             types = types(cards),
             rarities = rarities(cards),
-            tokens = tokens(cards),
             lands = lands,
             spells = copies - lands,
             unknown = cards.filter { it.group == DeckGroup.UNKNOWN }.sumOf { it.qty },
@@ -180,63 +215,4 @@ object DeckAnalysis {
         return Pip.COLOURS.filter { it.letter.single() in seen }.joinToString("") { it.letter }
     }
 
-    // --------------------------------------------------------- tokens
-
-    /**
-     * What the deck makes, read out of the rules text.
-     *
-     * Scryfall knows the real answer through `all_parts`, which this
-     * database does not store, so this reads the oracle text: the
-     * words between "create" and "token". It is wording, not truth —
-     * but "you will need two Treasure tokens and a 1/1 white Soldier"
-     * is the thing you actually want before you sit down, and nothing
-     * else here can tell you.
-     */
-    private val MAKES = Regex(
-        """\bcreates?\s+([^.;•]{0,120}?)\btokens?\b""",
-        setOf(RegexOption.IGNORE_CASE),
-    )
-
-    /** Leading counts. "two 1/1 Soldier" is the same token as "a 1/1 Soldier". */
-    private val COUNT = Regex(
-        // `\s+|$` and not `\s+`: "create a token that's a copy" leaves
-        // a bare "a" behind, which is not a count word any more and
-        // was surviving as a token called "A".
-        """^(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten|x|that many|a number of|any number of)(?:\s+|$)""",
-        setOf(RegexOption.IGNORE_CASE),
-    )
-
-    fun tokens(cards: List<DeckCard>): List<TokenMade> {
-        val made = mutableMapOf<String, Int>()
-        cards.forEach { card ->
-            val names = MAKES.findAll(card.oracleText.orEmpty().replace('\n', ' '))
-                .mapNotNull { describe(it.groupValues[1]) }
-                .toSet()
-            names.forEach { made[it] = (made[it] ?: 0) + card.qty }
-        }
-        return made.entries
-            .sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
-            .map { TokenMade(it.key, it.value) }
-    }
-
-    /** `1/1`, `X/X` — the shape of a creature token's stats. */
-    private val STATS = Regex("[0-9Xx*+-]+/[0-9Xx*+-]+")
-
-    /** A token's type is a proper noun: Soldier, Treasure, Clue, Map. */
-    private val NAMED = Regex("\\b[A-Z][a-z]{2,}")
-
-    private fun describe(raw: String): String? {
-        var t = raw.trim().replace(Regex("\\s+"), " ")
-        t = COUNT.replace(t, "")
-        t = t.trim().trimEnd(',')
-        // "create a token that's a copy of..." — the descriptor is
-        // after the word, not before it.
-        if (t.isEmpty() || t.startsWith("that", ignoreCase = true)) return "Copy of another permanent"
-        // Sentence fragments that happen to sit between "create" and
-        // "token": "create two **or more** tokens", "create **twice
-        // that many of those** tokens". A real token is named or has
-        // power and toughness; these are neither.
-        if (!STATS.containsMatchIn(t) && !NAMED.containsMatchIn(t)) return null
-        return t.replaceFirstChar(Char::uppercase)
-    }
 }

@@ -59,7 +59,114 @@ class Scryfall internal constructor(private val http: HttpClient) {
         }
     }
 
+    @Serializable
+    private data class Part(
+        val id: String = "",
+        val name: String = "",
+        val component: String = "",
+        @SerialName("type_line") val typeLine: String = "",
+    )
+
+    @Serializable
+    private data class Card(
+        val id: String = "",
+        val name: String = "",
+        @SerialName("type_line") val typeLine: String = "",
+        val power: String? = null,
+        val toughness: String? = null,
+        val colors: List<String> = emptyList(),
+        @SerialName("all_parts") val allParts: List<Part> = emptyList(),
+    )
+
+    @Serializable
+    private data class Collection(val data: List<Card> = emptyList())
+
+    @Serializable
+    private data class Identifier(val id: String)
+
+    @Serializable
+    private data class CollectionRequest(val identifiers: List<Identifier>)
+
+    /**
+     * The tokens a set of cards makes, as real cards.
+     *
+     * Scryfall names every card's token components in `all_parts`,
+     * which is the authoritative answer — reading them out of the
+     * rules text, which is what this did first, produced tokens
+     * called "Or more" and could never find the art.
+     *
+     * Seventy-five identifiers per request is Scryfall's limit, so a
+     * hundred-card deck is two calls. A failure is an empty list: a
+     * deck page that loses its token row is worse than one that
+     * never had it, and neither is worth an error.
+     */
+    suspend fun tokens(scryfallIds: List<String>): List<TokenCard> {
+        val ids = scryfallIds.filter { it.isNotBlank() }.distinct()
+        if (ids.isEmpty()) return emptyList()
+        // Which token ids the deck's cards refer to, and how many
+        // cards refer to each.
+        val refs = mutableMapOf<String, Int>()
+        ids.chunked(COLLECTION_MAX).forEach { chunk ->
+            fetch(chunk).forEach { card ->
+                card.allParts
+                    .filter { it.component == "token" && it.id.isNotBlank() }
+                    .map { it.id }
+                    .distinct()
+                    .forEach { id -> refs[id] = (refs[id] ?: 0) + 1 }
+            }
+        }
+        if (refs.isEmpty()) return emptyList()
+
+        // And then the tokens themselves. `all_parts` gives a name
+        // and a type line and nothing else, so without this a 1/1
+        // white Bird and a 2/2 blue Bird are the same row — and the
+        // same Bird printed in four sets is four of them.
+        val byIdentity = mutableMapOf<String, TokenCard>()
+        refs.keys.chunked(COLLECTION_MAX).forEach { chunk ->
+            fetch(chunk).forEach { card ->
+                val token = TokenCard(
+                    id = card.id,
+                    name = card.name,
+                    typeLine = card.typeLine,
+                    power = card.power,
+                    toughness = card.toughness,
+                    colors = card.colors.sorted().joinToString(""),
+                    madeBy = refs[card.id] ?: 1,
+                )
+                val had = byIdentity[token.identity]
+                byIdentity[token.identity] =
+                    if (had == null) token else had.copy(madeBy = had.madeBy + token.madeBy)
+            }
+        }
+        return byIdentity.values
+            .sortedWith(compareByDescending<TokenCard> { it.madeBy }.thenBy { it.name })
+    }
+
+    private suspend fun fetch(ids: List<String>): List<Card> = try {
+        val text = http.post("$BASE/cards/collection") {
+            contentType(ContentType.Application.Json)
+            header("Accept", "application/json")
+            header("User-Agent", USER_AGENT)
+            setBody(
+                json.encodeToString(
+                    CollectionRequest.serializer(),
+                    CollectionRequest(ids.map { Identifier(it) }),
+                ),
+            )
+        }.bodyAsText()
+        json.decodeFromString<Collection>(text).data
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        // Leaving the row out beats an error over a deck that
+        // otherwise loaded.
+        emptyList()
+    }
+
     companion object {
+        /** Scryfall takes seventy-five identifiers in one call. */
+        const val COLLECTION_MAX = 75
+
         /** Over a caller-supplied engine. See `MtgApi.withEngine`. */
         fun withEngine(http: HttpClient): Scryfall = Scryfall(http)
 

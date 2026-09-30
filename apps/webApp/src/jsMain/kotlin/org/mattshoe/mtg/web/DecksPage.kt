@@ -107,19 +107,18 @@ fun DecksPage(
                         }
                     }
                 }
+
+                Tokens(state)
             }
         }
     }
 }
 
-/** WUBRG pips, or one colourless one. The same markup `util.js` emitted. */
+/** WUBRG, as the symbols rather than letters in circles. */
 @Composable
 private fun Identity(ci: String) {
-    Span(attrs = { classes("mana") }) {
-        val letters = ci.ifEmpty { "C" }
-        letters.forEach { c ->
-            Span(attrs = { classes("ms"); attr("data-s", c.toString()) }) { Text(c.toString()) }
-        }
+    Span(attrs = { classes("mana-cost") }) {
+        ci.ifEmpty { "C" }.forEach { c -> ManaPip(c.toString()) }
     }
 }
 
@@ -198,8 +197,11 @@ private fun CardLine(card: DeckCard, owner: String, onOpen: (DeckCard, String) -
             card.art?.let { Img(src = it, alt = "", attrs = { attr("loading", "lazy") }) }
         }
         Div(attrs = { classes("line-text") }) {
-            Span(attrs = { classes("t-name") }) { Text(card.shown) }
-            card.typeLine?.takeIf { it.isNotBlank() }?.let {
+            Div(attrs = { classes("line-top") }) {
+                Span(attrs = { classes("t-name") }) { Text(card.shown) }
+                ManaCostRow(card.manaCost, "sm")
+            }
+            card.knownTypeLine?.takeIf { it.isNotBlank() }?.let {
                 Span(attrs = { classes("line-type") }) { Text(it) }
             }
         }
@@ -207,5 +209,59 @@ private fun CardLine(card: DeckCard, owner: String, onOpen: (DeckCard, String) -
             Span(attrs = { classes("tag", "bad", "mini") }) { Text("has ${card.owned}") }
         }
         Span(attrs = { classes("num") }) { Text("${card.qty}×") }
+    }
+}
+
+/**
+ * The tokens the deck makes, below the list, as cards.
+ *
+ * Real printed tokens with their own art rather than a description
+ * read out of the rules text — Scryfall names them in `all_parts`,
+ * which is the authoritative answer. Laid out the same as every
+ * other group so the list reads as one thing.
+ */
+@Composable
+private fun Tokens(state: DecksState) {
+    if (state.tokens.isEmpty()) return
+    Div(attrs = { classes("panel") }) {
+        Div(attrs = { classes("panel-head") }) {
+            H2 { Text("Tokens") }
+            Span(attrs = { classes("spacer") }) {}
+            Span(attrs = { classes("tag", "mini") }) { Text("${state.tokens.size}") }
+        }
+        Div(attrs = { classes("panel-body") }) {
+            state.tokens.forEach { token ->
+                Div(attrs = { classes("deck-line"); attr("title", token.name) }) {
+                    Div(attrs = { classes("thumb") }) {
+                        token.art?.let {
+                            Img(src = it, alt = "", attrs = { attr("loading", "lazy") })
+                        }
+                    }
+                    Div(attrs = { classes("line-text") }) {
+                        Div(attrs = { classes("line-top") }) {
+                            Span(attrs = { classes("t-name") }) { Text(token.name) }
+                            token.stats?.let {
+                                Span(attrs = { classes("tag", "mini", "mono") }) { Text(it) }
+                            }
+                            // Two 1/1 Warriors that differ only by
+                            // colour are two tokens, and without this
+                            // they are two identical rows.
+                            Span(attrs = { classes("mana-cost") }) {
+                                token.colors.ifEmpty { "C" }.forEach { ManaPip(it.toString(), "sm") }
+                            }
+                        }
+                        Span(attrs = { classes("line-type") }) { Text(token.shortType) }
+                    }
+                    Span(attrs = { classes("num") }) {
+                        Text("${token.madeBy}×")
+                    }
+                }
+            }
+        }
+        Div(attrs = { classes("panel-body") }) {
+            Div(attrs = { classes("muted", "small") }) {
+                Text("Made by the cards in this deck. You will want these to hand.")
+            }
+        }
     }
 }

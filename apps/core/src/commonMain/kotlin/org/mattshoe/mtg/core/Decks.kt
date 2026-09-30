@@ -339,6 +339,12 @@ data class DecksState(
     val decks: List<Deck> = emptyList(),
     val openSlug: String? = null,
     val cards: List<DeckCard> = emptyList(),
+    /**
+     * The real tokens the open deck makes, from Scryfall's own
+     * `all_parts`. Loaded after the list, so the deck shows
+     * immediately and the tokens arrive behind it.
+     */
+    val tokens: List<TokenCard> = emptyList(),
     val busy: Boolean = false,
     val error: String? = null,
 ) {
@@ -370,8 +376,13 @@ data class DecksState(
     fun loading() = copy(busy = true, error = null)
     fun loaded(decks: List<Deck>) = copy(decks = decks, busy = false, error = null)
     fun opened(slug: String, cards: List<DeckCard>) =
-        copy(openSlug = slug, cards = cards, busy = false, error = null)
+        copy(openSlug = slug, cards = cards, tokens = emptyList(), busy = false, error = null)
 
-    fun close() = copy(openSlug = null, cards = emptyList())
+    fun withTokens(t: List<TokenCard>) = copy(tokens = t)
+
+    /** Every printing the open deck can ask Scryfall about. */
+    val scryfallIds: List<String> get() = cards.mapNotNull { it.scryfallId }.distinct()
+
+    fun close() = copy(openSlug = null, cards = emptyList(), tokens = emptyList())
     fun failed(message: String) = copy(busy = false, error = message)
 }

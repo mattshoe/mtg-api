@@ -86,10 +86,9 @@ class DeckStatsLayoutTest {
         val frame = render(900)
         settle()
         val titles = frame.all("div.stats-card h3").map { it.textContent.orEmpty() }
-        assertEquals(
-            listOf("Mana curve", "Colour", "Card types", "Rarity", "Tokens it makes"),
-            titles,
-        )
+        // Tokens are real cards below the deck list now, not a
+        // guess from the rules text in a panel up here.
+        assertEquals(listOf("Mana curve", "Colour", "Card types", "Rarity"), titles)
         assertTrue(frame.all("div.figure").size >= 5, "no headline numbers")
     }
 
@@ -126,7 +125,10 @@ class DeckStatsLayoutTest {
         settle()
         val rows = frame.all("div.mana-row")
         // White and blue, and nothing for the three the deck does not touch.
-        assertEquals(listOf("W", "U"), rows.map { it.all("span.sym").first().textContent.orEmpty() })
+        assertEquals(
+            listOf("{W}", "{U}"),
+            rows.map { (it.querySelector("img.mana-sym") as HTMLElement).getAttribute("alt").orEmpty() },
+        )
         assertEquals(2, rows.first().all("div.mana-track").size, "needs and makes are two bars")
     }
 
@@ -160,12 +162,36 @@ class DeckStatsLayoutTest {
     }
 
     @Test
-    fun theTokensItMakesAreListed() = runTest {
+    fun eachColourSplitIsAlsoDrawnAsARing() = runTest {
+        // A bar says how many white pips; a ring says what share of
+        // the deck's colour is white, which is the question you ask
+        // about a splash.
         val frame = render(900)
         settle()
-        val tokens = frame.all("span.token").map { it.textContent.orEmpty() }
-        assertEquals(1, tokens.size)
-        assertTrue(tokens.first().contains("1/1 white Soldier creature"), tokens.toString())
+        val pies = frame.all("div.pie")
+        assertEquals(2, pies.size, "one for needs, one for makes")
+        pies.forEach { pie ->
+            val bg = pie.getAttribute("style").orEmpty()
+            assertTrue(bg.contains("conic-gradient"), "the ring has no slices: $bg")
+        }
+        val caps = frame.all("span.pie-cap").map { it.textContent.orEmpty() }
+        assertTrue(caps.any { it.startsWith("Needs") }, caps.toString())
+        assertTrue(caps.any { it.startsWith("Makes") }, caps.toString())
+    }
+
+    @Test
+    fun aRingWithNothingInItIsNotDrawn() = runTest {
+        // A colourless deck has no colour split to show.
+        val frame = document.createElement("div") as HTMLElement
+        document.body!!.appendChild(frame)
+        roots += frame
+        renderComposable(root = frame) {
+            DeckStatsPanel(
+                DeckAnalysis.of(listOf(card("Sol Ring", "Artifact", "{1}", 1.0))),
+            )
+        }
+        settle()
+        assertEquals(0, frame.all("div.pie").size)
     }
 
     @Test
