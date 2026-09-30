@@ -134,6 +134,14 @@ object Inventory {
                 "closingOneUnderneathLeavesTheTopAlone", "navigatingTakesEveryOverlayWithIt",
                 "escapeClosesWhateverIsOnTop", "escapeWithNothingOpenIsLeftAlone",
             )),
+        Feature(Area.SHELL, "A palette a colourblind person can actually read",
+            "app.css", logic = true, done = true,
+            tests = listOf(
+                "noTwoColoursLookTheSameToAnyoneAtAll",
+                "whiteIsTheLightestAndBlackIsTheDarkest",
+                "blackIsGreyRatherThanPurple", "noneOfThemIsNeon",
+                "everyOneOfThemStandsOffThePageItIsDrawnOn",
+            )),
         Feature(Area.SHELL, "Toasts", "util.js", logic = true, done = true,
             tests = listOf("navigatingClearsAStaleToast", "questionMarkToasts", "theHelpKeyToasts")),
 

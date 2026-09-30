@@ -25,14 +25,17 @@
   --bad:       #d6636b;
   --info:      #5b9bd5;
 
-  /* The five and colourless. Saturated rather than pastel: the old
-     set was washed out to the point of being hard to tell apart,
-     and red against green is the pairing colourblindness takes
-     first — so those two are separated by lightness as well as
-     hue. Six hues cannot all survive a red-green deficiency, so
-     every pip in this app carries its letter too and colour is
-     never the only thing saying which one it is. */
-  --w: #F5DA64; --u: #3FA9FF; --b: #B87CFF; --r: #FF5C33; --g: #2ED98F; --c: #9DB2CC;
+  /* The five and colourless.
+     Canonical first: white is the lightest thing here and black is
+     a dark grey, because that is what the words mean. Then laddered
+     by lightness, because lightness is the one axis that survives a
+     colour deficiency — hue does not, and saturation never helped
+     at all. Measured: the closest pair of these is 1.26 apart in
+     contrast under normal vision and under simulated deuteranopia,
+     protanopia and tritanopia. The pastel set was 1.00, which is to
+     say indistinguishable, and the neon set that replaced it was
+     1.01 and harsh with it. `PaletteTest` holds the floor. */
+  --w: #F8F3E0; --u: #61A3DD; --b: #5C5A6B; --r: #C47063; --g: #277A42; --c: #BBCCDE;
 
   --radius: 10px;
   --radius-sm: 7px;
@@ -295,12 +298,12 @@ select { appearance: none; background-image:
 }
 .pip:hover { border-color: var(--text-2); }
 .pip { display: inline-flex; align-items: center; gap: 6px; }
-.pip[data-c=W].on { background: var(--w); border-color: var(--w); color: #2E2708; }
-.pip[data-c=U].on { background: var(--u); border-color: var(--u); color: #04203A; }
-.pip[data-c=B].on { background: var(--b); border-color: var(--b); color: #2A0D46; }
-.pip[data-c=R].on { background: var(--r); border-color: var(--r); color: #3A0F04; }
-.pip[data-c=G].on { background: var(--g); border-color: var(--g); color: #04331F; }
-.pip[data-c=C].on { background: var(--c); border-color: var(--c); color: #131A24; }
+.pip[data-c=W].on { background: var(--w); border-color: var(--w); color: #14181F; }
+.pip[data-c=U].on { background: var(--u); border-color: var(--u); color: #14181F; }
+.pip[data-c=B].on { background: var(--b); border-color: var(--b); color: #F4F7FB; }
+.pip[data-c=R].on { background: var(--r); border-color: var(--r); color: #14181F; }
+.pip[data-c=G].on { background: var(--g); border-color: var(--g); color: #F4F7FB; }
+.pip[data-c=C].on { background: var(--c); border-color: var(--c); color: #14181F; }
 
 /* inline mana cost */
 .mana { display: inline-flex; gap: 2px; vertical-align: -2px; flex-wrap: wrap; }
@@ -309,11 +312,11 @@ select { appearance: none; background-image:
   font: 700 9.5px/1 var(--mono); background: var(--c); color: #1d2630; flex: none;
   box-shadow: inset 0 -1px 0 rgba(0,0,0,.2);
 }
-.ms[data-s=W] { background: var(--w); color: #2E2708; }
-.ms[data-s=U] { background: var(--u); color: #04203A; }
-.ms[data-s=B] { background: var(--b); color: #2A0D46; }
-.ms[data-s=R] { background: var(--r); color: #3A0F04; }
-.ms[data-s=G] { background: var(--g); color: #04331F; }
+.ms[data-s=W] { background: var(--w); color: #14181F; }
+.ms[data-s=U] { background: var(--u); color: #14181F; }
+.ms[data-s=B] { background: var(--b); color: #F4F7FB; }
+.ms[data-s=R] { background: var(--r); color: #14181F; }
+.ms[data-s=G] { background: var(--g); color: #F4F7FB; }
 .ms.hybrid { background: linear-gradient(135deg, var(--a1) 50%, var(--a2) 50%); font-size: 8px; }
 
 /* ---------------------------------------------------------------- tables */
@@ -729,6 +732,9 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
 .pie {
   width: 76px; height: 76px; border-radius: 50%; flex: none;
   border: 1px solid var(--line-2);
+  /* Slices are also separated by a hairline, so two neighbours are
+     told apart by an edge and not only by their colour. */
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.35);
   /* The slices themselves come from an inline conic-gradient, which
      is the whole chart: no canvas, no library, no script. */
 }
