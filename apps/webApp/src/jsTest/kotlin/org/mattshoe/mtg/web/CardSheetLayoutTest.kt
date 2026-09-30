@@ -178,4 +178,76 @@ class CardSheetLayoutTest {
             "the picture is ${r.width} by ${r.height}, a ratio of $ratio",
         )
     }
+
+    /** Two printings: one with a listing, one nobody sells. */
+    private fun shoppable() = detail().copy(
+        printings = listOf(
+            Printing(
+                id = 1,
+                setCode = "akh", setName = "Amonkhet", collectorNumber = "2",
+                finish = "nonfoil", qty = 3,
+                scryfallId = "abcdef12-3456-7890-abcd-ef1234567890",
+                price = 5.36, tcgplayer = "https://tcg.example/anointed",
+            ),
+            Printing(
+                id = 2,
+                setCode = "sld", setName = "Secret Lair", collectorNumber = "17",
+                finish = "foil", qty = 1,
+                scryfallId = "bbcdef12-3456-7890-abcd-ef1234567890",
+            ),
+        ),
+    )
+
+    @Test
+    fun aPrintingYouCanBuyLinksToTcgplayer() = runTest {
+        val frame = open(shoppable())
+        settle()
+        val link = frame.all("a.print-line").firstOrNull() ?: error("no printing links at all")
+        assertEquals("https://tcg.example/anointed", link.getAttribute("href"))
+        // It leaves the site, so it opens away and cannot reach back
+        // through `window.opener`.
+        assertEquals("_blank", link.getAttribute("target"))
+        assertTrue(
+            link.getAttribute("rel").orEmpty().contains("noopener"),
+            "a new tab with no rel=noopener",
+        )
+    }
+
+    @Test
+    fun aPrintingNobodySellsStaysARowRatherThanALinkToNowhere() = runTest {
+        val frame = open(shoppable())
+        settle()
+        assertEquals(1, frame.all("a.print-line").size, "a link to nowhere")
+        assertEquals(2, frame.all("div.print-line, a.print-line").size, "a printing went missing")
+    }
+
+    @Test
+    fun aPrintingQuotesThePriceForTheFinishItIsIn() = runTest {
+        val frame = open(shoppable())
+        settle()
+        val rows = frame.all("div.print-line, a.print-line")
+        assertTrue(rows[0].textContent.orEmpty().contains("$5.36"), rows[0].textContent.orEmpty())
+        // Nothing known is a dash, never a zero — a card is not free.
+        assertTrue(rows[1].textContent.orEmpty().contains("\u2014"), rows[1].textContent.orEmpty())
+    }
+
+    @Test
+    fun aPrintingLineStaysOnOneLine() = runTest {
+        val frame = open(shoppable())
+        settle()
+        if (!Stylesheet.applied()) return@runTest
+        frame.all("div.print-line, a.print-line").forEach { row ->
+            val r = row.getBoundingClientRect()
+            // Everything sits on the same line, so nothing has been
+            // pushed onto a second row. Heights differ between a pill
+            // and plain text, so tops are what to compare.
+            val tops = row.all("span").map { it.getBoundingClientRect().top }
+            assertTrue(
+                (tops.max() - tops.min()) < 4,
+                "a printing wrapped: tops span ${tops.max() - tops.min()}",
+            )
+            val price = row.all("span.num").first().getBoundingClientRect()
+            assertTrue(price.right <= r.right + 1, "the price ran off the row")
+        }
+    }
 }

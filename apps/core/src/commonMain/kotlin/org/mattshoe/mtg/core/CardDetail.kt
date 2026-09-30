@@ -26,6 +26,14 @@ data class Printing(
      * only needed by a card that arrived from a link.
      */
     val cardName: String = "",
+    /**
+     * What this printing is worth, for the finish it is in — a foil
+     * and a nonfoil of the same card are not the same price, and
+     * `card_prices` is the view that already knows that.
+     */
+    val price: Double? = null,
+    /** Where to buy this printing. Already in the database. */
+    val tcgplayer: String? = null,
 )
 
 data class DeckUse(
@@ -157,9 +165,14 @@ object CardQueries {
     }
 
     fun printings(nameNorm: String, owner: String) = Sql(
+        // `card_prices` rather than `prices`: it already works out
+        // which of usd, usd_foil and usd_etched applies to the
+        // finish this copy is in, and it carries the shop link.
         """SELECT c.id, c.name, c.face2, c.setcode, c.set_name, c.collector_number,
-                  c.finish, c.qty, c.scryfall_id
+                  c.finish, c.qty, c.scryfall_id,
+                  cp.price, cp.tcg_url
              FROM cards c
+             LEFT JOIN card_prices cp ON cp.card_id = c.id
             WHERE c.name_norm = ? AND c.owner = ?
             ORDER BY c.released_at DESC, c.setcode, c.collector_number""",
         listOf(nameNorm, owner),
@@ -201,6 +214,8 @@ object CardQueries {
                 finish = row.at(at, "finish") ?: "nonfoil",
                 qty = row.at(at, "qty")?.toIntOrNull() ?: 0,
                 scryfallId = row.at(at, "scryfall_id"),
+                price = row.at(at, "price")?.toDoubleOrNull(),
+                tcgplayer = row.at(at, "tcg_url"),
             )
         }
     }

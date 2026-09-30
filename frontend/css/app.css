@@ -834,6 +834,20 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
 }
 .deck-line .t-name { flex: 1; min-width: 0; }
 
+/* One printing in the card drawer. Same shape as a deck row: a line
+   you can read across, and a link out where there is one to follow. */
+.print-line {
+  display: flex; align-items: center; gap: 8px; padding: 7px 0;
+  font-size: 12.5px; color: var(--text-2); text-decoration: none;
+}
+.print-line + .print-line { border-top: 1px solid var(--line); }
+.print-line .set { flex: none; min-width: 34px; color: var(--text); font-weight: 600; }
+.print-line .cn { flex: none; min-width: 34px; color: var(--text-3); font-size: 11.5px; }
+.print-line .t-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.print-line .num { flex: none; color: var(--text); font-weight: 600; }
+a.print-line:hover { background: var(--bg-3); text-decoration: none; }
+a.print-line::after { content: "\2197"; color: var(--text-3); font-size: 11px; }
+
 /* A row that leaves the site says so, with the same mark the nav
    uses for a link that goes away. */
 a.deck-line { color: inherit; text-decoration: none; }

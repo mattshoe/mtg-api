@@ -1,5 +1,6 @@
 package org.mattshoe.mtg.android
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.mattshoe.mtg.core.CardDetail
+import org.mattshoe.mtg.core.Prices
 
 /**
  * One card, opened. Sibling of `CardSheet` on the web.
@@ -70,17 +72,35 @@ private fun Body(card: CardDetail) {
     if (card.printings.isEmpty()) {
         Text("None owned.", fontSize = 13.sp)
     } else {
+        // Where to buy another, when Scryfall has a listing for that
+        // exact printing. The price beside it is the one for the finish
+        // this copy is in, worked out by the `card_prices` view, so a
+        // foil is not quoted at the nonfoil price.
+        val open = androidx.compose.ui.platform.LocalUriHandler.current
         card.printings.forEach { p ->
-            Text(
-                listOfNotNull(
-                    p.setCode.uppercase(),
-                    p.collectorNumber,
-                    p.setName,
-                    p.finish,
-                    "${p.qty}×",
-                ).joinToString(" · "),
-                fontSize = 13.sp,
-            )
+            val shop = p.tcgplayer
+            Row(
+                Modifier.fillMaxWidth()
+                    .then(
+                        if (shop == null) Modifier
+                        else Modifier.clickable { runCatching { open.openUri(shop) } },
+                    )
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    listOfNotNull(
+                        p.setCode.uppercase(),
+                        p.collectorNumber,
+                        p.setName,
+                        p.finish.takeIf { it != "nonfoil" },
+                        "${p.qty}×",
+                    ).joinToString(" · ") + if (shop != null) " ↗" else "",
+                    fontSize = 13.sp,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(Prices.money(p.price), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            }
         }
     }
 

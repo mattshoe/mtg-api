@@ -444,6 +444,14 @@ object Inventory {
                 "theCardSheetSaysWhatIsOwnedAndWhatIsFree", "theArtComesOffScryfallByTheIdOnTheRow",
                 "theDrawerAsksForLegalitiesAndRulings", "aLegalityKnowsWhetherItIsOneAndReadsAsEnglish", "theDrawerDecodesWhatThoseQueriesReturn",
             )),
+        Feature(Area.CARD, "Every printing shows its price and links to TCGplayer",
+            "card.js", logic = true, done = true,
+            tests = listOf(
+                "aPrintingCarriesItsPriceAndWhereToBuyIt", "printingsAskTheFinishAwarePriceView",
+                "aPrintingYouCanBuyLinksToTcgplayer",
+                "aPrintingNobodySellsStaysARowRatherThanALinkToNowhere",
+                "aPrintingQuotesThePriceForTheFinishItIsIn", "aPrintingLineStaysOnOneLine",
+            )),
         Feature(Area.CARD, "Which decks a card is in, and how many are free", "card.js", logic = true, done = true,
             tests = listOf(
                 "proxiesDoNotCountAgainstWhatIsFree", "moreDecksThanCopiesIsFlaggedAndFreeNeverGoesNegative",

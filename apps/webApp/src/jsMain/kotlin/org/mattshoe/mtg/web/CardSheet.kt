@@ -1,6 +1,9 @@
 package org.mattshoe.mtg.web
 
 import androidx.compose.runtime.Composable
+import org.jetbrains.compose.web.attributes.ATarget
+import org.jetbrains.compose.web.attributes.target
+import org.jetbrains.compose.web.dom.A
 import org.jetbrains.compose.web.dom.Button
 import org.jetbrains.compose.web.dom.Div
 import org.jetbrains.compose.web.dom.H2
@@ -10,6 +13,7 @@ import org.jetbrains.compose.web.dom.Span
 import org.jetbrains.compose.web.dom.Text
 import org.mattshoe.mtg.core.CardDetail
 import org.mattshoe.mtg.core.CardQueries
+import org.mattshoe.mtg.core.Printing
 import org.mattshoe.mtg.core.Prices
 
 /**
@@ -76,17 +80,7 @@ private fun Body(card: CardDetail) {
     if (card.printings.isEmpty()) {
         Div(attrs = { classes("muted", "small") }) { Text("None owned.") }
     } else {
-        Div(attrs = { classes("table-wrap") }) {
-            card.printings.forEach { p ->
-                Div(attrs = { classes("flex-wrap", "small") }) {
-                    Span(attrs = { classes("mono") }) { Text(p.setCode.uppercase()) }
-                    Span(attrs = { classes("mono") }) { Text(p.collectorNumber.orEmpty()) }
-                    Span { Text(p.setName.orEmpty()) }
-                    Span(attrs = { classes("tag", "mini") }) { Text(p.finish) }
-                    Span(attrs = { classes("tag", "mini") }) { Text("${p.qty}×") }
-                }
-            }
-        }
+        card.printings.forEach { p -> PrintingLine(p) }
     }
 
     H3 { Text("Legal in") }
@@ -137,3 +131,40 @@ private fun Rulings(card: CardDetail) {
 /** The price line, shared with the grid so the two never disagree. */
 fun priceLine(price: Double?, layout: String?, releasedAt: String?, today: String): String =
     Prices.orReason(price, layout, releasedAt, today)
+
+/**
+ * One printing you own, and where to buy another.
+ *
+ * The shop link and the price are both already in the database —
+ * `card_prices` works out which of usd, usd_foil and usd_etched
+ * applies to the finish this copy is in, so a foil does not quote a
+ * nonfoil price. No second service to ask.
+ *
+ * A link when there is a listing and a plain row when there is not,
+ * the same rule the token rows follow.
+ */
+@Composable
+private fun PrintingLine(p: Printing) {
+    val body: @Composable () -> Unit = {
+        Span(attrs = { classes("mono", "set") }) { Text(p.setCode.uppercase()) }
+        Span(attrs = { classes("mono", "cn") }) { Text(p.collectorNumber.orEmpty()) }
+        Span(attrs = { classes("t-name") }) { Text(p.setName.orEmpty()) }
+        if (p.finish != "nonfoil") {
+            Span(attrs = { classes("tag", "mini") }) { Text(p.finish) }
+        }
+        Span(attrs = { classes("tag", "mini", "mono") }) { Text("${p.qty}×") }
+        Span(attrs = { classes("num", "mono") }) { Text(Prices.money(p.price, dash = "—")) }
+    }
+
+    val shop = p.tcgplayer
+    if (shop == null) {
+        Div(attrs = { classes("print-line") }) { body() }
+    } else {
+        A(href = shop, attrs = {
+            classes("print-line")
+            target(ATarget.Blank)
+            attr("rel", "noopener noreferrer")
+            attr("title", "Buy the ${p.setCode.uppercase()} printing on TCGplayer")
+        }) { body() }
+    }
+}

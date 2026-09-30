@@ -43,6 +43,41 @@ class CardDetailTest {
         assertEquals(3, card.owned)
     }
 
+    /**
+     * Each printing carries what it is worth and where to buy another.
+     *
+     * The price comes from `card_prices`, which picks usd, usd_foil or
+     * usd_etched by the finish the copy is in, so the foil row must not
+     * come back holding the nonfoil number. A printing nobody lists
+     * comes back with no link rather than a link to nothing.
+     */
+    @Test
+    fun aPrintingCarriesItsPriceAndWhereToBuyIt() {
+        val cols = listOf(
+            "id", "setcode", "set_name", "collector_number", "finish", "qty",
+            "scryfall_id", "price", "tcg_url",
+        )
+        val p = CardQueries.decodePrintings(
+            cols,
+            rows(
+                """[1,"m3c","MH3","409","nonfoil",2,"abc",5.36,"https://tcg/x"]""",
+                """[2,"2x2","2X2","117","foil",1,"def",null,null]""",
+            ),
+        )
+        assertEquals(5.36, p[0].price)
+        assertEquals("https://tcg/x", p[0].tcgplayer)
+        assertEquals(null, p[1].price)
+        assertEquals(null, p[1].tcgplayer, "a link to a listing that does not exist")
+    }
+
+    /** The shop link and the price are read out of the database, not fetched. */
+    @Test
+    fun printingsAskTheFinishAwarePriceView() {
+        val sql = CardQueries.printings("sol ring", "matt").sql
+        assertTrue("card_prices" in sql, "the nonfoil price would be quoted for a foil")
+        assertTrue("tcg_url" in sql, "no shop link comes back at all")
+    }
+
     /** A proxy in a deck does not consume a real card. */
     @Test
     fun proxiesDoNotCountAgainstWhatIsFree() {
