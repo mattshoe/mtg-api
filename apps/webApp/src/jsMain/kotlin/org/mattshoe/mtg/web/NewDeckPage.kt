@@ -93,13 +93,19 @@ private fun Stepper(s: NewDeck, go: (DeckStep) -> Unit) {
 
 @Composable
 private fun FormatStep(s: NewDeck, onState: (NewDeck) -> Unit) {
-    Div(attrs = { classes("flex-wrap") }) {
+    Div(attrs = { classes("pick") }) {
         Format.entries.forEach { f ->
             Button(attrs = {
-                classes("owner-opt")
+                classes("opt")
                 if (s.format == f) classes("on")
+                attr("aria-pressed", (s.format == f).toString())
                 onClick { onState(s.pick(f)) }
-            }) { Text(f.label) }
+            }) {
+                Span(attrs = { classes("opt-mark") }) { if (s.format == f) Text("✓") }
+                Span(attrs = { classes("opt-text") }) {
+                    Span(attrs = { classes("opt-label") }) { Text(f.label) }
+                }
+            }
         }
     }
     Next("Continue →", s.canLeaveFormat) { onState(s.goTo(DeckStep.OWNER)) }
@@ -107,13 +113,19 @@ private fun FormatStep(s: NewDeck, onState: (NewDeck) -> Unit) {
 
 @Composable
 private fun OwnerStep(s: NewDeck, onState: (NewDeck) -> Unit) {
-    Div(attrs = { classes("owner-pick") }) {
+    Div(attrs = { classes("pick") }) {
         Owner.entries.forEach { o ->
             Button(attrs = {
-                classes("owner-opt")
+                classes("opt")
                 if (s.owner == o) classes("on")
+                attr("aria-pressed", (s.owner == o).toString())
                 onClick { onState(s.assign(o)) }
-            }) { Text(o.label) }
+            }) {
+                Span(attrs = { classes("opt-mark") }) { if (s.owner == o) Text("✓") }
+                Span(attrs = { classes("opt-text") }) {
+                    Span(attrs = { classes("opt-label") }) { Text(o.label) }
+                }
+            }
         }
     }
     Next("Continue →", s.canLeaveOwner) { onState(s.goTo(DeckStep.NAME)) }

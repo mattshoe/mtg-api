@@ -370,7 +370,7 @@ class ScreensTest {
     fun nothingIsPreselectedInTheWizard() = runTest {
         val root = mount { MassEntryPage(MassEntry(), {}, {}, {}) }
         settle()
-        assertTrue(root.button("Pick one to continue").disabled)
+        assertTrue(root.button("Continue →").disabled)
         assertTrue(root.text().contains("Nothing is preselected on purpose."))
     }
 

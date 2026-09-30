@@ -50,7 +50,7 @@ fun MassEntryPage(
     // in before this is ever composed.
     val s = state
 
-    Div(attrs = { classes("wrap") }) {
+    Div(attrs = { classes("wrap", "wizard") }) {
         Div(attrs = { classes("page-head") }) {
             Span(attrs = { classes("sub") }) {
                 Text(
@@ -106,16 +106,25 @@ private fun Stepper(s: MassEntry, go: (Step) -> Unit) {
 
 @Composable
 private fun WhichStep(s: MassEntry, pick: (Direction) -> Unit, next: () -> Unit) {
-    Panel("Adding or removing?", note = if (s.cardCount > 0) "${s.cardCount} cards already in the box" else null) {
-        Div(attrs = { classes("owner-pick") }) {
-            Choice("Add to the collection", s.direction == Direction.ADD) { pick(Direction.ADD) }
-            Choice("Remove from the collection", s.direction == Direction.REMOVE) { pick(Direction.REMOVE) }
+    Panel(
+        "Adding or removing?",
+        note = if (s.tally.cards > 0) "${s.tally.cards} cards already in the box" else null,
+    ) {
+        Div(attrs = { classes("pick") }) {
+            Choice(
+                "Add to the collection",
+                "Cards you bought, opened or were given.",
+                s.direction == Direction.ADD,
+            ) { pick(Direction.ADD) }
+            Choice(
+                "Remove from the collection",
+                "Cards you sold, traded away or lost.",
+                s.direction == Direction.REMOVE,
+            ) { pick(Direction.REMOVE) }
         }
-        Div(attrs = { classes("flex-wrap") }) {
-            Primary(if (s.canLeaveWhich) "Continue →" else "Pick one to continue", s.canLeaveWhich, next)
-            if (!s.canLeaveWhich) {
-                Span(attrs = { classes("small", "says") }) { Text("Nothing is preselected on purpose.") }
-            }
+        Foot {
+            Primary("Continue →", s.canLeaveWhich, next)
+            if (!s.canLeaveWhich) Hint("Nothing is preselected on purpose.")
         }
     }
 }
@@ -128,37 +137,37 @@ private fun ListStep(
     onFiles: (List<File>) -> Unit,
 ) {
     val kind = if (s.isCsv) " · CSV" else ""
-    val over = if (s.overLimit) " — over the ${MassEntry.MAX_CARDS} limit" else ""
-    Panel(s.direction!!.question, note = "${s.cardCount} cards$kind$over") {
+    val over = if (s.overLimit) " — over the ${MassEntry.MAX_CARDS} line limit" else ""
+    Panel(s.direction!!.question, note = "${s.tally.lines} lines$kind$over") {
         TextArea(value = s.list, attrs = {
             classes("field")
             rows(14)
             onInput { type(it.value) }
         })
+        Counts(s)
         FileDrop(onFiles)
-        Div(attrs = { classes("flex-wrap") }) {
+        Foot {
             Ghost("← Back") { go(Step.WHICH) }
-            Primary("Continue →", s.canLeaveList) { go(Step.WHO) }
+            Primary("Continue →", s.canLeaveList)  { go(Step.WHO) }
+            if (!s.canLeaveList && s.tally.cards == 0) Hint("Paste a list, or drop a file on the box.")
         }
     }
 }
 
 @Composable
 private fun WhoStep(s: MassEntry, assign: (Owner) -> Unit, go: (Step) -> Unit, preview: () -> Unit) {
-    Panel("Whose collection?", note = "${s.cardCount} cards on the list") {
-        Div(attrs = { classes("owner-pick") }) {
-            Owner.entries.forEach { o -> Choice(o.label, s.owner == o) { assign(o) } }
+    Panel("Whose collection?", note = "${s.tally.cards} cards on the list") {
+        Div(attrs = { classes("pick") }) {
+            Owner.entries.forEach { o -> Choice(o.label, null, s.owner == o) { assign(o) } }
         }
-        Div(attrs = { classes("flex-wrap") }) {
+        Foot {
             Ghost("← Back") { go(Step.LIST) }
             Primary(
-                if (s.canPreview) "Preview changes · ${s.owner!!.slug} →" else "Pick one to continue",
+                if (s.canPreview) "Preview changes →" else "Preview changes →",
                 s.canPreview,
                 preview,
             )
-            if (!s.canPreview) {
-                Span(attrs = { classes("small", "says") }) { Text("Pick whose collection this goes to.") }
-            }
+            if (!s.canPreview) Hint("Pick whose collection this goes to.")
         }
     }
 }
@@ -219,13 +228,40 @@ private fun Panel(title: String, note: String? = null, body: @Composable () -> U
     }
 }
 
+/**
+ * One thing you can pick.
+ *
+ * A row rather than a slab: a mark, a label and a line of help, at
+ * the height of a button instead of the height of a card. What is
+ * chosen is said by a filled mark as well as by colour, because
+ * colour alone is not a signal everybody can read.
+ */
 @Composable
-private fun Choice(label: String, on: Boolean, click: () -> Unit) {
+private fun Choice(label: String, help: String?, on: Boolean, click: () -> Unit) {
     Button(attrs = {
-        classes("owner-opt")
+        classes("opt")
         if (on) classes("on")
+        attr("aria-pressed", on.toString())
         onClick { click() }
-    }) { Text(label) }
+    }) {
+        Span(attrs = { classes("opt-mark") }) { if (on) Text("✓") }
+        Span(attrs = { classes("opt-text") }) {
+            Span(attrs = { classes("opt-label") }) { Text(label) }
+            help?.let { Span(attrs = { classes("opt-help") }) { Text(it) } }
+        }
+    }
+}
+
+/** The row of buttons that ends a step, always in the same place. */
+@Composable
+private fun Foot(body: @Composable () -> Unit) {
+    Div(attrs = { classes("wiz-foot") }) { body() }
+}
+
+/** Why the button beside it is not doing anything yet. */
+@Composable
+private fun Hint(text: String) {
+    Span(attrs = { classes("small", "says") }) { Text(text) }
 }
 
 @Composable
@@ -321,5 +357,31 @@ private fun HistoryPanel(
                 }
             }
         }
+    }
+}
+
+/**
+ * What is in the box, counted two ways.
+ *
+ * A line count is what the request size is limited by and is not the
+ * number anybody pasting a deck wants: "4 Lightning Bolt" is four
+ * cards on one line, and the same card written twice with different
+ * set codes is one card you own two of.
+ */
+@Composable
+private fun Counts(s: MassEntry) {
+    val t = s.tally
+    Div(attrs = { classes("tally") }) {
+        Figure("${t.cards}", if (t.cards == 1) "card" else "cards")
+        Figure("${t.unique}", if (t.unique == 1) "unique" else "unique")
+        Figure("${t.lines}", if (t.lines == 1) "line" else "lines")
+    }
+}
+
+@Composable
+private fun Figure(value: String, label: String) {
+    Div(attrs = { classes("tally-cell") }) {
+        Div(attrs = { classes("tally-n") }) { Text(value) }
+        Div(attrs = { classes("tally-l") }) { Text(label) }
     }
 }

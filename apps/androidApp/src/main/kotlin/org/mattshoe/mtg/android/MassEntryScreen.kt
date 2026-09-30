@@ -116,14 +116,26 @@ private fun Which(s: MassEntry, onState: (MassEntry) -> Unit) {
 @Composable
 private fun ListStep(s: MassEntry, onState: (MassEntry) -> Unit, onPickFile: () -> Unit) {
     val kind = if (s.isCsv) " · CSV" else ""
-    val over = if (s.overLimit) " — over the ${MassEntry.MAX_CARDS} limit" else ""
-    Panel(head = s.direction!!.question, note = "${s.cardCount} cards$kind$over") {
+    val over = if (s.overLimit) " — over the ${MassEntry.MAX_CARDS} line limit" else ""
+    Panel(head = s.direction!!.question, note = "${s.tally.lines} lines$kind$over") {
         OutlinedTextField(
             value = s.list,
             onValueChange = { onState(s.type(it)) },
             modifier = Modifier.fillMaxWidth().height(260.dp),
             placeholder = { Text("One card per line.") },
         )
+        Spacer(Modifier.height(8.dp))
+        // What the box adds up to. A line count is what the request
+        // size is limited by, not what anybody pasting a deck wants:
+        // "4 Lightning Bolt" is four cards on one line.
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Figure("${s.tally.cards}", if (s.tally.cards == 1) "card" else "cards")
+            Figure("${s.tally.unique}", "unique")
+            Figure("${s.tally.lines}", if (s.tally.lines == 1) "line" else "lines")
+        }
         Spacer(Modifier.height(8.dp))
         // Reading a file only fills the box. It never submits and never
         // advances a step, the same as the web.
@@ -138,7 +150,7 @@ private fun ListStep(s: MassEntry, onState: (MassEntry) -> Unit, onPickFile: () 
 
 @Composable
 private fun Who(s: MassEntry, onState: (MassEntry) -> Unit, preview: () -> Unit) {
-    Panel(head = "Whose collection?", note = "${s.cardCount} cards on the list") {
+    Panel(head = "Whose collection?", note = "${s.tally.cards} cards on the list") {
         Owner.entries.forEach { o -> Choice(o.label, s.owner == o) { onState(s.assign(o)) } }
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -243,5 +255,14 @@ private fun HistoryPanel(
         }
         Spacer(Modifier.height(8.dp))
         OutlinedButton(onClick = onClear) { Text("Clear") }
+    }
+}
+
+/** One number and what it counts, for the tally under the box. */
+@Composable
+private fun Figure(value: String, label: String) {
+    Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+        Line(value, Ink, org.mattshoe.mtg.core.Design.H2, androidx.compose.ui.text.font.FontWeight.SemiBold)
+        Line(label.uppercase(), Ink3, org.mattshoe.mtg.core.Design.MINI)
     }
 }

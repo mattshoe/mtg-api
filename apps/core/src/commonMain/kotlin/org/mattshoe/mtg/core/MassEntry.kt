@@ -41,6 +41,13 @@ data class MassEntry(
 
     val cardCount: Int get() = DeckList.countCards(list)
     val isCsv: Boolean get() = DeckList.looksLikeCsv(list)
+
+    /**
+     * What is in the box: how many cards, and how many different
+     * ones. A line count is what the request size is limited by and
+     * is not the number anybody pasting a deck is looking for.
+     */
+    val tally: DeckList.Tally get() = DeckList.tally(list)
     val overLimit: Boolean get() = cardCount > MAX_CARDS
 
     // ---------------------------------------------------------- the gates

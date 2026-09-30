@@ -241,8 +241,9 @@ class ScreensTest {
     fun theCardSheetSaysWhatIsOwnedAndWhatIsFree() {
         val detail = CardDetail(
             name = "Sol Ring",
-            owner = "matt",
-            printings = listOf(Printing(1, "m3c", "Modern Horizons 3", "409", "nonfoil", 3, null)),
+            printings = listOf(
+                Printing(1, "m3c", "Modern Horizons 3", "409", "nonfoil", 3, null, owner = "matt"),
+            ),
             usedIn = listOf(DeckUse("alela", "Alela", "matt", 1, "ramp", false)),
         )
         content { CardSheet(detail) {} }
@@ -250,14 +251,15 @@ class ScreensTest {
         rule.onNodeWithText("3 owned").assertIsDisplayed()
         rule.onNodeWithText("2 free").assertExists()
         rule.onNodeWithText("Alela · 1× · ramp").assertExists()
+        // A card is nobody's in particular, so the page says who has it.
+        rule.onNodeWithText("matt · 3 owned · 2 free").assertExists()
     }
 
     @Test
     fun aProxyDoesNotEatACopy() {
         val detail = CardDetail(
             name = "Sol Ring",
-            owner = "matt",
-            printings = listOf(Printing(1, "m3c", null, "409", "nonfoil", 1, null)),
+            printings = listOf(Printing(1, "m3c", null, "409", "nonfoil", 1, null, owner = "matt")),
             usedIn = listOf(DeckUse("p", "Proxy deck", "matt", 1, null, true)),
         )
         content { CardSheet(detail) {} }
