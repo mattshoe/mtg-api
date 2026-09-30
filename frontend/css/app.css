@@ -175,7 +175,11 @@ h3 { font-size: 14px; }
   border-radius: var(--radius); box-shadow: var(--shadow);
 }
 .app-menu.open { display: flex; flex-direction: column; gap: 1px; }
-.app-menu.right { left: auto; right: 0; }
+/* Opened from the right edge, so a menu in a header does not run off
+   the side of a phone. Not `.right`, which is the text-alignment
+   utility — the group labels inherited it and read down the far
+   edge while their options read down the near one. */
+.app-menu.from-right { left: auto; right: 0; }
 
 /* Something with a menu hanging off it. The nav is one; the deck's
    share button is the other, and it opens from the right edge so a

@@ -120,6 +120,7 @@ object Inventory {
             tests = listOf(
                 "theShareOffersALinkOrTheListEitherWay", "eachOfTheFourReportsItself",
                 "aPressOutsideShutsTheShareMenu", "theShareMenuStaysOnScreenAtPhoneWidth",
+                "theShareMenuReadsDownItsLeftEdge",
                 "aDeckLeadsWithItsCommander", "aDeckWithNoCommanderHasNoBlankLineAtTheTop",
                 "twoCommandersBothLead", "aDeckExportPastesBackIntoTheEntryBox",
                 "anEmptyDeckExportsNothing", "theDeckFilenameIsTheDeckAndTheDate",

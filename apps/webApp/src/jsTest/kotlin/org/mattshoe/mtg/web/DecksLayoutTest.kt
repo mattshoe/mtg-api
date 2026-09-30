@@ -334,6 +334,30 @@ class DecksLayoutTest {
     }
 
     @Test
+    fun theShareMenuReadsDownItsLeftEdge() = runTest {
+        // The header aligns its own children to the right, and the
+        // group labels inherited it — "LINK" hard against the far
+        // edge with its two options under the near one.
+        val frame = mount(1000) { DecksPage(opened(), {}, {}) }
+        settle()
+        if (!Stylesheet.applied()) return@runTest
+        frame.all("button[aria-label='Share this deck']").first().click()
+        settle()
+        val menu = frame.all("div.app-menu.open").first()
+        // The boxes are full width either way, so it is the text
+        // inside them that has to be checked.
+        (menu.all("div.app-menu-group") + menu.all("button.app-tab")).forEach { row ->
+            // "start" is what a left-to-right page computes to when
+            // nothing has overridden it, and it is the same edge.
+            val align = kotlinx.browser.window.getComputedStyle(row).textAlign
+            assertTrue(
+                align == "left" || align == "start",
+                "'${row.textContent}' reads down the $align edge",
+            )
+        }
+    }
+
+    @Test
     fun aPressOutsideShutsTheShareMenu() = runTest {
         val frame = mount(1000) { DecksPage(opened(), {}, {}) }
         settle()

@@ -323,7 +323,7 @@ private fun ShareMenu(onShare: (ShareWhat, ExportTo) -> Unit) {
         }
 
         Div(attrs = {
-            classes("app-menu", "right")
+            classes("app-menu", "from-right")
             if (open) classes("open")
         }) {
             ShareWhat.entries.forEach { what ->
