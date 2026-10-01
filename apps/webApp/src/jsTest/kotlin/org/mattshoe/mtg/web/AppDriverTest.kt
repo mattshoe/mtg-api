@@ -514,6 +514,17 @@ class AppDriverTest {
         waitFor("the write") { writes.isNotEmpty() }
         settle()
         assertEquals(listOf("/cards/add"), writes, "it wrote more than once")
+
+        // And the button is not sitting there live while it happens.
+        // The refusal above is the backstop for the frame between the
+        // press and the redraw; this is what you can see.
+        assertTrue(
+            view.all("button").none { b ->
+                b as HTMLButtonElement
+                b.reads() == "Add 1 printings" && !b.disabled
+            },
+            "the apply button is still live after being pressed",
+        )
     }
 
     // ------------------------------------------- the suggestion list
