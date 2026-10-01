@@ -13,6 +13,7 @@ enum class Overlay {
     PALETTE,
     CHEATSHEET,
     DECK_EDIT,
+    DECK_TWEAK,
     DISASSEMBLE,
     UNLOCK,
     NEW_DECK,

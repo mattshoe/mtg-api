@@ -956,6 +956,65 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
    never so tall that the counts under it are off the screen. */
 .wizard textarea.field { height: clamp(150px, 34vh, 320px); }
 
+/* ------------------------------------------------ deck maintenance */
+/* One button on the row the card is on. Three of them left no room
+   for the card's own name, so what to do is asked inside the sheet.
+   The row still opens the card, so this has to keep the press. */
+.row-act {
+  margin-left: 4px; width: 34px; height: 34px; padding: 0; flex: none;
+  display: grid; place-items: center;
+  border: 1px solid var(--line-2); border-radius: 8px;
+  background: var(--bg-3); color: var(--text-2);
+  font: 600 14px/1 var(--mono); cursor: pointer;
+}
+@media (hover: hover) {
+  .row-act:hover { background: var(--bg-hover); color: var(--text); border-color: var(--text-3); }
+}
+@media (pointer: coarse) { .row-act { width: 38px; height: 38px; } }
+
+/* A button that owns its row, for the one thing a deck page is for
+   when there is nothing on it yet. */
+.btn.wide { width: 100%; justify-content: center; }
+
+/* What the change will do, in a sentence, above the buttons that do
+   it. The sheet is small enough that the summary is the headline. */
+.tweak-says {
+  padding: 9px 11px; border-radius: var(--radius-sm);
+  background: var(--bg-3); border: 1px solid var(--line);
+  font-size: 13.5px; font-weight: 600; color: var(--text);
+}
+
+/* The card chosen to come in. */
+.tweak-pick {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 9px 11px; border-radius: var(--radius-sm);
+  background: var(--accent-dim); border: 1px solid var(--accent);
+}
+.tweak-pick .t-name { font-size: 13.5px; font-weight: 600; color: var(--accent-2); }
+
+/* What the search turned up. Capped so a two-letter term cannot
+   push the buttons off the bottom of a phone. */
+.found { max-height: 44vh; overflow-y: auto; overscroll-behavior: contain; border-top: 1px solid var(--line); }
+.found-row {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  min-height: 48px; padding: 8px 10px; text-align: left;
+  background: none; border: 0; border-bottom: 1px solid var(--line);
+  color: var(--text); font: inherit; cursor: pointer;
+}
+@media (hover: hover) {
+  .found-row:hover { background: var(--bg-3); }
+}
+.found-row .t-name { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 550;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.found-row .line-type { flex: none; font-size: 11.5px; color: var(--text-3); }
+
+/* How many, with the two buttons a thumb wants. */
+.counter { display: flex; align-items: center; gap: 8px; }
+.counter .btn { min-width: 48px; min-height: 44px; font-size: 18px; }
+.counter .field.count {
+  width: 84px; text-align: center; font: 600 16px/1 var(--mono);
+}
+
 /* What a write did, or would do. One row per printing, readable on
    a phone: the card on the left and the numbers hard right, rather
    than 248 lines of monospace nobody can check. */

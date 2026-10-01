@@ -23,6 +23,7 @@ import org.mattshoe.mtg.core.DecksState
 import org.mattshoe.mtg.core.ExportTo
 import org.mattshoe.mtg.core.ShareWhat
 import org.mattshoe.mtg.core.TokenCard
+import org.mattshoe.mtg.core.Tweak
 
 /** Decks, on the web. Sibling of `DecksScreen`. */
 @Composable
@@ -35,6 +36,9 @@ fun DecksPage(
     onEdit: (Deck) -> Unit = {},
     onDisassemble: (Deck) -> Unit = {},
     onOpenCard: (DeckCard, String) -> Unit = { _, _ -> },
+    /** Maintenance, one card at a time, without leaving the page. */
+    onAddCard: () -> Unit = {},
+    onTweak: (DeckCard, Tweak?) -> Unit = { _, _ -> },
     onShare: (ShareWhat, ExportTo) -> Unit = { _, _ -> },
 ) {
     Div(attrs = { classes("wrap") }) {
@@ -99,6 +103,17 @@ fun DecksPage(
                 // By type, in the order every deck list is written in,
                 // alphabetical inside each section. The grouping is in
                 // the core so the phone cannot sort it differently.
+                if (admin) {
+                    Div(attrs = { classes("panel") }) {
+                        Div(attrs = { classes("panel-body") }) {
+                            Button(attrs = {
+                                classes("btn", "primary", "wide")
+                                onClick { onAddCard() }
+                            }) { Text("+ Add a card") }
+                        }
+                    }
+                }
+
                 state.byType.forEach { (group, cards) ->
                     Div(attrs = { classes("panel") }) {
                         Div(attrs = { classes("panel-head") }) {
@@ -109,7 +124,7 @@ fun DecksPage(
                             }
                         }
                         Div(attrs = { classes("panel-body") }) {
-                            cards.forEach { CardLine(it, open.owner, onOpenCard) }
+                            cards.forEach { CardLine(it, open.owner, onOpenCard, admin, onTweak) }
                         }
                     }
                 }
@@ -187,7 +202,13 @@ private fun Banner(deck: Deck, state: DecksState) {
  * many. The whole row opens the card, the way the grid tiles do.
  */
 @Composable
-private fun CardLine(card: DeckCard, owner: String, onOpen: (DeckCard, String) -> Unit) {
+private fun CardLine(
+    card: DeckCard,
+    owner: String,
+    onOpen: (DeckCard, String) -> Unit,
+    admin: Boolean = false,
+    onTweak: (DeckCard, Tweak?) -> Unit = { _, _ -> },
+) {
     Div(attrs = {
         classes("deck-line")
         attr("role", "button")
@@ -204,8 +225,9 @@ private fun CardLine(card: DeckCard, owner: String, onOpen: (DeckCard, String) -
         }
         Div(attrs = { classes("line-text") }) {
             Div(attrs = { classes("line-top") }) {
+                // The cost is not what a deck list is read for, and on
+                // a phone it was taking the room the name needed.
                 Span(attrs = { classes("t-name") }) { Text(card.shown) }
-                ManaCostRow(card.manaCost, "sm")
             }
             card.knownTypeLine?.takeIf { it.isNotBlank() }?.let {
                 Span(attrs = { classes("line-type") }) { Text(it) }
@@ -215,8 +237,24 @@ private fun CardLine(card: DeckCard, owner: String, onOpen: (DeckCard, String) -
             Span(attrs = { classes("tag", "bad", "mini") }) { Text("has ${card.owned}") }
         }
         Span(attrs = { classes("num") }) { Text("${card.qty}×") }
+        // Maintenance lives on the row the card is on. The row still
+        // opens the card, so each of these has to keep the press to
+        // itself.
+        // One button, not three: three marks on every row of a
+        // hundred-card list left no room for the card's own name.
+        // What to do is asked inside.
+        if (admin) {
+            Button(attrs = {
+                classes("row-act")
+                attr("title", "Change this card")
+                attr("aria-label", "Change ${card.shown}")
+                onClick { e -> e.stopPropagation(); onTweak(card, null) }
+            }) { Text("⋯") }
+        }
     }
 }
+
+
 
 /**
  * The tokens the deck makes, below the list, as cards.

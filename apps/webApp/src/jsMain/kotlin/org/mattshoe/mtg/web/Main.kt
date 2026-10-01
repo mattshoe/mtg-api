@@ -23,8 +23,11 @@ import org.mattshoe.mtg.core.CardQueries
 import org.mattshoe.mtg.core.CardRef
 import org.mattshoe.mtg.core.CardRow
 import org.mattshoe.mtg.core.Completion
+import org.mattshoe.mtg.core.DeckCard
 import org.mattshoe.mtg.core.DeckEditState
 import org.mattshoe.mtg.core.DeckQueries
+import org.mattshoe.mtg.core.DeckTweak
+import org.mattshoe.mtg.core.Tweak
 import org.mattshoe.mtg.core.DisassembleState
 import org.mattshoe.mtg.core.EntryHistory
 import org.mattshoe.mtg.core.Export
@@ -145,6 +148,7 @@ object MtgApp {
     private var searchJob: Job? = null
     private var lookupJob: Job? = null
     private var findJob: Job? = null
+    private var tweakJob: Job? = null
 
     private val store: Store = BrowserStore()
 
@@ -230,6 +234,12 @@ object MtgApp {
                     EntryHistory.save(store, app.history)
                 },
                 onEditDeck = { slug -> editDeck(slug) },
+                onAddCard = { startTweak(null, Tweak.ADD) },
+                onTweak = { card, kind -> startTweak(card, kind) },
+                onTweakState = { next -> app = app.copy(deckTweak = next) },
+                onTweakFind = { term -> findForTweak(term) },
+                onTweakPreview = { work { planTweak(app) } },
+                onTweakApply = { work { applyTweak(app) } },
                 onReviewDeck = { work { reviewDeck(app) } },
                 onSaveDeck = { work { saveDeck(app) } },
                 onAskDisassemble = { slug -> askDisassemble(slug) },
@@ -731,6 +741,78 @@ object MtgApp {
     private fun editDeck(slug: String) {
         val deck = app.decks.decks.firstOrNull { it.slug == slug } ?: return
         app = app.copy(deckEdit = DeckEditState.of(deck, app.decks.cards)).opening(Overlay.DECK_EDIT)
+    }
+
+    // ------------------------------------------------ one card at a time
+
+    /**
+     * Maintenance on the deck's own page.
+     *
+     * There is no per-card endpoint and there does not need to be:
+     * `/decks/list` takes the whole list and works out the
+     * difference, so a swap goes through the same checking, the same
+     * sourcing and the same record as a full rewrite.
+     */
+    private fun startTweak(card: DeckCard?, kind: Tweak?) {
+        val deck = app.decks.open ?: return
+        val commander = app.decks.cards.filter { it.role == "commander" }
+            .joinToString(" // ") { it.name }
+            .ifEmpty { deck.commanderName.orEmpty() }
+        val tweak = if (card == null) {
+            DeckTweak.add(deck, commander)
+        } else {
+            DeckTweak.on(deck, commander, card, kind)
+        }
+        app = app.copy(deckTweak = tweak).opening(Overlay.DECK_TWEAK)
+    }
+
+    /** Debounced, and the one in flight is abandoned when a newer starts. */
+    private fun findForTweak(term: String) {
+        tweakJob?.cancel()
+        tweakJob = scope.launch {
+            delay(Completion.DEBOUNCE_MS.toLong())
+            try {
+                val r = api.query(PaletteQueries.find(term))
+                val owned = PaletteQueries.decode(r.cols, r.rows)
+                app = app.copy(deckTweak = app.deckTweak?.searched(owned))
+                // And anything else that is a real card. A deck can
+                // want one nobody owns yet; the plan calls that "to
+                // buy" and says so before it writes.
+                val named = scryfall.complete(term)
+                app = app.copy(deckTweak = app.deckTweak?.searched(owned, named))
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // A finder that cannot reach the server is not an
+                // error worth a dialog; the box still takes typing.
+            }
+        }
+    }
+
+    private suspend fun planTweak(s: AppState): AppState {
+        val t = s.deckTweak ?: return app
+        app = app.copy(deckTweak = t.working())
+        return try {
+            val plan = api.setDeckList(token(), t.slug, t.commander, t.listAfter(s.decks.cards), dryRun = true)
+            app.copy(deckTweak = app.deckTweak?.planned(plan))
+        } catch (ex: ApiFailure) {
+            app.copy(deckTweak = app.deckTweak?.failed(ex.message ?: "that did not work"))
+        }
+    }
+
+    private suspend fun applyTweak(s: AppState): AppState {
+        val t = s.deckTweak ?: return app
+        app = app.copy(deckTweak = t.working())
+        return try {
+            val plan = api.setDeckList(token(), t.slug, t.commander, t.listAfter(s.decks.cards), dryRun = false)
+            // Reopen the deck so the list on screen is the list that
+            // is now stored, rather than the one that was.
+            openDeck(app.copy(deckTweak = app.deckTweak?.finished()), t.slug)
+                .closing(Overlay.DECK_TWEAK)
+                .say(t.summary + if (plan.buying > 0) " — ${plan.buying} bought" else "")
+        } catch (ex: ApiFailure) {
+            app.copy(deckTweak = app.deckTweak?.failed(ex.message ?: "that did not work"))
+        }
     }
 
     private suspend fun reviewDeck(s: AppState): AppState {

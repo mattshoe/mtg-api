@@ -36,18 +36,32 @@ class Scryfall internal constructor(private val http: HttpClient) {
 
     private val json = Json { ignoreUnknownKeys = true }
 
+    /** No `encodeURIComponent` on every target, so by hand. */
+    private fun encodeTerm(s: String): String = buildString {
+        s.encodeToByteArray().forEach { b ->
+            val c = b.toInt().toChar()
+            if (c.isLetterOrDigit() && b.toInt() in 0..127 || c in "-_.~") append(c)
+            else append('%').append((b.toInt() and 0xFF).toString(16).uppercase().padStart(2, '0'))
+        }
+    }
+
     /** Names that start like this. Two characters is the useful minimum. */
     suspend fun complete(term: String, limit: Int = 10): List<String> {
         if (term.trim().length < MIN_TERM) return emptyList()
         return try {
-            val text = http.get("$BASE/cards/autocomplete") {
-                parameter("q", term.trim())
-                header("Accept", "application/json")
+            // Not the Ktor client: its JS engine checks the response
+            // against a `Content-Length` that describes the
+            // compressed body, so every call here threw on the web
+            // and the catch below turned that into "no suggestions".
+            val text = plainGet(
+                http,
+                "$BASE/cards/autocomplete?q=" + encodeTerm(term.trim()),
+                accept = "application/json",
                 // Scryfall answers 400 to a bare client library user
                 // agent, and asks callers to say who they are. Their
                 // CDN does the same to the card images.
-                header("User-Agent", USER_AGENT)
-            }.bodyAsText()
+                userAgent = USER_AGENT,
+            )
             json.decodeFromString<Names>(text).data.take(limit)
         } catch (e: kotlinx.coroutines.CancellationException) {
             // The next keystroke replacing this lookup. Swallowing it

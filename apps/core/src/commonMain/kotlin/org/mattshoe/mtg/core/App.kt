@@ -24,6 +24,8 @@ data class AppState(
     val palette: PaletteState = PaletteState(),
     val card: CardDetail? = null,
     val deckEdit: DeckEditState? = null,
+    /** One card being added, swapped, counted or taken out. */
+    val deckTweak: DeckTweak? = null,
     val disassemble: DisassembleState? = null,
     /** What is on top, and therefore what back closes. */
     val overlays: Overlays = Overlays(),
@@ -181,6 +183,7 @@ data class AppState(
     private fun forget(o: Overlay): AppState = when (o) {
         Overlay.PALETTE -> copy(palette = palette.closed())
         Overlay.DECK_EDIT -> copy(deckEdit = null)
+        Overlay.DECK_TWEAK -> copy(deckTweak = null)
         Overlay.DISASSEMBLE -> copy(disassemble = null)
         Overlay.NEW_DECK -> copy(newDeck = NewDeck())
         Overlay.CHEATSHEET, Overlay.UNLOCK -> this

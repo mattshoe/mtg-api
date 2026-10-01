@@ -17,6 +17,9 @@ import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.CardRow
 import org.mattshoe.mtg.core.EntryHistory
 import org.mattshoe.mtg.core.CardDetail
+import org.mattshoe.mtg.core.DeckCard
+import org.mattshoe.mtg.core.DeckTweak
+import org.mattshoe.mtg.core.Tweak
 import org.mattshoe.mtg.core.ExportTo
 import org.mattshoe.mtg.core.Found
 import org.mattshoe.mtg.core.HistoryEntry
@@ -67,6 +70,12 @@ fun AppShell(
     onDisassemble: () -> Unit = {},
     onCheckNames: () -> Unit = {},
     onCreateDeck: () -> Unit = {},
+    onAddCard: () -> Unit = {},
+    onTweak: (DeckCard, Tweak?) -> Unit = { _, _ -> },
+    onTweakState: (DeckTweak) -> Unit = {},
+    onTweakFind: (String) -> Unit = {},
+    onTweakPreview: () -> Unit = {},
+    onTweakApply: () -> Unit = {},
 ) {
     var password by remember { mutableStateOf("") }
 
@@ -109,6 +118,8 @@ fun AppShell(
             onDisassemble = { onAskDisassemble(it.slug) },
             onOpenCard = { card, owner -> onOpenNamed(card.name, card.nameNorm, owner) },
             onShare = onShareDeck,
+            onAddCard = onAddCard,
+            onTweak = onTweak,
         )
 
         View.STATS -> StatsPage(state.stats) { owner: Owner? ->
@@ -149,6 +160,17 @@ fun AppShell(
     }
 
     // ------------------------------------------------------- overlays
+
+    state.deckTweak?.takeIf { Overlay.DECK_TWEAK in state.overlays }?.let { tweak ->
+        DeckTweakSheet(
+            state = tweak,
+            onState = onTweakState,
+            onFind = onTweakFind,
+            onPreview = onTweakPreview,
+            onApply = onTweakApply,
+            onClose = { onState(state.closing(Overlay.DECK_TWEAK)) },
+        )
+    }
 
     if (Overlay.PALETTE in state.overlays) {
         PaletteDialog(
