@@ -38,8 +38,31 @@ data class Change(
     val finish: String,
     val before: Int,
     val after: Int,
+    /**
+     * The card's Scryfall id, for the picture on the row.
+     *
+     * Seventh and defaulted: the change rows are a positional array
+     * on the wire, and a server that has not been redeployed yet
+     * sends six. A row with no id gets no picture rather than no row.
+     */
+    val scryfallId: String = "",
 ) {
     val isIncrease: Boolean get() = after > before
+
+    /** How many copies moved, signed. `+1`, `-2`. */
+    val delta: Int get() = after - before
+
+    /** A printing nobody owned a moment ago. */
+    val isNew: Boolean get() = before == 0 && after > 0
+
+    /** The last one, gone. */
+    val isGone: Boolean get() = after == 0 && before > 0
+
+    /** `+1` / `-2`, the way it should read on the row. */
+    val sign: String get() = if (delta > 0) "+$delta" else "$delta"
+
+    /** Cropped art for the review row, or null when the id never arrived. */
+    val art: String? get() = CardQueries.art(scryfallId.ifBlank { null }, "art_crop")
 }
 
 @Serializable
@@ -51,7 +74,16 @@ data class Applied(
     val changes: List<Change> = emptyList(),
     val errors: List<String> = emptyList(),
     val notes: List<String> = emptyList(),
-)
+) {
+    /** Copies moved, however they moved. The number people check. */
+    val copies: Int get() = changes.sumOf { if (it.delta < 0) -it.delta else it.delta }
+
+    /** Printings that did not exist in the collection before. */
+    val fresh: Int get() = changes.count { it.isNew }
+
+    /** Printings the collection no longer has any of. */
+    val emptied: Int get() = changes.count { it.isGone }
+}
 
 @Serializable
 data class Unlocked(
@@ -80,6 +112,7 @@ internal object ChangeSerializer :
             finish = at(3)?.jsonPrimitive?.content.orEmpty(),
             before = at(4)?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
             after = at(5)?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
+            scryfallId = at(6)?.jsonPrimitive?.content.orEmpty(),
         )
     }
 

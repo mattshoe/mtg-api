@@ -266,6 +266,122 @@ class MassEntryPageTest {
         assertTrue(cells[2].startsWith("3"), "three lines, not ${cells[2]}")
     }
 
+    /** A preview the size of a real one. */
+    private fun previewed(n: Int = 30): MassEntry {
+        val changes = (1..n).map { i ->
+            org.mattshoe.mtg.core.Change(
+                name = "A Card With Quite A Long Name Number $i",
+                set = "fra",
+                collectorNumber = "$i",
+                finish = if (i % 9 == 0) "foil" else "nonfoil",
+                before = if (i % 3 == 0) 0 else 1,
+                after = if (i % 3 == 0) 1 else 2,
+            )
+        }
+        return MassEntry(direction = org.mattshoe.mtg.core.Direction.ADD)
+            .type((1..n).joinToString("\n") { "1 A Card With Quite A Long Name Number $it" })
+            .assign(org.mattshoe.mtg.core.Owner.MATT)
+            .previewed(org.mattshoe.mtg.core.Applied(resolved = n, changes = changes))
+            .goTo(org.mattshoe.mtg.core.Step.REVIEW)
+    }
+
+    @Test
+    fun thePreviewIsRowsAndNotAWallOfText() = runTest {
+        // 248 lines of monospace in one <pre> is not something
+        // anybody can check before pressing the button that writes.
+        val root = mount(previewed(), width = PHONE)
+        settle()
+        assertEquals(0, root.querySelectorAll("pre").length, "the wall of text is back")
+        assertEquals(30, root.all("div.chg").size, "a printing went missing from the review")
+    }
+
+    @Test
+    fun eachRowSaysWhatMovedAndWhereItEnded() = runTest {
+        val root = mount(previewed(3), width = PHONE)
+        settle()
+        val rows = root.all("div.chg")
+        assertEquals("+1", rows[0].all("div.chg-delta").first().textContent)
+        assertEquals("1 → 2", rows[0].all("div.chg-was").first().textContent)
+        assertTrue(rows[0].textContent.orEmpty().contains("FRA 1"), rows[0].textContent.orEmpty())
+        // The third is one nobody owned, and says so in words.
+        assertTrue(rows[2].textContent.orEmpty().contains("new"), rows[2].textContent.orEmpty())
+        assertEquals("0 → 1", rows[2].all("div.chg-was").first().textContent)
+    }
+
+    @Test
+    fun theTotalsAreReadableWithoutReadingTheRows() = runTest {
+        val root = mount(previewed(30), width = PHONE)
+        settle()
+        val cells = root.all("div.tally-cell").map { it.textContent.orEmpty() }
+        assertEquals(3, cells.size, "no summary above the rows: $cells")
+        assertTrue(cells[0].startsWith("30"), cells[0])
+        assertTrue(cells[1].startsWith("30"), "thirty copies moved, not ${cells[1]}")
+        assertTrue(cells[2].startsWith("10"), "ten of them were new, not ${cells[2]}")
+    }
+
+    @Test
+    fun aLongCardNameDoesNotPushTheNumbersOffAPhone() = runTest {
+        val root = mount(previewed(8), width = PHONE)
+        settle()
+        if (!Stylesheet.applied()) return@runTest
+        assertEquals(emptyList(), root.overflowing())
+        root.all("div.chg").forEach { row ->
+            val r = row.getBoundingClientRect()
+            val n = row.all("div.chg-n").first().getBoundingClientRect()
+            assertTrue(n.right <= r.right + 1, "the count ran off the row")
+            // The name is cut short rather than wrapped, so a row
+            // stays the height of a name and the line under it.
+            val name = row.all("div.chg-name").first().getBoundingClientRect()
+            assertTrue(name.height < 22, "the name wrapped to ${name.height} tall")
+            assertTrue(r.height < 64, "a row grew to ${r.height} tall")
+        }
+    }
+
+    @Test
+    fun everyRowCarriesTheCardsArt() = runTest {
+        val root = mount(previewed(4), width = PHONE)
+        settle()
+        val rows = root.all("div.chg")
+        assertEquals(4, rows.size)
+        rows.forEach { row ->
+            assertTrue(row.querySelector("div.chg-thumb") != null, "a row has no picture slot")
+        }
+    }
+
+    @Test
+    fun aRowWithNoIdKeepsItsShapeAnyway() = runTest {
+        // An older server sends six values per change and no id. The
+        // row loses its picture, not its place.
+        val one = org.mattshoe.mtg.core.Change("Sol Ring", "m3c", "409", "nonfoil", 0, 1)
+        val root = mount(
+            MassEntry(direction = org.mattshoe.mtg.core.Direction.ADD)
+                .type("1 Sol Ring")
+                .assign(org.mattshoe.mtg.core.Owner.MATT)
+                .previewed(org.mattshoe.mtg.core.Applied(resolved = 1, changes = listOf(one))),
+            width = PHONE,
+        )
+        settle()
+        val row = root.all("div.chg").single()
+        assertTrue(row.querySelector("div.chg-thumb") != null, "the row lost its picture slot")
+        assertEquals(0, row.querySelectorAll("img").length, "an image with nothing to show")
+        assertTrue(row.textContent.orEmpty().contains("Sol Ring"))
+    }
+
+    @Test
+    fun theListStepSaysNothingIsWrittenYet() = runTest {
+        val root = mount(
+            MassEntry(direction = org.mattshoe.mtg.core.Direction.ADD)
+                .goTo(org.mattshoe.mtg.core.Step.LIST)
+                .type("1 Sol Ring"),
+            width = PHONE,
+        )
+        settle()
+        assertTrue(
+            root.textContent.orEmpty().contains("Nothing is written until"),
+            "no word about the list not being saved yet",
+        )
+    }
+
     @Test
     fun whatIsChosenIsSaidWithAMarkAndNotOnlyWithColour() = runTest {
         // Colour on its own is not a signal everybody can read.

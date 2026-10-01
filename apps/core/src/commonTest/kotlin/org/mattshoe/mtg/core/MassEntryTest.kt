@@ -171,4 +171,30 @@ class MassEntryTest {
     }
 
     private fun change() = Change("Sol Ring", "M3C", "409", "nonfoil", 0, 1)
+
+    // ------------------------------------------- leaving with work in hand
+
+    @Test
+    fun anEmptyBoxHasNothingToLose() {
+        assertFalse(MassEntry().unsaved)
+    }
+
+    @Test
+    fun aTypedListIsUnsavedUntilTheServerHasIt() {
+        assertTrue(MassEntry().type("1 Sol Ring").unsaved)
+    }
+
+    @Test
+    fun aDryRunIsStillUnsaved() {
+        // The most dangerous moment to close the tab: it looks done
+        // and nothing has been written.
+        val s = MassEntry().type("1 Sol Ring").previewed(Applied(resolved = 1))
+        assertTrue(s.unsaved)
+    }
+
+    @Test
+    fun aWriteThatCameBackIsNotUnsaved() {
+        val s = MassEntry().type("1 Sol Ring").finished(Applied(applied = true, resolved = 1))
+        assertFalse(s.unsaved)
+    }
 }

@@ -285,6 +285,16 @@ object MtgApp {
             }
         })
 
+        // Closing the tab is the one exit that loses the list: every
+        // other way out keeps it, because the state lives above the
+        // wizard. The browser will only show its own wording, but it
+        // will not let the page go without asking.
+        window.addEventListener("beforeunload", { raw ->
+            if (!app.entry.unsaved) return@addEventListener
+            raw.preventDefault()
+            raw.asDynamic().returnValue = "Your list has not been written to the collection yet."
+        })
+
         window.addEventListener("popstate", {
             // An entry this code popped on purpose, closing an overlay
             // by its own X. The overlay is already gone.

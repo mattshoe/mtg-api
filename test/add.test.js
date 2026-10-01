@@ -24,7 +24,7 @@ describe('POST /cards/add — a new card', () => {
     expect(r.status).toBe(200);
     expect(r.body.applied).toBe(true);
     expect(r.body.failed).toBe(0);
-    expect(r.body.changes).toEqual([['Lightning Bolt', '2X2', '117', 'nonfoil', 0, 4]]);
+    expect(r.body.changes).toEqual([['Lightning Bolt', '2X2', '117', 'nonfoil', 0, 4, 'f29ba16f-c8fb-42fe-aabf-87089cb214a7']]);
 
     const rows = await stack('Lightning Bolt');
     expect(rows).toHaveLength(1);
@@ -91,7 +91,7 @@ describe('POST /cards/add — an existing card', () => {
     expect(before).toHaveLength(1);
 
     const r = await post('/cards/add', { list: '2 Lightning Bolt (2X2) 117' }, stubScryfall());
-    expect(r.body.changes).toEqual([['Lightning Bolt', '2X2', '117', 'nonfoil', 3, 5]]);
+    expect(r.body.changes).toEqual([['Lightning Bolt', '2X2', '117', 'nonfoil', 3, 5, 'f29ba16f-c8fb-42fe-aabf-87089cb214a7']]);
 
     const after = await sql("SELECT id, qty FROM cards WHERE name_norm = 'lightning bolt'");
     expect(after).toHaveLength(1);
@@ -105,7 +105,7 @@ describe('POST /cards/add — an existing card', () => {
     expect(first[0].qty).toBe(2);
 
     const r = await post('/cards/add', { list: '3 Lightning Bolt (2X2) 117' }, stubScryfall());
-    expect(r.body.changes).toEqual([['Lightning Bolt', '2X2', '117', 'nonfoil', 2, 5]]);
+    expect(r.body.changes).toEqual([['Lightning Bolt', '2X2', '117', 'nonfoil', 2, 5, 'f29ba16f-c8fb-42fe-aabf-87089cb214a7']]);
 
     const second = await stack('Lightning Bolt');
     expect(second).toHaveLength(1);
@@ -117,7 +117,7 @@ describe('POST /cards/add — an existing card', () => {
     const r = await post('/cards/add', {
       list: '1 Lightning Bolt (2X2) 117\n2 Lightning Bolt (2X2) 117',
     }, stubScryfall());
-    expect(r.body.changes).toEqual([['Lightning Bolt', '2X2', '117', 'nonfoil', 0, 3]]);
+    expect(r.body.changes).toEqual([['Lightning Bolt', '2X2', '117', 'nonfoil', 0, 3, 'f29ba16f-c8fb-42fe-aabf-87089cb214a7']]);
     expect((await stack('Lightning Bolt'))[0].qty).toBe(3);
   });
 
@@ -200,7 +200,7 @@ describe('POST /cards/add — dry run', () => {
 
     expect(r.body.applied).toBe(false);
     expect(r.body.dry_run).toBe(true);
-    expect(r.body.changes).toEqual([['Lightning Bolt', '2X2', '117', 'nonfoil', 0, 4]]);
+    expect(r.body.changes).toEqual([['Lightning Bolt', '2X2', '117', 'nonfoil', 0, 4, 'f29ba16f-c8fb-42fe-aabf-87089cb214a7']]);
     expect(await snapshot()).toEqual(before);
   });
 

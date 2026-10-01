@@ -7,6 +7,7 @@ import org.jetbrains.compose.web.dom.Button
 import org.jetbrains.compose.web.dom.Div
 import org.jetbrains.compose.web.dom.H1
 import org.jetbrains.compose.web.dom.H2
+import org.jetbrains.compose.web.dom.Img
 import org.jetbrains.compose.web.dom.Pre
 import org.jetbrains.compose.web.dom.Span
 import org.jetbrains.compose.web.dom.Text
@@ -16,6 +17,7 @@ import org.jetbrains.compose.web.dom.Input
 import org.mattshoe.mtg.core.Direction
 import org.mattshoe.mtg.core.EntryHistory
 import org.mattshoe.mtg.core.HistoryEntry
+import org.mattshoe.mtg.core.Applied
 import org.mattshoe.mtg.core.MassEntry
 import org.mattshoe.mtg.core.Owner
 import org.mattshoe.mtg.core.Step
@@ -149,7 +151,13 @@ private fun ListStep(
         Foot {
             Ghost("← Back") { go(Step.WHICH) }
             Primary("Continue →", s.canLeaveList)  { go(Step.WHO) }
-            if (!s.canLeaveList && s.tally.cards == 0) Hint("Paste a list, or drop a file on the box.")
+            if (!s.canLeaveList && s.tally.cards == 0) {
+                Hint("Paste a list, or drop a file on the box.")
+            } else if (s.unsaved) {
+                // Said out loud rather than assumed: two more steps
+                // before anything reaches the collection.
+                Hint("Nothing is written until you press the button on the last step.")
+            }
         }
     }
 }
@@ -179,24 +187,12 @@ private fun ReviewStep(s: MassEntry, go: (Step) -> Unit, apply: () -> Unit) {
         if (p == null) {
             Text("No preview yet.")
         } else {
-            Div { Text("${p.resolved} resolved, ${p.failed} failed, ${p.changes.size} printings") }
-            Pre(attrs = { classes("out") }) {
-                Text(p.changes.joinToString("\n") {
-                    "${it.name} (${it.set} ${it.collectorNumber}) ${it.before} → ${it.after}"
-                })
-            }
-            if (p.errors.isNotEmpty()) {
-                Div(attrs = { classes("err") }) { Text(p.errors.joinToString("\n")) }
-            }
+            Outcome(p)
         }
-        Div(attrs = { classes("flex-wrap") }) {
+        Foot {
             Ghost("← Back") { go(Step.WHO) }
             Primary(
-                if (s.canApply) {
-                    "${s.direction!!.verb} ${p!!.changes.size} printings · ${s.owner!!.slug}"
-                } else {
-                    "Nothing to apply"
-                },
+                if (s.canApply) "${s.direction!!.verb} ${p!!.changes.size} printings" else "Nothing to apply",
                 s.canApply,
                 apply,
             )
@@ -207,10 +203,9 @@ private fun ReviewStep(s: MassEntry, go: (Step) -> Unit, apply: () -> Unit) {
 @Composable
 private fun DoneStep(s: MassEntry, again: () -> Unit) {
     val r = s.result!!
-    Panel(if (r.applied) "Applied" else "Nothing applied") {
-        Div { Text("${r.resolved} resolved, ${r.failed} failed, ${r.changes.size} printings") }
-        if (r.errors.isNotEmpty()) Div(attrs = { classes("err") }) { Text(r.errors.joinToString("\n")) }
-        Div(attrs = { classes("flex-wrap") }) { Primary("Enter more", true, again) }
+    Panel(if (r.applied) "Applied" else "Nothing applied", note = s.owner?.slug) {
+        Outcome(r)
+        Foot { Primary("Enter more", true, again) }
     }
 }
 
@@ -383,5 +378,68 @@ private fun Figure(value: String, label: String) {
     Div(attrs = { classes("tally-cell") }) {
         Div(attrs = { classes("tally-n") }) { Text(value) }
         Div(attrs = { classes("tally-l") }) { Text(label) }
+    }
+}
+
+/**
+ * What the server says it did, or would do.
+ *
+ * This was one `<pre>` of 248 lines and nobody can check a wall of
+ * text on a phone. It is a row per printing now: the card and where
+ * it is from on the left, how many moved on the right, with the
+ * count at the top so the whole thing can be sanity-checked without
+ * reading any of it.
+ */
+@Composable
+private fun Outcome(r: Applied) {
+    Div(attrs = { classes("tally") }) {
+        Figure("${r.changes.size}", if (r.changes.size == 1) "printing" else "printings")
+        Figure("${r.copies}", if (r.copies == 1) "copy" else "copies")
+        Figure("${r.fresh}", "new")
+    }
+
+    if (r.failed > 0) {
+        Div(attrs = { classes("tag", "bad") }) { Text("${r.failed} could not be resolved") }
+    }
+
+    Div(attrs = { classes("changes") }) {
+        r.changes.forEach { c ->
+            Div(attrs = { classes("chg") }) {
+                // The art says which card faster than the name does,
+                // which is the whole point of scanning 248 of these.
+                Div(attrs = { classes("chg-thumb") }) {
+                    c.art?.let { url ->
+                        Img(src = url, alt = "", attrs = {
+                            attr("loading", "lazy")
+                            attr("decoding", "async")
+                        })
+                    }
+                }
+                Div(attrs = { classes("chg-what") }) {
+                    Div(attrs = { classes("chg-name") }) { Text(c.name) }
+                    Div(attrs = { classes("chg-where") }) {
+                        Span(attrs = { classes("mono") }) { Text("${c.set.uppercase()} ${c.collectorNumber}") }
+                        if (c.finish != "nonfoil") {
+                            Span(attrs = { classes("tag", "mini") }) { Text(c.finish) }
+                        }
+                        if (c.isNew) Span(attrs = { classes("tag", "mini", "ok") }) { Text("new") }
+                        if (c.isGone) Span(attrs = { classes("tag", "mini", "warn") }) { Text("last one") }
+                    }
+                }
+                Div(attrs = { classes("chg-n") }) {
+                    Div(attrs = {
+                        classes("chg-delta")
+                        if (c.delta < 0) classes("down")
+                    }) { Text(c.sign) }
+                    Div(attrs = { classes("chg-was") }) { Text("${c.before} → ${c.after}") }
+                }
+            }
+        }
+    }
+
+    if (r.errors.isNotEmpty()) {
+        Div(attrs = { classes("err") }) {
+            r.errors.forEach { Div { Text(it) } }
+        }
     }
 }

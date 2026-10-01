@@ -488,6 +488,17 @@ object Inventory {
                 "nothingOnTheListStepHangsOffThePhoneEither",
                 "whatIsChosenIsSaidWithAMarkAndNotOnlyWithColour",
                 "theBrowsersOwnFilePickerIsNotOnTheScreen",
+                "thePreviewIsRowsAndNotAWallOfText", "eachRowSaysWhatMovedAndWhereItEnded",
+                "theTotalsAreReadableWithoutReadingTheRows",
+                "aLongCardNameDoesNotPushTheNumbersOffAPhone",
+                "everyRowCarriesTheCardsArt", "aRowWithNoIdKeepsItsShapeAnyway",
+            )),
+        Feature(Area.ENTRY, "Nothing is written until you say so, and leaving says as much",
+            "manage.js", logic = true, done = true,
+            tests = listOf(
+                "anEmptyBoxHasNothingToLose", "aTypedListIsUnsavedUntilTheServerHasIt",
+                "aDryRunIsStillUnsaved", "aWriteThatCameBackIsNotUnsaved",
+                "theListStepSaysNothingIsWrittenYet",
             )),
         Feature(Area.ENTRY, "Recent history, with reuse", "manage.js", logic = true, done = true,
             tests = listOf(

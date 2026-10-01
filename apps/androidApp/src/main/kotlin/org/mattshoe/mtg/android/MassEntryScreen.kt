@@ -3,6 +3,12 @@ package org.mattshoe.mtg.android
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import coil3.compose.AsyncImage
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -169,24 +175,7 @@ private fun Who(s: MassEntry, onState: (MassEntry) -> Unit, preview: () -> Unit)
 private fun Review(s: MassEntry, onState: (MassEntry) -> Unit, apply: () -> Unit) {
     val p = s.preview
     Panel(head = "Preview — nothing written yet", note = s.owner?.slug) {
-        if (p == null) {
-            Text("No preview yet.")
-        } else {
-            Text("${p.resolved} resolved, ${p.failed} failed, ${p.changes.size} printings")
-            Spacer(Modifier.height(8.dp))
-            // Selectable, the same as the web rendering. A canvas
-            // renderer would have taken this away.
-            SelectionContainer {
-                Text(
-                    p.changes.joinToString("\n") {
-                        "${it.name} (${it.set} ${it.collectorNumber}) ${it.before} → ${it.after}"
-                    },
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 13.sp,
-                )
-            }
-            if (p.errors.isNotEmpty()) Text(p.errors.joinToString("\n"), fontSize = 13.sp)
-        }
+        if (p == null) Text("No preview yet.") else Outcome(p)
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { onState(s.goTo(Step.WHO)) }) { Text("← Back") }
@@ -206,11 +195,74 @@ private fun Review(s: MassEntry, onState: (MassEntry) -> Unit, apply: () -> Unit
 @Composable
 private fun Done(s: MassEntry, again: () -> Unit) {
     val r = s.result!!
-    Panel(head = if (r.applied) "Applied" else "Nothing applied") {
-        Text("${r.resolved} resolved, ${r.failed} failed, ${r.changes.size} printings")
-        if (r.errors.isNotEmpty()) Text(r.errors.joinToString("\n"), fontSize = 13.sp)
+    Panel(head = if (r.applied) "Applied" else "Nothing applied", note = s.owner?.slug) {
+        Outcome(r)
         Spacer(Modifier.height(8.dp))
         Primary("Enter more", true, again)
+    }
+}
+
+/**
+ * What the write did, or would do.
+ *
+ * A row per printing rather than one block of monospace — the same
+ * shape as the web, because a column of 248 lines is not something
+ * anybody can check on a phone.
+ */
+@Composable
+private fun Outcome(r: org.mattshoe.mtg.core.Applied) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Figure("${r.changes.size}", if (r.changes.size == 1) "printing" else "printings")
+        Figure("${r.copies}", if (r.copies == 1) "copy" else "copies")
+        Figure("${r.fresh}", "new")
+    }
+    if (r.failed > 0) {
+        Spacer(Modifier.height(6.dp))
+        Line("${r.failed} could not be resolved", Bad, org.mattshoe.mtg.core.Design.SMALL, androidx.compose.ui.text.font.FontWeight.SemiBold)
+    }
+    Spacer(Modifier.height(8.dp))
+    SelectionContainer {
+        Column(Modifier.fillMaxWidth()) {
+            r.changes.forEach { c ->
+                Row(
+                    Modifier.fillMaxWidth().padding(vertical = 5.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                ) {
+                    // The art says which card faster than the name does.
+                    Box(Modifier.size(width = 44.dp, height = 32.dp).background(Bg3, RadiusSm).clip(RadiusSm)) {
+                        c.art?.let {
+                            AsyncImage(
+                                model = it,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop,
+                            )
+                        }
+                    }
+                    Column(Modifier.weight(1f)) {
+                        Line(c.name, Ink, org.mattshoe.mtg.core.Design.SMALL, androidx.compose.ui.text.font.FontWeight.Medium)
+                        Line(
+                            listOfNotNull(
+                                "${c.set.uppercase()} ${c.collectorNumber}",
+                                c.finish.takeIf { it != "nonfoil" },
+                                "new".takeIf { c.isNew },
+                            ).joinToString(" · "),
+                            Ink3,
+                            org.mattshoe.mtg.core.Design.MINI,
+                        )
+                    }
+                    Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
+                        Line(c.sign, if (c.delta < 0) Bad else Ok, org.mattshoe.mtg.core.Design.SMALL, androidx.compose.ui.text.font.FontWeight.Bold)
+                        Line("${c.before} → ${c.after}", Ink3, org.mattshoe.mtg.core.Design.MINI)
+                    }
+                }
+            }
+        }
+    }
+    if (r.errors.isNotEmpty()) {
+        Spacer(Modifier.height(6.dp))
+        r.errors.forEach { Line(it, Bad, org.mattshoe.mtg.core.Design.SMALL) }
     }
 }
 

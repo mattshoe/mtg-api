@@ -897,6 +897,36 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
    never so tall that the counts under it are off the screen. */
 .wizard textarea.field { height: clamp(150px, 34vh, 320px); }
 
+/* What a write did, or would do. One row per printing, readable on
+   a phone: the card on the left and the numbers hard right, rather
+   than 248 lines of monospace nobody can check. */
+.changes { margin-top: 12px; border-top: 1px solid var(--line); }
+.chg {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 0; border-bottom: 1px solid var(--line);
+}
+/* Cropped art, the size of a thumbnail on a phone. A fixed box so
+   the rows line up whether or not a picture ever arrives. */
+.chg-thumb {
+  flex: none; width: 44px; height: 32px; border-radius: 5px; overflow: hidden;
+  background: var(--bg-3); border: 1px solid var(--line);
+}
+.chg-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.chg-what { flex: 1; min-width: 0; }
+.chg-name {
+  font-size: 13.5px; font-weight: 550; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.chg-where {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  margin-top: 2px; font-size: 11.5px; color: var(--text-3);
+}
+.chg-n { flex: none; text-align: right; }
+/* The number that matters, big enough to scan a column of them. */
+.chg-delta { font: 700 14px/1.1 var(--mono); color: var(--ok); }
+.chg-delta.down { color: var(--bad); }
+.chg-was { margin-top: 2px; font: 400 11px/1 var(--mono); color: var(--text-3); white-space: nowrap; }
+
 /* Every step ends the same way, in the same place. The buttons grow
    into whatever room there is and wrap when there is none, so a phone
    gets two full-width targets rather than two stamps in a corner. */

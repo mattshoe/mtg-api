@@ -17,7 +17,7 @@ describe('POST /cards/remove — decrement', () => {
 
     const r = await post('/cards/remove', { list: '1 Lightning Bolt' });
     expect(r.body.applied).toBe(true);
-    expect(r.body.changes).toEqual([['Lightning Bolt', '2X2', '117', 'nonfoil', 3, 2]]);
+    expect(r.body.changes).toEqual([['Lightning Bolt', '2X2', '117', 'nonfoil', 3, 2, 'f29ba16f-c8fb-42fe-aabf-87089cb214a7']]);
 
     const after = await sql('SELECT id, qty FROM cards WHERE id = ?', before.id);
     expect(after).toHaveLength(1);
@@ -132,7 +132,7 @@ describe('POST /cards/remove — dry run', () => {
 
     const r = await post('/cards/remove', { list: '2 Lightning Bolt', dry_run: true });
     expect(r.body.dry_run).toBe(true);
-    expect(r.body.changes).toEqual([['Lightning Bolt', '2X2', '117', 'nonfoil', 3, 1]]);
+    expect(r.body.changes).toEqual([['Lightning Bolt', '2X2', '117', 'nonfoil', 3, 1, 'f29ba16f-c8fb-42fe-aabf-87089cb214a7']]);
     expect(await snapshot()).toEqual(before);
   });
 });

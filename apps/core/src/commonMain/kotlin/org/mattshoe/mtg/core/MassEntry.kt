@@ -48,6 +48,16 @@ data class MassEntry(
      * is not the number anybody pasting a deck is looking for.
      */
     val tally: DeckList.Tally get() = DeckList.tally(list)
+
+    /**
+     * Work the server has not been told about.
+     *
+     * A list in the box, or a dry run taken against it, and no result
+     * back. Moving to another screen keeps all of it — the state
+     * lives above the wizard — but closing the tab does not, and
+     * that is worth a word before it happens.
+     */
+    val unsaved: Boolean get() = result == null && (list.isNotBlank() || preview != null)
     val overLimit: Boolean get() = cardCount > MAX_CARDS
 
     // ---------------------------------------------------------- the gates
