@@ -67,6 +67,22 @@ class FilterPanelTest {
      * and opens the group under test — everything is folded away to
      * start, so that is the first thing a person does too.
      */
+    /**
+     * Read the settled value, not one mid-fade.
+     *
+     * A browser that is not painting does not finish a transition on
+     * any schedule worth waiting for, so the fades are turned off
+     * rather than waited out.
+     */
+    private fun holdStill() {
+        if (kotlinx.browser.document.querySelector("style[data-still]") != null) return
+        val css = kotlinx.browser.document.createElement("style") as HTMLElement
+        css.setAttribute("data-still", "")
+        css.textContent = "* { transition: none !important; animation: none !important; }"
+        kotlinx.browser.document.head!!.appendChild(css)
+        roots += css
+    }
+
     private fun HTMLElement.all(css: String): List<HTMLElement> =
         querySelectorAll(css).let { n -> (0 until n.length).mapNotNull { n[it] as? HTMLElement } }
 
@@ -102,6 +118,41 @@ class FilterPanelTest {
             // Still says what it is, for anything that cannot see it.
             assertTrue(!b.getAttribute("aria-label").isNullOrBlank(), "a toggle has no label")
         }
+    }
+
+    @Test
+    fun aColourLetGoOfLooksLetGoOf() = runTest {
+        // A finger cannot hover, but a tap leaves :hover stuck on
+        // what was touched — so a colour switched off stayed lit
+        // until something else was tapped.
+        val p = mount(open = "colour")
+        val root = p.root
+        holdStill()
+        settle()
+        if (!Stylesheet.applied()) return@runTest
+        val white = root.all("button.pip").first()
+        val dim = kotlinx.browser.window.getComputedStyle(white).opacity
+
+        white.click(); settle()
+        assertTrue(white.className.contains("on"), "the colour did not switch on")
+        assertEquals("1", kotlinx.browser.window.getComputedStyle(white).opacity)
+
+        white.click(); settle()
+        assertTrue(!white.className.contains("on"), "the colour did not switch off")
+        assertEquals(dim, kotlinx.browser.window.getComputedStyle(white).opacity, "it stayed lit")
+    }
+
+    @Test
+    fun nothingLightsUpOnHoverWhereThereIsNoPointer() = runTest {
+        // Every `:hover` rule in the stylesheet, not only this one:
+        // all of them stick after a tap on a touch screen.
+        // `cssRules` nests: a rule inside a media query is only
+        // reachable through it, so anything with :hover at the top
+        // level is a rule that fires on a touch screen.
+        val top = Stylesheet.topLevelRules()
+        if (top.isEmpty()) return@runTest
+        val unguarded = top.filter { ":hover" in it.substringBefore("{") }
+        assertEquals(emptyList(), unguarded, "a hover rule is not behind @media (hover: hover)")
     }
 
     @Test

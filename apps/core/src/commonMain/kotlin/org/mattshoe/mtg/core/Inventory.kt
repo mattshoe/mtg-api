@@ -240,6 +240,7 @@ object Inventory {
         Feature(Area.LIBRARY, "Boolean flags — reserved, game changer, full art and the rest", "filters.js", logic = true, done = true,
             tests = listOf(
                 "aColourToggleIsTheSymbolAndNothingElse", "theColourTogglesStayInsideTheirOwnButtons",
+                "aColourLetGoOfLooksLetGoOf", "nothingLightsUpOnHoverWhereThereIsNoPointer",
                 "flagsGoThreeWays", "theGameChangerFlagUsesItsDatabaseColumn", "theFlagsAreThreeValued",
                 "onlySetFlagsAppearInTheUrl", "everyFieldOnThePanelChangesTheQuery",
             )),

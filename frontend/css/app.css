@@ -71,7 +71,14 @@ body {
 }
 
 a { color: var(--accent-2); text-decoration: none; }
-a:hover { text-decoration: underline; }
+/* A finger cannot hover. A tap leaves :hover stuck on whatever was
+   touched until something else is touched, so every one of these
+   stayed lit after the press that turned it off — the colour pips
+   most visibly. None of it is behaviour, all of it is decoration,
+   so it only applies where there is a pointer to hover with. */
+@media (hover: hover) {
+  a:hover { text-decoration: underline; }
+}
 
 h1, h2, h3, h4 { margin: 0; font-weight: 600; line-height: 1.25; }
 h1 { font-size: 20px; }
@@ -98,7 +105,9 @@ h3 { font-size: 14px; }
 }
 
 .brand { display: flex; align-items: center; flex: none; color: var(--text); }
-.brand:hover { text-decoration: none; }
+@media (hover: hover) {
+  .brand:hover { text-decoration: none; }
+}
 /* The app's own icon, rather than a gold rectangle standing in for one.
    Sized to the hamburger beside it — at 22px against a 34px button it
    read as an afterthought. */
@@ -113,7 +122,9 @@ h3 { font-size: 14px; }
   padding: 7px 13px; border-radius: 7px; color: var(--text-2);
   font-weight: 500; white-space: nowrap;
 }
-.tabs a:hover { background: var(--bg-3); color: var(--text); text-decoration: none; }
+@media (hover: hover) {
+  .tabs a:hover { background: var(--bg-3); color: var(--text); text-decoration: none; }
+}
 .tabs a.on { background: var(--accent-dim); color: var(--accent-2); }
 
 /* The admin half of the nav, set apart so it reads as a different kind of
@@ -161,7 +172,9 @@ h3 { font-size: 14px; }
   border: 1px solid var(--line); border-radius: 8px;
   background: var(--bg-3); color: var(--text-2); cursor: pointer; font: inherit;
 }
-.nav-burger:hover { color: var(--text); border-color: var(--line-2); }
+@media (hover: hover) {
+  .nav-burger:hover { color: var(--text); border-color: var(--line-2); }
+}
 .nav-burger .bar { display: block; width: 16px; height: 2px; background: currentColor; border-radius: 1px; }
 
 /* A press anywhere else closes the menu. */
@@ -193,7 +206,9 @@ h3 { font-size: 14px; }
   background: transparent; color: var(--text-2);
   font: inherit; font-weight: 500; white-space: nowrap; cursor: pointer;
 }
-.app-tab:hover { background: var(--bg-3); color: var(--text); }
+@media (hover: hover) {
+  .app-tab:hover { background: var(--bg-3); color: var(--text); }
+}
 .app-tab.on { background: var(--accent-dim); color: var(--accent-2); }
 
 /* The admin half, set apart so it reads as a different kind of thing
@@ -209,7 +224,9 @@ h3 { font-size: 14px; }
   border: 1px solid var(--line); border-radius: 8px;
   background: var(--bg-3); color: var(--text-2); cursor: pointer; padding: 0;
 }
-.icon-btn:hover { background: var(--bg-hover); color: var(--text); }
+@media (hover: hover) {
+  .icon-btn:hover { background: var(--bg-hover); color: var(--text); }
+}
 .icon-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
 
 .nav-toggle { display: none; }
@@ -276,15 +293,23 @@ select { appearance: none; background-image:
   border: 1px solid var(--line-2); background: var(--bg-3); color: var(--text);
   font: inherit; font-size: 13.5px; font-weight: 550; cursor: pointer; white-space: nowrap;
 }
-.btn:hover { background: var(--bg-hover); border-color: var(--text-3); }
+@media (hover: hover) {
+  .btn:hover { background: var(--bg-hover); border-color: var(--text-3); }
+}
 .btn:disabled { opacity: .45; cursor: not-allowed; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: #17130a; }
-.btn.primary:hover { background: var(--accent-2); border-color: var(--accent-2); }
+@media (hover: hover) {
+  .btn.primary:hover { background: var(--accent-2); border-color: var(--accent-2); }
+}
 .btn.danger { border-color: color-mix(in srgb, var(--bad) 55%, var(--line-2)); color: var(--bad); }
-.btn.danger:hover { background: color-mix(in srgb, var(--bad) 14%, transparent); }
+@media (hover: hover) {
+  .btn.danger:hover { background: color-mix(in srgb, var(--bad) 14%, transparent); }
+}
 .btn.sm { padding: 5px 10px; font-size: 12.5px; }
 .btn.ghost { background: transparent; border-color: transparent; color: var(--text-2); }
-.btn.ghost:hover { background: var(--bg-3); color: var(--text); }
+@media (hover: hover) {
+  .btn.ghost:hover { background: var(--bg-3); color: var(--text); }
+}
 
 .chips { display: flex; flex-wrap: wrap; gap: 5px; }
 .chip {
@@ -293,7 +318,9 @@ select { appearance: none; background-image:
   font: inherit; font-size: 12px; cursor: pointer;
   user-select: none; white-space: nowrap;
 }
-.chip:hover { border-color: var(--text-3); color: var(--text); }
+@media (hover: hover) {
+  .chip:hover { border-color: var(--text-3); color: var(--text); }
+}
 .chip.on { background: var(--accent-dim); border-color: var(--accent); color: var(--accent-2); font-weight: 600; }
 .chip.mini { padding: 2px 7px; font-size: 11px; }
 .chip.ok { border-color: color-mix(in srgb, var(--ok) 45%, var(--line)); color: var(--ok); }
@@ -312,7 +339,9 @@ select { appearance: none; background-image:
   transition: opacity .12s ease, filter .12s ease;
 }
 .pip .mana-sym { width: 100%; height: 100%; display: block; }
-.pip:hover { opacity: .8; filter: grayscale(.3); }
+@media (hover: hover) {
+  .pip:hover { opacity: .8; filter: grayscale(.3); }
+}
 /* Chosen is said by a ring as well as by being lit, because colour
    on its own is not a signal everybody can read. */
 .pip.on {
@@ -344,7 +373,9 @@ th {
   position: sticky; top: 0; white-space: nowrap;
 }
 td { padding: 7px 11px; border-bottom: 1px solid var(--line); vertical-align: middle; }
-tbody tr:hover { background: var(--bg-3); }
+@media (hover: hover) {
+  tbody tr:hover { background: var(--bg-3); }
+}
 tbody tr.clickable { cursor: pointer; }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 td.mono { font-family: var(--mono); font-size: 12.5px; }
@@ -527,7 +558,9 @@ pre.out {
   background: var(--bg); color: var(--text-2);
   transition: border-color .12s ease, background .12s ease;
 }
-.dropzone:hover { border-color: var(--accent); background: var(--bg-3); }
+@media (hover: hover) {
+  .dropzone:hover { border-color: var(--accent); background: var(--bg-3); }
+}
 .dropzone.over {
   border-color: var(--accent); background: var(--accent-dim);
   border-style: solid;
@@ -594,7 +627,9 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
   text-align: left; padding: 8px 10px; border: none; border-radius: var(--radius-sm);
   background: none; color: var(--text); font: inherit; font-size: 13px; cursor: pointer;
 }
-.menu-wrap .menu button:hover { background: var(--bg-3); color: var(--accent-2); }
+@media (hover: hover) {
+  .menu-wrap .menu button:hover { background: var(--bg-3); color: var(--accent-2); }
+}
 
 /* add/remove wizard */
 .steps { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
@@ -604,7 +639,9 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
   background: var(--bg-2); color: var(--text-2); font: inherit; font-size: 13px;
 }
 .steps .step:not(:disabled) { cursor: pointer; }
-.steps .step:not(:disabled):hover { border-color: var(--line-2); background: var(--bg-3); }
+@media (hover: hover) {
+  .steps .step:not(:disabled):hover { border-color: var(--line-2); background: var(--bg-3); }
+}
 .steps .step-n {
   display: inline-grid; place-items: center; width: 19px; height: 19px;
   border-radius: 50%; background: var(--bg); border: 1px solid var(--line-2);
@@ -626,7 +663,9 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
   cursor: pointer; text-align: left;
   transition: border-color .12s ease, background .12s ease;
 }
-.owner-opt:hover { border-color: var(--accent); background: var(--bg-3); }
+@media (hover: hover) {
+  .owner-opt:hover { border-color: var(--accent); background: var(--bg-3); }
+}
 .owner-opt.on {
   border-color: var(--accent); background: var(--accent-dim); color: var(--accent-2);
   box-shadow: inset 0 0 0 1px var(--accent);
@@ -820,7 +859,9 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
   background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius);
   cursor: pointer; display: flex; flex-direction: column; overflow: hidden;
 }
-.deck-card:hover { border-color: var(--line-2); background: var(--bg-3); }
+@media (hover: hover) {
+  .deck-card:hover { border-color: var(--line-2); background: var(--bg-3); }
+}
 
 /* commander art, cropped to a band across the top */
 .deck-banner { flex: none; height: 96px; background: var(--bg-3); overflow: hidden; }
@@ -891,7 +932,9 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
   background: var(--bg-2); color: var(--text); font: inherit; cursor: pointer;
   transition: border-color .12s ease, background .12s ease;
 }
-.opt:hover { border-color: var(--text-3); background: var(--bg-3); }
+@media (hover: hover) {
+  .opt:hover { border-color: var(--text-3); background: var(--bg-3); }
+}
 /* The mark carries the choice as a shape. Colour alone is not a
    signal everybody can read. */
 .opt-mark {
@@ -998,22 +1041,30 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
 .print-line .cn { flex: none; min-width: 34px; color: var(--text-3); font-size: 11.5px; }
 .print-line .t-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .print-line .num { flex: none; color: var(--text); font-weight: 600; }
-a.print-line:hover { background: var(--bg-3); text-decoration: none; }
+@media (hover: hover) {
+  a.print-line:hover { background: var(--bg-3); text-decoration: none; }
+}
 .print-line .buy {
   flex: none; color: var(--accent-2); font-weight: 600;
   border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
 }
-a.print-line:hover .buy { background: var(--accent-dim); }
+@media (hover: hover) {
+  a.print-line:hover .buy { background: var(--accent-dim); }
+}
 
 /* A row that leaves the site says so, with the same mark the nav
    uses for a link that goes away. */
 a.deck-line { color: inherit; text-decoration: none; }
-a.deck-line:hover { background: var(--bg-3); text-decoration: none; }
+@media (hover: hover) {
+  a.deck-line:hover { background: var(--bg-3); text-decoration: none; }
+}
 a.deck-line .t-name::after { content: " \2197"; color: var(--text-3); font-size: .85em; }
 
 /* Clickable, so it has to look and behave like it. */
 .deck-line[role="button"] { cursor: pointer; }
-.deck-line[role="button"]:hover { background: var(--bg-3); }
+@media (hover: hover) {
+  .deck-line[role="button"]:hover { background: var(--bg-3); }
+}
 .deck-line[role="button"]:focus-visible { outline: 2px solid var(--info); outline-offset: -2px; }
 
 /* `art_crop` is a landscape band; the square is this box cropping it. */
@@ -1075,7 +1126,9 @@ tbody tr.total > td { border-top: 1px solid var(--line-2); color: var(--text); }
 .seg a { padding: 6px 12px; border-right: 1px solid var(--line-2); background: var(--bg);
          color: var(--text-2); font-size: 12.5px; }
 .seg a:last-child { border-right: none; }
-.seg a:hover { background: var(--bg-3); color: var(--text); text-decoration: none; }
+@media (hover: hover) {
+  .seg a:hover { background: var(--bg-3); color: var(--text); text-decoration: none; }
+}
 .seg a.on { background: var(--accent-dim); color: var(--accent-2); }
 
 /* the sourcing totals, above the per-card table */
@@ -1085,7 +1138,9 @@ tbody tr.total > td { border-top: 1px solid var(--line-2); color: var(--text); }
   background: var(--bg-2); font-size: 12.5px;
 }
 .summary-bar strong { font-variant-numeric: tabular-nums; color: var(--accent-2); }
-.seg button:hover { background: var(--bg-3); color: var(--text); }
+@media (hover: hover) {
+  .seg button:hover { background: var(--bg-3); color: var(--text); }
+}
 .seg button.on { background: var(--accent-dim); color: var(--accent-2); font-weight: 600; }
 
 details.adv { border-top: 1px solid var(--line); padding-top: 11px; margin-top: 11px; }
@@ -1146,7 +1201,9 @@ details.adv > div { padding-top: 12px; }
   content: "▸"; color: var(--text-3); font-size: 9px; transition: transform .12s ease;
 }
 .fgroup[open] > summary::before { transform: rotate(90deg); }
-.fgroup > summary:hover { background: var(--bg-3); color: var(--text); }
+@media (hover: hover) {
+  .fgroup > summary:hover { background: var(--bg-3); color: var(--text); }
+}
 .fgroup[open] > summary { color: var(--accent-2); border-bottom: 1px solid var(--line); }
 .fg-title { flex: 1; }
 .fgroup-body { padding: 13px 14px 15px; }
@@ -1173,14 +1230,18 @@ details.adv > div { padding-top: 12px; }
   letter-spacing: 0; font-weight: 400; margin: 0; padding: 2px 0;
   min-width: 0;
 }
-.check:hover { color: var(--text); }
+@media (hover: hover) {
+  .check:hover { color: var(--text); }
+}
 .check span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .check input[type=checkbox] {
   appearance: none; width: 15px; height: 15px; flex: none; margin: 0;
   border: 1.5px solid var(--line-2); border-radius: 4px; background: var(--bg);
   cursor: pointer; position: relative;
 }
-.check input[type=checkbox]:hover { border-color: var(--text-3); }
+@media (hover: hover) {
+  .check input[type=checkbox]:hover { border-color: var(--text-3); }
+}
 .check input[type=checkbox]:checked { background: var(--accent); border-color: var(--accent); }
 .check input[type=checkbox]:checked::after {
   content: ""; position: absolute; left: 4px; top: 1px;

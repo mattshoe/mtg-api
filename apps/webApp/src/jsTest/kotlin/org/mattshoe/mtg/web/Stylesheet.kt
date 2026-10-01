@@ -25,6 +25,26 @@ object Stylesheet {
         document.head!!.appendChild(link)
     }
 
+    /**
+     * The rules at the top level of it, as text.
+     *
+     * `cssRules` nests, so a rule inside a media query is not in
+     * this list. That is the point: it answers "what applies with no
+     * conditions on it", which is how "nothing hovers on a touch
+     * screen" gets checked at all rather than one button at a time.
+     */
+    fun topLevelRules(): List<String> {
+        val sheets = document.styleSheets
+        for (i in 0 until sheets.length) {
+            val sheet = sheets.item(i) ?: continue
+            val href = sheet.href ?: continue
+            if (!href.endsWith("app.css")) continue
+            val rules = try { sheet.asDynamic().cssRules } catch (e: Throwable) { null } ?: continue
+            return (0 until (rules.length as Int)).map { n -> rules[n].cssText as String }
+        }
+        return emptyList()
+    }
+
     /** True once it has actually applied, so a probe can say so rather than pass blindly. */
     fun applied(): Boolean {
         val probe = document.createElement("div") as HTMLElement
