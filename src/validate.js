@@ -15,7 +15,7 @@ const MAX_NAMES = 1000;
 // Scryfall takes 75 identifiers per call; the suggestion lookups after it
 // are one call each, so only so many are worth making.
 const MAX_SUGGESTIONS = 12;
-const CHUNK = 90;   // D1's bound-parameter ceiling is 100
+const CHUNK = 80;   // D1's bound-parameter ceiling is 100
 
 /** Names the collection already knows, by normalized name. */
 async function knownLocally(db, keys) {
@@ -23,10 +23,17 @@ async function knownLocally(db, keys) {
   for (let i = 0; i < keys.length; i += CHUNK) {
     const slice = keys.slice(i, i + CHUNK);
     const marks = slice.map(() => '?').join(',');
+    // The names go in once, as a table to join against, rather than
+    // twice as two IN lists. Binding them twice spent two parameters
+    // per name, so a list of fifty-one — any real deck — went over
+    // D1's ceiling and the check answered "too many SQL variables".
+    const values = slice.map(() => '(?)').join(',');
     const r = await db.prepare(
-      `SELECT DISTINCT name_norm FROM cards WHERE name_norm IN (${marks})
-        UNION SELECT DISTINCT alias_norm FROM aliases WHERE alias_norm IN (${marks})`,
-    ).bind(...slice, ...slice).all();
+      `WITH want(n) AS (VALUES ${values})
+        SELECT DISTINCT c.name_norm AS name_norm FROM cards c JOIN want ON want.n = c.name_norm
+         UNION
+        SELECT DISTINCT a.alias_norm AS name_norm FROM aliases a JOIN want ON want.n = a.alias_norm`,
+    ).bind(...slice).all();
     for (const row of r.results || []) found.add(row.name_norm);
   }
   return found;

@@ -288,11 +288,20 @@ internal class Clauses {
      * with no flavour text would be filtered out by `!goblin`.
      */
     fun search(columns: List<String>, raw: String) {
+        // One parameter per word, not one per word per column.
+        //
+        // D1 refuses a statement with more than a hundred bound
+        // parameters, and binding the same pattern once for the name
+        // and once for each face spent three of them on every word
+        // typed — so a long enough search came back "too many SQL
+        // variables" rather than coming back at all. The columns are
+        // joined into one haystack instead, which is the same
+        // question asked once.
+        val haystack = columns.joinToString(" || ' ' || ") { "COALESCE($it, '')" }
         TextQuery.parse(raw).forEach { term ->
-            val pattern = like(term.text)
-            val any = columns.joinToString(" OR ") { "COALESCE($it, '') LIKE ? ESCAPE '\\'" }
-            where += if (term.negated) "NOT ($any)" else "($any)"
-            repeat(columns.size) { params += pattern }
+            val clause = "$haystack LIKE ? ESCAPE '\\'"
+            where += if (term.negated) "NOT ($clause)" else "($clause)"
+            params += like(term.text)
         }
     }
 

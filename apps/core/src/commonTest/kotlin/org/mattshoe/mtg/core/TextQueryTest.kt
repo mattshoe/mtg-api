@@ -96,14 +96,15 @@ class TextQueryTest {
         // Both words, not the phrase "sol ring" — so "Ring of Solitude"
         // would match too, which is the point.
         assertEquals(2, Regex("c\\.name_norm").findAll(where(f)).count())
-        assertEquals(listOf("%sol%", "%sol%", "%sol%", "%ring%", "%ring%", "%ring%"), params(f))
+        // One parameter a word: the three columns are one haystack.
+        assertEquals(listOf("%sol%", "%ring%"), params(f))
     }
 
     @Test
     fun aQuotedNameIsOneCondition() {
         val f = Filters(q = "\"sol ring\"")
         assertEquals(1, Regex("c\\.name_norm").findAll(where(f)).count())
-        assertEquals(listOf("%sol ring%", "%sol ring%", "%sol ring%"), params(f))
+        assertEquals(listOf("%sol ring%"), params(f))
     }
 
     @Test

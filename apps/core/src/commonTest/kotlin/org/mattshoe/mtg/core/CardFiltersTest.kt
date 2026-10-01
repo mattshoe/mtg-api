@@ -116,11 +116,14 @@ class CardFiltersTest {
         val f = Filters(q = "Bolt")
         val sql = where(f)
         assertTrue(sql.contains("c.face2"))
-        // Three plain placeholders. A numbered one renumbers every
-        // bare `?` in the same statement, which misbound the owner
-        // filter next to it.
+        // A plain placeholder. A numbered one renumbers every bare
+        // `?` in the same statement, which misbound the owner filter
+        // next to it.
         assertFalse(sql.contains("?1"), sql)
-        assertEquals(listOf<Any?>("%bolt%", "%bolt%", "%bolt%"), params(f))
+        // One per word, not one per word per column: three columns
+        // times enough words put the statement over D1's hundred-
+        // parameter ceiling and the search stopped working.
+        assertEquals(listOf<Any?>("%bolt%"), params(f))
     }
 
     @Test

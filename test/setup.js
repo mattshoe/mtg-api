@@ -45,12 +45,43 @@ function statements(sql) {
   return out;
 }
 
+/**
+ * D1 refuses a statement with more than a hundred bound parameters.
+ *
+ * The local database under the test runner does not, so a statement
+ * that binds a list twice — a UNION with the same `IN` on both
+ * sides, say — passed every test here and then answered "too many
+ * SQL variables" against the real thing the moment a deck had more
+ * than fifty cards in it. Counting them here is what makes that a
+ * test failure instead of a bug report.
+ */
+const D1_PARAM_LIMIT = 100;
+
+function countingPrepare(db) {
+  const real = db.prepare.bind(db);
+  return (sql) => {
+    const stmt = real(sql);
+    const bind = stmt.bind.bind(stmt);
+    stmt.bind = (...values) => {
+      if (values.length > D1_PARAM_LIMIT) {
+        throw new Error(
+          `${values.length} bound parameters is over D1's limit of ${D1_PARAM_LIMIT}: `
+          + sql.replace(/\s+/g, ' ').slice(0, 160),
+        );
+      }
+      return bind(...values);
+    };
+    return stmt;
+  };
+}
+
 // Isolated storage rolls each test back, but the rollback point is whatever
 // the database held when the test started — so the schema and fixture have to
 // be laid down inside every test's own transaction.
 beforeEach(async () => {
   const all = [...statements(schemaSql), ...statements(seedSql)];
   await env.DB.batch(all.map((s) => env.DB.prepare(s)));
+  env.DB.prepare = countingPrepare(env.DB);
 });
 
 export { applyD1Migrations };

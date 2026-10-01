@@ -935,3 +935,40 @@ describe('POST /decks/list — transferring between collections', () => {
     expect(await count('card_search', 'rowid NOT IN (SELECT id FROM cards)')).toBe(0);
   });
 });
+
+describe('POST /decks/list — a list the size of a real deck', () => {
+  /**
+   * A hundred different names, which is what a Commander deck is.
+   *
+   * Every lookup behind an edit asks about every name at once, and
+   * D1 refuses a statement with more than 100 bound parameters — so
+   * the chunk size has to leave room for whatever else the statement
+   * binds. It did not, and editing any real deck answered "too many
+   * SQL variables".
+   */
+  const bigList = (n) => Array.from({ length: n }, (_, i) => `1 Made Up Card ${i}`).join('\n');
+
+  it('plans a hundred-card list without tripping the parameter limit', async () => {
+    const r = await post('/decks/list', { slug: SLUG, list: bigList(100), dry_run: true });
+    expect(r.body.error).toBeUndefined();
+    expect(r.status).toBe(200);
+    expect(r.body.rows).toBe(100);
+  });
+
+  it('and a list well past one chunk', async () => {
+    const r = await post('/decks/list', { slug: SLUG, list: bigList(250), dry_run: true });
+    expect(r.body.error).toBeUndefined();
+    expect(r.body.rows).toBe(250);
+  });
+
+  it('writes one too', async () => {
+    // Real names, so the edit does not have to buy a hundred made-up
+    // cards before it can get to the write.
+    const owned = await sql("SELECT DISTINCT name FROM cards WHERE owner = 'matt' ORDER BY name");
+    const list = owned.map((r) => `1 ${r.name}`).join('\n');
+    const r = await post('/decks/list', { slug: SLUG, list, dry_run: false });
+    expect(r.body.error).toBeUndefined();
+    expect(r.body.applied).toBe(true);
+    expect((await listOf(SLUG)).split('\n').length).toBe(owned.length);
+  });
+});

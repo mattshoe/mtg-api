@@ -235,7 +235,9 @@ object Inventory {
             )),
         Feature(Area.LIBRARY, "Filter panel: name, oracle text, flavour, artist, watermark, type line", "filters.js", logic = true, done = true,
             tests = listOf(
-                "aNameSearchLooksAtBothFacesAndIsBound", "oracleTextUsesFullTextSearch",
+                "aNameSearchLooksAtBothFacesAndIsBound", "aWordCostsOneParameterNotThree",
+                "aLongSearchStaysUnderWhatTheServerTakes",
+                "soDoesAFilterPanelWithPlentyTickedOnIt", "andTheExportOfOne", "oracleTextUsesFullTextSearch",
                 "thereIsNoSeparateLiteralTextBoxAnyMore", "everyFieldOnThePanelChangesTheQuery",
                 "theWordFieldsWriteTheirOwnColumns", "theNameBoxAcceptsTypedCharacters",
                 "andTheTypedNameReachesTheFilters", "clearingTheBoxClearsTheFilter",

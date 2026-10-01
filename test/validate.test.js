@@ -90,3 +90,31 @@ describe('POST /cards/validate', () => {
     expect(r.body.error).toMatch(/could not reach Scryfall/);
   });
 });
+
+describe('POST /cards/validate — a list the size of a real deck', () => {
+  /**
+   * Fifty-one names was the breaking point.
+   *
+   * The names went into the statement twice, once for `cards` and
+   * once for `aliases`, so each one cost two of D1's hundred bound
+   * parameters. Every deck in the collection is bigger than fifty
+   * cards, so checking any of them answered "too many SQL variables
+   * at offset 333" and the new-deck wizard could not get past its
+   * own check-the-names step.
+   */
+  it('checks a hundred names without tripping the parameter limit', async () => {
+    const names = Array.from({ length: 100 }, (_, i) => `Made Up Card ${i}`);
+    const r = await post('/cards/validate', { names }, stubScryfall());
+    expect(r.body.error).toBeUndefined();
+    expect(r.status).toBe(200);
+    expect(r.body.cards.length).toBe(100);
+  }, 20000);
+
+  it('and still finds the ones the collection has, past the first chunk', async () => {
+    const filler = Array.from({ length: 95 }, (_, i) => `Made Up Card ${i}`);
+    const r = await post('/cards/validate', { names: [...filler, 'Arcane Signet'] }, stubScryfall());
+    expect(r.body.error).toBeUndefined();
+    const signet = r.body.cards.find((c) => c.name === 'Arcane Signet');
+    expect(signet.ok).toBe(true);
+  }, 20000);
+});
