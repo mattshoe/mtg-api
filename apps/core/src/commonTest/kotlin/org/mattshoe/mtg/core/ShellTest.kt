@@ -96,3 +96,27 @@ class ShellTest {
         assertFalse(Admin().unlock("0.abc").lock().unlocked)
     }
 }
+
+/** The password goes to the server once per press, not once per frame. */
+class UnlockInFlightTest {
+
+    @Test
+    fun aLockedAdminWillTryAPassword() {
+        assertTrue(Admin().canTry, "it refused to try at all")
+    }
+
+    @Test
+    fun butNotASecondTimeWhileTheFirstIsOut() {
+        assertFalse(Admin().tries().canTry, "it offered to send the password again")
+    }
+
+    @Test
+    fun aTokenBackEndsTheAttempt() {
+        assertFalse(Admin().tries().unlock("t").trying, "it is still saying it is trying")
+    }
+
+    @Test
+    fun soDoesABadPassword() {
+        assertTrue(Admin().tries().gaveUp().canTry, "a wrong password locked the button out for good")
+    }
+}

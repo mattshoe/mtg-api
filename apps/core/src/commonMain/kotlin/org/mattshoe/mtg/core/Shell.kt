@@ -91,9 +91,16 @@ data class Route(val view: View, val rest: String = "", val query: String = "") 
  * from the Android share sheet is a fresh launch, and being asked for
  * the password every time was worse than useless.
  */
-data class Admin(val token: String? = null) {
+data class Admin(
+    val token: String? = null,
+    /** A password already gone to the server and not yet answered. */
+    val trying: Boolean = false,
+) {
 
     val unlocked: Boolean get() = !token.isNullOrBlank()
+
+    /** Offered once, until the server has said something back. */
+    val canTry: Boolean get() = !trying
 
     /** Which views are reachable right now. */
     fun reachable(view: View): Boolean = !view.gated || unlocked
@@ -110,6 +117,8 @@ data class Admin(val token: String? = null) {
     fun land(route: Route): Route =
         if (reachable(route.view)) route else Route(View.DEFAULT, query = route.query)
 
-    fun unlock(token: String) = copy(token = token)
-    fun lock() = copy(token = null)
+    fun tries() = copy(trying = true)
+    fun unlock(token: String) = copy(token = token, trying = false)
+    fun gaveUp() = copy(trying = false)
+    fun lock() = copy(token = null, trying = false)
 }

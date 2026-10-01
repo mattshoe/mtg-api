@@ -188,3 +188,33 @@ class NewDeckTest {
         assertFalse(d.canLeaveCheck)
     }
 }
+
+/** A deck is created once, however many times the button is pressed. */
+class CreateInFlightTest {
+
+    private fun ready(): NewDeck {
+        var s = NewDeck()
+            .pick(Format.COMMANDER)
+            .assign(Owner.MATT)
+            .rename("Test Deck")
+            .setCommander("Alela, Cunning Conqueror")
+            .type("1 Sol Ring")
+            .validated(Validation(checked = 2, unknown = 0, ok = true))
+        DeckList.cardLines(s.list).forEach { s = s.source(it, Source.BULK) }
+        return s
+    }
+
+    @Test
+    fun aFinishedWizardOffersToCreate() {
+        assertTrue(ready().canCreate, "a complete wizard should be able to create")
+    }
+
+    @Test
+    fun butNotWhileItIsAlreadyCreating() {
+        // The panel showed "Creating…" instead of the button, which
+        // is not the same as the button being refused: the press
+        // that lands in the frame before the redraw still got through,
+        // and every call carries its own idempotency key.
+        assertFalse(ready().working("Creating…").canCreate, "it offered to create a second deck")
+    }
+}

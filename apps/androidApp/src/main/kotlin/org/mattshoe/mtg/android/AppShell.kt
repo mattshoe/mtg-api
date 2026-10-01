@@ -265,10 +265,13 @@ fun AppShell(
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
-                    onState(state.closing(Overlay.UNLOCK))
-                    onUnlock(password)
-                }) { Text("Unlock") }
+                TextButton(
+                    enabled = password.isNotBlank() && state.admin.canTry,
+                    onClick = {
+                        onState(state.closing(Overlay.UNLOCK))
+                        onUnlock(password)
+                    },
+                ) { Text(if (state.admin.trying) "Unlocking…" else "Unlock") }
             },
             dismissButton = {
                 TextButton(onClick = { onState(state.closing(Overlay.UNLOCK)) }) { Text("Cancel") }

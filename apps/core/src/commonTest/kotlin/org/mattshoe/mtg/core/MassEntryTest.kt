@@ -198,3 +198,50 @@ class MassEntryTest {
         assertFalse(s.unsaved)
     }
 }
+
+/**
+ * Nothing that writes is offered twice.
+ *
+ * `busy` was declared on `MassEntry` and never set by either platform,
+ * and the gates never asked about it — so "Add 248 printings" stayed
+ * live while the add was in flight, and the API gives every call its
+ * own idempotency key, which means the second press is a second add
+ * rather than a repeat of the first.
+ */
+class EntryInFlightTest {
+
+    private fun ready() = MassEntry(
+        step = Step.REVIEW,
+        direction = Direction.ADD,
+        list = "4 Sol Ring",
+        owner = Owner.MATT,
+        preview = Applied(
+            applied = false,
+            resolved = 1,
+            failed = 0,
+            changes = listOf(Change("Sol Ring", "M3C", "409", "nonfoil", 0, 4)),
+            errors = emptyList(),
+        ),
+    )
+
+    @Test
+    fun aListWithAPlanIsOfferedForReal() {
+        assertTrue(ready().canApply, "a reviewed list should be appliable")
+    }
+
+    @Test
+    fun butNotWhileOneIsAlreadyOnItsWay() {
+        assertFalse(ready().working("Applying…").canApply, "it offered to apply a second time")
+    }
+
+    @Test
+    fun andNotASecondDryRunEither() {
+        assertFalse(ready().working("Checking…").canPreview, "it offered a second dry run")
+    }
+
+    @Test
+    fun whatComesBackOpensItAgain() {
+        val busy = ready().working("Applying…")
+        assertTrue(busy.failed("nope").canPreview, "a failure left the wizard stuck")
+    }
+}

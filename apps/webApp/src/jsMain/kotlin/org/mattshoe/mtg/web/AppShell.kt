@@ -7,11 +7,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import org.jetbrains.compose.web.attributes.InputType
+import org.jetbrains.compose.web.attributes.disabled
 import org.jetbrains.compose.web.attributes.placeholder
 import org.jetbrains.compose.web.dom.Button
 import org.jetbrains.compose.web.dom.Div
 import org.jetbrains.compose.web.dom.H2
 import org.jetbrains.compose.web.dom.Input
+import org.jetbrains.compose.web.dom.Span
 import org.jetbrains.compose.web.dom.Text
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.CardRow
@@ -155,8 +157,25 @@ fun AppShell(
 
     // The `.toasts` wrapper is what `position: fixed` lives on; a
     // bare `.toast` rendered in flow, off the bottom of the page.
+    //
+    // The toast itself is a button, and tapping anywhere on it puts it
+    // away. It used to sit in the bottom corner and stay there, which
+    // on a phone is full width directly over whatever the screen's own
+    // action bar is — "Apply" sat underneath "staging.txt — decklist,
+    // 15 cards" with no way to move it. It also goes away on its own
+    // now, and on a narrow screen it comes down from the top instead.
     state.toast?.let {
-        Div(attrs = { classes("toasts") }) { Div(attrs = { classes("toast") }) { Text(it) } }
+        Div(attrs = { classes("toasts") }) {
+            Button(attrs = {
+                classes("toast")
+                attr("title", "Dismiss")
+                attr("aria-label", "Dismiss")
+                onClick { onState(state.say(null)) }
+            }) {
+                Span(attrs = { classes("toast-says") }) { Text(it) }
+                Span(attrs = { classes("toast-x") }) { Text("×") }
+            }
+        }
     }
 
     // ------------------------------------------------------- overlays
@@ -245,12 +264,16 @@ fun AppShell(
                     Div(attrs = { classes("flex-wrap") }) {
                         Button(attrs = {
                             classes("btn", "primary")
+                            // Blank passwords were offered to the
+                            // server, and a second press while the
+                            // first was still out sent it again.
+                            if (password.isBlank() || !state.admin.canTry) disabled()
                             onClick {
                                 onState(state.closing(Overlay.UNLOCK))
                                 onUnlock(password)
                                 password = ""
                             }
-                        }) { Text("Unlock") }
+                        }) { Text(if (state.admin.trying) "Unlocking…" else "Unlock") }
                         Button(attrs = {
                             classes("btn", "ghost")
                             onClick { onState(state.closing(Overlay.UNLOCK)); password = "" }

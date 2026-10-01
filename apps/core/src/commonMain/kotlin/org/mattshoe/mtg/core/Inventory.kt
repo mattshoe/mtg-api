@@ -451,6 +451,24 @@ object Inventory {
             tests = listOf(
                 "aCreatedDeckStopsSayingItIsBeingCreated",
             )),
+        Feature(Area.SHELL, "Nothing that writes is offered twice", "app.js", logic = true, done = true,
+            tests = listOf(
+                "aDoubleTappedApplyOnlyWritesOnce", "aListWithAPlanIsOfferedForReal",
+                "butNotWhileOneIsAlreadyOnItsWay", "andNotASecondDryRunEither",
+                "whatComesBackOpensItAgain", "aFinishedWizardOffersToCreate",
+                "butNotWhileItIsAlreadyCreating", "aLockedAdminWillTryAPassword",
+                "butNotASecondTimeWhileTheFirstIsOut", "aTokenBackEndsTheAttempt", "soDoesABadPassword",
+            )),
+        Feature(Area.SHELL, "A toast goes away, by hand or on its own, and never covers a button", "app.js", logic = true, done = true,
+            tests = listOf(
+                "aToastCanBePutAwayAndNeverSwallowsAPress", "aToastGoesAwayOnItsOwn",
+            )),
+        Feature(Area.LIBRARY, "Name suggestions: tap to take one, and the list behaves", "complete.js", logic = true, done = true,
+            tests = listOf(
+                "aSuggestionTakenWithATapLandsInTheBox", "pressingSomewhereElseClosesTheSuggestions",
+                "theSuggestionListIsNotCroppedByThePanelAroundIt", "pickingClosesTheList",
+                "andDoesNotGoAndAskAboutItself", "butTypingAfterwardsAsksAgain",
+            )),
 
         // ---------------------------------------------------------- stats
         Feature(Area.STATS, "Collection totals and breakdowns", "stats.js", logic = true, done = true,

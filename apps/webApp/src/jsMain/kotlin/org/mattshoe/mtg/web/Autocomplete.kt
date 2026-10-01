@@ -1,6 +1,9 @@
 package org.mattshoe.mtg.web
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.remember
+import kotlinx.browser.document
 import org.jetbrains.compose.web.attributes.InputType
 import org.jetbrains.compose.web.attributes.placeholder
 import org.jetbrains.compose.web.dom.Div
@@ -9,6 +12,10 @@ import org.jetbrains.compose.web.dom.Li
 import org.jetbrains.compose.web.dom.Text
 import org.jetbrains.compose.web.dom.Ul
 import org.mattshoe.mtg.core.Completion
+import org.w3c.dom.HTMLElement
+import org.w3c.dom.Node
+import org.w3c.dom.events.Event
+import org.w3c.dom.events.EventListener
 
 /**
  * A text field that suggests card names.
@@ -27,7 +34,38 @@ fun AutocompleteField(
     onPick: (String) -> Unit,
     extraClasses: List<String> = emptyList(),
 ) {
-    Div(attrs = { classes("ac") }) {
+    // The field's own box, so a press somewhere else can be told apart
+    // from a press on a suggestion. Without it the list had no way to
+    // close except Escape or picking something, and a phone has no
+    // Escape — you could scroll the whole page with the suggestions
+    // still hanging over it.
+    val box = remember { arrayOfNulls<HTMLElement>(1) }
+
+    // Picking has to survive being asked twice. A tap on a phone sends
+    // mousedown *and* click, and both are wired, because which of the
+    // two arrives is not something to find out in production. The
+    // second one lands on an already-picked `Completion`, whose list
+    // is empty, so it is a no-op rather than a second search.
+    fun take(i: Int) {
+        val (next, picked) = state.pick(i)
+        onState(next)
+        picked?.let(onPick)
+    }
+
+    DisposableEffect(state.open) {
+        val away = EventListener { e: Event ->
+            val target = e.target as? Node
+            val mine = box[0]
+            if (mine != null && (target == null || !mine.contains(target))) onState(state.closed())
+        }
+        if (state.open) document.addEventListener("pointerdown", away, true)
+        onDispose { document.removeEventListener("pointerdown", away, true) }
+    }
+
+    Div(attrs = {
+        classes("ac")
+        ref { el -> box[0] = el; onDispose { box[0] = null } }
+    }) {
         Input(type = InputType.Text) {
             classes("field")
             extraClasses.forEach { classes(it) }
@@ -44,9 +82,7 @@ fun AutocompleteField(
                     "ArrowUp" -> { e.preventDefault(); onState(state.up()) }
                     "Enter" -> if (state.active >= 0) {
                         e.preventDefault()
-                        val (next, name) = state.pick(state.active)
-                        onState(next)
-                        name?.let(onPick)
+                        take(state.active)
                     }
                     // Stopped, so escape closes the list rather than
                     // whatever overlay the field is sitting in.
@@ -64,11 +100,25 @@ fun AutocompleteField(
                         // the target before click fired.
                         onMouseDown { e ->
                             e.preventDefault()
-                            val (next, picked) = state.pick(i)
-                            onState(next)
-                            picked?.let(onPick)
+                            take(i)
                         }
-                        onMouseEnter { onState(state.highlight(i)) }
+                        // And click as well, for the touchscreen where
+                        // the mouse events are a courtesy rather than a
+                        // promise. Tapping a suggestion did nothing at
+                        // all on a phone.
+                        onClick { e ->
+                            e.preventDefault()
+                            take(i)
+                        }
+                        // No mouse-enter handler. It wrote a state
+                        // derived from the one this composition
+                        // captured, and within a single frame that
+                        // capture is already stale — so the enter
+                        // that follows a tap handed back the list as
+                        // it was *before* the pick, open again, with
+                        // the name you had just chosen sitting in the
+                        // box behind it. Hover is a paint, so the
+                        // stylesheet does it.
                     }) { Text(name) }
                 }
             }

@@ -121,3 +121,32 @@ class PaletteStateTest {
         assertFalse(sql.sql.contains("DROP"))
     }
 }
+
+/** A name taken off the list is an answer, not another question. */
+class PickedNameTest {
+
+    private val list = Completion().typed("Vesu").suggested(listOf("Vesuva", "Vesuvan Mist"))
+
+    @Test
+    fun pickingClosesTheList() {
+        val (next, name) = list.pick(1)
+        assertEquals("Vesuvan Mist", name)
+        assertEquals("Vesuvan Mist", next.term)
+        assertFalse(next.open, "the list is still open")
+    }
+
+    @Test
+    fun andDoesNotGoAndAskAboutItself() {
+        // Picking put the name in the box, the box asked Scryfall
+        // about the name, and the answer was the name — so the list
+        // reopened over the field with the one thing already in it.
+        val (next, _) = list.pick(0)
+        assertFalse(next.worthAsking, "it went straight back to ask about the name it just took")
+    }
+
+    @Test
+    fun butTypingAfterwardsAsksAgain() {
+        val (next, _) = list.pick(0)
+        assertTrue(next.typed("Vesuvan").worthAsking, "editing the name stopped suggesting anything")
+    }
+}

@@ -94,17 +94,30 @@ class MainActivity : ComponentActivity() {
                             if (next.view != was.view || next.route.rest != was.route.rest) loadFor(next)
                         },
                         onUnlock = { password ->
-                            work {
-                                val t = api.unlock(password)
-                                prefs.edit().putString("token", t).apply()
-                                app.copy(admin = app.admin.unlock(t)).say("Admin mode on")
+                            claim(app.admin.canTry, { app.copy(admin = app.admin.tries()) }) {
+                                try {
+                                    val t = api.unlock(password)
+                                    prefs.edit().putString("token", t).apply()
+                                    app.copy(admin = app.admin.unlock(t)).say("Admin mode on")
+                                } catch (e: Exception) {
+                                    app = app.copy(admin = app.admin.gaveUp())
+                                    throw e
+                                }
                             }
                         },
                         onSearch = { work { search() } },
                         onOpenDeck = { slug -> work { openDeck(slug) } },
-                        onRunSql = { work { runSql() } },
+                        onRunSql = {
+                            claim(
+                                app.console.canRun,
+                                { app.copy(console = app.console.running()) },
+                            ) { runSql() }
+                        },
                         onPreviewEntry = {
-                            work {
+                            claim(
+                                app.entry.canPreview,
+                                { app.copy(entry = app.entry.working("Checking…")) },
+                            ) {
                                 val s = app.entry
                                 app.copy(
                                     entry = s.previewed(
@@ -114,7 +127,10 @@ class MainActivity : ComponentActivity() {
                             }
                         },
                         onApplyEntry = {
-                            work {
+                            claim(
+                                app.entry.canApply,
+                                { app.copy(entry = app.entry.working("Applying…")) },
+                            ) {
                                 val s = app.entry
                                 val done = app.copy(
                                     entry = s.finished(
@@ -140,12 +156,37 @@ class MainActivity : ComponentActivity() {
                             EntryHistory.save(store, app.history)
                         },
                         onEditDeck = { slug -> editDeck(slug) },
-                        onReviewDeck = { work { reviewDeck() } },
-                        onSaveDeck = { work { saveDeck() } },
+                        onReviewDeck = {
+                            claim(
+                                app.deckEdit?.canReview == true,
+                                { app.copy(deckEdit = app.deckEdit?.working()) },
+                            ) { reviewDeck() }
+                        },
+                        onSaveDeck = {
+                            claim(
+                                app.deckEdit?.canSave == true,
+                                { app.copy(deckEdit = app.deckEdit?.working()) },
+                            ) { saveDeck() }
+                        },
                         onAskDisassemble = { slug -> askDisassemble(slug) },
-                        onDisassemble = { work { disassemble() } },
-                        onCheckNames = { work { checkNames() } },
-                        onCreateDeck = { work { createDeck() } },
+                        onDisassemble = {
+                            claim(
+                                app.disassemble?.canGo == true,
+                                { app.copy(disassemble = app.disassemble?.working()) },
+                            ) { disassemble() }
+                        },
+                        onCheckNames = {
+                            claim(
+                                app.newDeck.busy == null,
+                                { app.copy(newDeck = app.newDeck.working("Checking every name…")) },
+                            ) { checkNames() }
+                        },
+                        onCreateDeck = {
+                            claim(
+                                app.newDeck.canCreate,
+                                { app.copy(newDeck = app.newDeck.working("Creating…")) },
+                            ) { createDeck() }
+                        },
                         onExit = { finish() },
                     )
                 }
@@ -158,6 +199,21 @@ class MainActivity : ComponentActivity() {
     private fun token() = app.admin.token.orEmpty()
 
     /** Off to the network and back, with the failure surfaced as a toast. */
+    /**
+     * Claim the action, then do it. Sibling of `claim` on the web.
+     *
+     * `work` only launches: the body starts on the next pass of the
+     * loop, so a flag set as the first line of the suspend function is
+     * set after the press rather than with it, and both halves of a
+     * double tap get through. Every call carries its own idempotency
+     * key, so the server makes both pieces of work.
+     */
+    private fun claim(allowed: Boolean, mark: () -> AppState, block: suspend () -> AppState) {
+        if (!allowed) return
+        app = mark()
+        work(block)
+    }
+
     private fun work(block: suspend () -> AppState) {
         lifecycleScope.launch {
             app = try {
@@ -395,6 +451,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun askDisassemble(slug: String) {
+        if (app.disassemble?.busy == true) return
         val deck = app.decks.decks.firstOrNull { it.slug == slug } ?: return
         app = app.copy(disassemble = DisassembleState(slug, deck.name, deck.owner).working())
             .opening(Overlay.DISASSEMBLE)

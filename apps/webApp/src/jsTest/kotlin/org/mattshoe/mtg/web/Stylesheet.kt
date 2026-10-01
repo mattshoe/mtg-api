@@ -26,6 +26,17 @@ object Stylesheet {
     }
 
     /**
+     * Take it away again.
+     *
+     * A suite that measures scroll positions against an unstyled page
+     * gets a different page height once this is loaded, so a class
+     * that pulls the sheet in for one test has to put it back.
+     */
+    fun unload() {
+        document.querySelector("link[data-mtg]")?.remove()
+    }
+
+    /**
      * The rules at the top level of it, as text.
      *
      * `cssRules` nests, so a rule inside a media query is not in

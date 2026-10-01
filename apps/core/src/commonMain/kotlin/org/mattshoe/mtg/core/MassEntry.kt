@@ -71,12 +71,18 @@ data class MassEntry(
     val canLeaveList: Boolean get() = canLeaveWhich && cardCount > 0 && !overLimit
 
     /** Whose it is, said out loud. */
-    val canPreview: Boolean get() = canLeaveList && owner != null
+    val canPreview: Boolean get() = canLeaveList && owner != null && busy == null
 
     /**
      * The one that matters. A write is offered only when a dry run has
      * come back from the server describing what it would do, and only
-     * when it would actually do something.
+     * when it would actually do something — and not while one is
+     * already on its way.
+     *
+     * `busy` belongs in here rather than only in what the screen draws.
+     * Every call carries its own idempotency key, so two presses are
+     * two separate writes and a double-tapped "Add 248 printings" adds
+     * them twice. The flag existed and nothing ever set it or asked.
      */
     val canApply: Boolean
         get() = canPreview && preview != null && preview.changes.isNotEmpty() && result == null

@@ -116,6 +116,7 @@ object MtgApp {
         set(value) {
             val was = held
             held = value
+            if (value.toast != null && value.toast != was.toast) fadeToast(value.toast!!)
             if (value.hash() == was.hash()) return
             // One rule for the whole app: going somewhere is a step
             // you can come back from, and everything else rewrites
@@ -138,12 +139,34 @@ object MtgApp {
             }
         }
 
+    private var toastJob: Job? = null
+
+    /**
+     * A toast says its piece and goes.
+     *
+     * It used to stay until something else replaced it, which on a
+     * phone meant a full-width bar parked over whatever the screen's
+     * own buttons were. The message it carries is a receipt, not a
+     * decision, so nothing is lost by it leaving — and it can be put
+     * away by hand before then.
+     */
+    private fun fadeToast(mine: String) {
+        toastJob?.cancel()
+        toastJob = scope.launch {
+            delay(TOAST_MS)
+            if (app.toast == mine) app = app.say(null)
+        }
+    }
+
     private var listening = false
     /**
      * Long enough to finish a word, short enough that a toggle feels
      * immediate. Every filter change asks for a search and a text
      * field changes on every keystroke.
      */
+    /** Long enough to read a sentence, short enough to stop mattering. */
+    private val TOAST_MS = 5_000L
+
     private val searchDebounceMs = 250L
     private var searchJob: Job? = null
     private var lookupJob: Job? = null
@@ -187,36 +210,62 @@ object MtgApp {
                     app = next
                     if (next.view != was.view || next.route.rest != was.route.rest) loadFor(next)
                 },
+                // Every one of these marks itself busy *here*, before
+                // the coroutine starts, rather than inside it.
+                // Launching first and setting the flag in the suspend
+                // body leaves a whole frame in which the button is
+                // still live, and a frame is all a double tap needs —
+                // each call carries its own idempotency key, so two
+                // presses are two writes the server is happy to make.
                 onUnlock = { password ->
-                    work {
-                        val t = api.unlock(password)
-                        store.put("mtg.admin", """{"token":"$t","expires_at":null}""")
-                        app.copy(admin = app.admin.unlock(t)).say("Admin mode on")
+                    if (app.admin.canTry) {
+                        app = app.copy(admin = app.admin.tries())
+                        work {
+                            try {
+                                val t = api.unlock(password)
+                                store.put("mtg.admin", """{"token":"$t","expires_at":null}""")
+                                app.copy(admin = app.admin.unlock(t)).say("Admin mode on")
+                            } catch (e: Exception) {
+                                app = app.copy(admin = app.admin.gaveUp())
+                                throw e
+                            }
+                        }
                     }
                 },
                 onSearch = { searchSoon() },
                 onOpenDeck = { slug -> work { openDeck(app, slug) } },
-                onRunSql = { work { runSql(app) } },
+                onRunSql = {
+                    if (app.console.canRun) {
+                        app = app.copy(console = app.console.running())
+                        work { runSql(app) }
+                    }
+                },
                 onPreviewEntry = {
-                    work {
-                        val s = app.entry
-                        app.copy(
-                            entry = s.previewed(
-                                api.cards(token(), s.direction!!, s.owner!!, s.list, dryRun = true),
-                            ),
-                        )
+                    if (app.entry.canPreview) {
+                        app = app.copy(entry = app.entry.working("Checking…"))
+                        work {
+                            val s = app.entry
+                            app.copy(
+                                entry = s.previewed(
+                                    api.cards(token(), s.direction!!, s.owner!!, s.list, dryRun = true),
+                                ),
+                            )
+                        }
                     }
                 },
                 onApplyEntry = {
-                    work {
-                        val s = app.entry
-                        val done = app.copy(
-                            entry = s.finished(
-                                api.cards(token(), s.direction!!, s.owner!!, s.list, dryRun = false),
-                            ),
-                        ).shareUsed().recordEntry(now())
-                        EntryHistory.save(store, done.history)
-                        done
+                    if (app.entry.canApply) {
+                        app = app.copy(entry = app.entry.working("Applying…"))
+                        work {
+                            val s = app.entry
+                            val done = app.copy(
+                                entry = s.finished(
+                                    api.cards(token(), s.direction!!, s.owner!!, s.list, dryRun = false),
+                                ),
+                            ).shareUsed().recordEntry(now())
+                            EntryHistory.save(store, done.history)
+                            done
+                        }
                     }
                 },
                 onExport = { where -> work { exportList(app, where) } },
@@ -238,14 +287,49 @@ object MtgApp {
                 onTweak = { card, kind -> startTweak(card, kind) },
                 onTweakState = { next -> app = app.copy(deckTweak = next) },
                 onTweakFind = { term -> findForTweak(term) },
-                onTweakPreview = { work { planTweak(app) } },
-                onTweakApply = { work { applyTweak(app) } },
-                onReviewDeck = { work { reviewDeck(app) } },
-                onSaveDeck = { work { saveDeck(app) } },
+                onTweakPreview = {
+                    claim(
+                        app.deckTweak?.ready == true,
+                        { app.copy(deckTweak = app.deckTweak?.working()) },
+                    ) { planTweak(app) }
+                },
+                onTweakApply = {
+                    claim(
+                        app.deckTweak?.canApply == true,
+                        { app.copy(deckTweak = app.deckTweak?.working()) },
+                    ) { applyTweak(app) }
+                },
+                onReviewDeck = {
+                    claim(
+                        app.deckEdit?.canReview == true,
+                        { app.copy(deckEdit = app.deckEdit?.working()) },
+                    ) { reviewDeck(app) }
+                },
+                onSaveDeck = {
+                    claim(
+                        app.deckEdit?.canSave == true,
+                        { app.copy(deckEdit = app.deckEdit?.working()) },
+                    ) { saveDeck(app) }
+                },
                 onAskDisassemble = { slug -> askDisassemble(slug) },
-                onDisassemble = { work { disassemble(app) } },
-                onCheckNames = { work { checkNames(app) } },
-                onCreateDeck = { work { createDeck(app) } },
+                onDisassemble = {
+                    claim(
+                        app.disassemble?.canGo == true,
+                        { app.copy(disassemble = app.disassemble?.working()) },
+                    ) { disassemble(app) }
+                },
+                onCheckNames = {
+                    claim(
+                        app.newDeck.busy == null,
+                        { app.copy(newDeck = app.newDeck.working("Checking every name…")) },
+                    ) { checkNames(app) }
+                },
+                onCreateDeck = {
+                    claim(
+                        app.newDeck.canCreate,
+                        { app.copy(newDeck = app.newDeck.working("Creating…")) },
+                    ) { createDeck(app) }
+                },
             )
         }
     }
@@ -362,6 +446,29 @@ object MtgApp {
     }
 
     // ------------------------------------------------------------ work
+
+    /**
+     * Claim the action, then do it.
+     *
+     * `work` only launches, and on this dispatcher the body does not
+     * start until the event loop comes back round — so a flag set as
+     * the first line of the suspend function is set a whole frame
+     * after the press. Both halves of a double tap get through that
+     * gap, and because every call carries its own idempotency key the
+     * server treats them as two separate pieces of work: a deck made
+     * twice, a list added twice.
+     *
+     * So the flag is written here, synchronously, between the press
+     * and the launch. The gate in front of it is the same one the
+     * button is disabled by, which means a press that gets through
+     * anyway — a stale frame, a keyboard, a script — is refused on
+     * the same terms.
+     */
+    private fun claim(allowed: Boolean, mark: () -> AppState, block: suspend () -> AppState) {
+        if (!allowed) return
+        app = mark()
+        work(block)
+    }
 
     /** Off to the network and back, with the failure surfaced as a toast. */
     private fun work(block: suspend () -> AppState) {
@@ -851,6 +958,10 @@ object MtgApp {
     }
 
     private fun askDisassemble(slug: String) {
+        // The overlay covers the button it was pressed from, but not
+        // until the next frame — two presses in one frame were two dry
+        // runs against the same deck.
+        if (app.disassemble?.busy == true) return
         val deck = app.decks.decks.firstOrNull { it.slug == slug } ?: return
         app = app.copy(
             disassemble = DisassembleState(slug, deck.name, deck.owner).working(),

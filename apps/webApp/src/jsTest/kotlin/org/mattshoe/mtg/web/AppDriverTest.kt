@@ -42,9 +42,18 @@ class AppDriverTest {
 
     private val roots = mutableListOf<HTMLElement>()
 
+    /** Every write the app made, by path, so a second one is visible. */
+    private val writes = mutableListOf<String>()
+
     @BeforeTest
     fun stubTheNetwork() {
+        writes.clear()
         val engine = MockEngine { request ->
+            if (request.method.value == "POST" && """"dry_run":false""" in
+                (request.body as? io.ktor.http.content.TextContent)?.text.orEmpty()
+            ) {
+                writes += request.url.encodedPath
+            }
             // Enough of an answer for every read the shell makes. The
             // shapes matter, the contents do not — except that a
             // deck query has to come back looking like a deck, or
@@ -61,6 +70,13 @@ class AppDriverTest {
                 body.contains("FROM deck_cards dc") ->
                     """{"cols":["name","name_norm","qty","role","owned","type_line","scryfall_id"],""" +
                         """"rows":[["Sol Ring","sol ring",1,null,1,"Artifact",null]],"n":1}"""
+
+                request.url.encodedPath == "/cards/add" ->
+                    """{"applied":true,"dry_run":false,"resolved":1,"failed":0,""" +
+                        """"changes":[["Sol Ring","M3C","409","nonfoil",0,4]],"errors":[]}"""
+
+                request.url.encodedPath.endsWith("/cards/autocomplete") ->
+                    """{"object":"catalog","total_values":2,"data":["Vesuva","Vesuvan Mist"]}"""
 
                 request.url.encodedPath == "/cards/validate" ->
                     """{"checked":1,"unknown":0,"ok":true,"cards":[],"bad":[],"suggestions":{}}"""
@@ -84,6 +100,11 @@ class AppDriverTest {
 
     @AfterTest
     fun cleanUp() {
+        // The two tests that need the real cascade pull it in
+        // themselves. Left loaded it changes the height of the page
+        // the scroll tests measure, which turns one of them red for a
+        // reason that has nothing to do with scrolling.
+        Stylesheet.unload()
         MtgApp.unmount()
         roots.forEach { it.remove() }
         roots.clear()
@@ -132,9 +153,21 @@ class AppDriverTest {
     private fun HTMLElement.all(css: String): List<HTMLElement> =
         querySelectorAll(css).let { n -> (0 until n.length).mapNotNull { n[it] as? HTMLElement } }
 
+    /**
+     * What a button reads as. An option row carries its help text in
+     * the same element, so the label is the part that names it.
+     */
+    private fun HTMLButtonElement.reads(): String =
+        ((querySelector(".opt-label")?.textContent ?: textContent).orEmpty().trim())
+
+    /** Is there a button reading that right now? */
+    private fun HTMLElement.has(label: String): Boolean =
+        querySelectorAll("button").let { n -> (0 until n.length).mapNotNull { n[it] as? HTMLButtonElement } }
+            .any { it.reads() == label }
+
     private fun HTMLElement.button(label: String): HTMLButtonElement =
         querySelectorAll("button").let { n -> (0 until n.length).mapNotNull { n[it] as? HTMLButtonElement } }
-            .firstOrNull { it.textContent?.trim() == label }
+            .firstOrNull { it.reads() == label }
             ?: error("no button labelled \"$label\"")
 
     private fun cardPages() = document.querySelectorAll("div.card-page").length
@@ -445,6 +478,152 @@ class AppDriverTest {
         val text = palette()?.textContent.orEmpty()
         assertTrue("Creating" !in text, "the panel is still saying it is creating: $text")
         assertTrue("Created" in text, "the panel never said it was done: $text")
+    }
+
+    @Test
+    fun aDoubleTappedApplyOnlyWritesOnce() = runTest {
+        // The flag that says "this is already happening" was set in
+        // the first line of the suspend function, which on this
+        // dispatcher runs a frame after the press. Two presses inside
+        // that frame both got through, and the API gives every call
+        // its own idempotency key — so an add of 248 printings was an
+        // add of 496 as far as the server was concerned.
+        val view = mount("#/entry", token = "t")
+        waitFor("the wizard") { view.all("button").isNotEmpty() }
+
+        view.button("Add to the collection").click()
+        waitFor("the direction to take") { !view.button("Continue →").disabled }
+        view.button("Continue →").click()
+        waitFor("the box") { view.all("textarea").isNotEmpty() }
+        val box = view.all("textarea").first() as org.w3c.dom.HTMLTextAreaElement
+        box.value = "4 Sol Ring"
+        box.dispatchEvent(org.w3c.dom.events.Event("input", js("({bubbles: true})")))
+        waitFor("the list to count") { !view.button("Continue →").disabled }
+        view.button("Continue →").click()
+        waitFor("the owner step") { view.has("Matt") }
+        view.button("Matt").click()
+        waitFor("preview to arm") { !view.button("Preview changes →").disabled }
+        view.button("Preview changes →").click()
+        waitFor("the preview") { view.has("Add 1 printings") }
+
+        // Twice in a row with nothing in between, the way a thumb
+        // does it.
+        val apply = view.button("Add 1 printings")
+        apply.click()
+        apply.click()
+        waitFor("the write") { writes.isNotEmpty() }
+        settle()
+        assertEquals(listOf("/cards/add"), writes, "it wrote more than once")
+    }
+
+    // ------------------------------------------- the suggestion list
+
+    private fun acInput() = document.querySelector(".ac .field") as org.w3c.dom.HTMLInputElement
+    private fun acItems(): List<HTMLElement> =
+        document.querySelectorAll(".ac-list li").let { n ->
+            (0 until n.length).mapNotNull { n[it] as? HTMLElement }
+        }
+
+    /** Type the way a person does, one event the field will believe. */
+    private fun typeName(text: String) {
+        val box = acInput()
+        box.value = text
+        box.dispatchEvent(org.w3c.dom.events.Event("input", js("({bubbles: true})")))
+    }
+
+    private suspend fun openSuggestions(): List<HTMLElement> {
+        mount("#/search")
+        waitFor("the search box") { document.querySelector(".ac .field") != null }
+        typeName("Vesu")
+        waitFor("the suggestions") { acItems().isNotEmpty() }
+        return acItems()
+    }
+
+    @Test
+    fun aSuggestionTakenWithATapLandsInTheBox() = runTest {
+        // A phone sends pointer events and a click. It does not
+        // promise a mousedown, and mousedown was the only thing the
+        // list listened to — so every tap on a suggestion did
+        // precisely nothing, on the one device this app is built for.
+        val items = openSuggestions()
+        assertEquals(listOf("Vesuva", "Vesuvan Mist"), items.map { it.textContent?.trim() })
+
+        // The whole gesture, in the order a browser sends it: the
+        // pointer arrives over the row, then the press. The enter was
+        // the part that put the list back — it wrote a state derived
+        // from a capture that the pick had already replaced.
+        items[1].dispatchEvent(org.w3c.dom.events.MouseEvent("mouseenter", js("({bubbles: false})")))
+        items[1].dispatchEvent(org.w3c.dom.events.MouseEvent("click", js("({bubbles: true, cancelable: true})")))
+        items[1].dispatchEvent(org.w3c.dom.events.MouseEvent("mouseenter", js("({bubbles: false})")))
+        waitFor("the pick to land") { acInput().value == "Vesuvan Mist" }
+        settle()
+        assertTrue(acItems().isEmpty(), "the list came back after a tap picked something")
+    }
+
+    @Test
+    fun pressingSomewhereElseClosesTheSuggestions() = runTest {
+        openSuggestions()
+        document.body!!.dispatchEvent(
+            org.w3c.dom.events.MouseEvent("pointerdown", js("({bubbles: true, cancelable: true})")),
+        )
+        waitFor("the list to close") { acItems().isEmpty() }
+    }
+
+    @Test
+    fun theSuggestionListIsNotCroppedByThePanelAroundIt() = runTest {
+        // The panel clips its children so its corners stay round. The
+        // suggestions are absolutely positioned and hang below it, so
+        // the clip cut the list down to whatever happened to fit —
+        // two rows, with no way to scroll to the rest.
+        val items = openSuggestions()
+        Stylesheet.load()
+        waitFor("the stylesheet") { Stylesheet.applied() }
+        val panel = document.querySelector(".panel") as HTMLElement
+        assertEquals(
+            "visible",
+            window.getComputedStyle(panel).getPropertyValue("overflow"),
+            "the panel is still clipping the suggestions",
+        )
+        val last = items.last().getBoundingClientRect()
+        val clip = panel.getBoundingClientRect()
+        assertTrue(
+            last.bottom > clip.bottom,
+            "this no longer proves anything: the list now fits inside the panel",
+        )
+        assertTrue(last.height > 40, "a suggestion is ${last.height}px tall, too small to hit")
+    }
+
+    @Test
+    fun aToastCanBePutAwayAndNeverSwallowsAPress() = runTest {
+        // A real toast off a real action rather than a test-only
+        // hook: Download says how many cards it wrote.
+        val view = mount("#/search")
+        waitFor("the grid") { view.all("div.card").isNotEmpty() }
+        view.button("Download").click()
+        waitFor("the toast") { document.querySelector(".toast") != null }
+
+        Stylesheet.load()
+        waitFor("the stylesheet") { Stylesheet.applied() }
+        val tray = document.querySelector(".toasts") as HTMLElement
+        assertEquals(
+            "none",
+            window.getComputedStyle(tray).getPropertyValue("pointer-events"),
+            "the toast tray is still taking presses meant for the page",
+        )
+        (document.querySelector(".toast") as HTMLElement).click()
+        waitFor("the toast to go") { document.querySelector(".toast") == null }
+    }
+
+    @Test
+    fun aToastGoesAwayOnItsOwn() = runTest {
+        // It used to stay until something else replaced it. On a
+        // phone that is a full-width bar parked over the screen's own
+        // buttons for the rest of the session.
+        val view = mount("#/search")
+        waitFor("the grid") { view.all("div.card").isNotEmpty() }
+        view.button("Download").click()
+        waitFor("the toast") { document.querySelector(".toast") != null }
+        waitFor("the toast to fade", upTo = 9000) { document.querySelector(".toast") == null }
     }
 
     @Test

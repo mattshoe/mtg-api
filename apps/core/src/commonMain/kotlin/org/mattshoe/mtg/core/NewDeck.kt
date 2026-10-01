@@ -90,7 +90,7 @@ data class NewDeck(
      * conjured, which is precisely what this wizard exists to prevent.
      */
     val canCreate: Boolean
-        get() = canLeaveCheck && !created && sourcesDecided
+        get() = canLeaveCheck && !created && sourcesDecided && busy == null
 
     val sourcesDecided: Boolean
         get() = DeckList.cardLines(list).all { line -> sources.containsKey(lineKey(line)) }

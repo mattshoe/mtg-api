@@ -15,17 +15,26 @@ data class Completion(
     /** -1 is "nothing highlighted", which is where every new list starts. */
     val active: Int = -1,
     val open: Boolean = false,
+    /**
+     * This term is a name taken off the list, not something typed.
+     *
+     * Without it, picking a suggestion asked for suggestions on what
+     * had just been picked, and the list reopened over the box holding
+     * the one name already in it — which reads as a list that will not
+     * go away.
+     */
+    val settled: Boolean = false,
 ) {
     val isEmpty: Boolean get() = items.isEmpty()
 
     val highlighted: String? get() = items.getOrNull(active)
 
     /** Worth a request. Two characters, the same as Scryfall asks for. */
-    val worthAsking: Boolean get() = term.trim().length >= MIN
+    val worthAsking: Boolean get() = term.trim().length >= MIN && !settled
 
     fun typed(text: String): Completion =
         if (text.trim().length < MIN) Completion(term = text)
-        else copy(term = text)
+        else copy(term = text, settled = false)
 
     fun suggested(names: List<String>, limit: Int = LIMIT) = copy(
         items = names.take(limit),
@@ -55,7 +64,7 @@ data class Completion(
     /** Picking closes the list and puts the name in the box. */
     fun pick(i: Int): Pair<Completion, String?> {
         val name = items.getOrNull(i) ?: return this to null
-        return Completion(term = name) to name
+        return Completion(term = name, settled = true) to name
     }
 
     companion object {
