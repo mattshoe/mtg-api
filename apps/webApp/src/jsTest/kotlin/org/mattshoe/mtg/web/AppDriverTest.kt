@@ -62,6 +62,14 @@ class AppDriverTest {
                     """{"cols":["name","name_norm","qty","role","owned","type_line","scryfall_id"],""" +
                         """"rows":[["Sol Ring","sol ring",1,null,1,"Artifact",null]],"n":1}"""
 
+                request.url.encodedPath == "/cards/validate" ->
+                    """{"checked":1,"unknown":0,"ok":true,"cards":[],"bad":[],"suggestions":{}}"""
+
+                request.url.encodedPath == "/decks/create" ->
+                    """{"created":true,"applied":true,"slug":"new-deck","card_count":100,"rows":100,""" +
+                        """"deck":{"slug":"new-deck","name":"New Deck","owner":"matt"},"added":[],"removed":[],""" +
+                        """"changed":[],"acquired":[],"returned":[],"errors":[]}"""
+
                 else ->
                     """{"cols":["id","owner","name","name_norm","qty","printings"],""" +
                         """"rows":[[1,"matt","Sol Ring","sol ring",1,1]],"n":1}"""
@@ -108,7 +116,7 @@ class AppDriverTest {
     private suspend fun settle() = repeat(12) { tick() }
 
     /** The page, mounted the way `index.html` mounts it. */
-    private fun mount(hash: String): HTMLElement {
+    private fun mount(hash: String, token: String = ""): HTMLElement {
         window.location.hash = hash
         val view = document.createElement("div") as HTMLElement
         val nav = document.createElement("div") as HTMLElement
@@ -116,7 +124,7 @@ class AppDriverTest {
         document.body!!.appendChild(nav)
         roots += view
         roots += nav
-        MtgApp.mount(view, null, "")
+        MtgApp.mount(view, null, token)
         MtgApp.mountNav(nav)
         return view
     }
@@ -343,6 +351,100 @@ class AppDriverTest {
         settle()
         assertTrue(hash().contains("q=bolt"), hash())
         assertEquals(before, js("window.history.length") as Int, "typing pushed history entries")
+    }
+
+    // -------------------------------------------- making a deck
+
+    private fun palette() = document.querySelector("div.palette") as? HTMLElement
+
+    private fun paletteButtons() =
+        palette()?.querySelectorAll("button")?.let { n ->
+            (0 until n.length).mapNotNull { n[it] as? HTMLButtonElement }
+        }.orEmpty()
+
+    /** What a button reads as, the option label winning over the mark. */
+    private fun HTMLButtonElement.says(): String =
+        ((querySelector(".opt-label")?.textContent ?: textContent).orEmpty().trim())
+
+    private fun option(label: String) =
+        paletteButtons().firstOrNull { it.says() == label }
+
+    private fun box(placeholder: String) =
+        palette()?.querySelector("[placeholder='$placeholder']") as? HTMLElement
+
+    private fun typeIntoArea(text: String) {
+        val box = palette()?.querySelector("textarea") as org.w3c.dom.HTMLTextAreaElement
+        box.value = text
+        box.dispatchEvent(org.w3c.dom.events.Event("input", js("({bubbles: true})")))
+    }
+
+    private fun press(label: String) {
+        val b = option(label) ?: error("no button '$label'; saw ${paletteButtons().map { it.textContent?.trim() }}")
+        b.click()
+    }
+
+    private fun typeInto(placeholder: String, text: String) {
+        val box = palette()?.querySelector("[placeholder='$placeholder']") as? HTMLElement
+            ?: error("no box '$placeholder'")
+        when (box) {
+            is org.w3c.dom.HTMLInputElement -> box.value = text
+            is org.w3c.dom.HTMLTextAreaElement -> box.value = text
+            else -> error("not a box")
+        }
+        box.dispatchEvent(org.w3c.dom.events.Event("input", js("({bubbles: true})")))
+    }
+
+    @Test
+    fun aCreatedDeckStopsSayingItIsBeingCreated() = runTest {
+        // The panel sat on "Creating…" after the deck already
+        // existed. The reload that follows a create builds on
+        // whatever `app` holds when it comes back, and the finished
+        // state was handed to it as an argument it ignored — so the
+        // toast appeared, the deck appeared, and the box never moved.
+        val view = mount("#/decks", token = "t")
+        waitFor("the deck list") { view.all("div.deck-card").isNotEmpty() }
+        view.button("New deck").click()
+        waitFor("the wizard") { palette() != null }
+
+        // A step at a time. Each wait keys off something only the
+        // next step has — the stepper down the side names every step
+        // on every step, so waiting for the word "Whose" to appear
+        // is waiting for something that never went away.
+        suspend fun onward(nextStep: String, there: () -> Boolean) {
+            waitFor("Continue to come alive") {
+                paletteButtons().any { it.says() == "Continue →" && !it.disabled }
+            }
+            press("Continue →")
+            waitFor("the $nextStep step", cond = there)
+        }
+
+        press("Commander")
+        onward("owner") { option("Matt") != null }
+        press("Matt")
+        onward("name") { box("Deck name") != null }
+        typeInto("Deck name", "Test Deck")
+        onward("commander") { box("e.g. Alela, Artful Provocateur") != null }
+        typeInto("e.g. Alela, Artful Provocateur", "Alela, Cunning Conqueror")
+        onward("cards") { palette()?.querySelector("textarea") != null }
+        typeIntoArea("1 Sol Ring")
+        onward("check") { paletteButtons().any { it.says() == "Check the names" } }
+
+        press("Check the names")
+        waitFor("the names to come back") {
+            paletteButtons().any { it.says() == "Continue →" && !it.disabled }
+        }
+        onward("review") { paletteButtons().any { it.says() == "All from bulk" } }
+        press("All from bulk")
+        waitFor("the create button to come alive") {
+            paletteButtons().any { it.says() == "Create Test Deck" && !it.disabled }
+        }
+        press("Create Test Deck")
+
+        waitFor("the deck to be made") { document.body!!.textContent.orEmpty().contains("Created Test Deck") }
+        settle()
+        val text = palette()?.textContent.orEmpty()
+        assertTrue("Creating" !in text, "the panel is still saying it is creating: $text")
+        assertTrue("Created" in text, "the panel never said it was done: $text")
     }
 
     @Test

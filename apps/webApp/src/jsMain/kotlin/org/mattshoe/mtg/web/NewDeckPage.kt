@@ -192,16 +192,21 @@ private fun CheckStep(s: NewDeck, onState: (NewDeck) -> Unit, onCheck: () -> Uni
                 v.bad.forEach { Span(attrs = { classes("chip", "mini", "bad") }) { Text(it.name) } }
             }
             if (v.suggestions.isNotEmpty()) {
-                Div(attrs = { classes("small", "muted") }) { Text("Did you mean") }
+                Div(attrs = { classes("small", "muted") }) { Text("Tap one to use it") }
                 Div(attrs = { classes("chips") }) {
                     v.suggestions.forEach { (wrong, right) ->
                         Button(attrs = {
-                            classes("chip", "mini")
-                            // Fixing it in the box, because retyping a
+                            classes("chip", "mini", "fixit")
+                            attr("title", "Use \"$right\"")
+                            // Fixing it where it is, because retyping a
                             // name the server already spelled for you is
                             // the kind of busywork that makes people
-                            // skip the check.
-                            onClick { onState(s.type(s.list.replace(wrong, right))) }
+                            // skip the check — and because the
+                            // commander is its own field, so a fix that
+                            // only rewrote the list did nothing at all
+                            // for the one name most likely to be typed
+                            // from memory.
+                            onClick { onState(s.correct(wrong, right)) }
                         }) { Text("$wrong → $right") }
                     }
                 }

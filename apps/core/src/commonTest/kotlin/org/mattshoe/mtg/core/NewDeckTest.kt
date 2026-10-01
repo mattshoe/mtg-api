@@ -3,6 +3,7 @@ package org.mattshoe.mtg.core
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -133,5 +134,57 @@ class NewDeckTest {
         assertFalse(Format.MODERN.wantsCommander)
         assertEquals(100, Format.COMMANDER.size)
         assertEquals(Format.PAUPER, Format.of("pauper"))
+    }
+
+    // -------------------------------------- taking a suggested spelling
+
+    @Test
+    fun aSuggestionFixesTheCommanderWhenThatIsWhatIsWrong() {
+        // The commander is its own field, so a correction that only
+        // rewrote the list did nothing — and a button that does
+        // nothing reads as broken, not as "it is kept elsewhere".
+        val d = NewDeck(commander = "Kardur Doomscourge", list = "1 Sol Ring\n1 Opt")
+            .correct("Kardur Doomscourge", "Kardur, Doomscourge")
+        assertEquals("Kardur, Doomscourge", d.commander)
+        assertEquals("1 Sol Ring\n1 Opt", d.list, "the list was not the problem")
+    }
+
+    @Test
+    fun andFixesTheListWhenThatIsWhereItIs() {
+        val d = NewDeck(commander = "Alela", list = "1 Sol Ring\n1 Lighting Bolt\n1 Opt")
+            .correct("Lighting Bolt", "Lightning Bolt")
+        assertEquals("1 Sol Ring\n1 Lightning Bolt\n1 Opt", d.list)
+        assertEquals("Alela", d.commander)
+    }
+
+    @Test
+    fun andBothWhenTheCardIsInBoth() {
+        val d = NewDeck(commander = "Kardur Doomscourge", list = "1 Kardur Doomscourge\n1 Opt")
+            .correct("Kardur Doomscourge", "Kardur, Doomscourge")
+        assertEquals("Kardur, Doomscourge", d.commander)
+        assertEquals("1 Kardur, Doomscourge\n1 Opt", d.list)
+    }
+
+    @Test
+    fun aQuantityIsKeptAndOnlyTheNameChanges() {
+        val d = NewDeck(list = "4 Lighting Bolt").correct("Lighting Bolt", "Lightning Bolt")
+        assertEquals("4 Lightning Bolt", d.list)
+    }
+
+    @Test
+    fun aNameInsideAnotherNameIsLeftAlone() {
+        // "Bolt" must not rewrite the middle of "Lightning Bolt", or
+        // taking one suggestion quietly breaks another line.
+        val d = NewDeck(list = "1 Lightning Bolt\n1 Bolt").correct("Bolt", "Bolt Bend")
+        assertEquals("1 Lightning Bolt\n1 Bolt Bend", d.list)
+    }
+
+    @Test
+    fun takingASuggestionMeansCheckingAgain() {
+        // The check that produced it was about the old spelling.
+        val d = NewDeck(commander = "Kardur Doomscourge", checked = Validation(checked = 2, unknown = 1))
+            .correct("Kardur Doomscourge", "Kardur, Doomscourge")
+        assertNull(d.checked)
+        assertFalse(d.canLeaveCheck)
     }
 }

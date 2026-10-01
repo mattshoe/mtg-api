@@ -441,6 +441,16 @@ object Inventory {
                 "namesMustBeCheckedBeforeSourcing", "aFailedCheckBlocksTheRestOfTheWizard",
                 "editingTheListThrowsAwayTheCheckAndEverySourcingChoice",
             )),
+        Feature(Area.DECKS, "Taking a suggested spelling, wherever the wrong one lives", "newdeck.js", logic = true, done = true,
+            tests = listOf(
+                "aSuggestionFixesTheCommanderWhenThatIsWhatIsWrong", "andFixesTheListWhenThatIsWhereItIs",
+                "andBothWhenTheCardIsInBoth", "aQuantityIsKeptAndOnlyTheNameChanges",
+                "aNameInsideAnotherNameIsLeftAlone", "takingASuggestionMeansCheckingAgain",
+            )),
+        Feature(Area.DECKS, "A created deck stops saying it is being created", "decks.js", logic = true, done = true,
+            tests = listOf(
+                "aCreatedDeckStopsSayingItIsBeingCreated",
+            )),
 
         // ---------------------------------------------------------- stats
         Feature(Area.STATS, "Collection totals and breakdowns", "stats.js", logic = true, done = true,

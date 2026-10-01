@@ -182,8 +182,15 @@ private fun CheckStep(s: NewDeck, onState: (NewDeck) -> Unit) {
         else -> {
             Text("${v.unknown} not found", fontWeight = FontWeight.SemiBold)
             Text(v.bad.joinToString(", ") { it.name }, fontSize = 12.sp)
+            if (v.suggestions.isNotEmpty()) {
+                Text("Tap one to use it", fontSize = 12.sp)
+            }
             v.suggestions.forEach { (wrong, right) ->
-                OutlinedButton(onClick = { onState(s.type(s.list.replace(wrong, right))) }) {
+                // `correct` rather than a rewrite of the list, because
+                // the commander lives in its own field — the name most
+                // likely to be typed from memory was the one the
+                // button could not fix.
+                OutlinedButton(onClick = { onState(s.correct(wrong, right)) }) {
                     Text("$wrong → $right", fontSize = 12.sp)
                 }
             }

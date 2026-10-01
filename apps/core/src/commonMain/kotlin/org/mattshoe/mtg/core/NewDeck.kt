@@ -122,6 +122,43 @@ data class NewDeck(
     /** Editing the list invalidates the check and every sourcing choice. */
     fun type(text: String) = copy(list = text, checked = null, sources = emptyMap(), error = null)
 
+    /**
+     * Take a suggested spelling, wherever the wrong one is.
+     *
+     * The commander is its own field rather than a line in the list,
+     * so a correction that only rewrote the list did nothing at all
+     * for a misspelt commander — the suggestion was right there and
+     * pressing it changed nothing, which reads as a broken button
+     * rather than as "that one is kept somewhere else".
+     */
+    fun correct(wrong: String, right: String): NewDeck {
+        val fixedCommander = if (commander.trim().equals(wrong.trim(), ignoreCase = true)) {
+            right
+        } else {
+            commander
+        }
+        val fixedList = list.lines().joinToString("\n") { line ->
+            if (sameCard(line, wrong)) line.replace(wrong, right, ignoreCase = true) else line
+        }
+        return copy(
+            commander = fixedCommander,
+            list = fixedList,
+            // The check was about the old spelling, and the sourcing
+            // choices were about cards one of which has just changed.
+            checked = null,
+            sources = emptyMap(),
+            error = null,
+        )
+    }
+
+    /** Is this list line that card, quantity and all? */
+    private fun sameCard(line: String, name: String): Boolean {
+        val body = line.trim().removePrefix("#").trim()
+            .replace(Regex("""^\d+\s*[xX]?\s+"""), "")
+            .trim()
+        return body.equals(name.trim(), ignoreCase = true)
+    }
+
     fun source(line: String, from: Source) = copy(sources = sources + (lineKey(line) to from))
 
     fun goTo(target: DeckStep): NewDeck {

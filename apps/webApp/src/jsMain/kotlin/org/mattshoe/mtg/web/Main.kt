@@ -394,7 +394,7 @@ object MtgApp {
             View.DECKS -> {
                 app = app.fetching(View.DECKS)
                 intoPage(View.DECKS) {
-                    if (s.route.rest.isEmpty()) loadDecks(s) else openDeck(s, s.route.rest)
+                    if (s.route.rest.isEmpty()) loadDecks() else openDeck(s, s.route.rest)
                 }
             }
 
@@ -491,14 +491,25 @@ object MtgApp {
         )
     }
 
-    private suspend fun loadDecks(s: AppState): AppState {
+    /**
+     * The deck list, re-read.
+     *
+     * It builds on whatever `app` holds when the read comes back,
+     * not on a state captured before it — anything that landed while
+     * it was in flight would otherwise be thrown away. It took no
+     * argument for exactly that reason, and the two callers that
+     * passed one had their work quietly discarded: a created deck
+     * stayed on "Creating…" for as long as anybody was willing to
+     * watch it.
+     */
+    private suspend fun loadDecks(): AppState {
         val r = api.query(DeckQueries.all())
         return app.copy(decks = app.decks.loaded(DeckQueries.decode(r.cols, r.rows)))
     }
 
     private suspend fun openDeck(s: AppState, slug: String): AppState {
         // The list first, because the header needs the deck's own row.
-        if (app.decks.decks.isEmpty()) app = loadDecks(s)
+        if (app.decks.decks.isEmpty()) app = loadDecks()
         val r = api.query(DeckQueries.cards(slug))
         // Read `app` again rather than the copy captured before the
         // query: anything that landed while it was in flight — the
@@ -855,7 +866,8 @@ object MtgApp {
         app = app.copy(disassemble = d.working())
         return try {
             val r = api.disassemble(token(), d.slug, dryRun = false)
-            loadDecks(app.copy(disassemble = app.disassemble?.finished()))
+            app = app.copy(disassemble = app.disassemble?.finished())
+            loadDecks()
                 .closing(Overlay.DISASSEMBLE)
                 .navigate(View.DECKS)
                 .say("Disassembled ${d.deckName} — ${r.freed} back in bulk")
@@ -888,7 +900,8 @@ object MtgApp {
                 list = n.list,
                 dryRun = false,
             )
-            loadDecks(app.copy(newDeck = app.newDeck.finished())).say("Created ${n.name}")
+            app = app.copy(newDeck = app.newDeck.finished())
+            loadDecks().say("Created ${n.name}")
         } catch (ex: ApiFailure) {
             app.copy(newDeck = app.newDeck.failed(ex.message ?: "that did not work"))
         }
