@@ -522,26 +522,26 @@ class CardGridTest {
     }
 
     @Test
-    fun theBadgesSayWhatIsSpareAndWhatItIsWorth() = runTest {
+    fun theOnlyBadgeOnATileIsWhatItIsWorth() = runTest {
+        // There was a "2 free" / "in decks" badge beside it. Two
+        // labels across the bottom of every picture in the grid is
+        // more than a grid of pictures can carry, and what is spare
+        // belongs on the card's own page where it can say whose.
         val root = mount {
             LibraryPage(Library().loaded(listOf(card("abcdef12-3456", 2, 2.5)), 1), {}, {}, {})
         }
         settle()
-        assertEquals("2 free", (root.querySelector(".free-badge") as org.w3c.dom.HTMLElement).textContent)
+        assertEquals(null, root.querySelector(".free-badge"), "the free badge is back")
         assertEquals("$2.50", (root.querySelector(".price-badge") as org.w3c.dom.HTMLElement).textContent)
     }
 
     @Test
-    fun aCardWithNoSpareCopySaysWhereTheyWent() = runTest {
+    fun aCardWithNoPriceShowsNoBadgeRatherThanADash() = runTest {
         val root = mount {
             LibraryPage(Library().loaded(listOf(card("abcdef12-3456", 0, null)), 1), {}, {}, {})
         }
         settle()
-        val badge = root.querySelector(".free-badge") as org.w3c.dom.HTMLElement
-        assertEquals("in decks", badge.textContent)
-        assertTrue(badge.className.contains("none"), badge.className)
-        // No price is a blank badge, not a dash: the dash reads as an
-        // error and most of the time it is not one.
+        // A dash reads as an error and most of the time it is not one.
         assertEquals("", (root.querySelector(".price-badge") as org.w3c.dom.HTMLElement).textContent)
     }
 

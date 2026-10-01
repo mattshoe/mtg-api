@@ -239,6 +239,7 @@ object Inventory {
             )),
         Feature(Area.LIBRARY, "Boolean flags — reserved, game changer, full art and the rest", "filters.js", logic = true, done = true,
             tests = listOf(
+                "aColourToggleIsTheSymbolAndNothingElse", "theColourTogglesStayInsideTheirOwnButtons",
                 "flagsGoThreeWays", "theGameChangerFlagUsesItsDatabaseColumn", "theFlagsAreThreeValued",
                 "onlySetFlagsAppearInTheUrl", "everyFieldOnThePanelChangesTheQuery",
             )),
@@ -274,7 +275,7 @@ object Inventory {
             tests = listOf(
                 "centsMatterUnderTenAndDoNotAboveIt", "thousandsAreGrouped", "noPriceIsADashNotAZero",
                 "anUnreleasedPrintingSaysWhenItArrives", "aTokenIsNotSoldSingly", "aPriceBeatsAReason",
-                "theBadgesSayWhatIsSpareAndWhatItIsWorth", "aCardWithNoSpareCopySaysWhereTheyWent",
+                "theOnlyBadgeOnATileIsWhatItIsWorth", "aCardWithNoPriceShowsNoBadgeRatherThanADash",
             )),
 
         // ---------------------------------------------------------- decks
@@ -363,7 +364,14 @@ object Inventory {
                 "openingADeckClearsTheTokensOfTheLastOne",
                 "eachColourSplitIsAlsoDrawnAsARing", "aRingWithNothingInItIsNotDrawn",
                 "everySectionIsDrawn", "theTallestColumnFillsTheChartAndTheRestAreToScale",
+                "twoColumnsOnlyDrawAlikeWhenTheyAreAlike", "noColumnOverflowsTheChartItIsIn",
+                "theCountSitsOnItsOwnBar", "theTallestBarsCountIsStillOnTheChart",
                 "eachColourShowsWhatItNeedsAgainstWhatItMakes",
+                "manaOutsideTheCommandersIdentityIsCountedAsColourless",
+                "aCardMakingSeveralUnusableColoursIsOneColourlessSource",
+                "realColourlessAndFoldedColourlessAddUp",
+                "aDeckWithNoCommanderKeepsEveryColourItMakes",
+                "twoCommandersSetTheIdentityBetweenThem", "theNeedsSideIsUntouched",
                 "aColourWithNoSourceIsSaidOutLoud", "theCardsNobodyOwnsAreNamedRatherThanFoldedIn",
                 "nothingRunsOffTheEdgeAtPhoneWidth",
                 "theColoursAreNotWashedOut",
@@ -534,7 +542,7 @@ object Inventory {
                 "theOwnersAddUpToWhatTheWholeCollectionHas", "theCardQueriesAskAboutEverybody", "thePageSaysWhoOwnsHowMany",
                 "aPrintingSaysWhoseCopyItIs", "aDeckRowSaysWhoseDeckItIs",
                 "theOwnerLinesStayOnOneLineOnAPhone",
-                "aCardWithNoSpareCopySaysWhereTheyWent",
+                "aCardWithNoPriceShowsNoBadgeRatherThanADash",
             )),
 
         // ----------------------------------------------------------- logs

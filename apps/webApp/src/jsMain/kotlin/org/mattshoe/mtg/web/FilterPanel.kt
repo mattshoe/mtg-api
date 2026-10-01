@@ -364,10 +364,13 @@ private fun Pips(selected: List<String>, onToggle: (String) -> Unit) {
                 attr("data-c", c)
                 if (c in selected) classes("on")
                 attr("title", NAMES[c] ?: c)
+                attr("aria-label", NAMES[c] ?: c)
+                attr("aria-pressed", (c in selected).toString())
                 onClick { onToggle(c) }
             }) {
+                // The symbol says it on its own. The name beside it
+                // did not fit the button and ran under the next one.
                 ManaPip(c)
-                Text(NAMES[c] ?: c)
             }
         }
     }

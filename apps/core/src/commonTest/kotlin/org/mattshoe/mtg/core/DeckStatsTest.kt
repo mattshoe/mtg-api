@@ -324,4 +324,88 @@ class DeckStatsTest {
         assertTrue(!s.hasCurve)
         assertEquals(null, s.value)
     }
+
+    // ------------------------------------ mana the deck cannot spend
+
+    private fun makes(cards: List<DeckCard>) =
+        DeckAnalysis.of(cards).sources.associate { it.label to it.value }
+
+    @Test
+    fun manaOutsideTheCommandersIdentityIsCountedAsColourless() {
+        // A land making red in a mono-black deck is not a red source
+        // — nothing in the deck has a red cost. It is generic mana,
+        // which is what colourless means here.
+        val deck = listOf(
+            card("Tinybones", type = "Legendary Creature", role = "commander", ci = "B"),
+            card("Swamp", type = "Basic Land — Swamp", cost = null, cmc = 0.0, qty = 10, produces = "B", ci = "B"),
+            card("Cascading Cataracts", type = "Land", cost = null, cmc = 0.0, produces = "WUBRG", ci = ""),
+        )
+        val m = makes(deck)
+        assertEquals(11, m["Black"], "the land making black is still a black source")
+        assertEquals(1, m["Colourless"], "the four colours it cannot use are one generic source")
+        assertEquals(null, m["Red"])
+        assertEquals(null, m["Green"])
+    }
+
+    @Test
+    fun aCardMakingSeveralUnusableColoursIsOneColourlessSource() {
+        // Not four. It is one card, and it makes one kind of mana
+        // this deck can spend.
+        val deck = listOf(
+            card("Tinybones", type = "Legendary Creature", role = "commander", ci = "B"),
+            card("Pool", type = "Land", cost = null, cmc = 0.0, produces = "WURG", ci = ""),
+        )
+        assertEquals(1, makes(deck)["Colourless"])
+    }
+
+    @Test
+    fun realColourlessAndFoldedColourlessAddUp() {
+        val deck = listOf(
+            card("Tinybones", type = "Legendary Creature", role = "commander", ci = "B"),
+            card("Wastes", type = "Basic Land — Wastes", cost = null, cmc = 0.0, produces = "C", ci = ""),
+            card("Mountain", type = "Basic Land — Mountain", cost = null, cmc = 0.0, produces = "R", ci = "R"),
+        )
+        assertEquals(2, makes(deck)["Colourless"])
+    }
+
+    @Test
+    fun aDeckWithNoCommanderKeepsEveryColourItMakes() {
+        // Nothing says what is spendable, so nothing is folded.
+        val deck = listOf(
+            card("Mountain", type = "Basic Land — Mountain", cost = null, cmc = 0.0, produces = "R", ci = "R"),
+            card("Island", type = "Basic Land — Island", cost = null, cmc = 0.0, produces = "U", ci = "U"),
+        )
+        val m = makes(deck)
+        assertEquals(1, m["Red"])
+        assertEquals(1, m["Blue"])
+        assertEquals(null, m["Colourless"])
+    }
+
+    @Test
+    fun twoCommandersSetTheIdentityBetweenThem() {
+        val deck = listOf(
+            card("Partner One", type = "Legendary Creature", role = "commander", ci = "W"),
+            card("Partner Two", type = "Legendary Creature", role = "commander", ci = "U"),
+            card("Plains", type = "Basic Land — Plains", cost = null, cmc = 0.0, produces = "W", ci = "W"),
+            card("Island", type = "Basic Land — Island", cost = null, cmc = 0.0, produces = "U", ci = "U"),
+            card("Mountain", type = "Basic Land — Mountain", cost = null, cmc = 0.0, produces = "R", ci = "R"),
+        )
+        val m = makes(deck)
+        assertEquals(1, m["White"])
+        assertEquals(1, m["Blue"])
+        assertEquals(null, m["Red"], "red is outside the pair's identity")
+        assertEquals(1, m["Colourless"])
+    }
+
+    @Test
+    fun theNeedsSideIsUntouched() {
+        // Only what the deck makes is folded. What it asks for is
+        // what is printed on the cards.
+        val deck = listOf(
+            card("Tinybones", type = "Legendary Creature", role = "commander", ci = "B", cost = "{1}{B}"),
+            card("Oddity", cost = "{R}", ci = "R"),
+        )
+        val needs = DeckAnalysis.of(deck).pips.associate { it.label to it.value }
+        assertEquals(1, needs["Red"], "a red cost is still a red cost")
+    }
 }

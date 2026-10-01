@@ -301,11 +301,21 @@ private fun DeckStats(s: org.mattshoe.mtg.core.DeckStats) {
                         verticalArrangement = Arrangement.Bottom,
                     ) {
                         Line(if (bar.value > 0) "${bar.value}" else "", Ink2, Design.MINI)
+                        // The bar fills a fraction of the track, not
+                        // of the whole column: the column also holds
+                        // the number and the label, so a fraction of
+                        // the column overruns the space left and
+                        // every tall bar ends up the same height.
                         Box(
-                            Modifier.fillMaxWidth()
-                                .fillMaxHeight(if (most <= 0) 0f else bar.value.toFloat() / most)
-                                .background(if (bar.value > 0) Accent else Bg3, Radius),
-                        )
+                            Modifier.weight(1f).fillMaxWidth(),
+                            contentAlignment = Alignment.BottomCenter,
+                        ) {
+                            Box(
+                                Modifier.fillMaxWidth()
+                                    .fillMaxHeight(if (most <= 0) 0f else bar.value.toFloat() / most)
+                                    .background(if (bar.value > 0) Accent else Bg3, Radius),
+                            )
+                        }
                         Line(bar.label, Ink3, Design.MINI)
                     }
                 }

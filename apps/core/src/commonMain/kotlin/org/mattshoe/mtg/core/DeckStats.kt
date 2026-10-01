@@ -124,7 +124,7 @@ object DeckAnalysis {
         return DeckStats(
             curve = curve(nonland),
             pips = pips(cards),
-            sources = sources(cards),
+            sources = sources(cards, spendable(cards)),
             types = types(cards),
             rarities = rarities(cards),
             lands = lands,
@@ -171,15 +171,40 @@ object DeckAnalysis {
         }
     }
 
-    /** How many cards can make each colour. Lands and rocks alike. */
-    private fun sources(cards: List<DeckCard>): List<Bar> {
+    /**
+     * The colours this deck is allowed to spend, or null when nothing
+     * says. A commander sets it, and in Commander that is the rule
+     * every other card in the deck already obeys.
+     */
+    private fun spendable(cards: List<DeckCard>): Set<Char>? {
+        val leaders = cards.filter { it.isCommander }
+        if (leaders.isEmpty()) return null
+        return leaders.flatMap { it.colorIdentity.orEmpty().toList() }.toSet()
+    }
+
+    /**
+     * How many cards can make each colour. Lands and rocks alike.
+     *
+     * Mana outside the commander's identity is folded into
+     * colourless, because that is all it can ever be: nothing in the
+     * deck has a coloured cost it could pay, so it is generic mana
+     * with a colour nobody can use. A Reflecting Pool in a mono-black
+     * deck makes one black source, not five of something.
+     */
+    private fun sources(cards: List<DeckCard>, spendable: Set<Char>?): List<Bar> {
         val counts = mutableMapOf<Pip, Int>()
         cards.forEach { c ->
-            c.knownProducedMana.orEmpty().forEach { letter ->
-                Pip.of(letter.toString().uppercase())?.let { pip ->
-                    counts[pip] = (counts[pip] ?: 0) + c.qty
+            // One card making the same colour twice is still one
+            // source of it, but a dual making two different colours
+            // is a source of each.
+            c.knownProducedMana.orEmpty()
+                .mapNotNull { Pip.of(it.toString().uppercase()) }
+                .map { pip ->
+                    val usable = spendable == null || pip == Pip.C || pip.letter.single() in spendable
+                    if (usable) pip else Pip.C
                 }
-            }
+                .distinct()
+                .forEach { pip -> counts[pip] = (counts[pip] ?: 0) + c.qty }
         }
         return Pip.entries.mapNotNull { pip ->
             counts[pip]?.takeIf { it > 0 }?.let { Bar(pip.label, it, pip.letter) }

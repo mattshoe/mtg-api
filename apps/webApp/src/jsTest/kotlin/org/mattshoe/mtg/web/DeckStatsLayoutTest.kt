@@ -110,6 +110,87 @@ class DeckStatsLayoutTest {
     }
 
     @Test
+    fun twoColumnsOnlyDrawAlikeWhenTheyAreAlike() = runTest {
+        // Fifteen, fifteen and seventeen all drew the same height.
+        // The bar was a percentage of the whole column, number label
+        // included, so anything near the top overflowed and flexbox
+        // shrank every tall bar down to the same ceiling.
+        val tall = listOf(
+            card("Plains", "Basic Land — Plains", null, 0.0, qty = 37, produces = "W"),
+            card("One", "Creature — Human", "{W}", 1.0, qty = 5),
+            card("Two", "Creature — Human", "{1}{W}", 2.0, qty = 15),
+            card("Three", "Creature — Human", "{2}{W}", 3.0, qty = 15),
+            card("Four", "Creature — Human", "{3}{W}", 4.0, qty = 17),
+        )
+        val frame = document.createElement("div") as HTMLElement
+        frame.style.width = "900px"
+        frame.style.position = "absolute"
+        frame.style.left = "0px"
+        document.body!!.appendChild(frame)
+        roots += frame
+        renderComposable(root = frame) { DeckStatsPanel(DeckAnalysis.of(tall)) }
+        settle()
+        if (!styled()) return@runTest
+
+        val h = frame.all("div.curve .bar").map { it.getBoundingClientRect().height }
+        // Columns are nought through seven, so one-drops are index 1.
+        val (five, fifteen, alsoFifteen, seventeen) = listOf(h[1], h[2], h[3], h[4])
+        assertEquals(fifteen, alsoFifteen, "two columns of fifteen drew differently")
+        assertTrue(seventeen > fifteen + 3, "seventeen drew the same as fifteen: $seventeen vs $fifteen")
+        assertTrue(fifteen > five + 20, "fifteen drew barely taller than five: $fifteen vs $five")
+        // And to scale, not merely ordered.
+        val scale = seventeen / 17.0
+        assertTrue(kotlin.math.abs(fifteen / 15.0 - scale) < scale * 0.12, "the columns are not to scale: $h")
+        assertTrue(kotlin.math.abs(five / 5.0 - scale) < scale * 0.12, "the columns are not to scale: $h")
+    }
+
+    @Test
+    fun theCountSitsOnItsOwnBar() = runTest {
+        // It was a row of numbers along the top of the chart, nowhere
+        // near the column each one counted.
+        val frame = render(900)
+        settle()
+        if (!styled()) return@runTest
+        frame.all("div.curve .bar").forEach { bar ->
+            val n = bar.querySelector("div.n") as? HTMLElement ?: error("a bar has no count")
+            if (n.textContent.orEmpty().isBlank()) return@forEach
+            val b = bar.getBoundingClientRect()
+            val r = n.getBoundingClientRect()
+            assertTrue(r.bottom <= b.top + 1, "the count is not above its bar")
+            assertTrue(b.top - r.bottom < 10, "the count floated ${b.top - r.bottom}px off its bar")
+            // And over the column it counts, not over a neighbour.
+            assertTrue(kotlin.math.abs((r.left + r.right) / 2 - (b.left + b.right) / 2) < 2)
+        }
+    }
+
+    @Test
+    fun theTallestBarsCountIsStillOnTheChart() = runTest {
+        val frame = render(900)
+        settle()
+        if (!styled()) return@runTest
+        val chart = frame.all("div.curve").first().getBoundingClientRect()
+        val tallest = frame.all("div.curve .bar").maxByOrNull { it.getBoundingClientRect().height }!!
+        val n = (tallest.querySelector("div.n") as HTMLElement).getBoundingClientRect()
+        assertTrue(n.top >= chart.top - 1, "the tallest bar's count is clipped off the top")
+    }
+
+    @Test
+    fun noColumnOverflowsTheChartItIsIn() = runTest {
+        val frame = render(900)
+        settle()
+        if (!styled()) return@runTest
+        // The first `.curve` is the chart; the second is the row of
+        // labels under it, and its columns are not in this one.
+        val chartEl = frame.all("div.curve").first()
+        val chart = chartEl.getBoundingClientRect()
+        chartEl.all("div.col").forEach { col ->
+            val r = col.getBoundingClientRect()
+            assertTrue(r.top >= chart.top - 1, "a column grew out of the top of the chart")
+            assertTrue(r.bottom <= chart.bottom + 1, "a column grew out of the bottom")
+        }
+    }
+
+    @Test
     fun theCurveLeavesTheLandsOut() = runTest {
         // Twenty-four lands in this deck. As nought-drops they would
         // be the whole chart.

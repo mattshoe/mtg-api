@@ -152,8 +152,8 @@ private fun SortPicker(state: Library, apply: (Library) -> Unit) {
 @Composable
 private fun Tile(card: CardRow, onOpen: (CardRow) -> Unit) {
     // The same markup and the same class names the hand-written grid
-    // used, so the picture, the free badge and the price sit exactly
-    // where the stylesheet already puts them.
+    // used, so the picture and the price sit exactly where the
+    // stylesheet already puts them.
     Div(attrs = {
         classes("card")
         onClick { onOpen(card) }
@@ -168,10 +168,9 @@ private fun Tile(card: CardRow, onOpen: (CardRow) -> Unit) {
                     attr("decoding", "async")
                 })
             }
-            val free = card.free ?: 0
-            Div(attrs = { classes("free-badge"); if (free <= 0) classes("none") }) {
-                Text(if (free > 0) "$free free" else "in decks")
-            }
+            // The price, bottom left. What is spare is on the card's
+            // own page, where there is room to say whose it is and
+            // which deck took it.
             Div(attrs = { classes("price-badge") }) { Text(Prices.money(card.price, dash = "")) }
         }
         // The name and how many, on one line. The mana cost was a

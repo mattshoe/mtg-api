@@ -39,6 +39,9 @@ class FilterPanelTest {
 
     private val roots = mutableListOf<HTMLElement>()
 
+    @kotlin.test.BeforeTest
+    fun loadTheStylesheet() = Stylesheet.load()
+
     @AfterTest
     fun cleanUp() {
         roots.forEach { it.remove() }
@@ -64,6 +67,9 @@ class FilterPanelTest {
      * and opens the group under test — everything is folded away to
      * start, so that is the first thing a person does too.
      */
+    private fun HTMLElement.all(css: String): List<HTMLElement> =
+        querySelectorAll(css).let { n -> (0 until n.length).mapNotNull { n[it] as? HTMLElement } }
+
     private fun mount(start: Filters = Filters(), open: String? = null): Panel {
         val root = document.createElement("div") as HTMLElement
         document.body!!.appendChild(root)
@@ -76,6 +82,50 @@ class FilterPanelTest {
         val panel = Panel(root) { held }
         open?.let { panel.fold(it) }
         return panel
+    }
+
+    @Test
+    fun aColourToggleIsTheSymbolAndNothingElse() = runTest {
+        // The name sat beside the symbol inside a 30px circle, so it
+        // ran out of the button and under the next one: "Wh", "Bl",
+        // "Bl", "Re", "Gr" all overlapping.
+        val p = mount(open = "colour")
+        val root = p.root
+        settle()
+        val pips = root.all("button.pip")
+        // Six colours, twice: the identity picker and the one
+        // for what a card produces.
+        assertEquals(12, pips.size, "a colour went missing")
+        pips.forEach { b ->
+            assertEquals("", b.textContent?.trim(), "a toggle still carries its name")
+            assertTrue(b.querySelector("img.mana-sym") != null, "a toggle has no symbol")
+            // Still says what it is, for anything that cannot see it.
+            assertTrue(!b.getAttribute("aria-label").isNullOrBlank(), "a toggle has no label")
+        }
+    }
+
+    @Test
+    fun theColourTogglesStayInsideTheirOwnButtons() = runTest {
+        val p = mount(open = "colour")
+        val root = p.root
+        root.style.width = "358px"
+        settle()
+        if (!Stylesheet.applied()) return@runTest
+        val pips = root.all("button.pip")
+        pips.zipWithNext().forEach { (a, b) ->
+            val left = a.getBoundingClientRect()
+            val right = b.getBoundingClientRect()
+            // Only compare the ones that ended up on the same row.
+            if (kotlin.math.abs(left.top - right.top) < 2) {
+                assertTrue(left.right <= right.left + 1, "two colour toggles overlap")
+            }
+        }
+        pips.forEach { b ->
+            val box = b.getBoundingClientRect()
+            val sym = (b.querySelector("img.mana-sym") as HTMLElement).getBoundingClientRect()
+            assertTrue(sym.right <= box.right + 1 && sym.left >= box.left - 1, "a symbol is outside its button")
+            assertTrue(box.height >= 36, "a colour toggle is only ${box.height}px for a thumb")
+        }
     }
 
     private class Panel(val root: HTMLElement, val filters: () -> Filters) {

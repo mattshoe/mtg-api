@@ -223,13 +223,12 @@ class LibraryLayoutTest {
     }
 
     @Test
-    fun everyCardTileHasItsPictureBadgesAndCaption() = runTest {
+    fun everyCardTileHasItsPicturePriceAndCaption() = runTest {
         val frame = render(1400)
         settle()
         if (!styled()) return@runTest
         frame.all("div.card").forEach { tile ->
             assertTrue(tile.querySelector("img.card-img") != null, "a tile has no picture")
-            assertTrue(tile.querySelector(".free-badge") != null, "a tile has no free badge")
             assertTrue(tile.querySelector(".price-badge") != null, "a tile has no price badge")
             assertTrue(tile.querySelector(".card-meta .nm") != null, "a tile has no name")
             val img = tile.querySelector("img.card-img") as HTMLElement

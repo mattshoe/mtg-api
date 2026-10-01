@@ -300,21 +300,25 @@ select { appearance: none; background-image:
 .chip.bad { border-color: color-mix(in srgb, var(--bad) 45%, var(--line)); color: var(--bad); }
 
 /* pip toggles, one per colour */
-.pips { display: flex; gap: 5px; }
+.pips { display: flex; gap: 8px; flex-wrap: wrap; }
+/* The symbol is the button. It used to be a 21px mark floating in a
+   38px circle with its name spilling out of the side; the symbol is
+   already a circle, so it fills the whole thing. */
 .pip {
-  width: 30px; height: 30px; padding: 0; border-radius: 50%; display: grid; place-items: center;
-  border: 1.5px solid var(--line-2); background: var(--bg);
-  font-weight: 800; font-size: 12.5px; cursor: pointer; color: var(--text-3);
-  font-family: var(--mono);
+  width: 36px; height: 36px; padding: 0; border: 0; background: none;
+  border-radius: 50%; display: block; flex: none; cursor: pointer;
+  /* Unchosen reads as off without hiding which colour it is. */
+  opacity: .42; filter: grayscale(.85);
+  transition: opacity .12s ease, filter .12s ease;
 }
-.pip:hover { border-color: var(--text-2); }
-.pip { display: inline-flex; align-items: center; gap: 6px; }
-.pip[data-c=W].on { background: var(--w); border-color: var(--w); color: #14181F; }
-.pip[data-c=U].on { background: var(--u); border-color: var(--u); color: #14181F; }
-.pip[data-c=B].on { background: var(--b); border-color: var(--b); color: #F4F7FB; }
-.pip[data-c=R].on { background: var(--r); border-color: var(--r); color: #14181F; }
-.pip[data-c=G].on { background: var(--g); border-color: var(--g); color: #F4F7FB; }
-.pip[data-c=C].on { background: var(--c); border-color: var(--c); color: #14181F; }
+.pip .mana-sym { width: 100%; height: 100%; display: block; }
+.pip:hover { opacity: .8; filter: grayscale(.3); }
+/* Chosen is said by a ring as well as by being lit, because colour
+   on its own is not a signal everybody can read. */
+.pip.on {
+  opacity: 1; filter: none;
+  box-shadow: 0 0 0 2px var(--bg-2), 0 0 0 3.5px var(--accent);
+}
 
 /* inline mana cost */
 .mana { display: inline-flex; gap: 2px; vertical-align: -2px; flex-wrap: wrap; }
@@ -388,14 +392,11 @@ td.mono { font-family: var(--mono); font-size: 12.5px; }
   font: 700 11.5px/1 var(--mono); white-space: nowrap;
 }
 
-.free-badge {
-  position: absolute; left: 6px; bottom: 6px; padding: 2px 6px; border-radius: 5px;
-  background: rgba(8,10,14,.86); color: var(--ok); font: 700 10px/1.4 var(--mono);
-  box-shadow: 0 0 0 1px rgba(255,255,255,.14);
-}
-.free-badge.none { color: var(--text-3); }
+/* The price, bottom left. It was on the right with a "free" or "in
+   decks" badge beside it, and the two of them covered the bottom of
+   every picture in the grid. */
 .price-badge {
-  position: absolute; right: 6px; bottom: 6px; padding: 2px 7px; border-radius: 5px;
+  position: absolute; left: 6px; bottom: 6px; padding: 2px 7px; border-radius: 5px;
   background: rgba(8,10,14,.86); color: var(--accent-2);
   font: 700 11px/1.5 var(--mono); box-shadow: 0 0 0 1px rgba(255,255,255,.14);
   pointer-events: none;
@@ -722,9 +723,24 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
 
 /* The mana curve: columns, tallest to scale, the count above each. */
 .curve { display: flex; align-items: flex-end; gap: 6px; height: 132px; }
-.curve .col { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; height: 100%; gap: 5px; min-width: 0; }
-.curve .n { font: 600 11px/1 var(--mono); color: var(--text-2); text-align: center; }
+.curve .col { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; height: 100%; min-width: 0; }
+/* The count sits on its own bar. It used to be a row of numbers
+   along the top of the chart, nowhere near the column it counted. */
+.curve .n {
+  position: absolute; bottom: 100%; left: 0; right: 0; margin-bottom: 3px;
+  font: 600 11px/1 var(--mono); color: var(--text-2); text-align: center;
+}
+/* What the bar is a percentage of. Without it the bar measured
+   against the whole column — number included — so anything near the
+   top overflowed and flexbox shrank every tall bar to the same
+   height. A 15 and a 17 drew exactly alike. The padding is the room
+   the number needs above a full-height bar. */
+.curve .track {
+  flex: 1; min-height: 0; display: flex; align-items: flex-end;
+  padding-top: 15px; box-sizing: border-box;
+}
 .curve .bar {
+  position: relative; width: 100%; flex: none;
   background: linear-gradient(to top, var(--accent), color-mix(in srgb, var(--accent) 55%, var(--bg-3)));
   border-radius: 4px 4px 0 0; min-height: 2px;
 }

@@ -94,13 +94,23 @@ private fun Curve(s: DeckStats) {
                 if (bar.value == 0) classes("none")
                 attr("title", "${bar.value} at ${bar.note}")
             }) {
-                Div(attrs = { classes("n") }) { Text(if (bar.value > 0) "${bar.value}" else "") }
-                Div(attrs = {
-                    classes("bar")
-                    // A percentage of the column rather than a pixel
-                    // count, so the chart is right at any width.
-                    style { property("height", "${bar.share(most)}%") }
-                }) {}
+                // The bar measures itself against the track, not
+                // against the column: a percentage of the column
+                // overflows, and flexbox then squashes every tall bar
+                // to the same height. Fifteen and seventeen drew
+                // identical. The number rides on top of its own bar
+                // rather than sitting in a row along the top of the
+                // chart, where it was nowhere near what it counted.
+                Div(attrs = { classes("track") }) {
+                    Div(attrs = {
+                        classes("bar")
+                        // A percentage rather than a pixel count, so
+                        // the chart is right at any size.
+                        style { property("height", "${bar.share(most)}%") }
+                    }) {
+                        Div(attrs = { classes("n") }) { Text(if (bar.value > 0) "${bar.value}" else "") }
+                    }
+                }
             }
         }
     }
