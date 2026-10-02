@@ -21,7 +21,7 @@
 // Reading is open. Anything that writes needs an admin token — see admin.js.
 
 import { getSchema } from './schema.js';
-import { runQuery, mayWrite, stripLiterals } from './query.js';
+import { runQuery, mayWrite, stripLiterals, isOverloaded } from './query.js';
 import { validateNames } from './validate.js';
 import { addCards, removeCards } from './cards.js';
 import { disassembleDeck, editDeckList, createDeck, FORMATS } from './decks.js';
@@ -31,9 +31,22 @@ import { runMaintenance, CRON_TASKS } from './maintenance.js';
 import { newEntry, writeEntry, buildLogQuery, logStats } from './log.js';
 import { keyFrom, claim, remember, release } from './idempotency.js';
 
+/**
+ * On every response, the error ones included — a CORS failure is invisible
+ * in the browser's network tab and the frontend only sees "failed to fetch".
+ *
+ * `expose-headers` is there because `retry-after` is not on the browser's
+ * safelist: without it a 503 arrives at the client with the one piece of
+ * information it needs to back off correctly stripped out.
+ */
+const CORS = {
+  'access-control-allow-origin': '*',
+  'access-control-expose-headers': 'retry-after',
+};
+
 const JSON_HEADERS = {
   'content-type': 'application/json; charset=utf-8',
-  'access-control-allow-origin': '*',
+  ...CORS,
 };
 
 const json = (body, status = 200, extra) => new Response(JSON.stringify(body), {
@@ -41,16 +54,43 @@ const json = (body, status = 200, extra) => new Response(JSON.stringify(body), {
   headers: extra ? { ...JSON_HEADERS, ...extra } : JSON_HEADERS,
 });
 
-const text = (body, contentType, status = 200) => new Response(body, {
+const text = (body, contentType, status = 200, extra) => new Response(body, {
   status,
-  headers: { 'content-type': `${contentType}; charset=utf-8`, 'access-control-allow-origin': '*' },
+  headers: { 'content-type': `${contentType}; charset=utf-8`, ...CORS, ...extra },
 });
 
-/** A handler result -> a Response. */
+/** How long to tell a client to wait before trying a busy database again. */
+const RETRY_AFTER = { 'retry-after': '1' };
+
+/**
+ * A handler result -> a Response.
+ *
+ * A 503 from a handler means the same thing as a 503 from the catch in
+ * `fetch` — D1 is busy — so it carries the same retry hint. Sending it from
+ * one path and not the other left half the API's 503s unhintable.
+ */
 function send(r) {
-  if (r.text !== undefined) return text(r.text, r.contentType || 'text/plain', r.status);
-  return json(r.body, r.status);
+  const extra = r.status === 503 ? RETRY_AFTER : undefined;
+  if (r.text !== undefined) return text(r.text, r.contentType || 'text/plain', r.status, extra);
+  return json(r.body, r.status, extra);
 }
+
+/** 405 with the Allow header, because "use GET" is only half an answer. */
+const notAllowed = (...methods) => json(
+  { error: `use ${methods.join(' or ')}` },
+  405,
+  { allow: [...methods, 'OPTIONS'].join(', ') },
+);
+
+/**
+ * The path a request routes as.
+ *
+ * `/query`, `/query/` and `//query` are one endpoint — a caller that joined
+ * a base URL and a path and got a double slash is not asking for something
+ * else. Both the router and the idempotency wrapper normalise through here,
+ * so a mutation cannot route as a write but be guarded as nothing.
+ */
+const routePath = (pathname) => pathname.replace(/\/{2,}/g, '/').replace(/\/+$/, '') || '/';
 
 /** `?params=[1,"x"]` -> an array, or null if it is not one. */
 function safeParams(raw) {
@@ -87,6 +127,7 @@ const INDEX = {
     'GET /decks/formats': 'the deck formats the wizard offers',
     'POST /decks/create': '{"name":"...","format":"commander","owner":"matt","commander":"...","list":"..."} — needs admin',
     'POST /decks/list': '{"slug":"...","list":"1 Sol Ring\\n...","dry_run":false} — replaces the deck list; needs admin',
+    'POST /share': 'a share-target body in, what the server actually received back out',
     'POST /prices': '{"ids":["<scryfall id>",...]} -> {"prices":{id:{usd,foil,etched,eur,tix,tcg}}}',
     'POST /admin': '{"password":"..."} -> {"token":"...","expires_at":null}',
     'GET /logs': '?min=info&q=&event=&status=error&since=24&limit=100 — admin only',
@@ -133,7 +174,7 @@ export default {
       // reached the screen. 503 is what it is, and what the client's
       // backoff is for.
       res = overloaded(entry.message)
-        ? json({ error: entry.message }, 503, { 'retry-after': '1' })
+        ? json({ error: entry.message }, 503, RETRY_AFTER)
         : json({ error: entry.message }, 500);
     }
     // After the response, never in front of it.
@@ -167,11 +208,13 @@ function queryDetail(body, out) {
 const SLOW_MS = 1000;
 const slow = (out) => (out.ms ?? 0) >= SLOW_MS;
 
-/** D1 under load, rather than anything wrong with the request. */
-export function overloaded(message) {
-  return /overload|queued for too long|too many|network connection lost|reset because of/i
-    .test(String(message || ''));
-}
+/**
+ * D1 under load, rather than anything wrong with the request. The same
+ * judgement a failing statement gets inside /query — two copies of this
+ * regex is one copy too many, and they had already started to differ in
+ * nothing but comments.
+ */
+export const overloaded = isOverloaded;
 
 /** Paths where sending the same request twice must not do the thing twice. */
 const MUTATIONS = new Set([
@@ -192,7 +235,7 @@ const MUTATIONS = new Set([
  */
 async function guarded(request, env, ctx, entry) {
   const url = new URL(request.url);
-  const path = url.pathname.replace(/\/+$/, '') || '/';
+  const path = routePath(url.pathname);
   const key = request.method.toUpperCase() === 'POST' && MUTATIONS.has(path)
     ? keyFrom(request)
     : null;
@@ -240,24 +283,30 @@ async function guarded(request, env, ctx, entry) {
 
 async function route(request, env, ctx, entry) {
   const url = new URL(request.url);
-  const path = url.pathname.replace(/\/+$/, '') || '/';
+  const path = routePath(url.pathname);
   const method = request.method.toUpperCase();
 
   if (method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
       headers: {
-        'access-control-allow-origin': '*',
+        ...CORS,
         'access-control-allow-methods': 'GET, POST, OPTIONS',
         'access-control-allow-headers': 'content-type, authorization, idempotency-key',
+        // Without this the browser pays for a preflight before every single
+        // write. A day is what the headers above are worth: they never vary.
+        'access-control-max-age': '86400',
       },
     });
   }
 
-  if (path === '/' && method === 'GET') return json(INDEX);
+  if (path === '/') {
+    if (method !== 'GET') return notAllowed('GET');
+    return json(INDEX);
+  }
 
     if (path === '/schema') {
-      if (method !== 'GET') return json({ error: 'use GET' }, 405);
+      if (method !== 'GET') return notAllowed('GET');
       return json(await getSchema(env.DB));
     }
 
@@ -283,7 +332,7 @@ async function route(request, env, ctx, entry) {
   // without this there is no way to find out what Android actually handed
   // over when a share comes out wrong.
   if (path === '/logs/client') {
-    if (method !== 'POST') return json({ error: 'use POST' }, 405);
+    if (method !== 'POST') return notAllowed('POST');
     const v = await verifyToken(env, bearer(request));
     if (!v.ok) return denied(v.reason);
     entry.admin = true;
@@ -295,7 +344,7 @@ async function route(request, env, ctx, entry) {
   }
 
     if (path === '/logs' || path === '/logs/stats') {
-    if (method !== 'GET') return json({ error: 'use GET' }, 405);
+    if (method !== 'GET') return notAllowed('GET');
     // The log carries IP addresses and the SQL people ran, so unlike every
     // other read here it needs a token.
     const v = await verifyToken(env, bearer(request));
@@ -326,7 +375,7 @@ async function route(request, env, ctx, entry) {
         ).all();
         return json({ runs: runs.results || [] });
       }
-      if (method !== 'POST') return json({ error: 'use GET or POST' }, 405);
+      if (method !== 'POST') return notAllowed('GET', 'POST');
       // It writes, so it is gated like any other write.
       const v = await verifyToken(env, bearer(request));
       if (!v.ok) return denied(v.reason);
@@ -354,7 +403,7 @@ async function route(request, env, ctx, entry) {
     if (path === '/prices') {
       // A read, so no admin token. Prices are public information and
       // this only ever touches the cache and Scryfall, never D1.
-      if (method !== 'POST') return json({ error: 'use POST' }, 405);
+      if (method !== 'POST') return notAllowed('POST');
       const { body, error } = await readJson(request);
       if (error) return json({ error }, 400);
       if (!Array.isArray(body.ids)) return json({ error: 'ids must be an array' }, 400);
@@ -372,7 +421,7 @@ async function route(request, env, ctx, entry) {
     }
 
     if (path === '/admin') {
-      if (method !== 'POST') return json({ error: 'use POST' }, 405);
+      if (method !== 'POST') return notAllowed('POST');
       const { body, error } = await readJson(request);
       if (error) return json({ error }, 400);
       const issued = await mintToken(env, body.password);
@@ -417,7 +466,7 @@ async function route(request, env, ctx, entry) {
         if (out.status >= 400) entry.message = out.body?.error;
         return send(out);
       }
-      if (method !== 'POST') return json({ error: 'use GET or POST' }, 405);
+      if (method !== 'POST') return notAllowed('GET', 'POST');
     const { body, error } = await readJson(request);
     if (error) return json({ error }, 400);
     const writes = await mayWrite(env.DB, body.sql);
@@ -438,7 +487,7 @@ async function route(request, env, ctx, entry) {
     }
 
     if (path === '/cards/add' || path === '/cards/remove') {
-      if (method !== 'POST') return json({ error: 'use POST' }, 405);
+      if (method !== 'POST') return notAllowed('POST');
       // Gated whole, dry runs included: a preview is part of editing, and
       // one rule is easier to trust than a carve-out.
       const v = await verifyToken(env, bearer(request));
@@ -466,7 +515,7 @@ async function route(request, env, ctx, entry) {
     if (path === '/cards/validate') {
       // A read: it checks names against the collection and Scryfall and
       // writes nothing, so it needs no token.
-      if (method !== 'POST') return json({ error: 'use POST' }, 405);
+      if (method !== 'POST') return notAllowed('POST');
       const { body, error } = await readJson(request);
       if (error) return json({ error }, 400);
       const r = await validateNames(env.DB, body, env.SCRYFALL_FETCH || fetch);
@@ -476,12 +525,12 @@ async function route(request, env, ctx, entry) {
     }
 
     if (path === '/decks/formats') {
-      if (method !== 'GET') return json({ error: 'use GET' }, 405);
+      if (method !== 'GET') return notAllowed('GET');
       return json({ formats: FORMATS });
     }
 
     if (path === '/decks/create') {
-      if (method !== 'POST') return json({ error: 'use POST' }, 405);
+      if (method !== 'POST') return notAllowed('POST');
       const v = await verifyToken(env, bearer(request));
       if (!v.ok) return denied(v.reason);
       const { body, error } = await readJson(request);
@@ -503,7 +552,7 @@ async function route(request, env, ctx, entry) {
     }
 
     if (path === '/decks/list') {
-      if (method !== 'POST') return json({ error: 'use POST' }, 405);
+      if (method !== 'POST') return notAllowed('POST');
       const v = await verifyToken(env, bearer(request));
       if (!v.ok) return denied(v.reason);
       const { body, error } = await readJson(request);
@@ -526,7 +575,7 @@ async function route(request, env, ctx, entry) {
     }
 
     if (path === '/decks/disassemble') {
-      if (method !== 'POST') return json({ error: 'use POST' }, 405);
+      if (method !== 'POST') return notAllowed('POST');
       // Gated whole, dry runs included, the same as add and remove.
       const v = await verifyToken(env, bearer(request));
       if (!v.ok) return denied(v.reason);
