@@ -65,7 +65,12 @@ android {
 
     buildTypes {
         release {
+            // Deliberately not minified and not obfuscated. This is
+            // sideloaded through Obtainium by the one person who uses
+            // it; there is nothing to hide and a readable stack trace
+            // out of a real crash is worth more than a smaller file.
             isMinifyEnabled = false
+            isShrinkResources = false
             signingConfigs.findByName("release")?.let { signingConfig = it }
         }
     }
