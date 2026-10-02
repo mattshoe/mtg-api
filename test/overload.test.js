@@ -13,6 +13,9 @@ describe('what is worth retrying', () => {
     expect(isOverloaded('queued for too long')).toBe(true);
     expect(isOverloaded('too many requests')).toBe(true);
     expect(isOverloaded('too many connections')).toBe(true);
+    // The one Cloudflare actually sends, with words in the middle.
+    expect(isOverloaded('too many API requests by single worker invocation')).toBe(true);
+    expect(isOverloaded('too many subrequests')).toBe(true);
     expect(isOverloaded('reset because of an internal error')).toBe(true);
   });
 

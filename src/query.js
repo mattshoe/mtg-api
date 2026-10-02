@@ -202,7 +202,11 @@ const cleanError = (e) => String(e.cause?.message || e.message || e)
 export const isOverloaded = (message) => {
   const said = String(message || '');
   if (/SQLITE_[A-Z]+|SQL variables|no such (table|column)|syntax error/i.test(said)) return false;
-  return /overload|queued for too long|too many (requests|connections|sub-?requests)|network connection lost|reset because of/i
+  // "too many API requests by single worker invocation" is a real
+  // Cloudflare message, so the words between "too many" and the noun
+  // have to be allowed for. What must not match is "too many SQL
+  // variables", which the guard above has already refused.
+  return /overload|queued for too long|too many [a-z ]*(requests|connections|subrequests)|network connection lost|reset because of/i
     .test(said);
 };
 
