@@ -18,8 +18,11 @@ android {
         applicationId = "org.mattshoe.mtg.share"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "2.1.0"
+        // CI hands in a code that only ever goes up, because Android
+        // refuses to install a build whose code is not higher than
+        // the one already on the phone. Locally it stays put.
+        versionCode = (System.getenv("MTG_VERSION_CODE") ?: "4").toInt()
+        versionName = System.getenv("MTG_VERSION_NAME") ?: "2.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     // Kept outside the repo, in ~/.mtg-android.env, so the key and its
@@ -32,6 +35,22 @@ android {
         ?.mapNotNull { line -> line.split("=", limit = 2).takeIf { it.size == 2 } }
         ?.associate { it[0].trim() to it[1].trim() }
         .orEmpty()
+        // On a build machine there is no home file. The same three
+        // values arrive as environment variables instead, out of the
+        // repository secrets — and it has to be the *same* key, or
+        // every phone with the app on it refuses the update.
+        .ifEmpty {
+            val store = System.getenv("MTG_ANDROID_KEYSTORE")
+            if (store.isNullOrBlank()) {
+                emptyMap()
+            } else {
+                mapOf(
+                    "MTG_ANDROID_KEYSTORE" to store,
+                    "MTG_ANDROID_KEYSTORE_PASSWORD" to System.getenv("MTG_ANDROID_KEYSTORE_PASSWORD").orEmpty(),
+                    "MTG_ANDROID_KEY_ALIAS" to System.getenv("MTG_ANDROID_KEY_ALIAS").orEmpty(),
+                )
+            }
+        }
 
     signingConfigs {
         if (creds.containsKey("MTG_ANDROID_KEYSTORE")) {
