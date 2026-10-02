@@ -589,3 +589,32 @@ npx wrangler d1 time-travel restore mtg --timestamp=2026-09-26T12:00:00Z
 
 That matters here, because with no auth and arbitrary SQL one bad statement
 reaches the real database. Worst case is a restore.
+
+## Shipping the Android app
+
+Every merge to `main` builds, signs and publishes the APK to a GitHub
+Release, which is where the site's Download button points
+(`releases/latest/download/mtg-collection.apk`). It runs only after
+the shared, web and Android test jobs have passed.
+
+It needs the **same signing key** the app was first published with —
+Android refuses to update an app signed with anything else, so a
+differently-signed APK would break every install rather than updating
+it. The key lives in `~/.mtg-android.env` locally and has to be given
+to the build machine as three repository secrets:
+
+```sh
+# from the machine that holds the key
+set -a; . ~/.mtg-android.env; set +a
+base64 -i "$MTG_ANDROID_KEYSTORE" | gh secret set MTG_ANDROID_KEYSTORE_BASE64
+printf %s "$MTG_ANDROID_KEYSTORE_PASSWORD" | gh secret set MTG_ANDROID_KEYSTORE_PASSWORD
+printf %s "$MTG_ANDROID_KEY_ALIAS" | gh secret set MTG_ANDROID_KEY_ALIAS
+```
+
+Until those exist the release job fails on purpose and says why. It
+does not fall back to a debug key: an APK nobody can install over the
+top is worse than no APK.
+
+`versionCode` is the commit count on `main` plus 100, so it only ever
+goes up. `versionName` is still edited by hand in
+`apps/androidApp/build.gradle.kts`.
