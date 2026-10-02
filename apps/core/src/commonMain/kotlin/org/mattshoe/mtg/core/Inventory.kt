@@ -463,6 +463,16 @@ object Inventory {
             tests = listOf(
                 "aToastCanBePutAwayAndNeverSwallowsAPress", "aToastGoesAwayOnItsOwn",
             )),
+        Feature(Area.LIBRARY, "Every filter box fills in and empties again", "library.js", logic = true, done = true,
+            tests = listOf(
+                "everyBoxNarrowsAndThenWidensAgain", "andDoesSoWithNoFrameBetweenFillingAndEmptying",
+                "everyTextFilterIsSwept",
+            )),
+        Feature(Area.SHELL, "No panel offers to start work it is already doing", "app.js", logic = true, done = true,
+            tests = listOf(
+                "massEntryOffersNothingWhileItIsApplying", "theConsoleOffersNothingWhileItIsRunning",
+                "aDeckSaveOffersNothingWhileItIsSaving", "aDisassembleOffersNothingWhileItIsRunning",
+            )),
         Feature(Area.LIBRARY, "One row per card, not one per owner", "library.js", logic = true, done = true,
             tests = listOf(
                 "thePageQueryGroupsPerCard", "andNotPerOwner",

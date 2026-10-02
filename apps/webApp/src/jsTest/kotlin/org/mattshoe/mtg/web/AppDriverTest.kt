@@ -663,12 +663,19 @@ class AppDriverTest {
 
     @Test
     fun puttingTheSuggestionListAwayNeverChangesTheSearch() = runTest {
-        // Closing the list went out as a whole rebuilt `Completion`,
-        // which carries the name — down the same callback that means
-        // "the name changed", built from whatever this last drew. So
-        // a press anywhere could hand the filter a term from the
-        // past: clear the box, touch the screen, and the search you
-        // had just cleared was back.
+        // Closing the list goes out on its own callback now, not as
+        // a rebuilt `Completion` down the one that means "the name
+        // changed" — a `Completion` carries the term, so that path
+        // could hand the filter a name from whenever the field last
+        // drew.
+        //
+        // Honest about what this proves: it holds the property, it
+        // does not reproduce the failure. Making that path wrong
+        // again leaves this green, because the stale value only
+        // differs from the live one when the browser has stopped
+        // painting between two edits, and a browser running tests
+        // never stops painting. Kept because the property is the
+        // thing worth defending.
         val view = mount("#/search")
         waitFor("the grid") { view.all("div.card").isNotEmpty() }
         typeName("bolt")
@@ -693,12 +700,15 @@ class AppDriverTest {
 
     @Test
     fun clearingTheNameSearchesAgain() = runTest {
-        // Typing narrows the list; emptying the box has to widen it
-        // back. It did not. The guard that stops a search firing on
-        // every touch compared the new name against one the
-        // composition had captured a frame earlier, so "bolt" to ""
-        // read as no change at all and four results stayed on screen
-        // under an empty field.
+        // Typing narrows the list; emptying the box widens it back.
+        //
+        // The reported failure was an emptied box leaving the
+        // narrowed results on screen. This covers the behaviour but
+        // not that failure: it stays green against the code that was
+        // reported broken, because the comparison it got wrong is
+        // only wrong when nothing has been painted between the two
+        // edits, and the test browser always paints. `LibrarySweepTest`
+        // does the same thing to every box on the page.
         val view = mount("#/search")
         waitFor("the grid") { view.all("div.card").isNotEmpty() }
         waitFor("the first search") { searches >= 1 }
@@ -714,9 +724,11 @@ class AppDriverTest {
 
     @Test
     fun andDoesSoWithNoFrameDrawnInBetween() = runTest {
-        // The same two edits with nothing painted between them, which
-        // is the shape the bug had: a decision made against the last
-        // thing drawn instead of against what the app holds now.
+        // The two edits with no `waitFor` between them. Closer to
+        // the shape of the bug, still not a reproduction: the
+        // debounce means the first search reads the state as it is
+        // when it finally runs, which is after both edits, so the
+        // right answer comes back anyway.
         val view = mount("#/search")
         waitFor("the grid") { view.all("div.card").isNotEmpty() }
         waitFor("the first search") { searches >= 1 }
