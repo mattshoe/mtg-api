@@ -68,6 +68,19 @@ class AppDriverTest {
             val body = (request.body as? io.ktor.http.content.TextContent)?.text.orEmpty()
             if ("MIN(c.id) AS id" in body) searches++
             val json = when {
+                // The library page, answered according to what was
+                // actually asked. A stub that returns the same rows
+                // whatever the filter cannot tell a search that ran
+                // from one that did not — which is how a search that
+                // stopped running passed a test suite.
+                "MIN(c.id) AS id" in body -> {
+                    val cols = """"cols":["id","owner","name","name_norm","qty","printings"]"""
+                    val bolt = """[1,"matt","Lightning Bolt","lightning bolt",1,1]"""
+                    val ring = """[2,"matt","Sol Ring","sol ring",1,1]"""
+                    if ("%bolt%" in body) """{$cols,"rows":[$bolt],"n":1}"""
+                    else """{$cols,"rows":[$ring,$bolt],"n":2}"""
+                }
+
                 body.contains("FROM decks d") && body.contains("art_id") ->
                     """{"cols":["slug","name","owner","commander","colors","bracket","art_id"],""" +
                         """"rows":[["alela","Fairy Deck","matt","Alela","UB",3,"abcdef12-3456"]],"n":1}"""
@@ -646,6 +659,79 @@ class AppDriverTest {
         view.button("Download").click()
         waitFor("the toast") { document.querySelector(".toast") != null }
         waitFor("the toast to fade", upTo = 9000) { document.querySelector(".toast") == null }
+    }
+
+    @Test
+    fun puttingTheSuggestionListAwayNeverChangesTheSearch() = runTest {
+        // Closing the list went out as a whole rebuilt `Completion`,
+        // which carries the name — down the same callback that means
+        // "the name changed", built from whatever this last drew. So
+        // a press anywhere could hand the filter a term from the
+        // past: clear the box, touch the screen, and the search you
+        // had just cleared was back.
+        val view = mount("#/search")
+        waitFor("the grid") { view.all("div.card").isNotEmpty() }
+        typeName("bolt")
+        waitFor("the list to narrow", upTo = 4000) { view.all("div.card").size == 1 }
+        typeName("")
+        waitFor("the list to widen", upTo = 4000) { view.all("div.card").size == 2 }
+
+        repeat(4) {
+            document.body!!.dispatchEvent(
+                org.w3c.dom.events.MouseEvent("pointerdown", js("({bubbles: true, cancelable: true})")),
+            )
+            settle()
+        }
+        rest(1200)
+        assertEquals("", acInput().value, "a press put a name back in the box")
+        assertEquals(
+            2,
+            view.all("div.card").size,
+            "a press somewhere else narrowed the search again",
+        )
+    }
+
+    @Test
+    fun clearingTheNameSearchesAgain() = runTest {
+        // Typing narrows the list; emptying the box has to widen it
+        // back. It did not. The guard that stops a search firing on
+        // every touch compared the new name against one the
+        // composition had captured a frame earlier, so "bolt" to ""
+        // read as no change at all and four results stayed on screen
+        // under an empty field.
+        val view = mount("#/search")
+        waitFor("the grid") { view.all("div.card").isNotEmpty() }
+        waitFor("the first search") { searches >= 1 }
+
+        assertEquals(2, view.all("div.card").size, "the stub is not answering with two cards")
+
+        typeName("bolt")
+        waitFor("the list to narrow", upTo = 4000) { view.all("div.card").size == 1 }
+
+        typeName("")
+        waitFor("the list to widen again", upTo = 4000) { view.all("div.card").size == 2 }
+    }
+
+    @Test
+    fun andDoesSoWithNoFrameDrawnInBetween() = runTest {
+        // The same two edits with nothing painted between them, which
+        // is the shape the bug had: a decision made against the last
+        // thing drawn instead of against what the app holds now.
+        val view = mount("#/search")
+        waitFor("the grid") { view.all("div.card").isNotEmpty() }
+        waitFor("the first search") { searches >= 1 }
+        val before = searches
+
+        typeName("bolt")
+        typeName("")
+        rest(1500)
+        assertEquals("", acInput().value, "the box is not actually empty")
+        assertEquals(
+            2,
+            view.all("div.card").size,
+            "the box is empty and the narrowed results are still on screen",
+        )
+        assertTrue(searches > before, "nothing was asked at all")
     }
 
     @Test

@@ -274,6 +274,8 @@ object MtgApp {
                 onOpenCard = { row -> openCard(row) },
                 onOpenFound = { found -> openFound(found) },
                 onOpenNamed = { name, norm, owner -> openNamed(name, norm, owner) },
+                onTypedName = { c -> nameTyped(c) },
+                onDismissNames = { app = app.copy(complete = app.complete.closed()) },
                 onFind = { term -> find(term) },
                 onLookup = { term -> lookup(term) },
                 onFiles = { files -> readFiles(files) },
@@ -723,6 +725,28 @@ object MtgApp {
                 // Typing fast. Not worth an error in a convenience.
             }
         }
+    }
+
+    /**
+     * The card-name box changed.
+     *
+     * Against `app`, which is now, rather than against a state the
+     * composition captured, which is whenever it last drew. Two edits
+     * inside one frame — type a name, clear it — compared the new
+     * name with itself, decided nothing had moved, and left the
+     * narrowed results on screen under an empty box.
+     *
+     * Only a real change asks the database again. Everything else the
+     * suggestion list reports is a list opening or closing, and a
+     * search for each of those turned every touch on a phone into a
+     * reload.
+     */
+    private fun nameTyped(c: Completion) {
+        val was = app.complete.term
+        app = app.typedCardName(c)
+        if (c.term == was) return
+        if (c.worthAsking) lookup(c.term)
+        searchSoon()
     }
 
     private fun lookup(term: String) {

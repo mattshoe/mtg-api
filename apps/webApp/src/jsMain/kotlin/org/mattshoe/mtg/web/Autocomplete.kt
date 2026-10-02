@@ -32,6 +32,16 @@ fun AutocompleteField(
     state: Completion,
     onState: (Completion) -> Unit,
     onPick: (String) -> Unit,
+    /**
+     * Put the list away. Not the same event as the name changing.
+     *
+     * Closing used to go out through `onState` as a whole rebuilt
+     * `Completion`, which carries the term — so a press somewhere
+     * else handed the name filter a term from whenever this last
+     * drew. Clear the box, touch the screen, and the search you had
+     * just cleared came back.
+     */
+    onDismiss: () -> Unit = {},
     extraClasses: List<String> = emptyList(),
 ) {
     // The field's own box, so a press somewhere else can be told apart
@@ -56,7 +66,7 @@ fun AutocompleteField(
         val away = EventListener { e: Event ->
             val target = e.target as? Node
             val mine = box[0]
-            if (mine != null && (target == null || !mine.contains(target))) onState(state.closed())
+            if (mine != null && (target == null || !mine.contains(target))) onDismiss()
         }
         if (state.open) document.addEventListener("pointerdown", away, true)
         onDispose { document.removeEventListener("pointerdown", away, true) }
@@ -86,7 +96,7 @@ fun AutocompleteField(
                     }
                     // Stopped, so escape closes the list rather than
                     // whatever overlay the field is sitting in.
-                    "Escape" -> { e.stopPropagation(); onState(state.closed()) }
+                    "Escape" -> { e.stopPropagation(); onDismiss() }
                 }
             }
         }

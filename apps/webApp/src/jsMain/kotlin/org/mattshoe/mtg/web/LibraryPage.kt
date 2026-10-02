@@ -42,6 +42,8 @@ fun LibraryPage(
     onExport: (ExportTo) -> Unit = {},
     complete: Completion = Completion(),
     onName: (Completion) -> Unit = {},
+    /** Put the suggestion list away, touching nothing else. */
+    onDismissNames: () -> Unit = {},
     facets: Facets = Facets(),
 ) {
     // One rule: anything that changes the filters asks the database
@@ -69,6 +71,7 @@ fun LibraryPage(
                     state = complete,
                     onState = onName,
                     onPick = { onSearch() },
+                    onDismiss = onDismissNames,
                 )
                 // No owner control and no Search button up here. Whose
                 // collection it is lives in the Collection group with
