@@ -47,10 +47,67 @@ data class DeckUse(
     val isProxy: Boolean,
 )
 
-/** One line of a card's legality, as the format sheet shows it. */
+/**
+ * One line of a card's legality, as the format sheet shows it.
+ *
+ * Statuses arrive from Scryfall as `legal`, `not_legal`, `banned` and
+ * `restricted`. The chip used to know only the first one and paint
+ * every other in alarm red, which said that a card merely absent from
+ * Standard was as bad as one banned out of Legacy, and said it in
+ * colour — the one channel the person reading this cannot use.
+ */
 data class Legality(val format: String, val status: String) {
-    val legal: Boolean get() = status == "legal"
-    val label: String get() = status.replace('_', ' ')
+
+    /** The status, however it was spelled, as the one token we compare. */
+    private val key: String get() = status.trim().lowercase().replace(' ', '_')
+
+    val legal: Boolean get() = key == "legal"
+    val banned: Boolean get() = key == "banned"
+    val restricted: Boolean get() = key == "restricted"
+
+    /** The status as English. */
+    val label: String get() = key.replace('_', ' ')
+
+    /** The format as a name rather than a column value. */
+    val formatLabel: String get() = format.trim().replace('_', ' ')
+        .replaceFirstChar { it.uppercase() }
+
+    /**
+     * A shape in front of the word.
+     *
+     * Hue is not a channel this collection's owner has, so the chip
+     * carries its status twice over — as a mark and as a word — and
+     * the colour is only ever the third telling.
+     */
+    val mark: String get() = when {
+        legal -> "✓"
+        banned -> "✕"
+        restricted -> "!"
+        else -> "○"
+    }
+
+    /** Which of the stylesheet's chip tones paints it. */
+    val tone: String get() = when {
+        legal -> "ok"
+        banned -> "bad"
+        restricted -> "warn"
+        else -> "off"
+    }
+
+    /** The whole chip, as it reads. */
+    val chip: String get() = "$mark $formatLabel $label"
+
+    /** Where it sits in the row. The formats people actually ask about, first. */
+    val rank: Int get() = ORDER.indexOf(format.trim().lowercase()).let { if (it < 0) ORDER.size else it }
+
+    companion object {
+        /**
+         * The order the row reads in, and the same order
+         * `CardQueries.legalities` sorts by — so a chip row built from
+         * anything else still comes out looking like the page.
+         */
+        val ORDER = listOf("commander", "modern", "legacy", "vintage", "standard", "pauper")
+    }
 }
 
 data class Ruling(val date: String, val text: String)
@@ -95,6 +152,24 @@ data class CardDetail(
 
     /** More decks want it than exist. Worth saying out loud. */
     val overCommitted: Boolean get() = committed > owned
+
+    /**
+     * The legality row, as it should be read.
+     *
+     * Ordered here rather than trusted from the query: the same list
+     * reaches a phone, a browser and a test, and only one of those
+     * three got it from `ORDER BY`. A format with nothing to say and
+     * a format said twice both drop out, because a row that repeats
+     * itself is a row nobody trusts.
+     */
+    val legalityChips: List<Legality>
+        get() = legalities
+            .filter { it.format.isNotBlank() && it.status.isNotBlank() }
+            .distinctBy { it.format.trim().lowercase() }
+            .sortedWith(compareBy({ it.rank }, { it.format.trim().lowercase() }))
+
+    /** Playable somewhere. A card that is legal nowhere should say so. */
+    val legalAnywhere: Boolean get() = legalityChips.any { it.legal }
 
     /**
      * Who has how many, most copies first.

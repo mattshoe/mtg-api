@@ -87,16 +87,24 @@ private fun Body(card: CardDetail) {
     }
 
     H3 { Text("Legal in") }
-    if (card.legalities.isEmpty()) {
+    // Ordered and de-duplicated by the state, not by whichever query
+    // happened to fill it, so the row reads the same everywhere.
+    val chips = card.legalityChips
+    if (chips.isEmpty()) {
         Div(attrs = { classes("muted", "small") }) { Text("Nothing recorded.") }
     } else {
-        Div(attrs = { classes("chips") }) {
-            card.legalities.forEach { l ->
+        Div(attrs = { classes("chips", "legalities") }) {
+            chips.forEach { l ->
                 Span(attrs = {
-                    classes("chip", "mini")
-                    if (!l.legal) classes("bad")
-                }) { Text("${l.format} ${l.label}") }
+                    classes("chip", "mini", l.tone)
+                    attr("title", "${l.formatLabel}: ${l.label}")
+                }) { Text(l.chip) }
             }
+        }
+        // The heading promises somewhere. When there is nowhere, the
+        // chips alone leave you counting them to find that out.
+        if (!card.legalAnywhere) {
+            Div(attrs = { classes("muted", "small") }) { Text("Legal nowhere.") }
         }
     }
 
