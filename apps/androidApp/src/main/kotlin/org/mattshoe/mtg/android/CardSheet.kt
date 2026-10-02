@@ -145,8 +145,21 @@ private fun Body(card: CardDetail) {
         }
     }
 
-    if (card.rulings.isNotEmpty()) {
-        Text("Rulings", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-        card.rulings.forEach { r -> Text("${r.date}  ${r.text}", fontSize = 12.sp) }
+    // `rulingsShown`, not the raw list: oldest first, the same ruling
+    // once however many faces the join returned it for, blank ones
+    // dropped, and a day rather than a whole timestamp. The web page
+    // gets all of that from the shared core and this had its own
+    // loop, so the two platforms disagreed about the same card.
+    Text("Rulings", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+    val rulings = card.rulingsShown
+    if (rulings.isEmpty()) {
+        Text("No rulings.", fontSize = 12.sp)
+    } else {
+        rulings.forEach { r ->
+            Text(
+                if (r.day.isEmpty()) r.body else "${r.day}  ${r.body}",
+                fontSize = 12.sp,
+            )
+        }
     }
 }
