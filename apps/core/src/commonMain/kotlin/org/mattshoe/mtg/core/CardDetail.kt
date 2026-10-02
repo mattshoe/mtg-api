@@ -126,10 +126,24 @@ data class CardDetail(
      * A card opened from a link has only its `name_norm`, which is
      * lowercase. Showing that as the title is ugly, and title-casing
      * it is wrong for "Jötun Grunt" and every card with a // in it.
+     *
+     * A row carrying nothing but the norm back is skipped rather than
+     * taken: it is the thing we were trying to get away from, and
+     * promoting it would undo a good name the palette already gave us.
+     * Whatever the printings say is believed otherwise — the query
+     * that fetched them is keyed `WHERE name_norm = ?`, so the row is
+     * this card by construction, and second-guessing it here would
+     * mean reimplementing the database's normalisation.
      */
     fun named(printings: List<Printing>): CardDetail {
-        val real = printings.firstOrNull { it.cardName.isNotBlank() }?.cardName
-        return if (real.isNullOrBlank() || real == name) this else copy(name = real)
+        val real = printings.asSequence()
+            .map { it.cardName.trim() }
+            .filter { it.isNotEmpty() }
+            .firstOrNull { it != nameNorm }
+        // Nothing better to show: an untitled drawer is worse than a
+        // lowercase one.
+        val next = real ?: name.trim().ifBlank { nameNorm }
+        return if (next == name) this else copy(name = next)
     }
 }
 
