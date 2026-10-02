@@ -1,6 +1,7 @@
 package org.mattshoe.mtg.web
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import org.jetbrains.compose.web.attributes.InputType
 import org.jetbrains.compose.web.attributes.disabled
 import org.jetbrains.compose.web.attributes.placeholder
@@ -232,27 +233,58 @@ private fun Hit(f: Found, pick: () -> Unit) {
     }
 }
 
-/** How many, with the two buttons a thumb actually wants. */
+/**
+ * How many, with the two buttons a thumb actually wants.
+ *
+ * The number is stepped from a holder rather than from the state this
+ * was composed with, because taps arrive faster than frames. Compose
+ * recomposes on an animation frame, so three taps on + inside one
+ * frame all run the same handler against the same `state` — and the
+ * deck ends up one card bigger instead of three. Press-and-hold key
+ * repeat does the same thing, faster.
+ */
 @Composable
 private fun Counter(state: DeckTweak, onState: (DeckTweak) -> Unit) {
+    val stepped = remember(state.qty) { intArrayOf(state.qty) }
+
+    fun put(n: Int) {
+        val next = state.clamped(n)
+        stepped[0] = next
+        onState(state.count(next))
+    }
+
     Div(attrs = { classes("counter") }) {
         Button(attrs = {
             classes("btn", "sm")
             attr("aria-label", "One fewer")
-            if (state.qty <= 0) disabled()
-            onClick { onState(state.count(state.qty - 1)) }
+            // Off at the floor, rather than live and doing nothing.
+            if (!state.canTakeOne) disabled()
+            onClick { put(stepped[0] - 1) }
         }) { Text("−") }
         Input(type = InputType.Text) {
             classes("field", "count")
             attr("inputmode", "numeric")
             attr("aria-label", "How many")
             value("${state.qty}")
-            onInput { e -> onState(state.count(e.value.trim().toIntOrNull() ?: 0)) }
+            onInput { e ->
+                // Anything that is not a number leaves the number
+                // alone. An empty box used to read as nought, and for
+                // a count nought means the card leaves the deck — so
+                // backspacing to retype deleted it.
+                val next = state.clamped(e.value.trim().toIntOrNull() ?: state.qty)
+                stepped[0] = next
+                // The box itself needs no putting right: `value()`
+                // makes it a controlled input, so Compose writes the
+                // declared number back over whatever was typed — a
+                // 999 shows as the 99 the state actually holds.
+                onState(state.count(next))
+            }
         }
         Button(attrs = {
             classes("btn", "sm")
             attr("aria-label", "One more")
-            onClick { onState(state.count(state.qty + 1)) }
+            if (!state.canAddOne) disabled()
+            onClick { put(stepped[0] + 1) }
         }) { Text("+") }
     }
 }

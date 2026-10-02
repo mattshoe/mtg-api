@@ -1039,7 +1039,11 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
 
 /* How many, with the two buttons a thumb wants. */
 .counter { display: flex; align-items: center; gap: 8px; }
-.counter .btn { min-width: 48px; min-height: 44px; font-size: 18px; }
+/* `.btn.sm` is cut to 38px under a finger further down this file, at
+   the same weight as `.counter .btn` and after it — so the one place
+   that is nothing but a tap target lost 6px on the only device that
+   needed them. Named with the modifier so it outranks that. */
+.counter .btn, .counter .btn.sm { min-width: 48px; min-height: 44px; font-size: 18px; }
 .counter .field.count {
   width: 84px; text-align: center; font: 600 16px/1 var(--mono);
 }

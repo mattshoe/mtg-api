@@ -64,6 +64,34 @@ data class DeckTweak(
 
     val canApply: Boolean get() = !busy && !saved && plan != null
 
+    // ---------------------------------------------------- how many of it
+
+    /**
+     * The fewest this change can be about.
+     *
+     * Taking a card out is a real answer, so a count can go to nought
+     * and the list drops the line. Adding nought copies of something,
+     * or swapping a card in nought times, is not a change at all —
+     * so the number stops at one and the minus goes off, rather than
+     * sitting at nought under a Preview button that will not press.
+     */
+    val floor: Int get() = if (kind == Tweak.QUANTITY) 0 else 1
+
+    /**
+     * And the most.
+     *
+     * The box takes typing, so a thumb on the wrong key turns one
+     * Sol Ring into nine thousand, and the plan that comes back is a
+     * nine-thousand-card purchase. No deck wants a hundredth copy of
+     * anything.
+     */
+    val ceiling: Int get() = MAX_QTY
+
+    fun clamped(n: Int) = n.coerceIn(floor, ceiling)
+
+    val canTakeOne: Boolean get() = qty > floor
+    val canAddOne: Boolean get() = qty < ceiling
+
     /** What the deck would be called afterwards, in one line. */
     val summary: String
         get() = when (kind) {
@@ -182,7 +210,21 @@ data class DeckTweak(
     fun picked(f: Found) =
         copy(pick = f, term = f.name, found = emptyList(), searching = false, plan = null, error = null)
 
-    fun count(n: Int) = copy(qty = n.coerceAtLeast(0), plan = null, error = null)
+    /**
+     * How many, kept inside the ends, and the plan dropped if it moved.
+     *
+     * A plan is about one number. Changing the number and keeping the
+     * plan would let the Apply button write a different change from
+     * the one that was shown. But a number that did not actually move
+     * — a plus at the ceiling, a 999 clamped back to 99 — must keep
+     * it: throwing the plan away there makes the button go dead for
+     * no reason a person can see.
+     */
+    fun count(n: Int): DeckTweak {
+        val next = clamped(n)
+        if (next == qty) return this
+        return copy(qty = next, plan = null, error = null)
+    }
 
     /** Answering "what do you want to do with this one". */
     fun doing(k: Tweak) =
@@ -198,6 +240,9 @@ data class DeckTweak(
     companion object {
         /** Worth asking the server about. One letter matches everything. */
         const val MIN_TERM = 2
+
+        /** The most copies of one card a single change can be about. */
+        const val MAX_QTY = 99
 
         fun add(deck: Deck, commander: String) =
             DeckTweak(deck.slug, deck.name, commander, Tweak.ADD, qty = 1)
