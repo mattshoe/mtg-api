@@ -270,51 +270,12 @@ async function route(request, env, ctx, entry) {
   // the same reason and agreeing with each other proves nothing. This is
   // the control: the worker forwards the body here untouched and a real
   // server says what is actually in it.
+  //
+  // It answers in plain sentences, never a stack trace: the only reader on
+  // the other end is a phone with no console attached to it.
   if (path === '/share') {
     if (method !== 'POST') return json({ error: 'use POST' }, 405);
-    const ct = request.headers.get('content-type') || '';
-    const raw = await request.arrayBuffer();
-
-    const files = [];
-    const fields = [];
-    const parts = [];
-    const names = [];
-    let err = null;
-
-    try {
-      const form = await new Response(raw, { headers: { 'content-type': ct } }).formData();
-      for (const [field, value] of form.entries()) {
-        if (typeof value === 'string') {
-          fields.push({ field, length: value.length });
-          const t = value.trim();
-          if (t && field !== 'url' && !/^https?:\/\/\S+$/i.test(t)) parts.push(t);
-          continue;
-        }
-        files.push({ field, name: value.name || '', type: value.type || '', size: value.size || 0 });
-        const text = await value.text();
-        if (text && !text.includes('\u0000')) { parts.push(text); if (value.name) names.push(value.name); }
-      }
-    } catch (e) {
-      err = String(e.message || e);
-    }
-
-    const list = parts.join('\n').trim();
-    const decoder = new TextDecoder();
-    entry.event = 'share';
-    entry.level = list ? 'info' : 'warn';
-    entry.message = list
-      ? `share: ${list.length} chars from ${names.join(', ') || 'text'}`
-      : 'share: the body reached the server with nothing usable in it';
-    entry.detail = {
-      contentType: ct,
-      bytes: raw.byteLength,
-      files,
-      fields,
-      chars: list.length,
-      error: err,
-      head: decoder.decode(raw.slice(0, 1500)),
-    };
-    return json({ ok: true, list, names, report: { bytes: raw.byteLength, ct, files, fields, error: err } });
+    return readShare(request, entry);
   }
 
   // The browser reporting something the server cannot see for itself.
@@ -585,4 +546,178 @@ async function route(request, env, ctx, entry) {
     }
 
   return json({ error: `no route for ${method} ${path}`, see: INDEX.endpoints }, 404);
+}
+
+// ------------------------------------------------------------------ share
+
+// A collection export, not a database. The same ceiling the upload box and
+// the service worker use, so a part this side accepts is one the phone
+// would have accepted too.
+const SHARE_MAX_PART = 2 * 1024 * 1024;
+
+// The whole body. Comfortably more than one oversized export, and small
+// enough that a misdirected upload cannot sit in a Worker's memory.
+const SHARE_MAX_BODY = 8 * 1024 * 1024;
+
+// Bare C0 controls, minus the three that belong in a text file. A decklist
+// that picked one up is still a decklist; the character is not.
+const CONTROLS = /[--]/g;
+
+const LOOKS_LIKE_URL = /^https?:\/\/\S+$/i;
+
+/**
+ * Did these bytes decode as text?
+ *
+ * The same test `textual()` makes in frontend/sw.js, and for the same
+ * reason: Android apps label a shared file with any MIME type they like,
+ * so the label is worthless and whether it decodes is the only evidence.
+ * Bytes that are not UTF-8 come back as replacement characters — a few of
+ * those is a file with an odd character in it, a great many is a JPEG. A
+ * NUL settles it on its own; no text file has one.
+ */
+export function textual(s) {
+  if (!s) return false;
+  if (s.includes(' ')) return false;
+  const head = s.slice(0, 4096);
+  const bad = (head.match(/�/g) || []).length;
+  return bad / head.length < 0.02;
+}
+
+/** Why nothing usable came out, in a sentence a phone can show. */
+function shareProblem(files, fields) {
+  if (!files.length && !fields.length) {
+    return 'the body parsed, but it carried no file and no text at all';
+  }
+  if (!files.length) {
+    const named = fields.map((f) => f.field).join(', ');
+    return `the share carried text (${named}), but nothing that reads as a card list`;
+  }
+  const listed = files
+    .map((f) => `${f.name || 'unnamed'} (${f.type || 'no type'}, ${f.size} bytes${f.skipped ? `, ${f.skipped}` : ''})`)
+    .join(', ');
+  return `nothing in the share read as a card list: ${listed}`;
+}
+
+/**
+ * POST /share — read a share-target body and say what was in it.
+ *
+ * Which parts count as a decklist follows the share target itself:
+ * `url` is where the share came from and `title` is what it was called,
+ * and neither is ever a list of cards — sharing a web page would otherwise
+ * put its title in the box. Only `text` can carry a list, and only when it
+ * is not itself a bare URL. A file part counts whatever it is called.
+ */
+async function readShare(request, entry) {
+  const ct = request.headers.get('content-type') || '';
+  const declared = Number(request.headers.get('content-length'));
+
+  const tooBig = (bytes) => {
+    entry.level = 'warn';
+    entry.message = `share: ${bytes} bytes is over the ${SHARE_MAX_BODY} byte cap`;
+    entry.detail = { contentType: ct, bytes, overLimit: true };
+    return json({
+      ok: false,
+      error: `the share body is ${bytes} bytes, over the ${SHARE_MAX_BODY} byte cap`,
+      list: '',
+      names: [],
+      report: { bytes, ct, files: [], fields: [], error: 'over the size cap' },
+    }, 413);
+  };
+
+  if (Number.isFinite(declared) && declared > SHARE_MAX_BODY) return tooBig(declared);
+
+  const raw = await request.arrayBuffer();
+  if (raw.byteLength > SHARE_MAX_BODY) return tooBig(raw.byteLength);
+
+  const head = new TextDecoder().decode(raw.slice(0, 1500));
+
+  if (raw.byteLength === 0) {
+    entry.level = 'warn';
+    entry.message = 'share: the body arrived empty';
+    entry.detail = { contentType: ct, bytes: 0, empty: true };
+    return json({
+      ok: false,
+      error: 'the share body was empty, nothing at all arrived with the request',
+      list: '',
+      names: [],
+      report: { bytes: 0, ct, files: [], fields: [], error: 'empty body' },
+    }, 400);
+  }
+
+  const files = [];
+  const fields = [];
+  const parts = [];
+  const names = [];
+  const shared = { url: null, title: null };
+  let err = null;
+
+  try {
+    const form = await new Response(raw, { headers: ct ? { 'content-type': ct } : {} }).formData();
+    for (const [field, value] of form.entries()) {
+      if (typeof value === 'string') {
+        fields.push({ field, length: value.length });
+        const t = value.trim();
+        if (!t) continue;
+        if (field === 'url') { shared.url = shared.url || t; continue; }
+        if (field === 'title') { shared.title = shared.title || t; continue; }
+        if (field !== 'text') continue;
+        if (LOOKS_LIKE_URL.test(t)) { shared.url = shared.url || t; continue; }
+        if (!textual(t)) continue;
+        parts.push(t.replace(CONTROLS, ''));
+        continue;
+      }
+
+      const info = { field, name: value.name || '', type: value.type || '', size: value.size || 0 };
+      files.push(info);
+      if (!info.size) { info.skipped = 'empty'; continue; }
+      if (info.size > SHARE_MAX_PART) { info.skipped = 'over the size cap'; continue; }
+      const body = await value.text();
+      if (!textual(body)) { info.skipped = 'not text'; continue; }
+      parts.push(body.replace(CONTROLS, ''));
+      if (info.name) names.push(info.name);
+    }
+  } catch (e) {
+    err = String(e?.message || e);
+  }
+
+  if (err) {
+    entry.level = 'warn';
+    entry.message = `share: the body would not parse as a form (${err})`;
+    entry.detail = { contentType: ct, bytes: raw.byteLength, error: err, head };
+    return json({
+      ok: false,
+      error: `the body could not be read as a form: ${err}`,
+      list: '',
+      names: [],
+      report: { bytes: raw.byteLength, ct, files, fields, error: err },
+    }, 400);
+  }
+
+  const list = parts.join('\n').trim();
+  const problem = list ? null : shareProblem(files, fields);
+
+  entry.event = 'share';
+  entry.level = list ? 'info' : 'warn';
+  entry.message = list
+    ? `share: ${list.length} chars from ${names.join(', ') || 'text'}`
+    : `share: ${problem}`;
+  entry.detail = {
+    contentType: ct,
+    bytes: raw.byteLength,
+    files,
+    fields,
+    chars: list.length,
+    error: null,
+    head,
+  };
+
+  return json({
+    ok: true,
+    list,
+    names,
+    url: shared.url,
+    title: shared.title,
+    problem,
+    report: { bytes: raw.byteLength, ct, files, fields, error: null },
+  });
 }
