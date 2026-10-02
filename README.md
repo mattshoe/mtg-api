@@ -611,9 +611,10 @@ printf %s "$MTG_ANDROID_KEYSTORE_PASSWORD" | gh secret set MTG_ANDROID_KEYSTORE_
 printf %s "$MTG_ANDROID_KEY_ALIAS" | gh secret set MTG_ANDROID_KEY_ALIAS
 ```
 
-Until those exist the release job fails on purpose and says why. It
-does not fall back to a debug key: an APK nobody can install over the
-top is worse than no APK.
+Until those exist the release job publishes nothing and says so — a
+warning on the run and a line in its summary, rather than a red build
+about a missing secret. It does not fall back to a debug key: an APK
+nobody can install over the top is worse than no APK.
 
 `versionCode` is the commit count on `main` plus 100, so it only ever
 goes up. `versionName` is still edited by hand in
