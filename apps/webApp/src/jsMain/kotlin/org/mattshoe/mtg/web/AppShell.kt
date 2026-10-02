@@ -19,6 +19,7 @@ import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.CardRow
 import org.mattshoe.mtg.core.EntryHistory
 import org.mattshoe.mtg.core.CardDetail
+import org.mattshoe.mtg.core.Completion
 import org.mattshoe.mtg.core.DeckCard
 import org.mattshoe.mtg.core.DeckTweak
 import org.mattshoe.mtg.core.Tweak
@@ -62,6 +63,10 @@ fun AppShell(
     onShareDeck: (ShareWhat, ExportTo) -> Unit = { _, _ -> },
     onFind: (String) -> Unit = {},
     onLookup: (String) -> Unit = {},
+    /** The card-name box changed, for whoever holds the live state. */
+    onTypedName: ((Completion) -> Unit)? = null,
+    /** The suggestion list should go away, and nothing else should move. */
+    onDismissNames: (() -> Unit)? = null,
     onFiles: (List<File>) -> Unit = {},
     onReuse: (HistoryEntry) -> Unit = {},
     onClearHistory: () -> Unit = {},
@@ -102,15 +107,18 @@ fun AppShell(
             onOpen = onOpenCard,
             onExport = onExport,
             complete = state.complete,
+            // Whoever holds the live state decides what a change to
+            // the name means. Deciding it here means deciding it
+            // against `state`, and `state` is this composition's
+            // copy — one frame behind the moment anything writes. Two
+            // edits inside a frame compared the new name against
+            // itself, concluded nothing had changed and skipped the
+            // search, so clearing the box left the narrowed results
+            // sitting under an empty field.
+            //
+            // A bare mount with no owner searches on every change,
+            // which is what this did before any of it.
             onName = { c ->
-                // Only when the name itself moved. The suggestion
-                // list reports every change it has — a row
-                // highlighted, the list closed because you pressed
-                // somewhere else — and all of those were running a
-                // fresh search against the database. On a phone that
-                // meant the page reloading under your thumb on every
-                // single touch, for as long as there was a name in
-                // the box.
                 val was = state.complete.term
                 onState(state.typedCardName(c))
                 if (c.term != was) {
@@ -118,6 +126,7 @@ fun AppShell(
                     onSearch()
                 }
             },
+            onDismissNames = onDismissNames ?: { onState(state.copy(complete = state.complete.closed())) },
             facets = state.facets,
         )
 
