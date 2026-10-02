@@ -140,7 +140,11 @@ data class MassEntry(
 
     fun finished(a: Applied) = copy(busy = null, error = null, result = a, step = Step.DONE)
 
-    /** Same direction, empty everything else. What "enter more" means. */
+    /**
+     * Back to the first question with nothing filled in. What "enter
+     * more" means: still the wizard, and nothing of the last run left
+     * in it — not the list, not the dry run, not the receipt.
+     */
     fun again() = MassEntry(list = "")
 
     companion object {

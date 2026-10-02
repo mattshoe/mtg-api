@@ -170,11 +170,7 @@ private fun WhoStep(s: MassEntry, assign: (Owner) -> Unit, go: (Step) -> Unit, p
         }
         Foot {
             Ghost("← Back") { go(Step.LIST) }
-            Primary(
-                if (s.canPreview) "Preview changes →" else "Preview changes →",
-                s.canPreview,
-                preview,
-            )
+            Primary("Preview changes →", s.canPreview, preview)
             if (!s.canPreview) Hint("Pick whose collection this goes to.")
         }
     }
@@ -200,10 +196,21 @@ private fun ReviewStep(s: MassEntry, go: (Step) -> Unit, apply: () -> Unit) {
     }
 }
 
+/**
+ * What the write did, and the way back to the start.
+ *
+ * `applied` is the server answering for the call, not for the cards.
+ * A removal of printings somebody has already removed comes back
+ * applied with an empty change list, and "Applied" over nought
+ * printings and nought copies reads as a write that landed. So the
+ * title asks whether anything moved rather than whether the call was
+ * made.
+ */
 @Composable
 private fun DoneStep(s: MassEntry, again: () -> Unit) {
     val r = s.result!!
-    Panel(if (r.applied) "Applied" else "Nothing applied", note = s.owner?.slug) {
+    val moved = r.applied && r.changes.isNotEmpty()
+    Panel(if (moved) "Applied" else "Nothing applied", note = s.owner?.slug) {
         Outcome(r)
         Foot { Primary("Enter more", true, again) }
     }
