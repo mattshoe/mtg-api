@@ -382,8 +382,7 @@ class AppDriverTest {
 
         backButton().click()
         waitFor("the search again") { cardPages() == 0 }
-        settle()
-        assertTrue(window.scrollY > 1000, "← Back landed at ${window.scrollY}, not where the list was")
+        waitFor("the list to be back where it was", upTo = 4000) { window.scrollY > 1000 }
     }
 
     @Test

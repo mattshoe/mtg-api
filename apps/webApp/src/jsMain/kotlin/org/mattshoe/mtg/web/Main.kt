@@ -356,6 +356,8 @@ object MtgApp {
     }
 
     fun unmount() {
+        // The offsets belong to the app that recorded them.
+        Scroll.forget()
         navComposition?.dispose()
         navComposition = null
         composition?.dispose()
