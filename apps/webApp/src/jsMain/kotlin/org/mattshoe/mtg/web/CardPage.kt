@@ -151,14 +151,35 @@ private fun Owners(card: CardDetail) {
     }
 }
 
+/**
+ * What the rules team has said about the card.
+ *
+ * The heading is there even when there is nothing under it, the way
+ * every other section of this page works. A section that vanishes is
+ * one you cannot tell apart from rulings that failed to load, and
+ * "no rulings" is itself worth knowing.
+ *
+ * Ordering, de-duplication and reading the date are all `CardDetail`'s
+ * job, so a phone shows the same list in the same order.
+ */
 @Composable
 private fun Rulings(card: CardDetail) {
-    if (card.rulings.isEmpty()) return
     H3 { Text("Rulings") }
-    card.rulings.forEach { r ->
-        Div(attrs = { classes("small") }) {
-            Span(attrs = { classes("muted") }) { Text("${r.date} ") }
-            Text(r.text)
+    val rulings = card.rulingsShown
+    if (rulings.isEmpty()) {
+        Div(attrs = { classes("muted", "small") }) { Text("No rulings.") }
+        return
+    }
+    rulings.forEach { r ->
+        Div(attrs = { classes("ruling", "small") }) {
+            // Nothing at all when the stored date is not a date: a
+            // lone separator in front of the text reads like a typo.
+            if (r.day.isNotEmpty()) {
+                Span(attrs = { classes("muted", "mono") }) { Text(r.day + " ") }
+            }
+            // `Text` writes a text node, so a ruling quoting "<i>" or
+            // an ability word in angle brackets is read, not parsed.
+            Span { Text(r.body) }
         }
     }
 }
