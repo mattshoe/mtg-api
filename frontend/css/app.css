@@ -988,7 +988,10 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
    for the card's own name, so what to do is asked inside the sheet.
    The row still opens the card, so this has to keep the press. */
 .row-act {
-  margin-left: 4px; width: 34px; height: 34px; padding: 0; flex: none;
+  /* 44px, and not a pixel of it conditional on the pointer: the
+     coarse-pointer rule under here used to shrink it to 38 on exactly
+     the device the size is for. */
+  margin-left: 4px; width: 44px; height: 44px; padding: 0; flex: none;
   display: grid; place-items: center;
   border: 1px solid var(--line-2); border-radius: 8px;
   background: var(--bg-3); color: var(--text-2);
@@ -997,7 +1000,6 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
 @media (hover: hover) {
   .row-act:hover { background: var(--bg-hover); color: var(--text); border-color: var(--text-3); }
 }
-@media (pointer: coarse) { .row-act { width: 38px; height: 38px; } }
 
 /* A button that owns its row, for the one thing a deck page is for
    when there is nothing on it yet. */

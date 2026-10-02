@@ -249,6 +249,11 @@ private fun CardLine(
                 attr("title", "Change this card")
                 attr("aria-label", "Change ${card.shown}")
                 onClick { e -> e.stopPropagation(); onTweak(card, null) }
+                // Enter and space are how this button is pressed, and
+                // they are also what the row is listening for. Without
+                // this the keyboard opened the card page behind the
+                // sheet every time.
+                onKeyDown { e -> if (e.key == "Enter" || e.key == " ") e.stopPropagation() }
             }) { Text("⋯") }
         }
     }
