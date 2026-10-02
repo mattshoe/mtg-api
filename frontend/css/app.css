@@ -423,16 +423,23 @@ td.mono { font-family: var(--mono); font-size: 12.5px; }
   font: 700 11.5px/1 var(--mono); white-space: nowrap;
 }
 
-/* The price, bottom left. It was on the right with a "free" or "in
-   decks" badge beside it, and the two of them covered the bottom of
-   every picture in the grid. */
+/* The price, centred along the bottom. It was on the right with a
+   "free" or "in decks" badge beside it, and the two of them covered
+   the bottom of every picture in the grid; then it was in the left
+   corner, which on a card is where the set symbol and the rarity
+   already are. */
 .price-badge {
-  position: absolute; left: 6px; bottom: 6px; padding: 2px 7px; border-radius: 5px;
+  position: absolute; left: 50%; transform: translateX(-50%);
+  bottom: 6px; padding: 2px 7px; border-radius: 5px;
   background: rgba(8,10,14,.86); color: var(--accent-2);
   font: 700 11px/1.5 var(--mono); box-shadow: 0 0 0 1px rgba(255,255,255,.14);
   pointer-events: none;
 }
 .price-badge:empty { display: none; }
+
+/* Results that are about to be replaced. Dimmed, still there, still
+   the right height — the page used to be emptied while it waited. */
+.grid.stale { opacity: .55; transition: opacity .12s ease; }
 
 /* ------------------------------------------------------------ card page */
 /* One card, as a page. It was a drawer sliding over whatever was

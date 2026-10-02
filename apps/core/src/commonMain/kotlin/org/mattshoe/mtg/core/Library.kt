@@ -138,7 +138,20 @@ data class Library(
     val total: Int = 0,
     val busy: Boolean = false,
     val error: String? = null,
+    /**
+     * The filters the rows on screen actually answer.
+     *
+     * Coming back from a card re-ran the whole search, because the
+     * route changed and the route is what asks for a load. The grid
+     * was replaced by "Searching…" while it did, the page lost its
+     * height, and the scroll offset being restored into it had
+     * nothing to hold on to — so back landed at the top of a list you
+     * were two hundred cards into.
+     */
+    val loadedFor: Filters? = null,
 ) {
+    /** These rows already answer what is on screen. Nothing to ask. */
+    val fresh: Boolean get() = loadedFor == filters && error == null
     val page: Int get() = filters.page
     val size: Int get() = filters.size
 
@@ -203,7 +216,8 @@ data class Library(
     }
 
     fun loading() = copy(busy = true, error = null)
-    fun loaded(rows: List<CardRow>, total: Int) = copy(rows = rows, total = total, busy = false, error = null)
+    fun loaded(rows: List<CardRow>, total: Int) =
+        copy(rows = rows, total = total, busy = false, error = null, loadedFor = filters)
     fun failed(message: String) = copy(busy = false, error = message)
 
     /** The two statements a page of the Library needs. */

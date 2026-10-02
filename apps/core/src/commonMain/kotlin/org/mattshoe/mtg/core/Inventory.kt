@@ -463,6 +463,21 @@ object Inventory {
             tests = listOf(
                 "aToastCanBePutAwayAndNeverSwallowsAPress", "aToastGoesAwayOnItsOwn",
             )),
+        Feature(Area.LIBRARY, "One row per card, not one per owner", "library.js", logic = true, done = true,
+            tests = listOf(
+                "thePageQueryGroupsPerCard", "andNotPerOwner",
+                "theCountQueryCountsGroupedRowsNotPrintings",
+            )),
+        Feature(Area.LIBRARY, "The grid keeps its place: no reload on back, no collapse while searching", "library.js", logic = true, done = true,
+            tests = listOf(
+                "comingBackFromACardDoesNotAskForTheSameHundredCardsAgain",
+                "andTheGridStaysPutWhileANewSearchRuns",
+            )),
+        Feature(Area.LIBRARY, "A filter group stays open once it is open", "library.js", logic = true, done = true,
+            tests = listOf(
+                "aGroupThatOpenedItselfDoesNotFoldWhenYouClearTheBox",
+                "andStaysOpenWhileYouRetypeInIt", "butTheHeaderStillFoldsIt",
+            )),
         Feature(Area.LIBRARY, "Name suggestions: tap to take one, and the list behaves", "complete.js", logic = true, done = true,
             tests = listOf(
                 "aSuggestionTakenWithATapLandsInTheBox", "pressingSomewhereElseClosesTheSuggestions",

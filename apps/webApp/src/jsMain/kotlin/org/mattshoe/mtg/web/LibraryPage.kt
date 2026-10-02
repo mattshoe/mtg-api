@@ -101,12 +101,24 @@ fun LibraryPage(
         FilterPanel(state.filters, facets) { apply(state.where(it)) }
 
         when {
-            state.busy -> Div(attrs = { classes("empty") }) { Text("Searching…") }
+            // Only when there is nothing to look at yet. Replacing a
+            // full grid with one line of text collapses the page to
+            // nothing, which throws away the scroll position and
+            // makes every filter change feel like a reload.
+            state.busy && state.rows.isEmpty() ->
+                Div(attrs = { classes("empty") }) { Text("Searching…") }
             state.error != null -> Div(attrs = { classes("err") }) { Text("Search failed: ${state.error}") }
             state.isEmpty -> Div(attrs = { classes("empty") }) { Text("Nothing matches that.") }
             else -> {
-                Div(attrs = { classes("muted", "small") }) { Text(state.showingLabel) }
-                Div(attrs = { classes("grid") }) { state.rows.forEach { Tile(it, onOpen) } }
+                Div(attrs = { classes("muted", "small") }) {
+                    Text(if (state.busy) "Searching…" else state.showingLabel)
+                }
+                Div(attrs = {
+                    classes("grid")
+                    // Dimmed rather than gone, so the page keeps its
+                    // height and you keep your place in it.
+                    if (state.busy) classes("stale")
+                }) { state.rows.forEach { Tile(it, onOpen) } }
                 Pager(state, ::apply)
             }
         }

@@ -148,8 +148,12 @@ private val NUM_OPS = setOf(">=", "<=", "=", ">", "<", "!=")
 /** Everything the panel and the query box can set. */
 data class Filters(
     // who and how many. Everything, both collections, unless narrowed.
-    // Rows stay per owner — GROUP BY is (owner, name_norm) — so a card
-    // they both own is two rows, which is the truth rather than a total.
+    // One row per card, not per owner. Grouping by (owner, name_norm)
+    // was defended as "the truth rather than a total", but the tile
+    // does not say whose it is, so a card they both own was the same
+    // picture and the same name twice with no way to tell them apart.
+    // Whose copies they are is on the card's own page, which has room
+    // to say it.
     val owner: String = "both",
     val qtyMin: String = "", val qtyMax: String = "",
     val pool: Pool = Pool.ALL,
@@ -534,7 +538,7 @@ fun buildQuery(s: Filters, countOnly: Boolean = false): Sql {
 
     if (countOnly) {
         val inner = "SELECT 1 FROM cards c $USAGE_JOIN $PRICE_JOIN $clause " +
-            "GROUP BY c.owner, c.name_norm $havingClause"
+            "GROUP BY c.name_norm $havingClause"
         return Sql("SELECT COUNT(*) FROM ($inner)", params)
     }
 
@@ -569,7 +573,7 @@ fun buildQuery(s: Filters, countOnly: Boolean = false): Sql {
 
     return Sql(
         "$select\nFROM cards c\n$USAGE_JOIN\n$PRICE_JOIN\n$clause" +
-            "\nGROUP BY c.owner, c.name_norm\n$havingClause\n$order\nLIMIT $size OFFSET $offset",
+            "\nGROUP BY c.name_norm\n$havingClause\n$order\nLIMIT $size OFFSET $offset",
         params,
     )
 }

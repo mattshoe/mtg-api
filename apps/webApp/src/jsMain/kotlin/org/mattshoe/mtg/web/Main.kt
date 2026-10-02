@@ -389,6 +389,14 @@ object MtgApp {
             raw.asDynamic().returnValue = "Your list has not been written to the collection yet."
         })
 
+        // A hand on the screen outranks a restore still in progress.
+        // The chase runs for two seconds so it can outlast a slow
+        // search, and without this it would drag the page back under
+        // somebody who had already started scrolling.
+        listOf("touchstart", "wheel").forEach { name ->
+            window.addEventListener(name, { Scroll.theyTookOver() }, js("({passive: true})"))
+        }
+
         window.addEventListener("popstate", {
             // An entry this code popped on purpose, closing an overlay
             // by its own X. The overlay is already gone.
@@ -496,7 +504,10 @@ object MtgApp {
      */
     private fun loadFor(s: AppState) {
         when (s.view) {
-            View.LIBRARY -> searchSoon()
+            // Only if the rows on screen do not already answer it.
+            // Coming back from a card asked the database for the same
+            // hundred cards again, and emptied the grid to do it.
+            View.LIBRARY -> if (!s.library.fresh) searchSoon()
 
             View.DECKS -> {
                 app = app.fetching(View.DECKS)

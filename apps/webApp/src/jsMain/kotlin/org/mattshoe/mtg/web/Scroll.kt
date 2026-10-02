@@ -59,6 +59,17 @@ object Scroll {
     }
 
     /**
+     * Stop chasing, because the person is scrolling.
+     *
+     * The chase lasts long enough to outlast a slow round trip, and
+     * that is long enough to fight somebody who started scrolling the
+     * moment the page appeared. Their hand wins.
+     */
+    fun theyTookOver() {
+        token++
+    }
+
+    /**
      * The card drawer scrolls inside itself and the element survives
      * one card being swapped for the next, so a long card read to the
      * bottom left the next one opening at its own middle.
@@ -69,6 +80,14 @@ object Scroll {
         }
     }
 
-    /** How long to keep asking. Half a second at 60Hz. */
-    private const val FRAMES = 30
+    /**
+     * How long to keep asking. Two seconds at 60Hz.
+     *
+     * It was half a second, which is less than a search against D1
+     * from a phone — so the rows arrived after the chase had given
+     * up and coming back from a card landed at the top of the list.
+     * It costs nothing to keep asking: the chase stops the frame it
+     * succeeds, and a hand on the screen stops it too.
+     */
+    private const val FRAMES = 120
 }

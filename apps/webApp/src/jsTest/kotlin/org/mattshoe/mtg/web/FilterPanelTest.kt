@@ -101,6 +101,44 @@ class FilterPanelTest {
     }
 
     @Test
+    fun aGroupThatOpenedItselfDoesNotFoldWhenYouClearTheBox() = runTest {
+        // Which groups are open was derived from which groups hold a
+        // filter, so emptying the last box in a group folded the
+        // whole section away while the cursor was still in it. On a
+        // phone that is the keyboard, the field and the section all
+        // going at once, mid-word.
+        val p = mount(Filters(artist = "quay"))
+        settle()
+        assertTrue(p.open("text"), "the group holding a filter did not open itself")
+
+        p.type("Rebecca Guay", "")
+        settle()
+        assertTrue(p.open("text"), "clearing the box folded the section away")
+    }
+
+    @Test
+    fun andStaysOpenWhileYouRetypeInIt() = runTest {
+        val p = mount(Filters(artist = "quay"))
+        settle()
+        p.type("Rebecca Guay", "")
+        settle()
+        p.type("Rebecca Guay", "seb")
+        settle()
+        assertTrue(p.open("text"), "it folded away between two characters")
+        assertEquals("seb", p.filters().artist)
+    }
+
+    @Test
+    fun butTheHeaderStillFoldsIt() = runTest {
+        // Sticky must not mean stuck.
+        val p = mount(Filters(artist = "quay"))
+        settle()
+        p.fold("text")
+        settle()
+        assertTrue(!p.open("text"), "the header would not close it")
+    }
+
+    @Test
     fun aColourToggleIsTheSymbolAndNothingElse() = runTest {
         // The name sat beside the symbol inside a 30px circle, so it
         // ran out of the button and under the next one: "Wh", "Bl",

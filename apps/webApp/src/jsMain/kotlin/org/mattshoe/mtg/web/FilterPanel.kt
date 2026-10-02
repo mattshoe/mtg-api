@@ -52,7 +52,20 @@ fun FilterPanel(
     // could not, because it is evaluated once and a link restored
     // after the first composition never reached it.
     var touched by remember { mutableStateOf(mapOf<Facet, Boolean>()) }
-    val open = Facet.entries.filter { touched[it] ?: (it.countIn(f) > 0) }.toSet()
+
+    /**
+     * Groups that have been open at some point and have not been
+     * closed by hand.
+     *
+     * Open was derived from "does this group hold a filter", which
+     * means clearing the last filter in a group folded the group away
+     * underneath you — cursor still in the box, keyboard still up,
+     * the whole section gone. A plain set rather than state: it only
+     * ever grows within a composition, and growing it is not news.
+     */
+    val stuck = remember { mutableSetOf<Facet>() }
+    val open = Facet.entries.filter { touched[it] ?: (it in stuck || it.countIn(f) > 0) }.toSet()
+    stuck += open
     fun toggle(g: Facet) { touched = touched + (g to (g !in open)) }
 
     // Half-typed token text, held by the panel rather than by the
@@ -78,6 +91,9 @@ fun FilterPanel(
     Div(attrs = { classes("flex-wrap") }) {
         Button(attrs = {
             classes("btn", "ghost")
+            // Clears the filters, not the layout. Folding the groups
+            // away as well would take the controls out from under
+            // somebody who is still working in them.
             onClick { onChange(Filters()) }
         }) { Text("Reset everything") }
     }

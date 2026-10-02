@@ -103,9 +103,20 @@ fun AppShell(
             onExport = onExport,
             complete = state.complete,
             onName = { c ->
+                // Only when the name itself moved. The suggestion
+                // list reports every change it has — a row
+                // highlighted, the list closed because you pressed
+                // somewhere else — and all of those were running a
+                // fresh search against the database. On a phone that
+                // meant the page reloading under your thumb on every
+                // single touch, for as long as there was a name in
+                // the box.
+                val was = state.complete.term
                 onState(state.typedCardName(c))
-                if (c.worthAsking) onLookup(c.term)
-                onSearch()
+                if (c.term != was) {
+                    if (c.worthAsking) onLookup(c.term)
+                    onSearch()
+                }
             },
             facets = state.facets,
         )

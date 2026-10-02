@@ -45,9 +45,13 @@ class AppDriverTest {
     /** Every write the app made, by path, so a second one is visible. */
     private val writes = mutableListOf<String>()
 
+    /** How many times the library asked the database for a page. */
+    private var searches = 0
+
     @BeforeTest
     fun stubTheNetwork() {
         writes.clear()
+        searches = 0
         val engine = MockEngine { request ->
             if (request.method.value == "POST" && """"dry_run":false""" in
                 (request.body as? io.ktor.http.content.TextContent)?.text.orEmpty()
@@ -62,6 +66,7 @@ class AppDriverTest {
             // not the payload — which quietly gave every query the
             // same answer and made a deck list of one nameless deck.
             val body = (request.body as? io.ktor.http.content.TextContent)?.text.orEmpty()
+            if ("MIN(c.id) AS id" in body) searches++
             val json = when {
                 body.contains("FROM decks d") && body.contains("art_id") ->
                     """{"cols":["slug","name","owner","commander","colors","bracket","art_id"],""" +
@@ -131,6 +136,12 @@ class AppDriverTest {
             waited += 40
         }
         error("gave up waiting for $what")
+    }
+
+    /** Real time, for the moment after something that is debounced. */
+    private suspend fun rest(ms: Int) {
+        var waited = 0
+        while (waited < ms) { tick(); waited += 40 }
     }
 
     /** Long enough for anything already in flight to have landed. */
@@ -635,6 +646,55 @@ class AppDriverTest {
         view.button("Download").click()
         waitFor("the toast") { document.querySelector(".toast") != null }
         waitFor("the toast to fade", upTo = 9000) { document.querySelector(".toast") == null }
+    }
+
+    @Test
+    fun comingBackFromACardDoesNotAskForTheSameHundredCardsAgain() = runTest {
+        // The route changing is what asks for a load, so back from a
+        // card re-ran the whole search. The grid was replaced by
+        // "Searching…" while it did, the page lost every pixel of its
+        // height, and the offset being restored into it had nothing
+        // to hold — so you came back to the top of a list you were
+        // two hundred cards down.
+        val view = mount("#/search")
+        waitFor("the grid") { view.all("div.card").isNotEmpty() }
+        waitFor("the first search to land") { searches >= 1 }
+        val asked = searches
+
+        view.all("div.card").first().click()
+        waitFor("the card page") { cardPages() == 1 }
+        window.history.back()
+        waitFor("the list again") { view.all("div.card").isNotEmpty() && cardPages() == 0 }
+        // Past the debounce and the round trip, so a search that was
+        // going to happen has happened.
+        rest(900)
+        assertEquals(asked, searches, "it searched again for rows it already had")
+    }
+
+    @Test
+    fun andTheGridStaysPutWhileANewSearchRuns() = runTest {
+        // Even a real re-search keeps the page its own height. One
+        // line of "Searching…" where a hundred tiles were is a
+        // collapse, and a collapse loses wherever you were in it.
+        val view = mount("#/search")
+        waitFor("the grid") { view.all("div.card").isNotEmpty() }
+        val before = view.all("div.card").size
+        assertTrue(before > 0, "nothing on screen to keep")
+
+        typeName("bolt")
+        // One frame: enough to redraw, well inside the debounce, so
+        // this is the moment the search is pending and nothing has
+        // come back yet.
+        tick()
+        assertTrue(
+            view.textContent.orEmpty().contains("Searching"),
+            "no search is in flight; this proves nothing",
+        )
+        assertEquals(
+            before,
+            view.all("div.card").size,
+            "the grid emptied itself while it waited for the next answer",
+        )
     }
 
     @Test

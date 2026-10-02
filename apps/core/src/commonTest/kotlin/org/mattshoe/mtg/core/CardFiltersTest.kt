@@ -235,15 +235,29 @@ class CardFiltersTest {
     fun theCountQueryCountsGroupedRowsNotPrintings() {
         val sql = buildQuery(Filters(), countOnly = true).sql
         assertTrue(sql.startsWith("SELECT COUNT(*) FROM ("))
-        assertTrue(sql.contains("GROUP BY c.owner, c.name_norm"))
+        assertTrue(sql.contains("GROUP BY c.name_norm"))
     }
 
     @Test
-    fun thePageQueryGroupsPerOwnerAndCard() {
+    fun thePageQueryGroupsPerCard() {
         val sql = buildQuery(Filters()).sql
-        assertTrue(sql.contains("GROUP BY c.owner, c.name_norm"))
+        assertTrue(sql.contains("GROUP BY c.name_norm"))
         assertTrue(sql.contains("MIN(c.id) AS id"))
         assertTrue(sql.contains("SUM(c.qty) AS qty"))
+    }
+
+    @Test
+    fun andNotPerOwner() {
+        // A card they both own was two tiles with the same picture and
+        // the same name, and nothing on a tile says whose it is.
+        assertFalse(
+            buildQuery(Filters()).sql.contains("GROUP BY c.owner"),
+            "the library is still splitting a card into one row per owner",
+        )
+        assertFalse(
+            buildQuery(Filters(), countOnly = true).sql.contains("GROUP BY c.owner"),
+            "the count is still counting a card once per owner",
+        )
     }
 
     @Test
