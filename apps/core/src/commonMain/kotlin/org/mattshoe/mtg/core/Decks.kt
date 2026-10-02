@@ -371,6 +371,15 @@ data class DecksState(
             .sortedBy { (group, _) -> group.ordinal }
             .map { (group, list) -> group to list.sortedBy { it.name.lowercase() } }
 
+    /**
+     * Every card in the order the page draws it.
+     *
+     * Exactly `byType` flattened, so "the next card" means the next
+     * one down the screen rather than the next one the database
+     * happened to return.
+     */
+    val pageOrder: List<DeckCard> get() = byType.flatMap { (_, cards) -> cards }
+
     val totalCards: Int get() = cards.sumOf { it.qty }
 
     fun loading() = copy(busy = true, error = null)

@@ -796,6 +796,40 @@ class AppDriverTest {
     }
 
     @Test
+    fun aDeckCanBeReadOneCardAtATimeWithoutGoingBack() = runTest {
+        // Opening a card, pressing back and opening the next is three
+        // gestures for every card in a hundred-card deck.
+        val view = mount("#/decks/alela")
+        waitFor("the deck") { view.all(".deck-line").isNotEmpty() }
+        view.all(".deck-line").first().click()
+        waitFor("the card page") { cardPages() == 1 }
+        settle()
+
+        val place = document.querySelector(".step-place")?.textContent.orEmpty()
+        assertTrue(Regex("""\d+ of \d+""").matches(place), "no position shown, got '$place'")
+
+        val next = document.querySelector(".step-next") as? HTMLButtonElement
+        assertTrue(next != null, "no next control on a card opened from a deck")
+        assertTrue(
+            (document.querySelector(".step-prev") as HTMLButtonElement).disabled,
+            "the first card offered a previous",
+        )
+    }
+
+    @Test
+    fun aCardOpenedFromTheLibraryHasNoDeckToStepThrough() = runTest {
+        val view = mount("#/search")
+        waitFor("the grid") { view.all("div.card").isNotEmpty() }
+        view.all("div.card").first().click()
+        waitFor("the card page") { cardPages() == 1 }
+        settle()
+        assertTrue(
+            document.querySelector(".card-steps") == null,
+            "a card with no deck behind it offered to step through one",
+        )
+    }
+
+    @Test
     fun aCardOpensAtTheTopOfItself() = runTest {
         val view = mount("#/search")
         settle()

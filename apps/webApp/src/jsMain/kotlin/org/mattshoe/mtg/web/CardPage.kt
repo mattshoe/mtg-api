@@ -11,6 +11,8 @@ import org.jetbrains.compose.web.dom.H3
 import org.jetbrains.compose.web.dom.Img
 import org.jetbrains.compose.web.dom.Span
 import org.jetbrains.compose.web.dom.Text
+import org.mattshoe.mtg.core.DeckCard
+import org.jetbrains.compose.web.attributes.disabled
 import org.mattshoe.mtg.core.CardDetail
 import org.mattshoe.mtg.core.CardQueries
 import org.mattshoe.mtg.core.Printing
@@ -31,7 +33,17 @@ import org.mattshoe.mtg.core.Prices
  * state, so the number cannot come out different on a phone.
  */
 @Composable
-fun CardPage(card: CardDetail, onShare: () -> Unit = {}, onBack: () -> Unit = {}) {
+fun CardPage(
+    card: CardDetail,
+    onShare: () -> Unit = {},
+    onBack: () -> Unit = {},
+    /** The card before this one in the deck being read, if there is one. */
+    previous: DeckCard? = null,
+    next: DeckCard? = null,
+    /** "7 of 99", when the card is part of a deck. */
+    place: String? = null,
+    onStep: (DeckCard) -> Unit = {},
+) {
     Div(attrs = { classes("wrap") }) {
         Div(attrs = { classes("page-head") }) {
             Button(attrs = {
@@ -47,13 +59,68 @@ fun CardPage(card: CardDetail, onShare: () -> Unit = {}, onBack: () -> Unit = {}
             }) { ShareIcon() }
         }
 
-        Div(attrs = { classes("card-page", "stack") }) {
+        Div(attrs = {
+            classes("card-page", "stack")
+            // A swipe, because this is read on a phone and opening a
+            // card, going back and opening the next is three gestures
+            // for every card in a hundred-card deck.
+            if (place != null) {
+                var x = 0.0
+                var y = 0.0
+                onTouchStart { e ->
+                    val t = e.touches.item(0) ?: return@onTouchStart
+                    x = t.clientX.toDouble()
+                    y = t.clientY.toDouble()
+                }
+                onTouchEnd { e ->
+                    val t = e.changedTouches.item(0) ?: return@onTouchEnd
+                    val dx = t.clientX.toDouble() - x
+                    val dy = t.clientY.toDouble() - y
+                    // Far enough across, and more across than down, so
+                    // scrolling the page is never mistaken for a swipe.
+                    if (kotlin.math.abs(dx) < SWIPE || kotlin.math.abs(dx) < kotlin.math.abs(dy) * 1.5) {
+                        return@onTouchEnd
+                    }
+                    (if (dx < 0) next else previous)?.let(onStep)
+                }
+            }
+        }) {
             when {
                 card.busy -> Div(attrs = { classes("empty") }) { Text("Loading…") }
                 card.error != null -> Div(attrs = { classes("err") }) { Text(card.error!!) }
                 else -> Body(card)
             }
+            if (place != null) Steps(previous, next, place, onStep)
         }
+    }
+}
+
+/** How far a finger has to travel before it counts as a swipe. */
+private const val SWIPE = 45.0
+
+/**
+ * Previous, where you are, next.
+ *
+ * Under the card rather than over it: the page is read top to bottom
+ * and this is what you do when you reach the end of one. It names the
+ * cards, so you can tell whether it is worth the tap.
+ */
+@Composable
+private fun Steps(previous: DeckCard?, next: DeckCard?, place: String, onStep: (DeckCard) -> Unit) {
+    Div(attrs = { classes("card-steps") }) {
+        Button(attrs = {
+            classes("btn", "sm", "ghost", "step-prev")
+            if (previous == null) disabled()
+            previous?.let { attr("title", "Previous: ${it.name}") }
+            onClick { previous?.let(onStep) }
+        }) { Text(previous?.let { "← ${it.shown}" } ?: "← Previous") }
+        Span(attrs = { classes("muted", "small", "mono", "step-place") }) { Text(place) }
+        Button(attrs = {
+            classes("btn", "sm", "ghost", "step-next")
+            if (next == null) disabled()
+            next?.let { attr("title", "Next: ${it.name}") }
+            onClick { next?.let(onStep) }
+        }) { Text(next?.let { "${it.shown} →" } ?: "Next →") }
     }
 }
 

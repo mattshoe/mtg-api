@@ -386,6 +386,21 @@ object MtgApp {
 
         window.addEventListener("keydown", { raw ->
             val e = raw as KeyboardEvent
+            // Left and right step along a deck while a card is open.
+            // Only there, and never while something is being typed
+            // into, where the arrows move a caret.
+            if (app.view == View.CARD && !e.defaultPrevented && !typingInto(e)) {
+                val step = when (e.key) {
+                    "ArrowLeft" -> app.previousCard
+                    "ArrowRight" -> app.nextCard
+                    else -> null
+                }
+                if (step != null) {
+                    e.preventDefault()
+                    openNamed(step.name, step.nameNorm, "")
+                    return@addEventListener
+                }
+            }
             val next = app.onBrowserKey(e)
             if (next != null) {
                 e.preventDefault()
