@@ -198,6 +198,20 @@ private fun Finder(state: DeckTweak, onState: (DeckTweak) -> Unit, onFind: (Stri
             state.found.forEach { f -> Hit(f) { onState(state.picked(f)) } }
         }
     }
+
+    // A term that was asked about and came back with nothing used to
+    // render as blank space under the box, which reads exactly like a
+    // finder that is still thinking. Only once the answer is actually
+    // back, so it never calls a card missing before it has looked.
+    if (state.pick == null &&
+        state.found.isEmpty() &&
+        !state.searching &&
+        state.term.trim().length >= DeckTweak.MIN_TERM
+    ) {
+        Div(attrs = { classes("found-none", "small", "muted") }) {
+            Text("No card called “${state.term.trim()}”.")
+        }
+    }
 }
 
 @Composable

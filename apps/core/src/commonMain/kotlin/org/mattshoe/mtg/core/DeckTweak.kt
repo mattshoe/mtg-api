@@ -132,7 +132,27 @@ data class DeckTweak(
 
     // ----------------------------------------------------------- moves
 
-    fun typed(text: String) = copy(term = text, error = null, pick = null, plan = null)
+    /**
+     * A keystroke in the finder.
+     *
+     * Hits for "lig" are not answers to "l", so going back under the
+     * minimum drops them rather than leaving a list up that the box
+     * no longer names — tapping one of those puts in a card nobody
+     * asked for. A term long enough to search counts as searching
+     * until the answer lands, so the finder can tell "nothing by that
+     * name" apart from "not back yet".
+     */
+    fun typed(text: String): DeckTweak {
+        val worthAsking = text.trim().length >= MIN_TERM
+        return copy(
+            term = text,
+            error = null,
+            pick = null,
+            plan = null,
+            found = if (worthAsking) found else emptyList(),
+            searching = worthAsking,
+        )
+    }
     /**
      * What the collection turned up, and then anything else by name.
      *
@@ -142,21 +162,31 @@ data class DeckTweak(
      * always the answer, and the rest marked as not owned.
      */
     fun searched(results: List<Found>, alsoNamed: List<String> = emptyList()): DeckTweak {
-        val have = results.map { it.name.lowercase() }.toSet()
+        // The collection groups by owner, so two people holding one
+        // card is two hits and the owner is what tells them apart.
+        // The same card from the same person twice is one hit shown
+        // twice, and the two rows read identically.
+        val mine = results.distinctBy { it.name.lowercase() to it.owner }
+        val have = mine.map { it.name.lowercase() }.toSet()
         val rest = alsoNamed
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .distinctBy { it.lowercase() }
             .filterNot { it.lowercase() in have }
             .map { Found(0, it, null, null, 0, "") }
-        return copy(found = results + rest, searching = false)
+        return copy(found = mine + rest, searching = false)
     }
     fun looking() = copy(searching = true)
 
     /** Picking a card clears any plan: it was about a different change. */
-    fun picked(f: Found) = copy(pick = f, term = f.name, found = emptyList(), plan = null, error = null)
+    fun picked(f: Found) =
+        copy(pick = f, term = f.name, found = emptyList(), searching = false, plan = null, error = null)
 
     fun count(n: Int) = copy(qty = n.coerceAtLeast(0), plan = null, error = null)
 
     /** Answering "what do you want to do with this one". */
-    fun doing(k: Tweak) = copy(kind = k, plan = null, error = null, term = "", found = emptyList(), pick = null)
+    fun doing(k: Tweak) =
+        copy(kind = k, plan = null, error = null, term = "", found = emptyList(), searching = false, pick = null)
 
     fun working() = copy(busy = true, error = null, errors = emptyList())
     fun planned(p: DeckPlan) = copy(plan = p, busy = false, error = null)
