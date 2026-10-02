@@ -13,10 +13,11 @@ on:
       - 'apps/**'
       - 'frontend/css/**'
       - '.github/workflows/apps.yml'
+  # No path filter on a pull request. These are required checks now,
+  # and a required check that is skipped never reports — the pull
+  # request waits for it forever. Pushes still filter: there is no
+  # point building the apps for a change to the Worker.
   pull_request:
-    paths:
-      - 'apps/**'
-      - 'frontend/css/**'
   workflow_dispatch:
 
 concurrency:
