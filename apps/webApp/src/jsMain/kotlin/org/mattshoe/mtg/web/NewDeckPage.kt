@@ -12,6 +12,9 @@ import org.jetbrains.compose.web.dom.Input
 import org.jetbrains.compose.web.dom.Span
 import org.jetbrains.compose.web.dom.Text
 import org.jetbrains.compose.web.dom.TextArea
+import org.mattshoe.mtg.core.Completion
+import org.mattshoe.mtg.core.DeckList
+import org.w3c.files.File
 import org.mattshoe.mtg.core.DeckStep
 import org.mattshoe.mtg.core.Format
 import org.mattshoe.mtg.core.NewDeck
@@ -33,6 +36,8 @@ fun NewDeckDialog(
     onCheck: () -> Unit,
     onCreate: () -> Unit,
     onClose: () -> Unit,
+    onCommanderTyped: (Completion) -> Unit = {},
+    onFiles: (List<File>) -> Unit = {},
 ) {
     Div(attrs = {
         classes("palette-scrim")
@@ -61,10 +66,10 @@ fun NewDeckDialog(
                     state.step == DeckStep.FORMAT -> FormatStep(state, onState)
                     state.step == DeckStep.OWNER -> OwnerStep(state, onState)
                     state.step == DeckStep.NAME -> NameStep(state, onState)
-                    state.step == DeckStep.COMMANDER -> CommanderStep(state, onState)
-                    state.step == DeckStep.CARDS -> CardsStep(state, onState)
+                    state.step == DeckStep.COMMANDER -> CommanderStep(state, onState, onCommanderTyped)
+                    state.step == DeckStep.CARDS -> CardsStep(state, onState, onFiles)
                     state.step == DeckStep.CHECK -> CheckStep(state, onState, onCheck)
-                    state.step == DeckStep.REVIEW -> ReviewStep(state, onState, onCreate)
+                    state.step == DeckStep.REVIEW -> ReviewStep(state, onCreate)
                     state.step == DeckStep.DONE -> DoneStep(state, onClose)
                 }
 
@@ -148,13 +153,20 @@ private fun NameStep(s: NewDeck, onState: (NewDeck) -> Unit) {
 }
 
 @Composable
-private fun CommanderStep(s: NewDeck, onState: (NewDeck) -> Unit) {
-    Input(type = InputType.Text) {
-        classes("field")
-        placeholder("e.g. Alela, Artful Provocateur")
-        value(s.commander)
-        onInput { onState(s.setCommander(it.value)) }
-    }
+private fun CommanderStep(
+    s: NewDeck,
+    onState: (NewDeck) -> Unit,
+    onTyped: (Completion) -> Unit,
+) {
+    // The same suggestion field the Library uses. This was a bare text
+    // box, so the one name in the whole wizard that has to be spelt
+    // exactly right was the one name with no help spelling it.
+    AutocompleteField(
+        hint = "e.g. Alela, Artful Provocateur",
+        state = s.hint,
+        onState = onTyped,
+        onPick = { name -> onState(s.setCommander(name)) },
+    )
     Div(attrs = { classes("muted", "small") }) {
         Text("A ${s.format?.label} deck needs one, and the server checks it too.")
     }
@@ -162,7 +174,7 @@ private fun CommanderStep(s: NewDeck, onState: (NewDeck) -> Unit) {
 }
 
 @Composable
-private fun CardsStep(s: NewDeck, onState: (NewDeck) -> Unit) {
+private fun CardsStep(s: NewDeck, onState: (NewDeck) -> Unit, onFiles: (List<File>) -> Unit) {
     TextArea(value = s.list, attrs = {
         classes("field", "mono")
         rows(16)
@@ -174,6 +186,20 @@ private fun CardsStep(s: NewDeck, onState: (NewDeck) -> Unit) {
             "${s.cardCount} cards" +
                 if (wanted > 0) " · ${s.format!!.label} wants $wanted" else "",
         )
+    }
+    // A deck you already have written down is in a file, and the only
+    // upload on the site used to live on another screen entirely.
+    FileDrop(onFiles)
+    if (s.needsCommander) {
+        val first = DeckList.firstCard(s.list)
+        if (first != null) {
+            Div(attrs = { classes("flex-wrap") }) {
+                Button(attrs = {
+                    classes("btn", "sm", "ghost")
+                    onClick { onState(s.commanderFromList()) }
+                }) { Text("First card is the commander (${first.name})") }
+            }
+        }
     }
     Next("Continue →", s.canLeaveCards) { onState(s.goTo(DeckStep.CHECK)) }
 }
@@ -228,49 +254,53 @@ private fun CheckStep(s: NewDeck, onState: (NewDeck) -> Unit, onCheck: () -> Uni
 }
 
 @Composable
-private fun ReviewStep(s: NewDeck, onState: (NewDeck) -> Unit, onCreate: () -> Unit) {
+private fun ReviewStep(s: NewDeck, onCreate: () -> Unit) {
+    // One line per card, and no questions. The wizard used to ask
+    // where every single copy should come from and then throw the
+    // answers away — `createDeck` has never had a `sources` field.
+    // What actually happens is decided by what the collection holds,
+    // which the check has already established.
+    val plan = s.plan
+    val adding = s.adding
     Div(attrs = { classes("muted", "small") }) {
         Text(
             "${s.format?.label} · ${s.owner?.label} · ${s.cardCount} cards" +
                 if (s.commander.isNotBlank()) " · ${s.commander}" else "",
         )
     }
-    Div(attrs = { classes("small") }) {
-        Text("Where each card comes from. Nothing is created until every line has an answer.")
+    Div(attrs = { classes("tally", "two") }) {
+        Figure("${plan.size - adding.size}", "from bulk")
+        Figure("${adding.size}", "added to bulk")
     }
     Div(attrs = { classes("table-wrap") }) {
-        s.undecided.take(60).forEach { line ->
-            Div(attrs = { classes("flex-wrap", "small") }) {
-                Span(attrs = { classes("t-name") }) { Text(line) }
-                Source.entries.forEach { src ->
-                    Button(attrs = {
-                        classes("btn", "sm", "ghost")
-                        onClick { onState(s.source(line, src)) }
-                    }) { Text(src.label) }
-                }
+        plan.forEach { line ->
+            Div(attrs = { classes("plan-row") }) {
+                Span(attrs = { classes("plan-qty") }) { Text("${line.qty}") }
+                Span(attrs = { classes("plan-name") }) { Text(line.name) }
+                Span(attrs = {
+                    classes("plan-from")
+                    if (!line.owned) classes("new")
+                }) { Text(line.from.label) }
             }
         }
     }
-    if (s.undecided.isEmpty()) {
-        Div(attrs = { classes("tag", "ok") }) { Text("Every line has a source") }
-    } else {
-        Div(attrs = { classes("muted", "small") }) { Text("${s.undecided.size} still undecided") }
-        Div(attrs = { classes("flex-wrap") }) {
-            Source.entries.forEach { src ->
-                Button(attrs = {
-                    classes("btn", "sm", "ghost")
-                    onClick { onState(s.undecided.fold(s) { acc, line -> acc.source(line, src) }) }
-                }) { Text("All ${src.label.lowercase()}") }
-            }
-        }
-    }
-    if (s.buying.isNotEmpty()) {
-        Div(attrs = { classes("small") }) {
-            Span(attrs = { classes("tag", "warn") }) { Text("buying") }
-            Text(" ${s.buying.size} line${if (s.buying.size == 1) "" else "s"} will be added to the collection")
+    if (adding.isNotEmpty()) {
+        Div(attrs = { classes("muted", "small") }) {
+            Text(
+                "${adding.size} card${if (adding.size == 1) "" else "s"} " +
+                    "the collection does not hold yet will be added to bulk.",
+            )
         }
     }
     Next("Create ${s.name}", s.canCreate, onCreate)
+}
+
+@Composable
+private fun Figure(value: String, label: String) {
+    Div(attrs = { classes("tally-cell") }) {
+        Div(attrs = { classes("tally-n") }) { Text(value) }
+        Div(attrs = { classes("tally-l") }) { Text(label) }
+    }
 }
 
 @Composable

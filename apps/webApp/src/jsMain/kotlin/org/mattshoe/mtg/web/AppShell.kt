@@ -67,6 +67,10 @@ fun AppShell(
     onTypedName: ((Completion) -> Unit)? = null,
     /** The suggestion list should go away, and nothing else should move. */
     onDismissNames: (() -> Unit)? = null,
+    /** The commander box in the new deck wizard changed. */
+    onCommanderTyped: (Completion) -> Unit = {},
+    /** A file dropped on the new deck wizard's card list. */
+    onDeckFiles: (List<File>) -> Unit = {},
     onFiles: (List<File>) -> Unit = {},
     onReuse: (HistoryEntry) -> Unit = {},
     onClearHistory: () -> Unit = {},
@@ -250,6 +254,8 @@ fun AppShell(
             onCheck = onCheckNames,
             onCreate = onCreateDeck,
             onClose = { onState(state.closing(Overlay.NEW_DECK)) },
+            onCommanderTyped = onCommanderTyped,
+            onFiles = onDeckFiles,
         )
     }
 

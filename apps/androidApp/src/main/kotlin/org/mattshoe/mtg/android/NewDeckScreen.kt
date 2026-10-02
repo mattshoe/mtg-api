@@ -62,7 +62,7 @@ fun NewDeckDialog(
                     state.step == DeckStep.COMMANDER -> CommanderStep(state, onState)
                     state.step == DeckStep.CARDS -> CardsStep(state, onState)
                     state.step == DeckStep.CHECK -> CheckStep(state, onState)
-                    state.step == DeckStep.REVIEW -> ReviewStep(state, onState)
+                    state.step == DeckStep.REVIEW -> ReviewStep(state)
                     state.step == DeckStep.DONE -> Text("${state.name} is created.")
                 }
                 state.error?.let { Text(it, fontSize = 13.sp) }
@@ -199,44 +199,25 @@ private fun CheckStep(s: NewDeck, onState: (NewDeck) -> Unit) {
 }
 
 @Composable
-private fun ReviewStep(s: NewDeck, onState: (NewDeck) -> Unit) {
+private fun ReviewStep(s: NewDeck) {
+    // One line per card and nothing to answer. The wizard used to ask
+    // where every copy should come from and then not send it — the
+    // create call has no `sources` field. What happens is decided by
+    // what the collection already holds.
     Text(
         "${s.format?.label} · ${s.owner?.label} · ${s.cardCount} cards" +
             if (s.commander.isNotBlank()) " · ${s.commander}" else "",
         fontSize = 13.sp,
     )
+    val plan = s.plan
+    val adding = s.adding
     Text(
-        "Where each card comes from. Nothing is created until every line has an answer.",
+        "${plan.size - adding.size} from bulk · ${adding.size} added to bulk",
         fontSize = 12.sp,
+        fontWeight = FontWeight.SemiBold,
     )
-    if (s.undecided.isEmpty()) {
-        Text("Every line has a source", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-    } else {
-        Text("${s.undecided.size} still undecided", fontSize = 12.sp)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Source.entries.forEach { src ->
-                OutlinedButton(onClick = {
-                    onState(s.undecided.fold(s) { acc, line -> acc.source(line, src) })
-                }) { Text("All ${src.label.lowercase()}", fontSize = 11.sp) }
-            }
-        }
-        s.undecided.take(40).forEach { line ->
-            Text(line, fontSize = 12.sp)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Source.entries.forEach { src ->
-                    OutlinedButton(onClick = { onState(s.source(line, src)) }) {
-                        Text(src.label, fontSize = 11.sp)
-                    }
-                }
-            }
-        }
-    }
-    if (s.buying.isNotEmpty()) {
-        Text(
-            "${s.buying.size} line${if (s.buying.size == 1) "" else "s"} will be added to the collection",
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold,
-        )
+    plan.take(200).forEach { line ->
+        Text("${line.qty}  ${line.name} — ${line.from.label}", fontSize = 12.sp)
     }
 }
 

@@ -291,40 +291,6 @@ private fun Ghost(label: String, click: () -> Unit) {
  * file you actually want in Android's picker, and the same guesswork
  * about MIME types that broke the share sheet would break this too.
  */
-@Composable
-private fun FileDrop(onFiles: (List<File>) -> Unit) {
-    Div(attrs = {
-        classes("dropzone")
-        onDragOver { it.preventDefault() }
-        onDrop { e ->
-            e.preventDefault()
-            onFiles(e.dataTransfer?.files.toList())
-        }
-    }) {
-        Input(type = InputType.File) {
-            // Hidden by being tiny and transparent, NOT by
-            // `display: none`. Android Chrome will not open a picker for
-            // an input that is not rendered, so a display:none input is
-            // a button that does nothing at all.
-            classes("file-in")
-            attr("accept", "*/*")
-            attr("multiple", "")
-            onChange { e ->
-                val el = e.target
-                onFiles(el.files.toList())
-                el.value = ""
-            }
-        }
-        Span(attrs = { classes("dz-icon") }) { Text("⤓") }
-        Div {
-            Div(attrs = { classes("dz-main") }) { Text("Upload a file") }
-            Div(attrs = { classes("dz-sub", "small", "muted") }) { Text("or drop one here") }
-        }
-    }
-}
-
-private fun FileList?.toList(): List<File> =
-    if (this == null) emptyList() else (0 until length).mapNotNull { item(it) }
 
 /** What was entered recently, and putting it back in the box. */
 @Composable

@@ -15,6 +15,15 @@ const MAX_NAMES = 1000;
 // Scryfall takes 75 identifiers per call; the suggestion lookups after it
 // are one call each, so only so many are worth making.
 const MAX_SUGGESTIONS = 12;
+
+/**
+ * How long the whole "did you mean" phase may take.
+ *
+ * Not per request — for all of them together. The names are already
+ * checked when this starts; everything after it is a nicety, and a
+ * nicety must not be the reason somebody waits.
+ */
+export const SUGGEST_BUDGET_MS = 3000;
 const CHUNK = 80;   // D1's bound-parameter ceiling is 100
 
 /** Names the collection already knows, by normalized name. */
@@ -93,8 +102,18 @@ export async function validateNames(db, body, fetchImpl) {
       }
       // A near miss is worth naming. This is the whole point — "did you mean
       // Bitterblossom" beats "no card named Biterblosom".
+      //
+      // On a budget, though. Each of these is a separate request and the
+      // client puts a deliberate gap between them, so a list of nonsense
+      // used to sit there asking about every line in turn — a minute and
+      // more of a spinner for an answer the person already knew. The
+      // check itself is finished by this point; suggestions are a
+      // courtesy, so they get what time is left and no more. Whatever
+      // did not get one still comes back as not found.
       const missing = unknown.filter((e) => !e.ok).slice(0, MAX_SUGGESTIONS);
+      const deadline = Date.now() + SUGGEST_BUDGET_MS;
       for (const e of missing) {
+        if (Date.now() >= deadline) break;
         try {
           e.suggestion = (await scry.suggest(e.name)) || null;
         } catch {
