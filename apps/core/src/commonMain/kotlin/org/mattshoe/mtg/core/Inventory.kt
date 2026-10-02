@@ -431,7 +431,9 @@ object Inventory {
             tests = listOf(
                 "startsAtTheFormatWithNothingChosen", "theCommanderStepOnlyExistsForFormatsThatWantOne",
                 "aCommanderFormatWillNotPassTheCommanderStepEmpty", "anUnnamedDeckGoesNoFurther",
-                "everyCardNeedsASourceBeforeADeckCanBeCreated", "whatIsBeingBoughtIsListedSeparately",
+                "aCheckedListIsReadyWithNothingElseToAnswer", "whatTheCollectionHoldsComesOutOfBulk",
+                "aCardNobodyHasCheckedYetIsSomethingToAdd", "thePlanIsOneLinePerCardWithItsQuantity",
+                "nothingAnywhereOffersToBuyAnything",
                 "jumpingAheadLandsOnTheLastStepActuallyAnswered",
                 "theNewDeckWizardWillNotLeaveTheFirstStepUnanswered",
             )),
@@ -439,7 +441,22 @@ object Inventory {
             tests = listOf(
                 "everyNameKnownIsOk", "aTypoComesBackWithItsSuggestion", "anUnknownNameWithNoNearMissIsStillReported",
                 "namesMustBeCheckedBeforeSourcing", "aFailedCheckBlocksTheRestOfTheWizard",
-                "editingTheListThrowsAwayTheCheckAndEverySourcingChoice",
+                "editingTheListThrowsAwayTheCheck",
+            )),
+        Feature(Area.DECKS, "Rename a deck, and the slug moves with it", "decks.js", logic = true, done = true,
+            tests = listOf(
+                "itOpensOnTheNameItAlreadyHas", "thereIsNothingToSaveUntilSomethingChanges",
+                "aNewNameIsSaveable", "theNewAddressIsShownBeforeAnythingIsWritten",
+                "whitespaceAloneIsNotARename", "aNameWithNothingToMakeASlugFromIsRefused",
+                "nothingIsOfferedTwiceWhileItIsBeingWritten", "norAfterItIsDone",
+                "aFailureLetsYouTryAgainWithoutLosingWhatYouTyped", "typingAgainClearsTheLastComplaint",
+                "theSlugFollowsTheSameRuleTheWizardUses", "closingItForgetsIt",
+            )),
+        Feature(Area.DECKS, "A decklist whose first card is the commander", "newdeck.js", logic = true, done = true,
+            tests = listOf(
+                "theFirstCardIsTheOneAPersonWouldPointAt", "commentsAndBlanksAndHeadersAreNotCards",
+                "takingItOutLeavesEverythingElseWhereItWas", "takingItOutOfAListWithNoCardsChangesNothing",
+                "oneLinePerCardWithItsQuantity", "theSameCardTwiceIsOneLineAddedUp",
             )),
         Feature(Area.DECKS, "Taking a suggested spelling, wherever the wrong one lives", "newdeck.js", logic = true, done = true,
             tests = listOf(

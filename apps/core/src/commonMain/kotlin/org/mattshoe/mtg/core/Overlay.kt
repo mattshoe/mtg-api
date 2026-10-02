@@ -17,6 +17,7 @@ enum class Overlay {
     DISASSEMBLE,
     UNLOCK,
     NEW_DECK,
+    RENAME,
 }
 
 /**

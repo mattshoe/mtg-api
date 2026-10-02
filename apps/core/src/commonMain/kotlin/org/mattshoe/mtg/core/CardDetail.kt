@@ -47,13 +47,105 @@ data class DeckUse(
     val isProxy: Boolean,
 )
 
-/** One line of a card's legality, as the format sheet shows it. */
+/**
+ * One line of a card's legality, as the format sheet shows it.
+ *
+ * Statuses arrive from Scryfall as `legal`, `not_legal`, `banned` and
+ * `restricted`. The chip used to know only the first one and paint
+ * every other in alarm red, which said that a card merely absent from
+ * Standard was as bad as one banned out of Legacy, and said it in
+ * colour — the one channel the person reading this cannot use.
+ */
 data class Legality(val format: String, val status: String) {
-    val legal: Boolean get() = status == "legal"
-    val label: String get() = status.replace('_', ' ')
+
+    /** The status, however it was spelled, as the one token we compare. */
+    private val key: String get() = status.trim().lowercase().replace(' ', '_')
+
+    val legal: Boolean get() = key == "legal"
+    val banned: Boolean get() = key == "banned"
+    val restricted: Boolean get() = key == "restricted"
+
+    /** The status as English. */
+    val label: String get() = key.replace('_', ' ')
+
+    /** The format as a name rather than a column value. */
+    val formatLabel: String get() = format.trim().replace('_', ' ')
+        .replaceFirstChar { it.uppercase() }
+
+    /**
+     * A shape in front of the word.
+     *
+     * Hue is not a channel this collection's owner has, so the chip
+     * carries its status twice over — as a mark and as a word — and
+     * the colour is only ever the third telling.
+     */
+    val mark: String get() = when {
+        legal -> "✓"
+        banned -> "✕"
+        restricted -> "!"
+        else -> "○"
+    }
+
+    /** Which of the stylesheet's chip tones paints it. */
+    val tone: String get() = when {
+        legal -> "ok"
+        banned -> "bad"
+        restricted -> "warn"
+        else -> "off"
+    }
+
+    /** The whole chip, as it reads. */
+    val chip: String get() = "$mark $formatLabel $label"
+
+    /** Where it sits in the row. The formats people actually ask about, first. */
+    val rank: Int get() = ORDER.indexOf(format.trim().lowercase()).let { if (it < 0) ORDER.size else it }
+
+    companion object {
+        /**
+         * The order the row reads in, and the same order
+         * `CardQueries.legalities` sorts by — so a chip row built from
+         * anything else still comes out looking like the page.
+         */
+        val ORDER = listOf("commander", "modern", "legacy", "vintage", "standard", "pauper")
+    }
 }
 
-data class Ruling(val date: String, val text: String)
+/**
+ * One ruling, as Gatherer publishes it: a day and a paragraph.
+ *
+ * The date arrives as whatever the import put in `published_at` —
+ * usually an ISO day, sometimes a full timestamp, occasionally
+ * nothing at all. Reading it is the type's job rather than every
+ * screen's, so a phone and a browser cannot disagree about what a
+ * malformed date looks like.
+ */
+data class Ruling(val date: String, val text: String) {
+
+    /**
+     * The day it was published, as a plain ISO date, or "" when the
+     * stored value is not one.
+     *
+     * Blank rather than the raw string: "soon" or "0000-00-00" on
+     * the front of a ruling reads like part of the ruling, and the
+     * line is more useful with no date than with a wrong one.
+     */
+    val day: String
+        get() {
+            if (date.length < 10) return ""
+            val d = date.substring(0, 10)
+            if (!Regex("""\d{4}-\d{2}-\d{2}""").matches(d)) return ""
+            val month = d.substring(5, 7).toInt()
+            val dayOfMonth = d.substring(8, 10).toInt()
+            if (month !in 1..12 || dayOfMonth !in 1..31) return ""
+            return d
+        }
+
+    /** The ruling itself, without the whitespace the import left on it. */
+    val body: String get() = text.trim()
+
+    /** A ruling with no words in it is not a ruling. */
+    val sayable: Boolean get() = body.isNotEmpty()
+}
 
 /**
  * What one person has of a card, and how much of it is spare.
@@ -97,6 +189,24 @@ data class CardDetail(
     val overCommitted: Boolean get() = committed > owned
 
     /**
+     * The legality row, as it should be read.
+     *
+     * Ordered here rather than trusted from the query: the same list
+     * reaches a phone, a browser and a test, and only one of those
+     * three got it from `ORDER BY`. A format with nothing to say and
+     * a format said twice both drop out, because a row that repeats
+     * itself is a row nobody trusts.
+     */
+    val legalityChips: List<Legality>
+        get() = legalities
+            .filter { it.format.isNotBlank() && it.status.isNotBlank() }
+            .distinctBy { it.format.trim().lowercase() }
+            .sortedWith(compareBy({ it.rank }, { it.format.trim().lowercase() }))
+
+    /** Playable somewhere. A card that is legal nowhere should say so. */
+    val legalAnywhere: Boolean get() = legalityChips.any { it.legal }
+
+    /**
      * Who has how many, most copies first.
      *
      * Anyone who owns none of it but has a deck asking for it still
@@ -117,6 +227,21 @@ data class CardDetail(
             }.sortedWith(compareByDescending<Holding> { it.owned }.thenBy { it.owner })
         }
 
+    /**
+     * The rulings as a person should read them: oldest first, each
+     * one once, nothing blank.
+     *
+     * The query already orders by `published_at`, but the order on
+     * the screen should not depend on which of four requests the
+     * list arrived from, and the join through `oracle_id` hands back
+     * the same ruling twice for a card with two faces. Undated ones
+     * go last because there is nowhere else to put them.
+     */
+    val rulingsShown: List<Ruling>
+        get() = rulings.filter { it.sayable }
+            .distinctBy { it.day to it.body }
+            .sortedWith(compareBy({ if (it.day.isEmpty()) 1 else 0 }, { it.day }))
+
     fun loading() = copy(busy = true, error = null)
     fun failed(message: String) = copy(busy = false, error = message)
 
@@ -126,10 +251,24 @@ data class CardDetail(
      * A card opened from a link has only its `name_norm`, which is
      * lowercase. Showing that as the title is ugly, and title-casing
      * it is wrong for "Jötun Grunt" and every card with a // in it.
+     *
+     * A row carrying nothing but the norm back is skipped rather than
+     * taken: it is the thing we were trying to get away from, and
+     * promoting it would undo a good name the palette already gave us.
+     * Whatever the printings say is believed otherwise — the query
+     * that fetched them is keyed `WHERE name_norm = ?`, so the row is
+     * this card by construction, and second-guessing it here would
+     * mean reimplementing the database's normalisation.
      */
     fun named(printings: List<Printing>): CardDetail {
-        val real = printings.firstOrNull { it.cardName.isNotBlank() }?.cardName
-        return if (real.isNullOrBlank() || real == name) this else copy(name = real)
+        val real = printings.asSequence()
+            .map { it.cardName.trim() }
+            .filter { it.isNotEmpty() }
+            .firstOrNull { it != nameNorm }
+        // Nothing better to show: an untitled drawer is worse than a
+        // lowercase one.
+        val next = real ?: name.trim().ifBlank { nameNorm }
+        return if (next == name) this else copy(name = next)
     }
 }
 

@@ -23,6 +23,20 @@ object Scroll {
     /** Which request is current. An older chase stops when this moves. */
     private var token = 0
 
+    /**
+     * Forget every offset.
+     *
+     * The map is on an object, so it outlives the app that filled it.
+     * A second mount in the same document — which is every test after
+     * the first, and a re-mount in the page — inherited wherever the
+     * last one happened to be scrolled, so a screen could open at an
+     * offset nothing in this session ever recorded.
+     */
+    fun forget() {
+        left.clear()
+        token++
+    }
+
     /** Remember where the screen at [hash] was, before leaving it. */
     fun remember(hash: String) {
         left[hash] = window.scrollY
@@ -49,12 +63,21 @@ object Scroll {
      * attempt would silently do nothing on every screen worth coming
      * back to.
      */
-    private fun chase(mine: Int, y: Double, framesLeft: Int) {
+    private fun chase(mine: Int, y: Double, framesLeft: Int, held: Int = 0) {
         if (framesLeft <= 0) return
         window.requestAnimationFrame {
             if (mine != token) return@requestAnimationFrame
             window.scrollTo(0.0, y)
-            if (kotlin.math.abs(window.scrollY - y) >= 1.0) chase(mine, y, framesLeft - 1)
+            val there = kotlin.math.abs(window.scrollY - y) < 1.0
+            // Landing once is not arriving. The screen being left can
+            // easily be tall enough to hold the offset while the one
+            // being restored has not drawn a row yet — the chase then
+            // stopped against the wrong page, and the browser clamped
+            // the scroll back down as soon as the shorter content
+            // took over. So the offset has to hold for several frames
+            // running before this lets go of it.
+            if (there && held + 1 >= STEADY) return@requestAnimationFrame
+            chase(mine, y, framesLeft - 1, if (there) held + 1 else 0)
         }
     }
 
@@ -90,4 +113,7 @@ object Scroll {
      * succeeds, and a hand on the screen stops it too.
      */
     private const val FRAMES = 120
+
+    /** Frames the offset has to survive before the chase believes it. */
+    private const val STEADY = 6
 }

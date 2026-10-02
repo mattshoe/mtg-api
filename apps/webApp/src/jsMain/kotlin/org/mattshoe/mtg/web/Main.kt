@@ -24,6 +24,7 @@ import org.mattshoe.mtg.core.CardRef
 import org.mattshoe.mtg.core.CardRow
 import org.mattshoe.mtg.core.Completion
 import org.mattshoe.mtg.core.DeckCard
+import org.mattshoe.mtg.core.DeckList
 import org.mattshoe.mtg.core.DeckEditState
 import org.mattshoe.mtg.core.DeckQueries
 import org.mattshoe.mtg.core.DeckTweak
@@ -40,6 +41,7 @@ import org.mattshoe.mtg.core.Load
 import org.mattshoe.mtg.core.MtgApi
 import org.mattshoe.mtg.core.Overlay
 import org.mattshoe.mtg.core.PaletteQueries
+import org.mattshoe.mtg.core.RenameState
 import org.mattshoe.mtg.core.Route
 import org.mattshoe.mtg.core.Rows
 import org.mattshoe.mtg.core.Scryfall
@@ -170,6 +172,7 @@ object MtgApp {
     private val searchDebounceMs = 250L
     private var searchJob: Job? = null
     private var lookupJob: Job? = null
+    private var commanderJob: Job? = null
     private var findJob: Job? = null
     private var tweakJob: Job? = null
 
@@ -276,6 +279,8 @@ object MtgApp {
                 onOpenNamed = { name, norm, owner -> openNamed(name, norm, owner) },
                 onTypedName = { c -> nameTyped(c) },
                 onDismissNames = { app = app.copy(complete = app.complete.closed()) },
+                onCommanderTyped = { c -> commanderTyped(c) },
+                onDeckFiles = { files -> readDeckFiles(files) },
                 onFind = { term -> find(term) },
                 onLookup = { term -> lookup(term) },
                 onFiles = { files -> readFiles(files) },
@@ -314,6 +319,13 @@ object MtgApp {
                     ) { saveDeck(app) }
                 },
                 onAskDisassemble = { slug -> askDisassemble(slug) },
+                onAskRename = { slug -> askRename(slug) },
+                onSaveRename = {
+                    claim(
+                        app.rename?.canSave == true,
+                        { app.copy(rename = app.rename?.working()) },
+                    ) { renameDeck(app) }
+                },
                 onDisassemble = {
                     claim(
                         app.disassemble?.canGo == true,
@@ -356,6 +368,8 @@ object MtgApp {
     }
 
     fun unmount() {
+        // The offsets belong to the app that recorded them.
+        Scroll.forget()
         navComposition?.dispose()
         navComposition = null
         composition?.dispose()
@@ -720,7 +734,12 @@ object MtgApp {
             delay(Completion.DEBOUNCE_MS.toLong())
             try {
                 val r = api.query(PaletteQueries.find(term))
-                app = app.copy(palette = app.palette.found(PaletteQueries.decode(r.cols, r.rows)))
+                // `term` and not the current one: a slow answer to a word
+                // that has since been typed over is dropped rather than
+                // shown under what is now in the box.
+                app = app.copy(
+                    palette = app.palette.found(PaletteQueries.decode(r.cols, r.rows), term),
+                )
             } catch (e: Exception) {
                 // Typing fast. Not worth an error in a convenience.
             }
@@ -747,6 +766,51 @@ object MtgApp {
         if (c.term == was) return
         if (c.worthAsking) lookup(c.term)
         searchSoon()
+    }
+
+    /**
+     * The commander box, which has its own suggestions.
+     *
+     * Separate from the Library's: typing a commander here must not
+     * rewrite the search filter on a screen nobody is looking at.
+     */
+    private fun commanderTyped(c: Completion) {
+        val was = app.newDeck.hint.term
+        app = app.copy(newDeck = app.newDeck.hinting(c))
+        if (c.term == was || !c.worthAsking) return
+        commanderJob?.cancel()
+        commanderJob = scope.launch {
+            delay(Completion.DEBOUNCE_MS.toLong())
+            val names = scryfall.complete(c.term)
+            app = app.copy(newDeck = app.newDeck.copy(hint = app.newDeck.hint.suggested(names)))
+        }
+    }
+
+    /**
+     * A file dropped on the wizard's card list.
+     *
+     * The same reading and the same limits as mass entry, landing in
+     * the wizard instead of the entry box.
+     */
+    private fun readDeckFiles(files: List<File>) {
+        scope.launch {
+            val texts = mutableListOf<String>()
+            files.forEach { f ->
+                val bytes = f.size.toLong()
+                if (bytes > Upload.MAX_BYTES) {
+                    app = app.say("${f.name} is too big (${Upload.size(bytes)})")
+                    return@forEach
+                }
+                val text = readText(f)
+                if (text == null) app = app.say("could not read ${f.name}")
+                else texts += text
+            }
+            if (texts.isEmpty()) return@launch
+            val merged = Upload.merge(app.newDeck.list, texts.joinToString("\n"))
+            app = app.copy(newDeck = app.newDeck.type(merged)).say(
+                "Loaded ${DeckList.entries(merged).size} cards",
+            )
+        }
     }
 
     private fun lookup(term: String) {
@@ -989,6 +1053,32 @@ object MtgApp {
                 .say("Saved — ${plan.cardCount} cards" + if (plan.buying > 0) ", ${plan.buying} bought" else "")
         } catch (ex: ApiFailure) {
             app.copy(deckEdit = app.deckEdit?.failed(ex.message ?: "that did not work"))
+        }
+    }
+
+    private fun askRename(slug: String) {
+        val deck = app.decks.decks.firstOrNull { it.slug == slug } ?: return
+        app = app.copy(rename = RenameState(slug = deck.slug, was = deck.name))
+            .opening(Overlay.RENAME)
+    }
+
+    /**
+     * Write the new name, then follow the deck to its new address.
+     *
+     * The slug moves with the name, so staying where we are would
+     * leave the page pointing at a deck that is no longer there.
+     */
+    private suspend fun renameDeck(s: AppState): AppState {
+        val r = s.rename ?: return app
+        return try {
+            val done = api.renameDeck(token(), r.slug, r.name.trim())
+            app = app.copy(rename = app.rename?.finished())
+            loadDecks()
+                .closing(Overlay.RENAME)
+                .navigate(Route(View.DECKS, done.slug))
+                .say("Renamed to ${done.name}")
+        } catch (ex: ApiFailure) {
+            app.copy(rename = app.rename?.failed(ex.message ?: "that did not work"))
         }
     }
 

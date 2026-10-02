@@ -988,7 +988,10 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
    for the card's own name, so what to do is asked inside the sheet.
    The row still opens the card, so this has to keep the press. */
 .row-act {
-  margin-left: 4px; width: 34px; height: 34px; padding: 0; flex: none;
+  /* 44px, and not a pixel of it conditional on the pointer: the
+     coarse-pointer rule under here used to shrink it to 38 on exactly
+     the device the size is for. */
+  margin-left: 4px; width: 44px; height: 44px; padding: 0; flex: none;
   display: grid; place-items: center;
   border: 1px solid var(--line-2); border-radius: 8px;
   background: var(--bg-3); color: var(--text-2);
@@ -997,7 +1000,6 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
 @media (hover: hover) {
   .row-act:hover { background: var(--bg-hover); color: var(--text); border-color: var(--text-3); }
 }
-@media (pointer: coarse) { .row-act { width: 38px; height: 38px; } }
 
 /* A button that owns its row, for the one thing a deck page is for
    when there is nothing on it yet. */
@@ -1037,7 +1039,11 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
 
 /* How many, with the two buttons a thumb wants. */
 .counter { display: flex; align-items: center; gap: 8px; }
-.counter .btn { min-width: 48px; min-height: 44px; font-size: 18px; }
+/* `.btn.sm` is cut to 38px under a finger further down this file, at
+   the same weight as `.counter .btn` and after it — so the one place
+   that is nothing but a tap target lost 6px on the only device that
+   needed them. Named with the modifier so it outranks that. */
+.counter .btn, .counter .btn.sm { min-width: 48px; min-height: 44px; font-size: 18px; }
 .counter .field.count {
   width: 84px; text-align: center; font: 600 16px/1 var(--mono);
 }
@@ -1102,6 +1108,31 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
 .tally-l {
   margin-top: 3px; font-size: 10.5px; letter-spacing: .07em;
   text-transform: uppercase; color: var(--text-3);
+}
+.tally.two { grid-template-columns: repeat(2, 1fr); }
+
+/* The new deck review: one line per card, quantity, name, and what
+   happens to it. It used to be three buttons per card asking where
+   every copy should come from — answers the client never sent. */
+.plan-row {
+  display: grid; grid-template-columns: 2.4em minmax(0, 1fr) auto;
+  align-items: center; gap: 10px;
+  padding: 9px 2px; border-bottom: 1px solid var(--line);
+  font-size: 13.5px;
+}
+.plan-row:last-child { border-bottom: 0; }
+.plan-qty { font: 600 13px/1 var(--mono); color: var(--text-2); text-align: right; }
+.plan-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plan-from {
+  flex: none; padding: 2px 8px; border-radius: 99px;
+  background: var(--bg-3); color: var(--text-2);
+  font-size: 11px; white-space: nowrap;
+}
+/* Added rather than taken: a ring and a brighter face, so it reads
+   without depending on hue. */
+.plan-from.new {
+  background: var(--accent-dim); color: var(--accent-2);
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
 
 /* Who owns how many. One line each, the name on the left and the

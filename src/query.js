@@ -186,8 +186,29 @@ const cleanError = (e) => String(e.cause?.message || e.message || e)
   .replace(/^D1_(ERROR|EXEC_ERROR):\s*/, '');
 
 /** D1 under load, rather than anything wrong with the statement. */
-export const isOverloaded = (message) => /overload|queued for too long|too many|network connection lost|reset because of/i
-  .test(String(message || ''));
+/**
+ * Worth trying again, as opposed to wrong.
+ *
+ * `too many` on its own was too broad: SQLite says "too many SQL
+ * variables" for a statement that binds past its parameter ceiling,
+ * which is a permanent fault in the query. Calling it retryable told
+ * the client to try again, so one broken deck list became six
+ * identical 503s in the log and the person reading them was told the
+ * database was busy when the database was fine.
+ *
+ * Anything SQLite names as an error is the statement's fault and is
+ * never retryable, whatever words follow.
+ */
+export const isOverloaded = (message) => {
+  const said = String(message || '');
+  if (/SQLITE_[A-Z]+|SQL variables|no such (table|column)|syntax error/i.test(said)) return false;
+  // "too many API requests by single worker invocation" is a real
+  // Cloudflare message, so the words between "too many" and the noun
+  // have to be allowed for. What must not match is "too many SQL
+  // variables", which the guard above has already refused.
+  return /overload|queued for too long|too many [a-z ]*(requests|connections|subrequests)|network connection lost|reset because of/i
+    .test(said);
+};
 
 /**
  * A statement that is one bare word almost never means what it says.

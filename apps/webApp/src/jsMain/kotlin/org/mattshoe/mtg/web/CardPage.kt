@@ -87,16 +87,24 @@ private fun Body(card: CardDetail) {
     }
 
     H3 { Text("Legal in") }
-    if (card.legalities.isEmpty()) {
+    // Ordered and de-duplicated by the state, not by whichever query
+    // happened to fill it, so the row reads the same everywhere.
+    val chips = card.legalityChips
+    if (chips.isEmpty()) {
         Div(attrs = { classes("muted", "small") }) { Text("Nothing recorded.") }
     } else {
-        Div(attrs = { classes("chips") }) {
-            card.legalities.forEach { l ->
+        Div(attrs = { classes("chips", "legalities") }) {
+            chips.forEach { l ->
                 Span(attrs = {
-                    classes("chip", "mini")
-                    if (!l.legal) classes("bad")
-                }) { Text("${l.format} ${l.label}") }
+                    classes("chip", "mini", l.tone)
+                    attr("title", "${l.formatLabel}: ${l.label}")
+                }) { Text(l.chip) }
             }
+        }
+        // The heading promises somewhere. When there is nowhere, the
+        // chips alone leave you counting them to find that out.
+        if (!card.legalAnywhere) {
+            Div(attrs = { classes("muted", "small") }) { Text("Legal nowhere.") }
         }
     }
 
@@ -151,14 +159,35 @@ private fun Owners(card: CardDetail) {
     }
 }
 
+/**
+ * What the rules team has said about the card.
+ *
+ * The heading is there even when there is nothing under it, the way
+ * every other section of this page works. A section that vanishes is
+ * one you cannot tell apart from rulings that failed to load, and
+ * "no rulings" is itself worth knowing.
+ *
+ * Ordering, de-duplication and reading the date are all `CardDetail`'s
+ * job, so a phone shows the same list in the same order.
+ */
 @Composable
 private fun Rulings(card: CardDetail) {
-    if (card.rulings.isEmpty()) return
     H3 { Text("Rulings") }
-    card.rulings.forEach { r ->
-        Div(attrs = { classes("small") }) {
-            Span(attrs = { classes("muted") }) { Text("${r.date} ") }
-            Text(r.text)
+    val rulings = card.rulingsShown
+    if (rulings.isEmpty()) {
+        Div(attrs = { classes("muted", "small") }) { Text("No rulings.") }
+        return
+    }
+    rulings.forEach { r ->
+        Div(attrs = { classes("ruling", "small") }) {
+            // Nothing at all when the stored date is not a date: a
+            // lone separator in front of the text reads like a typo.
+            if (r.day.isNotEmpty()) {
+                Span(attrs = { classes("muted", "mono") }) { Text(r.day + " ") }
+            }
+            // `Text` writes a text node, so a ruling quoting "<i>" or
+            // an ability word in angle brackets is read, not parsed.
+            Span { Text(r.body) }
         }
     }
 }

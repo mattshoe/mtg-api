@@ -72,43 +72,73 @@ class NewDeckTest {
         assertFalse(ready().validated(checked(ok = false)).canLeaveCheck)
     }
 
-    /** A slot with no source would be conjured from nothing. */
+    /**
+     * Where a copy comes from is a consequence, not a question.
+     *
+     * This used to assert the opposite: that nothing could be created
+     * until somebody had answered "bulk, transfer or buy" for every
+     * line. The answers were never sent — `createDeck` has no
+     * `sources` field and never had one — so it was a screen of
+     * choices that changed nothing, and "buy" described something the
+     * app does not do. Replaced deliberately, not relaxed.
+     */
     @Test
-    fun everyCardNeedsASourceBeforeADeckCanBeCreated() {
+    fun aCheckedListIsReadyWithNothingElseToAnswer() {
         val s = ready().validated(checked())
-        assertFalse(s.canCreate)
-        assertEquals(3, s.undecided.size)
-
-        val sourced = DeckList.cardLines(threeCards).fold(s) { acc, line -> acc.source(line, Source.BULK) }
-        assertTrue(sourced.sourcesDecided)
-        assertTrue(sourced.canCreate)
-        assertTrue(sourced.undecided.isEmpty())
+        assertTrue(s.canCreate, "a checked list still wanted something answered")
     }
 
     @Test
-    fun whatIsBeingBoughtIsListedSeparately() {
-        val s = ready().validated(checked())
-            .source("1 Sol Ring", Source.BULK)
-            .source("1 Arcane Signet", Source.BUY)
-            .source("1 Command Tower", Source.TRANSFER)
-        assertEquals(listOf("1 arcane signet"), s.buying)
+    fun whatTheCollectionHoldsComesOutOfBulk() {
+        val s = ready().validated(
+            Validation(
+                ok = true, checked = 3, unknown = 0,
+                cards = listOf(
+                    NameCheck(name = "Sol Ring", nameNorm = "sol ring", ok = true, source = "collection"),
+                    NameCheck(name = "Arcane Signet", nameNorm = "arcane signet", ok = true, source = "scryfall"),
+                    NameCheck(name = "Command Tower", nameNorm = "command tower", ok = true, source = "collection"),
+                ),
+            ),
+        )
+        val byName = s.plan.associateBy { it.name.lowercase() }
+        assertEquals(Source.BULK, byName["sol ring"]?.from)
+        assertEquals(Source.BULK, byName["command tower"]?.from)
+        assertEquals(Source.ADD, byName["arcane signet"]?.from, "a card nobody owns is added to bulk")
+        assertEquals(listOf("Arcane Signet"), s.adding.map { it.name })
+    }
+
+    @Test
+    fun aCardNobodyHasCheckedYetIsSomethingToAdd() {
+        // No verdict means nothing is known to be held, so the honest
+        // answer is that it would be added rather than taken.
+        assertTrue(ready().plan.all { it.from == Source.ADD })
+    }
+
+    @Test
+    fun thePlanIsOneLinePerCardWithItsQuantity() {
+        val s = ready().type("4 Lightning Bolt\n1 Sol Ring").validated(checked())
+        assertEquals(2, s.plan.size)
+        assertEquals(4, s.plan.first().qty)
+        assertEquals("Lightning Bolt", s.plan.first().name, "the name is shown as it was written")
+    }
+
+    @Test
+    fun nothingAnywhereOffersToBuyAnything() {
+        assertTrue(Source.entries.none { "buy" in it.label.lowercase() }, "something still says buy")
     }
 
     /** Editing the list after checking it must not carry the old verdict. */
     @Test
-    fun editingTheListThrowsAwayTheCheckAndEverySourcingChoice() {
-        val s = ready().validated(checked()).source("1 Sol Ring", Source.BULK)
+    fun editingTheListThrowsAwayTheCheck() {
+        val s = ready().validated(checked())
         val edited = s.type("$threeCards\n1 Opt")
         assertFalse(edited.namesChecked)
-        assertTrue(edited.sources.isEmpty())
         assertFalse(edited.canCreate)
     }
 
     @Test
     fun aDeckIsNotCreatedTwice() {
-        val done = DeckList.cardLines(threeCards)
-            .fold(ready().validated(checked())) { a, l -> a.source(l, Source.BULK) }
-            .finished()
+        val done = ready().validated(checked()).finished()
         assertEquals(DeckStep.DONE, done.step)
         assertFalse(done.canCreate)
     }
@@ -193,14 +223,13 @@ class NewDeckTest {
 class CreateInFlightTest {
 
     private fun ready(): NewDeck {
-        var s = NewDeck()
+        val s = NewDeck()
             .pick(Format.COMMANDER)
             .assign(Owner.MATT)
             .rename("Test Deck")
             .setCommander("Alela, Cunning Conqueror")
             .type("1 Sol Ring")
             .validated(Validation(checked = 2, unknown = 0, ok = true))
-        DeckList.cardLines(s.list).forEach { s = s.source(it, Source.BULK) }
         return s
     }
 

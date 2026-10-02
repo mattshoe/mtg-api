@@ -15,6 +15,7 @@ import org.jetbrains.compose.web.dom.TextArea
 import org.mattshoe.mtg.core.DeckEditState
 import org.mattshoe.mtg.core.DeckPlan
 import org.mattshoe.mtg.core.DisassembleState
+import org.mattshoe.mtg.core.RenameState
 import org.mattshoe.mtg.core.Tally
 
 /**
@@ -220,6 +221,80 @@ fun DisassembleDialog(state: DisassembleState, onGo: () -> Unit, onClose: () -> 
                         classes("btn", "ghost")
                         onClick { onClose() }
                     }) { Text("Cancel") }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Renaming a deck.
+ *
+ * It says where the deck will live afterwards, because the slug moves
+ * with the name and that changes every link anybody has to it.
+ */
+@Composable
+fun RenameDialog(
+    state: RenameState,
+    onState: (RenameState) -> Unit,
+    onSave: () -> Unit,
+    onClose: () -> Unit,
+) {
+    Div(attrs = {
+        classes("palette-scrim")
+        onClick { onClose() }
+    }) {
+        Div(attrs = {
+            classes("palette")
+            onClick { it.stopPropagation() }
+        }) {
+            Div(attrs = { classes("panel-head") }) {
+                H2 { Text("Rename deck") }
+                Span(attrs = { classes("spacer") }) {}
+                Button(attrs = {
+                    classes("btn", "sm", "ghost", "icon-only")
+                    attr("title", "Close")
+                    attr("aria-label", "Close")
+                    onClick { onClose() }
+                }) { CloseIcon() }
+            }
+            Div(attrs = { classes("panel-body", "stack") }) {
+                if (state.done) {
+                    Div(attrs = { classes("tag", "ok") }) { Text("Renamed") }
+                    Div(attrs = { classes("muted", "small") }) {
+                        Text("${state.was} is now ${state.name}, at #/decks/${state.nextSlug}")
+                    }
+                    Button(attrs = {
+                        classes("btn", "primary")
+                        onClick { onClose() }
+                    }) { Text("Done") }
+                } else {
+                    Input(type = InputType.Text) {
+                        classes("field")
+                        placeholder("Deck name")
+                        value(state.name)
+                        onInput { onState(state.typed(it.value)) }
+                        onKeyDown { e -> if (e.key == "Enter" && state.canSave) onSave() }
+                    }
+                    Div(attrs = { classes("muted", "small") }) {
+                        if (state.nextSlug.isEmpty()) {
+                            Text("That name has no letters or digits in it.")
+                        } else {
+                            Text("It will live at #/decks/${state.nextSlug}")
+                        }
+                    }
+                    state.error?.let { Div(attrs = { classes("err") }) { Text(it) } }
+                    Div(attrs = { classes("flex-wrap") }) {
+                        Button(attrs = {
+                            classes("btn", "primary")
+                            if (!state.canSave) disabled()
+                            onClick { onSave() }
+                        }) { Text(if (state.busy) "Renaming…" else "Rename") }
+                        Button(attrs = {
+                            classes("btn", "ghost")
+                            onClick { onClose() }
+                        }) { Text("Cancel") }
+                    }
                 }
             }
         }

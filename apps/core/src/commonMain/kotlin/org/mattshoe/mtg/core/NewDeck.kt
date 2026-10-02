@@ -40,11 +40,19 @@ enum class DeckStep(val label: String) {
     DONE("Done"),
 }
 
-/** Where a copy is going to come from. */
+/**
+ * Where a copy comes from.
+ *
+ * Not a question any more. A card the collection already holds comes
+ * out of bulk; one it does not hold gets added to bulk on the way in.
+ * The wizard used to ask, line by line, and then not send the answer
+ * — `createDeck` has never had a `sources` field — so it was a screen
+ * of choices that did nothing. And "Buy it" was never true: nothing
+ * here spends money, it writes a row.
+ */
 enum class Source(val slug: String, val label: String) {
     BULK("bulk", "From bulk"),
-    TRANSFER("transfer", "From the other collection"),
-    BUY("buy", "Buy it"),
+    ADD("buy", "Add to bulk"),
 }
 
 data class NewDeck(
@@ -55,9 +63,15 @@ data class NewDeck(
     val commander: String = "",
     val list: String = "",
     val checked: Validation? = null,
-    val sources: Map<String, Source> = emptyMap(),
     val busy: String? = null,
     val error: String? = null,
+    /**
+     * Name suggestions for the commander box.
+     *
+     * Its own, not the Library's: typing a commander must not quietly
+     * rewrite the search filter on another screen.
+     */
+    val hint: Completion = Completion(),
     val created: Boolean = false,
 ) {
 
@@ -90,16 +104,35 @@ data class NewDeck(
      * conjured, which is precisely what this wizard exists to prevent.
      */
     val canCreate: Boolean
-        get() = canLeaveCheck && !created && sourcesDecided && busy == null
+        get() = canLeaveCheck && !created && busy == null
 
-    val sourcesDecided: Boolean
-        get() = DeckList.cardLines(list).all { line -> sources.containsKey(lineKey(line)) }
+    /**
+     * One line per card, and what will happen to it.
+     *
+     * Derived, not chosen. The check has already told us which names
+     * the collection holds, and that is the whole of the decision.
+     */
+    data class Line(val qty: Int, val name: String, val from: Source) {
+        val owned: Boolean get() = from == Source.BULK
+    }
 
-    val undecided: List<String>
-        get() = DeckList.cardLines(list).filterNot { sources.containsKey(lineKey(it)) }
+    /** What the collection was found to already hold, by normalised name. */
+    private val held: Set<String>
+        get() = checked?.cards.orEmpty()
+            .filter { it.ok && it.source == "collection" }
+            .map { it.nameNorm }
+            .toSet()
 
-    val buying: List<String>
-        get() = sources.filterValues { it == Source.BUY }.keys.sorted()
+    val plan: List<Line>
+        get() {
+            val owned = held
+            return DeckList.entries(list).map { e ->
+                Line(e.qty, e.name, if (e.key in owned) Source.BULK else Source.ADD)
+            }
+        }
+
+    /** The cards the collection does not hold yet. */
+    val adding: List<Line> get() = plan.filterNot { it.owned }
 
     fun reachable(target: DeckStep): Boolean = when (target) {
         DeckStep.FORMAT -> true
@@ -117,10 +150,14 @@ data class NewDeck(
     fun pick(f: Format) = copy(format = f, error = null)
     fun assign(o: Owner) = copy(owner = o, error = null)
     fun rename(n: String) = copy(name = n, error = null)
-    fun setCommander(c: String) = copy(commander = c, error = null)
+    fun setCommander(c: String) =
+        copy(commander = c, checked = null, error = null, hint = hint.typed(c))
 
-    /** Editing the list invalidates the check and every sourcing choice. */
-    fun type(text: String) = copy(list = text, checked = null, sources = emptyMap(), error = null)
+    /** The suggestion list moved; the box shows whatever it holds. */
+    fun hinting(c: Completion) = copy(commander = c.term, checked = null, error = null, hint = c)
+
+    /** Editing the list invalidates the check taken against the old one. */
+    fun type(text: String) = copy(list = text, checked = null, error = null)
 
     /**
      * Take a suggested spelling, wherever the wrong one is.
@@ -146,7 +183,6 @@ data class NewDeck(
             // The check was about the old spelling, and the sourcing
             // choices were about cards one of which has just changed.
             checked = null,
-            sources = emptyMap(),
             error = null,
         )
     }
@@ -159,7 +195,23 @@ data class NewDeck(
         return body.equals(name.trim(), ignoreCase = true)
     }
 
-    fun source(line: String, from: Source) = copy(sources = sources + (lineKey(line) to from))
+    /**
+     * Take the first card of the list as the commander.
+     *
+     * Every decklist export puts it first, so asking somebody to cut
+     * it out by hand and retype it into another box is work the list
+     * has already done.
+     */
+    fun commanderFromList(): NewDeck {
+        val first = DeckList.firstCard(list) ?: return this
+        return copy(
+            commander = first.name,
+            list = DeckList.withoutFirstCard(list),
+            checked = null,
+            error = null,
+            hint = Completion(term = first.name),
+        )
+    }
 
     fun goTo(target: DeckStep): NewDeck {
         val landing = steps.lastOrNull { reachable(it) && steps.indexOf(it) <= steps.indexOf(target) }
@@ -175,7 +227,6 @@ data class NewDeck(
     /** The slug the API will give this deck. */
     val slug: String get() = slugify(name)
 
-    private fun lineKey(line: String) = line.trim().lowercase()
 
     companion object {
         /** Lowercase, words joined by hyphens, nothing else. */

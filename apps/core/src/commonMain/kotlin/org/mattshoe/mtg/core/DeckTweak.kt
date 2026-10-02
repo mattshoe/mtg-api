@@ -64,6 +64,34 @@ data class DeckTweak(
 
     val canApply: Boolean get() = !busy && !saved && plan != null
 
+    // ---------------------------------------------------- how many of it
+
+    /**
+     * The fewest this change can be about.
+     *
+     * Taking a card out is a real answer, so a count can go to nought
+     * and the list drops the line. Adding nought copies of something,
+     * or swapping a card in nought times, is not a change at all —
+     * so the number stops at one and the minus goes off, rather than
+     * sitting at nought under a Preview button that will not press.
+     */
+    val floor: Int get() = if (kind == Tweak.QUANTITY) 0 else 1
+
+    /**
+     * And the most.
+     *
+     * The box takes typing, so a thumb on the wrong key turns one
+     * Sol Ring into nine thousand, and the plan that comes back is a
+     * nine-thousand-card purchase. No deck wants a hundredth copy of
+     * anything.
+     */
+    val ceiling: Int get() = MAX_QTY
+
+    fun clamped(n: Int) = n.coerceIn(floor, ceiling)
+
+    val canTakeOne: Boolean get() = qty > floor
+    val canAddOne: Boolean get() = qty < ceiling
+
     /** What the deck would be called afterwards, in one line. */
     val summary: String
         get() = when (kind) {
@@ -132,7 +160,27 @@ data class DeckTweak(
 
     // ----------------------------------------------------------- moves
 
-    fun typed(text: String) = copy(term = text, error = null, pick = null, plan = null)
+    /**
+     * A keystroke in the finder.
+     *
+     * Hits for "lig" are not answers to "l", so going back under the
+     * minimum drops them rather than leaving a list up that the box
+     * no longer names — tapping one of those puts in a card nobody
+     * asked for. A term long enough to search counts as searching
+     * until the answer lands, so the finder can tell "nothing by that
+     * name" apart from "not back yet".
+     */
+    fun typed(text: String): DeckTweak {
+        val worthAsking = text.trim().length >= MIN_TERM
+        return copy(
+            term = text,
+            error = null,
+            pick = null,
+            plan = null,
+            found = if (worthAsking) found else emptyList(),
+            searching = worthAsking,
+        )
+    }
     /**
      * What the collection turned up, and then anything else by name.
      *
@@ -142,21 +190,45 @@ data class DeckTweak(
      * always the answer, and the rest marked as not owned.
      */
     fun searched(results: List<Found>, alsoNamed: List<String> = emptyList()): DeckTweak {
-        val have = results.map { it.name.lowercase() }.toSet()
+        // The collection groups by owner, so two people holding one
+        // card is two hits and the owner is what tells them apart.
+        // The same card from the same person twice is one hit shown
+        // twice, and the two rows read identically.
+        val mine = results.distinctBy { it.name.lowercase() to it.owner }
+        val have = mine.map { it.name.lowercase() }.toSet()
         val rest = alsoNamed
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .distinctBy { it.lowercase() }
             .filterNot { it.lowercase() in have }
             .map { Found(0, it, null, null, 0, "") }
-        return copy(found = results + rest, searching = false)
+        return copy(found = mine + rest, searching = false)
     }
     fun looking() = copy(searching = true)
 
     /** Picking a card clears any plan: it was about a different change. */
-    fun picked(f: Found) = copy(pick = f, term = f.name, found = emptyList(), plan = null, error = null)
+    fun picked(f: Found) =
+        copy(pick = f, term = f.name, found = emptyList(), searching = false, plan = null, error = null)
 
-    fun count(n: Int) = copy(qty = n.coerceAtLeast(0), plan = null, error = null)
+    /**
+     * How many, kept inside the ends, and the plan dropped if it moved.
+     *
+     * A plan is about one number. Changing the number and keeping the
+     * plan would let the Apply button write a different change from
+     * the one that was shown. But a number that did not actually move
+     * — a plus at the ceiling, a 999 clamped back to 99 — must keep
+     * it: throwing the plan away there makes the button go dead for
+     * no reason a person can see.
+     */
+    fun count(n: Int): DeckTweak {
+        val next = clamped(n)
+        if (next == qty) return this
+        return copy(qty = next, plan = null, error = null)
+    }
 
     /** Answering "what do you want to do with this one". */
-    fun doing(k: Tweak) = copy(kind = k, plan = null, error = null, term = "", found = emptyList(), pick = null)
+    fun doing(k: Tweak) =
+        copy(kind = k, plan = null, error = null, term = "", found = emptyList(), searching = false, pick = null)
 
     fun working() = copy(busy = true, error = null, errors = emptyList())
     fun planned(p: DeckPlan) = copy(plan = p, busy = false, error = null)
@@ -168,6 +240,9 @@ data class DeckTweak(
     companion object {
         /** Worth asking the server about. One letter matches everything. */
         const val MIN_TERM = 2
+
+        /** The most copies of one card a single change can be about. */
+        const val MAX_QTY = 99
 
         fun add(deck: Deck, commander: String) =
             DeckTweak(deck.slug, deck.name, commander, Tweak.ADD, qty = 1)

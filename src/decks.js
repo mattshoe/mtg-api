@@ -642,6 +642,44 @@ export function slugify(name) {
  * the browser, because the browser is not the only caller and a deck with
  * no owner or a duplicate slug is not worth being able to make.
  */
+/**
+ * Rename a deck.
+ *
+ * The slug moves with the name, because the slug is what the address
+ * bar shows and a deck called one thing living at the address of
+ * another is a link that lies. `deck_cards` hangs off `decks.id`, so
+ * nothing else has to be rewritten.
+ */
+export async function renameDeck(db, body) {
+  const slug = String(body?.slug || '').trim();
+  const name = String(body?.name || '').trim();
+  if (!slug) return { status: 400, body: { error: 'which deck? pass a slug' } };
+  if (!name) return { status: 400, body: { error: 'a deck needs a name' } };
+  if (name.length > 120) return { status: 400, body: { error: 'that name is too long' } };
+
+  const deck = await db.prepare('SELECT id, slug, name FROM decks WHERE slug = ?').bind(slug).first();
+  if (!deck) return { status: 404, body: { error: `no deck called ${slug}` } };
+
+  const next = slugify(name);
+  if (!next) return { status: 400, body: { error: 'that name has no letters or digits in it' } };
+
+  // Renaming to what it already is: say so rather than pretending to work.
+  if (deck.name === name && deck.slug === next) {
+    return { status: 200, body: { renamed: false, slug: next, name, was: deck.name } };
+  }
+
+  const clash = await db.prepare('SELECT slug FROM decks WHERE slug = ? AND id != ?')
+    .bind(next, deck.id).first();
+  if (clash) return { status: 409, body: { error: `another deck already lives at ${next}` } };
+
+  if (body?.dry_run) {
+    return { status: 200, body: { renamed: false, dry_run: true, slug: next, name, was: deck.name } };
+  }
+
+  await db.prepare('UPDATE decks SET name = ?, slug = ? WHERE id = ?').bind(name, next, deck.id).run();
+  return { status: 200, body: { renamed: true, slug: next, name, was: deck.name, wasSlug: deck.slug } };
+}
+
 export async function createDeck(db, body, fetchImpl) {
   const name = String(body?.name || '').trim();
   const format = String(body?.format || '').trim().toLowerCase();

@@ -194,3 +194,34 @@ internal object ShiftSerializer : KSerializer<Shift> {
     override fun serialize(encoder: Encoder, value: Shift) =
         throw SerializationException("plans are only ever read")
 }
+
+
+/**
+ * Renaming a deck.
+ *
+ * The slug travels with the name, because the slug is the address and
+ * a deck called one thing living at the address of another is a link
+ * that lies. The new address is worked out here so the box can show
+ * it before anything is written.
+ */
+data class RenameState(
+    val slug: String,
+    val was: String,
+    val name: String = was,
+    val busy: Boolean = false,
+    val error: String? = null,
+    val done: Boolean = false,
+) {
+    /** Where it will live, by the same rule the server uses. */
+    val nextSlug: String get() = NewDeck.slugify(name)
+
+    val changed: Boolean get() = name.trim() != was.trim()
+
+    val canSave: Boolean
+        get() = !busy && !done && name.isNotBlank() && nextSlug.isNotEmpty() && changed
+
+    fun typed(text: String) = copy(name = text, error = null)
+    fun working() = copy(busy = true, error = null)
+    fun failed(message: String) = copy(busy = false, error = message)
+    fun finished() = copy(busy = false, done = true, error = null)
+}

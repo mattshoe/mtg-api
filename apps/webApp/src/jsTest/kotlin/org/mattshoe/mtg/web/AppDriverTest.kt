@@ -382,8 +382,7 @@ class AppDriverTest {
 
         backButton().click()
         waitFor("the search again") { cardPages() == 0 }
-        settle()
-        assertTrue(window.scrollY > 1000, "← Back landed at ${window.scrollY}, not where the list was")
+        waitFor("the list to be back where it was", upTo = 4000) { window.scrollY > 1000 }
     }
 
     @Test
@@ -490,9 +489,10 @@ class AppDriverTest {
         waitFor("the names to come back") {
             paletteButtons().any { it.says() == "Continue →" && !it.disabled }
         }
-        onward("review") { paletteButtons().any { it.says() == "All from bulk" } }
-        press("All from bulk")
-        waitFor("the create button to come alive") {
+        // Straight to Create. The review used to ask where every copy
+        // should come from before it would offer this, and then not
+        // send the answers anywhere.
+        onward("review") {
             paletteButtons().any { it.says() == "Create Test Deck" && !it.disabled }
         }
         press("Create Test Deck")

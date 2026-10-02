@@ -35,6 +35,8 @@ fun DecksPage(
     onNew: () -> Unit = {},
     onEdit: (Deck) -> Unit = {},
     onDisassemble: (Deck) -> Unit = {},
+    /** Rename the open deck. The slug moves with the name. */
+    onRename: (Deck) -> Unit = {},
     onOpenCard: (DeckCard, String) -> Unit = { _, _ -> },
     /** Maintenance, one card at a time, without leaving the page. */
     onAddCard: () -> Unit = {},
@@ -89,6 +91,10 @@ fun DecksPage(
                         classes("btn", "sm")
                         onClick { onEdit(open) }
                     }) { Text("Edit list") }
+                    Button(attrs = {
+                        classes("btn", "sm")
+                        onClick { onRename(open) }
+                    }) { Text("Rename") }
                     Button(attrs = {
                         classes("btn", "sm", "danger")
                         onClick { onDisassemble(open) }
@@ -249,6 +255,11 @@ private fun CardLine(
                 attr("title", "Change this card")
                 attr("aria-label", "Change ${card.shown}")
                 onClick { e -> e.stopPropagation(); onTweak(card, null) }
+                // Enter and space are how this button is pressed, and
+                // they are also what the row is listening for. Without
+                // this the keyboard opened the card page behind the
+                // sheet every time.
+                onKeyDown { e -> if (e.key == "Enter" || e.key == " ") e.stopPropagation() }
             }) { Text("⋯") }
         }
     }

@@ -67,6 +67,10 @@ fun AppShell(
     onTypedName: ((Completion) -> Unit)? = null,
     /** The suggestion list should go away, and nothing else should move. */
     onDismissNames: (() -> Unit)? = null,
+    /** The commander box in the new deck wizard changed. */
+    onCommanderTyped: (Completion) -> Unit = {},
+    /** A file dropped on the new deck wizard's card list. */
+    onDeckFiles: (List<File>) -> Unit = {},
     onFiles: (List<File>) -> Unit = {},
     onReuse: (HistoryEntry) -> Unit = {},
     onClearHistory: () -> Unit = {},
@@ -74,6 +78,10 @@ fun AppShell(
     onReviewDeck: () -> Unit = {},
     onSaveDeck: () -> Unit = {},
     onAskDisassemble: (String) -> Unit = {},
+    /** Open the rename box for a deck. */
+    onAskRename: (String) -> Unit = {},
+    /** Write the new name. */
+    onSaveRename: () -> Unit = {},
     onDisassemble: () -> Unit = {},
     onCheckNames: () -> Unit = {},
     onCreateDeck: () -> Unit = {},
@@ -84,8 +92,6 @@ fun AppShell(
     onTweakPreview: () -> Unit = {},
     onTweakApply: () -> Unit = {},
 ) {
-    var password by remember { mutableStateOf("") }
-
     // The page underneath an overlay holds still. `overscroll-behavior`
     // on the overlay only stops the chaining once the overlay itself
     // reaches its end; a swipe that starts on the scrim never touches
@@ -137,6 +143,7 @@ fun AppShell(
             admin = state.admin.unlocked,
             onNew = { onState(state.opening(Overlay.NEW_DECK)) },
             onEdit = { onEditDeck(it.slug) },
+            onRename = { onAskRename(it.slug) },
             onDisassemble = { onAskDisassemble(it.slug) },
             onOpenCard = { card, owner -> onOpenNamed(card.name, card.nameNorm, owner) },
             onShare = onShareDeck,
@@ -252,13 +259,56 @@ fun AppShell(
             onCheck = onCheckNames,
             onCreate = onCreateDeck,
             onClose = { onState(state.closing(Overlay.NEW_DECK)) },
+            onCommanderTyped = onCommanderTyped,
+            onFiles = onDeckFiles,
+        )
+    }
+
+    state.rename?.takeIf { Overlay.RENAME in state.overlays }?.let { r ->
+        RenameDialog(
+            state = r,
+            onState = { onState(state.copy(rename = it)) },
+            onSave = onSaveRename,
+            onClose = { onState(state.closing(Overlay.RENAME)) },
         )
     }
 
     if (Overlay.UNLOCK in state.overlays) {
+        // The typed password belongs to the dialog, not to the shell.
+        // Hung off `AppShell` it outlived every way out that did not
+        // clear it by hand — Escape through the window's own key
+        // handler, the back gesture, a route change — and the next
+        // person to open the dialog found the last one's password
+        // still sitting in the box. Remembered here it cannot: the
+        // box is forgotten along with the dialog, whoever closed it.
+        var password by remember { mutableStateOf("") }
+
+        val close = { onState(state.closing(Overlay.UNLOCK)) }
+
+        // Blank passwords were offered to the server, and a second
+        // press while the first was still out sent it again. One
+        // rule, so the button, the Enter key and the label cannot
+        // disagree about what is allowed.
+        val ready = password.isNotBlank() && state.admin.canTry
+        val submit = {
+            if (ready) {
+                onState(state.closing(Overlay.UNLOCK))
+                onUnlock(password)
+            }
+        }
+
         Div(attrs = {
             classes("palette-scrim")
-            onClick { onState(state.closing(Overlay.UNLOCK)); password = "" }
+            onClick { close() }
+            // Escape closes it here as well as through the window's
+            // own handler, and stops there: left to bubble it would
+            // pop a second overlay out from underneath this one.
+            onKeyDown {
+                if (it.key == "Escape") {
+                    it.stopPropagation()
+                    close()
+                }
+            }
         }) {
             // `panel-head` and `panel-body`, the same as every other
             // dialog. Loose children of `.palette` get no padding at
@@ -278,25 +328,30 @@ fun AppShell(
                     Input(type = InputType.Password) {
                         classes("field")
                         placeholder("Password")
+                        // A property, never an attribute. Anything on
+                        // the page can read the DOM, and a password
+                        // has no business being in it twice.
                         value(password)
                         onInput { password = it.value }
+                        // A one-field form answers to Enter. Typing a
+                        // password and having nothing happen is how
+                        // you end up typing it a second time.
+                        onKeyDown {
+                            if (it.key == "Enter") {
+                                it.preventDefault()
+                                submit()
+                            }
+                        }
                     }
                     Div(attrs = { classes("flex-wrap") }) {
                         Button(attrs = {
                             classes("btn", "primary")
-                            // Blank passwords were offered to the
-                            // server, and a second press while the
-                            // first was still out sent it again.
-                            if (password.isBlank() || !state.admin.canTry) disabled()
-                            onClick {
-                                onState(state.closing(Overlay.UNLOCK))
-                                onUnlock(password)
-                                password = ""
-                            }
+                            if (!ready) disabled()
+                            onClick { submit() }
                         }) { Text(if (state.admin.trying) "Unlocking…" else "Unlock") }
                         Button(attrs = {
                             classes("btn", "ghost")
-                            onClick { onState(state.closing(Overlay.UNLOCK)); password = "" }
+                            onClick { close() }
                         }) { Text("Cancel") }
                     }
                 }
