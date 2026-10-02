@@ -35,21 +35,62 @@ data class PaletteState(
     /** Closing empties it, so it never reopens showing a stale answer. */
     fun closed() = PaletteState()
 
-    fun typed(text: String) = copy(term = text, active = 0)
+    /**
+     * A keystroke.
+     *
+     * Falling back under the minimum empties the list as well as the
+     * box. Deleting down to one character used to leave the previous
+     * answer sitting there under a term that was never asked about,
+     * which reads as a list that has stopped responding.
+     */
+    fun typed(text: String): PaletteState {
+        val worth = text.trim().length >= MIN
+        return copy(
+            term = text,
+            items = if (worth) items else emptyList(),
+            active = 0,
+            busy = worth,
+        )
+    }
 
-    fun found(rows: List<Found>) = copy(items = rows, active = 0, busy = false)
+    /**
+     * An answer from the server.
+     *
+     * `forTerm` is the term that was asked about. A slow answer to a
+     * term that has since been typed over is dropped rather than
+     * shown: the request is debounced and cancelled upstream, but a
+     * cancel that loses the race still delivers, and the row list
+     * then disagreed with the box above it.
+     */
+    fun found(rows: List<Found>, forTerm: String = term): PaletteState =
+        if (forTerm.trim() != term.trim()) this
+        else copy(items = rows.take(LIMIT), active = 0, busy = false)
 
+    /**
+     * The highlight stops at both ends rather than wrapping. The
+     * palette is a short list you scan, and wrapping past the end
+     * reads as a bug.
+     */
     fun down() = if (items.isEmpty()) this else copy(active = minOf(items.size - 1, active + 1))
     fun up() = if (items.isEmpty()) this else copy(active = maxOf(0, active - 1))
     fun highlight(i: Int) = if (i in items.indices) copy(active = i) else this
 
-    /** Worth a round trip. Anything blank would match the whole table. */
-    val worthAsking: Boolean get() = term.isNotBlank()
+    /**
+     * Worth a round trip.
+     *
+     * Blank would match the whole table, and one character matches
+     * most of it — twelve rows chosen by name length out of forty
+     * thousand is not an answer to anything.
+     */
+    val worthAsking: Boolean get() = term.trim().length >= MIN
 
     fun query(): Sql = PaletteQueries.find(term)
 
     companion object {
         const val LIMIT = 12
+
+        /** Characters before it is worth asking. The same as autocomplete. */
+        const val MIN = 2
     }
 }
 
@@ -59,13 +100,23 @@ object PaletteQueries {
      * Shortest name first: typing "bolt" should offer Lightning Bolt
      * before Bolt Bend, and length is a better proxy for that than
      * anything the database knows.
+     *
+     * One pattern, bound once per column. Three separate LIKEs rather
+     * than the filter panel's concatenated haystack because this is a
+     * substring match on the whole typed string, spaces and all —
+     * joining the columns with a space would let "bolt chain" match
+     * the end of one face and the start of the next.
      */
     fun find(term: String): Sql {
-        val like = "%" + term.trim().lowercase() + "%"
+        // The filter panel's escaping, so `%`, `_` and `\` are the
+        // characters somebody typed rather than LIKE's own wildcards.
+        val like = Clauses().like(term.trim())
         return Sql(
             """SELECT MIN(id) AS id, name, scryfall_id, type_line, SUM(qty) AS qty, owner
                  FROM cards
-                WHERE name_norm LIKE ? OR lower(face1) LIKE ? OR lower(face2) LIKE ?
+                WHERE name_norm LIKE ? ESCAPE '\'
+                   OR lower(face1) LIKE ? ESCAPE '\'
+                   OR lower(face2) LIKE ? ESCAPE '\'
                 GROUP BY owner, name_norm
                 ORDER BY length(name), name
                 LIMIT ${PaletteState.LIMIT}""",
