@@ -159,6 +159,32 @@ class MtgApi internal constructor(
     }
 
     /** Create a deck, pulling from bulk and buying what bulk cannot cover. */
+    @Serializable
+    private data class RenameDeckRequest(
+        val slug: String,
+        val name: String,
+        @SerialName("dry_run") val dryRun: Boolean = false,
+    )
+
+    @Serializable
+    data class Renamed(
+        val renamed: Boolean = false,
+        val slug: String = "",
+        val name: String = "",
+        val was: String = "",
+    )
+
+    /** Rename a deck. The slug moves with the name. */
+    suspend fun renameDeck(token: String, slug: String, name: String): Renamed {
+        val res = http.post("$base/decks/rename") {
+            contentType(ContentType.Application.Json)
+            header("Authorization", "Bearer $token")
+            header(Idempotency.HEADER, Idempotency.key())
+            setBody(RenameDeckRequest(slug, name))
+        }
+        return res.decode()
+    }
+
     suspend fun createDeck(
         token: String,
         name: String,

@@ -35,6 +35,8 @@ fun DecksPage(
     onNew: () -> Unit = {},
     onEdit: (Deck) -> Unit = {},
     onDisassemble: (Deck) -> Unit = {},
+    /** Rename the open deck. The slug moves with the name. */
+    onRename: (Deck) -> Unit = {},
     onOpenCard: (DeckCard, String) -> Unit = { _, _ -> },
     /** Maintenance, one card at a time, without leaving the page. */
     onAddCard: () -> Unit = {},
@@ -89,6 +91,10 @@ fun DecksPage(
                         classes("btn", "sm")
                         onClick { onEdit(open) }
                     }) { Text("Edit list") }
+                    Button(attrs = {
+                        classes("btn", "sm")
+                        onClick { onRename(open) }
+                    }) { Text("Rename") }
                     Button(attrs = {
                         classes("btn", "sm", "danger")
                         onClick { onDisassemble(open) }

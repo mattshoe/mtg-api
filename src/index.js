@@ -24,7 +24,7 @@ import { getSchema } from './schema.js';
 import { runQuery, mayWrite, stripLiterals, isOverloaded } from './query.js';
 import { validateNames } from './validate.js';
 import { addCards, removeCards } from './cards.js';
-import { disassembleDeck, editDeckList, createDeck, FORMATS } from './decks.js';
+import { disassembleDeck, editDeckList, createDeck, renameDeck, FORMATS } from './decks.js';
 import { mintToken, verifyToken, bearer } from './admin.js';
 import { lookupPrices } from './prices.js';
 import { runMaintenance, CRON_TASKS } from './maintenance.js';
@@ -126,6 +126,7 @@ const INDEX = {
     'POST /cards/validate': '{"list":"1 Sol Ring\\n..."} or {"names":[...]} -> which names are real, with suggestions',
     'GET /decks/formats': 'the deck formats the wizard offers',
     'POST /decks/create': '{"name":"...","format":"commander","owner":"matt","commander":"...","list":"..."} — needs admin',
+    'POST /decks/rename': '{"slug":"...","name":"New name"} — renames the deck, the slug moves with it; needs admin',
     'POST /decks/list': '{"slug":"...","list":"1 Sol Ring\\n...","dry_run":false} — replaces the deck list; needs admin',
     'POST /share': 'a share-target body in, what the server actually received back out',
     'POST /prices': '{"ids":["<scryfall id>",...]} -> {"prices":{id:{usd,foil,etched,eur,tix,tcg}}}',
@@ -219,7 +220,7 @@ export const overloaded = isOverloaded;
 /** Paths where sending the same request twice must not do the thing twice. */
 const MUTATIONS = new Set([
   '/cards/add', '/cards/remove',
-  '/decks/list', '/decks/create', '/decks/disassemble',
+  '/decks/list', '/decks/create', '/decks/disassemble', '/decks/rename',
 ]);
 
 /**
@@ -549,6 +550,24 @@ async function route(request, env, ctx, entry) {
       };
       if (r.status >= 400) entry.message = r.body?.error;
       return send(r);
+    }
+
+    if (path === '/decks/rename') {
+      if (method !== 'POST') return notAllowed('POST');
+      const v = await verifyToken(env, bearer(request));
+      if (!v.ok) return denied(v.reason);
+      const { body, error } = await readJson(request);
+      if (error) return json({ error }, 400);
+      entry.admin = true;
+      entry.write = true;
+      const r = await renameDeck(env.DB, body);
+      entry.detail = {
+        slug: body?.slug || null,
+        dry_run: Boolean(body?.dry_run),
+        renamed: r.body?.renamed,
+        to: r.body?.slug || null,
+      };
+      return json(r.body, r.status);
     }
 
     if (path === '/decks/list') {

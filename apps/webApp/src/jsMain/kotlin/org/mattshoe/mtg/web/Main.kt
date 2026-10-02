@@ -41,6 +41,7 @@ import org.mattshoe.mtg.core.Load
 import org.mattshoe.mtg.core.MtgApi
 import org.mattshoe.mtg.core.Overlay
 import org.mattshoe.mtg.core.PaletteQueries
+import org.mattshoe.mtg.core.RenameState
 import org.mattshoe.mtg.core.Route
 import org.mattshoe.mtg.core.Rows
 import org.mattshoe.mtg.core.Scryfall
@@ -318,6 +319,13 @@ object MtgApp {
                     ) { saveDeck(app) }
                 },
                 onAskDisassemble = { slug -> askDisassemble(slug) },
+                onAskRename = { slug -> askRename(slug) },
+                onSaveRename = {
+                    claim(
+                        app.rename?.canSave == true,
+                        { app.copy(rename = app.rename?.working()) },
+                    ) { renameDeck(app) }
+                },
                 onDisassemble = {
                     claim(
                         app.disassemble?.canGo == true,
@@ -1045,6 +1053,32 @@ object MtgApp {
                 .say("Saved — ${plan.cardCount} cards" + if (plan.buying > 0) ", ${plan.buying} bought" else "")
         } catch (ex: ApiFailure) {
             app.copy(deckEdit = app.deckEdit?.failed(ex.message ?: "that did not work"))
+        }
+    }
+
+    private fun askRename(slug: String) {
+        val deck = app.decks.decks.firstOrNull { it.slug == slug } ?: return
+        app = app.copy(rename = RenameState(slug = deck.slug, was = deck.name))
+            .opening(Overlay.RENAME)
+    }
+
+    /**
+     * Write the new name, then follow the deck to its new address.
+     *
+     * The slug moves with the name, so staying where we are would
+     * leave the page pointing at a deck that is no longer there.
+     */
+    private suspend fun renameDeck(s: AppState): AppState {
+        val r = s.rename ?: return app
+        return try {
+            val done = api.renameDeck(token(), r.slug, r.name.trim())
+            app = app.copy(rename = app.rename?.finished())
+            loadDecks()
+                .closing(Overlay.RENAME)
+                .navigate(Route(View.DECKS, done.slug))
+                .say("Renamed to ${done.name}")
+        } catch (ex: ApiFailure) {
+            app.copy(rename = app.rename?.failed(ex.message ?: "that did not work"))
         }
     }
 

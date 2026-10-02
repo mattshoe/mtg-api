@@ -27,6 +27,7 @@ data class AppState(
     /** One card being added, swapped, counted or taken out. */
     val deckTweak: DeckTweak? = null,
     val disassemble: DisassembleState? = null,
+    val rename: RenameState? = null,
     /** What is on top, and therefore what back closes. */
     val overlays: Overlays = Overlays(),
     /** Set when a share arrived and has not been used yet. */
@@ -186,6 +187,7 @@ data class AppState(
         Overlay.DECK_TWEAK -> copy(deckTweak = null)
         Overlay.DISASSEMBLE -> copy(disassemble = null)
         Overlay.NEW_DECK -> copy(newDeck = NewDeck())
+        Overlay.RENAME -> copy(rename = null)
         Overlay.CHEATSHEET, Overlay.UNLOCK -> this
     }
 

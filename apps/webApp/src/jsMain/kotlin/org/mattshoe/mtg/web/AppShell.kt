@@ -78,6 +78,10 @@ fun AppShell(
     onReviewDeck: () -> Unit = {},
     onSaveDeck: () -> Unit = {},
     onAskDisassemble: (String) -> Unit = {},
+    /** Open the rename box for a deck. */
+    onAskRename: (String) -> Unit = {},
+    /** Write the new name. */
+    onSaveRename: () -> Unit = {},
     onDisassemble: () -> Unit = {},
     onCheckNames: () -> Unit = {},
     onCreateDeck: () -> Unit = {},
@@ -139,6 +143,7 @@ fun AppShell(
             admin = state.admin.unlocked,
             onNew = { onState(state.opening(Overlay.NEW_DECK)) },
             onEdit = { onEditDeck(it.slug) },
+            onRename = { onAskRename(it.slug) },
             onDisassemble = { onAskDisassemble(it.slug) },
             onOpenCard = { card, owner -> onOpenNamed(card.name, card.nameNorm, owner) },
             onShare = onShareDeck,
@@ -256,6 +261,15 @@ fun AppShell(
             onClose = { onState(state.closing(Overlay.NEW_DECK)) },
             onCommanderTyped = onCommanderTyped,
             onFiles = onDeckFiles,
+        )
+    }
+
+    state.rename?.takeIf { Overlay.RENAME in state.overlays }?.let { r ->
+        RenameDialog(
+            state = r,
+            onState = { onState(state.copy(rename = it)) },
+            onSave = onSaveRename,
+            onClose = { onState(state.closing(Overlay.RENAME)) },
         )
     }
 

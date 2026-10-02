@@ -443,6 +443,15 @@ object Inventory {
                 "namesMustBeCheckedBeforeSourcing", "aFailedCheckBlocksTheRestOfTheWizard",
                 "editingTheListThrowsAwayTheCheck",
             )),
+        Feature(Area.DECKS, "Rename a deck, and the slug moves with it", "decks.js", logic = true, done = true,
+            tests = listOf(
+                "itOpensOnTheNameItAlreadyHas", "thereIsNothingToSaveUntilSomethingChanges",
+                "aNewNameIsSaveable", "theNewAddressIsShownBeforeAnythingIsWritten",
+                "whitespaceAloneIsNotARename", "aNameWithNothingToMakeASlugFromIsRefused",
+                "nothingIsOfferedTwiceWhileItIsBeingWritten", "norAfterItIsDone",
+                "aFailureLetsYouTryAgainWithoutLosingWhatYouTyped", "typingAgainClearsTheLastComplaint",
+                "theSlugFollowsTheSameRuleTheWizardUses", "closingItForgetsIt",
+            )),
         Feature(Area.DECKS, "A decklist whose first card is the commander", "newdeck.js", logic = true, done = true,
             tests = listOf(
                 "theFirstCardIsTheOneAPersonWouldPointAt", "commentsAndBlanksAndHeadersAreNotCards",
