@@ -443,6 +443,16 @@ object Inventory {
                 "namesMustBeCheckedBeforeSourcing", "aFailedCheckBlocksTheRestOfTheWizard",
                 "editingTheListThrowsAwayTheCheck",
             )),
+        Feature(Area.CARD, "Read a deck a card at a time, in page order", "decks.js", logic = true, done = true,
+            tests = listOf(
+                "theRunIsTheOrderThePageDraws", "whichIsBySectionAndAlphabeticalInside",
+                "aCardInTheMiddleHasOneEitherSide", "theFirstHasNothingBeforeIt",
+                "andTheLastNothingAfterIt", "itSaysWhereYouAre",
+                "aCardOpenedFromTheLibraryIsInNoRun", "norIsOneOpenedFromADeckThatIsNoLongerLoaded",
+                "aCardTheDeckDoesNotHoldHasNoPlaceInIt", "steppingThroughKeepsTheDeckBehindYou",
+                "andBackStillGoesToTheDeck", "aDeckCanBeReadOneCardAtATimeWithoutGoingBack",
+                "aCardOpenedFromTheLibraryHasNoDeckToStepThrough",
+            )),
         Feature(Area.DECKS, "Rename a deck, and the slug moves with it", "decks.js", logic = true, done = true,
             tests = listOf(
                 "itOpensOnTheNameItAlreadyHas", "thereIsNothingToSaveUntilSomethingChanges",

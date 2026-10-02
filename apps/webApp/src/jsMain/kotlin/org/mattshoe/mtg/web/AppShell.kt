@@ -168,6 +168,10 @@ fun AppShell(
             card = state.card ?: CardDetail(name = state.route.rest).loading(),
             onShare = onShare,
             onBack = { onState(state.leaveCard()) },
+            previous = state.previousCard,
+            next = state.nextCard,
+            place = state.cardPlace,
+            onStep = { c -> onOpenNamed(c.name, c.nameNorm, "") },
         )
 
         View.ENTRY -> MassEntryPage(

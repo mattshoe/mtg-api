@@ -441,6 +441,28 @@ td.mono { font-family: var(--mono); font-size: 12.5px; }
    the right height — the page used to be emptied while it waited. */
 .grid.stale { opacity: .55; transition: opacity .12s ease; }
 
+/* Previous / where you are / next, under the card. Reading a deck is
+   a hundred cards, and opening each one and coming back is three
+   gestures a card. */
+.card-steps {
+  display: grid; grid-template-columns: 1fr auto 1fr;
+  align-items: center; gap: 10px;
+  margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line);
+}
+.card-steps .btn { min-height: 44px; min-width: 0; }
+.step-prev { justify-self: start; }
+.step-next { justify-self: end; }
+.step-prev, .step-next {
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.step-place { white-space: nowrap; }
+@media (max-width: 700px) {
+  /* The names go first on a phone: the arrows and the count are what
+     has to survive, and a long card name must not push them off. */
+  .card-steps { gap: 6px; }
+  .card-steps .btn { font-size: 12px; padding-left: 8px; padding-right: 8px; }
+}
+
 /* ------------------------------------------------------------ card page */
 /* One card, as a page. It was a drawer sliding over whatever was
    underneath, which is where the scroll, back and link bugs lived. */

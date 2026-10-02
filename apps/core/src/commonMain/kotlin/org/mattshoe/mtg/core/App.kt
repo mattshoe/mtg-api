@@ -98,8 +98,35 @@ data class AppState(
     fun openCard(ref: CardRef, name: String = ref.nameNorm): AppState =
         navigate(Route(View.CARD, ref.encoded())).copy(
             card = CardDetail(name = name, nameNorm = ref.nameNorm).loading(),
-            from = route.takeIf { it.view != View.CARD },
+            // Where the *run* of cards started, not the last card.
+            // Going card to card kept overwriting this with nothing,
+            // so one step along a deck left back with nowhere to go.
+            from = if (route.view == View.CARD) from else route,
         )
+
+    /**
+     * The deck this card is being read as part of, in page order.
+     *
+     * Empty unless the card was opened from the deck that is still
+     * loaded — a card reached from the Library or a link belongs to
+     * no run and gets no next and no previous.
+     */
+    val deckRun: List<DeckCard>
+        get() {
+            val slug = from?.takeIf { it.view == View.DECKS }?.rest ?: return emptyList()
+            if (slug.isEmpty() || slug != decks.openSlug) return emptyList()
+            return decks.pageOrder
+        }
+
+    /** Where this card sits in that run, or -1 if it is not in one. */
+    val cardAt: Int
+        get() = cardRef?.nameNorm?.let { norm -> deckRun.indexOfFirst { it.nameNorm == norm } } ?: -1
+
+    val previousCard: DeckCard? get() = cardAt.takeIf { it > 0 }?.let { deckRun[it - 1] }
+    val nextCard: DeckCard? get() = cardAt.takeIf { it in 0 until deckRun.size - 1 }?.let { deckRun[it + 1] }
+
+    /** "7 of 99", for somebody halfway down a deck. */
+    val cardPlace: String? get() = cardAt.takeIf { it >= 0 }?.let { "${it + 1} of ${deckRun.size}" }
 
     /** Where the card's back button goes. The library, for a link with nothing behind it. */
     fun leaveCard(): AppState = navigate(from ?: Route(View.DEFAULT))

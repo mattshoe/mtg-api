@@ -17,6 +17,19 @@ import org.w3c.dom.events.KeyboardEvent
  */
 fun AppState.onBrowserKey(event: KeyboardEvent): AppState? {
     val tag = (event.target as? HTMLElement)?.tagName.orEmpty()
-    val typing = tag == "INPUT" || tag == "TEXTAREA" || tag == "SELECT"
+    val typing = typingInto(event)
     return onKey(event.key, typing, event.metaKey, event.ctrlKey)
+}
+
+
+/**
+ * Is this key going into a field?
+ *
+ * The arrows move a caret inside one, so nothing else may claim them
+ * there. Shared, because two places ask the same question and two
+ * copies of it would be free to disagree.
+ */
+fun typingInto(event: KeyboardEvent): Boolean {
+    val tag = (event.target as? HTMLElement)?.tagName.orEmpty()
+    return tag == "INPUT" || tag == "TEXTAREA" || tag == "SELECT"
 }
