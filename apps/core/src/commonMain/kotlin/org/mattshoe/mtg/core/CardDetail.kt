@@ -53,7 +53,42 @@ data class Legality(val format: String, val status: String) {
     val label: String get() = status.replace('_', ' ')
 }
 
-data class Ruling(val date: String, val text: String)
+/**
+ * One ruling, as Gatherer publishes it: a day and a paragraph.
+ *
+ * The date arrives as whatever the import put in `published_at` —
+ * usually an ISO day, sometimes a full timestamp, occasionally
+ * nothing at all. Reading it is the type's job rather than every
+ * screen's, so a phone and a browser cannot disagree about what a
+ * malformed date looks like.
+ */
+data class Ruling(val date: String, val text: String) {
+
+    /**
+     * The day it was published, as a plain ISO date, or "" when the
+     * stored value is not one.
+     *
+     * Blank rather than the raw string: "soon" or "0000-00-00" on
+     * the front of a ruling reads like part of the ruling, and the
+     * line is more useful with no date than with a wrong one.
+     */
+    val day: String
+        get() {
+            if (date.length < 10) return ""
+            val d = date.substring(0, 10)
+            if (!Regex("""\d{4}-\d{2}-\d{2}""").matches(d)) return ""
+            val month = d.substring(5, 7).toInt()
+            val dayOfMonth = d.substring(8, 10).toInt()
+            if (month !in 1..12 || dayOfMonth !in 1..31) return ""
+            return d
+        }
+
+    /** The ruling itself, without the whitespace the import left on it. */
+    val body: String get() = text.trim()
+
+    /** A ruling with no words in it is not a ruling. */
+    val sayable: Boolean get() = body.isNotEmpty()
+}
 
 /**
  * What one person has of a card, and how much of it is spare.
@@ -116,6 +151,21 @@ data class CardDetail(
                 )
             }.sortedWith(compareByDescending<Holding> { it.owned }.thenBy { it.owner })
         }
+
+    /**
+     * The rulings as a person should read them: oldest first, each
+     * one once, nothing blank.
+     *
+     * The query already orders by `published_at`, but the order on
+     * the screen should not depend on which of four requests the
+     * list arrived from, and the join through `oracle_id` hands back
+     * the same ruling twice for a card with two faces. Undated ones
+     * go last because there is nowhere else to put them.
+     */
+    val rulingsShown: List<Ruling>
+        get() = rulings.filter { it.sayable }
+            .distinctBy { it.day to it.body }
+            .sortedWith(compareBy({ if (it.day.isEmpty()) 1 else 0 }, { it.day }))
 
     fun loading() = copy(busy = true, error = null)
     fun failed(message: String) = copy(busy = false, error = message)
