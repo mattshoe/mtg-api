@@ -8,15 +8,17 @@ name: apps
 # pages.yml runs the fast half of this — a red test there stops the
 # site going out — and this runs all of it including the emulator.
 on:
+  # Every merge to main, whatever it touched. The path filter that
+  # used to be here meant a merge to the Worker published no APK, so
+  # the phone could sit several versions behind the site with nothing
+  # saying so. Building an app that did not change costs a few
+  # minutes; noticing six weeks later that updates quietly stopped
+  # costs more.
   push:
-    paths:
-      - 'apps/**'
-      - 'frontend/css/**'
-      - '.github/workflows/apps.yml'
-  # No path filter on a pull request. These are required checks now,
-  # and a required check that is skipped never reports — the pull
-  # request waits for it forever. Pushes still filter: there is no
-  # point building the apps for a change to the Worker.
+    branches: [main]
+  # No path filter on a pull request either. These are required
+  # checks, and a required check that is skipped never reports — the
+  # pull request waits for it forever.
   pull_request:
   workflow_dispatch:
 
