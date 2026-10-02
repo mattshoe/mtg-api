@@ -356,7 +356,12 @@ class MainActivity : ComponentActivity() {
             delay(Completion.DEBOUNCE_MS.toLong())
             try {
                 val r = api.query(PaletteQueries.find(term))
-                app = app.copy(palette = app.palette.found(PaletteQueries.decode(r.cols, r.rows)))
+                // `term` and not the current one: a slow answer to a word
+                // that has since been typed over is dropped rather than
+                // shown under what is now in the box.
+                app = app.copy(
+                    palette = app.palette.found(PaletteQueries.decode(r.cols, r.rows), term),
+                )
             } catch (e: Exception) {
                 // Typing fast. Not worth an error in a convenience.
             }
