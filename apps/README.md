@@ -35,7 +35,7 @@ No third-party dependencies at all — `HttpURLConnection` and `org.json` from
 the framework, framework views, no AndroidX, no Compose. Nothing to resolve
 and nothing to rot.
 
-    ./gradlew :app:assembleRelease
+    ./gradlew :androidApp:assembleRelease
 
 Signing comes from `~/.mtg-android.env`, which is outside the repo and holds
 the keystore path, its password and the key alias. Without that file the
@@ -52,34 +52,26 @@ Or copy the APK to the phone and open it.
 
 ## Tests
 
-Instrumented, on a real emulator, 28 of them:
+Instrumented, on a real emulator:
 
-    ./gradlew :app:connectedDebugAndroidTest
+    ./gradlew :androidApp:connectedDebugAndroidTest
 
-- `SharedListTest` — reading a real `content://` URI published to
-  MediaStore: CSV, plain decklist, several files at once, Open-with, shared
-  text, a mislabelled file, a binary file, an empty share, a 4,000 row
-  export.
-- `ShareActivityTest` — the manifest really claims a file share for every
-  MIME type ManaBox might use; the list reaches the screen; neither owner is
-  preselected; no write is reachable without a preview; a binary share says
-  what was wrong instead of going quiet.
-- `ApiTest` — the API client against a stub served from inside the test. No
-  network, no credentials. Request shape, the bearer token, `dry_run`
-  honesty, error passthrough, a 4,000 line list and a list full of commas
-  and apostrophes surviving the JSON.
+- `ScreensTest` — every screen renders, the keyboard shortcuts fire
+  only outside text fields, and nothing offers a write it has not
+  dry-run first.
 
-### Against the real API
+The bulk of what this app does is `:core` and `:core-net`, tested on
+the JVM and in a browser by `./gradlew :core:jvmTest :core:jsNodeTest`
+— the share wizard's gates, the deck rules, the SQL. The emulator is
+for the things only a device has.
 
-Dry runs only, so they resolve against Scryfall and write nothing. The token
-is passed in and never stored:
-
-    ./gradlew :app:installDebug :app:installDebugAndroidTest
-    adb shell am instrument -w \
-      -e liveToken "$(curl -s -X POST $API/admin -H 'content-type: application/json' \
-         -d "{\"password\":\"$MTG_ADMIN_PASSWORD\"}" | python3 -c 'import json,sys;print(json.load(sys.stdin)["token"])')" \
-      -e class org.mattshoe.mtg.share.LiveApiTest \
-      org.mattshoe.mtg.share.test/org.mattshoe.mtg.share.ArgRunner
+**A gap worth naming:** `MainActivity.readFiles` reads a shared
+`content://` URI and nothing tests it. The module that used to hold
+that coverage, `:app`, shared this one's `applicationId`, so it could
+never be installed alongside it and was deleted; its tests went with
+it and tested its own copy of the code, not this one. Reading a real
+share is the step a web app cannot do at all, so it is worth a test
+on the live path.
 
 ### The ManaBox stand-in
 

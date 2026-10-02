@@ -5,12 +5,14 @@ plugins {
     id("org.jetbrains.compose")
 }
 
-// The app. Not "the Compose rewrite" any more — this is what ships.
+// The app. The only one — the share-only build it replaced has been
+// deleted, having been unreachable since this took its applicationId:
+// two modules cannot both be installed under one id, so it was never
+// the rollback it was kept as, just a second copy of the icon and the
+// share intents that nothing could run.
 //
-// It carries :app's applicationId and is signed with the same key, so
-// it upgrades the share-only build in place rather than sitting next to
-// it. :app stays in the repo as the rollback: it still builds, and
-// installing its APK puts the old one back.
+// The id stays `…mtg.share` and the signing key stays the same, so an
+// install from back then still upgrades in place.
 android {
     namespace = "org.mattshoe.mtg.android"
     compileSdk = 35
