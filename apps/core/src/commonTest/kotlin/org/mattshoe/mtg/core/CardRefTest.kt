@@ -145,4 +145,11 @@ class CardRefTest {
         assertTrue(View.CARD !in Admin(token = "t").visible)
         assertTrue(Admin().reachable(View.CARD), "a link to a card must open while locked")
     }
+
+    @Test
+    fun aCardsRouteIsItsEncodedNameUnderTheCardView() {
+        val route = CardRef("nahiri: the lithomancer").route()
+        assertEquals(View.CARD, route.view)
+        assertEquals("nahiri%3A+the+lithomancer", route.rest)
+    }
 }

@@ -74,6 +74,26 @@ class EntryHistoryTest {
     }
 
     @Test
+    fun clearedIsAnEmptyHistoryRatherThanJustAnEmptyStore() {
+        val h = EntryHistory().remember(entry(1)).remember(entry(2))
+        assertTrue(h.cleared().isEmpty)
+        assertEquals(EntryHistory(), h.cleared())
+    }
+
+    @Test
+    fun aRowKnowsWhetherItWasAnAddOrARemoval() {
+        assertTrue(entry(1).copy(direction = "add").isAdd)
+        assertFalse(entry(1).copy(direction = "remove").isAdd)
+    }
+
+    @Test
+    fun aRowCanNameBackTheOwnerItWasEnteredFor() {
+        assertEquals(Owner.MATT, entry(1).copy(owner = "matt").asOwner())
+        // A row old enough to predate an owner being required at all.
+        assertNull(entry(1).copy(owner = "").asOwner())
+    }
+
+    @Test
     fun aFinishedEntryBecomesARow() {
         val done = MassEntry()
             .choose(Direction.ADD)

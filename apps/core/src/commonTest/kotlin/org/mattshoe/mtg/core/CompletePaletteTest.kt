@@ -40,6 +40,28 @@ class CompletionTest {
     }
 
     @Test
+    fun upFromTheMiddleJustStepsBackOne() {
+        // The wrap only matters off the very top. From anywhere else
+        // up is just "one sooner" — the plain decrement, not the wrap.
+        val middle = three.down().down()
+        assertEquals("Sol Ring", middle.up().highlighted)
+    }
+
+    @Test
+    fun aPointerCanJumpStraightToAnEntry() {
+        assertEquals("Sol Talisman", three.highlight(1).highlighted)
+        // Off the end of the list is not a position to jump to.
+        assertEquals(three, three.highlight(9))
+    }
+
+    @Test
+    fun closingTheListAlsoDropsTheHighlight() {
+        val shut = three.down().closed()
+        assertFalse(shut.open)
+        assertNull(shut.highlighted, "a closed list should not remember where you were")
+    }
+
+    @Test
     fun pickingPutsTheNameInTheBoxAndClosesTheList() {
         val (next, name) = three.pick(1)
         assertEquals("Sol Talisman", name)
