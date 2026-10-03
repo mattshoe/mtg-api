@@ -254,11 +254,24 @@ class ScreensTest {
         )
         content { CardSheet(detail) {} }
         rule.onNodeWithText("Sol Ring").assertIsDisplayed()
-        rule.onNodeWithText("3 owned").assertIsDisplayed()
-        rule.onNodeWithText("2 free").assertExists()
-        rule.onNodeWithText("Alela · 1× · ramp").assertExists()
+        // Twice over now, as on the website: once in the tags at the
+        // top and once on the owner's line. They used to be one
+        // run-on sentence per place, which read as text rather than
+        // as the figures they are.
+        rule.onAllNodesWithText("3 owned").onFirst().assertIsDisplayed()
+        rule.onAllNodesWithText("2 free").onFirst().assertExists()
+        // The deck row is a row now, not one joined string: the
+        // name, then whose deck it is, then how many, then the role —
+        // each its own node, as the website sets them. Joined, the
+        // owner could be dropped without this noticing.
+        rule.onNodeWithText("Alela").assertExists()
+        rule.onNodeWithText("1×").assertExists()
+        rule.onNodeWithText("ramp").assertExists()
         // A card is nobody's in particular, so the page says who has it.
-        rule.onNodeWithText("matt · 3 owned · 2 free").assertExists()
+        // Twice: once on the printing, once on the deck row. Both
+        // are the website's doing — a shared collection turns on
+        // whose copy it is, so it says so wherever a copy appears.
+        rule.onAllNodesWithText("matt").onFirst().assertExists()
     }
 
     @Test
@@ -269,7 +282,7 @@ class ScreensTest {
             usedIn = listOf(DeckUse("p", "Proxy deck", "matt", 1, null, true)),
         )
         content { CardSheet(detail) {} }
-        rule.onNodeWithText("1 free").assertExists()
+        rule.onAllNodesWithText("1 free").onFirst().assertExists()
     }
 
     // --------------------------------------------------------- overlays
