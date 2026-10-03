@@ -1,5 +1,16 @@
 package org.mattshoe.mtg.android
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.em
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -254,18 +265,21 @@ private fun ReviewStep(s: NewDeck) {
     )
     val plan = s.plan
     val adding = s.adding
-    Text(
-        "${plan.size - adding.size} from bulk · ${adding.size} added to bulk",
-        fontSize = 12.sp,
-        fontWeight = FontWeight.SemiBold,
-    )
+    // Two figures, the way the website draws them: the number big
+    // and what it counts small underneath. As one sentence it was
+    // the same words and none of the glance.
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        PlanFigure("${plan.size - adding.size}", "from bulk", Modifier.weight(1f))
+        PlanFigure("${adding.size}", "added to bulk", Modifier.weight(1f))
+    }
     // Every line, not the first two hundred of them. A list longer
     // than the cap silently lost rows off the bottom, which on the
     // one screen whose job is to say what will happen to each card is
     // the worst place to be approximate.
-    plan.forEach { line ->
-        Text("${line.qty}  ${line.name} — ${line.from.label}", fontSize = 12.sp)
-    }
+    plan.forEach { line -> PlanRow(line) }
     if (adding.isNotEmpty()) {
         Text(
             "${adding.size} card${if (adding.size == 1) "" else "s"} " +
@@ -293,5 +307,91 @@ private fun Pick(label: String, on: Boolean, click: () -> Unit) {
         // and neither is any use to somebody who cannot tell this
         // app's two greens apart — a character can be read.
         Text(if (on) "✓ $label" else label, fontSize = 12.sp)
+    }
+}
+
+
+/**
+ * One of the two figures above the list.
+ *
+ * The website gives these a cell each, a big number and a small
+ * uppercase label. They are the only part of the review anybody
+ * reads at a glance, and as a run-on sentence they were not.
+ */
+@Composable
+private fun PlanFigure(value: String, label: String, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(vertical = 9.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(value, fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
+        Text(
+            label.uppercase(),
+            fontSize = 10.sp,
+            letterSpacing = 0.07.em,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/**
+ * One card of the review: how many, what it is called, and what
+ * happens to it.
+ *
+ * The status is a tag rather than words after an em dash, and the
+ * one that adds to the collection is outlined as well as tinted —
+ * the same rule the website follows, and the reason is that hue
+ * alone is no use to the person who reads this.
+ */
+@Composable
+private fun PlanRow(line: NewDeck.Line) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
+    ) {
+        Text(
+            "${line.qty}",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(26.dp),
+            textAlign = TextAlign.End,
+        )
+        Text(
+            line.name,
+            fontSize = 13.5.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        val adding = !line.owned
+        Text(
+            line.from.label,
+            fontSize = 11.sp,
+            color = if (adding) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+            modifier = Modifier
+                .then(
+                    if (adding) {
+                        Modifier.border(
+                            1.dp,
+                            MaterialTheme.colorScheme.primary,
+                            RoundedCornerShape(99.dp),
+                        )
+                    } else {
+                        Modifier
+                    },
+                )
+                .clip(RoundedCornerShape(99.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .padding(horizontal = 8.dp, vertical = 2.dp),
+        )
     }
 }
