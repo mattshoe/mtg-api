@@ -4,6 +4,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -58,6 +59,42 @@ class DecksTest {
         val q = DeckQueries.cards("alela")
         assertEquals(listOf<Any?>("alela"), q.params)
         assertTrue(q.sql.contains("d.slug = ?"))
+    }
+
+    @Test
+    fun aDecksCardsDecodeByColumnName() {
+        val cols = listOf(
+            "name", "name_norm", "qty", "role", "owned", "type_line", "scryfall_id",
+            "mana_cost", "cmc", "produced_mana", "oracle_text", "color_identity", "rarity", "price",
+        )
+        val c = DeckQueries.decodeCards(
+            cols,
+            rows("""["Sol Ring","sol ring",1,"ramp",3,"Artifact","abc","{1}",1.0,null,"Add CC.","","uncommon",2.5]"""),
+        ).single()
+        assertEquals("Sol Ring", c.name)
+        assertEquals(1, c.qty)
+        assertEquals("ramp", c.role)
+        assertEquals(3, c.owned)
+        assertEquals("sol ring", c.nameNorm)
+        assertEquals("Artifact", c.typeLine)
+        assertEquals("abc", c.scryfallId)
+        assertEquals("{1}", c.manaCost)
+        assertEquals(1.0, c.cmc)
+        assertEquals("uncommon", c.rarity)
+        assertEquals(2.5, c.price)
+    }
+
+    @Test
+    fun aDeckCardWithNoOwnedCopiesAndNoPriceDecodesToZeroRatherThanNull() {
+        // A card the deck wants but nobody owns still has to appear in
+        // the list, with no printing to read a price or a count from.
+        val cols = listOf("name", "name_norm", "qty", "role", "owned", "cmc", "price")
+        val c = DeckQueries.decodeCards(cols, rows("""["Mana Crypt","mana crypt",1,null,null,null,null]""")).single()
+        assertEquals(0, c.owned)
+        assertEquals(1, c.qty)
+        assertNull(c.role)
+        assertNull(c.cmc)
+        assertNull(c.price)
     }
 
     @Test
@@ -310,5 +347,21 @@ class StatsTest {
     @Test
     fun anEmptyResultIsZeroesNotAnException() {
         assertEquals(Totals(), StatsQueries.decode(listOf("printings"), emptyList()))
+    }
+
+    @Test
+    fun choosingAnOwnerReplacesTheScopeAndDropsAnyStaleError() {
+        val s = StatsState(error = "network down").scopedTo(Owner.KAYLA)
+        assertEquals(Owner.KAYLA, s.scope.owner)
+        assertNull(s.error)
+        assertEquals(StatsScope(), StatsState().scopedTo(null).scope, "null is both, not a third owner")
+    }
+
+    @Test
+    fun loadedTotalsReplaceTheOldOnesAndStopTheSpinner() {
+        val s = StatsState(busy = true).loaded(Totals(printings = 100))
+        assertFalse(s.busy)
+        assertEquals(100, s.totals.printings)
+        assertNull(s.error)
     }
 }

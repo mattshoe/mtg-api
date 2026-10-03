@@ -47,4 +47,11 @@ class ShareTest {
     fun anExportGoesToOneOfTwoPlaces() {
         assertEquals(listOf("clipboard", "file"), ExportTo.entries.map { it.slug })
     }
+
+    /** A share is a link or a deck list — the other half of what the button is for. */
+    @Test
+    fun aShareIsALinkOrADeckList() {
+        assertEquals(listOf("link", "decklist"), ShareWhat.entries.map { it.slug })
+        assertEquals(listOf("Link", "Deck list"), ShareWhat.entries.map { it.label })
+    }
 }

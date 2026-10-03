@@ -83,6 +83,23 @@ class LibraryTest {
     }
 
     @Test
+    fun colorIdentityIsReadLetterByLetter() {
+        val card = Rows.cards(cols, oneRow()).single().copy(colorIdentity = "UW")
+        assertEquals(listOf("U", "W"), card.colors)
+        assertEquals(emptyList(), Rows.cards(cols, oneRow()).single().copy(colorIdentity = null).colors)
+    }
+
+    /** A value with some copies unpriced is a floor, and the screen says so. */
+    @Test
+    fun aValueIsPartialOnlyWhenSomeCopiesHaveNoPrice() {
+        val card = Rows.cards(cols, oneRow()).single()
+        assertFalse(card.copy(unpriced = 0, value = 7.5).valueIsPartial)
+        assertTrue(card.copy(unpriced = 1, value = 7.5).valueIsPartial)
+        // Nothing priced at all is not a partial total either.
+        assertFalse(card.copy(unpriced = 1, value = null).valueIsPartial)
+    }
+
+    @Test
     fun aCountQueryDecodesToOneNumber() {
         assertEquals(6607, Rows.count(rowsOf("[6607]")))
         assertEquals(0, Rows.count(emptyList()))
@@ -113,6 +130,13 @@ class LibraryTest {
     }
 
     @Test
+    fun theShownLabelMatchesTheRangeUnlessThereIsNothing() {
+        val s = Library(total = 6607, filters = Filters(page = 2))
+        assertEquals("101–200 of 6607", s.showingLabel)
+        assertEquals("No cards", Library(total = 0).showingLabel)
+    }
+
+    @Test
     fun nextAndPreviousStopAtTheEnds() {
         val first = Library(total = 250)
         assertFalse(first.hasPrev)
@@ -136,6 +160,18 @@ class LibraryTest {
     fun changingAFilterReturnsToPageOne() {
         val deep = Library(total = 6607, filters = Filters(page = 40))
         assertEquals(1, deep.where(deep.filters.copy(q = "bolt")).page)
+    }
+
+    @Test
+    fun pickingFromADropdownLeavesTheDirectionAlone() {
+        // sortedBy is for a dropdown: picking "Price" twice in a row
+        // must not quietly reverse it the way the button's sortBy does.
+        val s = Library(filters = Filters(sort = Sort.NAME, descending = false)).sortedBy(Sort.CMC)
+        assertEquals(Sort.CMC, s.filters.sort)
+        assertFalse(s.filters.descending)
+        // Picking the very same column again still does not flip it.
+        assertFalse(s.sortedBy(Sort.CMC).filters.descending)
+        assertEquals(1, s.page, "changing the sort is a filter change too")
     }
 
     @Test
@@ -165,6 +201,20 @@ class LibraryTest {
         assertFalse(Library().loading().isEmpty)
         assertFalse(Library().failed("nope").isEmpty)
         assertTrue(Library().loaded(emptyList(), 0).isEmpty)
+    }
+
+    /**
+     * `fresh` is what decides whether coming back to the Library has
+     * to ask again or can just show what is already on screen. Rows
+     * loaded for a different filter, or sat behind an error, are not
+     * fresh even though they are not empty either.
+     */
+    @Test
+    fun freshMeansTheRowsOnScreenAnswerTheFilterOnScreen() {
+        val loaded = Library(filters = Filters(q = "bolt")).loaded(emptyList(), 0)
+        assertTrue(loaded.fresh)
+        assertFalse(loaded.where(Filters(q = "sol")).fresh, "the filter moved on but the rows have not")
+        assertFalse(loaded.failed("HTTP 500").fresh, "an error is not a fresh answer")
     }
 
     @Test
