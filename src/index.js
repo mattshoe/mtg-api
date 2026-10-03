@@ -25,6 +25,7 @@ import { runQuery, mayWrite, stripLiterals, isOverloaded } from './query.js';
 import { validateNames } from './validate.js';
 import { addCards, removeCards } from './cards.js';
 import { disassembleDeck, editDeckList, createDeck, renameDeck, FORMATS } from './decks.js';
+import { deckPreview, cardPreview } from './preview.js';
 import { mintToken, verifyToken, bearer } from './admin.js';
 import { lookupPrices } from './prices.js';
 import { runMaintenance, CRON_TASKS } from './maintenance.js';
@@ -126,6 +127,8 @@ const INDEX = {
     'POST /cards/validate': '{"list":"1 Sol Ring\\n..."} or {"names":[...]} -> which names are real, with suggestions',
     'GET /decks/formats': 'the deck formats the wizard offers',
     'POST /decks/create': '{"name":"...","format":"commander","owner":"matt","commander":"...","list":"..."} — needs admin',
+    'GET /s/deck/:slug': 'a shareable link to a deck, with a preview Discord and Slack can read',
+    'GET /s/card/:name': 'the same for one card',
     'POST /decks/rename': '{"slug":"...","name":"New name"} — renames the deck, the slug moves with it; needs admin',
     'POST /decks/list': '{"slug":"...","list":"1 Sol Ring\\n...","dry_run":false} — replaces the deck list; needs admin',
     'POST /share': 'a share-target body in, what the server actually received back out',
@@ -550,6 +553,19 @@ async function route(request, env, ctx, entry) {
       };
       if (r.status >= 400) entry.message = r.body?.error;
       return send(r);
+    }
+
+    // Link previews. `/s/...` rather than the app's own hash URLs,
+    // because a fragment never reaches a server, so a crawler asking
+    // for a shared deck gets the index page and nothing about it.
+    if (path.startsWith('/s/deck/')) {
+      if (method !== 'GET') return notAllowed('GET');
+      return deckPreview(env.DB, decodeURIComponent(path.slice('/s/deck/'.length)));
+    }
+
+    if (path.startsWith('/s/card/')) {
+      if (method !== 'GET') return notAllowed('GET');
+      return cardPreview(env.DB, decodeURIComponent(path.slice('/s/card/'.length)).toLowerCase());
     }
 
     if (path === '/decks/rename') {

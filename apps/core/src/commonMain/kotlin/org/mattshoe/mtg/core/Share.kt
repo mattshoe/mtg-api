@@ -11,8 +11,48 @@ object Share {
 
     const val SITE = "https://mtg.mattshoe.org/"
 
-    /** The whole address, not the fragment. A hash on its own is not a link. */
-    fun link(state: AppState): String = SITE + state.hash()
+    /**
+     * Where a link somebody else opens is served from.
+     *
+     * Not the site: the site routes on a hash, and a fragment is
+     * never sent to a server, so Discord and Slack ask for `/` and
+     * unfurl the same bare page whatever was shared. These addresses
+     * name the deck or the card in the path, so there is something
+     * to answer with — real Open Graph tags, then a redirect into the
+     * app for whoever clicks.
+     */
+    const val PREVIEW = "https://mtg-api.mattshoe81.workers.dev"
+
+    /**
+     * The whole address, not the fragment. A hash on its own is not a
+     * link.
+     *
+     * A deck or a card gets its previewable address; anything else
+     * has nothing per-page to say, so it stays the plain site link.
+     */
+    fun link(state: AppState): String {
+        val deck = state.route.takeIf { it.view == View.DECKS }?.rest?.takeIf { it.isNotEmpty() }
+        if (deck != null) return "$PREVIEW/s/deck/${encode(deck)}"
+        state.cardRef?.let { return "$PREVIEW/s/card/${encode(it.nameNorm)}" }
+        return SITE + state.hash()
+    }
+
+    /** Percent-encoding, for the handful of characters a name can carry. */
+    private fun encode(raw: String): String = buildString {
+        raw.forEach { c ->
+            when {
+                // ASCII only. `isLetterOrDigit` is true of 'ö' and
+                // every other letter in the world, which would walk
+                // straight into the URL unencoded.
+                c in 'a'..'z' || c in 'A'..'Z' || c in '0'..'9' || c in "-_.~" -> append(c)
+                else -> c.toString().encodeToByteArray().forEach { b ->
+                    append('%')
+                    append(((b.toInt() and 0xFF) shr 4).toString(16).uppercase())
+                    append((b.toInt() and 0x0F).toString(16).uppercase())
+                }
+            }
+        }
+    }
 
     /** What a share sheet puts above it. */
     fun title(state: AppState): String = when {

@@ -443,6 +443,13 @@ object Inventory {
                 "namesMustBeCheckedBeforeSourcing", "aFailedCheckBlocksTheRestOfTheWizard",
                 "editingTheListThrowsAwayTheCheck",
             )),
+        Feature(Area.SHARE, "A shared link previews as the thing it points at", "preview.js", logic = true, done = true,
+            tests = listOf(
+                "aDeckLinkNamesTheDeckWhereAServerCanSeeIt", "aCardLinkDoesTheSame",
+                "anythingElseIsStillJustTheSite", "theDeckListItselfIsNotADeck",
+                "aNameWithPunctuationSurvivesTheUrl", "andSoDoesAnApostrophe",
+                "aNonAsciiNameIsEncodedAsUtf8",
+            )),
         Feature(Area.CARD, "Read a deck a card at a time, in page order", "decks.js", logic = true, done = true,
             tests = listOf(
                 "theRunIsTheOrderThePageDraws", "whichIsBySectionAndAlphabeticalInside",
