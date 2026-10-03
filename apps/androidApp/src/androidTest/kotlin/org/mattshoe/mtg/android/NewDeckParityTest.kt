@@ -1,27 +1,28 @@
 package org.mattshoe.mtg.android
 
-import android.graphics.Bitmap
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.assertAny
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onSiblings
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.After
 import org.junit.Rule
 import org.junit.Test
@@ -33,8 +34,6 @@ import org.mattshoe.mtg.core.NameCheck
 import org.mattshoe.mtg.core.NewDeck
 import org.mattshoe.mtg.core.Owner
 import org.mattshoe.mtg.core.Validation
-import java.io.File
-import java.io.FileOutputStream
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.test.fail
@@ -95,7 +94,12 @@ class NewDeckParityTest {
      * exactly like a real failure and is not one.
      */
     private fun content(body: @Composable () -> Unit) {
-        rule.setContent { MaterialTheme(colorScheme = darkColorScheme()) { Surface { body() } } }
+        // `MtgTheme`, not Material's own dark scheme. The screenshots
+        // are the only evidence anybody has that this looks like the
+        // website, and under `darkColorScheme()` every one of them
+        // came back in Material's default purple — a picture of a
+        // screen the app never shows.
+        rule.setContent { MtgTheme { body() } }
         rule.waitForIdle()
         rule.waitUntil(timeoutMillis = 10_000) {
             rule.onAllNodes(hasClickAction()).fetchSemanticsNodes().isNotEmpty()
@@ -164,23 +168,43 @@ class NewDeckParityTest {
 
     private fun tap(text: String) = rule.onNodeWithText(text).performScrollTo().performClick()
 
+    /** The one node whose own text is exactly this, ignoring merging. */
+    private fun node(text: String): SemanticsNodeInteraction =
+        rule.onNode(hasText(text), useUnmergedTree = true)
+
+    /**
+     * These words, and these, sitting in one row of the layout.
+     *
+     * The web draws the review as cells — `.tally-cell` is a figure
+     * and its label, `.plan-row` is a quantity, a name and a tag —
+     * and a flat check that the words are all somewhere on the
+     * screen passes just as happily when they have been glued into
+     * one sentence. Siblings is the difference between the two.
+     */
+    private fun grouped(what: String, anchor: String, vararg withIt: String) =
+        fact("$what — \"$anchor\" should sit in a row with ${withIt.joinToString(", ")}") {
+            val row = node(anchor).onSiblings()
+            withIt.forEach { row.assertAny(hasText(it)) }
+        }
+
     // ------------------------------------------------------- screenshots
 
     private val shots = mutableListOf<String>()
 
-    /** A picture of the step, named, on the device's own storage. */
+    /**
+     * A picture of the step, named, on the device's own storage.
+     *
+     * The dialog's own window, through the shared kit, rather than
+     * the whole device through `uiAutomation`. A full-screen grab is
+     * a picture of whatever else the emulator is doing: on a box
+     * running five of them an "isn't responding" dialog sat over the
+     * middle of every shot in the last run, and two came back with
+     * nothing of the wizard in them at all.
+     */
     private fun shoot(name: String) {
         rule.waitForIdle()
         val out = runCatching {
-            val instr = InstrumentationRegistry.getInstrumentation()
-            val bmp: Bitmap = instr.uiAutomation.takeScreenshot()
-                ?: error("the screenshot came back empty")
-            val ctx = instr.targetContext
-            val dir = File(ctx.getExternalFilesDir(null) ?: ctx.filesDir, "parity")
-            dir.mkdirs()
-            val file = File(dir, "newdeck-$name.png")
-            FileOutputStream(file).use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
-            file.absolutePath
+            with(Parity) { rule.onNode(isDialog()).shoot("newdeck-$name").absolutePath }
         }
         shots += out.getOrElse { "newdeck-$name.png FAILED: ${it.message}" }
     }
@@ -222,6 +246,15 @@ class NewDeckParityTest {
         fact("an unreachable step is disabled, not missing") {
             rule.onNodeWithText("2 Whose").assertIsNotEnabled()
         }
+        // `.step.on`. Seven identical pills said nothing about where
+        // you were, and the one thing that did was the title.
+        fact("the stepper marks the step you are on") {
+            rule.onNodeWithText("1 Format").assertIsSelected()
+        }
+        fact("and marks no other") {
+            rule.onNodeWithText("2 Whose").assertIsNotSelected()
+            rule.onNodeWithText("3 Name").assertIsNotSelected()
+        }
         // No commander step until a format that wants one is picked,
         // so Cards is the fourth step rather than the fifth.
         shown("no commander step before a format is chosen", "4 Cards")
@@ -231,6 +264,11 @@ class NewDeckParityTest {
         tap("Commander")
         fact("the chosen format is marked with a tick, not a colour") {
             assertTrue(says("✓ Commander"), "it says: ${words()}")
+        }
+        // `aria-pressed`, which the web sets on every one of these.
+        fact("and the choice is announced, not only drawn") {
+            rule.onNodeWithText("✓ Commander").assertIsSelected()
+            rule.onNodeWithText("Standard").assertIsNotSelected()
         }
         fact("choosing a format arms Continue") {
             rule.onNodeWithText("Continue →").assertIsEnabled()
@@ -423,14 +461,22 @@ class NewDeckParityTest {
 
     @Test
     fun aFailedCheckOffersTheSpellingAndFixesTheCommander() {
+        // Two of them, not one. With a single bad name the old screen
+        // joined the list with ", " and the join never showed, so
+        // "which one" passed against a line that glues every unknown
+        // name into one run of prose the moment there are two.
         val bad = Validation(
             ok = false,
-            checked = 2,
-            unknown = 1,
+            checked = 3,
+            unknown = 2,
             cards = listOf(
                 NameCheck(
                     name = "Kardur Doomscourge", nameNorm = "kardur doomscourge",
                     ok = false, suggestion = "Kardur, Doomscourge",
+                ),
+                NameCheck(
+                    name = "Sol Rng", nameNorm = "sol rng",
+                    ok = false, suggestion = "Sol Ring",
                 ),
             ),
         )
@@ -438,8 +484,12 @@ class NewDeckParityTest {
             named().setCommander("Kardur Doomscourge").type(list).validated(bad)
                 .copy(step = DeckStep.CHECK),
         )
-        shown("how many did not land", "1 not found")
+        shown("how many did not land", "2 not found")
+        // `.chips`: a chip each, so the name you have to find is in
+        // its own box rather than in the middle of a sentence.
         shown("which one", "Kardur Doomscourge")
+        shown("and the other one", "Sol Rng")
+        nowhere("the unknown names are not run together", "Kardur Doomscourge, Sol Rng")
         shown("what to do about it", "Tap one to use it")
         shown("the spelling on offer", "Kardur Doomscourge → Kardur, Doomscourge")
         fact("a failed check goes no further") {
@@ -467,11 +517,23 @@ class NewDeckParityTest {
 
         shown("the title names the step", "New deck · Review")
         shown("what is being made", "Commander · Matt · 2 cards · Alela, Cunning Conqueror")
-        shown("the tally", "1 from bulk · 1 added to bulk")
+        // The tally is two figures, the way `.tally-cell` draws them:
+        // the count big and what it counts small and uppercase under
+        // it, each pair in its own cell. Written out as the sentence
+        // "1 from bulk · 1 added to bulk" the words were all there
+        // and the glance was not, and no assertion noticed.
+        shown("the first figure is labelled", "FROM BULK")
+        shown("the second figure is labelled", "ADDED TO BULK")
+        grouped("the figure from bulk", "FROM BULK", "1")
+        grouped("the figure added to bulk", "ADDED TO BULK", "1")
+        nowhere("the tally is not a sentence", "1 from bulk · 1 added to bulk")
         // One line per card: the quantity, the name as it was written,
-        // and what will happen to it. Nothing to choose.
-        shown("the card the collection holds", "1  Sol Ring — From bulk")
-        shown("the card it does not", "1  Arcane Signet — Add to bulk")
+        // and a tag for what will happen to it. Three cells of a
+        // `.plan-row`, not one line of prose with an em dash in it.
+        grouped("the card the collection holds", "Sol Ring", "1", "From bulk")
+        grouped("the card it does not", "Arcane Signet", "1", "Add to bulk")
+        nowhere("a held card is not a sentence", "Sol Ring — From bulk")
+        nowhere("an added card is not a sentence", "Arcane Signet — Add to bulk")
         shown("and what that means", "1 card the collection does not hold yet will be added to bulk.")
         fact("no per-card source buttons") {
             val pickers = rule.onAllNodes(
