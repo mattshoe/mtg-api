@@ -194,6 +194,36 @@ h3 { font-size: 14px; }
    edge while their options read down the near one. */
 .app-menu.from-right { left: auto; right: 0; }
 
+/* A header menu, narrow, with buttons after it.
+ *
+ * `from-right` keeps a menu on screen only while its button is at the
+ * right edge. On the deck page unlocked, "Edit list", "Rename" and
+ * "Disassemble" follow the share button and push it inward, and the
+ * menu hung off its right edge ran clean off the left of the phone —
+ * the first two options were sliced in half and the third was gone.
+ *
+ * Narrow enough that the button cannot be trusted to sit anywhere in
+ * particular, the menu stops hanging off the button and spans the
+ * header instead, which cannot be off screen because the header is
+ * not. A container query rather than `@media`, so it keys on the
+ * width of the page the header is in — the one a layout test can set,
+ * and the one that is actually too narrow when the window is wide and
+ * the content column is not.
+ *
+ * `position: relative` is load-bearing: `container-type` does not
+ * make the header a containing block on its own, so without it the
+ * unanchored menu went out to the edges of the viewport instead. The
+ * layout test did not catch that either, because its mount frame is
+ * absolutely positioned and stood in for the containing block the
+ * real page has not got. */
+.page-head { container-type: inline-size; position: relative; }
+@container (max-width: 700px) {
+  /* So the menu measures against the header, not the button. */
+  .page-head .menu-anchor { position: static; }
+  .page-head .app-menu,
+  .page-head .app-menu.from-right { left: 0; right: 0; }
+}
+
 /* Something with a menu hanging off it. The nav is one; the deck's
    share button is the other, and it opens from the right edge so a
    menu in a header does not run off the side of a phone. */

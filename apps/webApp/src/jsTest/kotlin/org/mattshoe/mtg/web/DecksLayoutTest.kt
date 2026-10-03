@@ -369,15 +369,75 @@ class DecksLayoutTest {
         assertTrue(frame.all("div.app-menu.open").isEmpty(), "the menu is stuck open")
     }
 
+    /**
+     * The menu, on a phone, with the admin buttons beside it.
+     *
+     * This passed for weeks while the menu was visibly cut off on
+     * Matt's phone, because it rendered the deck locked: with no "Edit
+     * list", "Rename" or "Disassemble" after it the share button sits
+     * flush against the right edge, which is the one position a menu
+     * hanging off its right edge cannot overflow from. Unlocked, those
+     * three push the button inward and the menu ran off the left.
+     *
+     * Both widths, because the fix is a width rule and a rule that
+     * only ever runs one way is half untested.
+     */
+    /**
+     * Like `mount`, but not a containing block.
+     *
+     * `mount` positions its frame absolutely so the mounts do not
+     * stack, and that quietly stood in for the containing block the
+     * real page does not have: an absolutely positioned menu resolved
+     * against the 400px frame instead of the viewport, so a rule that
+     * sent the menu to the viewport's edges measured as if it had gone
+     * to the page's. That is the shape of the bug being fixed here, so
+     * this test cannot use a harness that hides it.
+     */
+    private fun column(width: Int, block: @androidx.compose.runtime.Composable () -> Unit): HTMLElement {
+        val frame = document.createElement("div") as HTMLElement
+        frame.style.width = "${width}px"
+        document.body!!.appendChild(frame)
+        roots += frame
+        renderComposable(root = frame) { block() }
+        return frame
+    }
+
+    @Test
+    fun theShareMenuStaysOnScreenWithTheAdminButtonsBesideIt() = runTest {
+        listOf(360, 400, 700, 1000).forEach { width ->
+            val frame = column(width) { DecksPage(opened(), {}, {}, admin = true) }
+            settle()
+            if (!Stylesheet.applied()) return@runTest
+            frame.all("button[aria-label='Share this deck']").first().click()
+            settle()
+            val menu = frame.all("div.app-menu.open").first().getBoundingClientRect()
+            val page = frame.getBoundingClientRect()
+            assertTrue(
+                menu.width > 0 && menu.height > 0,
+                "at ${width}px the menu has no size, so this measures nothing",
+            )
+            assertTrue(
+                menu.right <= page.right + 1,
+                "at ${width}px the menu runs off the right: ${menu.right} > ${page.right}",
+            )
+            assertTrue(
+                menu.left >= page.left - 1,
+                "at ${width}px the menu runs off the left: ${menu.left} < ${page.left}",
+            )
+        }
+    }
+
+    /** Locked, the same. The old test only ever covered this one. */
     @Test
     fun theShareMenuStaysOnScreenAtPhoneWidth() = runTest {
-        val frame = mount(400) { DecksPage(opened(), {}, {}) }
+        val frame = column(400) { DecksPage(opened(), {}, {}) }
         settle()
         if (!Stylesheet.applied()) return@runTest
         frame.all("button[aria-label='Share this deck']").first().click()
         settle()
         val menu = frame.all("div.app-menu.open").first().getBoundingClientRect()
         val page = frame.getBoundingClientRect()
+        assertTrue(menu.width > 0, "the menu has no size, so this measures nothing")
         assertTrue(menu.right <= page.right + 1, "the menu runs off the right: ${menu.right} > ${page.right}")
         assertTrue(menu.left >= page.left - 1, "the menu runs off the left")
     }
