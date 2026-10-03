@@ -412,7 +412,18 @@ class MassEntryParityTest {
             },
             fact("each row says which printing") { says("FRA 1") },
             fact("a printing nobody owned says so in a word, not a colour") {
-                says("FRA 2 · new")
+                says("FRA 2") && says("new")
+            },
+            // The web puts "new" in a tag of its own beside the set
+            // code. This read "FRA 2 · new" — one grey run-on string
+            // with the same words in it and none of the structure,
+            // which is how it passed the sentence above while looking
+            // nothing like the website.
+            fact("what is true of a printing is a tag, not glued onto the set code") {
+                !says("·", substring = true)
+            },
+            fact("a tag apiece, for the two printings nobody owned") {
+                howMany("new") == 2
             },
             fact("how many moved is a signed number, not a colour") { says("+2") },
             fact("and where it ended up") { says("1 → 3") && says("0 → 1") },
@@ -435,10 +446,10 @@ class MassEntryParityTest {
         Parity.check(
             fact("the loss is a signed number") { says("-1") },
             fact("and where it ended up") { says("1 → 0") },
-            fact("the collection having none left is said in words") {
-                says("last one", substring = true)
+            fact("the collection having none left is said in words, in a tag of its own") {
+                says("last one")
             },
-            fact("a printing that went away is not also called new") { !says("· new", substring = true) },
+            fact("a printing that went away is not also called new") { !says("new") },
             fact("one printing, singular, the way the website counts it") {
                 says("PRINTING") && says("COPY")
             },
