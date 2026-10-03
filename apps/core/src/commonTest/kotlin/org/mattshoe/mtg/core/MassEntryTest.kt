@@ -197,6 +197,55 @@ class MassEntryTest {
         val s = MassEntry().type("1 Sol Ring").finished(Applied(applied = true, resolved = 1))
         assertFalse(s.unsaved)
     }
+
+    // -------------------------------------------- DONE, which nothing
+    // above happens to reach on its own.
+
+    @Test
+    fun doneIsOnlyReachableOnceAResultHasActuallyComeBack() {
+        val ready = MassEntry().choose(Direction.ADD).type(listOfTwo).assign(Owner.MATT)
+            .previewed(Applied(dryRun = true, changes = listOf(change())))
+        assertFalse(ready.reachable(Step.DONE), "nothing has been applied yet")
+
+        val done = ready.finished(Applied(applied = true, changes = listOf(change())))
+        assertTrue(done.reachable(Step.DONE))
+    }
+
+    @Test
+    fun askingForDoneBeforeAnythingHasBeenAppliedLandsOnReviewInstead() {
+        // DONE means "a result came back", not "I asked to go there" —
+        // a stale link or a double tap must not be able to fake it.
+        val ready = MassEntry().choose(Direction.ADD).type(listOfTwo).assign(Owner.MATT)
+            .previewed(Applied(dryRun = true, changes = listOf(change())))
+        val landed = ready.goTo(Step.DONE)
+        assertEquals(Step.REVIEW, landed.step)
+        assertEquals(ready.preview, landed.preview, "landing on REVIEW keeps the dry run that is already in hand")
+    }
+
+    @Test
+    fun askingForDoneAfterAResultHasComeBackActuallyGoesThere() {
+        val done = MassEntry().choose(Direction.ADD).type(listOfTwo).assign(Owner.MATT)
+            .previewed(Applied(dryRun = true, changes = listOf(change())))
+            .finished(Applied(applied = true, changes = listOf(change())))
+        assertEquals(Step.DONE, done.goTo(Step.DONE).step)
+    }
+
+    @Test
+    fun navigatingToReviewDirectlyLandsThereAndKeepsThePreviewInHand() {
+        val previewed = MassEntry().choose(Direction.ADD).type(listOfTwo).assign(Owner.MATT)
+            .previewed(Applied(dryRun = true, changes = listOf(change())))
+        val again = previewed.goTo(Step.REVIEW)
+        assertEquals(Step.REVIEW, again.step)
+        assertEquals(previewed.preview, again.preview)
+    }
+
+    @Test
+    fun theWizardListsExactlyTheFourAnsweredStepsInOrderNotIncludingDone() {
+        // DONE is an ending, not a question the stepper offers to jump
+        // back to — the UI on both platforms indexes into this list.
+        assertEquals(listOf(Step.WHICH, Step.LIST, Step.WHO, Step.REVIEW), Step.wizard)
+        assertFalse(Step.DONE in Step.wizard)
+    }
 }
 
 /**
