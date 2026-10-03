@@ -11,6 +11,22 @@ package org.mattshoe.mtg.core
  */
 object DeckList {
 
+    /**
+     * The invisible character a Windows editor writes at the front.
+     *
+     * Notepad and several spreadsheet exports start a UTF-8 file with
+     * a byte-order-mark, and `trim()` does not remove it because it is
+     * not whitespace. Every pattern here is anchored with `^`, so the
+     * mark sat in front of the anchor and the first line of such a
+     * file lost its quantity in silence: "4 Sol Ring" came back as one
+     * card literally named that. It is never part of a card's name, so
+     * it comes off before anything reads the text.
+     */
+    private const val BOM = '\uFEFF'
+
+    private fun String.noBom(): String =
+        if (BOM in this) filterNot { it == BOM } else this
+
     /** Lines that are structure rather than cards. */
     private val COMMENT = Regex("^(#|//)")
     private val SECTION = Regex("^(deck|sideboard|maybeboard|commander|companion)\\s*:?\\s*$", RegexOption.IGNORE_CASE)
@@ -21,7 +37,7 @@ object DeckList {
      * as CSV is how a comma once ate half a card name.
      */
     fun looksLikeCsv(text: String): Boolean {
-        val first = text.lineSequence().firstOrNull { it.isNotBlank() } ?: return false
+        val first = text.noBom().lineSequence().firstOrNull { it.isNotBlank() } ?: return false
         if (!first.contains(',')) return false
         val cols = first.lowercase()
             .replace("\"", "")
@@ -31,7 +47,8 @@ object DeckList {
     }
 
     /** How many cards a list represents, whatever shape it is in. */
-    fun countCards(text: String): Int {
+    fun countCards(raw: String): Int {
+        val text = raw.noBom()
         if (text.isBlank()) return 0
         if (looksLikeCsv(text)) return text.lineSequence().count { it.isNotBlank() } - 1
         return text.lineSequence().count { isCardLine(it) }
@@ -55,7 +72,8 @@ object DeckList {
     private val SET_AND_NUMBER = Regex("""\s*\((?:[A-Za-z0-9_]{2,6})\)(?:\s+\S+)?\s*""")
     private val FOIL = Regex("""\s*\*(?:F|foil|etched)\*\s*""", RegexOption.IGNORE_CASE)
 
-    fun tally(text: String): Tally {
+    fun tally(raw: String): Tally {
+        val text = raw.noBom()
         val lines = cardLines(text)
         if (lines.isEmpty()) return Tally(0, 0, 0)
         val counted = if (looksLikeCsv(text)) csvCounts(text, lines) else listCounts(lines)
@@ -85,7 +103,8 @@ object DeckList {
      * cards, so a review can show one line each instead of handing
      * somebody back the thing they just pasted.
      */
-    fun entries(text: String): List<Entry> {
+    fun entries(raw: String): List<Entry> {
+        val text = raw.noBom()
         val lines = cardLines(text)
         if (lines.isEmpty()) return emptyList()
         val counted = if (looksLikeCsv(text)) csvCounts(text, lines) else listCounts(lines)
@@ -200,9 +219,10 @@ object DeckList {
         raw.replace(FOIL, " ").replace(SET_AND_NUMBER, " ").trim().trim(',').trim().lowercase()
 
     /** The lines a human would point at and call cards. */
-    fun cardLines(text: String): List<String> =
+    fun cardLines(raw: String): List<String> = raw.noBom().let { text ->
         if (looksLikeCsv(text)) text.lines().filter { it.isNotBlank() }.drop(1)
         else text.lines().filter { isCardLine(it) }
+    }
 
     private fun isCardLine(line: String): Boolean {
         val t = line.trim()
@@ -218,7 +238,7 @@ object DeckList {
      */
     fun looksTextual(s: String): Boolean {
         if (s.isEmpty()) return false
-        if (s.contains(' ')) return false
+        if (s.contains('\u0000')) return false
         val head = s.take(4096)
         return head.count { it == '�' }.toDouble() / head.length < 0.02
     }
