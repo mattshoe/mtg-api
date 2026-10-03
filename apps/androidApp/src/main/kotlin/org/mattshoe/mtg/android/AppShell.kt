@@ -150,6 +150,11 @@ fun AppShell(
                     onSearch()
                 },
                 onCheatsheet = { onState(state.opening(Overlay.CHEATSHEET)) },
+                // Without this every facet list in the panel — types,
+                // set types, layouts, frames, borders, the deck and
+                // format dropdowns — renders empty on the phone while
+                // the website fills them from the same state.
+                facets = state.facets,
             )
 
             View.DECKS -> DecksScreen(

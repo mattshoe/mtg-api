@@ -170,18 +170,22 @@ class ScreensTest {
     }
 
     @Test
-    fun theFilterButtonRevealsThePanel() {
-        var shown = false
+    fun theFilterGroupsAreAlwaysOnThePage() {
+        // There is no Filters button any more, on either platform.
+        // Hiding the whole panel was a way to leave a filter applied
+        // with nothing on screen saying so, so the groups sit there
+        // folded instead. The sibling is
+        // `theFilterGroupsAreAlwaysOnThePage` in the web suite.
         content {
-            LibraryScreen(
-                Library().loaded(listOf(card("Sol Ring")), 1),
-                {}, {}, {},
-                showFilters = shown,
-                onToggleFilters = { shown = !shown },
-            )
+            LibraryScreen(Library().loaded(listOf(card("Sol Ring")), 1), {}, {}, {})
         }
-        rule.onNodeWithText("Filters").performScrollTo().performClick()
-        rule.runOnIdle { assertTrue(shown) }
+        rule.onAllNodesWithTextOrNothing("Filters")
+        // `Facet.title`, the same strings the web panel uses. The
+        // website uppercases them in CSS, which does not change the
+        // text either side.
+        rule.onNodeWithText("Collection").assertExists()
+        rule.onNodeWithText("Colour").assertExists()
+        rule.onNodeWithText("Legality").assertExists()
     }
 
     @Test
@@ -204,7 +208,9 @@ class ScreensTest {
                 onExport = { exported = true },
             )
         }
-        rule.onNodeWithText("Export decklist").performScrollTo().performClick()
+        // "Copy", the word the website uses. It was "Export decklist"
+        // here and nowhere else.
+        rule.onNodeWithText("Copy").performScrollTo().performClick()
         rule.runOnIdle { assertTrue(exported) }
     }
 
