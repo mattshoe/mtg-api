@@ -5,8 +5,13 @@
   "type": "module",
   "description": "REST API over Matt's Magic: The Gathering collection, on Cloudflare Workers + D1",
   "scripts": {
-    "test": "eslint frontend/js frontend/sw.js && vitest run",
+    "test": "node scripts/guard.mjs 900 -- npm run test:raw",
+    "test:raw": "eslint frontend/js frontend/sw.js && vitest run --reporter=basic",
     "test:watch": "vitest",
+    "test:core": "node scripts/guard.mjs 900 -- ./gradlew -p apps :core:jvmTest",
+    "test:web": "node scripts/guard.mjs 1200 -- ./gradlew -p apps :webApp:jsTest",
+    "test:android": "node scripts/guard.mjs 2700 -- ./gradlew -p apps :androidApp:connectedDebugAndroidTest -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true",
+    "test:all": "npm run test && npm run test:core && npm run test:web",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "lint": "eslint frontend/js frontend/sw.js"
