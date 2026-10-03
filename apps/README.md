@@ -65,13 +65,18 @@ the JVM and in a browser by `./gradlew :core:jvmTest :core:jsNodeTest`
 — the share wizard's gates, the deck rules, the SQL. The emulator is
 for the things only a device has.
 
-**A gap worth naming:** `MainActivity.readFiles` reads a shared
-`content://` URI and nothing tests it. The module that used to hold
-that coverage, `:app`, shared this one's `applicationId`, so it could
-never be installed alongside it and was deleted; its tests went with
-it and tested its own copy of the code, not this one. Reading a real
-share is the step a web app cannot do at all, so it is worth a test
-on the live path.
+- `SharedFilesTest` — a real `content://` URI published to
+  MediaStore and read the way a share delivers one: CSV, a plain
+  decklist, several files at once, a file mislabelled
+  `application/octet-stream`, a 4,000 row export, a JPEG refused, an
+  empty file, a URI that cannot be opened, and one bad file not
+  taking a good one down with it.
+
+That second file is the coverage `:app` used to hold. `:app` shared
+this module's `applicationId` and so could never be installed; its
+tests proved things about a copy of the code nobody ran. Reading a
+share is the step a web app cannot do at all, so the tests came
+across to `SharedFiles`, which is what the activity actually calls.
 
 ### The ManaBox stand-in
 
