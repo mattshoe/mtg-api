@@ -75,6 +75,12 @@ android {
         }
     }
 
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+            all { it.systemProperty("robolectric.graphicsMode", "NATIVE") }
+        }
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -122,4 +128,13 @@ dependencies {
     androidTestImplementation("androidx.compose.ui:ui-test-junit4:1.7.6")
     androidTestImplementation(kotlin("test"))
     debugImplementation("androidx.compose.ui:ui-test-manifest:1.7.6")
+
+    // The same Compose test API, on the JVM. A test that mounts one
+    // Text and asserts it costs about 2.7 seconds on an emulator —
+    // almost all of it launching an activity — which is most of what
+    // the device suite spends its time on.
+    testImplementation("androidx.test.ext:junit:1.2.1")
+    testImplementation("androidx.compose.ui:ui-test-junit4:1.7.6")
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation(kotlin("test"))
 }
