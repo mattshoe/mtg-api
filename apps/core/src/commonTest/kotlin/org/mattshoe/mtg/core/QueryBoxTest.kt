@@ -1,5 +1,6 @@
 package org.mattshoe.mtg.core
 
+import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -148,6 +149,144 @@ class QueryBoxTest {
     fun nonNumericComparisonsDoNotProduceGarbageSql() {
         assertTrue(sql("mv<=banana").contains("c.cmc <= ?"))
         assertEquals(listOf<Any?>(0.0), params("mv<=banana"))
+    }
+
+    // -------------------------------------------- keys the cheatsheet
+    // examples never happen to exercise: loy, price/usd, restricted.
+
+    @Test
+    fun loyaltyComparesRealNumbersOnlyLikePowerAndToughnessDo() {
+        val s = sql("loy>=3")
+        assertTrue(s.contains("c.loyalty GLOB '[0-9]*'"), s)
+        assertTrue(s.contains("CAST(c.loyalty AS INTEGER) >= ?"), s)
+        assertEquals(listOf<Any?>(3.0), params("loy>=3"))
+    }
+
+    @Test
+    fun loyAndLoyaltyAreTheSameKey() {
+        assertEquals(sql("loy<=2"), sql("loyalty<=2"))
+    }
+
+    @Test
+    fun aNonNumericLoyaltyFallsBackRatherThanThrowing() {
+        assertEquals(listOf<Any?>(0.0), params("loy>=X"))
+    }
+
+    @Test
+    fun priceComparesAgainstTheSamePriceExpressionEveryOtherSortUses() {
+        // PRICE_EXPR picks the foil or etched price when that is the
+        // finish owned — a plain `c.price` column would answer for the
+        // wrong printing.
+        val s = sql("price>=5")
+        assertTrue(s.contains("CASE c.finish"), s)
+        assertTrue(s.contains(") >= ?"), s)
+        assertEquals(listOf<Any?>(5.0), params("price>=5"))
+    }
+
+    @Test
+    fun usdAndPriceAreTheSameKey() {
+        assertEquals(sql("usd<=1.5"), sql("price<=1.5"))
+    }
+
+    @Test
+    fun restrictedChecksTheLegalitiesTableForThatStatusSpecifically() {
+        // Not the same question as `banned:` — a card can be legal in a
+        // format's card pool while being restricted to one copy.
+        val s = sql("restricted:vintage")
+        assertTrue(s.contains("l.status = 'restricted'"), s)
+        assertFalse(s.contains("l.status = 'banned'"), s)
+        assertEquals(listOf<Any?>("vintage"), params("restricted:vintage"))
+    }
+
+    // -------------------------------------------- quoting shapes
+
+    @Test
+    fun singleQuotesHoldAPhraseTogetherJustLikeDoubleQuotesDo() {
+        assertEquals(listOf<Any?>("%draw a card%"), params("o:'draw a card'"))
+    }
+
+    @Test
+    fun aBareQuotedPhraseWithNoKeySearchesBothFacesLikeAnyOtherBareWord() {
+        // `"Lightning Bolt"` typed with no key in front is still a name
+        // search, just one term instead of two words ANDed separately.
+        val q = "\"Lightning Bolt\""
+        assertEquals(
+            listOf<Any?>("%lightning bolt%", "%lightning bolt%", "%lightning bolt%"),
+            params(q),
+        )
+        assertFalse(sql(q).startsWith("NOT ("))
+    }
+
+    @Test
+    fun aMinusBeforeABareQuotedPhraseNegatesTheWholePhrase() {
+        val q = "-\"Lightning Bolt\""
+        assertTrue(sql(q).startsWith("NOT ("), sql(q))
+    }
+
+    // -------------------------------------------- hostile values
+
+    @Test
+    fun anApostropheInAValueSurvivesIntoTheBoundParameterUnescaped() {
+        // It is bound, never interpolated, so there is nothing to escape
+        // for SQL's sake — it only has to not be mangled on the way.
+        assertEquals(listOf<Any?>("%o'brien%", "%o'brien%", "%o'brien%"), params("n:O'Brien"))
+    }
+
+    @Test
+    fun aBackslashInAValueSurvivesIntoTheBoundParameterUnescaped() {
+        val raw = "back\\slash"
+        val expected = "%" + raw.lowercase() + "%"
+        assertEquals(listOf<Any?>(expected, expected, expected), params("n:$raw"))
+    }
+
+    @Test
+    fun aCommaInAQuotedValueStaysPartOfTheOneValue() {
+        assertEquals(listOf<Any?>("%kardur, doomscourge%"), params("""o:"Kardur, Doomscourge""""))
+    }
+
+    @Test
+    fun accentedLettersAreLoweredLikeAnyOtherLetter() {
+        assertEquals(listOf<Any?>("%æther vial%", "%æther vial%", "%æther vial%"), params("""n:"Æther Vial""""))
+    }
+
+    @Test
+    fun aDoubleFacedNameWithASlashSlashIsOneOrdinaryBareTerm() {
+        val q = "\"Fable of the Mirror-Breaker // Reflection of Kiki-Jiki\""
+        val p = params(q)
+        assertEquals(3, p.size)
+        assertTrue((p[0] as String).contains("//"), p[0].toString())
+    }
+
+    @Test
+    fun aVeryLongBareWordIsStillOneSearchTermRatherThanBeingCutOff() {
+        val longName = "A".repeat(200)
+        val p = params(longName)
+        assertEquals(3, p.size)
+        assertEquals("%${longName.lowercase()}%", p[0])
+    }
+
+    /**
+     * Real bug: `QueryBox`'s own `like()` just wraps the value in `%...%`
+     * with no escaping, unlike `Clauses.like()` in CardFilters.kt — which
+     * exists for exactly this reason, per its own comment: "%" and "_"
+     * are ordinary characters to someone searching for "50%" or
+     * "Chandra_", and treating them otherwise silently matches
+     * everything. Typing a literal percent or underscore into the query
+     * box silently widens the search instead of narrowing it, with no
+     * error and no sign anything went wrong — the exact failure mode
+     * this file's own doc comment says is worse than a crash.
+     */
+    @Ignore(
+        "REAL BUG: QueryBox's like() does not escape % or _ before building " +
+            "the LIKE pattern, so a literal percent or underscore typed into " +
+            "the box is read as a SQL wildcard instead of a literal character. " +
+            "See CardFilters.kt's Clauses.like(), which escapes both for this " +
+            "exact reason.",
+    )
+    @Test
+    fun aLiteralPercentOrUnderscoreIsEscapedRatherThanActingAsAWildcard() {
+        assertTrue(sql("t:50%").contains("ESCAPE"), "a literal % must be escaped, not left as a SQL wildcard")
+        assertTrue(sql("a:Chandra_").contains("ESCAPE"), "a literal _ must be escaped, not left as a SQL wildcard")
     }
 }
 
