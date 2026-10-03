@@ -397,7 +397,7 @@ class FilterFieldAloneTest {
     @Test
     fun theQueryBoxIsFoldedInAsOneMoreClause() {
         val f = Filters(adv = "t:creature")
-        assertEquals("lower(c.type_line) LIKE ?", where(f))
+        assertEquals("lower(c.type_line) LIKE ? ESCAPE '\\'", where(f))
         assertEquals(listOf<Any?>("%creature%"), params(f))
     }
 

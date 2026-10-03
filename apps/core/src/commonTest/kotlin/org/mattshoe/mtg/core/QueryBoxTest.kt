@@ -1,6 +1,5 @@
 package org.mattshoe.mtg.core
 
-import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -233,10 +232,14 @@ class QueryBoxTest {
     }
 
     @Test
-    fun aBackslashInAValueSurvivesIntoTheBoundParameterUnescaped() {
-        val raw = "back\\slash"
-        val expected = "%" + raw.lowercase() + "%"
-        assertEquals(listOf<Any?>(expected, expected, expected), params("n:$raw"))
+    fun aBackslashInAValueIsItselfEscapedBecauseItIsTheEscapeCharacter() {
+        // The clause says `ESCAPE '\'`, so a backslash the person
+        // actually typed has to be doubled or it would quietly escape
+        // whatever followed it instead of being searched for.
+        assertEquals(
+            listOf<Any?>("%back\\\\slash%", "%back\\\\slash%", "%back\\\\slash%"),
+            params("n:back\\slash"),
+        )
     }
 
     @Test
@@ -276,13 +279,6 @@ class QueryBoxTest {
      * error and no sign anything went wrong — the exact failure mode
      * this file's own doc comment says is worse than a crash.
      */
-    @Ignore(
-        "REAL BUG: QueryBox's like() does not escape % or _ before building " +
-            "the LIKE pattern, so a literal percent or underscore typed into " +
-            "the box is read as a SQL wildcard instead of a literal character. " +
-            "See CardFilters.kt's Clauses.like(), which escapes both for this " +
-            "exact reason.",
-    )
     @Test
     fun aLiteralPercentOrUnderscoreIsEscapedRatherThanActingAsAWildcard() {
         assertTrue(sql("t:50%").contains("ESCAPE"), "a literal % must be escaped, not left as a SQL wildcard")
