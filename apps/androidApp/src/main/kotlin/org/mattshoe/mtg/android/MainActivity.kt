@@ -24,21 +24,29 @@ import org.mattshoe.mtg.core.CardQueries
 import org.mattshoe.mtg.core.CardRef
 import org.mattshoe.mtg.core.CardRow
 import org.mattshoe.mtg.core.Completion
+import org.mattshoe.mtg.core.DeckCard
 import org.mattshoe.mtg.core.DeckEditState
 import org.mattshoe.mtg.core.DeckQueries
+import org.mattshoe.mtg.core.DeckTweak
 import org.mattshoe.mtg.core.DisassembleState
 import org.mattshoe.mtg.core.EntryHistory
 import org.mattshoe.mtg.core.Export
+import org.mattshoe.mtg.core.ExportTo
 import org.mattshoe.mtg.core.Found
 import org.mattshoe.mtg.core.Load
 import org.mattshoe.mtg.core.MtgApi
 import org.mattshoe.mtg.core.Overlay
 import org.mattshoe.mtg.core.PaletteQueries
+import org.mattshoe.mtg.core.RenameState
+import org.mattshoe.mtg.core.Route
 import org.mattshoe.mtg.core.Rows
 import org.mattshoe.mtg.core.Scryfall
+import org.mattshoe.mtg.core.Share
+import org.mattshoe.mtg.core.ShareWhat
 import org.mattshoe.mtg.core.StatsQueries
 import org.mattshoe.mtg.core.Store
 import org.mattshoe.mtg.core.Table
+import org.mattshoe.mtg.core.Tweak
 import org.mattshoe.mtg.core.Upload
 import org.mattshoe.mtg.core.View
 import org.mattshoe.mtg.core.query
@@ -64,6 +72,7 @@ class MainActivity : ComponentActivity() {
 
     private var lookupJob: Job? = null
     private var findJob: Job? = null
+    private var tweakJob: Job? = null
 
     /**
      * Everything, because a narrow list greys out the file you actually
@@ -169,6 +178,29 @@ class MainActivity : ComponentActivity() {
                             ) { saveDeck() }
                         },
                         onAskDisassemble = { slug -> askDisassemble(slug) },
+                        onAskRename = { slug -> askRename(slug) },
+                        onSaveRename = {
+                            claim(
+                                app.rename?.canSave == true,
+                                { app.copy(rename = app.rename?.working()) },
+                            ) { renameDeck() }
+                        },
+                        onAddCard = { startTweak(null, Tweak.ADD) },
+                        onTweak = { card, kind -> startTweak(card, kind) },
+                        onTweakFind = { term -> findForTweak(term) },
+                        onTweakPreview = {
+                            claim(
+                                app.deckTweak?.ready == true,
+                                { app.copy(deckTweak = app.deckTweak?.working()) },
+                            ) { planTweak() }
+                        },
+                        onTweakApply = {
+                            claim(
+                                app.deckTweak?.canApply == true,
+                                { app.copy(deckTweak = app.deckTweak?.working()) },
+                            ) { applyTweak() }
+                        },
+                        onShare = { what, where -> work { shareDeck(what, where) } },
                         onDisassemble = {
                             claim(
                                 app.disassemble?.canGo == true,
@@ -374,6 +406,139 @@ class MainActivity : ComponentActivity() {
             delay(Completion.DEBOUNCE_MS.toLong())
             app = app.copy(complete = app.complete.suggested(scryfall.complete(term)))
         }
+    }
+
+    // ------------------------------------------------------------ deck
+
+    private fun askRename(slug: String) {
+        val deck = app.decks.decks.firstOrNull { it.slug == slug } ?: return
+        app = app.copy(rename = RenameState(slug = deck.slug, was = deck.name))
+            .opening(Overlay.RENAME)
+    }
+
+    /**
+     * Write the new name, then follow the deck to its new address.
+     *
+     * The slug moves with the name, so staying where we are would
+     * leave the screen pointing at a deck that is no longer there.
+     */
+    private suspend fun renameDeck(): AppState {
+        val r = app.rename ?: return app
+        return try {
+            val done = api.renameDeck(token(), r.slug, r.name.trim())
+            app = app.copy(rename = app.rename?.finished())
+            loadDecks()
+                .closing(Overlay.RENAME)
+                .navigate(Route(View.DECKS, done.slug))
+                .say("Renamed to ${done.name}")
+        } catch (ex: ApiFailure) {
+            app.copy(rename = app.rename?.failed(ex.message ?: "that did not work"))
+        }
+    }
+
+    /**
+     * Open the sheet on one card, or on none for an addition.
+     *
+     * The commander comes off the list on screen rather than the
+     * deck row, because a deck with two of them has both and the row
+     * only names one.
+     */
+    private fun startTweak(card: DeckCard?, kind: Tweak?) {
+        val deck = app.decks.open ?: return
+        val commander = app.decks.cards.filter { it.role == "commander" }
+            .joinToString(" // ") { it.name }
+            .ifEmpty { deck.commanderName.orEmpty() }
+        val tweak = if (card == null) {
+            DeckTweak.add(deck, commander)
+        } else {
+            DeckTweak.on(deck, commander, card, kind)
+        }
+        app = app.copy(deckTweak = tweak).opening(Overlay.DECK_TWEAK)
+    }
+
+    /** Debounced, and the one in flight is abandoned when a newer starts. */
+    private fun findForTweak(term: String) {
+        tweakJob?.cancel()
+        tweakJob = lifecycleScope.launch {
+            delay(Completion.DEBOUNCE_MS.toLong())
+            try {
+                val r = api.query(PaletteQueries.find(term))
+                val owned = PaletteQueries.decode(r.cols, r.rows)
+                app = app.copy(deckTweak = app.deckTweak?.searched(owned))
+                // And anything else that is a real card. A deck can
+                // want one nobody owns yet; the plan calls that "to
+                // buy" and says so before it writes.
+                val named = scryfall.complete(term)
+                app = app.copy(deckTweak = app.deckTweak?.searched(owned, named))
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Typing fast. Not worth an error in a convenience.
+            }
+        }
+    }
+
+    private suspend fun planTweak(): AppState {
+        val t = app.deckTweak ?: return app
+        return try {
+            val plan = api.setDeckList(
+                token(), t.slug, t.commander, t.listAfter(app.decks.cards), dryRun = true,
+            )
+            app.copy(deckTweak = app.deckTweak?.planned(plan))
+        } catch (ex: ApiFailure) {
+            app.copy(deckTweak = app.deckTweak?.failed(ex.message ?: "that did not work"))
+        }
+    }
+
+    private suspend fun applyTweak(): AppState {
+        val t = app.deckTweak ?: return app
+        return try {
+            val plan = api.setDeckList(
+                token(), t.slug, t.commander, t.listAfter(app.decks.cards), dryRun = false,
+            )
+            app = app.copy(deckTweak = app.deckTweak?.finished())
+            // Reopen the deck so the list on screen is the list that is
+            // now stored, rather than the one that was.
+            openDeck(t.slug)
+                .closing(Overlay.DECK_TWEAK)
+                .say(t.summary + if (plan.buying > 0) " — ${plan.buying} bought" else "")
+        } catch (ex: ApiFailure) {
+            app.copy(deckTweak = app.deckTweak?.failed(ex.message ?: "that did not work"))
+        }
+    }
+
+    /**
+     * The open deck, handed over.
+     *
+     * The link is this screen's address on the website, so what is
+     * pasted into a chat opens the same deck for whoever gets it. The
+     * list is the deck itself, which is what somebody wants when they
+     * are going to build it rather than read about it.
+     *
+     * Both halves of `ExportTo` end up on the clipboard here, because
+     * a phone has nowhere useful to put a loose text file and pasting
+     * is what the next app is going to ask for either way. The wording
+     * still distinguishes them, so a tap on Download does not look
+     * like it did nothing.
+     */
+    private fun shareDeck(what: ShareWhat, where: ExportTo): AppState {
+        val deck = app.decks.open ?: return app.say("No deck open")
+        val text = when (what) {
+            ShareWhat.LINK -> Share.link(app)
+            ShareWhat.DECKLIST -> Export.deck(app.decks.cards)
+        }
+        val name = when (what) {
+            ShareWhat.LINK -> "${deck.slug}-link.txt"
+            ShareWhat.DECKLIST -> Export.deckFilename(deck.slug, today())
+        }
+        val clip = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clip.setPrimaryClip(ClipData.newPlainText(name, text))
+        return app.say(
+            when (what) {
+                ShareWhat.LINK -> "Link copied"
+                ShareWhat.DECKLIST -> "${app.decks.totalCards} cards copied"
+            },
+        )
     }
 
     // ----------------------------------------------------------- export
