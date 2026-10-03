@@ -45,7 +45,13 @@ data class AppState(
     /** Where a route actually lands, given the lock. */
     fun navigate(to: Route): AppState {
         val landed = admin.land(to)
-        return copy(
+        // A route change takes the overlays with it, and an overlay
+        // that goes has to let go of what it was holding the same way
+        // it would if its own X had been pressed. Clearing only the
+        // stack left a half-typed new deck and a stale palette answer
+        // sitting behind the nav bar, so the next `/` showed rows that
+        // answered a search from two screens ago.
+        return overlays.stack.fold(this) { s, o -> s.forget(o) }.copy(
             route = landed,
             toast = null,
             overlays = overlays.clear(),
