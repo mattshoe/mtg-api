@@ -22,6 +22,7 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performScrollToKey
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
@@ -658,7 +659,6 @@ class LibraryParityTest {
 
     @Test
     fun searchingEmptyAndFailedEachSayWhatHappened() {
-        Parity.needsRealRendering()
         screen(Library().loaded(emptyList(), 0))
         Parity.check(
             Fact("nothing matched, and it says so") { said("Nothing matches that.") },
@@ -678,6 +678,11 @@ class LibraryParityTest {
         // in flight — the web dims the grid rather than replacing it,
         // because collapsing the page throws away where you were.
         rule.runOnIdle { library.value = Library().loaded(listOf(card("Sol Ring")), 1).loading() }
+        rule.waitForIdle()
+        // The grid is lazy, so a row below the fold is not composed at
+        // all. "Still there" is a claim about the list, not about what
+        // fits on this particular screen, so scroll to it and then ask.
+        rule.onNodeWithTag("library").performScrollToKey("matt:sol ring")
         rule.waitForIdle()
         Parity.check(
             Fact("it still says it is searching") { said("Searching…") },

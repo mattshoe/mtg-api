@@ -328,7 +328,6 @@ class DeckStatsParityTest {
 
     @Test
     fun twoColumnsOnlyDrawAlikeWhenTheyAreAlike() {
-        Parity.needsRealRendering()
         // Fifteen, fifteen and seventeen all drew the same height on
         // the web: the bar was a fraction of the whole column, number
         // included, so anything near the top overflowed.
@@ -419,7 +418,6 @@ class DeckStatsParityTest {
 
     @Test
     fun theNeedsAndMakesBarsShareOneScale() {
-        Parity.needsRealRendering()
         // Ten pips wanted, five sources: the makes bar has to be half
         // the needs bar, or the pair is not a comparison.
         show(lopsidedDeck())

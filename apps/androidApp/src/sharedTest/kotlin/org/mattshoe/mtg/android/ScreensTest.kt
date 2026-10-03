@@ -7,6 +7,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.performScrollToKey
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performKeyInput
@@ -15,6 +16,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
@@ -163,9 +165,15 @@ class ScreensTest {
 
     @Test
     fun theLibraryShowsTheRangeAndTheRows() {
-        Parity.needsRealRendering()
         val lib = Library().loaded(listOf(card("Sol Ring"), card("Arcane Signet")), 250)
         content { LibraryScreen(lib, {}, {}, {}) }
+        // Into view first. The grid is lazy and its header carries the
+        // page head, the controls and the filter sheet, so on a short
+        // screen the first card is simply not composed yet — which
+        // `assertIsDisplayed` reports as "not displayed" and reads
+        // like the row is missing rather than below the fold.
+        rule.onNodeWithTag("library").performScrollToKey("matt:sol ring")
+        rule.waitForIdle()
         rule.onNodeWithText("Sol Ring").assertIsDisplayed()
         rule.onNodeWithText("1–100 of 250").assertExists()
     }

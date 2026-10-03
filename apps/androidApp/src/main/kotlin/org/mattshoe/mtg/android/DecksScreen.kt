@@ -527,13 +527,29 @@ private fun Curve(s: org.mattshoe.mtg.core.DeckStats) {
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Bottom,
                     ) {
-                        Line(
-                            if (bar.value > 0) "${bar.value}" else "",
-                            Ink2,
-                            Design.MINI,
-                            FontWeight.SemiBold,
-                            Modifier.testTag("curve-count-${bar.label}"),
-                        )
+                        // Pinned to exactly the room reserved for it.
+                        // Left to size itself the number came out a
+                        // shade taller than `CURVE_HEAD` on some
+                        // densities, the column overflowed, and the
+                        // only bar with no slack — the tallest — was
+                        // squeezed to fit. Seventeen then drew 74dp
+                        // against fifteen's 71 instead of its honest
+                        // 80, which is the "why are the 15 and 17 the
+                        // same height" this chart was rebuilt to fix,
+                        // alive again and showing on one emulator in
+                        // three.
+                        Box(
+                            Modifier.height(CURVE_HEAD).fillMaxWidth(),
+                            contentAlignment = Alignment.BottomCenter,
+                        ) {
+                            Line(
+                                if (bar.value > 0) "${bar.value}" else "",
+                                Ink2,
+                                Design.MINI,
+                                FontWeight.SemiBold,
+                                Modifier.testTag("curve-count-${bar.label}"),
+                            )
+                        }
                         Box(
                             Modifier.fillMaxWidth()
                                 // A zero column is still a column: the
