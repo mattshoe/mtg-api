@@ -397,29 +397,15 @@ class MainActivity : ComponentActivity() {
 
     private fun readFiles(uris: List<Uri>) {
         lifecycleScope.launch {
-            val chunks = mutableListOf<String>()
-            val names = mutableListOf<String>()
-            uris.forEach { uri ->
-                val bytes = runCatching {
-                    contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length }
-                }.getOrNull() ?: -1L
-                if (bytes > 0 && Upload.tooBig(bytes)) {
-                    app = app.say("that file is too big (${Upload.size(bytes)})")
-                    return@forEach
-                }
-                val text = runCatching {
-                    contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() }
-                }.getOrNull()
-                if (text == null) app = app.say("could not read that file")
-                else {
-                    chunks += text
-                    names += uri.lastPathSegment?.substringAfterLast('/') ?: "file"
-                }
-            }
-            if (chunks.isEmpty()) return@launch
-            val incoming = chunks.joinToString("\n")
+            // The reading itself is `SharedFiles`, where it can be
+            // tested against a real content:// URI without an
+            // activity in the way.
+            val read = SharedFiles.read(contentResolver, uris)
+            read.complaints.forEach { app = app.say(it) }
+            if (read.isEmpty) return@launch
+            val incoming = read.chunks.joinToString("\n")
             app = app.copy(entry = app.entry.type(Upload.merge(app.entry.list, incoming)))
-                .say(Upload.describe(names, incoming))
+                .say(Upload.describe(read.names, incoming))
                 .shareUsed()
         }
     }

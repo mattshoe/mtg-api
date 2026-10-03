@@ -563,7 +563,6 @@ object Inventory {
         Feature(Area.ENTRY, "Owner never preselected", "manage.js", logic = true, done = true,
             tests = listOf(
                 "neitherOwnerIsAssumed", "nothingIsPreselectedInTheWizard", "theWizardWalksToTheOwnerStep",
-                "testNeitherOwnerIsPreselectedAndPreviewIsNotOfferedUntilOneIs",
                 "reusePutsTheListBackWithoutTheOwner", "aShareOpensTheWizardWithTheListAlreadyInIt",
             )),
         Feature(Area.ENTRY, "Decklist and CSV parsing", "manage.js, parse.js", logic = true, done = true,
@@ -676,21 +675,20 @@ object Inventory {
             )),
 
         // ---------------------------------------------------------- share
-        Feature(Area.SHARE, "Receive a shared file from another Android app", "SharedFile.kt", logic = true, done = true,
+        Feature(Area.SHARE, "Receive a shared file from another Android app", "SharedFiles.kt", logic = true, done = true,
             tests = listOf(
-                "testReadsACsvSharedAsAContentUri", "testReadsAPlainDecklist", "testReadsSeveralFilesAtOnce",
-                "testOpenWithIsReadTheSameWay", "testSharedTextIsTakenToo", "testALargeExportSurvivesIntact",
-                "testTheManifestClaimsAFileShare", "testASharedCsvArrivesOnScreen",
+                "readsACsvSharedAsAContentUri", "readsAPlainDecklist", "readsSeveralFilesAtOnce",
+                "aLargeExportSurvivesIntact", "everyFileThatIsReadIsAlsoNamed", "nothingSharedIsNothingRead",
             )),
-        Feature(Area.SHARE, "Read it whatever its declared MIME type", "SharedFile.kt", logic = true, done = true,
+        Feature(Area.SHARE, "Read it whatever its declared MIME type", "SharedFiles.kt", logic = true, done = true,
             tests = listOf(
-                "testReadsAFileWhateverItsDeclaredTypeIs", "testOpenWithIsReadTheSameWay",
-                "testTheManifestClaimsAFileShare",
+                "readsAFileWhateverItsDeclaredTypeIs",
             )),
-        Feature(Area.SHARE, "Say what arrived when nothing usable did", "SharedFile.kt", logic = true, done = true,
+        Feature(Area.SHARE, "Say what arrived when nothing usable did", "SharedFiles.kt", logic = true, done = true,
             tests = listOf(
-                "testABareLinkIsNotACardList", "testBinaryIsRefusedAndSaysSo",
-                "testAnEmptyShareIsReportedRatherThanIgnored", "testABinaryShareSaysWhatWasWrongInsteadOfGoingQuiet",
+                "binaryIsRefusedAndSaysSo", "anEmptyFileIsNotAList",
+                "aFileThatCannotBeOpenedIsSaidOutLoudRatherThanDroppedQuietly",
+                "oneBadFileDoesNotTakeTheGoodOneWithIt",
                 "textIsTextAndBinaryIsNot", "aFewOddCharactersAreStillText",
             )),
     )

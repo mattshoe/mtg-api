@@ -100,7 +100,7 @@ jobs:
 
       - name: It compiles
         working-directory: apps
-        run: ./gradlew --no-daemon :androidApp:assembleDebug :app:assembleDebug
+        run: ./gradlew --no-daemon :androidApp:assembleDebug
 
       # KVM, so the emulator is not software-rendered and the job
       # finishes this century.
@@ -119,8 +119,7 @@ jobs:
           arch: x86_64
           disable-animations: true
           working-directory: apps
-          # :app's LiveApiTest needs a token it is not given here, so
-          # it skips itself. Nothing in CI touches the real database.
+          # Nothing in CI touches the real database.
           script: ./gradlew --no-daemon :androidApp:connectedDebugAndroidTest
 
       - uses: actions/upload-artifact@v4
