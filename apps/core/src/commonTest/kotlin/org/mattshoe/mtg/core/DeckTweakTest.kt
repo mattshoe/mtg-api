@@ -212,3 +212,276 @@ class DeckTweakTest {
         assertEquals(listOf("Lightning Bolt", "Lightning Helix"), t.found.map { it.name })
     }
 }
+
+/**
+ * The two questions underneath `ready`: what kind of change is this,
+ * and does it still need a card named before it means anything.
+ */
+class DeckTweakWhatKindTest {
+
+    private val deck = Deck("alela", "Alela", "matt", "Alela, Cunning Conqueror", "UB", 3, null)
+
+    private fun card(name: String, qty: Int = 1) =
+        DeckCard(name, qty, null, qty, nameNorm = name.lowercase())
+
+    @Test
+    fun addingAndSwappingNeedACardRemovingAndCountingDoNot() {
+        assertTrue(DeckTweak.add(deck, "x").needsACard)
+        assertTrue(DeckTweak.on(deck, "x", card("Swamp"), Tweak.SWAP).needsACard)
+        assertFalse(DeckTweak.on(deck, "x", card("Swamp"), Tweak.REMOVE).needsACard)
+        assertFalse(DeckTweak.on(deck, "x", card("Swamp"), Tweak.QUANTITY).needsACard)
+    }
+
+    @Test
+    fun beforeAKindIsPickedItDoesNotNeedACardEither() {
+        // `needsACard` is specifically about ADD and SWAP — a sheet
+        // that has not even been told what it is doing yet must not
+        // read as "waiting on a card name" before it reads as "waiting
+        // on a choice".
+        assertFalse(DeckTweak.on(deck, "x", card("Swamp")).needsACard)
+    }
+
+    @Test
+    fun theSheetKnowsWhenItIsStillAskingWhatToDo() {
+        val asking = DeckTweak.on(deck, "x", card("Swamp"))
+        assertTrue(asking.choosing)
+        assertFalse(asking.doing(Tweak.REMOVE).choosing)
+    }
+
+    @Test
+    fun aSheetStillChoosingIsNeverReady() {
+        // Not ADD, REMOVE, SWAP or QUANTITY — `ready`'s `when` has no
+        // branch that reads "undecided" as go, so a card opened with
+        // no kind chosen must never offer to preview anything.
+        assertFalse(DeckTweak.on(deck, "x", card("Swamp")).ready)
+    }
+
+    @Test
+    fun removingIsReadyAsSoonAsThereIsARowToRemove() {
+        assertTrue(DeckTweak.on(deck, "x", card("Swamp"), Tweak.REMOVE).ready)
+    }
+
+    @Test
+    fun removingWithNoRowNamedIsNotReady() {
+        // Not reachable through the factory functions — `on` always
+        // supplies a subject — but the state shape allows it, and nothing
+        // else here stops a REMOVE with nothing to remove from reading
+        // as ready.
+        val noSubject = DeckTweak.on(deck, "x", card("Swamp"), Tweak.REMOVE).copy(subject = null)
+        assertFalse(noSubject.ready, "a removal with nothing named was ready to preview")
+    }
+
+    @Test
+    fun aBusySheetIsNeverReadyEvenWithEverythingElseAnswered() {
+        val t = DeckTweak.on(deck, "x", card("Swamp"), Tweak.REMOVE).working()
+        assertFalse(t.ready, "a change already being sent was offered again")
+    }
+
+    @Test
+    fun aSavedSheetIsNeverReadyEitherEvenIfReopenedSomehow() {
+        val t = DeckTweak.on(deck, "x", card("Swamp"), Tweak.REMOVE).copy(saved = true)
+        assertFalse(t.ready)
+    }
+
+    @Test
+    fun aBusyOrSavedSheetCannotApplyEvenWithAPlanInHand() {
+        val planned = DeckTweak.add(deck, "x").picked(Found(1, "Opt", null, null, 1, "matt")).planned(DeckPlan())
+        assertTrue(planned.canApply)
+        assertFalse(planned.working().canApply, "a change already being sent could be applied again")
+        assertFalse(planned.copy(saved = true).canApply, "an already-saved change could be applied again")
+    }
+}
+
+/**
+ * The sheet's own lifecycle moves: opening a kind, searching, sending,
+ * and failing. None of these are exercised by walking a tweak through
+ * to a plan, so each gets its own, direct test.
+ */
+class DeckTweakLifecycleTest {
+
+    private val deck = Deck("alela", "Alela", "matt", "Alela, Cunning Conqueror", "UB", 3, null)
+
+    private fun card(name: String, qty: Int = 1) =
+        DeckCard(name, qty, null, qty, nameNorm = name.lowercase())
+
+    private val bolt = Found(1, "Lightning Bolt", null, "Instant", 4, "matt")
+
+    @Test
+    fun lookingMarksTheSheetAsSearching() {
+        val t = DeckTweak.add(deck, "x").looking()
+        assertTrue(t.searching)
+    }
+
+    @Test
+    fun pickingAKindResetsWhateverTheFinderWasHolding() {
+        // Choosing REMOVE after having typed into the ADD finder must
+        // not leave a stale term, hit list or pick sitting around for
+        // a kind of change that does not use them.
+        val wasSearching = DeckTweak.add(deck, "x").typed("lig").searched(listOf(bolt))
+        val switched = wasSearching.doing(Tweak.REMOVE)
+        assertEquals(Tweak.REMOVE, switched.kind)
+        assertEquals("", switched.term)
+        assertTrue(switched.found.isEmpty())
+        assertFalse(switched.searching)
+        assertEquals(null, switched.pick)
+    }
+
+    @Test
+    fun pickingAKindDropsAnyPlanTheOldKindHadMade() {
+        val planned = DeckTweak.add(deck, "x").picked(bolt).planned(DeckPlan())
+        assertTrue(planned.canApply)
+        assertFalse(planned.doing(Tweak.REMOVE).canApply, "a plan for Add survived switching to Remove")
+    }
+
+    @Test
+    fun workingClearsTheLastErrorButNotWhatWasTyped() {
+        val t = DeckTweak.on(deck, "x", card("Swamp"), Tweak.REMOVE)
+            .failed("network error")
+            .working()
+        assertTrue(t.busy)
+        assertEquals(null, t.error)
+        assertEquals("Swamp", t.subject?.name, "the row being acted on was forgotten mid-retry")
+    }
+
+    @Test
+    fun aFailureDropsThePlanSoApplyCannotFireOnAStalePlan() {
+        val t = DeckTweak.add(deck, "x").picked(bolt).planned(DeckPlan()).failed("422: bad request")
+        assertFalse(t.canApply)
+        assertEquals("422: bad request", t.error)
+    }
+
+    @Test
+    fun aFailureCanCarryLineLevelErrorsAsWellAsTheHeadline() {
+        val t = DeckTweak.add(deck, "x").failed("2 line(s) could not be read", listOf("xx", "yy"))
+        assertEquals(listOf("xx", "yy"), t.errors)
+    }
+
+    @Test
+    fun finishingMarksItSavedAndNoLongerBusy() {
+        val t = DeckTweak.add(deck, "x").picked(bolt).planned(DeckPlan()).working().finished()
+        assertTrue(t.saved)
+        assertFalse(t.busy)
+    }
+}
+
+/** What each kind of change says about itself, including the cases that never reach the factory functions. */
+class DeckTweakSummaryEdgeCasesTest {
+
+    private val deck = Deck("alela", "Alela", "matt", "Alela, Cunning Conqueror", "UB", 3, null)
+
+    private fun card(name: String, qty: Int = 1) =
+        DeckCard(name, qty, null, qty, nameNorm = name.lowercase())
+
+    private val bolt = Found(1, "Lightning Bolt", null, "Instant", 4, "matt")
+
+    @Test
+    fun withNoKindChosenYetTheSummaryNamesTheRowIfThereIsOne() {
+        val onARow = DeckTweak.on(deck, "x", card("Swamp"))
+        assertEquals("Swamp", onARow.summary)
+    }
+
+    @Test
+    fun withNoKindAndNoRowTheSummaryIsBlankRatherThanNull() {
+        val blank = DeckTweak.on(deck, "x", card("Swamp")).copy(subject = null)
+        assertEquals("", blank.summary)
+    }
+
+    @Test
+    fun anAddWithNoCardPickedYetSaysSoRatherThanShowingBlank() {
+        assertEquals("Add a card", DeckTweak.add(deck, "x").summary)
+    }
+
+    @Test
+    fun aRemoveWithNoRowNamedSaysSoRatherThanShowingBlank() {
+        val noSubject = DeckTweak.on(deck, "x", card("Swamp"), Tweak.REMOVE).copy(subject = null)
+        assertEquals("Remove a card", noSubject.summary)
+    }
+
+    @Test
+    fun aQuantityChangeWithNoRowNamedSaysSoRatherThanShowingBlank() {
+        val noSubject = DeckTweak.on(deck, "x", card("Swamp"), Tweak.QUANTITY).copy(subject = null)
+        assertEquals("Change how many", noSubject.summary)
+    }
+
+    @Test
+    fun aSwapWithARowChosenButNoNewCardYetNamesTheRowComingOut() {
+        val noPickYet = DeckTweak.on(deck, "x", card("Swamp"), Tweak.SWAP)
+        assertEquals("Swap out Swamp", noPickYet.summary)
+    }
+
+    @Test
+    fun aSwapWithOnlyACardPickedAndNoRowYetReadsAsSwapACard() {
+        // The arrow form ("X → Y") needs both ends. With only the
+        // incoming card chosen, the subject being null takes the whole
+        // branch to the same fallback as having picked nothing at all
+        // — which is correct, but worth pinning: the half-picked state
+        // must not show an arrow pointing from nothing.
+        val onlyPick = DeckTweak.on(deck, "x", card("Swamp"), Tweak.SWAP).copy(subject = null, pick = bolt)
+        assertEquals("Swap a card", onlyPick.summary)
+    }
+
+    @Test
+    fun aSwapWithNeitherEndChosenSaysSoRatherThanShowingBlank() {
+        val neither = DeckTweak.on(deck, "x", card("Swamp"), Tweak.SWAP).copy(subject = null, pick = null)
+        assertEquals("Swap a card", neither.summary)
+    }
+}
+
+/**
+ * `listAfter`'s early-outs: the states a plan is never actually built
+ * from in practice (no card named, nothing to act on) but that the
+ * function has to not crash on and not quietly corrupt the list for.
+ */
+class DeckTweakListAfterEdgeCasesTest {
+
+    private val deck = Deck("alela", "Alela", "matt", "Alela, Cunning Conqueror", "UB", 3, null)
+
+    private fun card(name: String, qty: Int = 1, role: String? = null) =
+        DeckCard(name, qty, role, qty, nameNorm = name.lowercase())
+
+    private val cards = listOf(card("Sol Ring"), card("Counterspell", qty = 2), card("Swamp", qty = 10))
+
+    private val bolt = Found(1, "Lightning Bolt", null, "Instant", 4, "matt")
+
+    @Test
+    fun addingWithNoCardPickedLeavesTheListExactlyAsItWas() {
+        val t = DeckTweak.add(deck, "x")
+        assertEquals("1 Sol Ring\n2 Counterspell\n10 Swamp", t.listAfter(cards))
+    }
+
+    @Test
+    fun removingWithNoRowNamedLeavesTheListExactlyAsItWas() {
+        val t = DeckTweak.on(deck, "x", card("Swamp", 10), Tweak.REMOVE).copy(subject = null)
+        assertEquals("1 Sol Ring\n2 Counterspell\n10 Swamp", t.listAfter(cards))
+    }
+
+    @Test
+    fun aQuantityChangeWithNoRowNamedLeavesTheListExactlyAsItWas() {
+        val t = DeckTweak.on(deck, "x", card("Swamp", 10), Tweak.QUANTITY).copy(subject = null)
+        assertEquals("1 Sol Ring\n2 Counterspell\n10 Swamp", t.listAfter(cards))
+    }
+
+    @Test
+    fun aSwapWithNoRowNamedLeavesTheListExactlyAsItWas() {
+        val t = DeckTweak.on(deck, "x", card("Swamp", 10), Tweak.SWAP).copy(subject = null, pick = bolt)
+        assertEquals("1 Sol Ring\n2 Counterspell\n10 Swamp", t.listAfter(cards))
+    }
+
+    @Test
+    fun aSwapWithNoCardPickedLeavesTheListExactlyAsItWas() {
+        val t = DeckTweak.on(deck, "x", card("Swamp", 10), Tweak.SWAP).copy(pick = null)
+        assertEquals("1 Sol Ring\n2 Counterspell\n10 Swamp", t.listAfter(cards))
+    }
+
+    @Test
+    fun aSwapForACardNotActuallyInTheListStillInsertsTheNewOne() {
+        // `indexOf(s.shown)` comes back -1 when the subject named is
+        // not one of the rows handed in — stale state, since the list
+        // this screen opened from is the one the sheet was given. The
+        // new card still has to go in somewhere rather than vanish.
+        val notInList = card("Black Lotus", 1)
+        val t = DeckTweak.on(deck, "x", notInList, Tweak.SWAP).picked(bolt)
+        assertTrue("Lightning Bolt" in t.listAfter(cards), t.listAfter(cards))
+        assertTrue("Black Lotus" !in t.listAfter(cards))
+    }
+}

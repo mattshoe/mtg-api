@@ -1,8 +1,10 @@
 package org.mattshoe.mtg.core
 
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -78,6 +80,107 @@ class DeckEditStateTest {
     fun anEmptyListIsNotWorthReviewing() {
         assertFalse(DeckEditState(slug = "x").canReview)
     }
+
+    @Test
+    fun theLineCountIsTheSameRuleEveryPastedListUses() {
+        // Not reimplemented here — if `lineCount` ever drifted from
+        // `DeckList.countCards`, the number shown above the box and
+        // the number the server actually bills for would disagree.
+        val s = DeckEditState.of(deck, cards)
+        assertEquals(DeckList.countCards(s.list), s.lineCount)
+        assertEquals(2, s.lineCount)
+    }
+
+    @Test
+    fun workingMarksItBusyAndDropsTheLastComplaint() {
+        val s = DeckEditState.of(deck, cards)
+            .failed("network error", listOf("line 3"))
+            .working()
+        assertTrue(s.busy)
+        assertEquals(null, s.error)
+        assertTrue(s.errors.isEmpty())
+    }
+
+    @Test
+    fun aFailureWithNoLineLevelDetailLeavesTheListEmptyRatherThanNull() {
+        // The common case: the server refused the whole thing with one
+        // message and nothing line-by-line to show under it.
+        val s = DeckEditState.of(deck, cards).failed("deck not found")
+        assertEquals("deck not found", s.error)
+        assertTrue(s.errors.isEmpty())
+    }
+}
+
+/** The two generated serializers that make the wire's positional arrays readable. */
+class DeckPlanSerializersTest {
+
+    @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+    @Test
+    fun everyWireTypeHasADiscoverableSerializer() {
+        // Mechanical, but real: if `@Serializable(with = ...)` were
+        // ever dropped from one of these, `Json.decodeFromString` on
+        // anything containing it would fail to compile or silently
+        // use the wrong shape, not fail at runtime where this would
+        // catch it instead.
+        assertEquals("Tally", Tally.serializer().descriptor.serialName)
+        assertEquals("Shift", Shift.serializer().descriptor.serialName)
+        assertEquals("org.mattshoe.mtg.core.FreedCard", FreedCard.serializer().descriptor.serialName)
+        assertEquals("org.mattshoe.mtg.core.DeckRef", DeckRef.serializer().descriptor.serialName)
+    }
+
+    @Test
+    fun aTallyThatIsNotAnArrayAtAllFailsLoudlyRatherThanSilently() {
+        // A plan is read, never written by hand, so the only way this
+        // shape goes wrong is the server changing its wire format —
+        // and that should come back as a clear parse failure, not a
+        // Tally quietly holding "" and nought.
+        val json = Json { ignoreUnknownKeys = true }
+        assertFailsWith<SerializationException> {
+            json.decodeFromString<DeckPlan>("""{"added":[{"name":"Sol Ring","qty":1}]}""")
+        }
+    }
+
+    @Test
+    fun aShiftThatIsNotAnArrayAtAllFailsLoudlyRatherThanSilently() {
+        val json = Json { ignoreUnknownKeys = true }
+        assertFailsWith<SerializationException> {
+            json.decodeFromString<DeckPlan>("""{"changed":["not an array"]}""")
+        }
+    }
+
+    @Test
+    fun aPlanIsNeverWrittenBackToTheServerAsJson() {
+        // "plans are only ever read" is the whole design: the UI shows
+        // what the dry run said and sends the edited list back, never
+        // the plan itself. Both serializers refuse to encode, on
+        // purpose, so a future caller who tries learns immediately.
+        assertFailsWith<SerializationException> {
+            TallySerializer.serialize(NoOpEncoder, Tally("Sol Ring", 1))
+        }
+        assertFailsWith<SerializationException> {
+            ShiftSerializer.serialize(NoOpEncoder, Shift("Forest", 8, 10))
+        }
+    }
+}
+
+/** An encoder that does nothing: only here to prove the two serializers refuse to run at all. */
+@OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+private object NoOpEncoder : kotlinx.serialization.encoding.Encoder {
+    override val serializersModule = kotlinx.serialization.modules.EmptySerializersModule()
+    override fun encodeBoolean(value: Boolean) {}
+    override fun encodeByte(value: Byte) {}
+    override fun encodeChar(value: Char) {}
+    override fun encodeDouble(value: Double) {}
+    override fun encodeFloat(value: Float) {}
+    override fun encodeInt(value: Int) {}
+    override fun encodeLong(value: Long) {}
+    override fun encodeShort(value: Short) {}
+    override fun encodeString(value: String) {}
+    override fun encodeEnum(enumDescriptor: kotlinx.serialization.descriptors.SerialDescriptor, index: Int) {}
+    override fun encodeInline(descriptor: kotlinx.serialization.descriptors.SerialDescriptor) = this
+    override fun encodeNull() {}
+    override fun beginStructure(descriptor: kotlinx.serialization.descriptors.SerialDescriptor) =
+        throw UnsupportedOperationException("never reached: serialize throws first")
 }
 
 class DisassembleStateTest {
@@ -107,6 +210,23 @@ class DisassembleStateTest {
     @Test
     fun doneMeansDone() {
         assertFalse(s.planned(Disassembly(freed = 1)).finished().canGo)
+    }
+
+    @Test
+    fun itCannotFireAgainWhileTheFirstPressIsStillInFlight() {
+        val t = s.planned(Disassembly(freed = 1)).working()
+        assertTrue(t.busy)
+        assertFalse(t.canGo, "a second disassemble could be sent while the first was in flight")
+    }
+
+    @Test
+    fun aFailureLeavesTheWarningReadableSoItCanBeTriedAgain() {
+        val t = s.planned(Disassembly(freed = 42)).working().failed("the deck was already gone")
+        assertFalse(t.busy)
+        assertEquals("the deck was already gone", t.error)
+        // The dry run's own numbers survive the failure, since this
+        // is the same confirmation box, not a reset one.
+        assertTrue(t.warning.contains("42 cards"))
     }
 }
 
@@ -145,6 +265,28 @@ class DeckPlanWireTest {
         val plan = json.decodeFromString<DeckPlan>("""{"card_count":99,"dry_run":true}""")
         assertTrue(plan.nothingChanges)
         assertEquals(0, plan.buying)
+    }
+
+    @Test
+    fun everyFieldAPlanCanCarryDecodesIncludingTheOnesTheFirstTestLeftOut() {
+        // `applied`, `created`, `slug` and `errors` only ever showed up
+        // on the apply response, never the dry run, so a decode test
+        // built only from a dry-run body never exercised them.
+        val body = """
+            {"deck":{"slug":"alela","name":"Alela","owner":"matt"},
+             "commander":"Alela, Artful Provocateur","commander_changed":false,
+             "rows":2,"card_count":2,"owned_count":1,
+             "added":[],"removed":[],"changed":[],"newly_missing":[],
+             "acquired":[],"returned":[],
+             "applied":true,"dry_run":false,"created":true,
+             "slug":"alela-2","errors":["one line could not be read"]}
+        """.trimIndent()
+        val plan = json.decodeFromString<DeckPlan>(body)
+        assertTrue(plan.applied)
+        assertTrue(plan.created)
+        assertEquals("alela-2", plan.slug)
+        assertEquals(listOf("one line could not be read"), plan.errors)
+        assertTrue(plan.nothingChanges, "an empty diff was read as a change")
     }
 
     @Test

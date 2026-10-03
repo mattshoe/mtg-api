@@ -217,6 +217,73 @@ class NewDeckTest {
         assertNull(d.checked)
         assertFalse(d.canLeaveCheck)
     }
+
+    // ------------------------------------------- needsCommander, by format
+
+    @Test
+    fun noFormatChosenYetNeedsNoCommander() {
+        // A fresh wizard must not read as "wants a commander" before
+        // anybody has picked a format at all.
+        assertFalse(NewDeck().needsCommander)
+    }
+
+    @Test
+    fun aCommanderFormatNeedsOneAndANonCommanderFormatDoesNot() {
+        assertTrue(NewDeck().pick(Format.COMMANDER).needsCommander)
+        assertTrue(NewDeck().pick(Format.OATHBREAKER).needsCommander)
+        assertFalse(NewDeck().pick(Format.STANDARD).needsCommander)
+    }
+
+    @Test
+    fun cardsCannotBeLeftWithAnEmptyListEvenWhenEverythingElseIsAnswered() {
+        // canLeaveCards is canLeaveCommander with one more condition
+        // (cardCount > 0): a commander-less format must still refuse
+        // an empty list, not wave it through because the commander
+        // gate was the only one it remembers to check.
+        val noCards = NewDeck().pick(Format.STANDARD).assign(Owner.MATT).rename("Mono Red")
+        assertFalse(noCards.canLeaveCards, "an empty list was treated as a complete deck")
+        assertTrue(noCards.type("1 Sol Ring").canLeaveCards)
+    }
+
+    @Test
+    fun cardsCannotBeLeftWithoutACommanderEvenWithCardsTyped() {
+        val noCommander = NewDeck().pick(Format.COMMANDER).assign(Owner.MATT).rename("Alela").type("1 Sol Ring")
+        assertFalse(noCommander.canLeaveCards, "cards were reachable before the commander step passed")
+    }
+
+    @Test
+    fun onlyACardTheCollectionActuallyVouchesForCountsAsHeld() {
+        // `held` requires ok == true. A card that failed its own check
+        // must not be read as "in bulk" just because something upstream
+        // tagged its source as the collection by mistake.
+        val s = ready().type("1 Sol Ring").validated(
+            Validation(
+                ok = false, checked = 1, unknown = 1,
+                cards = listOf(
+                    NameCheck(name = "Sol Ring", nameNorm = "sol ring", ok = false, source = "collection"),
+                ),
+            ),
+        )
+        assertEquals(Source.ADD, s.plan.single().from, "a failed check was read as something owned")
+    }
+
+    @Test
+    fun failingClearsBusyAndRecordsWhatWentWrong() {
+        val s = ready().working("Creating…").failed("the server is down")
+        assertNull(s.busy)
+        assertEquals("the server is down", s.error)
+    }
+
+    @Test
+    fun theInstanceSlugIsTheSameRuleAsTheStaticOne() {
+        // Screens read `deck.slug`, not `NewDeck.slugify(deck.name)` —
+        // if the instance property ever drifted from the companion
+        // function, the preview address and the one the server gives
+        // the deck would quietly disagree.
+        val s = NewDeck(name = "Kardur, Doomscourge")
+        assertEquals(NewDeck.slugify("Kardur, Doomscourge"), s.slug)
+        assertEquals("kardur-doomscourge", s.slug)
+    }
 }
 
 /** A deck is created once, however many times the button is pressed. */
@@ -246,4 +313,153 @@ class CreateInFlightTest {
         // and every call carries its own idempotency key.
         assertFalse(ready().working("Creating…").canCreate, "it offered to create a second deck")
     }
+}
+
+/**
+ * Taking the first card of a pasted list as the commander.
+ *
+ * Every decklist export puts it first, so asking somebody to retype a
+ * name the list already has is work nobody should be asked to redo.
+ */
+class CommanderFromListTest {
+
+    @Test
+    fun theFirstCardMovesIntoTheCommanderBoxAndOutOfTheList() {
+        val s = NewDeck(list = "1 Alela, Artful Provocateur\n1 Sol Ring\n1 Opt").commanderFromList()
+        assertEquals("Alela, Artful Provocateur", s.commander)
+        assertEquals("1 Sol Ring\n1 Opt", s.list)
+    }
+
+    @Test
+    fun takingTheCommanderOffTheListInvalidatesWhateverWasChecked() {
+        // The check that passed was about a list that still had the
+        // commander's line in it.
+        val s = NewDeck(list = "1 Alela\n1 Sol Ring", checked = Validation(checked = 2, unknown = 0, ok = true))
+            .commanderFromList()
+        assertNull(s.checked)
+        assertFalse(s.canLeaveCheck)
+    }
+
+    @Test
+    fun theSuggestionBoxShowsTheNameThatWasJustTakenOffTheList() {
+        val s = NewDeck(list = "1 Alela, Artful Provocateur\n1 Sol Ring").commanderFromList()
+        assertEquals("Alela, Artful Provocateur", s.hint.term)
+    }
+
+    @Test
+    fun anEmptyListHasNoFirstCardSoNothingMoves() {
+        // Nothing to promote, and nothing to break either: pressing
+        // the button on an empty box must be a no-op, not a crash.
+        val s = NewDeck(commander = "Alela", list = "")
+        assertEquals(s, s.commanderFromList())
+    }
+
+    @Test
+    fun aListThatIsOnlyCommentsAndHeadersHasNoFirstCardEither() {
+        val s = NewDeck(list = "# a note\nCommander:")
+        assertEquals(s, s.commanderFromList())
+    }
+}
+
+/** The suggestion box for the commander field, and what typing in it does. */
+class CommanderHintingTest {
+
+    @Test
+    fun aSuggestionMovingThroughTheListUpdatesTheBoxButNotTheCommanderYet() {
+        // `hinting` is the list moving under a highlight, not a pick —
+        // it must show whatever the completion widget holds without
+        // quietly committing a different commander than what was typed.
+        val s = NewDeck(commander = "Al").hinting(Completion(term = "Alela, Artful Provocateur"))
+        assertEquals("Alela, Artful Provocateur", s.commander)
+    }
+
+    @Test
+    fun movingTheHintInvalidatesAStaleCheck() {
+        val s = NewDeck(commander = "Al", checked = Validation(checked = 1, unknown = 0, ok = true))
+            .hinting(Completion(term = "Alela"))
+        assertNull(s.checked)
+    }
+}
+
+/**
+ * Every step the wizard can be asked to reach, and what `goTo` does
+ * when the step asked for is not one this build of the deck actually
+ * has.
+ */
+class ReachableAndGoToTest {
+
+    @Test
+    fun theFormatStepIsAlwaysReachableEvenBeforeAnythingIsAnswered() {
+        assertTrue(NewDeck().reachable(DeckStep.FORMAT))
+    }
+
+    @Test
+    fun theDoneStepIsOnlyReachableOnceTheDeckExists() {
+        val s = NewDeck().pick(Format.COMMANDER).assign(Owner.MATT).rename("Alela")
+            .setCommander("Alela, Artful Provocateur").type("1 Sol Ring")
+            .validated(Validation(checked = 1, unknown = 0, ok = true))
+        assertFalse(s.reachable(DeckStep.DONE), "done was reachable before anything was created")
+        assertTrue(s.finished().reachable(DeckStep.DONE))
+    }
+
+    @Test
+    fun askingForAStepThisFormatDoesNotHaveAndHasNotEarnedLandsOnFormat() {
+        // Standard has no COMMANDER step at all (it is filtered out of
+        // `steps`), so when it is also not yet reachable the "land on
+        // the furthest step actually answered" search has nothing in
+        // the list to match against and has to fall all the way back,
+        // rather than getting stuck on a step the UI never draws.
+        val s = NewDeck().pick(Format.STANDARD)
+        assertFalse(s.canLeaveName, "the test needs an unreachable Commander step to prove anything")
+        assertEquals(DeckStep.FORMAT, s.goTo(DeckStep.COMMANDER).step)
+    }
+
+    @Test
+    fun aStepFilteredOutOfThisFormatButAlreadyEarnedIsStillHandedBack() {
+        // `reachable` is a chain of gates, not a check against `steps`,
+        // so once the name step is passed, COMMANDER answers true for
+        // Standard too even though Standard never draws that screen.
+        // Worth pinning down: it means `goTo` alone will not stop a
+        // caller from landing on a step this format does not have —
+        // only reading from `steps` does.
+        val s = NewDeck().pick(Format.STANDARD).assign(Owner.MATT).rename("Mono Red")
+        assertTrue(s.reachable(DeckStep.COMMANDER))
+        assertEquals(DeckStep.COMMANDER, s.goTo(DeckStep.COMMANDER).step)
+    }
+
+    @Test
+    fun askingForDoneBeforeTheDeckExistsFallsAllTheWayBackToFormat() {
+        // DONE is filtered out of `steps` itself, so when it is not
+        // yet reachable the usual "land on the furthest answered step"
+        // search has nothing to search — it has nowhere to land but
+        // the very start, rather than getting stuck mid-wizard.
+        val s = ready().validated(Validation(checked = 1, unknown = 0, ok = true))
+        assertFalse(s.reachable(DeckStep.DONE))
+        assertEquals(DeckStep.FORMAT, s.goTo(DeckStep.DONE).step)
+    }
+
+    @Test
+    fun onceTheDeckExistsGoingToDoneLandsOnDone() {
+        val done = ready().validated(Validation(checked = 1, unknown = 0, ok = true)).finished()
+        assertEquals(DeckStep.DONE, done.goTo(DeckStep.DONE).step)
+    }
+
+    @Test
+    fun goingToAStepThatIsActuallyReachableLandsExactlyThere() {
+        val s = NewDeck().pick(Format.COMMANDER)
+        assertEquals(DeckStep.OWNER, s.goTo(DeckStep.OWNER).step)
+    }
+
+    @Test
+    fun goingBackwardsIsAlwaysAllowed() {
+        // Every earlier step was, by definition, already answered to
+        // get this far, so going back can never be refused.
+        val s = ready().validated(Validation(checked = 1, unknown = 0, ok = true))
+        assertEquals(DeckStep.FORMAT, s.goTo(DeckStep.FORMAT).step)
+        assertEquals(DeckStep.NAME, s.goTo(DeckStep.NAME).step)
+    }
+
+    private fun ready() = NewDeck()
+        .pick(Format.COMMANDER).assign(Owner.MATT).rename("Alela")
+        .setCommander("Alela, Artful Provocateur").type("1 Sol Ring")
 }
