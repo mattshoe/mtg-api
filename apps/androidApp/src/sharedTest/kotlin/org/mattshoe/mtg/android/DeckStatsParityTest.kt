@@ -315,6 +315,7 @@ class DeckStatsParityTest {
 
     @Test
     fun theTallestColumnFillsTheChartAndTheRestAreToScale() {
+        Parity.needsRealRendering()
         show(deck())
         val one = height("curve-bar-1")
         val two = height("curve-bar-2")
@@ -327,6 +328,7 @@ class DeckStatsParityTest {
 
     @Test
     fun twoColumnsOnlyDrawAlikeWhenTheyAreAlike() {
+        Parity.needsRealRendering()
         // Fifteen, fifteen and seventeen all drew the same height on
         // the web: the bar was a fraction of the whole column, number
         // included, so anything near the top overflowed.
@@ -417,6 +419,7 @@ class DeckStatsParityTest {
 
     @Test
     fun theNeedsAndMakesBarsShareOneScale() {
+        Parity.needsRealRendering()
         // Ten pips wanted, five sources: the makes bar has to be half
         // the needs bar, or the pair is not a comparison.
         show(lopsidedDeck())
@@ -537,6 +540,7 @@ class DeckStatsParityTest {
 
     @Test
     fun everyPipLetterFitsInsideItsOwnDisc() {
+        Parity.needsRealRendering()
         // The screenshot found this one: a `Text` keeps the theme's
         // line height whatever its font size, so a 9sp letter sat in
         // a 24sp line and centring the line left the glyph hanging
@@ -716,6 +720,7 @@ class DeckStatsParityTest {
      */
     @Test
     fun everyChartIsPhotographed() {
+        Parity.needsRealRendering()
         show(deck())
         shootRoot("01-top")
         shoot("02-curve", "curve")
@@ -731,6 +736,7 @@ class DeckStatsParityTest {
 
     @Test
     fun theTallCurveIsPhotographed() {
+        Parity.needsRealRendering()
         show(tallDeck())
         shoot("08-curve-tall", "curve")
     }

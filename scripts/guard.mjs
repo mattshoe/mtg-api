@@ -74,6 +74,15 @@ const started = Date.now();
 const child = spawn(cmd, args, { stdio: 'inherit', detached: true });
 writeFileSync(PIDFILE, String(child.pid));
 
+// A command that is not there must say so, not throw an unhandled
+// 'error' event and bury the reason under a Node stack trace.
+child.on('error', (err) => {
+  clearTimeout(timer);
+  try { unlinkSync(PIDFILE); } catch { /* already gone */ }
+  console.error(`guard: could not run \`${[cmd, ...args].join(' ')}\` — ${err.message}`);
+  process.exit(127);
+});
+
 let killedBy = null;
 const timer = setTimeout(() => {
   killedBy = `timed out after ${seconds}s`;

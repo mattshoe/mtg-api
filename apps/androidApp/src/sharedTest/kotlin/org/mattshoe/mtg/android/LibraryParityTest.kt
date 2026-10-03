@@ -317,6 +317,7 @@ class LibraryParityTest {
 
     @Test
     fun aChosenColourIsTellableApartWithoutHue() {
+        Parity.needsRealRendering()
         panel()
         fold(Facet.COLOUR)
         // Every one of the six, measured off the screen: the repo owner
@@ -657,6 +658,7 @@ class LibraryParityTest {
 
     @Test
     fun searchingEmptyAndFailedEachSayWhatHappened() {
+        Parity.needsRealRendering()
         screen(Library().loaded(emptyList(), 0))
         Parity.check(
             Fact("nothing matched, and it says so") { said("Nothing matches that.") },

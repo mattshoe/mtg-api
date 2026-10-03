@@ -962,6 +962,7 @@ class TweakSheetParityTest {
 
     @Test
     fun aShutButtonIsNotOnlyADifferentColour() {
+        Parity.needsRealRendering()
         // Whoever owns this cannot tell two hues apart, so "off" has to
         // be legible as something other than a hue. Measured off the
         // pixels, because a colour constant in the source says nothing
@@ -1058,6 +1059,7 @@ class TweakSheetParityTest {
 
     @Test
     fun withAPlanTheOnlyThingOfferedIsApplyingIt() {
+        Parity.needsRealRendering()
         sheet(swapping().picked(bolt).planned(plan()))
         Parity.check(
             fact("the button is named by what it does") { says("${Tweak.SWAP.verb} it") },

@@ -163,6 +163,7 @@ class ScreensTest {
 
     @Test
     fun theLibraryShowsTheRangeAndTheRows() {
+        Parity.needsRealRendering()
         val lib = Library().loaded(listOf(card("Sol Ring"), card("Arcane Signet")), 250)
         content { LibraryScreen(lib, {}, {}, {}) }
         rule.onNodeWithText("Sol Ring").assertIsDisplayed()

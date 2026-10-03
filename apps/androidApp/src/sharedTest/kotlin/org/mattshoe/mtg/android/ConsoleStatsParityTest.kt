@@ -426,6 +426,7 @@ class ConsoleStatsParityTest {
 
     @Test
     fun aTableWiderThanThePhoneScrollsSidewaysRatherThanVanishing() {
+        Parity.needsRealRendering()
         val cols = (0..7).map { "column_$it" }
         showConsole(
             ConsoleState(sql = "SELECT 1")
@@ -458,6 +459,7 @@ class ConsoleStatsParityTest {
 
     @Test
     fun theErrorIsNotToldByItsColourAlone() {
+        Parity.needsRealRendering()
         showConsole(ConsoleState(sql = "SELEC 1").failed("boom"))
         val lift = ownSurface("err")
         assertTrue(
@@ -594,6 +596,7 @@ class ConsoleStatsParityTest {
 
     @Test
     fun aFailedLineIsNotToldByItsColourAlone() {
+        Parity.needsRealRendering()
         showLogs(LogsState().loaded(lines()))
         val bad = lightness("log-cell-1-0")
         val ok = lightness("log-cell-0-0")
@@ -605,6 +608,7 @@ class ConsoleStatsParityTest {
 
     @Test
     fun theFailedMarkIsDrawnDownTheRowsLeadingEdge() {
+        Parity.needsRealRendering()
         showLogs(LogsState().loaded(lines()))
         val bmp = tag("log-cell-1-0").captureToImage().asAndroidBitmap()
         val okBmp = tag("log-cell-0-0").captureToImage().asAndroidBitmap()
@@ -705,6 +709,7 @@ class ConsoleStatsParityTest {
 
     @Test
     fun theToggleIsMarkedWhileItIsInForce() {
+        Parity.needsRealRendering()
         showLogs(LogsState().loaded(lines()))
         val off = lightnessOf(
             rule.onNode(hasText("Errors only (1)")).captureToImage().asAndroidBitmap(),
@@ -791,6 +796,7 @@ class ConsoleStatsParityTest {
     /** The gap found elsewhere today: facts run together instead of tags. */
     @Test
     fun eachNumberIsATagRatherThanProseBesideItsLabel() {
+        Parity.needsRealRendering()
         showStats(StatsState().loaded(totals()))
         val lift = ownSurface("stat-value-0")
         assertTrue(
@@ -847,6 +853,7 @@ class ConsoleStatsParityTest {
 
     @Test
     fun bothIsTheScopeWhenNoOwnerIsChosen() {
+        Parity.needsRealRendering()
         showStats(StatsState().loaded(totals()))
         val both = seg("Both")
         assertTrue(both - seg("Matt") > 4.0, "Both is the one in force; $both vs ${seg("Matt")}")
@@ -855,6 +862,7 @@ class ConsoleStatsParityTest {
 
     @Test
     fun theActiveScopeIsMarked() {
+        Parity.needsRealRendering()
         showStats(StatsState().scopedTo(Owner.MATT).loaded(totals()))
         val matt = seg("Matt")
         assertTrue(matt - seg("Both") > 4.0, "Matt is the one in force; $matt vs ${seg("Both")}")
@@ -863,6 +871,7 @@ class ConsoleStatsParityTest {
 
     @Test
     fun theActiveScopeIsNotMarkedByHueAlone() {
+        Parity.needsRealRendering()
         showStats(StatsState().scopedTo(Owner.KAYLA).loaded(totals()))
         // Lightness is the whole assertion: these numbers come off the
         // screen through a grey filter, which is what the owner sees.
@@ -872,6 +881,7 @@ class ConsoleStatsParityTest {
 
     @Test
     fun onlyOneScopeIsMarkedAtATime() {
+        Parity.needsRealRendering()
         showStats(StatsState().scopedTo(Owner.MATT).loaded(totals()))
         val lit = listOf("Both", "Matt", "Kayla").associateWith { seg(it) }
         val brightest = lit.maxByOrNull { it.value }!!
@@ -907,6 +917,7 @@ class ConsoleStatsParityTest {
 
     @Test
     fun theMarkMovesWithTheChoice() {
+        Parity.needsRealRendering()
         showStats(StatsState().loaded(totals()))
         rule.onNodeWithText("Kayla").performClick()
         rule.waitForIdle()
@@ -924,6 +935,7 @@ class ConsoleStatsParityTest {
 
     @Test
     fun theScopeSwitcherStaysUpWhileTheNumbersLoad() {
+        Parity.needsRealRendering()
         showStats(StatsState().scopedTo(Owner.MATT).loading())
         rule.onNodeWithText("Matt").assertExists()
         assertTrue(seg("Matt") - seg("Both") > 4.0)
@@ -948,6 +960,7 @@ class ConsoleStatsParityTest {
      */
     @Test
     fun theConsoleIsPhotographed() {
+        Parity.needsRealRendering()
         showConsole(ConsoleState())
         shootRoot("c01-empty")
         console = ConsoleState(sql = "SELECT name, qty FROM cards LIMIT 10").running()
@@ -969,6 +982,7 @@ class ConsoleStatsParityTest {
 
     @Test
     fun theLogIsPhotographed() {
+        Parity.needsRealRendering()
         showLogs(LogsState().loaded(lines()))
         shootRoot("l01-rows")
         shoot("l02-grid", "log-grid")
@@ -985,6 +999,7 @@ class ConsoleStatsParityTest {
 
     @Test
     fun theStatsScreenIsPhotographed() {
+        Parity.needsRealRendering()
         showStats(StatsState().loaded(totals()))
         shootRoot("s01-both")
         stats = StatsState().scopedTo(Owner.MATT).loaded(totals())

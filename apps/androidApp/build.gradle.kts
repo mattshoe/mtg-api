@@ -75,10 +75,31 @@ android {
         }
     }
 
+    // One copy of the screen tests, run two ways.
+    //
+    // They are all `@RunWith(AndroidJUnit4::class)`, which delegates to
+    // Robolectric on the JVM and to the device runner on a device, so
+    // the same file is both suites. `testDebugUnitTest` is the one that
+    // runs on every change, in under a minute; `connectedDebugAndroidTest`
+    // is the same assertions against real hardware, with the screenshots.
+    sourceSets {
+        getByName("test").kotlin.srcDir("src/sharedTest/kotlin")
+        getByName("androidTest").kotlin.srcDir("src/sharedTest/kotlin")
+    }
+
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
-            all { it.systemProperty("robolectric.graphicsMode", "NATIVE") }
+            // Not `graphicsMode = NATIVE`. It was here so the JVM run
+            // could capture pixels, and it crashed the test executor
+            // with SIGABRT partway through a run — green once, dead
+            // the next time. Nothing on the JVM needs real pixels any
+            // more: every test that reads them is marked
+            // `needsRealRendering` and runs on a device.
+            all {
+                it.maxHeapSize = "2g"
+                it.testLogging { events("failed") }
+            }
         }
     }
     compileOptions {

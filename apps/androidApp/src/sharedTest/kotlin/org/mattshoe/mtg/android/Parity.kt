@@ -1,10 +1,12 @@
 package org.mattshoe.mtg.android
 
 import android.graphics.Bitmap
+import android.os.Build
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.captureToImage
 import androidx.test.platform.app.InstrumentationRegistry
+import org.junit.Assume
 import java.io.File
 
 /**
@@ -20,6 +22,39 @@ import java.io.File
  * drift survived. These tests look at the running app instead.
  */
 object Parity {
+
+    /**
+     * Is this running on real hardware, or on the JVM?
+     *
+     * These tests are one source run two ways: `testDebugUnitTest`
+     * puts them on the JVM through Robolectric, which takes under
+     * three minutes for all of them, and `connectedDebugAndroidTest`
+     * puts the same assertions on a device, which takes twenty.
+     *
+     * Almost everything they check — what is on screen, what is
+     * enabled, what a press does — is true in both places. Reading
+     * actual pixels is not: Robolectric cannot force the redraw that
+     * `captureToImage` needs, so a screenshot there is not a
+     * screenshot of anything.
+     */
+    val onDevice: Boolean = !Build.FINGERPRINT.contains("robolectric", ignoreCase = true)
+
+    /**
+     * Skip, rather than pass, when the answer depends on real
+     * rendering.
+     *
+     * An assumption and not an early return on purpose. A check that
+     * silently returns reads as a green test and proves nothing,
+     * which is exactly how the share menu stayed broken for weeks.
+     * This way the JVM run reports it skipped and the device run
+     * reports it passed, and neither of them lies.
+     */
+    fun needsRealRendering() {
+        Assume.assumeTrue(
+            "needs a device: Robolectric does not render pixels or measure quite like one",
+            onDevice,
+        )
+    }
 
     /**
      * Where screenshots land, to be pulled off the device.
@@ -41,7 +76,11 @@ object Parity {
      * sits beside assertions that do the proving — the picture is for
      * the person deciding whether "the same" really looks the same.
      */
-    fun SemanticsNodeInteraction.shoot(name: String): File {
+    fun SemanticsNodeInteraction.shoot(name: String): File? {
+        // On the JVM there is nothing to photograph. Evidence is not
+        // an assertion, so its absence is not a failure — the same
+        // test's assertions have already run either way.
+        if (!onDevice) return null
         val file = File(shots, "$name.png")
         val bitmap = captureToImage().asAndroidBitmap()
         file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }

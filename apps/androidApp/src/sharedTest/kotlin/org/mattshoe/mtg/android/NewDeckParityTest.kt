@@ -204,7 +204,7 @@ class NewDeckParityTest {
     private fun shoot(name: String) {
         rule.waitForIdle()
         val out = runCatching {
-            with(Parity) { rule.onNode(isDialog()).shoot("newdeck-$name").absolutePath }
+            with(Parity) { rule.onNode(isDialog()).shoot("newdeck-$name")?.absolutePath ?: "no device" }
         }
         shots += out.getOrElse { "newdeck-$name.png FAILED: ${it.message}" }
     }
