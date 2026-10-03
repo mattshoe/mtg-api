@@ -24,6 +24,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -116,6 +117,21 @@ class TweakSheetParityTest {
     // ---------------------------------------------------------- reading
 
     private fun nodes(matcher: SemanticsMatcher) = rule.onAllNodes(matcher).fetchSemanticsNodes()
+
+    /**
+     * The sheet's right edge, in the units a node's bounds are in.
+     *
+     * `getUnclippedBoundsInRoot()` is in dp and `SemanticsNode.boundsInRoot`
+     * is in pixels, and comparing one against the other said everything
+     * on a 400dp sheet ran off a 400dp sheet — by exactly the density.
+     * The overflow checks were measuring the screen's density, not the
+     * layout.
+     */
+    private fun rightEdgePx(): Float {
+        val d = InstrumentationRegistry.getInstrumentation()
+            .targetContext.resources.displayMetrics.density
+        return rule.onNodeWithTag("tweak-sheet").getUnclippedBoundsInRoot().right.value * d + 1f
+    }
 
     private fun says(text: String, substring: Boolean = false) =
         nodes(hasText(text, substring = substring)).isNotEmpty()
@@ -679,12 +695,13 @@ class TweakSheetParityTest {
         sheet(adding(), width = 400)
         type("han")
         push(state().searched(listOf(long), listOf("Hanweir Battlements")))
-        val edge = rule.onNodeWithTag("tweak-sheet").getUnclippedBoundsInRoot().right.value + 1f
+        val edgeDp = rule.onNodeWithTag("tweak-sheet").getUnclippedBoundsInRoot().right.value + 1f
         listOf(0, 1).forEach { i ->
             val row = rule.onNodeWithTag("tweak-hit-$i").getUnclippedBoundsInRoot()
-            assertTrue(row.right.value <= edge, "hit $i runs to ${row.right.value}, past $edge")
+            assertTrue(row.right.value <= edgeDp, "hit $i runs to ${row.right.value}, past $edgeDp")
         }
         // And nothing written on the row does either.
+        val edge = rightEdgePx()
         nodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.Text)).forEach {
             assertTrue(
                 it.boundsInRoot.right <= edge,
@@ -1136,9 +1153,13 @@ class TweakSheetParityTest {
     @Test
     fun nothingOnTheSheetRunsOffAPhone() {
         sheet(swapping().picked(bolt).planned(plan()), width = 400)
-        val edge = rule.onNodeWithTag("tweak-sheet").getUnclippedBoundsInRoot().right.value + 1f
+        val edge = rightEdgePx()
         val over = nodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.Text))
             .filter { it.boundsInRoot.right > edge }
-        assertTrue(over.isEmpty(), "${over.size} things run off the right edge of a 400dp phone")
+        assertTrue(
+            over.isEmpty(),
+            "${over.size} things run off the right edge of a 400dp phone, " +
+                "furthest to ${over.maxOfOrNull { it.boundsInRoot.right }}",
+        )
     }
 }

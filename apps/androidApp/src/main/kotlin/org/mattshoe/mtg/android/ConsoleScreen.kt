@@ -162,11 +162,16 @@ private fun cells(l: LogLine) = listOf(
 private fun ErrBlock(message: String) {
     Text(
         message,
+        // The tag goes on the surface, not inside it. Below the
+        // padding it named the inner text box, so anything measuring
+        // "is this block lighter than what it sits on" sampled the
+        // block's own tint on both sides of its reported edge and
+        // found no difference at all.
         Modifier.fillMaxWidth()
+            .testTag("err")
             .background(Bad.copy(alpha = 0.12f), RadiusSm)
             .border(1.dp, Bad.copy(alpha = 0.42f), RadiusSm)
             .padding(horizontal = 13.dp, vertical = 10.dp)
-            .testTag("err")
             .semantics { contentDescription = "error: $message" },
         color = Bad,
         fontFamily = FontFamily.Monospace,

@@ -204,7 +204,13 @@ class ConsoleStatsParityTest {
                 n++
             }
         }
-        return if (n == 0) 0.0 else sum / n
+        // Not 0.0. A window that fell off the bitmap — a node below
+        // the fold, a band above the first row — used to come back as
+        // zero, and a zero subtracted from a zero is a lift of
+        // exactly nothing, which reads like a real finding and is a
+        // measurement that never happened.
+        if (n == 0) error("sampled $x0..$x1 x $y0..$y1 of a ${bmp.width}x${bmp.height} shot, which is nowhere")
+        return sum / n
     }
 
     /**
@@ -217,6 +223,13 @@ class ConsoleStatsParityTest {
      * cannot read the hue.
      */
     private fun ownSurface(t: String): Double {
+        // Into view first. The console scrolls, the error block sits
+        // under a 180dp SQL box and a results panel, and off a short
+        // screen it is simply not painted — so both bands sampled the
+        // page behind it, came out identical, and reported a lift of
+        // zero for a surface that was never on the screenshot.
+        tag(t).performScrollTo()
+        rule.waitForIdle()
         val bmp = rule.onRoot().captureToImage().asAndroidBitmap()
         val d = InstrumentationRegistry.getInstrumentation()
             .targetContext.resources.displayMetrics.density
@@ -225,6 +238,9 @@ class ConsoleStatsParityTest {
         val l = px(b.left.value) + 6
         val r = px(b.right.value) - 6
         val top = px(b.top.value)
+        check(top - 8 >= 0 && top + 9 < bmp.height && r > l) {
+            "$t sits at $b on a ${bmp.width}x${bmp.height} shot, so there is no band above it to compare against"
+        }
         val inside = mean(bmp, l, r, top + 3, top + 9)
         val outside = mean(bmp, l, r, top - 8, top - 2)
         return inside - outside
@@ -592,14 +608,24 @@ class ConsoleStatsParityTest {
         showLogs(LogsState().loaded(lines()))
         val bmp = tag("log-cell-1-0").captureToImage().asAndroidBitmap()
         val okBmp = tag("log-cell-0-0").captureToImage().asAndroidBitmap()
+        // Past the grid's own 1dp border first. Sampling from x=0
+        // read that border on both rows — the same pixels, the same
+        // number twice — and called a rule that was plainly there
+        // missing.
+        val d = InstrumentationRegistry.getInstrumentation()
+            .targetContext.resources.displayMetrics.density
+        val border = kotlin.math.ceil(d).toInt()
         fun edge(b: Bitmap): Double {
             val y = b.height / 2
             var sum = 0.0
-            for (x in 0 until minOf(3, b.width)) {
+            var n = 0
+            for (x in border until minOf(border + 4, b.width)) {
                 val p = b.getPixel(x, y)
                 sum += 0.299 * ((p shr 16) and 0xFF) + 0.587 * ((p shr 8) and 0xFF) + 0.114 * (p and 0xFF)
+                n++
             }
-            return sum / minOf(3, b.width)
+            check(n > 0) { "the cell is only ${b.width}px wide, so there is nothing to read" }
+            return sum / n
         }
         assertTrue(edge(bmp) - edge(okBmp) > 10.0, "the rule down the left edge: ${edge(bmp)} vs ${edge(okBmp)}")
     }
