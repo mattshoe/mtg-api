@@ -18,10 +18,19 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -35,6 +44,9 @@ import org.mattshoe.mtg.core.Pip
 import org.mattshoe.mtg.core.Prices
 import org.mattshoe.mtg.core.DecksState
 import org.mattshoe.mtg.core.Design
+import org.mattshoe.mtg.core.ExportTo
+import org.mattshoe.mtg.core.ShareWhat
+import org.mattshoe.mtg.core.Tweak
 
 /**
  * Decks, on Android. Sibling of `DecksPage`.
@@ -53,7 +65,13 @@ fun DecksScreen(
     onNew: () -> Unit = {},
     onEdit: (Deck) -> Unit = {},
     onDisassemble: (Deck) -> Unit = {},
+    /** Rename the open deck. The slug moves with the name. */
+    onRename: (Deck) -> Unit = {},
     onOpenCard: (DeckCard, String) -> Unit = { _, _ -> },
+    /** Maintenance, one card at a time, without leaving the screen. */
+    onAddCard: () -> Unit = {},
+    onTweak: (DeckCard, Tweak?) -> Unit = { _, _ -> },
+    onShare: (ShareWhat, ExportTo) -> Unit = { _, _ -> },
 ) {
     Column(
         Modifier.fillMaxWidth()
@@ -69,18 +87,32 @@ fun DecksScreen(
                 state.error != null -> Line("Could not load decks: ${state.error}", Bad)
                 state.decks.isEmpty() -> Line("No decks yet.", Ink3)
                 else -> state.byOwner.forEach { (owner, decks) ->
-                    Line(
+                    // A shelf, with a heading that says how many are on
+                    // it. The web's `.owner-head` is the name and the
+                    // count together, not a bare name.
+                    GroupHead(
                         owner.replaceFirstChar(Char::uppercase),
-                        Ink,
+                        "${decks.size} " + if (decks.size == 1) "deck" else "decks",
                         Design.H2,
-                        FontWeight.SemiBold,
-                        Modifier.padding(top = 6.dp),
                     )
                     decks.forEach { DeckTile(it, onOpen) }
                 }
             }
         } else {
-            Ghost("← Decks", onClick = onClose)
+            var sharing by remember { mutableStateOf(false) }
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(Design.GAP.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Ghost("← Decks", onClick = onClose)
+                Spacer(Modifier.weight(1f))
+                ShareButton(sharing) { sharing = !sharing }
+            }
+            // Inline rather than a floating popup: a phone has the
+            // width for it, and a menu that is part of the page
+            // cannot end up off the edge of the screen.
+            if (sharing) ShareMenu { what, where -> sharing = false; onShare(what, where) }
             Hero(open, state)
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -92,24 +124,25 @@ fun DecksScreen(
             if (admin) {
                 // Both of these move real cards, and both show the
                 // server's own dry run before they are allowed to.
-                Row(horizontalArrangement = Arrangement.spacedBy(Design.GAP.dp)) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(Design.GAP.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
                     Btn("Edit list") { onEdit(open) }
+                    Btn("Rename") { onRename(open) }
                     Btn("Disassemble", danger = true) { onDisassemble(open) }
                 }
             }
             DeckStats(DeckAnalysis.of(state.cards))
+            if (admin) {
+                Panel { Primary("+ Add a card", onClick = onAddCard) }
+            }
             // `byType` is the core's, the same list the website reads,
             // so the two cannot group or order a deck differently.
             state.byType.forEach { (group, cards) ->
-                Line(
-                    group.title,
-                    Ink,
-                    Design.H3,
-                    FontWeight.SemiBold,
-                    Modifier.padding(top = 6.dp),
-                )
+                GroupHead(group.title, "${cards.sumOf { it.qty }}")
                 Panel {
-                    cards.forEach { c -> CardLine(c, open.owner, onOpenCard) }
+                    cards.forEach { c -> CardLine(c, open.owner, onOpenCard, admin, onTweak) }
                 }
             }
 
@@ -232,7 +265,13 @@ private fun Hero(deck: Deck, state: DecksState) {
  * and how many. The whole row opens the card, the way the web's does.
  */
 @Composable
-private fun CardLine(card: DeckCard, owner: String, onOpen: (DeckCard, String) -> Unit) {
+private fun CardLine(
+    card: DeckCard,
+    owner: String,
+    onOpen: (DeckCard, String) -> Unit,
+    admin: Boolean = false,
+    onTweak: (DeckCard, Tweak?) -> Unit = { _, _ -> },
+) {
     Row(
         Modifier.fillMaxWidth().clickable { onOpen(card, owner) }.padding(vertical = 5.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -252,10 +291,130 @@ private fun CardLine(card: DeckCard, owner: String, onOpen: (DeckCard, String) -
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
             Line(card.shown, Ink, Design.SMALL)
-            card.typeLine?.takeIf { it.isNotBlank() }?.let { Line(it, Ink3, Design.MINI) }
+            // `knownTypeLine`, not `typeLine`: a basic land nobody
+            // inventories has no printing to read one off, and the
+            // web names it anyway. The phone was leaving every
+            // Island, Plains and Forest with a blank second line.
+            card.knownTypeLine?.takeIf { it.isNotBlank() }?.let { Line(it, Ink3, Design.MINI) }
         }
         if (card.short > 0) Tag("has ${card.owned}", Bad)
         Line("${card.qty}×", Ink3, Design.MINI)
+        // Maintenance lives on the row the card is on. One button,
+        // not three: three marks on every row of a hundred-card list
+        // left no room for the card's own name. What to do is asked
+        // inside the sheet.
+        if (admin) RowAction(card, onTweak)
+    }
+}
+
+/**
+ * The "⋯" on a card's row. Admin only, and it keeps the press.
+ *
+ * The row it sits on is itself a button, so without its own click the
+ * sheet would open with the card page behind it. A 44dp box rather
+ * than a 20dp glyph, which is the floor the web's coarse-pointer rule
+ * puts on it.
+ */
+@Composable
+private fun RowAction(card: DeckCard, onTweak: (DeckCard, Tweak?) -> Unit) {
+    Box(
+        Modifier.size(44.dp)
+            .semantics {
+                role = Role.Button
+                contentDescription = "Change ${card.shown}"
+            }
+            // Nothing is decided here: the sheet asks what to do.
+            .clickable { onTweak(card, null) },
+        contentAlignment = Alignment.Center,
+    ) {
+        Line("⋯", Ink2, Design.H3, FontWeight.SemiBold)
+    }
+}
+
+/**
+ * A panel head: what it is, and how many of it. The web's
+ * `.panel-head` is an `h2` and a count tag, never a bare word.
+ */
+@Composable
+private fun GroupHead(title: String, count: String, size: Int = Design.H3) {
+    Row(
+        Modifier.fillMaxWidth().padding(top = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Line(
+            title,
+            Ink,
+            size,
+            FontWeight.SemiBold,
+            Modifier.weight(1f).semantics { heading() },
+        )
+        Tag(count)
+    }
+}
+
+/**
+ * Share, with something to say about what.
+ *
+ * A deck is worth handing over two ways: as a link to this page, and
+ * as the list itself for somebody to paste into their own builder.
+ * Each can go to the clipboard or come down as a file, so the four
+ * are a menu rather than four buttons crowding the header.
+ */
+@Composable
+private fun ShareButton(open: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier.size(44.dp)
+            .semantics {
+                role = Role.Button
+                contentDescription = "Share this deck"
+            }
+            .background(
+                if (open) AccentDim else androidx.compose.ui.graphics.Color.Transparent,
+                Radius,
+            )
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        // The glyph, not the word - the web's button is icon-only.
+        // Boxed and gold while it is open, so "open" reads as a shape
+        // and a lightness rather than a hue nobody can see.
+        Line("⤴", if (open) Accent2 else Ink2, Design.H2, FontWeight.SemiBold)
+    }
+}
+
+@Composable
+private fun ShareMenu(onShare: (ShareWhat, ExportTo) -> Unit) {
+    Panel {
+        // A group is its label and the two options under it, close
+        // enough together to read as one thing. Evenly spaced, the
+        // second label sat as far from its own options as from the
+        // group above it and the menu read as six loose words.
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            ShareWhat.entries.forEach { what ->
+                Column {
+                    Line(
+                        what.label,
+                        Ink3,
+                        Design.MINI,
+                        FontWeight.SemiBold,
+                        Modifier.padding(bottom = 2.dp),
+                    )
+                    ExportTo.entries.forEach { where ->
+                        Line(
+                            where.label,
+                            Ink,
+                            Design.SMALL,
+                            FontWeight.Normal,
+                            Modifier.fillMaxWidth()
+                                .semantics { role = Role.Button }
+                                .clickable { onShare(what, where) }
+                                .padding(vertical = 9.dp),
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -270,7 +429,13 @@ private fun CardLine(card: DeckCard, owner: String, onOpen: (DeckCard, String) -
 @Composable
 private fun DeckStats(s: org.mattshoe.mtg.core.DeckStats) {
     Panel {
-        Line("The deck at a glance", Ink, Design.H3, FontWeight.SemiBold)
+        Line(
+            "The deck at a glance",
+            Ink,
+            Design.H3,
+            FontWeight.SemiBold,
+            Modifier.semantics { heading() },
+        )
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -434,7 +599,7 @@ private fun Bars(title: String, bars: List<Bar>, total: Int) {
 @Composable
 private fun TokenList(tokens: List<org.mattshoe.mtg.core.TokenCard>) {
     if (tokens.isEmpty()) return
-    Line("Tokens", Ink, Design.H3, FontWeight.SemiBold, Modifier.padding(top = 6.dp))
+    GroupHead("Tokens", "${tokens.size}")
     val open = androidx.compose.ui.platform.LocalUriHandler.current
     Panel {
         tokens.forEach { token ->
@@ -477,5 +642,11 @@ private fun TokenList(tokens: List<org.mattshoe.mtg.core.TokenCard>) {
                 Line("${token.madeBy}×", Ink3, Design.MINI)
             }
         }
+        Line(
+            "Made by the cards in this deck. You will want these to hand — " +
+                "each one goes to TCGplayer.",
+            Ink3,
+            Design.MINI,
+        )
     }
 }
