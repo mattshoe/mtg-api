@@ -355,7 +355,12 @@ class ScreensTest {
     @Test
     fun nothingIsPreselectedInTheWizard() {
         content { MassEntryScreen(MassEntry(), {}, {}, {}) }
-        rule.onNodeWithText("Pick one to continue").assertIsNotEnabled()
+        // "Continue →" whether or not it is pressable, the way the
+        // website does it. It used to be relabelled "Pick one to
+        // continue" when disabled, so the button changed its name
+        // depending on its state and the two platforms disagreed
+        // about what the thing was even called.
+        rule.onNodeWithText("Continue →").assertIsNotEnabled()
         rule.onNodeWithText("Nothing is preselected on purpose.").assertExists()
     }
 

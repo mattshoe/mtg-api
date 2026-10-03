@@ -24,11 +24,18 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.FlowRow
+import org.mattshoe.mtg.core.Design
 import org.mattshoe.mtg.core.Direction
 import org.mattshoe.mtg.core.EntryHistory
 import org.mattshoe.mtg.core.HistoryEntry
@@ -73,7 +80,9 @@ fun MassEntryScreen(
         Stepper(state) { onState(state.goTo(it)) }
 
         when {
-            state.busy != null -> Panel { Line(state.busy!!) }
+            // "Working", headed, the same as the web — a panel with no
+            // head is not the same screen as one that says what it is.
+            state.busy != null -> Panel(head = "Working") { Line(state.busy!!) }
             state.step == Step.WHICH -> Which(state, onState)
             state.step == Step.LIST -> {
                 ListStep(state, onState, onPickFile)
@@ -107,14 +116,27 @@ private fun Stepper(s: MassEntry, go: (Step) -> Unit) {
 
 @Composable
 private fun Which(s: MassEntry, onState: (MassEntry) -> Unit) {
-    Panel(head = "Adding or removing?", note = if (s.cardCount > 0) "${s.cardCount} cards already in the box" else null) {
-        Choice("Add to the collection", s.direction == Direction.ADD) { onState(s.choose(Direction.ADD)) }
-        Choice("Remove from the collection", s.direction == Direction.REMOVE) { onState(s.choose(Direction.REMOVE)) }
+    // Cards, not lines. "4 Lightning Bolt" is four cards already in
+    // the box, and `cardCount` counts the line — which is the number
+    // the request size is limited by and not the one to say here.
+    Panel(
+        head = "Adding or removing?",
+        note = if (s.tally.cards > 0) "${s.tally.cards} cards already in the box" else null,
+    ) {
+        Choice(
+            "Add to the collection",
+            "Cards you bought, opened or were given.",
+            s.direction == Direction.ADD,
+        ) { onState(s.choose(Direction.ADD)) }
+        Choice(
+            "Remove from the collection",
+            "Cards you sold, traded away or lost.",
+            s.direction == Direction.REMOVE,
+        ) { onState(s.choose(Direction.REMOVE)) }
         Spacer(Modifier.height(8.dp))
-        Primary(
-            if (s.canLeaveWhich) "Continue →" else "Pick one to continue",
-            s.canLeaveWhich,
-        ) { onState(s.goTo(Step.LIST)) }
+        // One label, enabled or not. A button whose words change is a
+        // different button, and the web's says "Continue →" either way.
+        Primary("Continue →", s.canLeaveWhich) { onState(s.goTo(Step.LIST)) }
         if (!s.canLeaveWhich) Text("Nothing is preselected on purpose.", fontSize = 13.sp)
     }
 }
@@ -151,21 +173,28 @@ private fun ListStep(s: MassEntry, onState: (MassEntry) -> Unit, onPickFile: () 
             OutlinedButton(onClick = { onState(s.goTo(Step.WHICH)) }) { Text("← Back") }
             Primary("Continue →", s.canLeaveList) { onState(s.goTo(Step.WHO)) }
         }
+        // Why the button beside it is not doing anything yet, and —
+        // said out loud rather than assumed — that two more steps
+        // stand between this box and the collection.
+        if (!s.canLeaveList && s.tally.cards == 0) {
+            Text("Paste a list, or drop a file on the box.", fontSize = 13.sp)
+        } else if (s.unsaved) {
+            Text("Nothing is written until you press the button on the last step.", fontSize = 13.sp)
+        }
     }
 }
 
 @Composable
 private fun Who(s: MassEntry, onState: (MassEntry) -> Unit, preview: () -> Unit) {
     Panel(head = "Whose collection?", note = "${s.tally.cards} cards on the list") {
-        Owner.entries.forEach { o -> Choice(o.label, s.owner == o) { onState(s.assign(o)) } }
+        Owner.entries.forEach { o -> Choice(o.label, null, s.owner == o) { onState(s.assign(o)) } }
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { onState(s.goTo(Step.LIST)) }) { Text("← Back") }
-            Primary(
-                if (s.canPreview) "Preview changes · ${s.owner!!.slug} →" else "Pick one to continue",
-                s.canPreview,
-                preview,
-            )
+            // The web's label, unchanged by whether it is pressable.
+            // Who was named is said by the tick on the row above it,
+            // and again by the note on the step after this one.
+            Primary("Preview changes →", s.canPreview, preview)
         }
         if (!s.canPreview) Text("Pick whose collection this goes to.", fontSize = 13.sp)
     }
@@ -180,11 +209,7 @@ private fun Review(s: MassEntry, onState: (MassEntry) -> Unit, apply: () -> Unit
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { onState(s.goTo(Step.WHO)) }) { Text("← Back") }
             Primary(
-                if (s.canApply) {
-                    "${s.direction!!.verb} ${p!!.changes.size} printings · ${s.owner!!.slug}"
-                } else {
-                    "Nothing to apply"
-                },
+                if (s.canApply) "${s.direction!!.verb} ${p!!.changes.size} printings" else "Nothing to apply",
                 s.canApply,
                 apply,
             )
@@ -192,10 +217,21 @@ private fun Review(s: MassEntry, onState: (MassEntry) -> Unit, apply: () -> Unit
     }
 }
 
+/**
+ * What the write did, and the way back to the start.
+ *
+ * `applied` is the server answering for the call, not for the cards.
+ * A removal of printings somebody has already removed comes back
+ * applied with an empty change list, and "Applied" over nought
+ * printings and nought copies reads as a write that landed. So the
+ * title asks whether anything moved rather than whether the call was
+ * made — the same question the web page asks.
+ */
 @Composable
 private fun Done(s: MassEntry, again: () -> Unit) {
     val r = s.result!!
-    Panel(head = if (r.applied) "Applied" else "Nothing applied", note = s.owner?.slug) {
+    val moved = r.applied && r.changes.isNotEmpty()
+    Panel(head = if (moved) "Applied" else "Nothing applied", note = s.owner?.slug) {
         Outcome(r)
         Spacer(Modifier.height(8.dp))
         Primary("Enter more", true, again)
@@ -247,6 +283,10 @@ private fun Outcome(r: org.mattshoe.mtg.core.Applied) {
                                 "${c.set.uppercase()} ${c.collectorNumber}",
                                 c.finish.takeIf { it != "nonfoil" },
                                 "new".takeIf { c.isNew },
+                                // The collection has none of this
+                                // printing left. The web says so and
+                                // this did not.
+                                "last one".takeIf { c.isGone },
                             ).joinToString(" · "),
                             Ink3,
                             org.mattshoe.mtg.core.Design.MINI,
@@ -269,22 +309,40 @@ private fun Outcome(r: org.mattshoe.mtg.core.Applied) {
 // -------------------------------------------------------------- pieces
 
 /**
- * One big decision per screen, which is what the wizard is for. The
- * same `.owner-opt` shape the web uses on these steps.
+ * One thing you can pick.
+ *
+ * The same `.opt` row the web draws: a mark, a label and a line of
+ * help, at the height of a button rather than the height of a card.
+ *
+ * What is chosen is said by a filled tick as well as by a colour,
+ * because colour on its own is not a signal everybody can read — the
+ * web asserts that and so does the Android suite. `selected` in the
+ * semantics tree is what `aria-pressed` is in the DOM, so the same
+ * fact is checkable on both.
  */
 @Composable
-private fun Choice(label: String, on: Boolean, click: () -> Unit) {
-    Line(
-        label,
-        color = if (on) Accent2 else Ink,
-        size = 15,
-        modifier = Modifier.fillMaxWidth()
+private fun Choice(label: String, help: String?, on: Boolean, click: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth()
             .padding(vertical = 3.dp)
             .background(if (on) AccentDim else Bg2, Radius)
             .border(1.dp, if (on) Accent else Line2, Radius)
             .clickable(onClick = click)
+            .semantics(mergeDescendants = true) { selected = on; role = Role.Button }
             .padding(horizontal = 16.dp, vertical = 18.dp),
-    )
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        // Empty while it is off, so the label does not shift sideways
+        // when the tick arrives.
+        Box(Modifier.size(18.dp), contentAlignment = Alignment.Center) {
+            if (on) Line("✓", Accent2, Design.SMALL, FontWeight.Bold)
+        }
+        Column(Modifier.weight(1f)) {
+            Line(label, if (on) Accent2 else Ink, 15)
+            help?.let { Line(it, Ink3, Design.MINI) }
+        }
+    }
 }
 
 /** What was entered recently, and putting it back in the box. */

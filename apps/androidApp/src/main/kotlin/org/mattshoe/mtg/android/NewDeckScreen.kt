@@ -21,6 +21,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.mattshoe.mtg.core.Completion
+import org.mattshoe.mtg.core.DeckList
 import org.mattshoe.mtg.core.DeckStep
 import org.mattshoe.mtg.core.Format
 import org.mattshoe.mtg.core.NewDeck
@@ -42,6 +44,14 @@ fun NewDeckDialog(
     onCheck: () -> Unit,
     onCreate: () -> Unit,
     onClose: () -> Unit,
+    /**
+     * The commander box was typed into. The caller does the lookup,
+     * exactly as on the web — the box itself still works without one,
+     * it just has nothing to suggest.
+     */
+    onCommanderTyped: (Completion) -> Unit = {},
+    /** A file for the card list. The web drops one on the same step. */
+    onPickFile: () -> Unit = {},
 ) {
     AlertDialog(
         onDismissRequest = onClose,
@@ -59,11 +69,12 @@ fun NewDeckDialog(
                     state.step == DeckStep.FORMAT -> FormatStep(state, onState)
                     state.step == DeckStep.OWNER -> OwnerStep(state, onState)
                     state.step == DeckStep.NAME -> NameStep(state, onState)
-                    state.step == DeckStep.COMMANDER -> CommanderStep(state, onState)
-                    state.step == DeckStep.CARDS -> CardsStep(state, onState)
-                    state.step == DeckStep.CHECK -> CheckStep(state, onState)
+                    state.step == DeckStep.COMMANDER ->
+                        CommanderStep(state, onState, onCommanderTyped)
+                    state.step == DeckStep.CARDS -> CardsStep(state, onState, onPickFile)
+                    state.step == DeckStep.CHECK -> CheckStep(state, onState, onCheck)
                     state.step == DeckStep.REVIEW -> ReviewStep(state)
-                    state.step == DeckStep.DONE -> Text("${state.name} is created.")
+                    state.step == DeckStep.DONE -> DoneStep(state)
                 }
                 state.error?.let { Text(it, fontSize = 13.sp) }
             }
@@ -87,11 +98,12 @@ private fun Confirm(
         }
         DeckStep.COMMANDER -> Next(s.canLeaveCommander) { onState(s.goTo(DeckStep.CARDS)) }
         DeckStep.CARDS -> Next(s.canLeaveCards) { onState(s.goTo(DeckStep.CHECK)) }
-        DeckStep.CHECK ->
-            if (s.canLeaveCheck) Next(true) { onState(s.goTo(DeckStep.REVIEW)) }
-            else TextButton(onClick = onCheck, enabled = s.busy == null) {
-                Text(if (s.checked == null) "Check the names" else "Check again")
-            }
+        // Continue, always — and the check itself sits in the body
+        // beside it, the way the web shows both. Swapping one button
+        // for the other meant a verdict you had no way to ask for
+        // twice, and the only way back was to edit the list, which
+        // throws the verdict away.
+        DeckStep.CHECK -> Next(s.canLeaveCheck) { onState(s.goTo(DeckStep.REVIEW)) }
         DeckStep.REVIEW -> TextButton(onClick = onCreate, enabled = s.canCreate) {
             Text("Create ${s.name}")
         }
@@ -107,9 +119,12 @@ private fun Next(enabled: Boolean, click: () -> Unit) {
 @Composable
 private fun Stepper(s: NewDeck, go: (DeckStep) -> Unit) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        s.steps.forEach { step ->
-            OutlinedButton(onClick = { go(step) }, enabled = s.reachable(step) && step != s.step) {
-                Text(step.label, fontSize = 11.sp)
+        // Numbered, and gated on `reachable` alone — the same two
+        // rules the web stepper draws. The step you are on stays
+        // pressable there, so it does here.
+        s.steps.forEachIndexed { i, step ->
+            OutlinedButton(onClick = { go(step) }, enabled = s.reachable(step)) {
+                Text("${i + 1} ${step.label}", fontSize = 11.sp)
             }
         }
     }
@@ -144,19 +159,29 @@ private fun NameStep(s: NewDeck, onState: (NewDeck) -> Unit) {
 }
 
 @Composable
-private fun CommanderStep(s: NewDeck, onState: (NewDeck) -> Unit) {
-    OutlinedTextField(
-        value = s.commander,
-        onValueChange = { onState(s.setCommander(it)) },
-        modifier = Modifier.fillMaxWidth(),
-        singleLine = true,
-        label = { Text("Commander") },
+private fun CommanderStep(
+    s: NewDeck,
+    onState: (NewDeck) -> Unit,
+    onTyped: (Completion) -> Unit,
+) {
+    // The same suggestion field the Library uses, and the same one the
+    // web wizard uses. This was a bare text box, so the one name in
+    // the whole wizard that has to be spelt exactly right was the one
+    // name with no help spelling it.
+    AutocompleteField(
+        label = "e.g. Alela, Artful Provocateur",
+        state = s.hint,
+        onState = { c ->
+            onState(s.hinting(c))
+            onTyped(c)
+        },
+        onPick = { name -> onState(s.setCommander(name)) },
     )
     Text("A ${s.format?.label} deck needs one, and the server checks it too.", fontSize = 12.sp)
 }
 
 @Composable
-private fun CardsStep(s: NewDeck, onState: (NewDeck) -> Unit) {
+private fun CardsStep(s: NewDeck, onState: (NewDeck) -> Unit, onPickFile: () -> Unit) {
     OutlinedTextField(
         value = s.list,
         onValueChange = { onState(s.type(it)) },
@@ -168,10 +193,23 @@ private fun CardsStep(s: NewDeck, onState: (NewDeck) -> Unit) {
         "${s.cardCount} cards" + if (wanted > 0) " · ${s.format!!.label} wants $wanted" else "",
         fontSize = 12.sp,
     )
+    // A deck you already have written down is in a file. Reading one
+    // only fills the box — it never submits and never moves a step,
+    // the same as the web and the same as mass entry.
+    OutlinedButton(onClick = onPickFile) { Text("Upload a file") }
+    if (s.needsCommander) {
+        // Every decklist export puts the commander first, so cutting
+        // it out by hand and retyping it is work the list has done.
+        DeckList.firstCard(s.list)?.let { first ->
+            OutlinedButton(onClick = { onState(s.commanderFromList()) }) {
+                Text("First card is the commander (${first.name})", fontSize = 12.sp)
+            }
+        }
+    }
 }
 
 @Composable
-private fun CheckStep(s: NewDeck, onState: (NewDeck) -> Unit) {
+private fun CheckStep(s: NewDeck, onState: (NewDeck) -> Unit, onCheck: () -> Unit) {
     val v = s.checked
     when {
         v == null -> Text(
@@ -196,6 +234,11 @@ private fun CheckStep(s: NewDeck, onState: (NewDeck) -> Unit) {
             }
         }
     }
+    // The check itself, beside the verdict rather than instead of the
+    // way on. A list that checked out can still be checked again.
+    OutlinedButton(onClick = onCheck, enabled = s.busy == null) {
+        Text(if (v == null) "Check the names" else "Check again")
+    }
 }
 
 @Composable
@@ -216,9 +259,27 @@ private fun ReviewStep(s: NewDeck) {
         fontSize = 12.sp,
         fontWeight = FontWeight.SemiBold,
     )
-    plan.take(200).forEach { line ->
+    // Every line, not the first two hundred of them. A list longer
+    // than the cap silently lost rows off the bottom, which on the
+    // one screen whose job is to say what will happen to each card is
+    // the worst place to be approximate.
+    plan.forEach { line ->
         Text("${line.qty}  ${line.name} — ${line.from.label}", fontSize = 12.sp)
     }
+    if (adding.isNotEmpty()) {
+        Text(
+            "${adding.size} card${if (adding.size == 1) "" else "s"} " +
+                "the collection does not hold yet will be added to bulk.",
+            fontSize = 12.sp,
+        )
+    }
+}
+
+/** What the web's `DoneStep` says: created, and where it lives. */
+@Composable
+private fun DoneStep(s: NewDeck) {
+    Text("Created", fontWeight = FontWeight.SemiBold)
+    Text("${s.name} is at #/decks/${s.slug}", fontSize = 12.sp)
 }
 
 @Composable
@@ -226,5 +287,11 @@ private fun Pick(label: String, on: Boolean, click: () -> Unit) {
     Button(
         onClick = click,
         colors = if (on) ButtonDefaults.buttonColors() else ButtonDefaults.outlinedButtonColors(),
-    ) { Text(label, fontSize = 12.sp) }
+    ) {
+        // The tick, the way the web marks the chosen option. Fill
+        // against outline is a lightness difference and a colour one,
+        // and neither is any use to somebody who cannot tell this
+        // app's two greens apart — a character can be read.
+        Text(if (on) "✓ $label" else label, fontSize = 12.sp)
+    }
 }
