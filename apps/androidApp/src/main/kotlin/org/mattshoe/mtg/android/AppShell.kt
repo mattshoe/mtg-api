@@ -181,6 +181,12 @@ fun AppShell(
             View.CARD -> CardSheet(
                 card = state.card ?: org.mattshoe.mtg.core.CardDetail(name = state.route.rest).loading(),
                 onClose = { onState(state.leaveCard()) },
+                // Reading a deck a card at a time, the same three
+                // controls the web page puts under the card.
+                previous = state.previousCard,
+                next = state.nextCard,
+                place = state.cardPlace,
+                onStep = { c -> onOpenNamed(c.name, c.nameNorm, "") },
             )
 
             View.ENTRY -> MassEntryScreen(
