@@ -2,6 +2,7 @@ package org.mattshoe.mtg.core
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /** What a deck is made of, worked out from its cards. */
@@ -121,6 +122,25 @@ class DeckStatsTest {
         assertEquals(0, ManaCost.manaValue("{X}"))
         // A two-brid costs two; the other hybrid costs one.
         assertEquals(3, ManaCost.manaValue("{W/U}{2/R}"))
+    }
+
+    /**
+     * The symbol itself is what tells two costs apart here — "W" vs
+     * "U" in the URL — never a colour value, so this stays readable
+     * to someone who cannot tell the pips apart by hue.
+     */
+    @Test
+    fun symbolArtIsTheBracesAndSlashesTakenOut() {
+        assertEquals("${ManaCost.SYMBOL_BASE}/W.svg", ManaCost.symbolArt("W"))
+        assertEquals("${ManaCost.SYMBOL_BASE}/WU.svg", ManaCost.symbolArt("W/U"))
+        assertEquals("${ManaCost.SYMBOL_BASE}/2W.svg", ManaCost.symbolArt("2/W"))
+    }
+
+    @Test
+    fun artPairsEverySymbolWithItsOwnPicture() {
+        val art = ManaCost.art("{1}{G}")
+        assertEquals(listOf("1", "G"), art.map { it.first })
+        assertEquals("${ManaCost.SYMBOL_BASE}/G.svg", art.last().second)
     }
 
     // ---------------------------------------------------------- curve
@@ -289,6 +309,31 @@ class DeckStatsTest {
         // "Token Creature — Soldier" on every one of them is noise.
         assertEquals("Creature — Soldier", t.shortType)
         assertTrue(t.art.orEmpty().contains("art_crop"), t.art.orEmpty())
+    }
+
+    @Test
+    fun statsAreBlankUnlessBothPowerAndToughnessAreKnown() {
+        val soldier = TokenCard("1", "Soldier", "Token Creature — Soldier", power = "1", toughness = "1")
+        assertEquals("1/1", soldier.stats)
+        // A token with no stats at all — an Incubator, a Clue — has
+        // nothing to show rather than a slash with half of it missing.
+        val clue = TokenCard("2", "Clue", "Token Artifact")
+        assertNull(clue.stats)
+    }
+
+    /**
+     * `all_parts` never says how a 1/1 white Bird differs from a 2/2
+     * blue one — only fetching the tokens themselves does — so what
+     * makes two rows the same card has to be power, toughness and
+     * colour together, not just the name.
+     */
+    @Test
+    fun identityTellsApartTwoTokensWithTheSameNameAndDifferentStats() {
+        val whiteBird = TokenCard("1", "Bird", "Token Creature — Bird", "1", "1", colors = "W")
+        val blueBird = TokenCard("2", "Bird", "Token Creature — Bird", "2", "2", colors = "U")
+        assertTrue(whiteBird.identity != blueBird.identity)
+        val sameBirdReprinted = TokenCard("3", "Bird", "Token Creature — Bird", "1", "1", colors = "W")
+        assertEquals(whiteBird.identity, sameBirdReprinted.identity, "a reprint is still the same token")
     }
 
     @Test

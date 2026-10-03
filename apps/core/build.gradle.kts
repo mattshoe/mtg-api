@@ -19,7 +19,17 @@ plugins {
 // decides that.
 kotlin {
     jvm()                       // where the shared tests run fastest
-    androidTarget()
+    androidTarget {
+        // Pinned, not inherited. `compileOptions` below fixes Java at
+        // 17 while Kotlin takes the target from whatever JDK is running
+        // Gradle, so on a JDK 21 machine the two halves of the same
+        // compilation disagreed and the Android build of :core would
+        // not start. CI runs 17 and never saw it; a laptop on 21 could
+        // not build the app at all.
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        }
+    }
     // browser() is what the web app links against; nodejs() is only so
     // the shared tests can run without standing up a browser.
     js(IR) {

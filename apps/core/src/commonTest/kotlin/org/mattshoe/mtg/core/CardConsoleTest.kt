@@ -78,6 +78,40 @@ class CardDetailTest {
         assertTrue("tcg_url" in sql, "no shop link comes back at all")
     }
 
+    /**
+     * A double-faced row carries both `name` and `face2` from the
+     * database, and the drawer's title has to read the way
+     * `CardRow.fullName` already does — both halves, joined by the
+     * same slash — or a card opened from the grid and the same card
+     * opened from a link would title themselves differently.
+     */
+    @Test
+    fun aDoubleFacedPrintingJoinsBothFacesWithASlash() {
+        val cols = listOf("id", "setcode", "set_name", "collector_number", "finish", "qty", "scryfall_id", "name", "face2")
+        val p = CardQueries.decodePrintings(
+            cols,
+            rows("""[1,"vow","Crimson Vow","69","nonfoil",1,"abc","Delver of Secrets","Insectile Aberration"]"""),
+        ).single()
+        assertEquals("Delver of Secrets // Insectile Aberration", p.cardName)
+    }
+
+    @Test
+    fun aSingleFacedPrintingIsJustItsOwnName() {
+        val cols = listOf("id", "setcode", "set_name", "collector_number", "finish", "qty", "scryfall_id", "name", "face2")
+        val p = CardQueries.decodePrintings(
+            cols,
+            rows("""[1,"m3c","MH3","409","nonfoil",1,"abc","Sol Ring",null]"""),
+        ).single()
+        assertEquals("Sol Ring", p.cardName)
+    }
+
+    @Test
+    fun aFailedFetchClearsBusyAndSaysWhatWentWrong() {
+        val s = CardDetail(name = "Sol Ring", busy = true).failed("HTTP 500")
+        assertFalse(s.busy)
+        assertEquals("HTTP 500", s.error)
+    }
+
     // ------------------------------------------------ who owns how many
 
     private fun copy(owner: String, qty: Int) =
@@ -195,6 +229,14 @@ class ConsoleTest {
     }
 
     @Test
+    fun aTableWithColumnsButNoRowsIsStillEmpty() {
+        // `SELECT * FROM decks WHERE 1=0` answers with column names and
+        // nothing else, which is a real result and not a query gone wrong.
+        assertTrue(Table.of(listOf("name"), emptyList()).isEmpty)
+        assertFalse(Table.of(listOf("name"), rows("""["Sol Ring"]""")).isEmpty)
+    }
+
+    @Test
     fun nothingToRunIsNotRunnable() {
         assertFalse(ConsoleState().canRun)
         assertFalse(ConsoleState(sql = "   ").canRun)
@@ -231,6 +273,21 @@ class LogsTest {
     fun slowIsOverASecond() {
         assertTrue(line(200, ms = 1500).slow)
         assertFalse(line(200, ms = 999).slow)
+    }
+
+    @Test
+    fun loadingClearsAnyOldErrorAndSaysItIsBusy() {
+        val s = LogsState(error = "HTTP 500").loading()
+        assertTrue(s.busy)
+        assertNull(s.error)
+    }
+
+    @Test
+    fun aFailedFetchKeepsWhateverLinesWereAlreadyOnScreen() {
+        val s = LogsState(lines = listOf(line(200))).loading().failed("network down")
+        assertFalse(s.busy)
+        assertEquals("network down", s.error)
+        assertEquals(1, s.lines.size, "an old page of logs is better than a blank one")
     }
 
     @Test

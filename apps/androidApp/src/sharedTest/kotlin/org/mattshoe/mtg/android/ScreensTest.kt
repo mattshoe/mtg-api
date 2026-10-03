@@ -7,6 +7,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.performScrollToKey
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performKeyInput
@@ -15,6 +16,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
@@ -165,23 +167,34 @@ class ScreensTest {
     fun theLibraryShowsTheRangeAndTheRows() {
         val lib = Library().loaded(listOf(card("Sol Ring"), card("Arcane Signet")), 250)
         content { LibraryScreen(lib, {}, {}, {}) }
+        // Into view first. The grid is lazy and its header carries the
+        // page head, the controls and the filter sheet, so on a short
+        // screen the first card is simply not composed yet — which
+        // `assertIsDisplayed` reports as "not displayed" and reads
+        // like the row is missing rather than below the fold.
+        rule.onNodeWithTag("library").performScrollToKey("matt:sol ring")
+        rule.waitForIdle()
         rule.onNodeWithText("Sol Ring").assertIsDisplayed()
         rule.onNodeWithText("1–100 of 250").assertExists()
     }
 
     @Test
-    fun theFilterButtonRevealsThePanel() {
-        var shown = false
+    fun theFilterGroupsAreAlwaysOnThePage() {
+        // There is no Filters button any more, on either platform.
+        // Hiding the whole panel was a way to leave a filter applied
+        // with nothing on screen saying so, so the groups sit there
+        // folded instead. The sibling is
+        // `theFilterGroupsAreAlwaysOnThePage` in the web suite.
         content {
-            LibraryScreen(
-                Library().loaded(listOf(card("Sol Ring")), 1),
-                {}, {}, {},
-                showFilters = shown,
-                onToggleFilters = { shown = !shown },
-            )
+            LibraryScreen(Library().loaded(listOf(card("Sol Ring")), 1), {}, {}, {})
         }
-        rule.onNodeWithText("Filters").performScrollTo().performClick()
-        rule.runOnIdle { assertTrue(shown) }
+        rule.onAllNodesWithTextOrNothing("Filters")
+        // `Facet.title`, the same strings the web panel uses. The
+        // website uppercases them in CSS, which does not change the
+        // text either side.
+        rule.onNodeWithText("Collection").assertExists()
+        rule.onNodeWithText("Colour").assertExists()
+        rule.onNodeWithText("Legality").assertExists()
     }
 
     @Test
@@ -204,7 +217,9 @@ class ScreensTest {
                 onExport = { exported = true },
             )
         }
-        rule.onNodeWithText("Export decklist").performScrollTo().performClick()
+        // "Copy", the word the website uses. It was "Export decklist"
+        // here and nowhere else.
+        rule.onNodeWithText("Copy").performScrollTo().performClick()
         rule.runOnIdle { assertTrue(exported) }
     }
 
@@ -248,11 +263,24 @@ class ScreensTest {
         )
         content { CardSheet(detail) {} }
         rule.onNodeWithText("Sol Ring").assertIsDisplayed()
-        rule.onNodeWithText("3 owned").assertIsDisplayed()
-        rule.onNodeWithText("2 free").assertExists()
-        rule.onNodeWithText("Alela · 1× · ramp").assertExists()
+        // Twice over now, as on the website: once in the tags at the
+        // top and once on the owner's line. They used to be one
+        // run-on sentence per place, which read as text rather than
+        // as the figures they are.
+        rule.onAllNodesWithText("3 owned").onFirst().assertIsDisplayed()
+        rule.onAllNodesWithText("2 free").onFirst().assertExists()
+        // The deck row is a row now, not one joined string: the
+        // name, then whose deck it is, then how many, then the role —
+        // each its own node, as the website sets them. Joined, the
+        // owner could be dropped without this noticing.
+        rule.onNodeWithText("Alela").assertExists()
+        rule.onNodeWithText("1×").assertExists()
+        rule.onNodeWithText("ramp").assertExists()
         // A card is nobody's in particular, so the page says who has it.
-        rule.onNodeWithText("matt · 3 owned · 2 free").assertExists()
+        // Twice: once on the printing, once on the deck row. Both
+        // are the website's doing — a shared collection turns on
+        // whose copy it is, so it says so wherever a copy appears.
+        rule.onAllNodesWithText("matt").onFirst().assertExists()
     }
 
     @Test
@@ -263,7 +291,7 @@ class ScreensTest {
             usedIn = listOf(DeckUse("p", "Proxy deck", "matt", 1, null, true)),
         )
         content { CardSheet(detail) {} }
-        rule.onNodeWithText("1 free").assertExists()
+        rule.onAllNodesWithText("1 free").onFirst().assertExists()
     }
 
     // --------------------------------------------------------- overlays
@@ -355,7 +383,12 @@ class ScreensTest {
     @Test
     fun nothingIsPreselectedInTheWizard() {
         content { MassEntryScreen(MassEntry(), {}, {}, {}) }
-        rule.onNodeWithText("Pick one to continue").assertIsNotEnabled()
+        // "Continue →" whether or not it is pressable, the way the
+        // website does it. It used to be relabelled "Pick one to
+        // continue" when disabled, so the button changed its name
+        // depending on its state and the two platforms disagreed
+        // about what the thing was even called.
+        rule.onNodeWithText("Continue →").assertIsNotEnabled()
         rule.onNodeWithText("Nothing is preselected on purpose.").assertExists()
     }
 

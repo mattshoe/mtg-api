@@ -1,6 +1,7 @@
 package org.mattshoe.mtg.android
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -10,7 +11,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import org.mattshoe.mtg.core.Design
 import org.mattshoe.mtg.core.Owner
@@ -33,14 +36,20 @@ fun StatsScreen(state: StatsState, onScope: (Owner?) -> Unit) {
     ) {
         PageHead("Stats")
 
-        Seg(
-            listOf("both" to "Both", "matt" to "Matt", "kayla" to "Kayla"),
-            state.scope.owner?.slug ?: "both",
-        ) { slug -> onScope(Owner.entries.firstOrNull { it.slug == slug }) }
+        Box(Modifier.testTag("scope")) {
+            Seg(
+                listOf("both" to "Both", "matt" to "Matt", "kayla" to "Kayla"),
+                state.scope.owner?.slug ?: "both",
+            ) { slug -> onScope(Owner.entries.firstOrNull { it.slug == slug }) }
+        }
 
         when {
-            state.busy -> Line("Loading…", Ink3)
-            state.error != null -> Line("Could not load stats: ${state.error}", Bad)
+            state.busy -> Line("Loading…", Ink3, modifier = Modifier.testTag("stats-busy"))
+            state.error != null -> Line(
+                "Could not load stats: ${state.error}",
+                Bad,
+                modifier = Modifier.testTag("stats-err"),
+            )
             else -> {
                 val t = state.totals
                 Panel {
@@ -52,19 +61,32 @@ fun StatsScreen(state: StatsState, onScope: (Owner?) -> Unit) {
                         "Decks" to t.decks.toString(),
                         "Sets" to t.sets.toString(),
                         "Foils" to t.foils.toString(),
+                        // `unpriced`, never `$0`: nothing priced and
+                        // nothing worth anything are different facts.
                         "Value" to Prices.money(t.value, dash = "unpriced"),
-                    ).forEach { (label, value) ->
+                    ).forEachIndexed { i, (label, value) ->
                         Row(
-                            Modifier.fillMaxWidth(),
+                            Modifier.fillMaxWidth()
+                                .testTag("stat-row-$i")
+                                .semantics { contentDescription = "$label $value" },
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Line(label, Ink2, Design.BODY)
-                            Tag(value)
+                            Line(label, Ink2, Design.BODY, modifier = Modifier.testTag("stat-label-$i"))
+                            // `.tag`: the number is a stated fact in a
+                            // pill, not prose run together with its label.
+                            Box(Modifier.testTag("stat-value-$i")) { Tag(value) }
                         }
                     }
                 }
-                t.pricedAt?.let { Line("Prices from $it", Ink3, Design.MINI) }
+                t.pricedAt?.let {
+                    Line(
+                        "Prices from $it",
+                        Ink3,
+                        Design.MINI,
+                        modifier = Modifier.testTag("priced-at"),
+                    )
+                }
             }
         }
     }

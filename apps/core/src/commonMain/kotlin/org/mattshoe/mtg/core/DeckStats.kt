@@ -141,6 +141,18 @@ object DeckAnalysis {
     }
 
     /**
+     * What a card costs.
+     *
+     * The printing's own mana value, or what its printed cost adds up
+     * to when the row has one but no `cmc`. One function rather than
+     * three: the curve read the cost and the average did not, so the
+     * same card was a four-drop in one chart and a nought-drop in the
+     * other.
+     */
+    private fun manaValue(c: DeckCard): Double =
+        c.knownManaValue ?: ManaCost.manaValue(c.manaCost).toDouble()
+
+    /**
      * The curve, lands excluded.
      *
      * Lands cost nothing and would put a third of the deck in the
@@ -149,8 +161,7 @@ object DeckAnalysis {
     private fun curve(nonland: List<DeckCard>): List<Bar> {
         val buckets = IntArray(CURVE_TOP + 1)
         nonland.forEach { c ->
-            val mv = (c.knownManaValue ?: ManaCost.manaValue(c.manaCost).toDouble())
-                .toInt().coerceIn(0, CURVE_TOP)
+            val mv = manaValue(c).toInt().coerceIn(0, CURVE_TOP)
             buckets[mv] += c.qty
         }
         return buckets.mapIndexed { mv, n ->
@@ -179,6 +190,12 @@ object DeckAnalysis {
     private fun spendable(cards: List<DeckCard>): Set<Char>? {
         val leaders = cards.filter { it.isCommander }
         if (leaders.isEmpty()) return null
+        // A commander nobody owns a printing of has no colour identity
+        // to read, which is not the same as having none. Treated as an
+        // empty identity it folded every land in the deck into one
+        // colourless source and reported every colour the deck plays
+        // as unsupported.
+        if (leaders.all { it.colorIdentity == null }) return null
         return leaders.flatMap { it.colorIdentity.orEmpty().toList() }.toSet()
     }
 
@@ -231,12 +248,12 @@ object DeckAnalysis {
     private fun average(nonland: List<DeckCard>): Double {
         val copies = nonland.sumOf { it.qty }
         if (copies == 0) return 0.0
-        val total = nonland.sumOf { (it.knownManaValue ?: 0.0) * it.qty }
+        val total = nonland.sumOf { manaValue(it) * it.qty }
         return ((total / copies) * 100).roundToInt() / 100.0
     }
 
     private fun median(nonland: List<DeckCard>): Double {
-        val all = nonland.flatMap { c -> List(c.qty) { c.knownManaValue ?: 0.0 } }.sorted()
+        val all = nonland.flatMap { c -> List(c.qty) { manaValue(c) } }.sorted()
         if (all.isEmpty()) return 0.0
         val mid = all.size / 2
         return if (all.size % 2 == 1) all[mid] else ((all[mid - 1] + all[mid]) / 2)

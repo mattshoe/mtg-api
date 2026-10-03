@@ -13,12 +13,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.mattshoe.mtg.core.DeckEditState
 import org.mattshoe.mtg.core.DeckPlan
 import org.mattshoe.mtg.core.DisassembleState
+import org.mattshoe.mtg.core.RenameState
 import org.mattshoe.mtg.core.Tally
 
 /**
@@ -159,6 +161,84 @@ fun DisassembleDialog(state: DisassembleState, onGo: () -> Unit, onClose: () -> 
                     state.plan != null -> Text("It is not holding anything you own.", fontSize = 13.sp)
                 }
                 state.error?.let { Text(it, fontSize = 13.sp) }
+            }
+        },
+    )
+}
+
+/**
+ * Renaming a deck, on Android. Sibling of `RenameDialog` on the web.
+ *
+ * It says where the deck will live afterwards, because the slug moves
+ * with the name and that changes every link anybody already has to
+ * it. `RenameState` decides when Rename is reachable — a blank name,
+ * a name with nothing sluggable in it, and a name that has not
+ * actually changed are all refused in `:core`, so the phone cannot be
+ * more permissive than the website.
+ */
+@Composable
+fun RenameDialog(
+    state: RenameState,
+    onState: (RenameState) -> Unit,
+    onSave: () -> Unit,
+    onClose: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text(if (state.done) "Renamed" else "Rename deck") },
+        confirmButton = {
+            if (state.done) {
+                TextButton(onClick = onClose, modifier = Modifier.testTag("rename-done")) {
+                    Text("Done")
+                }
+            } else {
+                // Tagged because the deck header behind the dialog has
+                // a "Rename" of its own, and a test that goes by the
+                // word presses that one and proves nothing.
+                TextButton(
+                    onClick = onSave,
+                    enabled = state.canSave,
+                    modifier = Modifier.testTag("rename-save"),
+                ) {
+                    Text(if (state.busy) "Renaming…" else "Rename")
+                }
+            }
+        },
+        dismissButton = {
+            if (!state.done) {
+                TextButton(onClick = onClose, modifier = Modifier.testTag("rename-cancel")) {
+                    Text("Cancel")
+                }
+            }
+        },
+        text = {
+            Column(
+                Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (state.done) {
+                    Text(
+                        "${state.was} is now ${state.name}, at #/decks/${state.nextSlug}",
+                        fontSize = 13.sp,
+                    )
+                } else {
+                    OutlinedTextField(
+                        value = state.name,
+                        onValueChange = { onState(state.typed(it)) },
+                        label = { Text("Deck name") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Text(
+                        if (state.nextSlug.isEmpty()) {
+                            "That name has no letters or digits in it."
+                        } else {
+                            "It will live at #/decks/${state.nextSlug}"
+                        },
+                        fontSize = 13.sp,
+                    )
+                    state.error?.let { Text(it, fontSize = 13.sp) }
+                }
             }
         },
     )

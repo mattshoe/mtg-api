@@ -39,11 +39,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.CardRow
+import org.mattshoe.mtg.core.DeckCard
+import org.mattshoe.mtg.core.ExportTo
 import org.mattshoe.mtg.core.Found
 import org.mattshoe.mtg.core.HistoryEntry
 import org.mattshoe.mtg.core.Overlay
 import org.mattshoe.mtg.core.Owner
 import org.mattshoe.mtg.core.Route
+import org.mattshoe.mtg.core.ShareWhat
+import org.mattshoe.mtg.core.Tweak
 import org.mattshoe.mtg.core.View
 
 /**
@@ -81,6 +85,17 @@ fun AppShell(
     onSaveDeck: () -> Unit = {},
     onAskDisassemble: (String) -> Unit = {},
     onDisassemble: () -> Unit = {},
+    /** Rename the open deck. The slug moves with the name. */
+    onAskRename: (String) -> Unit = {},
+    onSaveRename: () -> Unit = {},
+    /** Maintenance on one card, without leaving the deck. */
+    onAddCard: () -> Unit = {},
+    onTweak: (DeckCard, Tweak?) -> Unit = { _, _ -> },
+    onTweakFind: (String) -> Unit = {},
+    onTweakPreview: () -> Unit = {},
+    onTweakApply: () -> Unit = {},
+    /** The deck, as a link or as a list, copied or downloaded. */
+    onShare: (ShareWhat, ExportTo) -> Unit = { _, _ -> },
     onCheckNames: () -> Unit = {},
     onCreateDeck: () -> Unit = {},
     onExit: () -> Unit = {},
@@ -150,6 +165,11 @@ fun AppShell(
                     onSearch()
                 },
                 onCheatsheet = { onState(state.opening(Overlay.CHEATSHEET)) },
+                // Without this every facet list in the panel — types,
+                // set types, layouts, frames, borders, the deck and
+                // format dropdowns — renders empty on the phone while
+                // the website fills them from the same state.
+                facets = state.facets,
             )
 
             View.DECKS -> DecksScreen(
@@ -160,7 +180,11 @@ fun AppShell(
                 onNew = { onState(state.opening(Overlay.NEW_DECK)) },
                 onEdit = { onEditDeck(it.slug) },
                 onDisassemble = { onAskDisassemble(it.slug) },
+                onRename = { onAskRename(it.slug) },
                 onOpenCard = { card, owner -> onOpenNamed(card.name, card.nameNorm, owner) },
+                onAddCard = onAddCard,
+                onTweak = onTweak,
+                onShare = onShare,
             )
 
             View.STATS -> StatsScreen(state.stats) { owner: Owner? ->
@@ -181,6 +205,12 @@ fun AppShell(
             View.CARD -> CardSheet(
                 card = state.card ?: org.mattshoe.mtg.core.CardDetail(name = state.route.rest).loading(),
                 onClose = { onState(state.leaveCard()) },
+                // Reading a deck a card at a time, the same three
+                // controls the web page puts under the card.
+                previous = state.previousCard,
+                next = state.nextCard,
+                place = state.cardPlace,
+                onStep = { c -> onOpenNamed(c.name, c.nameNorm, "") },
             )
 
             View.ENTRY -> MassEntryScreen(
@@ -231,6 +261,26 @@ fun AppShell(
             state = d,
             onGo = onDisassemble,
             onClose = { onState(state.closing(Overlay.DISASSEMBLE)) },
+        )
+    }
+
+    state.deckTweak?.takeIf { Overlay.DECK_TWEAK in state.overlays }?.let { t ->
+        DeckTweakSheet(
+            state = t,
+            onState = { onState(state.copy(deckTweak = it)) },
+            onFind = onTweakFind,
+            onPreview = onTweakPreview,
+            onApply = onTweakApply,
+            onClose = { onState(state.closing(Overlay.DECK_TWEAK)) },
+        )
+    }
+
+    state.rename?.takeIf { Overlay.RENAME in state.overlays }?.let { r ->
+        RenameDialog(
+            state = r,
+            onState = { onState(state.copy(rename = it)) },
+            onSave = onSaveRename,
+            onClose = { onState(state.closing(Overlay.RENAME)) },
         )
     }
 

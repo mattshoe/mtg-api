@@ -156,13 +156,28 @@ fun parseQueryBox(input: String): Sql {
         params.addAll(args)
     }
 
-    fun like(v: String) = "%${v.lowercase()}%"
+    /**
+     * A contains-match on a value the person typed, not a pattern.
+     *
+     * `%` and `_` are ordinary characters to somebody searching for
+     * "50%" or "Chandra_", and left alone SQLite reads them as its own
+     * wildcards: the search silently widens instead of narrowing, with
+     * no error and nothing on screen to say the answer is wrong.
+     * `Clauses.like` in `CardFilters.kt` has escaped them from the
+     * start for this reason and this box did not, so the same typed
+     * text meant two different things depending on which box it went
+     * into. Every `LIKE` built from this has to carry `ESCAPE` with
+     * it, which is what `LIKE_ESC` is for.
+     */
+    fun like(v: String) = "%" + v.lowercase().replace("\\", "\\\\")
+        .replace("%", "\\%").replace("_", "\\_") + "%"
 
     for (tok in tokenize(input)) {
         if (tok.bare != null) {
             if (tok.bare.isBlank()) continue
             push(
-                "(c.name_norm LIKE ? OR lower(c.face1) LIKE ? OR lower(c.face2) LIKE ?)",
+                "(c.name_norm LIKE ? ESCAPE '\\' OR lower(c.face1) LIKE ? ESCAPE '\\' " +
+                    "OR lower(c.face2) LIKE ? ESCAPE '\\')",
                 listOf(like(tok.bare), like(tok.bare), like(tok.bare)),
                 tok.neg,
             )
@@ -176,14 +191,15 @@ fun parseQueryBox(input: String): Sql {
 
         when (key) {
             "name" -> push(
-                "(c.name_norm LIKE ? OR lower(c.face1) LIKE ? OR lower(c.face2) LIKE ?)",
+                "(c.name_norm LIKE ? ESCAPE '\\' OR lower(c.face1) LIKE ? ESCAPE '\\' " +
+                    "OR lower(c.face2) LIKE ? ESCAPE '\\')",
                 listOf(like(v), like(v), like(v)), tok.neg,
             )
-            "oracle" -> push("lower(c.oracle_text) LIKE ?", listOf(like(v)), tok.neg)
-            "flavor" -> push("lower(c.flavor_text) LIKE ?", listOf(like(v)), tok.neg)
-            "type" -> push("lower(c.type_line) LIKE ?", listOf(like(v)), tok.neg)
+            "oracle" -> push("lower(c.oracle_text) LIKE ? ESCAPE '\\'", listOf(like(v)), tok.neg)
+            "flavor" -> push("lower(c.flavor_text) LIKE ? ESCAPE '\\'", listOf(like(v)), tok.neg)
+            "type" -> push("lower(c.type_line) LIKE ? ESCAPE '\\'", listOf(like(v)), tok.neg)
             "manacost" -> push(
-                "replace(c.mana_cost, ' ', '') LIKE ?",
+                "replace(c.mana_cost, ' ', '') LIKE ? ESCAPE '\\'",
                 listOf(like(v.replace(Regex("\\s"), ""))), tok.neg,
             )
 
@@ -239,8 +255,8 @@ fun parseQueryBox(input: String): Sql {
             "settype" -> push("c.set_type = ?", listOf(v.lowercase()), tok.neg)
             "layout" -> push("c.layout = ?", listOf(v.lowercase()), tok.neg)
             "cn" -> push("c.collector_number = ?", listOf(v), tok.neg)
-            "artist" -> push("lower(c.artist) LIKE ?", listOf(like(v)), tok.neg)
-            "watermark" -> push("lower(c.watermark) LIKE ?", listOf(like(v)), tok.neg)
+            "artist" -> push("lower(c.artist) LIKE ? ESCAPE '\\'", listOf(like(v)), tok.neg)
+            "watermark" -> push("lower(c.watermark) LIKE ? ESCAPE '\\'", listOf(like(v)), tok.neg)
             "owner" -> push("c.owner = ?", listOf(v.lowercase()), tok.neg)
 
             "game" -> push(

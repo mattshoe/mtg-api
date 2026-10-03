@@ -102,6 +102,32 @@ jobs:
         working-directory: apps
         run: ./gradlew --no-daemon :androidApp:assembleDebug :app:assembleDebug
 
+      # The same 339 screen tests, on the JVM, before an emulator is
+      # even started. They are one source run two ways, and this way
+      # takes about ninety seconds against the emulator's fourteen
+      # minutes — so a broken screen fails the build long before the
+      # device job has finished booting. The device run below still
+      # happens, for the 26 that need real pixels and for the
+      # screenshots.
+      - name: Screens, on the JVM
+        working-directory: apps
+        run: ./gradlew --no-daemon :androidApp:testDebugUnitTest
+
+      # A suite that quietly shrinks is worse than one that fails.
+      # Kotlin's incremental compiler has already dropped three whole
+      # classes out of a build that then reported success.
+      - name: Every test that exists actually ran
+        run: >-
+          node scripts/check-test-count.mjs
+          apps/androidApp/src/sharedTest
+          apps/androidApp/build/test-results/testDebugUnitTest
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screens-test-results
+          path: apps/androidApp/build/test-results/testDebugUnitTest/*.xml
+
       # KVM, so the emulator is not software-rendered and the job
       # finishes this century.
       - name: Enable KVM
@@ -122,6 +148,13 @@ jobs:
           # :app's LiveApiTest needs a token it is not given here, so
           # it skips itself. Nothing in CI touches the real database.
           script: ./gradlew --no-daemon :androidApp:connectedDebugAndroidTest
+
+      - name: Every test that exists actually ran on the device too
+        if: always()
+        run: >-
+          node scripts/check-test-count.mjs
+          apps/androidApp/src/sharedTest
+          apps/androidApp/build/outputs/androidTest-results
 
       - uses: actions/upload-artifact@v4
         if: always()

@@ -24,3 +24,7 @@ frontend/kmp/
 
 # Agent worktrees. Each is its own checkout; none of it belongs here.
 .claude/worktrees/
+
+# The guard writes each running test group's id here so the next run
+# of the same command can clean up anything a SIGKILL left behind.
+.test-guard/

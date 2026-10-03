@@ -16,6 +16,9 @@ package org.mattshoe.mtg.core
 
 val COLOR_LETTERS = listOf("W", "U", "B", "R", "G")
 
+/** What a land can tap for: the five, plus colourless. */
+private val PRODUCIBLE = COLOR_LETTERS + "C"
+
 /** Fixed. One page size, and a page never shows printings separately. */
 const val PAGE_SIZE = 100
 
@@ -323,14 +326,24 @@ internal class Clauses {
     fun like(v: String) = "%" + v.lowercase().replace("\\", "\\\\")
         .replace("%", "\\%").replace("_", "\\_") + "%"
 
+    /**
+     * A finite number, or nothing at all.
+     *
+     * `toDoubleOrNull` also accepts "NaN" and "Infinity", and both bind
+     * as SQL NULL — so a box holding either produced a comparison that
+     * is never true and an empty grid with no explanation. Unparseable
+     * and un-comparable get the same answer here: add no clause.
+     */
+    fun number(value: String): Double? = value.trim().toDoubleOrNull()?.takeIf { it.isFinite() }
+
     fun numeric(column: String, op: String, value: String) {
-        val n = value.trim().toDoubleOrNull() ?: return
+        val n = number(value) ?: return
         add("$column ${if (op in NUM_OPS) op else ">="} ?", n)
     }
 
     /** Power and toughness are text: '*', '1+*', '3'. Compare real numbers only. */
     fun pt(column: String, op: String, value: String) {
-        val n = value.trim().toDoubleOrNull() ?: return
+        val n = number(value) ?: return
         add("$column GLOB '[0-9]*' AND CAST($column AS INTEGER) ${if (op in NUM_OPS) op else ">="} ?", n)
     }
 
@@ -401,14 +414,21 @@ fun conditions(s: Filters): Sql {
     c.search(listOf("lower(c.artist)"), s.artist)
     c.search(listOf("lower(c.watermark)"), s.watermark)
     c.search(listOf("lower(c.type_line)"), s.typeLine)
+    // `addLike`, not a hand-rolled LIKE: `like()` escapes `%`, `_` and
+    // `\` with a backslash, and without the matching `ESCAPE` clause
+    // SQLite reads that backslash as an ordinary character — so a cost
+    // typed with an underscore in it matched nothing at all.
     s.manaCost.trim().takeIf { it.isNotEmpty() }
-        ?.let { c.add("replace(c.mana_cost, ' ', '') LIKE ?", c.like(it.replace(Regex("\\s"), ""))) }
+        ?.let { c.addLike("replace(c.mana_cost, ' ', '')", it.replace(Regex("\\s"), "")) }
     s.collnum.trim().takeIf { it.isNotEmpty() }?.let { c.add("c.collector_number = ?", it) }
 
     colorClause(s.colorTarget.column, s.colorMode, s.colors, c)
     c.numeric("c.color_identity_count", ">=", s.ciMin)
     c.numeric("c.color_identity_count", "<=", s.ciMax)
-    s.produces.forEach { c.add("c.produced_mana LIKE ?", "%$it%") }
+    // Only the six pips the panel offers. The value goes straight into
+    // a LIKE pattern, so `produces=%` from a hand-edited link was a
+    // bare `%%%` — every card that taps for anything.
+    s.produces.filter { it in PRODUCIBLE }.forEach { c.add("c.produced_mana LIKE ?", "%$it%") }
 
     c.numeric("c.cmc", ">=", s.cmcMin)
     c.numeric("c.cmc", "<=", s.cmcMax)
@@ -443,8 +463,12 @@ fun conditions(s: Filters): Sql {
         c.params.addAll(s.games)
     }
 
-    if (s.yearMin.isNotBlank()) c.add("c.released_at >= ?", "${s.yearMin}-01-01")
-    if (s.yearMax.isNotBlank()) c.add("c.released_at <= ?", "${s.yearMax}-12-31")
+    // A year has to be a number. `yearMin = "soon"` used to bind
+    // 'soon-01-01', which no release date is ever >= — a typo that
+    // emptied the grid instead of being ignored like every other
+    // unparseable number here.
+    s.yearMin.trim().toIntOrNull()?.let { c.add("c.released_at >= ?", "$it-01-01") }
+    s.yearMax.trim().toIntOrNull()?.let { c.add("c.released_at <= ?", "$it-12-31") }
 
     Flag.entries.forEach { flag ->
         when (s.flags[flag]) {
@@ -473,8 +497,8 @@ fun conditions(s: Filters): Sql {
         else -> Unit
     }
 
-    if (s.priceMin.isNotBlank()) s.priceMin.toDoubleOrNull()?.let { c.add("($PRICE_EXPR) >= ?", it) }
-    if (s.priceMax.isNotBlank()) s.priceMax.toDoubleOrNull()?.let { c.add("($PRICE_EXPR) <= ?", it) }
+    c.number(s.priceMin)?.let { c.add("($PRICE_EXPR) >= ?", it) }
+    c.number(s.priceMax)?.let { c.add("($PRICE_EXPR) <= ?", it) }
 
     when (s.pool) {
         Pool.FREE -> c.where += "COALESCE(u.free, 0) > 0"
@@ -547,7 +571,10 @@ fun buildQuery(s: Filters, countOnly: Boolean = false): Sql {
         s.sort.keys.joinToString(", ") { "($it) IS NULL, ($it) $dir" } +
         ", c.name_norm ASC"
     val size = if (s.size > 0) s.size else PAGE_SIZE
-    val offset = (s.page - 1).coerceAtLeast(0) * size
+    // Long, because `(page - 1) * size` overflowed Int: page 30000000
+    // came out as a negative offset, which SQLite reads as zero — so a
+    // page number past about 21 million quietly showed page one.
+    val offset = (s.page.toLong() - 1L).coerceAtLeast(0L) * size.toLong()
 
     // One row per card, never one per printing. MIN(c.id) makes SQLite
     // take the other bare columns from that same row, which is the

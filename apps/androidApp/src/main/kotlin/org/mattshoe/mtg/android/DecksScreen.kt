@@ -1,10 +1,12 @@
 package org.mattshoe.mtg.android
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -18,10 +20,20 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -35,6 +47,9 @@ import org.mattshoe.mtg.core.Pip
 import org.mattshoe.mtg.core.Prices
 import org.mattshoe.mtg.core.DecksState
 import org.mattshoe.mtg.core.Design
+import org.mattshoe.mtg.core.ExportTo
+import org.mattshoe.mtg.core.ShareWhat
+import org.mattshoe.mtg.core.Tweak
 
 /**
  * Decks, on Android. Sibling of `DecksPage`.
@@ -53,7 +68,13 @@ fun DecksScreen(
     onNew: () -> Unit = {},
     onEdit: (Deck) -> Unit = {},
     onDisassemble: (Deck) -> Unit = {},
+    /** Rename the open deck. The slug moves with the name. */
+    onRename: (Deck) -> Unit = {},
     onOpenCard: (DeckCard, String) -> Unit = { _, _ -> },
+    /** Maintenance, one card at a time, without leaving the screen. */
+    onAddCard: () -> Unit = {},
+    onTweak: (DeckCard, Tweak?) -> Unit = { _, _ -> },
+    onShare: (ShareWhat, ExportTo) -> Unit = { _, _ -> },
 ) {
     Column(
         Modifier.fillMaxWidth()
@@ -69,18 +90,32 @@ fun DecksScreen(
                 state.error != null -> Line("Could not load decks: ${state.error}", Bad)
                 state.decks.isEmpty() -> Line("No decks yet.", Ink3)
                 else -> state.byOwner.forEach { (owner, decks) ->
-                    Line(
+                    // A shelf, with a heading that says how many are on
+                    // it. The web's `.owner-head` is the name and the
+                    // count together, not a bare name.
+                    GroupHead(
                         owner.replaceFirstChar(Char::uppercase),
-                        Ink,
+                        "${decks.size} " + if (decks.size == 1) "deck" else "decks",
                         Design.H2,
-                        FontWeight.SemiBold,
-                        Modifier.padding(top = 6.dp),
                     )
                     decks.forEach { DeckTile(it, onOpen) }
                 }
             }
         } else {
-            Ghost("← Decks", onClick = onClose)
+            var sharing by remember { mutableStateOf(false) }
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(Design.GAP.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Ghost("← Decks", onClick = onClose)
+                Spacer(Modifier.weight(1f))
+                ShareButton(sharing) { sharing = !sharing }
+            }
+            // Inline rather than a floating popup: a phone has the
+            // width for it, and a menu that is part of the page
+            // cannot end up off the edge of the screen.
+            if (sharing) ShareMenu { what, where -> sharing = false; onShare(what, where) }
             Hero(open, state)
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -92,24 +127,25 @@ fun DecksScreen(
             if (admin) {
                 // Both of these move real cards, and both show the
                 // server's own dry run before they are allowed to.
-                Row(horizontalArrangement = Arrangement.spacedBy(Design.GAP.dp)) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(Design.GAP.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
                     Btn("Edit list") { onEdit(open) }
+                    Btn("Rename") { onRename(open) }
                     Btn("Disassemble", danger = true) { onDisassemble(open) }
                 }
             }
-            DeckStats(DeckAnalysis.of(state.cards))
+            DeckStatsPanel(DeckAnalysis.of(state.cards))
+            if (admin) {
+                Panel { Primary("+ Add a card", onClick = onAddCard) }
+            }
             // `byType` is the core's, the same list the website reads,
             // so the two cannot group or order a deck differently.
             state.byType.forEach { (group, cards) ->
-                Line(
-                    group.title,
-                    Ink,
-                    Design.H3,
-                    FontWeight.SemiBold,
-                    Modifier.padding(top = 6.dp),
-                )
+                GroupHead(group.title, "${cards.sumOf { it.qty }}")
                 Panel {
-                    cards.forEach { c -> CardLine(c, open.owner, onOpenCard) }
+                    cards.forEach { c -> CardLine(c, open.owner, onOpenCard, admin, onTweak) }
                 }
             }
 
@@ -232,7 +268,13 @@ private fun Hero(deck: Deck, state: DecksState) {
  * and how many. The whole row opens the card, the way the web's does.
  */
 @Composable
-private fun CardLine(card: DeckCard, owner: String, onOpen: (DeckCard, String) -> Unit) {
+private fun CardLine(
+    card: DeckCard,
+    owner: String,
+    onOpen: (DeckCard, String) -> Unit,
+    admin: Boolean = false,
+    onTweak: (DeckCard, Tweak?) -> Unit = { _, _ -> },
+) {
     Row(
         Modifier.fillMaxWidth().clickable { onOpen(card, owner) }.padding(vertical = 5.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -252,25 +294,153 @@ private fun CardLine(card: DeckCard, owner: String, onOpen: (DeckCard, String) -
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
             Line(card.shown, Ink, Design.SMALL)
-            card.typeLine?.takeIf { it.isNotBlank() }?.let { Line(it, Ink3, Design.MINI) }
+            // `knownTypeLine`, not `typeLine`: a basic land nobody
+            // inventories has no printing to read one off, and the
+            // web names it anyway. The phone was leaving every
+            // Island, Plains and Forest with a blank second line.
+            card.knownTypeLine?.takeIf { it.isNotBlank() }?.let { Line(it, Ink3, Design.MINI) }
         }
         if (card.short > 0) Tag("has ${card.owned}", Bad)
         Line("${card.qty}×", Ink3, Design.MINI)
+        // Maintenance lives on the row the card is on. One button,
+        // not three: three marks on every row of a hundred-card list
+        // left no room for the card's own name. What to do is asked
+        // inside the sheet.
+        if (admin) RowAction(card, onTweak)
     }
 }
 
 /**
- * What the deck is made of, on a phone.
+ * The "⋯" on a card's row. Admin only, and it keeps the press.
  *
- * Every number is `DeckAnalysis`, the same object the website reads,
- * so the two cannot disagree about a deck's curve. Drawn plainer than
- * the web's: a phone has one column and no room for five panels side
- * by side.
+ * The row it sits on is itself a button, so without its own click the
+ * sheet would open with the card page behind it. A 44dp box rather
+ * than a 20dp glyph, which is the floor the web's coarse-pointer rule
+ * puts on it.
  */
 @Composable
-private fun DeckStats(s: org.mattshoe.mtg.core.DeckStats) {
+private fun RowAction(card: DeckCard, onTweak: (DeckCard, Tweak?) -> Unit) {
+    Box(
+        Modifier.size(44.dp)
+            .semantics {
+                role = Role.Button
+                contentDescription = "Change ${card.shown}"
+            }
+            // Nothing is decided here: the sheet asks what to do.
+            .clickable { onTweak(card, null) },
+        contentAlignment = Alignment.Center,
+    ) {
+        Line("⋯", Ink2, Design.H3, FontWeight.SemiBold)
+    }
+}
+
+/**
+ * A panel head: what it is, and how many of it. The web's
+ * `.panel-head` is an `h2` and a count tag, never a bare word.
+ */
+@Composable
+private fun GroupHead(title: String, count: String, size: Int = Design.H3) {
+    Row(
+        Modifier.fillMaxWidth().padding(top = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Line(
+            title,
+            Ink,
+            size,
+            FontWeight.SemiBold,
+            Modifier.weight(1f).semantics { heading() },
+        )
+        Tag(count)
+    }
+}
+
+/**
+ * Share, with something to say about what.
+ *
+ * A deck is worth handing over two ways: as a link to this page, and
+ * as the list itself for somebody to paste into their own builder.
+ * Each can go to the clipboard or come down as a file, so the four
+ * are a menu rather than four buttons crowding the header.
+ */
+@Composable
+private fun ShareButton(open: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier.size(44.dp)
+            .semantics {
+                role = Role.Button
+                contentDescription = "Share this deck"
+            }
+            .background(
+                if (open) AccentDim else androidx.compose.ui.graphics.Color.Transparent,
+                Radius,
+            )
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        // The glyph, not the word - the web's button is icon-only.
+        // Boxed and gold while it is open, so "open" reads as a shape
+        // and a lightness rather than a hue nobody can see.
+        Line("⤴", if (open) Accent2 else Ink2, Design.H2, FontWeight.SemiBold)
+    }
+}
+
+@Composable
+private fun ShareMenu(onShare: (ShareWhat, ExportTo) -> Unit) {
     Panel {
-        Line("The deck at a glance", Ink, Design.H3, FontWeight.SemiBold)
+        // A group is its label and the two options under it, close
+        // enough together to read as one thing. Evenly spaced, the
+        // second label sat as far from its own options as from the
+        // group above it and the menu read as six loose words.
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            ShareWhat.entries.forEach { what ->
+                Column {
+                    Line(
+                        what.label,
+                        Ink3,
+                        Design.MINI,
+                        FontWeight.SemiBold,
+                        Modifier.padding(bottom = 2.dp),
+                    )
+                    ExportTo.entries.forEach { where ->
+                        Line(
+                            where.label,
+                            Ink,
+                            Design.SMALL,
+                            FontWeight.Normal,
+                            Modifier.fillMaxWidth()
+                                .semantics { role = Role.Button }
+                                .clickable { onShare(what, where) }
+                                .padding(vertical = 9.dp),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * What the deck is made of, on a phone. Sibling of `DeckStatsPanel`.
+ *
+ * Every number is `DeckAnalysis`, the same object the website reads,
+ * so the two cannot disagree about a deck's curve. The charts are the
+ * web's charts: the same six figures, the same columns, the same two
+ * rings, the same captions. A phone has one column, so the panels are
+ * stacked rather than set in a grid — that is the only difference
+ * either platform is allowed.
+ */
+@Composable
+internal fun DeckStatsPanel(s: org.mattshoe.mtg.core.DeckStats) {
+    Panel {
+        Line(
+            "The deck at a glance",
+            Ink,
+            Design.H3,
+            FontWeight.SemiBold,
+            Modifier.semantics { heading() },
+        )
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -280,109 +450,316 @@ private fun DeckStats(s: org.mattshoe.mtg.core.DeckStats) {
             Figure("${s.lands}", "lands · ${s.landShare}%")
             Figure(s.averageManaValue.toString(), "avg mana")
             Figure("${s.spells}", "spells")
-            s.value?.let { Figure(Prices.money(it), "value") }
+            // The hint is the web's `title`. A phone has nothing to
+            // hover, so it is the figure's description instead —
+            // which is also the only way a screen reader hears it.
+            s.value?.let {
+                Figure(
+                    Prices.money(it),
+                    "value",
+                    hint = if (s.unpriced > 0) "${s.unpriced} cards have no price" else "",
+                )
+            }
             if (s.missing > 0) Figure("${s.missing}", "not owned", Warn)
         }
     }
 
-    if (s.hasCurve) {
-        Panel {
-            Line("Mana curve", Ink3, Design.MINI, FontWeight.SemiBold)
-            val most = s.curve.maxOfOrNull { it.value } ?: 0
-            Row(
-                Modifier.fillMaxWidth().height(110.dp).padding(top = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
-                verticalAlignment = Alignment.Bottom,
-            ) {
-                s.curve.forEach { bar ->
-                    Column(
-                        Modifier.weight(1f),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Bottom,
-                    ) {
-                        Line(if (bar.value > 0) "${bar.value}" else "", Ink2, Design.MINI)
-                        // The bar fills a fraction of the track, not
-                        // of the whole column: the column also holds
-                        // the number and the label, so a fraction of
-                        // the column overruns the space left and
-                        // every tall bar ends up the same height.
-                        Box(
-                            Modifier.weight(1f).fillMaxWidth(),
-                            contentAlignment = Alignment.BottomCenter,
-                        ) {
-                            Box(
-                                Modifier.fillMaxWidth()
-                                    .fillMaxHeight(if (most <= 0) 0f else bar.value.toFloat() / most)
-                                    .background(if (bar.value > 0) Accent else Bg3, Radius),
-                            )
-                        }
-                        Line(bar.label, Ink3, Design.MINI)
-                    }
-                }
-            }
-            Line("Median ${s.medianManaValue}. Lands excluded.", Ink3, Design.MINI)
-        }
-    }
-
-    if (s.pips.isNotEmpty() || s.sources.isNotEmpty()) {
-        Panel {
-            Line("Colour", Ink3, Design.MINI, FontWeight.SemiBold)
-            val most = maxOf(
-                s.pips.maxOfOrNull { it.value } ?: 0,
-                s.sources.maxOfOrNull { it.value } ?: 0,
-            )
-            Pip.entries.forEach { pip ->
-                val needs = s.pips.firstOrNull { it.label == pip.label }?.value ?: 0
-                val makes = s.sources.firstOrNull { it.label == pip.label }?.value ?: 0
-                if (needs == 0 && makes == 0) return@forEach
-                Row(
-                    Modifier.fillMaxWidth().padding(top = 7.dp),
-                    horizontalArrangement = Arrangement.spacedBy(9.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Box(
-                        Modifier.size(18.dp).background(c(Design.pip(pip.letter)), CircleShape),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        androidx.compose.material3.Text(
-                            pip.letter, color = Bg, fontSize = 10.sp, fontWeight = FontWeight.Bold,
-                        )
-                    }
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Track(needs, most, pip, "needs")
-                        Track(makes, most, pip, "makes")
-                    }
-                }
-            }
-            if (s.unsupported.isNotEmpty()) {
-                Line("No source for ${s.unsupported.joinToString(", ")}.", Warn, Design.MINI)
-            }
-        }
-    }
-
+    if (s.hasCurve) Panel { Curve(s) }
+    if (s.pips.isNotEmpty() || s.sources.isNotEmpty()) Panel { Colours(s) }
     if (s.types.isNotEmpty()) Panel { Bars("Card types", s.types, s.totalCards) }
     if (s.rarities.isNotEmpty()) Panel { Bars("Rarity", s.rarities, s.totalCards) }
 
     if (s.unknown > 0) {
         Line(
-            "${s.unknown} card${if (s.unknown == 1) "" else "s"} here have no printing in the " +
-                "collection, so they are counted in the total and left out of every chart.",
+            "${s.unknown} card${if (s.unknown == 1) "" else "s"} in this list have no printing " +
+                "in the collection, so nothing is known about them — they are counted in the " +
+                "total and left out of every chart above.",
             Ink3,
             Design.MINI,
         )
     }
 }
 
+/** How tall the chart is, and how much of that the count above a full bar needs. */
+private val CURVE_HEIGHT = 132.dp
+private val CURVE_HEAD = 18.dp
+
+/** A column is rounded where it ends and square where it stands, as on the web. */
+private val CurveCap =
+    androidx.compose.foundation.shape.RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)
+
+/**
+ * The curve, as columns. The web's `Curve`.
+ *
+ * Lands are not in it — they cost nothing and would put a third of
+ * the deck in the nought column, which is the one thing a curve must
+ * not say.
+ */
 @Composable
-private fun Figure(n: String, k: String, tint: androidx.compose.ui.graphics.Color = Ink) {
-    Column {
+private fun Curve(s: org.mattshoe.mtg.core.DeckStats) {
+    Line("Mana curve", Ink3, Design.MINI, FontWeight.SemiBold)
+    val most = s.curve.maxOfOrNull { it.value } ?: 0
+    Row(
+        Modifier.fillMaxWidth().height(CURVE_HEIGHT).padding(top = 10.dp).testTag("curve"),
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
+        verticalAlignment = Alignment.Bottom,
+    ) {
+        s.curve.forEach { bar ->
+            Column(
+                Modifier.weight(1f).fillMaxHeight(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Bottom,
+            ) {
+                // The bar measures itself against the track, not
+                // against the column: the column also holds the
+                // number and the label, and a fraction of the column
+                // overruns what is left, which is how the web drew
+                // fifteen and seventeen exactly alike. The head is
+                // the room the number needs above a full-height bar,
+                // and the number rides on top of its own bar rather
+                // than sitting in a row along the top of the chart,
+                // where it was nowhere near what it counted.
+                BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+                    val room = (maxHeight - CURVE_HEAD).coerceAtLeast(0.dp)
+                    val tall = if (most <= 0) 0.dp else room * (bar.value.toFloat() / most)
+                    Column(
+                        Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Bottom,
+                    ) {
+                        // Pinned to exactly the room reserved for it.
+                        // Left to size itself the number came out a
+                        // shade taller than `CURVE_HEAD` on some
+                        // densities, the column overflowed, and the
+                        // only bar with no slack — the tallest — was
+                        // squeezed to fit. Seventeen then drew 74dp
+                        // against fifteen's 71 instead of its honest
+                        // 80, which is the "why are the 15 and 17 the
+                        // same height" this chart was rebuilt to fix,
+                        // alive again and showing on one emulator in
+                        // three.
+                        Box(
+                            Modifier.height(CURVE_HEAD).fillMaxWidth(),
+                            contentAlignment = Alignment.BottomCenter,
+                        ) {
+                            Line(
+                                if (bar.value > 0) "${bar.value}" else "",
+                                Ink2,
+                                Design.MINI,
+                                FontWeight.SemiBold,
+                                Modifier.testTag("curve-count-${bar.label}"),
+                            )
+                        }
+                        Box(
+                            Modifier.fillMaxWidth()
+                                // A zero column is still a column: the
+                                // web leaves a 2px stub so the chart
+                                // has a floor to read the rest against.
+                                .height(tall.coerceAtLeast(2.dp))
+                                .background(if (bar.value > 0) Accent else Bg3, CurveCap)
+                                .testTag("curve-bar-${bar.label}"),
+                        )
+                    }
+                }
+                Line(
+                    bar.label,
+                    Ink3,
+                    Design.MINI,
+                    modifier = Modifier.testTag("curve-label-${bar.label}"),
+                )
+            }
+        }
+    }
+    Line("Median ${s.medianManaValue}. Lands excluded.", Ink3, Design.MINI)
+}
+
+/**
+ * What the deck asks for against what it can make, per colour.
+ * The web's `Colours`.
+ *
+ * Two bars per colour: pips needed, then sources at half strength.
+ * A splash with no sources is the thing this is for, and it is
+ * invisible in either chart on its own.
+ */
+@Composable
+private fun Colours(s: org.mattshoe.mtg.core.DeckStats) {
+    Line("Colour", Ink3, Design.MINI, FontWeight.SemiBold)
+    val most = maxOf(
+        s.pips.maxOfOrNull { it.value } ?: 0,
+        s.sources.maxOfOrNull { it.value } ?: 0,
+    )
+    Pip.entries.forEach { pip ->
+        val needs = s.pips.firstOrNull { it.label == pip.label }?.value ?: 0
+        val makes = s.sources.firstOrNull { it.label == pip.label }?.value ?: 0
+        if (needs == 0 && makes == 0) return@forEach
+        Row(
+            Modifier.fillMaxWidth().padding(top = 7.dp).testTag("mana-row-${pip.letter}"),
+            horizontalArrangement = Arrangement.spacedBy(9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            PipDot(pip.letter, 18.dp, 10.sp, "pip-row-${pip.letter}")
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Track(needs, most, pip, "needs", faded = false)
+                Track(makes, most, pip, "makes", faded = true)
+            }
+        }
+    }
+    Row(
+        Modifier.fillMaxWidth().padding(top = 14.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Ring("Needs", s.pips, Modifier.weight(1f))
+        Ring("Makes", s.sources, Modifier.weight(1f))
+    }
+    Line(
+        "Pips the deck asks for, against cards that can produce them. " +
+            "Hybrid pips count for both halves.",
+        Ink3,
+        Design.MINI,
+    )
+    if (s.unsupported.isNotEmpty()) {
+        Line("No source for ${s.unsupported.joinToString(", ")}.", Warn, Design.MINI)
+    }
+}
+
+/**
+ * One colour split, as a ring. The web's `Pie`.
+ *
+ * A bar says how many white pips there are; a ring says what share of
+ * the deck's colour is white, which is the question you ask when
+ * deciding whether a splash is really a splash. Every slice is also
+ * named by its letter in the key below, because a chart that encodes
+ * a colour only as a hue says nothing to half its readers.
+ */
+@Composable
+private fun Ring(caption: String, bars: List<Bar>, modifier: Modifier = Modifier) {
+    val total = bars.sumOf { it.value }
+    // Nothing to split: a colourless deck has no colour chart.
+    if (total <= 0) {
+        Box(modifier)
+        return
+    }
+    val slices = bars.map { it to (it.value * 100) / total }
+    val told = slices.joinToString(", ") { (bar, pct) -> "${bar.label} $pct%" }
+    Column(
+        modifier.testTag("ring-$caption"),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(5.dp),
+    ) {
+        Canvas(
+            Modifier.size(76.dp)
+                .semantics { contentDescription = "$caption · $total — $told" },
+        ) {
+            var at = -90f
+            bars.forEach { bar ->
+                val sweep = 360f * bar.value / total
+                drawArc(
+                    color = c(Design.pip(letterFor(bar.label))),
+                    startAngle = at,
+                    sweepAngle = sweep,
+                    useCenter = true,
+                )
+                at += sweep
+            }
+            // A hairline on every boundary, so two neighbouring
+            // slices are told apart by an edge and not only by their
+            // colour.
+            at = -90f
+            bars.forEach { bar ->
+                val rad = at * kotlin.math.PI.toFloat() / 180f
+                drawLine(
+                    color = Bg2,
+                    start = center,
+                    end = androidx.compose.ui.geometry.Offset(
+                        center.x + (size.minDimension / 2) * kotlin.math.cos(rad),
+                        center.y + (size.minDimension / 2) * kotlin.math.sin(rad),
+                    ),
+                    strokeWidth = 2f,
+                )
+                at += 360f * bar.value / total
+            }
+        }
+        Line("$caption · $total", Ink3, Design.TINY, FontWeight.SemiBold)
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            slices.forEach { (bar, pct) ->
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    PipDot(letterFor(bar.label), 14.dp, 9.sp, "pip-$caption-${letterFor(bar.label)}")
+                    Line("$pct%", Ink2, Design.TINY)
+                }
+            }
+        }
+    }
+}
+
+/** The letter a colour goes by, which is how a slice is named rather than tinted. */
+private fun letterFor(label: String): String =
+    Pip.entries.firstOrNull { it.label == label }?.letter ?: "C"
+
+/**
+ * One mana symbol: the colour, with its letter on it. The web's `.sym`.
+ *
+ * The letter is the point of it — the owner is colourblind and a disc
+ * told apart only by its hue says nothing. Which is why the line box
+ * is trimmed to the glyph: a `Text` keeps the theme's line height
+ * whatever its font size, so an 8sp letter sat in a 24sp line and
+ * centring the line left the letter hanging off the bottom of a small
+ * disc as a sliver. The screenshot caught it; no assertion could.
+ */
+@OptIn(androidx.compose.ui.text.ExperimentalTextApi::class)
+@Composable
+private fun PipDot(
+    letter: String,
+    size: androidx.compose.ui.unit.Dp,
+    text: androidx.compose.ui.unit.TextUnit,
+    tag: String,
+) {
+    Box(
+        Modifier.size(size).background(c(Design.pip(letter)), CircleShape).testTag(tag),
+        contentAlignment = Alignment.Center,
+    ) {
+        androidx.compose.material3.Text(
+            letter,
+            Modifier.testTag("$tag-letter"),
+            color = Bg,
+            fontSize = text,
+            lineHeight = text,
+            fontWeight = FontWeight.Bold,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            style = androidx.compose.ui.text.TextStyle(
+                platformStyle = androidx.compose.ui.text.PlatformTextStyle(
+                    includeFontPadding = false,
+                ),
+                lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
+                    alignment = androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center,
+                    trim = androidx.compose.ui.text.style.LineHeightStyle.Trim.Both,
+                ),
+            ),
+        )
+    }
+}
+
+@Composable
+private fun Figure(
+    n: String,
+    k: String,
+    tint: androidx.compose.ui.graphics.Color = Ink,
+    hint: String = "",
+) {
+    val told = if (hint.isEmpty()) "$n $k" else "$n $k — $hint"
+    Column(Modifier.semantics { contentDescription = told }) {
         Line(n, tint, Design.H2, FontWeight.SemiBold)
         Line(k, Ink3, Design.MINI)
     }
 }
 
 @Composable
-private fun Track(n: Int, most: Int, pip: Pip, what: String) {
+private fun Track(n: Int, most: Int, pip: Pip, what: String, faded: Boolean) {
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(7.dp),
@@ -392,7 +769,14 @@ private fun Track(n: Int, most: Int, pip: Pip, what: String) {
             Box(
                 Modifier.fillMaxWidth(if (most <= 0) 0f else n.toFloat() / most)
                     .height(9.dp)
-                    .background(c(Design.pip(pip.letter)), Radius),
+                    // Sources at half strength, the way the web fades
+                    // `.fill.makes`: the pair is one comparison and
+                    // the top bar is the demand.
+                    .background(
+                        c(Design.pip(pip.letter)).copy(alpha = if (faded) 0.5f else 1f),
+                        Radius,
+                    )
+                    .testTag("track-${pip.letter}-$what"),
             )
         }
         Line("$n $what", Ink3, Design.MINI)
@@ -414,7 +798,8 @@ private fun Bars(title: String, bars: List<Bar>, total: Int) {
                 Box(
                     Modifier.fillMaxWidth(if (most <= 0) 0f else bar.value.toFloat() / most)
                         .height(8.dp)
-                        .background(Accent, Radius),
+                        .background(Accent, Radius)
+                        .testTag("hbar-${bar.label}"),
                 )
             }
             Line("${bar.value}", Ink3, Design.MINI)
@@ -434,7 +819,7 @@ private fun Bars(title: String, bars: List<Bar>, total: Int) {
 @Composable
 private fun TokenList(tokens: List<org.mattshoe.mtg.core.TokenCard>) {
     if (tokens.isEmpty()) return
-    Line("Tokens", Ink, Design.H3, FontWeight.SemiBold, Modifier.padding(top = 6.dp))
+    GroupHead("Tokens", "${tokens.size}")
     val open = androidx.compose.ui.platform.LocalUriHandler.current
     Panel {
         tokens.forEach { token ->
@@ -477,5 +862,11 @@ private fun TokenList(tokens: List<org.mattshoe.mtg.core.TokenCard>) {
                 Line("${token.madeBy}×", Ink3, Design.MINI)
             }
         }
+        Line(
+            "Made by the cards in this deck. You will want these to hand — " +
+                "each one goes to TCGplayer.",
+            Ink3,
+            Design.MINI,
+        )
     }
 }

@@ -8,7 +8,12 @@ export default defineWorkersConfig({
     poolOptions: {
       workers: {
         isolatedStorage: true,
-        singleWorker: true,
+        // One worker per test file, not one for the whole suite.
+        // `isolatedStorage` already gives each test its own storage,
+        // so serialising the files on top of that bought nothing and
+        // cost four minutes: 287s serial against 39s parallel, the
+        // same 558 tests passing, checked over four consecutive runs.
+        singleWorker: false,
         wrangler: { configPath: './wrangler.toml' },
         miniflare: {
           compatibilityFlags: ['nodejs_compat'],
@@ -23,6 +28,22 @@ export default defineWorkersConfig({
         },
       },
     },
+    // Only this checkout's tests. An agent worktree under
+    // `.claude/worktrees/` is a whole copy of the repo, tests and
+    // all, and vitest's default glob happily collected every one of
+    // them: eight copies of `decks.test.js` ran in a single `npm
+    // test`, which is why a one-minute suite took over ten and
+    // looked for all the world like it had hung.
+    include: ['test/**/*.test.js'],
+    exclude: ['**/node_modules/**', '.claude/**', '**/.wrangler/**'],
     setupFiles: ['./test/setup.js'],
+    // A stuck test fails; it does not hang the run. Without these a
+    // single test waiting on something that never arrives holds the
+    // whole suite open indefinitely, and the output looks exactly
+    // like a slow suite. `scripts/guard.mjs` is the outer backstop;
+    // these are what make one test's problem stay one test's problem.
+    testTimeout: 20_000,
+    hookTimeout: 30_000,
+    teardownTimeout: 20_000,
   },
 });

@@ -12,7 +12,14 @@ plugins {
 // counting lines in a CSV to change that.
 kotlin {
     jvm()
-    androidTarget()
+    androidTarget {
+        // See :core. `compileOptions` fixes Java at 17 and Kotlin would
+        // otherwise take its target from the JDK running Gradle, so the
+        // two disagree on anything newer and the module will not build.
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        }
+    }
     js(IR) { browser(); nodejs(); binaries.library() }
     iosArm64()
     iosSimulatorArm64()
