@@ -427,7 +427,20 @@ class DeckStatsParityTest {
         val needs = railWidth("track-W-needs")
         val makes = railWidth("track-W-makes")
         assertTrue(needs > 40f, "the needs bar is only ${needs}dp wide")
-        assertTrue(abs(makes - needs / 2f) < 2f, "five sources against ten pips drew ${makes}dp of ${needs}dp")
+        // As a proportion, not as a count of pixels. The claim is that
+        // the makes bar is half the needs bar; `fillMaxWidth(0.5f)`
+        // rounds to whole pixels, so the answer lands a dp or two
+        // either side depending on the screen's density — 104dp of 204
+        // on CI's emulator against 102 of 204 here. A 2dp window on a
+        // 100dp bar is tighter than that rounding and was failing on
+        // the density rather than on the drawing. Three percent still
+        // catches a bar at 40% or at full width, which is what going
+        // wrong would actually look like.
+        val share = makes / needs
+        assertTrue(
+            abs(share - 0.5f) < 0.03f,
+            "five sources against ten pips drew ${makes}dp of ${needs}dp, a share of $share",
+        )
     }
 
     @Test
