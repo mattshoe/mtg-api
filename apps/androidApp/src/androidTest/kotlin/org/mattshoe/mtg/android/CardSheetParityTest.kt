@@ -85,6 +85,46 @@ class CardSheetParityTest {
     private fun topOf(text: String) =
         rule.onNodeWithText(text).getUnclippedBoundsInRoot().top.value
 
+    /**
+     * The one thing on the screen that says this, as drawn.
+     *
+     * Unmerged: a printing you can buy is a clickable row, and a
+     * clickable merges its children's semantics into itself. Asking
+     * the merged tree where the set name is hands back the whole row,
+     * which would make every measurement below agree with itself.
+     */
+    private fun piece(text: String) = rule.onNodeWithText(text, useUnmergedTree = true)
+
+    /** How tall the line carrying this text is. One line, or two. */
+    private fun tall(text: String) =
+        piece(text).getUnclippedBoundsInRoot().let { (it.bottom - it.top).value }
+
+    /** Where every node carrying exactly this text sits, in pixels. */
+    private fun tops(text: String) = rule.onAllNodes(hasText(text), useUnmergedTree = true)
+        .fetchSemanticsNodes().map { it.boundsInRoot.top }
+
+    /**
+     * All of these sit on one row.
+     *
+     * The web suite measures its rows — `aPrintingLineStaysOnOneLine`,
+     * `theOwnerLinesStayOnOneLine` — because a row is a row by its
+     * layout and not by its words. Reading the words off the screen
+     * one at a time passes just as happily on a paragraph, which is
+     * what this screen used to draw: "matt · 24 owned · 0 free" in one
+     * sentence where the website sets a name and three figures.
+     *
+     * A word may be on the page more than once (an owner is on his
+     * printing and on his deck), so any one occurrence lining up with
+     * one of each of the others is enough.
+     */
+    private fun onOneRow(vararg text: String): Boolean {
+        val slack = 4f * rule.density.density
+        val first = tops(text.first())
+        val rest = text.drop(1).map { tops(it) }
+        if (first.isEmpty() || rest.any { it.isEmpty() }) return false
+        return first.any { t -> rest.all { other -> other.any { kotlin.math.abs(it - t) < slack } } }
+    }
+
     // ------------------------------------------------------------ cards
 
     private fun card(vararg l: Pair<String, String>) =
@@ -406,16 +446,29 @@ class CardSheetParityTest {
         open(shared())
         Parity.check(
             Parity.Fact("the section names itself") { seen("Who owns it") },
-            Parity.Fact("matt has 24 and none of them spare") {
-                seen("matt · 24 owned · 0 free")
+            Parity.Fact("matt has 24 and none of them spare, across one row") {
+                onOneRow("Matt", "24 owned", "0 free")
             },
-            Parity.Fact("kayla has 10 and five of them spare") {
-                seen("kayla · 10 owned · 5 free")
+            Parity.Fact("kayla has 10 and five of them spare, across one row") {
+                onOneRow("Kayla", "10 owned", "5 free")
+            },
+            // The website sets each count in its own `.tag.mini.mono`
+            // rather than running them into a sentence, and a figure
+            // you can pick out is the whole point of the row.
+            Parity.Fact("every count is its own figure, not a word in a sentence") {
+                count("24 owned") == 1 && count("10 owned") == 1 && count("0 free") == 1
+            },
+            // Only here: the printing and the deck rows carry the
+            // owner as the database spells him, exactly as the web's
+            // `.tag` does.
+            Parity.Fact("the name is capitalised, the way `.owner-line .t-name` is") {
+                count("Matt") == 1 && count("Kayla") == 1
             },
             Parity.Fact("the owner with the most copies comes first") {
-                topOf("matt · 24 owned · 0 free") < topOf("kayla · 10 owned · 5 free")
+                topOf("Matt") < topOf("Kayla")
             },
         )
+        rule.onRoot().shoot("card_sheet_who_owns_it")
     }
 
     @Test
@@ -430,7 +483,10 @@ class CardSheetParityTest {
         )
         Parity.check(
             Parity.Fact("an owner with no copies is still listed, and said to be short") {
-                seen("kayla · 0 owned · 0 free · 2 short")
+                onOneRow("Kayla", "0 owned", "0 free", "2 short")
+            },
+            Parity.Fact("how short she is, is a figure of its own") {
+                count("2 short") == 1
             },
         )
     }
@@ -439,19 +495,25 @@ class CardSheetParityTest {
     fun aPrintingSaysWhoseCopyItIsAndADeckSaysWhoseDeckItIs() {
         open(shared())
         Parity.check(
-            Parity.Fact("kayla's printing names her") {
-                inside("LCC · 4 · The Lost Caverns of Ixalan Commander · kayla · 10×") == 1
+            // Pieces that line up, not a dot-joined sentence: the web
+            // sets the code, the number, the name and each tag in its
+            // own span of `.print-line`.
+            Parity.Fact("kayla's printing names her, across one row") {
+                onOneRow("LCC", "4", "The Lost Caverns of Ixalan Commander", "kayla", "10×")
             },
-            Parity.Fact("matt's printing names him") {
-                inside("M3C · 409 · Modern Horizons 3 · matt · 24×") == 1
+            Parity.Fact("matt's printing names him, across one row") {
+                onOneRow("M3C", "409", "Modern Horizons 3", "matt", "24×")
             },
-            Parity.Fact("both decks that want it are listed") {
-                inside("Alela") >= 1 && inside("Bello") >= 1
+            Parity.Fact("both decks that want it are listed, each naming its owner") {
+                onOneRow("Alela", "kayla", "5×") && onOneRow("Bello", "matt", "24×")
             },
             // The owner is its own tag beside the row, the way the web
             // page puts it in its own span.
-            Parity.Fact("each name appears on an owner line, a printing and a deck row") {
-                inside("kayla") >= 3 && inside("matt") >= 3
+            Parity.Fact("each name is a tag on a printing and on a deck row") {
+                count("kayla") == 2 && count("matt") == 2
+            },
+            Parity.Fact("and the owner section names them once more, capitalised") {
+                count("Kayla") == 1 && count("Matt") == 1
             },
         )
     }
@@ -469,7 +531,76 @@ class CardSheetParityTest {
             },
             // Nothing known is a dash, never a zero — a card is not free.
             Parity.Fact("an unpriced printing reads as a dash") { seen("—") },
-            Parity.Fact("the foil printing says it is a foil") { inside("foil · 1×") == 1 },
+            Parity.Fact("the foil printing says it is a foil, on its own row") {
+                onOneRow("SLD", "17", "Artist Series", "foil", "1×", "—")
+            },
+            Parity.Fact("the finish is a tag of its own, not a word in a sentence") {
+                count("foil") == 1 && count("1×") == 1
+            },
+        )
+    }
+
+    @Test
+    fun aPrintingRowStaysOnOneLineOnAPhoneWithTheSetNameGivingWay() {
+        // The web measures exactly this, because a row is a row by its
+        // layout: joined into one sentence this wrapped onto a second
+        // line on a 340dp phone and took the price down with it, and
+        // every assertion about its words still passed.
+        open(shoppable())
+        val long = "The Lost Caverns of Ixalan Commander"
+        Parity.check(
+            Parity.Fact("the row you can buy reads across in one line") {
+                onOneRow("LCC", "124", long, "3×", "$5.36", "TCGplayer ↗")
+            },
+            Parity.Fact("so does the one nobody sells") {
+                onOneRow("SLD", "17", "Artist Series", "foil", "1×", "—")
+            },
+            // The set name is the only part long enough to be a
+            // problem, so it is the part that gives way, and it gives
+            // way by being cut short.
+            Parity.Fact("nothing on either row hangs off the side of the phone") {
+                listOf("$5.36", "TCGplayer ↗", "—").all {
+                    piece(it).getUnclippedBoundsInRoot().right.value <= phone + 1f
+                }
+            },
+        )
+        // Held against a name that fits: the long one is cut off at
+        // the same height rather than growing a second line.
+        assertTrue(
+            tall(long) <= tall("Artist Series") + 1f,
+            "the long set name is ${tall(long)}dp tall against ${tall("Artist Series")}dp",
+        )
+        rule.onRoot().shoot("card_sheet_printings")
+    }
+
+    @Test
+    fun theScanIsNoWiderThanTheWebsAndSitsInTheMiddleOfThePage() {
+        // `.card-scan` is 300px at the widest and `margin: 0 auto`.
+        // Filling the width was invisible on a phone and absurd on
+        // anything else, which is the half nobody looks at.
+        // Wider than the scan may be. The emulator may be narrower
+        // than this, so the page is measured rather than assumed.
+        open(everything(), width = 420)
+        val art = rule.onNodeWithContentDescription("Sol Ring").getUnclippedBoundsInRoot()
+        val page = rule.onRoot().getUnclippedBoundsInRoot()
+        val across = (art.right - art.left).value
+        val down = (art.bottom - art.top).value
+        assertTrue(across <= 301f, "the scan is ${across}dp wide, past the website's 300")
+        assertTrue(
+            (page.right - page.left).value > across + 20f,
+            "the page is no wider than the scan, so centring proves nothing",
+        )
+        val leftGap = (art.left - page.left).value
+        val rightGap = (page.right - art.right).value
+        assertTrue(
+            kotlin.math.abs(leftGap - rightGap) < 2f,
+            "the scan is not centred: ${leftGap}dp one side, ${rightGap}dp the other",
+        )
+        // A card is 488 by 680 and must not be stretched to fit.
+        val ratio = across / down
+        assertTrue(
+            kotlin.math.abs(ratio - 488f / 680f) < 0.02f,
+            "the scan is a ratio of $ratio, which is not the shape of a card",
         )
     }
 
@@ -509,7 +640,7 @@ class CardSheetParityTest {
                 seen("3 committed")
             },
             Parity.Fact("the owner line says how short he is") {
-                seen("matt · 1 owned · 0 free · 2 short")
+                onOneRow("Matt", "1 owned", "0 free", "2 short")
             },
         )
     }
@@ -528,7 +659,9 @@ class CardSheetParityTest {
             Parity.Fact("a proxy is not counted as a committed copy") {
                 inside("committed") == 0
             },
-            Parity.Fact("the deck row says it is a proxy") { seen("Proxy deck · 1× · proxy") },
+            Parity.Fact("the deck row says it is a proxy") {
+                onOneRow("Proxy deck", "matt", "1×", "proxy")
+            },
         )
     }
 
@@ -546,8 +679,16 @@ class CardSheetParityTest {
                 val tops = sections.map { topOf(it) }
                 tops == tops.sorted()
             },
-            Parity.Fact("the deck row keeps its quantity and its role") {
-                seen("Alela · 1× · ramp")
+            // The web's order: what it is called, whose it is, then
+            // the figures. The owner used to be stranded on the end.
+            Parity.Fact("the deck row keeps its owner, its quantity and its role") {
+                onOneRow("Alela", "matt", "1×", "ramp")
+            },
+            // Once at the top of the page and once on his own line:
+            // each is its own `.tag`, not a phrase inside a sentence,
+            // which is nought nodes with this text rather than two.
+            Parity.Fact("the figures the page opens with are tags of their own") {
+                count("3 owned") == 2 && count("2 free") == 2
             },
             Parity.Fact("the rulings under it are oldest first") {
                 topOf("2004-10-04  It is a mana ability.") <
