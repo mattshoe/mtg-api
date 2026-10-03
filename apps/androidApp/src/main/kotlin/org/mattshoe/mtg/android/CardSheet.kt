@@ -1,14 +1,18 @@
 package org.mattshoe.mtg.android
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -19,8 +23,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
@@ -115,46 +125,66 @@ private fun Body(card: CardDetail) {
     // page without the card on it is a list of numbers.
     CardQueries.art(card.printings.firstOrNull()?.scryfallId)?.let { url ->
         val frame = RoundedCornerShape(5)
-        AsyncImage(
-            model = url,
-            contentDescription = card.name,
-            modifier = Modifier.fillMaxWidth()
-                .aspectRatio(Design.CARD_ASPECT)
-                .background(Bg3, frame)
-                .clip(frame),
-            contentScale = ContentScale.Fit,
-        )
-    }
-
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("${card.owned} owned", fontSize = Design.SMALL.sp)
-        Text("${card.free} free", fontSize = Design.SMALL.sp)
-        // More decks want it than exist. Worth saying out loud, in the
-        // same words the web says it in.
-        if (card.overCommitted) {
-            Text(
-                "${card.committed} committed",
-                fontSize = Design.SMALL.sp,
-                color = Bad,
-                fontWeight = FontWeight.SemiBold,
+        // `.card-scan` is 300px at the widest and centred in whatever
+        // holds it. Filling the width instead was invisible on a phone
+        // and absurd on anything else — a playing card the width of a
+        // tablet.
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            AsyncImage(
+                model = url,
+                contentDescription = card.name,
+                modifier = Modifier.widthIn(max = 300.dp).fillMaxWidth()
+                    .aspectRatio(Design.CARD_ASPECT)
+                    .background(Bg3, frame)
+                    .clip(frame),
+                contentScale = ContentScale.Fit,
             )
         }
+    }
+
+    // `.flex-wrap` of `.tag.mini`, the way the web states a figure:
+    // boxed, so a number reads as a number and not as the start of a
+    // sentence. Three of them run together in plain text is a phrase
+    // you have to parse; three pills are three facts.
+    FlowRow(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Tag("${card.owned} owned")
+        Tag("${card.free} free")
+        // More decks want it than exist. Worth saying out loud, in the
+        // same words the web says it in.
+        if (card.overCommitted) Tag("${card.committed} committed", Bad)
     }
 
     // Who has how many. The page used to be one person's, which made
     // the other half of the collection invisible.
     if (card.byOwner.isNotEmpty()) {
         Heading("Who owns it")
-        card.byOwner.forEach { h ->
-            Text(
-                listOfNotNull(
-                    h.owner,
-                    "${h.owned} owned",
-                    "${h.free} free",
-                    if (h.short > 0) "${h.short} short" else null,
-                ).joinToString(" · "),
-                fontSize = Design.SMALL.sp,
-            )
+        card.byOwner.forEachIndexed { i, h ->
+            // `.owner-line + .owner-line`: a hairline, so two people
+            // read as two rows rather than one paragraph.
+            if (i > 0) RowRule()
+            Row(
+                Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // `.owner-line .t-name` is capitalised by the
+                // stylesheet, and takes the slack so the figures stay
+                // in a column down the side.
+                RowName(
+                    h.owner.replaceFirstChar { it.uppercase() },
+                    Modifier.weight(1f),
+                    weight = FontWeight.SemiBold,
+                )
+                Figure("${h.owned} owned")
+                // Nought spare reads differently from three spare, and
+                // it is the number people are actually here for.
+                Figure("${h.free} free", if (h.free > 0) Ok else Ink2)
+                if (h.short > 0) Figure("${h.short} short", Bad)
+            }
         }
     }
 
@@ -167,35 +197,51 @@ private fun Body(card: CardDetail) {
         // finish this copy is in, worked out by the `card_prices`
         // view, so a foil is not quoted at the nonfoil price.
         val open = androidx.compose.ui.platform.LocalUriHandler.current
-        card.printings.forEach { p ->
+        card.printings.forEachIndexed { i, p ->
             val shop = p.tcgplayer
+            if (i > 0) RowRule()
             Row(
                 Modifier.fillMaxWidth()
                     .then(
                         if (shop == null) Modifier
                         else Modifier.clickable { runCatching { open.openUri(shop) } },
                     )
-                    .padding(vertical = 4.dp),
+                    .padding(vertical = 3.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                // `.set`, `.cn`, `.t-name`, then the tags: a row you
+                // read across, with the set name the only part that
+                // gives way. Joined into one sentence it wrapped onto
+                // a second line on a phone and the price went with it.
                 Text(
-                    listOfNotNull(
-                        p.setCode.uppercase(),
-                        p.collectorNumber,
-                        p.setName,
-                        // Whose copy it is. A card is not one person's.
-                        p.owner.takeIf { it.isNotBlank() },
-                        p.finish.takeIf { it != "nonfoil" },
-                        "${p.qty}×",
-                    ).joinToString(" · "),
-                    fontSize = Design.SMALL.sp,
-                    modifier = Modifier.weight(1f),
+                    p.setCode.uppercase(),
+                    color = Ink,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = Design.MINI.sp,
+                    maxLines = 1,
                 )
+                p.collectorNumber?.let {
+                    Text(
+                        it,
+                        color = Ink3,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = Design.TINY.sp,
+                        maxLines = 1,
+                    )
+                }
+                RowName(p.setName.orEmpty(), Modifier.weight(1f), color = Ink2)
+                // Whose copy it is. A card is not one person's.
+                if (p.owner.isNotBlank()) Tag(p.owner)
+                if (p.finish != "nonfoil") Tag(p.finish)
+                Figure("${p.qty}×")
                 Text(
                     Prices.money(p.price, dash = "—"),
-                    fontSize = Design.SMALL.sp,
+                    fontSize = Design.MINI.sp,
+                    fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
                 )
                 // Say where it goes. A row that is only subtly a link
                 // is a link nobody finds, so the shop is named rather
@@ -233,24 +279,23 @@ private fun Body(card: CardDetail) {
         Text("Not in a deck.", fontSize = Design.SMALL.sp)
     } else {
         card.usedIn.forEach { use ->
-            Row(
+            // `.flex-wrap` of the deck's name and then a tag apiece,
+            // in the website's order: whose deck it is comes straight
+            // after what it is called, because that is the half of
+            // the answer a shared collection turns on.
+            FlowRow(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                Text(
-                    listOfNotNull(
-                        use.name,
-                        "${use.qty}×",
-                        use.role,
-                        // A proxy does not consume a real card, so it
-                        // must not read like one that does.
-                        if (use.isProxy) "proxy" else null,
-                    ).joinToString(" · "),
-                    fontSize = Design.SMALL.sp,
-                )
+                RowName(use.name, weight = FontWeight.Medium)
                 // Whose deck it is. The page is not one person's.
                 if (use.owner.isNotBlank()) Tag(use.owner)
+                Tag("${use.qty}×")
+                use.role?.let { Tag(it) }
+                // A proxy does not consume a real card, so it must not
+                // read like one that does.
+                if (use.isProxy) Tag("proxy")
             }
         }
     }
@@ -265,7 +310,20 @@ private fun Body(card: CardDetail) {
     } else {
         rulings.forEach { r ->
             Text(
-                if (r.day.isEmpty()) r.body else "${r.day}  ${r.body}",
+                // The day in the web's `.muted.mono`, so a column of
+                // them lines up and the eye goes to the ruling rather
+                // than to the date in front of it. One text node, not
+                // two: the line is one sentence to anything reading it
+                // out, which is how it reads on the page as well.
+                buildAnnotatedString {
+                    if (r.day.isNotEmpty()) {
+                        withStyle(SpanStyle(color = Ink3, fontFamily = FontFamily.Monospace)) {
+                            append(r.day)
+                        }
+                        append("  ")
+                    }
+                    append(r.body)
+                },
                 fontSize = Design.MINI.sp,
             )
         }
@@ -276,6 +334,62 @@ private fun Body(card: CardDetail) {
 @Composable
 private fun Heading(text: String) {
     Text(text, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+}
+
+/**
+ * `.t-name`: the one thing on a row that gives way.
+ *
+ * A set name is longer than a phone and every figure beside it is
+ * short, so the name is cut off rather than allowed to wrap — a
+ * wrapped row takes the price onto a second line with it, which is
+ * how the printings here came out two lines tall next to the
+ * website's one.
+ */
+@Composable
+private fun RowName(
+    text: String,
+    modifier: Modifier = Modifier,
+    color: Color = Ink,
+    weight: FontWeight = FontWeight.Medium,
+) {
+    Text(
+        text,
+        modifier,
+        color = color,
+        fontSize = Design.MINI.sp,
+        fontWeight = weight,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
+}
+
+/**
+ * `.tag.mini.mono`: a counted thing, boxed.
+ *
+ * The shared `Tag` is this pill in the proportional face, which is
+ * right for a word like an owner or a finish. A number gets the mono
+ * one, so a column of them lines up down the page the way the
+ * website's do.
+ */
+@Composable
+private fun Figure(text: String, tone: Color = Ink2) {
+    Text(
+        text,
+        Modifier
+            .background(Bg3, RadiusSm)
+            .border(1.dp, tone.copy(alpha = 0.4f), RadiusSm)
+            .padding(horizontal = 7.dp, vertical = 2.dp),
+        color = tone,
+        fontSize = Design.TINY.sp,
+        fontFamily = FontFamily.Monospace,
+        maxLines = 1,
+    )
+}
+
+/** `.owner-line + .owner-line`: the hairline that makes two rows two. */
+@Composable
+private fun RowRule() {
+    Box(Modifier.fillMaxWidth().height(1.dp).background(Line))
 }
 
 /**
