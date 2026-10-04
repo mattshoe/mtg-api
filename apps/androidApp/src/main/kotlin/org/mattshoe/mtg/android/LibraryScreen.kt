@@ -242,8 +242,12 @@ private fun CardTile(card: CardRow, stale: Boolean, onOpen: (CardRow) -> Unit) {
                 modifier = Modifier.fillMaxSize().background(Bg3, frame).clip(frame),
                 contentScale = ContentScale.Crop,
             )
+            // Centred along the bottom, the same as the web's
+            // `.price-badge` (`left: 50%; transform: translateX(-50%)`).
+            // The bottom-left corner is where the set symbol and
+            // rarity dot already are.
             Prices.money(card.price, dash = "").takeIf { it.isNotEmpty() }?.let {
-                Badge(it, Accent2, Modifier.align(Alignment.BottomStart).padding(5.dp))
+                Badge(it, Accent2, Modifier.align(Alignment.BottomCenter).padding(bottom = 5.dp))
             }
         }
         // The name and how many, on one line. The name gives way so

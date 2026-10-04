@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.CardRow
+import org.mattshoe.mtg.core.Completion
 import org.mattshoe.mtg.core.DeckCard
 import org.mattshoe.mtg.core.ExportTo
 import org.mattshoe.mtg.core.Found
@@ -114,6 +115,8 @@ fun AppShell(
     onShare: (ShareWhat, ExportTo) -> Unit = { _, _ -> },
     onCheckNames: () -> Unit = {},
     onCreateDeck: () -> Unit = {},
+    /** The new deck wizard's commander box, which has its own suggestions. */
+    onCommanderTyped: (Completion) -> Unit = {},
     onExit: () -> Unit = {},
 ) {
     var showFilters by remember { mutableStateOf(false) }
@@ -362,6 +365,8 @@ fun AppShell(
             onCheck = onCheckNames,
             onCreate = onCreateDeck,
             onClose = { onState(state.closing(Overlay.NEW_DECK)) },
+            onCommanderTyped = onCommanderTyped,
+            onPickFile = onPickFile,
         )
     }
 

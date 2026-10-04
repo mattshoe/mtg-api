@@ -1,0 +1,108 @@
+package org.mattshoe.mtg.android
+
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextInput
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.mattshoe.mtg.core.AppState
+import org.mattshoe.mtg.core.Completion
+import org.mattshoe.mtg.core.DeckStep
+import org.mattshoe.mtg.core.Format
+import org.mattshoe.mtg.core.NewDeck
+import org.mattshoe.mtg.core.Overlay
+import org.mattshoe.mtg.core.Owner
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+
+/**
+ * The new deck wizard's commander box and "Upload a file" button,
+ * pressed on a device, reaching the shell.
+ *
+ * `AppShell` had no `onCommanderTyped` parameter at all, so the
+ * dialog took its no-op default and the commander box never
+ * suggested anything. "Upload a file" had the same shape of problem
+ * from the other end: `AppShell`'s call to `NewDeckDialog` simply
+ * omitted `onPickFile`, even though the shell already had one — it
+ * was wired to mass entry and never forwarded here.
+ *
+ * A component handed its own callback cannot catch either bug —
+ * `NewDeckDialog` already declares both parameters and works fine in
+ * isolation. Only a real `AppShell`, wired the way the activity wires
+ * it, shows that neither callback ever arrives.
+ */
+@RunWith(AndroidJUnit4::class)
+class NewDeckWizardReachesTheShellTest {
+
+    @get:Rule
+    val rule = createComposeRule()
+
+    private fun opened(step: DeckStep) = AppState(
+        newDeck = NewDeck(
+            step = step,
+            format = Format.COMMANDER,
+            owner = Owner.MATT,
+            name = "Test Deck",
+            commander = if (step == DeckStep.CARDS) "Alela, Artful Provocateur" else "",
+        ),
+    ).opening(Overlay.NEW_DECK)
+
+    private fun shell(
+        start: AppState,
+        onCommanderTyped: (Completion) -> Unit = {},
+        onPickFile: () -> Unit = {},
+    ) {
+        rule.setContent {
+            MaterialTheme(colorScheme = darkColorScheme()) {
+                Surface {
+                    val held = androidx.compose.runtime.remember {
+                        androidx.compose.runtime.mutableStateOf(start)
+                    }
+                    AppShell(
+                        state = held.value,
+                        onState = { held.value = it },
+                        onUnlock = {},
+                        onSearch = {},
+                        onOpenDeck = {},
+                        onRunSql = {},
+                        onPreviewEntry = {},
+                        onApplyEntry = {},
+                        onCommanderTyped = onCommanderTyped,
+                        onPickFile = onPickFile,
+                    )
+                }
+            }
+        }
+        rule.waitForIdle()
+    }
+
+    @Test
+    fun theCommanderBoxReachesTheShell() {
+        val typed = mutableListOf<String>()
+        shell(opened(DeckStep.COMMANDER), onCommanderTyped = { c -> typed += c.term })
+
+        rule.onNodeWithText("e.g. Alela, Artful Provocateur").performTextInput("Alela")
+        rule.waitForIdle()
+
+        assertTrue(typed.isNotEmpty(), "the commander box was typed into and the shell heard nothing")
+        assertEquals("Alela", typed.last())
+    }
+
+    @Test
+    fun uploadAFileReachesTheShell() {
+        var picked = 0
+        shell(opened(DeckStep.CARDS), onPickFile = { picked++ })
+
+        rule.onNodeWithText("Upload a file").performScrollTo().performClick()
+        rule.waitForIdle()
+
+        assertEquals(1, picked, "Upload a file was pressed and the shell heard nothing")
+    }
+}

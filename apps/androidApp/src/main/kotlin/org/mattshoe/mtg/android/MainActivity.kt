@@ -74,6 +74,7 @@ class MainActivity : ComponentActivity() {
     private var lookupJob: Job? = null
     private var findJob: Job? = null
     private var tweakJob: Job? = null
+    private var commanderJob: Job? = null
 
     /**
      * The seam a test reaches through, the same way the web's
@@ -249,6 +250,7 @@ class MainActivity : ComponentActivity() {
                                 { app.copy(newDeck = app.newDeck.working("Creating…")) },
                             ) { createDeck() }
                         },
+                        onCommanderTyped = { c -> commanderTyped(c) },
                         onExit = { finish() },
                     )
                 }
@@ -464,6 +466,20 @@ class MainActivity : ComponentActivity() {
         lookupJob = lifecycleScope.launch {
             delay(Completion.DEBOUNCE_MS.toLong())
             app = app.copy(complete = app.complete.suggested(scryfall.complete(term)))
+        }
+    }
+
+    /**
+     * The new deck wizard's commander box, which has its own
+     * suggestions — separate from the Library's, so typing a
+     * commander here must not touch the search filter.
+     */
+    private fun commanderTyped(c: Completion) {
+        if (!c.worthAsking) return
+        commanderJob?.cancel()
+        commanderJob = lifecycleScope.launch {
+            delay(Completion.DEBOUNCE_MS.toLong())
+            app = app.copy(newDeck = app.newDeck.copy(hint = app.newDeck.hint.suggested(scryfall.complete(c.term))))
         }
     }
 
