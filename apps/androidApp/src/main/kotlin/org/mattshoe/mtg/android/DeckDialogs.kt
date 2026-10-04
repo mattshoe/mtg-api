@@ -82,7 +82,7 @@ fun DeckEditDialog(
                     label = { Text("The 99 — ${state.lineCount} lines") },
                 )
                 state.plan?.takeIf { !state.stale }?.let { PlanSummary(it, state.saved) }
-                state.error?.let { Text((listOf(it) + state.errors).joinToString("\n"), fontSize = 13.sp) }
+                state.error?.let { ErrBox((listOf(it) + state.errors).joinToString("\n")) }
             }
         },
     )
@@ -160,7 +160,7 @@ fun DisassembleDialog(state: DisassembleState, onGo: () -> Unit, onClose: () -> 
                         state.plan!!.cards.forEach { Text("${it.qty}× ${it.name}", fontSize = 13.sp) }
                     state.plan != null -> Text("It is not holding anything you own.", fontSize = 13.sp)
                 }
-                state.error?.let { Text(it, fontSize = 13.sp) }
+                state.error?.let { ErrBox(it) }
             }
         },
     )
@@ -237,7 +237,7 @@ fun RenameDialog(
                         },
                         fontSize = 13.sp,
                     )
-                    state.error?.let { Text(it, fontSize = 13.sp) }
+                    state.error?.let { ErrBox(it) }
                 }
             }
         },
