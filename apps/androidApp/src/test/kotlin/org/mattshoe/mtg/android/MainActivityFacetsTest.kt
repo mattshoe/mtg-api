@@ -18,6 +18,7 @@ import io.ktor.http.content.OutgoingContent
 import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
 import android.os.Looper
+import androidx.compose.runtime.snapshots.Snapshot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -33,6 +34,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.mattshoe.mtg.core.MtgApi
 import org.robolectric.Robolectric
+import org.robolectric.android.controller.ActivityController
 import org.robolectric.Shadows.shadowOf
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -85,10 +87,38 @@ class MainActivityFacetsTest {
         Dispatchers.setMain(UnconfinedTestDispatcher())
     }
 
+    /**
+     * Destroy the activity before resetting the dispatcher.
+     *
+     * A resumed `MainActivity` owns a Compose root, and
+     * `ComposeRootRegistry` keeps every root that was created and never
+     * detached for the life of the JVM. Compose's Robolectric idling
+     * strategy spins until all of them report idle, so a leaked
+     * activity here hangs the next `createComposeRule` test in an
+     * unrelated class. See the same note in `DownloadDecisionTest`.
+     */
     @After
     fun tearDown() {
+        controller?.let { runCatching { it.pause().stop().destroy() } }
+        controller = null
+        // Then flush the global snapshot. `ComposeIdlingResource`
+        // decides whether to keep pumping frames from
+        // `clock.hasAwaiters || Snapshot.current.hasPendingChanges() ||
+        // recomposer.hasPendingWork`, and the middle one is
+        // process-global, not per-test. A `MainActivity` that wrote
+        // state outside composition and was torn down before Compose's
+        // apply-notification runnable reached a paused Robolectric
+        // looper leaves `hasPendingChanges` true for the life of the
+        // JVM — so the next `createComposeRule` test in some unrelated
+        // class spins in `advanceTimeByFrame` forever. Draining the
+        // looper and sending the notifications ourselves ends it here.
+        shadowOf(Looper.getMainLooper()).idle()
+        Snapshot.sendApplyNotifications()
+        shadowOf(Looper.getMainLooper()).idle()
         Dispatchers.resetMain()
     }
+
+    private var controller: ActivityController<MainActivity>? = null
 
     private val facetsBody = """
         {"cols":["kind","value"],"rows":[
@@ -131,6 +161,7 @@ class MainActivityFacetsTest {
     fun facetsLoadOnceAtStartupAndASecondCallDoesNotRefetch() {
         val seen = mutableListOf<String>()
         val built = Robolectric.buildActivity(MainActivity::class.java)
+        controller = built
         val realActivity = built.get()
         realActivity.useForTesting(fakeApi(seen))
         built.create().start().resume()

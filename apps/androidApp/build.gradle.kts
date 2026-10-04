@@ -1,3 +1,4 @@
+import java.time.Duration
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -98,7 +99,57 @@ android {
             // `needsRealRendering` and runs on a device.
             all {
                 it.maxHeapSize = "2g"
+                // Fork a fresh JVM every few classes.
+                //
+                // `ComposeRootRegistry` holds every Compose root ever
+                // created in a weakly-referenced set, and every single
+                // `isIdleNow` call copies that whole set. Each dialog
+                // and each dropdown is its own root, so the set grows
+                // by thousands over a full run — and the entries are
+                // only cleared by a *full* GC, which never happens when
+                // the heap is 2g and the suite only ever uses 300MB. The
+                // result was a suite that got slower and slower and
+                // then stopped: around test 200 a single `waitForIdle()`
+                // would spin for twenty minutes inside
+                // `getCreatedComposeRoots().toSet()`. Proven by
+                // attaching to the stuck run and issuing `jcmd GC.run`,
+                // which let it advance immediately.
+                //
+                // Forking resets the registry, which is a guarantee
+                // rather than a hope about collector behaviour. All the
+                // classes share one Robolectric sandbox (sdk=34), so a
+                // fork costs one sandbox init; five of them is about
+                // forty seconds against a suite that otherwise cannot
+                // finish at all.
+                it.setForkEvery(4)
                 it.testLogging { events("failed") }
+                // A hung test used to be indistinguishable from a slow
+                // suite: the task sat there until the outer guard killed
+                // the process group, and the XML left on disk was the
+                // *previous* run's, so the run looked green. Two things
+                // stop that now.
+                //
+                // One, the task kills itself. Twelve minutes is about
+                // eight times the honest runtime, so this only ever
+                // fires on a hang.
+                it.timeout.set(Duration.ofMinutes(12))
+                // Two, every test writes its name as it starts and
+                // again as it ends, flushed. The last line with no
+                // matching end is the test that hung — which is the one
+                // thing the XML can never tell you, because a hung test
+                // never gets an XML entry at all.
+                val order = layout.buildDirectory.file("test-order.log").get().asFile
+                it.doFirst { order.parentFile.mkdirs(); order.writeText("") }
+                it.addTestListener(object : TestListener {
+                    override fun beforeSuite(d: TestDescriptor) {}
+                    override fun afterSuite(d: TestDescriptor, r: TestResult) {}
+                    override fun beforeTest(d: TestDescriptor) {
+                        order.appendText("START ${d.className}.${d.name}\n")
+                    }
+                    override fun afterTest(d: TestDescriptor, r: TestResult) {
+                        order.appendText("  END ${d.className}.${d.name} ${r.resultType}\n")
+                    }
+                })
             }
         }
     }

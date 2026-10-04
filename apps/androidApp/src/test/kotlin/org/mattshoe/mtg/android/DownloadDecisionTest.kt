@@ -3,6 +3,7 @@ package org.mattshoe.mtg.android
 import android.content.ClipboardManager
 import android.content.Context
 import android.os.Looper
+import androidx.compose.runtime.snapshots.Snapshot
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
@@ -33,6 +34,7 @@ import org.mattshoe.mtg.core.Route
 import org.mattshoe.mtg.core.ShareWhat
 import org.mattshoe.mtg.core.View
 import org.robolectric.Robolectric
+import org.robolectric.android.controller.ActivityController
 import org.robolectric.Shadows.shadowOf
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import kotlin.test.assertEquals
@@ -70,10 +72,46 @@ class DownloadDecisionTest {
         Dispatchers.setMain(UnconfinedTestDispatcher())
     }
 
+    /**
+     * Destroy the activity, not just the dispatcher.
+     *
+     * A resumed `MainActivity` owns a Compose root, and
+     * `ComposeRootRegistry` holds every root that was created and never
+     * detached — for the life of the JVM, across test classes. Compose's
+     * Robolectric idling strategy busy-spins `advanceTimeByFrame` until
+     * *every* registered root reports idle, so one leaked resumed
+     * activity makes `waitForIdle()` spin forever in whichever
+     * unrelated test happens to run next. That is exactly what
+     * happened: six leaked activities from this class, and the first
+     * `createComposeRule` test after it hung with no XML entry, so the
+     * previous run's results were still on disk and the suite read as
+     * green at the old count.
+     */
     @After
     fun tearDown() {
+        controllers.asReversed().forEach {
+            runCatching { it.pause().stop().destroy() }
+                .onFailure { e -> println("TEARDOWN-THREW: ${e::class.simpleName}: ${e.message}") }
+        }
+        controllers.clear()
+        // Then flush the global snapshot. `ComposeIdlingResource`
+        // decides whether to keep pumping frames from
+        // `clock.hasAwaiters || Snapshot.current.hasPendingChanges() ||
+        // recomposer.hasPendingWork`, and the middle one is
+        // process-global, not per-test. A `MainActivity` that wrote
+        // state outside composition and was torn down before Compose's
+        // apply-notification runnable reached a paused Robolectric
+        // looper leaves `hasPendingChanges` true for the life of the
+        // JVM — so the next `createComposeRule` test in some unrelated
+        // class spins in `advanceTimeByFrame` forever. Draining the
+        // looper and sending the notifications ourselves ends it here.
+        shadowOf(Looper.getMainLooper()).idle()
+        Snapshot.sendApplyNotifications()
+        shadowOf(Looper.getMainLooper()).idle()
         Dispatchers.resetMain()
     }
+
+    private val controllers = mutableListOf<ActivityController<MainActivity>>()
 
     private fun settle() {
         shadowOf(Looper.getMainLooper()).idle()
@@ -130,6 +168,7 @@ class DownloadDecisionTest {
 
     private fun launch(downloads: Downloads): MainActivity {
         val built = Robolectric.buildActivity(MainActivity::class.java)
+        controllers += built
         val activity = built.get()
         activity.useForTesting(fakeApi())
         activity.useDownloadsForTesting(downloads)
