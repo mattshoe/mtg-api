@@ -31,6 +31,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -433,31 +434,27 @@ private fun Pips(which: String, selected: List<String>, onToggle: (String) -> Un
         (COLOR_LETTERS + "C").forEach { letter ->
             val on = letter in selected
             val hue = c(Design.pip(letter))
-            // The letter is what says which colour this is, so it is
-            // never drawn in that colour — Black's own grey and
-            // Green's own green are both under 4.5:1 on this
-            // background. The hue goes round the edge instead.
-            val ink = when {
-                !on -> Ink
-                isLight(letter) -> c(Design.ON_ACCENT)
-                else -> Color.White
-            }
+            // The real symbol, the same artwork the website uses. What
+            // says this one is chosen is the ring and the dimming, not
+            // the hue: a thick Accent ring and the symbol at full
+            // strength when on, a thin ring and a faded symbol when
+            // off. Two channels that survive being unable to see the
+            // difference between the colours themselves.
             Box(
                 Modifier
                     .testTag("pip-$which-$letter")
                     .size(40.dp)
-                    .background(if (on) hue else Bg, CircleShape)
+                    .background(if (on) hue.copy(alpha = 0.22f) else Bg, CircleShape)
                     .border(if (on) 3.dp else 2.dp, if (on) Accent else hue, CircleShape)
                     .semantics { contentDescription = NAMES[letter] ?: letter }
                     .toggleable(value = on, role = Role.Checkbox) { onToggle(letter) },
                 contentAlignment = Alignment.Center,
             ) {
-                Text(
+                ManaSymbol(
                     letter,
-                    color = ink,
-                    fontSize = Design.SMALL.sp,
-                    fontWeight = if (on) FontWeight.Bold else FontWeight.Medium,
-                    textAlign = TextAlign.Center,
+                    size = 22.dp,
+                    text = Design.SMALL.sp,
+                    modifier = Modifier.alpha(if (on) 1f else 0.55f),
                 )
             }
         }

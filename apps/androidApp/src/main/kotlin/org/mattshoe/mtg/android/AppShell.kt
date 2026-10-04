@@ -107,18 +107,14 @@ fun AppShell(
     // moment the app opens rather than after the first tap.
     LaunchedEffect(Unit) { runCatching { keys.requestFocus() } }
 
-    // Back dismisses what is on top, then backs out of a deck, then
-    // leaves. The same order the web's history stack produces, from the
-    // same `Overlays`.
-    BackHandler {
-        val next = state.dismissTop()
-        when {
-            next != null -> onState(next)
-            state.decks.openSlug != null -> onState(state.copy(decks = state.decks.close()))
-            state.view != View.DEFAULT -> onState(state.navigate(View.DEFAULT))
-            else -> onExit()
-        }
-    }
+    // The order is `AppState.back`, in the shared core, so the phone
+    // cannot have its own idea of what back means. It used to: the
+    // order was written out here, and it asked whether a deck was
+    // open before it asked whether a card was on screen. Reading a
+    // card from a deck both are true, so the first press closed the
+    // deck underneath and left the card up — a press that visibly did
+    // nothing — and the second fell through to Library.
+    BackHandler { onState(state.back() ?: run { onExit(); return@BackHandler }) }
 
     Column(
         Modifier.fillMaxSize()
@@ -175,7 +171,7 @@ fun AppShell(
             View.DECKS -> DecksScreen(
                 state = state.decks,
                 onOpen = { onOpenDeck(it.slug) },
-                onClose = { onState(state.copy(decks = state.decks.close())) },
+                onClose = { onState(state.navigate(Route(View.DECKS))) },
                 admin = state.admin.unlocked,
                 onNew = { onState(state.opening(Overlay.NEW_DECK)) },
                 onEdit = { onEditDeck(it.slug) },

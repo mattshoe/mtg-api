@@ -6,6 +6,7 @@ import coil3.PlatformContext
 import coil3.SingletonImageLoader
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.crossfade
+import coil3.svg.SvgDecoder
 import okhttp3.OkHttpClient
 
 /**
@@ -40,7 +41,12 @@ class Images : Application(), SingletonImageLoader.Factory {
 
     override fun newImageLoader(context: PlatformContext): ImageLoader =
         ImageLoader.Builder(context)
-            .components { add(OkHttpNetworkFetcherFactory(callFactory = { scryfallFriendly })) }
+            .components {
+                add(OkHttpNetworkFetcherFactory(callFactory = { scryfallFriendly }))
+                // The mana symbols are SVGs, and card art is not. Both
+                // go through this loader.
+                add(SvgDecoder.Factory())
+            }
             .crossfade(true)
             .build()
 }

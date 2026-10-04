@@ -141,6 +141,10 @@ dependencies {
     // same screen.
     implementation("io.coil-kt.coil3:coil-compose:3.0.4")
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.0.4")
+    // Scryfall's mana symbols are SVGs. Without this Coil fetches them
+    // and has nothing that can decode one, so every pip comes back
+    // empty and the fallback letter is all you ever see.
+    implementation("io.coil-kt.coil3:coil-svg:3.0.4")
 
     // The screens are tested on a device, clicked, because "the port is
     // done" is a claim about what a person can do with the app.

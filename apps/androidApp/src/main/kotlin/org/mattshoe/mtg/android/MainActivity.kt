@@ -115,7 +115,18 @@ class MainActivity : ComponentActivity() {
                             }
                         },
                         onSearch = { work { search() } },
-                        onOpenDeck = { slug -> work { openDeck(slug) } },
+                        // Through the address, the way every other
+                        // screen is reached. Loading the deck without
+                        // naming it in the route left the route saying
+                        // "the deck list", so a card opened from the
+                        // deck remembered the list as where it came
+                        // from and back landed there instead of in the
+                        // deck. `loadFor` sees the slug and fetches.
+                        onOpenDeck = { slug ->
+                            val next = app.navigate(Route(View.DECKS, slug))
+                            app = next
+                            loadFor(next)
+                        },
                         onRunSql = {
                             claim(
                                 app.console.canRun,

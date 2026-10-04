@@ -199,17 +199,7 @@ private fun DeckTile(deck: Deck, onOpen: (Deck) -> Unit) {
 private fun Identity(ci: String) {
     Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
         (ci.ifEmpty { "C" }).forEach { letter ->
-            Box(
-                Modifier.size(16.dp).background(c(Design.pip(letter.toString())), CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                androidx.compose.material3.Text(
-                    letter.toString(),
-                    color = Bg,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                )
-            }
+            ManaSymbol(letter.toString(), size = 16.dp, text = 10.sp)
         }
     }
 }
@@ -719,29 +709,12 @@ private fun PipDot(
     text: androidx.compose.ui.unit.TextUnit,
     tag: String,
 ) {
-    Box(
-        Modifier.size(size).background(c(Design.pip(letter)), CircleShape).testTag(tag),
-        contentAlignment = Alignment.Center,
-    ) {
-        androidx.compose.material3.Text(
-            letter,
-            Modifier.testTag("$tag-letter"),
-            color = Bg,
-            fontSize = text,
-            lineHeight = text,
-            fontWeight = FontWeight.Bold,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            style = androidx.compose.ui.text.TextStyle(
-                platformStyle = androidx.compose.ui.text.PlatformTextStyle(
-                    includeFontPadding = false,
-                ),
-                lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
-                    alignment = androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center,
-                    trim = androidx.compose.ui.text.style.LineHeightStyle.Trim.Both,
-                ),
-            ),
-        )
-    }
+    // The real symbol, the same one the website draws. It was a letter
+    // in a coloured circle here, which is the phone's own invention and
+    // nothing like the page — and a droplet against a skull is legible
+    // to somebody who cannot separate blue from black, which W against
+    // U is not.
+    ManaSymbol(letter, size = size, text = text, tag = tag)
 }
 
 @Composable

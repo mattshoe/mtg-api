@@ -213,6 +213,39 @@ data class AppState(
         return copy(overlays = overlays.pop()).forget(top)
     }
 
+    /**
+     * One press of back, wherever you are.
+     *
+     * Returns null when there is nothing left to go back to and the
+     * app should close.
+     *
+     * The order is the one a browser's history produces, which is
+     * what the website gets for free and the phone has to be told:
+     * take off whatever is on top, then leave a card the way its own
+     * Close does, then come out of an open deck, then back to the
+     * default view, then out.
+     *
+     * A card is checked before a deck, and that ordering is the whole
+     * point. Reading a card from inside a deck, the deck is still
+     * open behind it, so a rule that asked about the deck first threw
+     * the deck away while leaving the card on screen — one press that
+     * visibly did nothing, and a second that fell through to Library.
+     * `leaveCard` goes to the route the card was opened from, which
+     * is the deck.
+     */
+    fun back(): AppState? = when {
+        overlays.any -> dismissTop()
+        view == View.CARD -> leaveCard()
+        // Back to the list as a route, not just by emptying `decks`.
+        // The open deck is in the address — that is what lets a card
+        // opened from it know where it came from — so closing it has
+        // to put the address back too, or the screen says list and
+        // the address still says deck.
+        decks.openSlug != null -> navigate(Route(View.DECKS))
+        view != View.DEFAULT -> navigate(View.DEFAULT)
+        else -> null
+    }
+
     /** Closing an overlay throws away whatever it was holding. */
     private fun forget(o: Overlay): AppState = when (o) {
         Overlay.PALETTE -> copy(palette = palette.closed())
