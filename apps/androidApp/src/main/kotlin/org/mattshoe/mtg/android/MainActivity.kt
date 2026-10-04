@@ -7,12 +7,13 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.viewModels
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -71,7 +72,14 @@ class MainActivity : ComponentActivity() {
     private val store: Store by lazy { PrefsStore(prefs) }
     private var downloads: Downloads = MediaStoreDownloads(this)
 
-    private var held by mutableStateOf(AppState())
+    /**
+     * The state, and the work in flight, both outliving this activity.
+     *
+     * Android recreates the activity on every configuration change,
+     * so anything held in a field here is gone on a rotation. See
+     * [MtgViewModel].
+     */
+    private val model: MtgViewModel by viewModels()
 
     /**
      * The state. Every write goes through here rather than through
@@ -84,16 +92,26 @@ class MainActivity : ComponentActivity() {
      * there is no second step for any of them to skip.
      */
     private var app: AppState
-        get() = held
+        get() = model.app
         set(value) {
-            AdminToken.sync(store, held.admin, value.admin)
-            held = value
+            AdminToken.sync(store, model.app.admin, value.admin)
+            model.app = value
         }
 
-    private var lookupJob: Job? = null
-    private var findJob: Job? = null
-    private var tweakJob: Job? = null
-    private var commanderJob: Job? = null
+    // All on the ViewModel, so a rotation mid-request neither cancels
+    // the work nor loses the handle to it.
+    private var lookupJob: Job?
+        get() = model.lookupJob
+        set(v) { model.lookupJob = v }
+    private var findJob: Job?
+        get() = model.findJob
+        set(v) { model.findJob = v }
+    private var tweakJob: Job?
+        get() = model.tweakJob
+        set(v) { model.tweakJob = v }
+    private var commanderJob: Job?
+        get() = model.commanderJob
+        set(v) { model.commanderJob = v }
 
     /**
      * The seam a test reaches through, the same way the web's
@@ -113,6 +131,14 @@ class MainActivity : ComponentActivity() {
     internal fun useDownloadsForTesting(downloads: Downloads) {
         this.downloads = downloads
     }
+
+    /**
+     * Where the app's coroutines run: the ViewModel's scope, not the
+     * activity's. `lifecycleScope` is cancelled when a configuration
+     * change destroys the activity, so a rotation part-way through a
+     * search abandoned the search.
+     */
+    private val scope get() = model.viewModelScope
 
     /** What `onCreate` landed, for a test that cannot see a private field. */
     internal fun stateForTesting(): AppState = app
@@ -149,12 +175,19 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(saved: Bundle?) {
         super.onCreate(saved)
 
-        app = AppState(
-            admin = Admin(AdminToken.restore(store)),
-            history = EntryHistory.load(store),
-        )
-        loadFor(app)
-        loadFacets()
+        // Only on a genuinely new start. `onCreate` runs again after
+        // every configuration change, and re-running this reset `app`
+        // to a fresh `AppState` — which emptied the app just as
+        // thoroughly as holding the state in a field did.
+        if (!model.started) {
+            model.started = true
+            app = AppState(
+                admin = Admin(AdminToken.restore(store)),
+                history = EntryHistory.load(store),
+            )
+            loadFor(app)
+            loadFacets()
+        }
 
         setContent {
             MtgTheme {
@@ -324,7 +357,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun work(block: suspend () -> AppState) {
-        lifecycleScope.launch {
+        scope.launch {
             app = try {
                 block()
             } catch (e: ApiFailure) {
@@ -387,8 +420,7 @@ class MainActivity : ComponentActivity() {
      * `Dispatchers.Main` first. A job you can join is deterministic
      * whoever ran before you.
      */
-    internal var facetsJob: Job? = null
-        private set
+    internal val facetsJob: Job? get() = model.facetsJob
 
     /**
      * Why the facet load gave up, if it did.
@@ -398,8 +430,7 @@ class MainActivity : ComponentActivity() {
      * invisible, which cost three attempts at a flaky test that could
      * only ever report "facets never loaded" and never why.
      */
-    internal var facetsError: Exception? = null
-        private set
+    internal val facetsError: Exception? get() = model.facetsError
 
     /**
      * Whether the facet load actually wrote its result.
@@ -410,14 +441,13 @@ class MainActivity : ComponentActivity() {
      * stories behind an unloaded `facets`, and which the state alone
      * cannot distinguish.
      */
-    internal var facetsApplied: Boolean = false
-        private set
+    internal val facetsApplied: Boolean get() = model.facetsApplied
 
     private fun loadFacets() {
         if (app.facets.loaded) return
-        facetsError = null
-        facetsApplied = false
-        facetsJob = lifecycleScope.launch {
+        model.facetsError = null
+        model.facetsApplied = false
+        model.facetsJob = scope.launch {
             try {
                 val all = FacetQueries.everything.map { api.query(it).let { r -> r.cols to r.rows } }
                 val d = api.query(FacetQueries.decks)
@@ -427,7 +457,7 @@ class MainActivity : ComponentActivity() {
                         FacetQueries.decodeDecks(d.cols, d.rows),
                     ),
                 )
-                facetsApplied = true
+                model.facetsApplied = true
             } catch (e: kotlinx.coroutines.CancellationException) {
                 // Never swallowed. `catch (e: Exception)` below would
                 // have caught this too, which is how a cancelled load
@@ -440,14 +470,14 @@ class MainActivity : ComponentActivity() {
                 // still a usable panel. Kept, but no longer silent: the
                 // throwable is held so a test can say what actually
                 // went wrong instead of only that nothing arrived.
-                facetsError = e
+                model.facetsError = e
             }
         }
     }
 
     /** Like `work`, but the failure lands on the screen that asked. */
     private fun intoPage(view: View, block: suspend () -> AppState) {
-        lifecycleScope.launch {
+        scope.launch {
             app = try {
                 block()
             } catch (e: ApiFailure) {
@@ -541,7 +571,7 @@ class MainActivity : ComponentActivity() {
     /** Debounced, and the one in flight is abandoned when a newer starts. */
     private fun find(term: String) {
         findJob?.cancel()
-        findJob = lifecycleScope.launch {
+        findJob = scope.launch {
             delay(Completion.DEBOUNCE_MS.toLong())
             try {
                 val r = api.query(PaletteQueries.find(term))
@@ -559,7 +589,7 @@ class MainActivity : ComponentActivity() {
 
     private fun lookup(term: String) {
         lookupJob?.cancel()
-        lookupJob = lifecycleScope.launch {
+        lookupJob = scope.launch {
             delay(Completion.DEBOUNCE_MS.toLong())
             app = app.copy(complete = app.complete.suggested(scryfall.complete(term)))
         }
@@ -573,7 +603,7 @@ class MainActivity : ComponentActivity() {
     private fun commanderTyped(c: Completion) {
         if (!c.worthAsking) return
         commanderJob?.cancel()
-        commanderJob = lifecycleScope.launch {
+        commanderJob = scope.launch {
             delay(Completion.DEBOUNCE_MS.toLong())
             app = app.copy(newDeck = app.newDeck.copy(hint = app.newDeck.hint.suggested(scryfall.complete(c.term))))
         }
@@ -630,7 +660,7 @@ class MainActivity : ComponentActivity() {
     /** Debounced, and the one in flight is abandoned when a newer starts. */
     private fun findForTweak(term: String) {
         tweakJob?.cancel()
-        tweakJob = lifecycleScope.launch {
+        tweakJob = scope.launch {
             delay(Completion.DEBOUNCE_MS.toLong())
             try {
                 val r = api.query(PaletteQueries.find(term))
@@ -772,7 +802,7 @@ class MainActivity : ComponentActivity() {
     // ------------------------------------------------------------ files
 
     private fun readFiles(uris: List<Uri>) {
-        lifecycleScope.launch {
+        scope.launch {
             val chunks = mutableListOf<String>()
             val names = mutableListOf<String>()
             uris.forEach { uri ->
