@@ -526,7 +526,21 @@ private fun Stat(
             fill = true,
             onPick = onOp,
         )
-        NumberField(value, onValue, "any", Modifier.testTag("box-$tag"))
+        NumberField(
+            value,
+            onValue,
+            "any",
+            Modifier.testTag("box-$tag"),
+            // A phone keypad, not a digits-only one. Power and
+            // toughness are not numbers — `:core` says so where it
+            // builds the clause: "Power and toughness are text: '*',
+            // '1+*', '3'." `KeyboardType.Number` has no `*` key on it
+            // anywhere, so Tarmogoyf was a card you could not ask
+            // for. Phone keeps the digits big and carries `*` and `#`
+            // beside them. The web gets this for free: its box is an
+            // `InputType.Text`.
+            keyboard = KeyboardType.Phone,
+        )
     }
 }
 
@@ -536,6 +550,7 @@ private fun NumberField(
     onInput: (String) -> Unit,
     hint: String,
     modifier: Modifier = Modifier,
+    keyboard: KeyboardType = KeyboardType.Number,
 ) {
     OutlinedTextField(
         value = value,
@@ -543,7 +558,7 @@ private fun NumberField(
         modifier = modifier.fillMaxWidth(),
         singleLine = true,
         shape = RadiusSm,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        keyboardOptions = KeyboardOptions(keyboardType = keyboard),
         placeholder = { Text(hint, color = Ink3, fontSize = Design.MINI.sp) },
         colors = fieldColors(),
     )
