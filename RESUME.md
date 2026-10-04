@@ -13,10 +13,21 @@ It has no PR yet. `main` is `c388bc1`.
 deleted. Fix agents told to use it came back with conflicts against
 newer work; that mistake cost a merge resolution already.
 
-Green as of the last run: core 2129, Android screens **377**, web 391,
+Green as of the last run: core 2129, Android screens **402**, web 391,
 worker 558. Screens takes about 3 minutes now, not 85 seconds —
 `forkEvery(4)`, and worth every second of it (see "Things that will
 bite").
+
+**The device suite is green too: 394 tests, 0 failures, ~21 minutes**
+(`npm run test:android`, against the `parity2` AVD). That number
+matters more than it looks. 394 against the JVM's 402 is not a
+shortfall — it is every test in `sharedTest`, including all 27 the JVM
+skips behind `Parity.needsRealRendering()`; the eight the device does
+not see live in `src/test` and are JVM-only by design. Run it after any
+presentation change: it caught two tests that were green on the JVM and
+simply wrong (see below), and it is the only thing that checks layout
+against real font metrics, because Robolectric renders every glyph
+about 1dp wide.
 
 ## Done and merged onto this branch
 
@@ -55,10 +66,9 @@ agent finished. Check each for a commit, then merge it, run
 
 | item | branch | what |
 |---|---|---|
-| 4.6 | fresh worktree | dialog error styling |
-| 4.7 | fresh worktree | the tweak sheet as a real dialog |
-| 4.8, 4.9 | fresh worktree | tap targets, and the keyboard that blocks `*` |
-| 1.4 | `parity/android-1-4-autocomplete-dismiss` | **finished, merge REVERTED — see below.** |
+| 1.4 | fresh worktree | autocomplete dismissal, reworked — see below |
+
+4.6, 4.7, 4.8 and 4.9 are all merged. The whole of section 4 is done.
 
 **1.3 (the toast) is done and the branch is deleted.** Not merged —
 dropped. Its content had already arrived through another agent's
@@ -124,9 +134,27 @@ switcher is a `.seg` instead of the wizard's `owner-opt`.
 8. `Double.toString()` gives "2" on the web and "2.0" on Android from
    one shared value (3.3). Grep for other Doubles reaching a screen.
 
-**Presentation, Android** — 4.1-4.5 merged (`b03eea6`): mono and
-tabular numbers, uppercase labels, art crop anchors, hairlines, and
-owner-group spacing. 4.6-4.9 are with the three agents above.
+**Presentation, Android — all of section 4 is done.** 4.1-4.5
+(`b03eea6`): mono and tabular numbers, uppercase labels, art crop
+anchors, hairlines, owner-group spacing. 4.6 (`135d899`): the deck
+dialogs' errors are a real tinted, ringed, monospace box — the old
+plain `Text` resolved to `Ink2`, the exact colour of the prose line
+above it. 4.7 (`60574e4`): the tweak sheet is a `BasicAlertDialog`
+with a scrim, tap-outside and an 82vh cap; it measured 470dp on a
+470dp screen before, Preview past the bottom. 4.8 (`c212f2a`) and 4.9
+(`3a4f102`): every `NavPill`, `Ghost` and `Seg` segment has a 48dp
+touch target with the painted pill centred inside at its old size,
+and the power/toughness box raises `KeyboardType.Phone` so `*` is
+reachable.
+
+Two things from that batch worth carrying forward. 4.8 raised the
+minimum on *every* `Ghost`/`NavPill`/`Seg` segment, not only the nav
+ones the audit named — rows that pack several across a narrow screen
+may be tighter than before, and the Library's Copy/Download row had to
+become a `FlowRow` because it already overflowed at 320dp. And the
+`*`-typing test passes with or without the fix: `performTextInput`
+goes in under the IME, so the keyboard was never what blocked it. That
+test guards the binding, it does not demonstrate the defect.
 
 **Design, now in scope** (section 5) — hamburger nav with the title and
 an Admin group and no Find button, hero leading with the commander,
@@ -149,6 +177,19 @@ parity gap. Matt has not asked for it.
   running the same suite at once will kill each other. Fine for one
   person, wrong for a fan-out. Worktrees dodge it; fix it properly if
   agents ever share a tree again.
+- **A pixel test gated behind `needsRealRendering()` has never run.**
+  Two landed green on the JVM and were simply wrong. One called
+  `onRoot()` with a dialog open, where there are two roots and
+  `onRoot()` throws on the ambiguity — unreachable on the JVM because
+  the test skips there. The other sized its fixture at ten rows
+  because ten rows overflow Robolectric's 470dp screen; they do not
+  overflow a real 808dp phone, so the sheet needed no scrolling and
+  the test proved nothing. Size a fixture off `screenHeightDp`, never
+  off a number that happened to work, and run the device suite before
+  believing a gated test.
+- **Make a test assert its own preconditions.** The scroll test above
+  failed with "the tenth hit already fits, so this proves nothing
+  about scrolling", which is why it cost one run instead of five.
 - **A test that mounts a component alone can be blind.** Four separate
   bugs survived because of this — the share menu in an absolutely
   positioned frame, Library rows below a lazy grid's fold, the tweak
@@ -192,6 +233,6 @@ parity gap. Matt has not asked for it.
   conflicting overloads after any merge, and resolve hunk by hunk.
 - `./gradlew` is at `apps/gradlew`. `--tests` works for `:core:jvmTest`
   and `:androidApp:testDebugUnitTest`, never for `:webApp:jsTest`.
-- `npm run test:screens` is 377 Android tests on the JVM in ~3m;
-  `npm run test:android` is the same source on a device in ~14 minutes
-  and is where the 22 `needsRealRendering` tests actually run.
+- `npm run test:screens` is 402 Android tests on the JVM in ~3m;
+  `npm run test:android` is the same source on a device in ~21 minutes
+  and is where the 27 `needsRealRendering` tests actually run.
