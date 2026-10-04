@@ -32,6 +32,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -284,6 +286,9 @@ private fun Badge(label: String, tone: Color, modifier: Modifier) {
         color = tone,
         fontSize = Design.TINY.sp,
         fontWeight = FontWeight.SemiBold,
+        // `.price-badge` is `var(--mono)` on the web, so a $9 badge and
+        // a $120 one do not jump around as cards scroll past.
+        fontFamily = monoSmall.fontFamily,
     )
 }
 
@@ -295,7 +300,10 @@ private fun Pager(state: Library, go: (Library) -> Unit) {
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Ghost("← Previous", enabled = state.hasPrev) { go(state.prev()) }
-        Line("Page ${state.page} of ${state.pages}", Ink3)
+        // `.pager .info` is `font-variant-numeric: tabular-nums` on the
+        // web, so "Next" does not jog sideways as the page number
+        // widens from one digit to two.
+        Line("Page ${state.page} of ${state.pages}", Ink3, tabularNums = true)
         Ghost("Next →", enabled = state.hasNext) { go(state.next()) }
     }
 }
@@ -308,10 +316,16 @@ internal fun Line(
     size: Int = Design.SMALL,
     weight: FontWeight = FontWeight.Normal,
     modifier: Modifier = Modifier,
+    /** `var(--mono)`: the curve's counts and axis labels, a deck row's "N×". */
+    fontFamily: FontFamily? = null,
+    /** `font-variant-numeric: tabular-nums`, for a number beside a control that must not move. */
+    tabularNums: Boolean = false,
 ) = androidx.compose.material3.Text(
     value,
     modifier,
     color = color,
     fontSize = size.sp,
     fontWeight = weight,
+    fontFamily = fontFamily,
+    style = if (tabularNums) TextStyle(fontFeatureSettings = "tnum") else TextStyle.Default,
 )

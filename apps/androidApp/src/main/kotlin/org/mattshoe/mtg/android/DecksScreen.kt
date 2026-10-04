@@ -26,6 +26,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
@@ -60,6 +61,33 @@ import org.mattshoe.mtg.core.Tweak
  * grouping, the gaps and the totals all come from `DecksState`, so the
  * two cannot disagree about what a deck is short of.
  */
+
+/**
+ * `object-position: center Y%` on the web, as a Compose crop bias.
+ * CSS's 50% is dead centre (bias 0); 0% is the top edge (bias -1). A
+ * creature's face sits in the top third of almost every piece of
+ * Magic art, which is why every one of these biases high rather than
+ * letting Coil centre the crop.
+ */
+private fun topBias(percent: Int): BiasAlignment = BiasAlignment(0f, (percent - 50) / 50f)
+
+/** `.deck-banner img`: `object-position: center 38%`. */
+private val TileCrop = topBias(38)
+
+/** `.deck-hero img`: `object-position: center 34%`. */
+private val HeroCrop = topBias(34)
+
+/** `.deck-line .thumb img` and `.token .thumb img`: `object-position: center 32%`. */
+private val RowCrop = topBias(32)
+
+/**
+ * On top of the gap every item in the column already gets, so one
+ * owner's shelf and the next read as two groups rather than one long
+ * list. The web's `.owner-group + .owner-group` is 28px against the
+ * 11px `.owner-head` keeps beneath its own name.
+ */
+private val OwnerGroupExtraGap = 16.dp
+
 @Composable
 fun DecksScreen(
     state: DecksState,
@@ -97,14 +125,21 @@ fun DecksScreen(
                 state.busy -> Line("Loading…", Ink3)
                 state.error != null -> Line("Could not load decks: ${state.error}", Bad)
                 state.decks.isEmpty() -> Line("No decks yet.", Ink3)
-                else -> state.byOwner.forEach { (owner, decks) ->
+                else -> state.byOwner.forEachIndexed { i, (owner, decks) ->
                     // A shelf, with a heading that says how many are on
                     // it. The web's `.owner-head` is the name and the
-                    // count together, not a bare name.
+                    // count together, not a bare name, with a rule
+                    // under it (`border-bottom`). Two shelves have to
+                    // read as two shelves, so every one after the
+                    // first gets extra air above it on top of the
+                    // column's own gap — 28px against 11px on the web,
+                    // not Android's old uniform 8dp everywhere.
                     GroupHead(
                         owner.replaceFirstChar(Char::uppercase),
                         "${decks.size} " + if (decks.size == 1) "deck" else "decks",
                         Design.H2,
+                        underline = true,
+                        extraTopGap = if (i > 0) OwnerGroupExtraGap else 0.dp,
                     )
                     decks.forEach { DeckTile(it, onOpen) }
                 }
@@ -151,9 +186,17 @@ fun DecksScreen(
             // `byType` is the core's, the same list the website reads,
             // so the two cannot group or order a deck differently.
             state.byType.forEach { (group, cards) ->
-                GroupHead(group.title, "${cards.sumOf { it.qty }}")
+                // The web wraps this in `.panel-head`: a shaded band
+                // with a rule under it, and the capitals every
+                // `.panel-head h2` gets.
+                GroupHead(group.title, "${cards.sumOf { it.qty }}", uppercase = true, banded = true)
                 Panel {
-                    cards.forEach { c -> CardLine(c, open.owner, onOpenCard, admin, onTweak) }
+                    cards.forEachIndexed { i, c ->
+                        // `.deck-line + .deck-line { border-top }`: a
+                        // rule between rows, not after the last one.
+                        if (i > 0) Hairline("deck-line-rule-${group.title}-$i")
+                        CardLine(c, open.owner, onOpenCard, admin, onTweak)
+                    }
                 }
             }
 
@@ -177,6 +220,7 @@ private fun DeckTile(deck: Deck, onOpen: (Deck) -> Unit) {
                 contentDescription = null,
                 modifier = Modifier.fillMaxWidth().height(96.dp).background(Bg3),
                 contentScale = ContentScale.Crop,
+                alignment = TileCrop,
             )
         }
         Column(
@@ -233,6 +277,7 @@ private fun Hero(deck: Deck, state: DecksState) {
             contentDescription = null,
             modifier = Modifier.fillMaxWidth().height(150.dp),
             contentScale = ContentScale.Crop,
+            alignment = HeroCrop,
         )
         Box(
             Modifier.fillMaxWidth().height(150.dp)
@@ -279,14 +324,18 @@ private fun CardLine(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // `art_crop` is a landscape band; the square comes from this
-        // box cropping it.
-        Box(Modifier.size(40.dp).background(Bg3, Radius).clip(Radius)) {
+        // box cropping it. `.deck-line .thumb` has a 1px border on
+        // the web, which Coil's own crop had nothing to match.
+        Box(
+            Modifier.size(40.dp).background(Bg3, Radius).border(1.dp, Line, Radius).clip(Radius),
+        ) {
             card.art?.let {
                 AsyncImage(
                     model = it,
                     contentDescription = null,
                     modifier = Modifier.size(40.dp),
                     contentScale = ContentScale.Crop,
+                    alignment = RowCrop,
                 )
             }
         }
@@ -299,7 +348,9 @@ private fun CardLine(
             card.knownTypeLine?.takeIf { it.isNotBlank() }?.let { Line(it, Ink3, Design.MINI) }
         }
         if (card.short > 0) Tag("has ${card.owned}", Bad)
-        Line("${card.qty}×", Ink3, Design.MINI)
+        // `.deck-line .num` is `var(--mono)`, so a 6 and a 16 do not
+        // shift the row's text beside them.
+        Line("${card.qty}×", Ink3, Design.MINI, fontFamily = monoSmall.fontFamily)
         // Maintenance lives on the row the card is on. One button,
         // not three: three marks on every row of a hundred-card list
         // left no room for the card's own name. What to do is asked
@@ -337,21 +388,53 @@ private fun RowAction(card: DeckCard, onTweak: (DeckCard, Tweak?) -> Unit) {
  * `.panel-head` is an `h2` and a count tag, never a bare word.
  */
 @Composable
-private fun GroupHead(title: String, count: String, size: Int = Design.H3) {
-    Row(
-        Modifier.fillMaxWidth().padding(top = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Line(
-            title,
-            Ink,
-            size,
-            FontWeight.SemiBold,
-            Modifier.weight(1f).semantics { heading() },
-        )
-        Tag(count)
+private fun GroupHead(
+    title: String,
+    count: String,
+    size: Int = Design.H3,
+    /** `.panel-head h2 { text-transform: uppercase }`. `.owner-head` is not one of these. */
+    uppercase: Boolean = false,
+    /** `.owner-head { border-bottom }`: a rule under the heading, nothing behind it. */
+    underline: Boolean = false,
+    /** `.panel-head { background; border-bottom }`: a shaded band, with a rule under it. */
+    banded: Boolean = false,
+    /** Extra air above this heading, on top of whatever gap the column already gives it. */
+    extraTopGap: androidx.compose.ui.unit.Dp = 0.dp,
+) {
+    Column(Modifier.fillMaxWidth().padding(top = 6.dp + extraTopGap)) {
+        Row(
+            Modifier.fillMaxWidth()
+                .then(if (banded) Modifier.background(Bg3) else Modifier)
+                .padding(
+                    horizontal = if (banded) 12.dp else 0.dp,
+                    vertical = if (banded) 8.dp else 0.dp,
+                )
+                .testTag("group-head-$title"),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Line(
+                if (uppercase) title.uppercase() else title,
+                Ink,
+                size,
+                FontWeight.SemiBold,
+                Modifier.weight(1f).semantics { heading() },
+            )
+            Tag(count)
+        }
+        if (underline || banded) {
+            Box(
+                Modifier.fillMaxWidth().height(1.dp).background(Line)
+                    .testTag("group-rule-$title"),
+            )
+        }
     }
+}
+
+/** `.deck-line + .deck-line { border-top }`: a rule between rows, not after the last. */
+@Composable
+private fun Hairline(tag: String) {
+    Box(Modifier.fillMaxWidth().height(1.dp).background(Line).testTag(tag))
 }
 
 /**
@@ -433,7 +516,8 @@ private fun ShareMenu(onShare: (ShareWhat, ExportTo) -> Unit) {
 internal fun DeckStatsPanel(s: org.mattshoe.mtg.core.DeckStats) {
     Panel {
         Line(
-            "The deck at a glance",
+            // `.panel-head h2 { text-transform: uppercase }` on the web.
+            "The deck at a glance".uppercase(),
             Ink,
             Design.H3,
             FontWeight.SemiBold,
@@ -495,7 +579,7 @@ private val CurveCap =
  */
 @Composable
 private fun Curve(s: org.mattshoe.mtg.core.DeckStats) {
-    Line("Mana curve", Ink3, Design.MINI, FontWeight.SemiBold)
+    Line("Mana curve".uppercase(), Ink3, Design.MINI, FontWeight.SemiBold)
     val most = s.curve.maxOfOrNull { it.value } ?: 0
     Row(
         Modifier.fillMaxWidth().height(CURVE_HEIGHT).padding(top = 10.dp).testTag("curve"),
@@ -546,6 +630,10 @@ private fun Curve(s: org.mattshoe.mtg.core.DeckStats) {
                                 Design.MINI,
                                 FontWeight.SemiBold,
                                 Modifier.testTag("curve-count-${bar.label}"),
+                                // `.curve .n` is `var(--mono)` on the
+                                // web, so a 15 and a 17 line up digit
+                                // for digit over their bars.
+                                fontFamily = monoSmall.fontFamily,
                             )
                         }
                         Box(
@@ -564,6 +652,8 @@ private fun Curve(s: org.mattshoe.mtg.core.DeckStats) {
                     Ink3,
                     Design.MINI,
                     modifier = Modifier.testTag("curve-label-${bar.label}"),
+                    // `.curve .x` is `var(--mono)` on the web too.
+                    fontFamily = monoSmall.fontFamily,
                 )
             }
         }
@@ -581,7 +671,7 @@ private fun Curve(s: org.mattshoe.mtg.core.DeckStats) {
  */
 @Composable
 private fun Colours(s: org.mattshoe.mtg.core.DeckStats) {
-    Line("Colour", Ink3, Design.MINI, FontWeight.SemiBold)
+    Line("Colour".uppercase(), Ink3, Design.MINI, FontWeight.SemiBold)
     val most = maxOf(
         s.pips.maxOfOrNull { it.value } ?: 0,
         s.sources.maxOfOrNull { it.value } ?: 0,
@@ -733,9 +823,20 @@ private fun Figure(
     hint: String = "",
 ) {
     val told = if (hint.isEmpty()) "$n $k" else "$n $k — $hint"
-    Column(Modifier.semantics { contentDescription = told }) {
+    Column(
+        Modifier.semantics { contentDescription = told }
+            // The web's `.figures` grid draws a 1px seam between cells
+            // with a `--line` background under a 1px gap; a hairline
+            // border around each cell is the same seam without a grid
+            // of Android's own to lay six figures into on a phone.
+            .border(1.dp, Line, RadiusSm)
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+    ) {
         Line(n, tint, Design.H2, FontWeight.SemiBold)
-        Line(k, Ink3, Design.MINI)
+        // `.figure .k { text-transform: uppercase }` on the web. The
+        // accessible name stays sentence case — a screen reader is
+        // not shown CSS text-transform either.
+        Line(k.uppercase(), Ink3, Design.MINI)
     }
 }
 
@@ -766,7 +867,8 @@ private fun Track(n: Int, most: Int, pip: Pip, what: String, faded: Boolean) {
 
 @Composable
 private fun Bars(title: String, bars: List<Bar>, total: Int) {
-    Line(title, Ink3, Design.MINI, FontWeight.SemiBold)
+    // `.stats-card > h3 { text-transform: uppercase }` on the web.
+    Line(title.uppercase(), Ink3, Design.MINI, FontWeight.SemiBold)
     val most = bars.maxOfOrNull { it.value } ?: 0
     bars.forEach { bar ->
         Row(
@@ -800,7 +902,7 @@ private fun Bars(title: String, bars: List<Bar>, total: Int) {
 @Composable
 private fun TokenList(tokens: List<org.mattshoe.mtg.core.TokenCard>) {
     if (tokens.isEmpty()) return
-    GroupHead("Tokens", "${tokens.size}")
+    GroupHead("Tokens", "${tokens.size}", uppercase = true, banded = true)
     val open = androidx.compose.ui.platform.LocalUriHandler.current
     Panel {
         tokens.forEach { token ->
@@ -825,6 +927,7 @@ private fun TokenList(tokens: List<org.mattshoe.mtg.core.TokenCard>) {
                             contentDescription = null,
                             modifier = Modifier.size(40.dp),
                             contentScale = ContentScale.Crop,
+                            alignment = RowCrop,
                         )
                     }
                 }

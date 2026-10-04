@@ -262,18 +262,20 @@ class DecksParityTest {
     fun theListIsGroupedByTypeInReadingOrderWithACountOnEachSection() {
         content { DecksScreen(opened(), {}, {}) }
         assertEquals(
+            // `.panel-head h2 { text-transform: uppercase }` on the
+            // web — the deck's own heading and every type section.
             listOf(
-                "The deck at a glance",
-                "Commander", "Creatures", "Artifacts", "Enchantments", "Lands",
+                "THE DECK AT A GLANCE",
+                "COMMANDER", "CREATURES", "ARTIFACTS", "ENCHANTMENTS", "LANDS",
             ),
             headings(),
             "the sections are not the web's, in the web's order",
         )
         Parity.check(
             Parity.Fact("the two creatures are counted on their heading") {
-                tagBeside("Creatures") == "2"
+                tagBeside("CREATURES") == "2"
             },
-            Parity.Fact("one commander, counted") { tagBeside("Commander") == "1" },
+            Parity.Fact("one commander, counted") { tagBeside("COMMANDER") == "1" },
             Parity.Fact("a section nothing falls into is not drawn at all") {
                 !says("Planeswalkers") && !says("Battles") && !says("Not in the collection")
             },
@@ -330,7 +332,7 @@ class DecksParityTest {
                     yOf("has 0") == yOf("Rhystic Study")
             },
             Parity.Fact("the twenty Plains are a land, not an unknown card") {
-                headings().contains("Lands")
+                headings().contains("LANDS")
             },
         )
     }
@@ -520,9 +522,9 @@ class DecksParityTest {
     @Test
     fun theTokensAreCardsBelowTheListWithTheirOwnCount() {
         content { DecksScreen(withTokens(), {}, {}) }
-        assertEquals("Tokens", headings().last(), "the tokens are not the last thing on the screen")
+        assertEquals("TOKENS", headings().last(), "the tokens are not the last thing on the screen")
         Parity.check(
-            Parity.Fact("the heading counts them") { tagBeside("Tokens") == "3" },
+            Parity.Fact("the heading counts them") { tagBeside("TOKENS") == "3" },
             Parity.Fact("two Birds and a Clue") {
                 howMany("Bird") == 2 && says("Clue")
             },
