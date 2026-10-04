@@ -107,9 +107,28 @@ val Info = c(Design.INFO)
  */
 val Scrim = c(0x9904060A)
 
+/** `color-mix(in srgb, a P%, b)`, as a Compose colour. */
+fun mix(a: Color, b: Color, shareOfA: Float): Color =
+    c(Design.mixSrgb(a.toArgbLong(), b.toArgbLong(), shareOfA))
+
+/**
+ * The four channels as `0xAARRGGBB`.
+ *
+ * Through the components rather than through `Color.value`, which is
+ * a packed `ULong` whose layout depends on the colour space.
+ */
+private fun Color.toArgbLong(): Long =
+    (0xFFL shl 24) or
+        ((red * 255f + 0.5f).toLong() shl 16) or
+        ((green * 255f + 0.5f).toLong() shl 8) or
+        (blue * 255f + 0.5f).toLong()
+
 val Radius = RoundedCornerShape(Design.RADIUS.dp)
 val RadiusSm = RoundedCornerShape(Design.RADIUS_SM.dp)
 val Pill = RoundedCornerShape(Design.RADIUS_PILL.dp)
+
+/** `.deck-line .thumb`: a 40px square of art, rounded by 6px and no more. */
+val RadiusThumb = RoundedCornerShape(Design.RADIUS_THUMB.dp)
 
 private val scheme = darkColorScheme(
     primary = Accent,
@@ -394,7 +413,13 @@ fun Field(
             fontSize = Design.BODY.sp,
             fontFamily = if (mono) androidx.compose.ui.text.font.FontFamily.Monospace else null,
         ),
-        placeholder = { Text(placeholder, color = Ink3, fontSize = Design.BODY.sp) },
+        // Blank means none at all, not an empty one. The web's
+        // `<textarea>`s mostly carry no `placeholder` attribute, and a
+        // slot holding an empty `Text` is a node on the screen and in
+        // the semantics tree that says nothing.
+        placeholder = placeholder.takeIf { it.isNotEmpty() }?.let {
+            { Text(it, color = Ink3, fontSize = Design.BODY.sp) }
+        },
         colors = OutlinedTextFieldDefaults.colors(
             focusedContainerColor = Bg,
             unfocusedContainerColor = Bg,

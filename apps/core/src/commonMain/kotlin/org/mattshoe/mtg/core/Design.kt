@@ -68,12 +68,65 @@ object Design {
         else -> C
     }
 
+    // ------------------------------------------------------- mixtures
+    //
+    // `color-mix(in srgb, A P%, B)` appears four times in `app.css`
+    // and the browser evaluates it for nothing. Android has to work
+    // it out, and a hand-converted hex in the Compose source is
+    // exactly the kind of copy `DesignTest` exists to stop — so the
+    // shares are named here and checked against the stylesheet.
+
+    /**
+     * `color-mix(in srgb, …)`: a straight per-channel average at the
+     * encoded values, which is what sRGB means and what the browser
+     * does. Not a perceptual blend — Compose's own `lerp` goes
+     * through Oklab and lands somewhere else.
+     */
+    fun mixSrgb(a: Long, b: Long, shareOfA: Float): Long {
+        fun channel(shift: Int): Long {
+            val left = (a shr shift) and 0xFF
+            val right = (b shr shift) and 0xFF
+            val mixed = left * shareOfA + right * (1f - shareOfA)
+            // The browser rounds; truncating is a channel out on
+            // nearly every mix.
+            return (mixed + 0.5f).toLong().coerceIn(0L, 255L)
+        }
+        return (0xFFL shl 24) or
+            (channel(16) shl 16) or
+            (channel(8) shl 8) or
+            channel(0)
+    }
+
+    /**
+     * `.chip.ok`, `.chip.bad` and `.chip.warn`: the edge is the tone
+     * at 45% over `--line`, and the face stays the page's own.
+     */
+    const val CHIP_EDGE_MIX = 0.45f
+
+    /**
+     * `.curve .bar`: `linear-gradient(to top, var(--accent),
+     * color-mix(in srgb, var(--accent) 55%, var(--bg-3)))`. Full
+     * accent at the foot of the bar, dimmed at the head of it.
+     */
+    const val CURVE_BAR_MIX = 0.55f
+
     // ----------------------------------------------------------- shape
 
     const val RADIUS = 10
     const val RADIUS_SM = 7
     /** A pill: the nav tabs and the chips. */
     const val RADIUS_PILL = 99
+
+    /**
+     * `.deck-line .thumb` and `.token .thumb`: a 40px square of
+     * cropped art, rounded by 6px.
+     *
+     * Not `--radius`. Android used the page radius, which is ten on a
+     * forty-pixel box — a quarter of the thumbnail's width taken off
+     * each corner, so the art read as a circle rather than a square
+     * with the corners off.
+     */
+    const val RADIUS_THUMB = 6
 
     // ------------------------------------------------------------ type
 

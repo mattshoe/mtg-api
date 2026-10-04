@@ -155,7 +155,10 @@ private fun ListStep(s: MassEntry, onState: (MassEntry) -> Unit, onPickFile: () 
             value = s.list,
             onValueChange = { onState(s.type(it)) },
             modifier = Modifier.fillMaxWidth().height(260.dp),
-            placeholder = { Text("One card per line.") },
+            // No placeholder, the same as the web's `<textarea>`. The
+            // panel above the box already asks the question and the
+            // tally below it already counts the lines; a third
+            // sentence inside the box said what both of them say.
         )
         // What the box adds up to. A line count is what the request
         // size is limited by, not what anybody pasting a deck wants:
