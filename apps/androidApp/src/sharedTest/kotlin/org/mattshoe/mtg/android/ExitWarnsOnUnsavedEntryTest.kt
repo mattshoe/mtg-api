@@ -5,6 +5,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -146,6 +147,9 @@ class ExitWarnsOnUnsavedEntryTest {
             .copy(entry = MassEntry().copy(list = "1 Sol Ring"))
         val read = shell(start) { exited++ }
 
+        // Behind the hamburger now, at every width (section 5).
+        rule.onNodeWithContentDescription("Menu").performClick()
+        rule.waitForIdle()
         rule.onNodeWithText("Decks").performClick()
         rule.waitForIdle()
 

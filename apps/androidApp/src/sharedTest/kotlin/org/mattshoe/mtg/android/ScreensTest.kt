@@ -114,10 +114,18 @@ class ScreensTest {
 
     // ------------------------------------------------------------ shell
 
+    /** The places you can go live behind the hamburger now, at every width. */
+    private fun openTheMenu() {
+        rule.onNodeWithContentDescription("Menu").performClick()
+        rule.waitForIdle()
+    }
+
     @Test
     fun gatedTabsAreAbsentWhileLocked() {
         content { AppShell(AppState(), {}, {}, {}, {}, {}, {}, {}) }
-        // "Library" is both a tab and the heading below it.
+        openTheMenu()
+        // "Library" is the menu row, the bar's title and the heading
+        // below it.
         rule.onAllNodesWithText("Library").onFirst().assertIsDisplayed()
         rule.onNodeWithText("Decks").assertExists()
         rule.onAllNodesWithTextOrNothing("Mass Entry")
@@ -129,7 +137,8 @@ class ScreensTest {
     fun unlockingBringsTheGatedTabsBack() {
         var state = AppState(admin = Admin(token = "t"))
         content { AppShell(state, { state = it }, {}, {}, {}, {}, {}, {}) }
-        // The tab row scrolls sideways on a phone, so these are present
+        openTheMenu()
+        // The menu is taller than a small screen, so these are present
         // rather than necessarily on screen.
         rule.onNodeWithText("Mass Entry").assertExists()
         rule.onNodeWithText("Server Logs").assertExists()
@@ -137,12 +146,16 @@ class ScreensTest {
     }
 
     @Test
-    fun theFindButtonOpensTheFinder() {
+    fun theFinderIsOnTheSlashKeyRatherThanAButton() {
+        // The website has no Find button and its suite says so. The
+        // palette itself is still there, on `/` and ⌘K, which is the
+        // only way either platform opens it now.
         var state = AppState()
         content {
             AppShell(state, { state = it }, {}, {}, {}, {}, {}, {})
         }
-        rule.onNodeWithText("Find").performScrollTo().performClick()
+        rule.onNodeWithText("Find").assertDoesNotExistNow()
+        rule.onRoot().performKeyInput { pressKey(Key.Slash) }
         rule.runOnIdle {
             assertEquals(Overlay.PALETTE, state.overlays.top)
             assertTrue(state.palette.open)
@@ -516,7 +529,9 @@ class ScreensTest {
         // The tray itself carries no background and no click handler;
         // only the chip inside it does. A tap elsewhere on the screen,
         // toast showing or not, has to keep reaching whatever is
-        // really there underneath it.
+        // really there underneath it — the hamburger, and then the
+        // menu row it opens.
+        openTheMenu()
         rule.onNodeWithText("Decks").performClick()
         rule.waitForIdle()
 

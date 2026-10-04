@@ -189,26 +189,6 @@ fun Panel(
     }
 }
 
-/** `.app-tab`: a nav pill, gold while it is the current view. */
-@Composable
-fun NavPill(label: String, on: Boolean, onClick: () -> Unit) {
-    Box(
-        Modifier.sizeIn(minWidth = TouchTarget, minHeight = TouchTarget).pressable(true, onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            label,
-            Modifier
-                .background(if (on) AccentDim else Bg2, Pill)
-                .border(1.dp, if (on) Accent else Line2, Pill)
-                .padding(horizontal = 13.dp, vertical = 7.dp),
-            color = if (on) Accent2 else Ink2,
-            fontSize = Design.SMALL.sp,
-            fontWeight = FontWeight.Medium,
-        )
-    }
-}
-
 /**
  * `.seg`: one row, one choice, hairlines between.
  *

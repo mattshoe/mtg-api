@@ -3,7 +3,6 @@ package org.mattshoe.mtg.android
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.lazy.grid.LazyGridState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
@@ -52,20 +50,39 @@ import org.mattshoe.mtg.core.Route
 import org.mattshoe.mtg.core.ShareWhat
 import org.mattshoe.mtg.core.Tweak
 import org.mattshoe.mtg.core.View
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import kotlinx.coroutines.delay
 import org.mattshoe.mtg.core.Design
+import kotlin.math.roundToInt
 
 /**
  * The shell: the nav, the lock, whichever screen is current, and
@@ -121,6 +138,14 @@ fun AppShell(
     onExit: () -> Unit = {},
 ) {
     var showFilters by remember { mutableStateOf(false) }
+    // One hamburger at every width, so there is one behaviour to keep
+    // straight rather than two. See `NavMenu`.
+    var menuOpen by remember { mutableStateOf(false) }
+    // Where the bar ends, in root pixels, so the menu hangs off the
+    // bottom of it rather than off a guess. The bar sits inside
+    // `safeDrawingPadding`, whose size is the status bar's and is not
+    // known here.
+    var barBottom by remember { mutableStateOf(0) }
     // Asked only once back has nowhere left to go but out, and only
     // when `AppState.wouldExitWithUnsavedEntry` says there is a
     // pasted list that exit would throw away — see `BackHandler`
@@ -187,7 +212,7 @@ fun AppShell(
     Box(Modifier.fillMaxSize()) {
         Column(
             Modifier.fillMaxSize()
-                // Otherwise the tab row sits under the clock.
+                // Otherwise the bar sits under the clock.
                 .safeDrawingPadding()
             .focusRequester(keys)
             .focusable()
@@ -196,22 +221,34 @@ fun AppShell(
             // typing" rule the web gets from checking the target's tag.
             .onKeyEvent { event -> event.handledBy(state, onState) },
     ) {
+            // The bar: the way to everywhere, the way home, and what
+            // you are looking at. The web's `AppNav`, in the same
+            // order — burger, mark, title.
             Row(
-                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(8.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                Modifier.fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                    .onGloballyPositioned { barBottom = it.boundsInRoot().bottom.roundToInt() },
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                // Only the views the lock allows. Gated ones are absent, not
-                // greyed out — the same as the web.
-                state.admin.visible.forEach { view ->
-                    NavPill(view.label, state.view == view) { onState(state.navigate(view)) }
+                NavBurger(menuOpen) { menuOpen = !menuOpen }
+                HomeMark {
+                    menuOpen = false
+                    onState(state.navigate(View.DEFAULT))
                 }
-                Ghost(if (state.admin.unlocked) "Lock" else "Unlock") {
-                    if (state.admin.unlocked) onState(state.copy(admin = state.admin.lock()).navigate(state.route))
-                    else onState(state.opening(Overlay.UNLOCK))
-                }
-                Ghost("Find") {
-                    onState(state.opening(Overlay.PALETTE).copy(palette = state.palette.opened()))
-                }
+                // `.topbar-title`. One line, clipped rather than
+                // wrapped: a deck called "Alela, Artful Provocateur"
+                // would otherwise push the bar to two rows and move
+                // every screen down with it.
+                Text(
+                    state.title,
+                    Modifier.weight(1f).padding(start = 4.dp).testTag("topbar-title"),
+                    color = Ink,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
 
             when (state.view) {
@@ -306,6 +343,30 @@ fun AppShell(
         // over the button you were reaching for.
         state.toast?.let { message ->
             ToastTray(message, onDismiss = { onState(state.say(null)) })
+        }
+
+        // Over the page rather than inside the bar, so the menu is
+        // not clipped by a bar one row high and nothing underneath it
+        // takes the press meant for the backdrop.
+        if (menuOpen) {
+            // A press anywhere else closes it, the way a menu is
+            // expected to behave. `detectTapGestures` and not
+            // `clickable`: a full-screen `clickable` sets
+            // `shouldMergeDescendantSemantics`, which folds the whole
+            // page beneath it into one node and blinds every test
+            // that reads a tag.
+            Box(
+                Modifier.fillMaxSize()
+                    .testTag("nav-backdrop")
+                    .pointerInput(Unit) { detectTapGestures { menuOpen = false } },
+            )
+            NavMenu(
+                state = state,
+                top = barBottom,
+                // Closes even when the view picked is the one already
+                // showing — otherwise the menu sits open over the page.
+                onPick = { next -> menuOpen = false; onState(next) },
+            )
         }
     }
 
@@ -433,6 +494,161 @@ fun AppShell(
         )
     }
 }
+
+// ------------------------------------------------------------- the nav
+
+// Every tag below is the website's own class name — `nav-burger`,
+// `app-menu`, `app-menu-sep`, `app-menu-group`, `topbar-title`,
+// `brand-mark` — so a test on either platform names the same thing.
+
+/** `.nav-burger`: 34dp of button, three bars, inside a thumb-sized box. */
+@Composable
+private fun NavBurger(open: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier.sizeIn(minWidth = TouchTarget, minHeight = TouchTarget)
+            .testTag("nav-burger")
+            // The web's `aria-label`, which is what a screen reader
+            // and every finder here read it by.
+            .semantics {
+                role = Role.Button
+                contentDescription = if (open) "Close menu" else "Menu"
+            }
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            Modifier.size(34.dp)
+                .background(Bg3, RoundedCornerShape(8.dp))
+                .border(1.dp, if (open) Line2 else Line, RoundedCornerShape(8.dp)),
+            verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            // `.nav-burger .bar`: 16 by 2, in the button's own colour.
+            repeat(3) { Box(Modifier.width(16.dp).height(2.dp).background(if (open) Ink else Ink2)) }
+        }
+    }
+}
+
+/**
+ * `.brand`: the app's own icon, and it goes home.
+ *
+ * The foreground layer rather than the adaptive icon beside it —
+ * `painterResource` wants something it can decode, and an
+ * `<adaptive-icon>` is a composition of two other drawables.
+ */
+@Composable
+private fun HomeMark(onClick: () -> Unit) {
+    Box(
+        Modifier.sizeIn(minWidth = TouchTarget, minHeight = TouchTarget)
+            .testTag("brand-mark")
+            .semantics { role = Role.Button; contentDescription = "Home" }
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Image(
+            painter = painterResource(R.drawable.ic_launcher_foreground),
+            contentDescription = null,
+            modifier = Modifier.size(34.dp),
+        )
+    }
+}
+
+/**
+ * `.app-menu`: everywhere you can go, in one list.
+ *
+ * The ungated views first, then the admin half behind a rule and a
+ * heading so it reads as a different kind of thing rather than three
+ * more places to go, then the lock. The same order as `AppNav`, off
+ * the same `state.admin.visible`, so neither platform can offer a
+ * screen the other does not.
+ *
+ * Hung off the bottom of the bar at a measured offset. `Popup` would
+ * place it too, but the suggestion list is already one and its
+ * dismissal is wound through `AppState.back`; a second window with
+ * its own idea of what back means is how that gets undone.
+ */
+@Composable
+private fun NavMenu(state: AppState, top: Int, onPick: (AppState) -> Unit) {
+    Box(Modifier.fillMaxSize()) {
+        Column(
+            Modifier
+                .offset { IntOffset(MENU_INSET.roundToPx(), top + MENU_GAP.roundToPx()) }
+                // Fixed rather than min-width: the rows fill it, and
+                // a row that fills a width nothing has decided takes
+                // the whole screen.
+                .width(MENU_WIDTH)
+                .background(Bg2, Radius)
+                .border(1.dp, Line2, Radius)
+                .padding(7.dp)
+                .testTag("app-menu"),
+            verticalArrangement = Arrangement.spacedBy(1.dp),
+        ) {
+            // Everything anybody can reach.
+            state.admin.visible.filterNot { it.gated }.forEach { view ->
+                MenuTab(view.label, state.view == view) { onPick(state.navigate(view)) }
+            }
+
+            // And the admin half, set apart.
+            Box(
+                Modifier.fillMaxWidth()
+                    .padding(start = 4.dp, end = 4.dp, top = 6.dp, bottom = 2.dp)
+                    .height(1.dp)
+                    .background(Line2)
+                    .testTag("app-menu-sep"),
+            )
+            Text(
+                "Admin".uppercase(),
+                Modifier.padding(start = 11.dp, end = 11.dp, top = 3.dp, bottom = 5.dp)
+                    .testTag("app-menu-group"),
+                color = Ink3,
+                fontSize = 10.5.sp,
+                fontWeight = FontWeight.Bold,
+            )
+
+            state.admin.visible.filter { it.gated }.forEach { view ->
+                MenuTab(view.label, state.view == view) { onPick(state.navigate(view)) }
+            }
+
+            MenuTab(if (state.admin.unlocked) "Lock" else "Unlock", on = false) {
+                onPick(
+                    if (state.admin.unlocked) {
+                        state.copy(admin = state.admin.lock()).navigate(state.route)
+                    } else {
+                        state.opening(Overlay.UNLOCK)
+                    },
+                )
+            }
+        }
+    }
+}
+
+/** `.app-tab` inside the menu: a full-width row, gold while it is the current view. */
+@Composable
+private fun MenuTab(label: String, on: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier.fillMaxWidth()
+            // A row of text is about 34dp on its own, which is the
+            // web's `.app-tab` and three quarters of a fingertip.
+            .heightIn(min = TouchTarget)
+            .background(if (on) AccentDim else Color.Transparent, RadiusSm)
+            .semantics { role = Role.Button }
+            .clickable(onClick = onClick)
+            .padding(horizontal = 11.dp),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Text(
+            label,
+            color = if (on) Accent2 else Ink2,
+            fontSize = Design.SMALL.sp,
+            fontWeight = FontWeight.Medium,
+        )
+    }
+}
+
+/** `top: calc(100% + 7px); left: 0` against the bar's own 8dp inset. */
+private val MENU_GAP = 7.dp
+private val MENU_INSET = 8.dp
+private val MENU_WIDTH = 220.dp
 
 /** Where a deck tap goes, as a route rather than a special case. */
 fun AppState.openDeck(slug: String) = navigate(Route(View.DECKS, slug))
