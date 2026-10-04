@@ -17,13 +17,15 @@ The cycle, in this order:
    shipped four of those.
 3. **Write the smallest production change that makes it pass.**
 4. **Run the whole suite**, not just your test.
-5. **Record the red in the commit message.** See below — CI checks
-   for it.
+5. **Record the red in the commit message.** Nothing checks it and
+   nothing can; write it so the next reader knows the test could
+   fail.
 
 ### Why the red step is not optional
 
-Four tests in this project were written, landed green, and were
-later found to prove nothing:
+Six tests in this project were written, landed green, and were later
+found to prove nothing. Four were mounted somewhere the bug could not
+happen:
 
 - a share-menu test mounted the menu in an absolutely positioned
   frame, so the off-screen bug it existed to catch could not happen
@@ -34,8 +36,15 @@ later found to prove nothing:
 - a filter-panel test fed a hand-built `Facets` that the real app
   never produced, while the real app's facet loader did not exist
 
-Every one of them would have been caught by running it against the
+Every one of those would have been caught by running it against the
 unfixed code for ten seconds. That is the whole discipline.
+
+The other two were gated behind `needsRealRendering()`, so they had
+never executed at all: one called `onRoot()` with a dialog open, where
+there are two roots and `onRoot()` throws; one sized its fixture to
+Robolectric's 470dp screen, which a real 808dp phone does not
+overflow, so the sheet needed no scrolling and the test proved
+nothing. Both were green on the JVM for days. See below.
 
 ### What the test has to do
 
@@ -56,46 +65,63 @@ unfixed code for ten seconds. That is the whole discipline.
 ### Gated tests are not coverage
 
 A test behind `Parity.needsRealRendering()` is skipped on the JVM,
-which means it has **never executed**. Four such tests have landed
-green and been wrong. Prefer a test that runs on the JVM. If a check
+which means it has **never executed**. Two such tests landed green and
+were simply wrong, and the device run is the only thing that found
+them. Prefer a test that runs on the JVM. If a check
 genuinely needs pixels, run `npm run test:android` before believing
 it, and say plainly in the commit that it is otherwise unproven.
 
-## The commit message records the red
+## Say what was red, in the commit message
 
-Any commit touching production code must carry a `Red:` line saying
-what failed before the change, with the count:
+Not because anything checks it — nothing can. A commit is a finished
+thing and the order its parts were written in leaves no trace. I tried
+making CI police a `Red:` trailer and Matt was right to call it what
+it was: you can satisfy a message format perfectly while doing the
+exact opposite of TDD.
+
+Write it anyway, because the next person reading the commit wants to
+know the test could fail:
 
 ```
 Red: 5 of 6 in CardFaceParityTest — "no type line", "only the
 creature face has a stat box expected:<1> but was:<0>"
 ```
 
-If some of your new tests pass against the unfixed code, **say so and
-say why**. A guard against regression is worth having; counting it as
-proof is not.
+And if some of your new tests pass against the unfixed code, **say so
+and say why**. A guard against regression is worth having; counting it
+as proof is not. Six tests this repo shipped were doing the second
+thing.
 
-The genuinely test-only commit — a new test for existing behaviour, a
-renamed fixture — needs no `Red:` line, because it has no production
-change. Say `Red: n/a, tests only`.
+## What CI does enforce
 
-`scripts/check-tdd.mjs` enforces both halves of this in CI: a
-production change with no test change in the same commit fails, and
-so does one with no `Red:` line.
+Not the discipline — the result of it. Three things, and all three
+have caught something real:
 
-### The exemption, which is deliberately awkward
+- **Every test runs on every pull request.** `shared`, `web` and
+  `android` in `.github/workflows/apps.yml`, including the emulator.
+  Worth knowing how this was learned: `apps.yml` triggers on
+  `pull_request` and pushes to `main`, so a hundred commits once sat
+  on a branch with no pull request and no CI at all, verified by
+  nothing but a laptop.
+- **Every test that exists actually ran** —
+  `scripts/check-test-count.mjs` counts `@Test` in the source and
+  compares. Kotlin's incremental compiler once dropped three classes,
+  71 tests, out of a device APK and reported BUILD SUCCESSFUL.
+- **No suite shrinks** — `scripts/check-suite-floor.mjs` against the
+  committed numbers in `test/suite-floors.json`. A suite that shrinks
+  is worse than one that fails, because it goes green. Skips are
+  excluded from the count, so a gated test cannot pad the total.
 
-A commit that genuinely cannot have a test — a pure rename, a revert,
-a dependency bump — uses:
+When a suite grows, raise the floor in the same commit:
 
 ```
-TDD-exempt: <the actual reason>
+npm run check:floor -- --raise screens=apps/androidApp/build/test-results/testDebugUnitTest
 ```
 
-The script prints every exemption in the CI log as a warning with its
-reason attached, so they are countable and visible in review. If you
-find yourself reaching for it more than rarely, the problem is the
-commit, not the rule.
+It will not lower a floor, whatever you pass it. If you genuinely
+removed a test, edit `test/suite-floors.json` by hand and say why in
+the message — which is the point: it takes a deliberate, visible,
+reviewable act.
 
 ## Never trust a test count without a successful build
 

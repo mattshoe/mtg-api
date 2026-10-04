@@ -17,3 +17,12 @@ jobs:
       # Runs the real Worker against a local D1 in workerd. No Cloudflare
       # credentials needed and nothing touches the live database.
       - run: npm test
+
+      # A suite that shrinks is worse than one that fails, because it
+      # goes green. The floor lives in `test/suite-floors.json` and may
+      # never go down. Re-run with a JUnit reporter rather than parsing
+      # the human output, which is not a format.
+      - name: The suite did not shrink
+        run: |
+          npx vitest run --reporter=junit --outputFile=.vitest-results/results.xml
+          node scripts/check-suite-floor.mjs worker=.vitest-results
