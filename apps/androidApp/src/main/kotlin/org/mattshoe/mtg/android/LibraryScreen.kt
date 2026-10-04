@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -158,22 +157,32 @@ private fun Controls(
             onPick = { onSearch() },
         )
 
-        // Sort and its direction on the left because they are what you
-        // reach for; export pushed to the right because it is the one
-        // thing here that leaves. No Search button and no owner
-        // picker: whose collection it is lives in the Collection
-        // group with every other filter.
-        Row(
+        // Sort and its direction first because they are what you
+        // reach for; export after, because it is the one thing here
+        // that leaves. No Search button and no owner picker: whose
+        // collection it is lives in the Collection group with every
+        // other filter.
+        //
+        // It wraps. A 176dp dropdown, its arrow and two text buttons
+        // come to more than a phone is wide, and as a `Row` with a
+        // `Spacer` pushing export right the overflow went off the
+        // edge of the screen — Download half gone at 320dp and
+        // entirely gone once the buttons were given a thumb-sized
+        // target. A second line is the only honest answer at this
+        // width.
+        FlowRow(
             Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Design.GAP.dp),
+            verticalArrangement = Arrangement.spacedBy(Design.GAP.dp),
         ) {
             SortPicker(state, apply)
-            Spacer(Modifier.weight(1f))
             // Both destinations, the way the web offers them.
             // `MainActivity` decides what "Download" actually does —
             // see `Downloads` — this just asks for one or the other.
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Ghost(ExportTo.CLIPBOARD.label) { onExport(ExportTo.CLIPBOARD) }
                 Ghost(ExportTo.FILE.label) { onExport(ExportTo.FILE) }
             }

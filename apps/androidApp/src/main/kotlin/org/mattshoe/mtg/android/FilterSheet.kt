@@ -498,6 +498,16 @@ private fun Range(
     }
 }
 
+/**
+ * An operator and a number: power, toughness, loyalty.
+ *
+ * The operator and the box used to share one row, which left five
+ * one-glyph segments to size themselves off their own text — 26dp
+ * each, side by side, under a thumb. They get the whole width now and
+ * split it evenly, with the box underneath. The web shows the same
+ * five as a `<select>`, so there is no row-for-row layout to hold to
+ * here; what has to match is which five and what they mean.
+ */
 @Composable
 private fun Stat(
     tag: String,
@@ -506,13 +516,17 @@ private fun Stat(
     onOp: (String) -> Unit,
     onValue: (String) -> Unit,
 ) {
-    Row(
+    Column(
         Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Seg(listOf(">=" to "≥", "<=" to "≤", "=" to "=", ">" to ">", "<" to "<"), op, onOp)
-        NumberField(value, onValue, "any", Modifier.weight(1f).testTag("box-$tag"))
+        Seg(
+            listOf(">=" to "≥", "<=" to "≤", "=" to "=", ">" to ">", "<" to "<"),
+            op,
+            fill = true,
+            onPick = onOp,
+        )
+        NumberField(value, onValue, "any", Modifier.testTag("box-$tag"))
     }
 }
 
