@@ -163,6 +163,59 @@ data class Holding(val owner: String, val owned: Int, val committed: Int) {
     val short: Int get() = (committed - owned).coerceAtLeast(0)
 }
 
+/**
+ * The card itself: what is actually printed on it.
+ *
+ * Everything else in `CardDetail` is about the collection — which
+ * printings are owned, who has them, which decks want them. None of
+ * it is the card. Both platforms opened a card and showed its name,
+ * its sets and its legality, and nowhere said what the card *does*:
+ * no mana cost, no type line, no rules text, no power and toughness,
+ * no flavour. The columns have been in `cards` since the first import
+ * (`mana_cost`, `type_line`, `oracle_text`, `flavor_text`, `power`,
+ * `toughness`, `loyalty`, `defense`) and nothing ever selected them.
+ * `app.css` even still carried `.oracle` and `.flavor` rules with
+ * nothing to style.
+ *
+ * One face. A double-faced card has a row per face in `card_faces`,
+ * and [CardDetail.faces] holds them in printed order — index 0 is the
+ * front. A normal card has exactly one.
+ */
+data class Face(
+    val name: String = "",
+    val manaCost: String = "",
+    val typeLine: String = "",
+    val oracleText: String = "",
+    val flavorText: String = "",
+    val power: String? = null,
+    val toughness: String? = null,
+    val loyalty: String? = null,
+    val defense: String? = null,
+) {
+    /**
+     * `3/4`, a Tarmogoyf's star over a star, `4` for a planeswalker,
+     * `6` for a battle, or nothing at all.
+     *
+     * One string because the three are mutually exclusive on a real
+     * card and every caller wants the same little box in the corner.
+     * `*` is a legitimate power — Tarmogoyf's whole identity — which
+     * is why this is text and not a number, and why the phone's
+     * power box had to stop raising a digits-only keyboard (4.9).
+     */
+    val stats: String?
+        get() = when {
+            power != null && toughness != null -> "$power/$toughness"
+            loyalty != null -> loyalty
+            defense != null -> defense
+            else -> null
+        }
+
+    /** Nothing printed on it at all, which means nothing to draw. */
+    val blank: Boolean
+        get() = manaCost.isBlank() && typeLine.isBlank() &&
+            oracleText.isBlank() && flavorText.isBlank() && stats == null
+}
+
 data class CardDetail(
     val name: String = "",
     /**
@@ -176,9 +229,17 @@ data class CardDetail(
     val usedIn: List<DeckUse> = emptyList(),
     val legalities: List<Legality> = emptyList(),
     val rulings: List<Ruling> = emptyList(),
+    /**
+     * What is printed on the card, front face first. Empty until the
+     * face query comes back; a normal card has one, a double-faced
+     * card has two.
+     */
+    val faces: List<Face> = emptyList(),
     val busy: Boolean = false,
     val error: String? = null,
 ) {
+    /** The front, which is the one a single-faced card is. */
+    val face: Face? get() = faces.firstOrNull()
     val owned: Int get() = printings.sumOf { it.qty }
 
     /** Copies no deck has claimed. Proxies do not consume a real card. */
@@ -362,6 +423,67 @@ object CardQueries {
             ORDER BY c.owner, c.released_at DESC, c.setcode, c.collector_number""",
         listOf(nameNorm),
     )
+
+    /**
+     * What is actually printed on the card.
+     *
+     * One row for a normal card, taken off any printing — the oracle
+     * text, the type line and the mana cost belong to the `oracle_id`,
+     * not to the particular copy somebody owns, so which printing it
+     * comes from does not matter. The flavour text *does* vary by
+     * printing, so this takes the newest, which is the one most likely
+     * to be the copy in hand.
+     *
+     * Double-faced cards come from `card_faces`, which has a row per
+     * face in printed order. The `UNION ALL` is so one query answers
+     * both shapes: a DFC contributes its two face rows, and a normal
+     * card contributes the `cards` row instead, guarded by
+     * `NOT EXISTS` so a DFC never also emits the combined
+     * "A // B" row that is not any one face.
+     *
+     * The `pick` CTE is load-bearing, not tidiness. Selecting
+     * straight from `cards` returns one row per *printing owned* —
+     * Sol Ring came back twice, the same text both times, because two
+     * copies of it are in the collection. Narrowing to one printing
+     * first is what makes this one card rather than a list.
+     */
+    fun face(nameNorm: String) = Sql(
+        """WITH pick AS (
+                SELECT id, name, mana_cost, type_line, oracle_text, flavor_text,
+                       power, toughness, loyalty, defense
+                  FROM cards WHERE name_norm = ?
+                 ORDER BY released_at DESC LIMIT 1)
+           SELECT cf.face_index, cf.name, cf.mana_cost, cf.type_line,
+                  cf.oracle_text, cf.flavor_text, cf.power, cf.toughness,
+                  cf.loyalty, cf.defense
+             FROM card_faces cf JOIN pick ON cf.card_id = pick.id
+            UNION ALL
+           SELECT 99, pick.name, pick.mana_cost, pick.type_line,
+                  pick.oracle_text, pick.flavor_text, pick.power, pick.toughness,
+                  pick.loyalty, pick.defense
+             FROM pick
+            WHERE NOT EXISTS (SELECT 1 FROM card_faces f WHERE f.card_id = pick.id)
+            ORDER BY 1
+            LIMIT 2""",
+        listOf(nameNorm),
+    )
+
+    fun decodeFaces(cols: List<String>, rows: List<JsonArray>): List<Face> {
+        val at = cols.withIndex().associate { (i, n) -> n to i }
+        return rows.map { row ->
+            Face(
+                name = row.at(at, "name").orEmpty(),
+                manaCost = row.at(at, "mana_cost").orEmpty(),
+                typeLine = row.at(at, "type_line").orEmpty(),
+                oracleText = row.at(at, "oracle_text").orEmpty(),
+                flavorText = row.at(at, "flavor_text").orEmpty(),
+                power = row.at(at, "power"),
+                toughness = row.at(at, "toughness"),
+                loyalty = row.at(at, "loyalty"),
+                defense = row.at(at, "defense"),
+            )
+        }.filterNot { it.blank }
+    }
 
     /** Every deck that wants it, whoever built it. */
     fun usedIn(nameNorm: String) = Sql(

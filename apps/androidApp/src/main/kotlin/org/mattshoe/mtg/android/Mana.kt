@@ -2,6 +2,8 @@ package org.mattshoe.mtg.android
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
@@ -67,6 +69,32 @@ fun ManaSymbol(
             contentDescription = null,
             modifier = Modifier.size(size).clip(CircleShape),
         )
+    }
+}
+
+/**
+ * A whole mana cost, as a row of symbols. Sibling of `ManaCostRow` on
+ * the web, reading the same `ManaCost.symbols` so the two cannot
+ * disagree about how `{2}{U/B}` breaks up.
+ *
+ * Nothing at all for a card with no cost — a land's empty corner is
+ * correct, and an empty `Row` with spacing in it is not.
+ */
+@Composable
+fun ManaCostRow(
+    cost: String?,
+    size: Dp = 15.dp,
+    text: TextUnit = 9.sp,
+    modifier: Modifier = Modifier,
+) {
+    val symbols = ManaCost.symbols(cost)
+    if (symbols.isEmpty()) return
+    Row(
+        modifier.testTag("mana-cost"),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        symbols.forEach { symbol -> ManaSymbol(symbol, size = size, text = text) }
     }
 }
 

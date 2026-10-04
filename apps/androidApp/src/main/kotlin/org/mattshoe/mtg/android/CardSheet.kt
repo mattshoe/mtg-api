@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -22,6 +23,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -38,6 +40,7 @@ import org.mattshoe.mtg.core.CardDetail
 import org.mattshoe.mtg.core.CardQueries
 import org.mattshoe.mtg.core.DeckCard
 import org.mattshoe.mtg.core.Design
+import org.mattshoe.mtg.core.Face
 import org.mattshoe.mtg.core.Legality
 import org.mattshoe.mtg.core.Prices
 
@@ -141,6 +144,12 @@ private fun Body(card: CardDetail) {
             )
         }
     }
+
+    // What the card actually says. Everything below this point is
+    // about the collection's relationship to the card — how many are
+    // owned, who has them, which decks want them. None of it is the
+    // card, and until now none of the card was here either.
+    card.faces.forEach { FacePanel(it, named = card.faces.size > 1) }
 
     // `.flex-wrap` of `.tag.mini`, the way the web states a figure:
     // boxed, so a number reads as a number and not as the start of a
@@ -331,6 +340,79 @@ private fun Body(card: CardDetail) {
 }
 
 /** An `h3` on the web: the name of a section, present even when empty. */
+/**
+ * One printed face, the sibling of `FacePanel` on the web.
+ *
+ * The cost as real symbols beside the name, then the type line, the
+ * rules text, the flavour, and the little box in the corner. The line
+ * breaks in oracle text carry meaning — one ability per line is how a
+ * card is read — so the string goes in whole and Compose wraps it.
+ *
+ * `named` only on a double-faced card, where saying which face you
+ * are reading is the entire point of drawing two of these.
+ */
+@Composable
+private fun FacePanel(face: Face, named: Boolean) {
+    Panel {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (named) {
+                Text(
+                    face.name,
+                    Modifier.weight(1f),
+                    color = Ink,
+                    fontSize = Design.SMALL.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            } else {
+                Spacer(Modifier.weight(1f))
+            }
+            ManaCostRow(face.manaCost)
+        }
+        if (face.typeLine.isNotBlank()) {
+            Text(face.typeLine, color = Ink2, fontSize = Design.MINI.sp)
+        }
+        if (face.oracleText.isNotBlank()) {
+            Text(
+                face.oracleText,
+                Modifier.testTag("oracle"),
+                color = Ink,
+                fontSize = Design.SMALL.sp,
+                lineHeight = (Design.SMALL * 1.6).sp,
+            )
+        }
+        if (face.flavorText.isNotBlank()) {
+            Text(
+                face.flavorText,
+                Modifier.testTag("flavor"),
+                color = Ink3,
+                fontSize = Design.MINI.sp,
+                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+            )
+        }
+        // Bottom-right, where it is printed, and in the mono face so
+        // a 3/4 and a 12/12 line up when two faces are stacked.
+        face.stats?.let { stats ->
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                Text(
+                    stats,
+                    Modifier.testTag("ptbox")
+                        .background(Bg3, RadiusSm)
+                        .border(1.dp, Line2, RadiusSm)
+                        .padding(horizontal = 9.dp, vertical = 2.dp),
+                    color = Ink,
+                    fontSize = Design.SMALL.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun Heading(text: String) {
     Text(text, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)

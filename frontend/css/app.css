@@ -519,8 +519,22 @@ td.mono { font-family: var(--mono); font-size: 12.5px; }
   display: block; margin: 0 auto 8px; box-shadow: var(--shadow);
 }
 
+/* The card's own face. `.oracle` and `.flavor` sat here for months
+   with nothing using them, because neither platform ever selected
+   `oracle_text` or `flavor_text`. They do now. */
 .oracle { white-space: pre-wrap; font-size: 13.5px; line-height: 1.6; }
 .flavor { white-space: pre-wrap; font-style: italic; color: var(--text-3); font-size: 12.5px; margin-top: 8px; }
+.card-face .panel-body { display: flex; flex-direction: column; gap: 7px; }
+.face-head { display: flex; align-items: center; gap: 8px; }
+.face-name { font-weight: 600; font-size: 14px; }
+.type-line { font-size: 12.5px; color: var(--text-2); }
+/* Bottom-right, the way it is printed on the card, and in the mono
+   face so a `3/4` and a `12/12` line up if two faces are stacked. */
+.ptbox {
+  align-self: flex-end; font-family: var(--mono); font-size: 13.5px; font-weight: 600;
+  padding: 2px 9px; border: 1px solid var(--line-2); border-radius: var(--radius-sm);
+  background: var(--bg-3);
+}
 
 .kv { display: grid; grid-template-columns: max-content 1fr; gap: 5px 14px; font-size: 13px; }
 .kv dt { color: var(--text-2); font-size: 11.5px; text-transform: uppercase; letter-spacing: .03em; padding-top: 2px; }

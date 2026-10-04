@@ -503,7 +503,8 @@ class MainActivity : ComponentActivity() {
     }
 
     private suspend fun loadCard(nameNorm: String, label: String): AppState {
-        val (printings, uses, legal, rules) = Load.card(nameNorm)
+        val (face, printings, uses, legal, rules) = Load.card(nameNorm)
+        val f = api.query(face)
         val p = api.query(printings)
         val u = api.query(uses)
         val l = api.query(legal)
@@ -516,6 +517,7 @@ class MainActivity : ComponentActivity() {
                 usedIn = CardQueries.decodeUses(u.cols, u.rows),
                 legalities = CardQueries.decodeLegalities(l.cols, l.rows),
                 rulings = CardQueries.decodeRulings(r.cols, r.rows),
+                faces = CardQueries.decodeFaces(f.cols, f.rows),
             ),
         )
     }

@@ -404,8 +404,18 @@ object Load {
 
     fun stats(scope: StatsScope): Sql = StatsQueries.totals(scope)
 
-    /** Everything the drawer shows: printings, decks, legality, rulings. */
+    /**
+     * Everything the card page shows: the card itself, then the
+     * printings, the decks, the legality and the rulings.
+     *
+     * The face is first because it is the card. Every other query
+     * here is about the collection's relationship to it, and for a
+     * long time those four were the only ones, which is how both
+     * platforms ended up with a card page that never said what the
+     * card does.
+     */
     fun card(nameNorm: String): List<Sql> = listOf(
+        CardQueries.face(nameNorm),
         CardQueries.printings(nameNorm),
         CardQueries.usedIn(nameNorm),
         CardQueries.legalities(nameNorm),
