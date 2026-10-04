@@ -356,6 +356,19 @@ data class AppState(
     fun recordEntry(now: String): AppState =
         if (entry.result == null) this
         else copy(history = history.remember(EntryHistory.of(entry, now)))
+
+    companion object {
+        /**
+         * How long a toast says its piece before it goes on its own.
+         *
+         * One number, shared by both platforms, because a `5000`
+         * hard-coded twice is exactly how a web fade and an Android
+         * fade drift apart. Long enough to read a sentence, short
+         * enough to stop mattering.
+         */
+        const val TOAST_MS = 5_000L
+    }
+
 }
 
 /**

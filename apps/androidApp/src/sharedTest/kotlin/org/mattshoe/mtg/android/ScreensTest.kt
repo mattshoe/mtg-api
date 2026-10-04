@@ -54,6 +54,14 @@ import org.mattshoe.mtg.core.View
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import android.content.res.Configuration
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.test.onNodeWithContentDescription
+import kotlin.test.assertNull
 
 /**
  * The Android screens, on a device, clicked.
@@ -426,6 +434,105 @@ class ScreensTest {
     private fun deck() = Deck("alela", "Alela", "matt", "Alela, Artful Provocateur", "UWB", 3, null)
 
     private fun deckCard() = DeckCard("Sol Ring", 1, null, 1)
+
+    @Test
+    fun theToastFadesOnItsOwnAfterFiveSeconds() {
+        val held = shellToast(AppState().say("Added 3 cards"))
+        rule.onNodeWithText("Added 3 cards").assertExists()
+
+        advance(AppState.TOAST_MS)
+
+        assertNull(held.value.toast, "the toast outlived its five seconds")
+        rule.onNodeWithText("Added 3 cards").assertDoesNotExist()
+    }
+    @Test
+    fun tappingTheToastDismissesItEarly() {
+        val held = shellToast(AppState().say("Added 3 cards"))
+
+        rule.onNodeWithContentDescription("Dismiss").performClick()
+        rule.waitForIdle()
+
+        assertNull(held.value.toast, "a tap on the toast did not clear it")
+        rule.onNodeWithText("Added 3 cards").assertDoesNotExist()
+    }
+    @Test
+    fun aSecondToastRearmsTheFadeRatherThanInheritingIt() {
+        val held = shellToast(AppState().say("First"))
+        rule.onNodeWithText("First").assertExists()
+
+        // Four of the first toast's five seconds — not due yet.
+        advance(4_000)
+        rule.onNodeWithText("First").assertExists()
+
+        // A second toast lands before the first one went on its own.
+        held.value = held.value.say("Second")
+        rule.waitForIdle()
+        rule.onNodeWithText("Second").assertExists()
+
+        // Four seconds after the SECOND arrived — eight since the
+        // first. A fade that inherited the old toast's one second of
+        // remaining time, instead of restarting, would already have
+        // cleared this.
+        advance(4_000)
+        rule.onNodeWithText("Second").assertExists()
+        assertEquals("Second", held.value.toast, "the second toast's fade did not restart")
+
+        // The full five seconds after the second toast does clear it.
+        advance(1_200)
+        assertNull(held.value.toast)
+        rule.onNodeWithText("Second").assertDoesNotExist()
+    }
+    @Test
+    fun theToastDoesNotBlockAPressOnAControlUnderneath() {
+        // Wide, so the toast docks bottom-end rather than top-center —
+        // away from the nav row this test presses, the way a control
+        // the toast is not actually covering should always still be
+        // reachable regardless of where the tray itself sits.
+        val held = shellToast(AppState().say("Added 3 cards"), wide = true)
+        rule.onNodeWithText("Added 3 cards").assertExists()
+
+        // The tray itself carries no background and no click handler;
+        // only the chip inside it does. A tap elsewhere on the screen,
+        // toast showing or not, has to keep reaching whatever is
+        // really there underneath it.
+        rule.onNodeWithText("Decks").performClick()
+        rule.waitForIdle()
+
+        assertEquals(View.DECKS, held.value.view, "a control under the toast tray did not get the tap")
+    }
+    /**
+     * A real shell over state the test can also push into from the
+     * outside — not just from a click — so "a second toast arrives
+     * while the first is still showing" can be simulated the way the
+     * real app would produce it: nothing in the UI itself fires a
+     * second toast, the app above `AppShell` does.
+     */
+    private fun shellToast(start: AppState, wide: Boolean = false): MutableState<AppState> {
+        lateinit var held: MutableState<AppState>
+        content {
+            held = remember { mutableStateOf(start) }
+            val shell = @androidx.compose.runtime.Composable {
+                AppShell(held.value, { held.value = it }, {}, {}, {}, {}, {}, {})
+            }
+            if (wide) {
+                // Wide enough that the toast docks bottom-end instead
+                // of top-center, so this covers the other half of
+                // `ToastTray`'s own placement switch.
+                val forced = Configuration(LocalConfiguration.current).apply { screenWidthDp = 800 }
+                CompositionLocalProvider(LocalConfiguration provides forced) { shell() }
+            } else {
+                shell()
+            }
+        }
+        return held
+    }
+    /** Jump the virtual clock forward without losing a click's own gesture. */
+    private fun advance(millis: Long) {
+        rule.mainClock.autoAdvance = false
+        rule.mainClock.advanceTimeBy(millis)
+        rule.mainClock.autoAdvance = true
+        rule.waitForIdle()
+    }
 }
 
 /** `assertDoesNotExist`, spelled so the intent reads at the call site. */

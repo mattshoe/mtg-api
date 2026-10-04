@@ -155,7 +155,7 @@ object MtgApp {
     private fun fadeToast(mine: String) {
         toastJob?.cancel()
         toastJob = scope.launch {
-            delay(TOAST_MS)
+            delay(AppState.TOAST_MS)
             if (app.toast == mine) app = app.say(null)
         }
     }
@@ -167,7 +167,6 @@ object MtgApp {
      * field changes on every keystroke.
      */
     /** Long enough to read a sentence, short enough to stop mattering. */
-    private val TOAST_MS = 5_000L
 
     private val searchDebounceMs = 250L
     private var searchJob: Job? = null

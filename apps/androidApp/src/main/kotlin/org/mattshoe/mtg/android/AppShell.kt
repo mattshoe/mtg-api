@@ -51,6 +51,20 @@ import org.mattshoe.mtg.core.Route
 import org.mattshoe.mtg.core.ShareWhat
 import org.mattshoe.mtg.core.Tweak
 import org.mattshoe.mtg.core.View
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import kotlinx.coroutines.delay
+import org.mattshoe.mtg.core.Design
 
 /**
  * The shell: the nav, the lock, whichever screen is current, and
@@ -166,10 +180,11 @@ fun AppShell(
         }
     }
 
-    Column(
-        Modifier.fillMaxSize()
-            // Otherwise the tab row sits under the clock.
-            .safeDrawingPadding()
+    Box(Modifier.fillMaxSize()) {
+        Column(
+            Modifier.fillMaxSize()
+                // Otherwise the tab row sits under the clock.
+                .safeDrawingPadding()
             .focusRequester(keys)
             .focusable()
             // Bubbling, not preview, on purpose: a focused text field
@@ -177,103 +192,111 @@ fun AppShell(
             // typing" rule the web gets from checking the target's tag.
             .onKeyEvent { event -> event.handledBy(state, onState) },
     ) {
-        Row(
-            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(8.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            // Only the views the lock allows. Gated ones are absent, not
-            // greyed out — the same as the web.
-            state.admin.visible.forEach { view ->
-                NavPill(view.label, state.view == view) { onState(state.navigate(view)) }
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                // Only the views the lock allows. Gated ones are absent, not
+                // greyed out — the same as the web.
+                state.admin.visible.forEach { view ->
+                    NavPill(view.label, state.view == view) { onState(state.navigate(view)) }
+                }
+                Ghost(if (state.admin.unlocked) "Lock" else "Unlock") {
+                    if (state.admin.unlocked) onState(state.copy(admin = state.admin.lock()).navigate(state.route))
+                    else onState(state.opening(Overlay.UNLOCK))
+                }
+                Ghost("Find") {
+                    onState(state.opening(Overlay.PALETTE).copy(palette = state.palette.opened()))
+                }
             }
-            Ghost(if (state.admin.unlocked) "Lock" else "Unlock") {
-                if (state.admin.unlocked) onState(state.copy(admin = state.admin.lock()).navigate(state.route))
-                else onState(state.opening(Overlay.UNLOCK))
+
+            when (state.view) {
+                View.LIBRARY -> LibraryScreen(
+                    state = state.library,
+                    onState = { onState(state.copy(library = it)) },
+                    onSearch = onSearch,
+                    onOpen = onOpenCard,
+                    showFilters = showFilters,
+                    onToggleFilters = { showFilters = !showFilters },
+                    onExport = onExport,
+                    complete = state.complete,
+                    onName = { c ->
+                        onState(state.typedCardName(c))
+                        if (c.worthAsking) onLookup(c.term)
+                        onSearch()
+                    },
+                    onCheatsheet = { onState(state.opening(Overlay.CHEATSHEET)) },
+                    // Without this every facet list in the panel — types,
+                    // set types, layouts, frames, borders, the deck and
+                    // format dropdowns — renders empty on the phone while
+                    // the website fills them from the same state.
+                    facets = state.facets,
+                    gridState = libraryGridState,
+                )
+
+                View.DECKS -> DecksScreen(
+                    state = state.decks,
+                    scrollState = deckScrollState,
+                    onOpen = { onOpenDeck(it.slug) },
+                    onClose = { onState(state.navigate(Route(View.DECKS))) },
+                    admin = state.admin.unlocked,
+                    onNew = { onState(state.opening(Overlay.NEW_DECK)) },
+                    onEdit = { onEditDeck(it.slug) },
+                    onDisassemble = { onAskDisassemble(it.slug) },
+                    onRename = { onAskRename(it.slug) },
+                    onOpenCard = { card, owner -> onOpenNamed(card.name, card.nameNorm, owner) },
+                    onAddCard = onAddCard,
+                    onTweak = onTweak,
+                    onShare = onShare,
+                )
+
+                View.STATS -> StatsScreen(state.stats) { owner: Owner? ->
+                    onState(state.copy(stats = state.stats.scopedTo(owner).loading()))
+                }
+
+                View.CONSOLE -> ConsoleScreen(
+                    state = state.console,
+                    onState = { onState(state.copy(console = it)) },
+                    onRun = onRunSql,
+                    onCheatsheet = { onState(state.opening(Overlay.CHEATSHEET)) },
+                )
+
+                View.LOGS -> LogsScreen(state.logs) { onState(state.copy(logs = it)) }
+
+                // A card is a destination here too, so the system back
+                // gesture leaves it the way it leaves any other screen.
+                View.CARD -> CardSheet(
+                    card = state.card ?: org.mattshoe.mtg.core.CardDetail(name = state.route.rest).loading(),
+                    onClose = { onState(state.leaveCard()) },
+                    // Reading a deck a card at a time, the same three
+                    // controls the web page puts under the card.
+                    previous = state.previousCard,
+                    next = state.nextCard,
+                    place = state.cardPlace,
+                    onStep = { c -> onOpenNamed(c.name, c.nameNorm, "") },
+                )
+
+                View.ENTRY -> MassEntryScreen(
+                    state = state.entry,
+                    onState = { onState(state.copy(entry = it)) },
+                    onPreview = onPreviewEntry,
+                    onApply = onApplyEntry,
+                    history = state.history,
+                    onPickFile = onPickFile,
+                    onReuse = onReuse,
+                    onClearHistory = onClearHistory,
+                )
             }
-            Ghost("Find") {
-                onState(state.opening(Overlay.PALETTE).copy(palette = state.palette.opened()))
-            }
+
         }
 
-        when (state.view) {
-            View.LIBRARY -> LibraryScreen(
-                state = state.library,
-                onState = { onState(state.copy(library = it)) },
-                onSearch = onSearch,
-                onOpen = onOpenCard,
-                showFilters = showFilters,
-                onToggleFilters = { showFilters = !showFilters },
-                onExport = onExport,
-                complete = state.complete,
-                onName = { c ->
-                    onState(state.typedCardName(c))
-                    if (c.worthAsking) onLookup(c.term)
-                    onSearch()
-                },
-                onCheatsheet = { onState(state.opening(Overlay.CHEATSHEET)) },
-                // Without this every facet list in the panel — types,
-                // set types, layouts, frames, borders, the deck and
-                // format dropdowns — renders empty on the phone while
-                // the website fills them from the same state.
-                facets = state.facets,
-                gridState = libraryGridState,
-            )
-
-            View.DECKS -> DecksScreen(
-                state = state.decks,
-                scrollState = deckScrollState,
-                onOpen = { onOpenDeck(it.slug) },
-                onClose = { onState(state.navigate(Route(View.DECKS))) },
-                admin = state.admin.unlocked,
-                onNew = { onState(state.opening(Overlay.NEW_DECK)) },
-                onEdit = { onEditDeck(it.slug) },
-                onDisassemble = { onAskDisassemble(it.slug) },
-                onRename = { onAskRename(it.slug) },
-                onOpenCard = { card, owner -> onOpenNamed(card.name, card.nameNorm, owner) },
-                onAddCard = onAddCard,
-                onTweak = onTweak,
-                onShare = onShare,
-            )
-
-            View.STATS -> StatsScreen(state.stats) { owner: Owner? ->
-                onState(state.copy(stats = state.stats.scopedTo(owner).loading()))
-            }
-
-            View.CONSOLE -> ConsoleScreen(
-                state = state.console,
-                onState = { onState(state.copy(console = it)) },
-                onRun = onRunSql,
-                onCheatsheet = { onState(state.opening(Overlay.CHEATSHEET)) },
-            )
-
-            View.LOGS -> LogsScreen(state.logs) { onState(state.copy(logs = it)) }
-
-            // A card is a destination here too, so the system back
-            // gesture leaves it the way it leaves any other screen.
-            View.CARD -> CardSheet(
-                card = state.card ?: org.mattshoe.mtg.core.CardDetail(name = state.route.rest).loading(),
-                onClose = { onState(state.leaveCard()) },
-                // Reading a deck a card at a time, the same three
-                // controls the web page puts under the card.
-                previous = state.previousCard,
-                next = state.nextCard,
-                place = state.cardPlace,
-                onStep = { c -> onOpenNamed(c.name, c.nameNorm, "") },
-            )
-
-            View.ENTRY -> MassEntryScreen(
-                state = state.entry,
-                onState = { onState(state.copy(entry = it)) },
-                onPreview = onPreviewEntry,
-                onApply = onApplyEntry,
-                history = state.history,
-                onPickFile = onPickFile,
-                onReuse = onReuse,
-                onClearHistory = onClearHistory,
-            )
+        // Floated over the screen rather than appended to the end of
+        // it, so it sits where this says and not wherever the current
+        // layout happened to run out — which on a phone was directly
+        // over the button you were reaching for.
+        state.toast?.let { message ->
+            ToastTray(message, onDismiss = { onState(state.say(null)) })
         }
-
-        state.toast?.let { Muted(it, Modifier.padding(16.dp)) }
     }
 
     // ------------------------------------------------------- overlays
@@ -423,4 +446,39 @@ private fun androidx.compose.ui.input.key.KeyEvent.handledBy(
         ?: return false
     onState(next)
     return true
+}
+
+@Composable
+private fun ToastTray(message: String, onDismiss: () -> Unit) {
+    val latest by rememberUpdatedState(message)
+    val onLatestDismiss by rememberUpdatedState(onDismiss)
+
+    LaunchedEffect(message) {
+        delay(AppState.TOAST_MS)
+        if (latest == message) onLatestDismiss()
+    }
+
+    val narrow = LocalConfiguration.current.screenWidthDp < 600
+    Box(
+        Modifier.fillMaxSize().padding(16.dp),
+        contentAlignment = if (narrow) Alignment.TopCenter else Alignment.BottomEnd,
+    ) {
+        Row(
+            Modifier
+                .widthIn(max = 380.dp)
+                .background(Bg2, RadiusSm)
+                .border(1.5.dp, Accent, RadiusSm)
+                .semantics {
+                    contentDescription = "Dismiss"
+                    role = Role.Button
+                }
+                .clickable(onClick = onDismiss)
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(message, Modifier.weight(1f), color = Ink, fontSize = Design.SMALL.sp)
+            Text("×", color = Ink2, fontSize = 17.sp)
+        }
+    }
 }
