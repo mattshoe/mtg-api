@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { classify, judge, PRODUCTION, TESTS } from '../scripts/tdd-rules.mjs'
+import { classify, judge, afterTheRule, RULE_COMMIT, PRODUCTION, TESTS } from '../scripts/tdd-rules.mjs'
 
 // The TDD gate, tested before it existed, which is the only way it
 // could have been written without hypocrisy.
@@ -168,5 +168,40 @@ describe('judge', () => {
     })
     expect(v.failed).toBe(false)
     expect(v.exempt).toContain('revert')
+  })
+})
+
+describe('afterTheRule', () => {
+  // The rule landed in a50b33d. Judging the 100-odd commits that
+  // came before it would fail the first pull request it ever ran on,
+  // for commits written under no such rule — which is not enforcement,
+  // it is noise, and noise is how a gate gets switched off.
+  //
+  // The boundary is one commit, named, and nothing before it is
+  // judged. Everything from it onward is, with no way to opt a later
+  // commit out except the logged `TDD-exempt:` trailer.
+
+  it('judges nothing before the commit that introduced the rule', () => {
+    const all = ['old1', 'old2', RULE_COMMIT, 'new1']
+    const descendants = [RULE_COMMIT, 'new1']
+    expect(afterTheRule(all, descendants)).toEqual([RULE_COMMIT, 'new1'])
+  })
+
+  it('judges everything when the rule commit is not in the history at all', () => {
+    // A repository checked out before the rule existed, or a range
+    // that does not contain it. Judging everything is the safe
+    // direction: the gate erring strict is recoverable, the gate
+    // erring silent is not.
+    const all = ['a', 'b']
+    expect(afterTheRule(all, null)).toEqual(['a', 'b'])
+  })
+
+  it('judges nothing when every commit in the range predates the rule', () => {
+    expect(afterTheRule(['old1', 'old2'], [RULE_COMMIT, 'new1'])).toEqual([])
+  })
+
+  it('names a real commit as the boundary', () => {
+    // A typo here would silently switch the gate off for everything.
+    expect(RULE_COMMIT).toMatch(/^[0-9a-f]{40}$/)
   })
 })

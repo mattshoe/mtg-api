@@ -58,6 +58,33 @@ export function classify(path) {
   return null
 }
 
+/**
+ * The commit that introduced the rule, in `CLAUDE.md`.
+ *
+ * Nothing before it is judged. The repository has a hundred commits
+ * that predate the discipline, and failing a pull request for commits
+ * written under no such rule is not enforcement — it is noise, and
+ * noise is how a gate ends up switched off. Everything from this
+ * commit onward is judged, with no way out but the logged
+ * `TDD-exempt:` trailer.
+ */
+export const RULE_COMMIT = 'a50b33da1c8fb8f0195326d43b605935003146af'
+
+/**
+ * The commits in `all` that are worth judging.
+ *
+ * `descendants` is the rule commit and everything after it, as git
+ * reports it, or `null` when the rule commit is not in this history
+ * at all — a shallow clone, or a range that predates it. In that case
+ * everything is judged: a gate erring strict is recoverable, a gate
+ * erring silent is not.
+ */
+export function afterTheRule(all, descendants) {
+  if (!descendants) return all
+  const allowed = new Set(descendants)
+  return all.filter((sha) => allowed.has(sha))
+}
+
 const RED_LINE = /^\s*Red:\s*\S+/im
 const EXEMPT_LINE = /^\s*TDD-exempt:\s*(.*)$/im
 const REVERT = /^\s*Revert "/m

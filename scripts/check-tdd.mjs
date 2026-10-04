@@ -8,7 +8,7 @@
 // Usage: check-tdd.mjs <base>..<head>   (default: origin/main..HEAD)
 
 import { execFileSync } from 'node:child_process'
-import { judge } from './tdd-rules.mjs'
+import { judge, afterTheRule, RULE_COMMIT } from './tdd-rules.mjs'
 
 function git(args) {
   return execFileSync('git', args, { encoding: 'utf8' })
@@ -52,7 +52,30 @@ function main() {
     return
   }
 
-  const verdicts = shas.map((sha) => judge(read(sha)))
+  // Anything older than the rule itself is left alone. See
+  // `RULE_COMMIT`.
+  let descendants = null
+  try {
+    git(['cat-file', '-e', `${RULE_COMMIT}^{commit}`])
+    const out = git(['log', '--format=%H', `${RULE_COMMIT}~1..HEAD`]).trim()
+    descendants = out ? out.split('\n') : []
+  } catch {
+    console.log('check-tdd: the rule commit is not in this history; judging everything')
+  }
+  const judged = afterTheRule(shas, descendants)
+  const skippedOld = shas.length - judged.length
+  if (skippedOld > 0) {
+    console.log(
+      `check-tdd: ${skippedOld} commit(s) predate the rule (${RULE_COMMIT.slice(0, 9)}) ` +
+        'and are not judged',
+    )
+  }
+  if (judged.length === 0) {
+    console.log('check-tdd: nothing in this range postdates the rule, nothing to check')
+    return
+  }
+
+  const verdicts = judged.map((sha) => judge(read(sha)))
   const bad = verdicts.filter((v) => v.failed)
   const exempt = verdicts.filter((v) => v.exempt)
 
@@ -67,9 +90,9 @@ function main() {
   }
 
   if (bad.length === 0) {
-    const judged = verdicts.filter((v) => !v.skipped).length
+    const n = verdicts.filter((v) => !v.skipped).length
     console.log(
-      `\ncheck-tdd: ${judged} commit(s) judged in ${range}, all of them ` +
+      `\ncheck-tdd: ${n} commit(s) judged in ${range}, all of them ` +
         `test-first as far as a machine can tell.`,
     )
     return
