@@ -157,13 +157,16 @@ class DeckStatsParityTest {
 
     @Test
     fun allSixHeadlineFiguresAreDrawn() {
+        // `.figure .k { text-transform: uppercase }` on the web — the
+        // visible label is shouted; the accessible name (asserted
+        // elsewhere by content description) stays sentence case.
         show(deck())
-        rule.onNodeWithText("cards").assertExists()
-        rule.onNodeWithText("lands · 55%").assertExists()
-        rule.onNodeWithText("avg mana").assertExists()
-        rule.onNodeWithText("spells").assertExists()
-        rule.onNodeWithText("value").assertExists()
-        rule.onNodeWithText("not owned").assertExists()
+        rule.onNodeWithText("CARDS").assertExists()
+        rule.onNodeWithText("LANDS · 55%").assertExists()
+        rule.onNodeWithText("AVG MANA").assertExists()
+        rule.onNodeWithText("SPELLS").assertExists()
+        rule.onNodeWithText("VALUE").assertExists()
+        rule.onNodeWithText("NOT OWNED").assertExists()
     }
 
     @Test
@@ -623,7 +626,8 @@ class DeckStatsParityTest {
     @Test
     fun theTypeBarsAreTheDecksGroupsWithTheirCounts() {
         show(deck())
-        rule.onNodeWithText("Card types").assertExists()
+        // `.stats-card > h3 { text-transform: uppercase }` on the web.
+        rule.onNodeWithText("CARD TYPES").assertExists()
         assertEquals(
             listOf("Creatures", "Sorceries", "Lands", "Not in the collection"),
             stats(deck()).types.map { it.label },
@@ -637,7 +641,7 @@ class DeckStatsParityTest {
     @Test
     fun theRarityBarsRunCommonToMythic() {
         show(deck())
-        rule.onNodeWithText("Rarity").assertExists()
+        rule.onNodeWithText("RARITY").assertExists()
         assertEquals(listOf("Rare", "Mythic"), stats(deck()).rarities.map { it.label })
         assertTrue(exists("hbar-Rare") && exists("hbar-Mythic"))
     }
