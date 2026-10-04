@@ -57,34 +57,56 @@ class MainActivityFacetsTest {
 
 
     /**
-     * Drain the main looper, which is where `lifecycleScope.launch`
-     * puts the load.
+     * Drain the main looper and wait for the load, in a loop.
      *
-     * This used to swap in an unconfined test dispatcher instead.
-     * That worked when the class ran alone and failed when it ran
-     * after the rest of the suite, because `createComposeRule` also
-     * owns the main dispatcher and the two fought over it — a test
-     * that passes by itself and fails in company is worse than one
-     * that just fails. Idling Robolectric's own looper asks the
-     * framework to finish what it has queued and takes nothing over.
+     * Three previous attempts at this test's flakiness fought over
+     * which dispatcher should own `Dispatchers.Main`. The actual
+     * problem is a thread, not a dispatcher.
+     *
+     * `lifecycleScope.launch` normally resumes on
+     * `Dispatchers.Main.immediate`, so in production the whole load
+     * — including the `app = app.copy(...)` at the end of it — runs
+     * on the main thread. The moment `setUp` swaps in an unconfined
+     * dispatcher, that guarantee is gone: Ktor's engine suspends on
+     * its own dispatcher and the continuation resumes on whichever
+     * background thread finished the call. So the write lands off the
+     * main thread, and whether the test sees it depends on timing.
+     * Under load — two other Gradle builds on the machine — it
+     * sometimes did not.
+     *
+     * `runBlocking { join() }` looked like it fixed that and could
+     * not, because joining from the main thread blocks the very
+     * looper the framework half of the load needs in order to finish.
+     * Draining and polling does both jobs: the looper keeps moving,
+     * and the coroutine is given real time to land. Bounded, so a
+     * genuine hang still fails rather than sitting here.
      */
     private fun settle(activity: MainActivity? = null) {
-        shadowOf(Looper.getMainLooper()).idle()
-        // Wait for the load itself rather than hoping a dispatcher ran
-        // it inline. That hope is what made this pass alone and fail
-        // after other classes had installed their own `Main`.
-        activity?.facetsJob?.let { kotlinx.coroutines.runBlocking { it.join() } }
-        shadowOf(Looper.getMainLooper()).idle()
+        val looper = shadowOf(Looper.getMainLooper())
+        val job = activity?.facetsJob
+        repeat(SETTLE_TRIES) {
+            looper.idle()
+            if (job == null || job.isCompleted) return
+            Thread.sleep(SETTLE_STEP_MS)
+        }
+        looper.idle()
     }
 
     @Before
     fun setUp() {
-        // Both halves are needed, and neither alone is enough.
-        // `lifecycleScope.launch` goes to `Dispatchers.Main`; an
-        // unconfined test dispatcher runs the fake network inline so
-        // there is something to find, and idling Robolectric's looper
-        // drains whatever the framework queued around it.
+        // `lifecycleScope.launch` goes to `Dispatchers.Main`, which
+        // under Robolectric is a paused looper that nothing in a plain
+        // JUnit test ever pumps. The unconfined dispatcher starts the
+        // load inline so there is something to wait for; `settle`
+        // then does the waiting properly. See the note there for why
+        // this half alone was never enough.
         Dispatchers.setMain(UnconfinedTestDispatcher())
+    }
+
+    private companion object {
+        /** Two seconds in total, which is twenty times the honest cost. */
+        const val SETTLE_TRIES = 200
+        const val SETTLE_STEP_MS = 10L
     }
 
     /**
@@ -172,7 +194,14 @@ class MainActivityFacetsTest {
         // failure on purpose, so without this the only thing this test
         // could ever say was "nothing arrived".
         realActivity.facetsError?.let { throw AssertionError("the facet load threw: $it", it) }
-        assertTrue(realActivity.facetsJob != null, "loadFacets never ran — facetsJob is still null after onCreate")
+        val job = realActivity.facetsJob
+        assertTrue(job != null, "loadFacets never ran — facetsJob is still null after onCreate")
+        // Four distinct stories used to arrive as the one sentence
+        // "facets never loaded": the load never started, it is still
+        // running, it was cancelled, or it failed. Each says its own
+        // name now.
+        assertTrue(job!!.isCompleted, "the facet load had not finished when the test looked")
+        assertTrue(!job.isCancelled, "the facet load was cancelled before it could finish")
         assertTrue(loaded.facets.loaded, "facets never loaded — app.facets.loaded is false after onCreate")
         assertTrue(loaded.facets.types.isNotEmpty(), "the type checklist's own list is empty")
         assertTrue(loaded.facets.layouts.isNotEmpty(), "layouts is empty")
