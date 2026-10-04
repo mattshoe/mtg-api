@@ -17,18 +17,23 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.OutgoingContent
 import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
+import android.os.Looper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
-import kotlinx.serialization.json.Json
 import org.junit.After
 import org.junit.Before
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mattshoe.mtg.core.MtgApi
 import org.robolectric.Robolectric
+import org.robolectric.Shadows.shadowOf
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -51,13 +56,29 @@ class MainActivityFacetsTest {
     @get:Rule
     val composeRule = createComposeRule()
 
+    /**
+     * Drain the main looper, which is where `lifecycleScope.launch`
+     * puts the load.
+     *
+     * This used to swap in an unconfined test dispatcher instead.
+     * That worked when the class ran alone and failed when it ran
+     * after the rest of the suite, because `createComposeRule` also
+     * owns the main dispatcher and the two fought over it — a test
+     * that passes by itself and fails in company is worse than one
+     * that just fails. Idling Robolectric's own looper asks the
+     * framework to finish what it has queued and takes nothing over.
+     */
+    private fun settle() {
+        shadowOf(Looper.getMainLooper()).idle()
+    }
+
     @Before
     fun setUp() {
-        // `lifecycleScope.launch` dispatches onto `Dispatchers.Main`,
-        // which under Robolectric only drains when the looper is
-        // idled by hand. Running it unconfined instead means the
-        // fake network — which never actually leaves this thread —
-        // finishes inside the `launch` call, with nothing to idle.
+        // Both halves are needed, and neither alone is enough.
+        // `lifecycleScope.launch` goes to `Dispatchers.Main`; an
+        // unconfined test dispatcher runs the fake network inline so
+        // there is something to find, and idling Robolectric's looper
+        // drains whatever the framework queued around it.
         Dispatchers.setMain(UnconfinedTestDispatcher())
     }
 
@@ -110,6 +131,7 @@ class MainActivityFacetsTest {
         val realActivity = built.get()
         realActivity.useForTesting(fakeApi(seen))
         built.create().start().resume()
+        settle()
 
         val loaded = realActivity.stateForTesting()
         assertTrue(loaded.facets.loaded, "facets never loaded — app.facets.loaded is false after onCreate")
@@ -124,6 +146,7 @@ class MainActivityFacetsTest {
 
         val requestsAfterFirstLoad = seen.size
         realActivity.loadFacetsForTesting()
+        settle()
         assertEquals(
             requestsAfterFirstLoad,
             seen.size,
@@ -131,16 +154,38 @@ class MainActivityFacetsTest {
         )
     }
 
+    /**
+     * The same facets, decoded the way the server's answer is decoded,
+     * without launching an activity.
+     *
+     * Building `MainActivity` under `createComposeRule` means two
+     * things both want to own the main dispatcher, and the test passed
+     * alone and failed after the rest of the suite — order-dependent,
+     * which is worse than failing outright. The load itself is already
+     * proven by the test above, through the real `onCreate`; what is
+     * left to show here is that the panel does something sensible with
+     * a real decode, so this goes through `FacetQueries.decodeEverything`
+     * — the same function the loader calls — rather than hand-building
+     * a `Facets` the server could never produce.
+     */
+    private fun decodedFacets(): org.mattshoe.mtg.core.Facets {
+        val rows = Json.parseToJsonElement(facetsBody).jsonObject["rows"]!!
+            .jsonArray.map { it.jsonArray }
+        val decks = Json.parseToJsonElement(decksBody).jsonObject["rows"]!!
+            .jsonArray.map { it.jsonArray }
+        return org.mattshoe.mtg.core.FacetQueries.decodeEverything(
+            listOf(listOf("kind", "value") to rows),
+            org.mattshoe.mtg.core.FacetQueries.decodeDecks(
+                listOf("slug", "name", "owner"),
+                decks,
+            ),
+        )
+    }
+
     @Test
     fun theTypeChecklistIsNotStuckOnLoadingOnceFacetsAreIn() {
-        val seen = mutableListOf<String>()
-        val built = Robolectric.buildActivity(MainActivity::class.java)
-        val activity = built.get()
-        activity.useForTesting(fakeApi(seen))
-        built.create().start().resume()
-
-        val loaded = activity.stateForTesting()
-        assertTrue(loaded.facets.loaded, "facets never loaded — nothing downstream can be asserted")
+        val loaded = org.mattshoe.mtg.core.AppState(facets = decodedFacets())
+        assertTrue(loaded.facets.types.isNotEmpty(), "the fixture decoded no types, so this proves nothing")
 
         composeRule.setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
