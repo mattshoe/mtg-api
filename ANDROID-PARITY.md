@@ -1,5 +1,18 @@
 # Android against the website
 
+**Everything in this report is done.** Sections 1, 2, 3 and 4 are
+closed, both web-side bugs are fixed, and the design differences in
+section 5 are settled — the three Matt ruled on are built, and the
+drag-and-drop zone is deliberately skipped because a phone has no drag
+source. The one thing left open is 3.2, which was never a parity gap:
+the card page shows no mana cost, type line, oracle text,
+power/toughness or flavour on *either* platform, because `CardDetail`
+has no fields for them. That is a missing feature, and Matt has not
+asked for it.
+
+The findings are kept below as written, in the present tense they were
+written in. They are a record of what was wrong, not a to-do list.
+
 Thirty-nine single-feature audits, one agent each, web as the
 reference. Every finding below was either measured on a running build
 or read out of both sources with a file and line; "looks different"
@@ -183,6 +196,38 @@ present on one platform and not the other, the curve's gradient and its
 5dp against 6px bar gap, thumbnail radius, the two-line card name, the
 pager's left alignment, the Reset button's weight, and the line-count
 pluralisation in the edit dialog.
+
+## What the work said about the tests
+
+The audit's own lesson was that four separate bugs survived because a
+test mounted a component alone. Everything below that line was written
+before the fixes. Doing them added four more lessons, all of which
+cost real time:
+
+- **A killed Gradle task leaves the previous run's XML on disk.** The
+  wrapper then reports yesterday's green. "356 tests, 0 failures" was
+  read out of a run that never happened, and three separate agents
+  were caught by it. Never read a count without confirming the build
+  succeeded.
+- **A hung test leaves no XML at all**, so the XML can never name it.
+  `build/test-order.log` writes a START and an END per test; a START
+  with no END is the culprit. That found a twenty-minute hang in one
+  run after two blind ones.
+- **`ComposeRootRegistry` never shrinks on its own** and every
+  `isIdleNow` copies the whole set, so a long suite grinds to a halt
+  around test 200. `forkEvery(4)` is the fix and must stay.
+- **A `needsRealRendering` test has never run.** It skips on the JVM,
+  so it is unproven code, not coverage. Two landed green and were
+  simply wrong — one called `onRoot()` with a dialog open, where
+  there are two roots; one sized its fixture to Robolectric's 470dp
+  screen, which a real 808dp phone does not overflow. Run
+  `npm run test:android` before believing a gated test.
+
+And one that generalises the original lesson rather than repeating it:
+the four share-menu tests in `DecksParityTest` all pass against the
+inline menu, because every one of them asks what the menu *says* and
+none asked where it was. A test can mount the right thing and still
+be pointed at the wrong question.
 
 ## What the audit says about the tests
 
