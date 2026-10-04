@@ -8,17 +8,18 @@ name: apps
 # pages.yml runs the fast half of this — a red test there stops the
 # site going out — and this runs all of it including the emulator.
 on:
-  # Every merge to main, whatever it touched. The path filter that
-  # used to be here meant a merge to the Worker published no APK, so
-  # the phone could sit several versions behind the site with nothing
-  # saying so. Building an app that did not change costs a few
-  # minutes; noticing six weeks later that updates quietly stopped
-  # costs more.
-  push:
-    branches: [main]
-  # No path filter on a pull request either. These are required
-  # checks, and a required check that is skipped never reports — the
-  # pull request waits for it forever.
+  # Pull requests only.
+  #
+  # This used to run on pushes to main as well, which meant merging
+  # re-ran the entire matrix — emulator included, twenty minutes of it
+  # — against a tree the pull request had just finished testing, before
+  # the release was allowed to start. The gate is the pull request.
+  # Merging is for shipping, and `release.yml` does that without
+  # asking the same questions twice.
+  #
+  # No path filter: these are required checks, and a required check
+  # that is skipped never reports, so the pull request waits for it
+  # forever.
   pull_request:
   workflow_dispatch:
 
@@ -219,101 +220,3 @@ jobs:
   #
   # Only from main, and only behind the tests above: shipping a build
   # that failed its own suite to a phone is worse than not shipping.
-  release:
-    runs-on: ubuntu-latest
-    needs: [shared, web, android]
-    # Dispatch as well as push, so a release can be re-cut by hand
-    # without inventing a commit — the key or the runner having been
-    # the thing that went wrong, not the code.
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      # No key, no APK — but not a red build either. Android refuses
-      # to update an app signed with a different key, so the only
-      # alternatives are "publish nothing" and "publish something
-      # nobody can install over the top". It says so loudly on every
-      # run instead of failing, so main stays honest about the tests
-      # rather than about a missing secret.
-      - name: Is the signing key here
-        id: key
-        env:
-          STORE: ${{ secrets.MTG_ANDROID_KEYSTORE_BASE64 }}
-        run: |
-          if [ -z "$STORE" ]; then
-            echo "have=no" >> "$GITHUB_OUTPUT"
-            echo "::warning::No APK published: MTG_ANDROID_KEYSTORE_BASE64 is not set." \
-                 "Android will not update an app signed with a different key, so this" \
-                 "job will not substitute one. See the README for the three secrets."
-            {
-              echo "### Android app not published"
-              echo
-              echo "The signing key is not available to this build, so no APK was"
-              echo "produced. The Download button still serves the last release."
-              echo "Add \`MTG_ANDROID_KEYSTORE_BASE64\`, \`MTG_ANDROID_KEYSTORE_PASSWORD\`"
-              echo "and \`MTG_ANDROID_KEY_ALIAS\` — see the README."
-            } >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "have=yes" >> "$GITHUB_OUTPUT"
-          fi
-
-      - uses: actions/setup-java@v4
-        if: steps.key.outputs.have == 'yes'
-        with:
-          distribution: temurin
-          java-version: '17'
-      - uses: gradle/actions/setup-gradle@v4
-        if: steps.key.outputs.have == 'yes'
-
-      - name: Unpack the signing key
-        if: steps.key.outputs.have == 'yes' 
-        env:
-          STORE: ${{ secrets.MTG_ANDROID_KEYSTORE_BASE64 }}
-        run: echo "$STORE" | base64 -d > "$RUNNER_TEMP/mtg-release.jks"
-
-      # Commits on main only ever go up, so the code only ever goes up,
-      # which is the one thing Android insists on. The offset keeps it
-      # above the 4 that was last published by hand.
-      - name: Work out the version
-        if: steps.key.outputs.have == 'yes'
-        id: v
-        run: |
-          echo "code=$(( $(git rev-list --count HEAD) + 100 ))" >> "$GITHUB_OUTPUT"
-          echo "name=$(grep -oE 'versionName = System.getenv\("MTG_VERSION_NAME"\) \?: "[^"]+"' \
-            apps/androidApp/build.gradle.kts | grep -oE '"[0-9.]+"$' | tr -d '"')" >> "$GITHUB_OUTPUT"
-
-      - name: Build the APK
-        if: steps.key.outputs.have == 'yes'
-        working-directory: apps
-        env:
-          MTG_ANDROID_KEYSTORE: ${{ runner.temp }}/mtg-release.jks
-          MTG_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.MTG_ANDROID_KEYSTORE_PASSWORD }}
-          MTG_ANDROID_KEY_ALIAS: ${{ secrets.MTG_ANDROID_KEY_ALIAS }}
-          MTG_VERSION_CODE: ${{ steps.v.outputs.code }}
-          MTG_VERSION_NAME: ${{ steps.v.outputs.name }}
-        run: ./gradlew --no-daemon :androidApp:assembleRelease
-
-      - name: It has to actually be signed
-        if: steps.key.outputs.have == 'yes'
-        run: |
-          APK=$(find apps/androidApp/build/outputs/apk/release -name '*.apk' | head -1)
-          [ -n "$APK" ] || { echo "::error::no APK was produced"; exit 1; }
-          cp "$APK" mtg-collection.apk
-          # An unsigned APK installs on nothing. Fail here rather than
-          # publishing one to the Download button.
-          "$ANDROID_HOME"/build-tools/35.0.0/apksigner verify --print-certs mtg-collection.apk
-
-      - name: Publish it where the site looks for it
-        if: steps.key.outputs.have == 'yes'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          TAG="android-v${{ steps.v.outputs.name }}-${{ steps.v.outputs.code }}"
-          gh release create "$TAG" mtg-collection.apk \
-            --title "Android app ${{ steps.v.outputs.name }} (${{ steps.v.outputs.code }})" \
-            --notes "Built from ${{ github.sha }}. Install over the top; same signing key." \
-            --latest
