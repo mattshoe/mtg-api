@@ -32,6 +32,7 @@ import org.mattshoe.mtg.core.DisassembleState
 import org.mattshoe.mtg.core.EntryHistory
 import org.mattshoe.mtg.core.Export
 import org.mattshoe.mtg.core.ExportTo
+import org.mattshoe.mtg.core.FacetQueries
 import org.mattshoe.mtg.core.Found
 import org.mattshoe.mtg.core.Load
 import org.mattshoe.mtg.core.MtgApi
@@ -63,7 +64,7 @@ import java.time.Instant
  */
 class MainActivity : ComponentActivity() {
 
-    private val api = MtgApi()
+    private var api = MtgApi()
     private val scryfall = Scryfall()
     private val prefs by lazy { getSharedPreferences("mtg", Context.MODE_PRIVATE) }
     private val store: Store by lazy { PrefsStore(prefs) }
@@ -73,6 +74,23 @@ class MainActivity : ComponentActivity() {
     private var lookupJob: Job? = null
     private var findJob: Job? = null
     private var tweakJob: Job? = null
+
+    /**
+     * The seam a test reaches through, the same way the web's
+     * `useForTesting` does: nothing here changes what the app does,
+     * only what it talks to. Called before `onCreate` — real
+     * `MtgApi()` has already been constructed, but nothing has used
+     * it yet.
+     */
+    internal fun useForTesting(api: MtgApi) {
+        this.api = api
+    }
+
+    /** What `onCreate` landed, for a test that cannot see a private field. */
+    internal fun stateForTesting(): AppState = app
+
+    /** A second load, the way a config change or a re-entry would ask for one. */
+    internal fun loadFacetsForTesting() = loadFacets()
 
     /**
      * Everything, because a narrow list greys out the file you actually
@@ -91,6 +109,7 @@ class MainActivity : ComponentActivity() {
             history = EntryHistory.load(store),
         )
         loadFor(app)
+        loadFacets()
 
         setContent {
             MtgTheme {
@@ -287,6 +306,35 @@ class MainActivity : ComponentActivity() {
             }
 
             else -> Unit
+        }
+    }
+
+    /**
+     * The lists the filter panel offers, read once.
+     *
+     * The sibling of the web's `loadFacets` — same guard, same silent
+     * failure, same shape — so the phone's type checklist and deck
+     * picker fill from the collection instead of sitting empty
+     * forever. Launched once from `onCreate`, not from `loadFor`,
+     * because these lists do not change per screen and must not be
+     * refetched on every navigation.
+     */
+    private fun loadFacets() {
+        if (app.facets.loaded) return
+        lifecycleScope.launch {
+            try {
+                val all = FacetQueries.everything.map { api.query(it).let { r -> r.cols to r.rows } }
+                val d = api.query(FacetQueries.decks)
+                app = app.copy(
+                    facets = FacetQueries.decodeEverything(
+                        all,
+                        FacetQueries.decodeDecks(d.cols, d.rows),
+                    ),
+                )
+            } catch (e: Exception) {
+                // A panel with typed fields instead of checkbox lists is
+                // still a usable panel.
+            }
         }
     }
 
