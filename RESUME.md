@@ -44,12 +44,42 @@ agent finished. Check each for a commit, then merge it, run
 
 | item | branch | what |
 |---|---|---|
-| 1.3 | `android-parity-1-3-toast` | auto-dismiss after 5s, tap to dismiss, cannot swallow a press, off the bottom controls |
-| 1.4 | `parity/android-1-4-autocomplete-dismiss` | tap-outside / Back close the suggestion list |
+| 1.3 | `android-parity-1-3-toast` | **finished, not yet merged.** Auto-dismiss after 5s, tap to dismiss, docked top on a narrow screen. Its own report is honest that one of its four tests stayed green against the old code, because the old bare `Text` never consumed touches either. |
+| 1.4 | `parity/android-1-4-autocomplete-dismiss` | **finished, merge REVERTED — see below.** |
 | 2.1-2.3 | `worktree-agent-aa3e17db39725e327` | the web's dead CSS: `tr.bad`, `.chip.warn`, `.chip.off`, `.toast.*` |
 
 If a branch has no commit, the agent did not finish — reread the item
 in `ANDROID-PARITY.md` and relaunch it.
+
+### 1.4 needs rework before it can land
+
+The autocomplete-dismiss branch is good work and its own suite passed,
+but merging it here broke **13 Android screen tests** that have nothing
+to do with autocomplete — share menu, rename, add-a-card, scroll
+position, the Find button, facets. The failures are all
+`Failed to inject touch input`, `performScrollTo() failed` and
+`Failed to perform text input`, which is the signature of something
+swallowing pointer events app-wide rather than thirteen separate bugs.
+
+The likely cause is `AutocompleteDismissScope` — a watcher the branch
+installs at the screen root on `PointerEventPass.Initial` to notice
+taps outside the field. Core was unaffected (2124 green), so it is the
+Compose wrapper, not the shared `back()` change.
+
+The merge was aborted, not committed. To pick it up:
+
+1. Merge `parity/android-1-4-autocomplete-dismiss` again and expect
+   conflicts in `App.kt`, `BackTest.kt` and `AppShell.kt` — the branch
+   was cut from `main` and wrote its *own* `AppState.back()`, which
+   lacks this branch's `view == View.CARD` case (Matt's one-press back
+   fix). The merged order wants to be:
+   `complete.open` → `overlays.any` → `view == View.CARD` →
+   `decks.openSlug != null` → `view != View.DEFAULT` → null.
+2. `BackTest` is an add/add conflict — two whole classes of the same
+   name. Keep both sets; the agent's seven go in their own class.
+3. Then fix the pointer watcher so it observes without disturbing, and
+   do not trust the branch's own green — run the **whole** screens
+   suite, which is what caught this.
 
 ## The queue, in order
 
