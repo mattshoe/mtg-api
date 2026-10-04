@@ -232,9 +232,17 @@ data class AppState(
      *
      * The order is the one a browser's history produces, which is
      * what the website gets for free and the phone has to be told:
-     * take off whatever is on top, then leave a card the way its own
-     * Close does, then come out of an open deck, then back to the
-     * default view, then out.
+     * put the suggestion list away, then take off whatever is on top,
+     * then leave a card the way its own Close does, then come out of
+     * an open deck, then back to the default view, then out.
+     *
+     * The suggestion list goes first, and it goes first for the same
+     * reason an overlay does: it floats over the screen, and while it
+     * is up it is what a press is aimed at. Nothing used to ask about
+     * it at all — `dismissTop` has never heard of `complete` — so a
+     * press on Back with the card-name list open skipped it and acted
+     * on whatever was behind it instead: a deck closing, or the app
+     * leaving, while the suggestions stayed exactly where they were.
      *
      * A card is checked before a deck, and that ordering is the whole
      * point. Reading a card from inside a deck, the deck is still
@@ -245,6 +253,13 @@ data class AppState(
      * is the deck.
      */
     fun back(): AppState? = when {
+        // `closed()` and not a rebuilt `Completion`: closing has to
+        // leave the typed term alone. A press that handed back a whole
+        // new `Completion` would carry whatever term the frame it was
+        // built in happened to be drawing, which is how the web's
+        // version used to put a search you had just cleared back on
+        // the screen.
+        complete.open -> copy(complete = complete.closed())
         overlays.any -> dismissTop()
         view == View.CARD -> leaveCard()
         // Back to the list as a route, not just by emptying `decks`.

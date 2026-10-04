@@ -229,6 +229,12 @@ fun AppShell(
                         if (c.worthAsking) onLookup(c.term)
                         onSearch()
                     },
+                    // Close the list and nothing else — not
+                    // `typedCardName`, which would also hand the name
+                    // filter whatever term this frame drew, and not a
+                    // search either. The only thing a tap somewhere
+                    // else asked for is the list out of the way.
+                    onDismissName = { onState(state.copy(complete = state.complete.closed())) },
                     onCheatsheet = { onState(state.opening(Overlay.CHEATSHEET)) },
                     // Without this every facet list in the panel — types,
                     // set types, layouts, frames, borders, the deck and
