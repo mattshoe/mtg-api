@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -78,7 +79,11 @@ private val TileCrop = topBias(38)
 /** `.deck-hero img`: `object-position: center 34%`. */
 private val HeroCrop = topBias(34)
 
-/** `.deck-line .thumb img` and `.token .thumb img`: `object-position: center 32%`. */
+/**
+ * `.deck-line .thumb img`: `object-position: center 32%`. The token
+ * row's thumbnail is Android's own — the web draws tokens as pills
+ * with no art — and takes the same bias as the deck row it resembles.
+ */
 private val RowCrop = topBias(32)
 
 /**
@@ -386,9 +391,15 @@ private fun CardLine(
     ) {
         // `art_crop` is a landscape band; the square comes from this
         // box cropping it. `.deck-line .thumb` has a 1px border on
-        // the web, which Coil's own crop had nothing to match.
+        // the web, which Coil's own crop had nothing to match, and a
+        // 6px corner rather than the page's 10 — ten on a forty-pixel
+        // box takes a quarter of its width off each corner and the
+        // art reads as a circle with the sides flattened.
         Box(
-            Modifier.size(40.dp).background(Bg3, Radius).border(1.dp, Line, Radius).clip(Radius),
+            Modifier.size(40.dp)
+                .background(Bg3, RadiusThumb)
+                .border(1.dp, Line, RadiusThumb)
+                .clip(RadiusThumb),
         ) {
             card.art?.let {
                 AsyncImage(
@@ -646,6 +657,25 @@ private val CurveCap =
     androidx.compose.foundation.shape.RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)
 
 /**
+ * `.curve .bar`'s `linear-gradient(to top, var(--accent),
+ * color-mix(in srgb, var(--accent) 55%, var(--bg-3)))`.
+ *
+ * CSS's `to top` puts the first stop at the foot, so the bar is full
+ * accent where it stands and dimmed where it ends. Compose's
+ * `verticalGradient` reads the other way round, which is why the
+ * mixed colour is first here.
+ *
+ * It is not decoration. A flat gold column against a flat gold
+ * column beside it has one edge between them and nothing else; the
+ * ramp gives every bar a light foot and a dark head, so the shape of
+ * the curve reads as lightness rather than as eight rectangles of
+ * one colour.
+ */
+private val CurveFill = Brush.verticalGradient(
+    listOf(mix(Accent, Bg3, Design.CURVE_BAR_MIX), Accent),
+)
+
+/**
  * The curve, as columns. The web's `Curve`.
  *
  * Lands are not in it — they cost nothing and would put a third of
@@ -658,7 +688,10 @@ private fun Curve(s: org.mattshoe.mtg.core.DeckStats) {
     val most = s.curve.maxOfOrNull { it.value } ?: 0
     Row(
         Modifier.fillMaxWidth().height(CURVE_HEIGHT).padding(top = 10.dp).testTag("curve"),
-        horizontalArrangement = Arrangement.spacedBy(5.dp),
+        // `.curve { gap: 6px }`. Five was a dp narrower than the
+        // page's, which over eight columns is a chart eight dp wider
+        // with eight slightly fatter bars in it.
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.Bottom,
     ) {
         s.curve.forEach { bar ->
@@ -717,7 +750,17 @@ private fun Curve(s: org.mattshoe.mtg.core.DeckStats) {
                                 // web leaves a 2px stub so the chart
                                 // has a floor to read the rest against.
                                 .height(tall.coerceAtLeast(2.dp))
-                                .background(if (bar.value > 0) Accent else Bg3, CurveCap)
+                                // `.curve .col.none .bar` is flat
+                                // `--bg-3`: an empty column is a
+                                // floor to read the rest against and
+                                // not a bar with nothing in it.
+                                .then(
+                                    if (bar.value > 0) {
+                                        Modifier.background(CurveFill, CurveCap)
+                                    } else {
+                                        Modifier.background(Bg3, CurveCap)
+                                    },
+                                )
                                 .testTag("curve-bar-${bar.label}"),
                         )
                     }
@@ -774,15 +817,23 @@ private fun Colours(s: org.mattshoe.mtg.core.DeckStats) {
         Ring("Needs", s.pips, Modifier.weight(1f))
         Ring("Makes", s.sources, Modifier.weight(1f))
     }
+    // One caption, the web's `.sub`, and the splash warning is the last
+    // sentence of it rather than a line of its own in amber. The web
+    // appends it to the same text node; amber on the phone made it a
+    // second thing to read and said "wrong" in the one channel this
+    // collection's owner cannot see anyway — the sentence itself is
+    // what carries it.
     Line(
         "Pips the deck asks for, against cards that can produce them. " +
-            "Hybrid pips count for both halves.",
+            "Hybrid pips count for both halves." +
+            if (s.unsupported.isNotEmpty()) {
+                " No source for ${s.unsupported.joinToString(", ")}."
+            } else {
+                ""
+            },
         Ink3,
         Design.MINI,
     )
-    if (s.unsupported.isNotEmpty()) {
-        Line("No source for ${s.unsupported.joinToString(", ")}.", Warn, Design.MINI)
-    }
 }
 
 /**
@@ -995,7 +1046,12 @@ private fun TokenList(tokens: List<org.mattshoe.mtg.core.TokenCard>) {
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Box(Modifier.size(40.dp).background(Bg3, Radius).clip(Radius)) {
+                // The same 6px square as a deck row's. The web's
+                // `.token` is a pill with no picture in it at all, so
+                // there is no rule to copy here — this follows the
+                // thumbnail it sits closest to rather than the page
+                // radius, which rounded a 40dp box nearly round.
+                Box(Modifier.size(40.dp).background(Bg3, RadiusThumb).clip(RadiusThumb)) {
                     token.art?.let {
                         AsyncImage(
                             model = it,

@@ -107,9 +107,28 @@ val Info = c(Design.INFO)
  */
 val Scrim = c(0x9904060A)
 
+/** `color-mix(in srgb, a P%, b)`, as a Compose colour. */
+fun mix(a: Color, b: Color, shareOfA: Float): Color =
+    c(Design.mixSrgb(a.toArgbLong(), b.toArgbLong(), shareOfA))
+
+/**
+ * The four channels as `0xAARRGGBB`.
+ *
+ * Through the components rather than through `Color.value`, which is
+ * a packed `ULong` whose layout depends on the colour space.
+ */
+private fun Color.toArgbLong(): Long =
+    (0xFFL shl 24) or
+        ((red * 255f + 0.5f).toLong() shl 16) or
+        ((green * 255f + 0.5f).toLong() shl 8) or
+        (blue * 255f + 0.5f).toLong()
+
 val Radius = RoundedCornerShape(Design.RADIUS.dp)
 val RadiusSm = RoundedCornerShape(Design.RADIUS_SM.dp)
 val Pill = RoundedCornerShape(Design.RADIUS_PILL.dp)
+
+/** `.deck-line .thumb`: a 40px square of art, rounded by 6px and no more. */
+val RadiusThumb = RoundedCornerShape(Design.RADIUS_THUMB.dp)
 
 private val scheme = darkColorScheme(
     primary = Accent,
@@ -256,6 +275,18 @@ fun Primary(label: String, enabled: Boolean = true, onClick: () -> Unit) {
     )
 }
 
+/**
+ * `.btn { font-weight: 550 }`, which is not one of Material's named
+ * weights.
+ *
+ * Between Medium and SemiBold, and the website means the half step:
+ * at 500 "Reset everything" read as a label and at 600 it shouted
+ * next to the panel heading above it. `FontWeight` takes any value
+ * from 1 to 1000, so there is no reason to round it to one of the
+ * nine that have names.
+ */
+val ButtonWeight = FontWeight(550)
+
 /** `.btn`: bordered, a shade above the page. */
 @Composable
 fun Btn(label: String, enabled: Boolean = true, danger: Boolean = false, onClick: () -> Unit) {
@@ -268,7 +299,7 @@ fun Btn(label: String, enabled: Boolean = true, danger: Boolean = false, onClick
             .padding(horizontal = 14.dp, vertical = 8.dp),
         color = if (!enabled) Ink3 else if (danger) Bad else Ink,
         fontSize = 13.5.sp,
-        fontWeight = FontWeight.Medium,
+        fontWeight = ButtonWeight,
     )
 }
 
@@ -382,7 +413,13 @@ fun Field(
             fontSize = Design.BODY.sp,
             fontFamily = if (mono) androidx.compose.ui.text.font.FontFamily.Monospace else null,
         ),
-        placeholder = { Text(placeholder, color = Ink3, fontSize = Design.BODY.sp) },
+        // Blank means none at all, not an empty one. The web's
+        // `<textarea>`s mostly carry no `placeholder` attribute, and a
+        // slot holding an empty `Text` is a node on the screen and in
+        // the semantics tree that says nothing.
+        placeholder = placeholder.takeIf { it.isNotEmpty() }?.let {
+            { Text(it, color = Ink3, fontSize = Design.BODY.sp) }
+        },
         colors = OutlinedTextFieldDefaults.colors(
             focusedContainerColor = Bg,
             unfocusedContainerColor = Bg,

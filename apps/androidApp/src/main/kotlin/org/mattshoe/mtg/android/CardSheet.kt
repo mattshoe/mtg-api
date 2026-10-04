@@ -324,12 +324,17 @@ private fun Body(card: CardDetail) {
                 // than to the date in front of it. One text node, not
                 // two: the line is one sentence to anything reading it
                 // out, which is how it reads on the page as well.
+                //
+                // One space after the date, not two. The web writes
+                // `r.day + " "` into a text node, and HTML would
+                // collapse a second one anyway; Compose does not, so
+                // two here was a visibly wider gap than the page's.
                 buildAnnotatedString {
                     if (r.day.isNotEmpty()) {
                         withStyle(SpanStyle(color = Ink3, fontFamily = FontFamily.Monospace)) {
                             append(r.day)
                         }
-                        append("  ")
+                        append(" ")
                     }
                     append(r.body)
                 },
@@ -491,13 +496,33 @@ private fun Chip(l: Legality) {
         l.restricted -> Warn
         else -> Ink3
     }
+    // `.chip.mini.<tone>`, which is not what Android drew. The web
+    // leaves the face as the page's own colour and puts the tone on a
+    // one-pixel edge — the tone at 45% over `--line` — rounds it to a
+    // pill, sets 11px, and takes the body's weight. Android had a
+    // 16%-tinted lozenge with no edge at all, at 12sp, in Medium or
+    // SemiBold depending on the status: a different shape, a
+    // different size, a different weight and a fill the website has
+    // nowhere.
+    //
+    // `.chip.off` is the exception the stylesheet spells out: "not
+    // legal" is not a failure, so its edge stays `--line-2` like any
+    // ordinary chip and only the mark and the dimmed text separate it
+    // from the other three. That is deliberate — it is told apart by
+    // shape, not by which of three alarm colours is lightest.
+    val edged = l.legal || l.banned || l.restricted
     Text(
         l.chip,
         Modifier
-            .background(tone.copy(alpha = 0.16f), RadiusSm)
-            .padding(horizontal = 7.dp, vertical = 3.dp),
+            // Outermost on purpose: `Text` puts its own semantics
+            // inside the modifier chain, so the node carrying the
+            // text has the *unpadded* box. Measuring a chip's air
+            // needs a node that owns the padded one.
+            .testTag("legality-${l.formatLabel}")
+            .background(Bg, Pill)
+            .border(1.dp, if (edged) mix(tone, Line, Design.CHIP_EDGE_MIX) else Line2, Pill)
+            .padding(horizontal = 7.dp, vertical = 2.dp),
         color = tone,
-        fontSize = Design.MINI.sp,
-        fontWeight = if (l.legal) FontWeight.Medium else FontWeight.SemiBold,
+        fontSize = Design.TINY.sp,
     )
 }

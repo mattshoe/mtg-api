@@ -341,7 +341,12 @@ private fun Subject(card: DeckCard, kind: Tweak?) {
         // Which of the two cards in a swap this one is. In words: the
         // arrow in the summary line is the only other thing saying it,
         // and an arrow is not a label.
-        if (kind == Tweak.SWAP) Tag("going out", Warn)
+        //
+        // `.tag.mini` with no tone class, which is `var(--text-2)` —
+        // not `.tag.warn`. Leaving is not a warning, and amber here
+        // spent the one colour the rest of this sheet reserves for
+        // "something is wrong" on the ordinary half of a swap.
+        if (kind == Tweak.SWAP) Tag("going out")
     }
 }
 

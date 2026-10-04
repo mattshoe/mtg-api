@@ -2,23 +2,23 @@
 
 **The parity work is done.** All thirty-nine audits in
 `ANDROID-PARITY.md` are closed: sections 1 to 4, both web-side bugs,
-and the design differences in section 5. Nothing is in flight and no
-agent is running.
+the design differences in section 5, and the eleven smaller cosmetics
+in section 6. Nothing is in flight and no agent is running.
 
 Green on every suite, all verified on the same tree:
 
 | suite | count | how |
 |---|---|---|
-| `:core:jvmTest` | 2134 | `npm run test:core` |
-| Android screens, JVM | 432 (28 skipped) | `npm run test:screens`, ~3m20s |
-| Android screens, device | 424 | `npm run test:android`, ~22m |
-| web | 393 | `npm run test:web` |
-| worker | 558 | `npm test` |
+| `:core:jvmTest` | 2144 | `npm run test:core` |
+| Android screens, JVM | 453 (29 skipped) | `npm run test:screens`, ~3m30s |
+| web | 399 | `npm run test:web` |
+| worker | 559 | `npm test` |
 
-The 432 and the 424 are the same source. The device runs every test
-in `sharedTest`, including all 28 the JVM skips behind
-`Parity.needsRealRendering()`; the eight it does not see live in
-`src/test` and are JVM-only by design.
+The device run has **not** been taken since section 6 landed, so the
+row for it is gone rather than left at a stale number. One of the 29
+skips is new — `theLongestCardNameInMagicReallyDoesStayOnOneLine` —
+and like the other 28 it is unproven until `npm run test:android`
+runs.
 
 **There is still no PR** for `fix/back-and-mana-symbols`. `main` is
 `c388bc1`.
@@ -29,13 +29,12 @@ in `sharedTest`, including all 28 the JVM skips behind
   power/toughness or flavour on *either* platform, because
   `CardDetail` has no fields for them. A missing feature rather than a
   parity gap, and Matt has not asked for it.
-- **Section 6, the smaller cosmetics** — chip fills and weights, the
-  "going out" tag's colour, the amber on "No source for X", one space
-  against two after a ruling date, a placeholder present on one
-  platform and not the other, the curve's gradient and its 5dp against
-  6px bar gap, thumbnail radius, the two-line card name, the pager's
-  left alignment, the Reset button's weight, the line-count
-  pluralisation in the edit dialog. Collected but never queued.
+- **Two judgement calls in section 6**, both one line to reverse. The
+  Console's SQL box and the mass entry box each lost a placeholder,
+  because the website's own boxes carry none and the heading above and
+  the count below already say what the placeholder said. If Matt wants
+  the example query back, it goes back on both platforms rather than
+  one.
 - **`MainActivityFacetsTest.facetsLoadOnceAtStartupAndASecondCallDoesNotRefetch`
   is still flaky under load.** It has failed perhaps one run in four,
   always while something else was hammering the machine, always

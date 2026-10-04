@@ -79,7 +79,15 @@ fun DeckEditDialog(
                     value = state.list,
                     onValueChange = { onState(state.typeList(it)) },
                     modifier = Modifier.fillMaxWidth().height(220.dp),
-                    label = { Text("The 99 — ${state.lineCount} lines") },
+                    // "1 line", not "1 lines". The web's panel head
+                    // pluralises this count and the phone did not, so
+                    // a one-card paste read as a typo.
+                    label = {
+                        Text(
+                            "The 99 — ${state.lineCount} " +
+                                if (state.lineCount == 1) "line" else "lines",
+                        )
+                    },
                 )
                 state.plan?.takeIf { !state.stale }?.let { PlanSummary(it, state.saved) }
                 state.error?.let { ErrBox((listOf(it) + state.errors).joinToString("\n")) }

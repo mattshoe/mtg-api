@@ -61,7 +61,12 @@ fun ConsoleScreen(
             Field(
                 value = state.sql,
                 onValueChange = { onState(state.type(it)) },
-                placeholder = "SELECT name, qty FROM cards LIMIT 10",
+                // No placeholder. The web's box is a bare
+                // `TextArea` with none, and the Cheatsheet beside it
+                // is where an example query lives on both platforms —
+                // an example in the box reads as text somebody typed
+                // and left there.
+                placeholder = "",
                 modifier = Modifier.height(180.dp).testTag("sql"),
                 singleLine = false,
                 mono = true,
