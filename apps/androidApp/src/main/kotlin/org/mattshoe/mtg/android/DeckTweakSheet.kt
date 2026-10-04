@@ -3,11 +3,13 @@ package org.mattshoe.mtg.android
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -17,6 +19,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.BasicAlertDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -27,7 +31,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -39,6 +45,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogProperties
 import coil3.compose.AsyncImage
 import org.mattshoe.mtg.core.DeckCard
 import org.mattshoe.mtg.core.DeckPlan
@@ -68,7 +75,17 @@ import org.mattshoe.mtg.core.Tweak
  * them on a device and reads the semantics tree back, because reading
  * this file beside the web one and concluding they match is exactly
  * how the two drifted everywhere else.
+ *
+ * It is a modal, which it was not. This was a bare `Column` dropped at
+ * the end of the shell: nothing dimmed behind it, nothing outside it
+ * dismissed it, and nothing capped its height — so the four-hit finder
+ * ran past the bottom of a phone with the Preview button somewhere off
+ * the end of it. Every other overlay here is a dialog, and the website
+ * has always drawn this one inside `.palette-scrim`. The parity suite
+ * could not see any of that, because it hosted the sheet in a `Box` of
+ * its own with nothing behind it and no screen to run off.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DeckTweakSheet(
     state: DeckTweak,
@@ -78,40 +95,108 @@ fun DeckTweakSheet(
     onApply: () -> Unit,
     onClose: () -> Unit,
 ) {
-    Column(
-        Modifier.fillMaxWidth()
-            .testTag("tweak-sheet")
-            .background(Bg2)
-            .verticalScroll(rememberScrollState())
-            .padding(Design.PANEL_PAD.dp),
-        verticalArrangement = Arrangement.spacedBy(Design.GAP.dp),
-    ) {
-        // `.panel-head`: what the sheet is for, whose deck it is, and
-        // the way out. The title comes off the choice that was made,
-        // so it is the web's "Swap this card out" rather than a fixed
-        // word that stops describing the screen after the first tap.
-        Row(
-            Modifier.fillMaxWidth().testTag("tweak-head"),
-            horizontalArrangement = Arrangement.spacedBy(Design.GAP.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                state.kind?.title ?: "Change this card",
-                fontSize = Design.H2.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = Ink,
-            )
-            Spacer(Modifier.weight(1f))
-            Muted(state.deckName, size = Design.MINI)
-            Tap("Close", Modifier.testTag("tweak-close"), onClick = onClose) {
-                Text("×", fontSize = Design.H1.sp, color = Ink2)
-            }
-        }
+    // How tall the screen is, which is what the cap below is a
+    // fraction of. `vh` on the web; there is no such unit here.
+    val tall = LocalConfiguration.current.screenHeightDp
 
-        when {
-            state.saved -> Done(state, onClose)
-            state.choosing -> Choose(state, onState)
-            else -> Body(state, onState, onFind, onPreview, onApply)
+    // `BasicAlertDialog` rather than the full `AlertDialog` the other
+    // overlays use: the sheet already carries its own head, its own ×
+    // and its own foot, and the foot is a different pair of buttons on
+    // each of its four screens. `AlertDialog` owns all three of those
+    // slots, so it would mean a second close button and a confirm that
+    // does not know what it is confirming. This is the same dialog
+    // underneath — real window, real scrim, back and outside taps both
+    // arriving as `onDismissRequest`.
+    BasicAlertDialog(
+        onDismissRequest = onClose,
+        modifier = Modifier.fillMaxSize(),
+        // The window is the whole screen, so the scrim below covers
+        // the whole screen. At the platform default the window is
+        // sized to the sheet and there is nowhere outside it to tap.
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Box(
+            Modifier.fillMaxSize()
+                .testTag("tweak-scrim")
+                .background(Scrim)
+                // `.palette-scrim`'s `onClick { onClose() }`. A raw tap
+                // detector and not `clickable`, for two reasons. A
+                // screen reader should not be told the dark behind the
+                // sheet is a full-screen button — and `clickable` sets
+                // `shouldMergeDescendantSemantics`, which folds the
+                // entire sheet into one node: every tag inside it
+                // disappears from the merged tree and the seventy
+                // tests that read them stop being able to see
+                // anything.
+                .pointerInput(Unit) { detectTapGestures { onClose() } }
+                // `padding: 12vh 14px 14px`. The top inset is what
+                // leaves the sheet looking like a sheet rather than a
+                // screen, and the side inset is why it does not sit
+                // four pixels off each edge of a phone.
+                .padding(start = 14.dp, end = 14.dp, top = (tall * 0.12f).dp, bottom = 14.dp),
+            contentAlignment = Alignment.TopCenter,
+        ) {
+            Column(
+                Modifier.fillMaxWidth()
+                    // `.palette.wide`: `min(760px, 94vw)`.
+                    .widthIn(max = 760.dp)
+                    .testTag("tweak-sheet")
+                    // `max-height: 82vh`, and the scroll below it. A
+                    // swap with four hits and a plan is taller than a
+                    // phone; without this the sheet simply kept going
+                    // and the buttons at the end of it were off the
+                    // screen with no way to reach them.
+                    .heightIn(max = (tall * 0.82f).dp)
+                    .background(Bg2, Radius)
+                    .border(1.dp, Line2, Radius)
+                    // The web's `onClick { it.stopPropagation() }`.
+                    // Taps that no control inside the sheet claimed —
+                    // the padding, the gaps between rows, the summary
+                    // line — would otherwise reach the scrim's tap
+                    // detector and shut the sheet from inside it.
+                    // Consumed on the main pass, which runs child
+                    // first, so every control inside still gets first
+                    // refusal and the scroll underneath still works.
+                    .pointerInput(Unit) {
+                        awaitPointerEventScope {
+                            while (true) {
+                                awaitPointerEvent().changes.forEach { it.consume() }
+                            }
+                        }
+                    }
+                    .verticalScroll(rememberScrollState())
+                    .padding(Design.PANEL_PAD.dp),
+                verticalArrangement = Arrangement.spacedBy(Design.GAP.dp),
+            ) {
+                // `.panel-head`: what the sheet is for, whose deck it
+                // is, and the way out. The title comes off the choice
+                // that was made, so it is the web's "Swap this card
+                // out" rather than a fixed word that stops describing
+                // the screen after the first tap.
+                Row(
+                    Modifier.fillMaxWidth().testTag("tweak-head"),
+                    horizontalArrangement = Arrangement.spacedBy(Design.GAP.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        state.kind?.title ?: "Change this card",
+                        fontSize = Design.H2.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Ink,
+                    )
+                    Spacer(Modifier.weight(1f))
+                    Muted(state.deckName, size = Design.MINI)
+                    Tap("Close", Modifier.testTag("tweak-close"), onClick = onClose) {
+                        Text("×", fontSize = Design.H1.sp, color = Ink2)
+                    }
+                }
+
+                when {
+                    state.saved -> Done(state, onClose)
+                    state.choosing -> Choose(state, onState)
+                    else -> Body(state, onState, onFind, onPreview, onApply)
+                }
+            }
         }
     }
 }
