@@ -9,6 +9,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
@@ -20,9 +21,9 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mattshoe.mtg.android.Parity.shoot
+import org.mattshoe.mtg.core.Admin
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.Facet
-import org.mattshoe.mtg.core.View
 import kotlin.math.abs
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -47,9 +48,11 @@ import kotlin.test.assertTrue
  * next door's touch area runs through it.
  *
  * Through the real `AppShell`, every one of them. `Theme.kt`'s pieces
- * look right mounted alone — it is the nav row packing six of them
+ * look right mounted alone — it was the nav row packing six of them
  * into 320dp, and the filter panel putting five inside one `Seg`,
- * that made them unhittable.
+ * that made them unhittable. The row is a hamburger and a menu now
+ * (section 5), so what gets measured here is the bar's two controls
+ * and every row behind them.
  */
 @RunWith(AndroidJUnit4::class)
 class TapTargetsParityTest {
@@ -107,19 +110,35 @@ class TapTargetsParityTest {
         )
     }
 
+    /** Everything in the bar, which is now the hamburger and the way home. */
+    private fun barControls() = listOf(
+        "the hamburger" to rule.onNodeWithTag("nav-burger"),
+        "the home mark" to rule.onNodeWithTag("brand-mark"),
+    )
+
     @Test
-    fun theNavsLockAndFindAreBigEnoughToHit() {
+    fun theBarsOwnControlsAreBigEnoughToHit() {
         shell()
-        listOf("Unlock", "Find").forEach { assertBigEnough("the nav's $it", control(it)) }
+        barControls().forEach { (what, node) -> assertBigEnough(what, node) }
         rule.onRoot().shoot("tap-targets-nav")
     }
 
+    /**
+     * And every row of the menu behind it.
+     *
+     * The pills these replaced were about 30dp of painted box inside a
+     * 48dp target. A menu row is full width, so only its height is in
+     * question — and left to its own text it is 34dp, which is the
+     * website's `.app-tab` and three quarters of a fingertip.
+     */
     @Test
-    fun soIsEveryTabPillBesideThem() {
-        shell()
-        AppState().admin.visible.forEach { view: View ->
-            assertBigEnough("the ${view.label} tab", control(view.label))
-        }
+    fun soIsEveryRowOfTheMenuBehindIt() {
+        shell(AppState(admin = Admin(token = "t")))
+        rule.onNodeWithContentDescription("Menu").performClick()
+        rule.waitForIdle()
+        val rows = AppState(admin = Admin(token = "t")).admin.visible.map { it.label } + "Lock"
+        rows.forEach { label -> assertBigEnough("the $label row", control(label)) }
+        rule.onNodeWithTag("app-menu").shoot("tap-targets-menu")
     }
 
     /**
@@ -130,9 +149,12 @@ class TapTargetsParityTest {
      */
     @Test
     fun noTwoNavControlsClaimTheSameTouchArea() {
-        shell()
-        val labels = AppState().admin.visible.map { it.label } + listOf("Unlock", "Find")
-        val boxes = labels.map { it to control(it).touch() }
+        shell(AppState(admin = Admin(token = "t")))
+        rule.onNodeWithContentDescription("Menu").performClick()
+        rule.waitForIdle()
+        val rows = AppState(admin = Admin(token = "t")).admin.visible.map { it.label } + "Lock"
+        val boxes = barControls().map { (what, node) -> what to node.touch() } +
+            rows.map { it to control(it).touch() }
         boxes.forEachIndexed { i, (a, ra) ->
             boxes.drop(i + 1).forEach { (b, rb) ->
                 assertTrue(
