@@ -78,7 +78,7 @@ fun LibraryScreen(
      */
     @Suppress("UNUSED_PARAMETER") showFilters: Boolean = false,
     @Suppress("UNUSED_PARAMETER") onToggleFilters: () -> Unit = {},
-    onExport: () -> Unit = {},
+    onExport: (ExportTo) -> Unit = {},
     complete: Completion = Completion(),
     onName: (Completion) -> Unit = {},
     @Suppress("UNUSED_PARAMETER") onCheatsheet: () -> Unit = {},
@@ -143,7 +143,7 @@ private fun Controls(
     state: Library,
     apply: (Library) -> Unit,
     onSearch: () -> Unit,
-    onExport: () -> Unit,
+    onExport: (ExportTo) -> Unit,
     complete: Completion,
     onName: (Completion) -> Unit,
 ) {
@@ -168,10 +168,13 @@ private fun Controls(
         ) {
             SortPicker(state, apply)
             Spacer(Modifier.weight(1f))
-            // Only the clipboard. The web offers a file as well; the
-            // phone's export hands the decklist to the clipboard, and
-            // wiring a second destination is `MainActivity`'s to do.
-            Ghost(ExportTo.CLIPBOARD.label, onClick = onExport)
+            // Both destinations, the way the web offers them.
+            // `MainActivity` decides what "Download" actually does —
+            // see `Downloads` — this just asks for one or the other.
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Ghost(ExportTo.CLIPBOARD.label) { onExport(ExportTo.CLIPBOARD) }
+                Ghost(ExportTo.FILE.label) { onExport(ExportTo.FILE) }
+            }
         }
     }
 }

@@ -39,6 +39,7 @@ import org.mattshoe.mtg.core.Direction
 import org.mattshoe.mtg.core.Disassembly
 import org.mattshoe.mtg.core.DisassembleState
 import org.mattshoe.mtg.core.EntryHistory
+import org.mattshoe.mtg.core.ExportTo
 import org.mattshoe.mtg.core.Found
 import org.mattshoe.mtg.core.HistoryEntry
 import org.mattshoe.mtg.core.Library
@@ -229,6 +230,27 @@ class ScreensTest {
         // here and nowhere else.
         rule.onNodeWithText("Copy").performScrollTo().performClick()
         rule.runOnIdle { assertTrue(exported) }
+    }
+
+    @Test
+    fun theLibraryOffersBothCopyAndDownload() {
+        // 1.10: the web offers Copy and Download; the Library here
+        // used to offer only Copy. Both rows must exist, and each must
+        // report its own destination rather than the two collapsing
+        // into one press.
+        val picked = mutableListOf<ExportTo>()
+        content {
+            LibraryScreen(
+                Library().loaded(listOf(card("Sol Ring")), 1),
+                {}, {}, {},
+                onExport = { picked += it },
+            )
+        }
+        rule.onNodeWithText("Copy").performScrollTo().performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Download").performScrollTo().performClick()
+        rule.waitForIdle()
+        assertEquals(listOf(ExportTo.CLIPBOARD, ExportTo.FILE), picked, "Copy and Download did not report different destinations")
     }
 
     @Test
