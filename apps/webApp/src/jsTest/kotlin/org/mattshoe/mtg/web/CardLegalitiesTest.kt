@@ -14,6 +14,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 /**
@@ -187,6 +188,49 @@ class CardLegalitiesTest {
         val seen = frame.chipText()
         assertEquals(2, seen.size, seen.toString())
         assertTrue("Timeless" in seen[1], "the new format came out as ${seen[1]}")
+    }
+
+    /**
+     * `.chip.warn` and `.chip.off` did not exist in `app.css` — only
+     * `.chip.ok` and `.chip.bad` were defined — so "restricted" and
+     * "not legal" both fell back to the plain, untoned chip and
+     * resolved to the exact same computed colour and border as each
+     * other. `eachStatusGetsItsOwnClassOnThePage` above checks the
+     * class name only, which is exactly what let that through; this
+     * checks what the browser actually painted.
+     */
+    @Test
+    fun everyToneIsPaintedDifferentlyFromEveryOtherTone() = runTest {
+        val frame = open(mixed())
+        settle()
+        assertTrue(Stylesheet.applied(), "the real stylesheet never applied")
+        fun chipFor(format: String) = frame.chips().first { it.textContent.orEmpty().contains(format) }
+        val ok = chipFor("Commander") // legal
+        val bad = chipFor("Legacy") // banned
+        val warn = chipFor("Vintage") // restricted
+        val off = chipFor("Standard") // not_legal
+        val tones = mapOf("ok" to ok, "bad" to bad, "warn" to warn, "off" to off)
+        fun look(el: HTMLElement): String {
+            val cs = window.getComputedStyle(el)
+            return listOf(cs.color, cs.borderColor, cs.borderStyle).joinToString("|")
+        }
+        val looks = tones.mapValues { (_, el) -> look(el) }
+        for ((nameA, lookA) in looks) {
+            for ((nameB, lookB) in looks) {
+                if (nameA == nameB) continue
+                assertNotEquals(lookA, lookB, "$nameA and $nameB chips resolve to the same look ($lookA)")
+            }
+        }
+    }
+
+    /** `.chip.off` reads as dimmed/dashed rather than any particular hue. */
+    @Test
+    fun aNotLegalChipIsNotPaintedAsPlainAsAnUntonedChip() = runTest {
+        val frame = open(mixed())
+        settle()
+        assertTrue(Stylesheet.applied(), "the real stylesheet never applied")
+        val off = frame.chips().first { it.textContent.orEmpty().contains("Standard") }
+        assertEquals("dashed", window.getComputedStyle(off).borderStyle, "a not-legal chip has no shape cue of its own")
     }
 
     @Test

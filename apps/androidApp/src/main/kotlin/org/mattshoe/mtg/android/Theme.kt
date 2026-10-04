@@ -5,10 +5,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.LocalTextStyle
@@ -22,12 +25,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.mattshoe.mtg.core.Design
@@ -60,6 +65,25 @@ private fun Modifier.pressable(enabled: Boolean, onClick: () -> Unit) = this
     .semantics { role = Role.Button; if (!enabled) disabled() }
     .clickable(enabled = enabled, onClick = onClick)
 
+/**
+ * The smallest a thing you tap is allowed to be.
+ *
+ * Android's own guideline, and the website has no equivalent to copy:
+ * a mouse pointer is one pixel and a fingertip is about nine
+ * millimetres. The nav's Lock and Find were 25dp boxes six dp apart,
+ * which on a phone is two targets inside one thumb.
+ *
+ * It is the *touchable* box, not the painted one. Every control that
+ * uses this keeps its own padding and draws at its own size inside a
+ * box this big, so the page looks much as it did and the thumb gets
+ * somewhere to land. Compose will stretch a hit area to this on its
+ * own, but only as a fringe around a small control — where two of
+ * them sit side by side the fringes overlap and whichever was laid
+ * out first takes the overlap, so the other is still unhittable.
+ * Real layout space is the only version of this that works.
+ */
+val TouchTarget = 48.dp
+
 val Bg = c(Design.BG)
 val Bg2 = c(Design.BG_2)
 val Bg3 = c(Design.BG_3)
@@ -76,9 +100,37 @@ val Warn = c(Design.WARN)
 val Bad = c(Design.BAD)
 val Info = c(Design.INFO)
 
+/**
+ * What a modal puts between itself and the page under it.
+ *
+ * `.palette-scrim`'s `rgba(4,6,10,.6)` in `frontend/css/app.css`, which
+ * is darker than any surface in the palette on purpose: the point is
+ * that the thing behind reads as out of reach.
+ */
+val Scrim = c(0x9904060A)
+
+/** `color-mix(in srgb, a P%, b)`, as a Compose colour. */
+fun mix(a: Color, b: Color, shareOfA: Float): Color =
+    c(Design.mixSrgb(a.toArgbLong(), b.toArgbLong(), shareOfA))
+
+/**
+ * The four channels as `0xAARRGGBB`.
+ *
+ * Through the components rather than through `Color.value`, which is
+ * a packed `ULong` whose layout depends on the colour space.
+ */
+private fun Color.toArgbLong(): Long =
+    (0xFFL shl 24) or
+        ((red * 255f + 0.5f).toLong() shl 16) or
+        ((green * 255f + 0.5f).toLong() shl 8) or
+        (blue * 255f + 0.5f).toLong()
+
 val Radius = RoundedCornerShape(Design.RADIUS.dp)
 val RadiusSm = RoundedCornerShape(Design.RADIUS_SM.dp)
 val Pill = RoundedCornerShape(Design.RADIUS_PILL.dp)
+
+/** `.deck-line .thumb`: a 40px square of art, rounded by 6px and no more. */
+val RadiusThumb = RoundedCornerShape(Design.RADIUS_THUMB.dp)
 
 private val scheme = darkColorScheme(
     primary = Accent,
@@ -158,27 +210,27 @@ fun Panel(
     }
 }
 
-/** `.app-tab`: a nav pill, gold while it is the current view. */
+/**
+ * `.seg`: one row, one choice, hairlines between.
+ *
+ * `fill` is for a row of short labels — the five comparison
+ * operators, which are one glyph each. Left to size themselves off
+ * their own text they came out 26dp a side, five of them in a huddle,
+ * and the one you hit was whichever your thumb overlapped first.
+ * Filled, they share the row equally and each is its own target.
+ */
 @Composable
-fun NavPill(label: String, on: Boolean, onClick: () -> Unit) {
-    Text(
-        label,
-        Modifier
-            .background(if (on) AccentDim else Bg2, Pill)
-            .border(1.dp, if (on) Accent else Line2, Pill)
-            .pressable(true, onClick)
-            .padding(horizontal = 13.dp, vertical = 7.dp),
-        color = if (on) Accent2 else Ink2,
-        fontSize = Design.SMALL.sp,
-        fontWeight = FontWeight.Medium,
-    )
-}
-
-/** `.seg`: one row, one choice, hairlines between. */
-@Composable
-fun Seg(options: List<Pair<String, String>>, selected: String?, onPick: (String) -> Unit) {
+fun Seg(
+    options: List<Pair<String, String>>,
+    selected: String?,
+    fill: Boolean = false,
+    onPick: (String) -> Unit,
+) {
     Row(
-        Modifier.background(Bg, RadiusSm).border(1.dp, Line2, RadiusSm),
+        Modifier
+            .then(if (fill) Modifier.fillMaxWidth() else Modifier)
+            .background(Bg, RadiusSm)
+            .border(1.dp, Line2, RadiusSm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         options.forEachIndexed { i, (value, label) ->
@@ -188,16 +240,24 @@ fun Seg(options: List<Pair<String, String>>, selected: String?, onPick: (String)
                     Text("", fontSize = Design.MINI.sp)
                 }
             }
-            Text(
-                label,
+            Box(
                 Modifier
+                    // Equal shares of the row, so no segment is a
+                    // sliver because its label is one character.
+                    .then(if (fill) Modifier.weight(1f) else Modifier)
+                    .sizeIn(minWidth = TouchTarget, minHeight = TouchTarget)
                     .background(if (on) AccentDim else Color.Transparent)
-                    .pressable(true) { onPick(value) }
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                color = if (on) Accent2 else Ink2,
-                fontSize = 12.5.sp,
-                fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
-            )
+                    .pressable(true) { onPick(value) },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    label,
+                    Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    color = if (on) Accent2 else Ink2,
+                    fontSize = 12.5.sp,
+                    fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
+                )
+            }
         }
     }
 }
@@ -217,6 +277,18 @@ fun Primary(label: String, enabled: Boolean = true, onClick: () -> Unit) {
     )
 }
 
+/**
+ * `.btn { font-weight: 550 }`, which is not one of Material's named
+ * weights.
+ *
+ * Between Medium and SemiBold, and the website means the half step:
+ * at 500 "Reset everything" read as a label and at 600 it shouted
+ * next to the panel heading above it. `FontWeight` takes any value
+ * from 1 to 1000, so there is no reason to round it to one of the
+ * nine that have names.
+ */
+val ButtonWeight = FontWeight(550)
+
 /** `.btn`: bordered, a shade above the page. */
 @Composable
 fun Btn(label: String, enabled: Boolean = true, danger: Boolean = false, onClick: () -> Unit) {
@@ -229,24 +301,29 @@ fun Btn(label: String, enabled: Boolean = true, danger: Boolean = false, onClick
             .padding(horizontal = 14.dp, vertical = 8.dp),
         color = if (!enabled) Ink3 else if (danger) Bad else Ink,
         fontSize = 13.5.sp,
-        fontWeight = FontWeight.Medium,
+        fontWeight = ButtonWeight,
     )
 }
 
 /** `.btn.sm.ghost`, and `.on` when it is in force. */
 @Composable
 fun Ghost(label: String, on: Boolean = false, enabled: Boolean = true, onClick: () -> Unit) {
-    Text(
-        label,
-        Modifier
-            .background(if (on) AccentDim else Color.Transparent, RadiusSm)
-            .border(1.dp, if (on) Accent else Color.Transparent, RadiusSm)
-            .pressable(enabled, onClick)
-            .padding(horizontal = 10.dp, vertical = 5.dp),
-        color = if (on) Accent2 else if (enabled) Ink2 else Ink3,
-        fontSize = 12.5.sp,
-        fontWeight = FontWeight.Medium,
-    )
+    Box(
+        Modifier.sizeIn(minWidth = TouchTarget, minHeight = TouchTarget)
+            .pressable(enabled, onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            Modifier
+                .background(if (on) AccentDim else Color.Transparent, RadiusSm)
+                .border(1.dp, if (on) Accent else Color.Transparent, RadiusSm)
+                .padding(horizontal = 10.dp, vertical = 5.dp),
+            color = if (on) Accent2 else if (enabled) Ink2 else Ink3,
+            fontSize = 12.5.sp,
+            fontWeight = FontWeight.Medium,
+        )
+    }
 }
 
 /** `.tag`: a small stated fact, not a control. */
@@ -261,6 +338,106 @@ fun Tag(label: String, tone: Color = Ink2) {
         color = tone,
         fontSize = Design.TINY.sp,
     )
+}
+
+/**
+ * `.err`'s face and edge: the bad tone at 12% and 42%, straight off
+ * the `.err` rule in `app.css`. Not `:root` variables, so `DesignTest`
+ * cannot police them — they are written here beside the composable
+ * that uses them rather than hidden inside it.
+ */
+const val ERR_FILL = 0.12f
+const val ERR_EDGE = 0.42f
+
+/** `.err`'s `padding: 10px 13px`. */
+const val ERR_PAD_X = 13
+const val ERR_PAD_Y = 10
+
+/** What the box and the words inside it answer to, in tests. */
+const val ERR_TAG = "err"
+const val ERR_TEXT_TAG = "err-text"
+
+/**
+ * The share mark: three nodes and two links, the same drawing the
+ * website makes.
+ *
+ * `.icon-share` in `app.css` is an inline SVG on a 24-unit viewBox —
+ * circles at (18,5), (6,12) and (18,19), radius 3, joined by a path
+ * from (8.6,13.5) to (15.4,17.5) and another from (15.4,6.5) to
+ * (8.6,10.5), all at stroke-width 1.9 with round caps. Those numbers
+ * are reproduced exactly here and scaled, so the phone and the page
+ * draw one symbol rather than two things that resemble each other.
+ *
+ * Android used to type it instead: `Line("⤴", …)`, a 16sp U+2934.
+ * That is an arrow pointing up and to the right, not a share mark; it
+ * came out around 11dp of actual ink inside a 44dp box; and what it
+ * looked like at all was down to whichever font the handset shipped.
+ */
+@Composable
+fun ShareMark(tint: Color, size: Dp = 20.dp, modifier: Modifier = Modifier) {
+    androidx.compose.foundation.Canvas(modifier.size(size).testTag(SHARE_MARK_TAG)) {
+        // One unit of the web's viewBox, so every number below is the
+        // number in the stylesheet.
+        val u = this.size.minDimension / 24f
+        val stroke = 1.9f * u
+        fun at(x: Float, y: Float) = androidx.compose.ui.geometry.Offset(x * u, y * u)
+
+        listOf(18f to 5f, 6f to 12f, 18f to 19f).forEach { (x, y) ->
+            drawCircle(
+                color = tint,
+                radius = 3f * u,
+                center = at(x, y),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke),
+            )
+        }
+        listOf(
+            at(8.6f, 13.5f) to at(15.4f, 17.5f),
+            at(15.4f, 6.5f) to at(8.6f, 10.5f),
+        ).forEach { (from, to) ->
+            drawLine(
+                color = tint,
+                start = from,
+                end = to,
+                strokeWidth = stroke,
+                cap = androidx.compose.ui.graphics.StrokeCap.Round,
+            )
+        }
+    }
+}
+
+/** What the share mark answers to in a test. */
+const val SHARE_MARK_TAG = "share-mark"
+
+/**
+ * `.err`: an error is a box you are meant to find, not a sentence
+ * loose in the column.
+ *
+ * The website gives every error a tinted face, an edge a shade
+ * stronger than that face, 10px by 13px of air and the fixed-width
+ * family. Android drew the words at body size in the dialog's own
+ * prose colour, so in a wizard step with eight other lines of prose
+ * in it the one line saying what went wrong looked like all the rest.
+ *
+ * Three things set it apart here and not one of them is a hue: it is
+ * the only thing in the dialog with a ring round it, the only thing
+ * in a monospace face, and its face is lighter than the dialog
+ * behind it. Red on its own would say nothing at all to the person
+ * who reads this.
+ */
+@Composable
+fun ErrBox(message: String, modifier: Modifier = Modifier) {
+    Box(
+        modifier
+            .fillMaxWidth()
+            .testTag(ERR_TAG)
+            .background(Bad.copy(alpha = ERR_FILL), RadiusSm)
+            .border(1.dp, Bad.copy(alpha = ERR_EDGE), RadiusSm)
+            .padding(horizontal = ERR_PAD_X.dp, vertical = ERR_PAD_Y.dp),
+    ) {
+        // `monoSmall` already is `var(--mono)` at 12.5px; the tone is
+        // the only thing this adds to it.
+        Text(message, Modifier.testTag(ERR_TEXT_TAG), color = Bad, style = monoSmall)
+    }
 }
 
 /** `.muted.small`, which is most of the prose on the site. */
@@ -289,7 +466,13 @@ fun Field(
             fontSize = Design.BODY.sp,
             fontFamily = if (mono) androidx.compose.ui.text.font.FontFamily.Monospace else null,
         ),
-        placeholder = { Text(placeholder, color = Ink3, fontSize = Design.BODY.sp) },
+        // Blank means none at all, not an empty one. The web's
+        // `<textarea>`s mostly carry no `placeholder` attribute, and a
+        // slot holding an empty `Text` is a node on the screen and in
+        // the semantics tree that says nothing.
+        placeholder = placeholder.takeIf { it.isNotEmpty() }?.let {
+            { Text(it, color = Ink3, fontSize = Design.BODY.sp) }
+        },
         colors = OutlinedTextFieldDefaults.colors(
             focusedContainerColor = Bg,
             unfocusedContainerColor = Bg,

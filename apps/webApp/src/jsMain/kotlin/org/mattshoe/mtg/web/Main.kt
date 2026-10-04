@@ -16,6 +16,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.jetbrains.compose.web.renderComposable
 import org.mattshoe.mtg.core.Admin
+import org.mattshoe.mtg.core.AdminToken
 import org.mattshoe.mtg.core.ApiFailure
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.CardDetail
@@ -118,6 +119,11 @@ object MtgApp {
         set(value) {
             val was = held
             held = value
+            // Every write lands here, so the token in `localStorage`
+            // cannot fall out of step with the one in memory — not the
+            // nav menu's Lock button, not Cmd+L, not whatever reaches
+            // this property next. See `AdminToken`.
+            AdminToken.sync(store, was.admin, value.admin)
             if (value.toast != null && value.toast != was.toast) fadeToast(value.toast!!)
             if (value.hash() == was.hash()) return
             // One rule for the whole app: going somewhere is a step
@@ -155,7 +161,7 @@ object MtgApp {
     private fun fadeToast(mine: String) {
         toastJob?.cancel()
         toastJob = scope.launch {
-            delay(TOAST_MS)
+            delay(AppState.TOAST_MS)
             if (app.toast == mine) app = app.say(null)
         }
     }
@@ -167,7 +173,6 @@ object MtgApp {
      * field changes on every keystroke.
      */
     /** Long enough to read a sentence, short enough to stop mattering. */
-    private val TOAST_MS = 5_000L
 
     private val searchDebounceMs = 250L
     private var searchJob: Job? = null
@@ -226,7 +231,8 @@ object MtgApp {
                         work {
                             try {
                                 val t = api.unlock(password)
-                                store.put("mtg.admin", """{"token":"$t","expires_at":null}""")
+                                // Persisted by the `app` setter, which
+                                // diffs the token on every write.
                                 app.copy(admin = app.admin.unlock(t)).say("Admin mode on")
                             } catch (e: Exception) {
                                 app = app.copy(admin = app.admin.gaveUp())
@@ -515,9 +521,9 @@ object MtgApp {
             app = try {
                 block()
             } catch (e: ApiFailure) {
-                app.say(e.message ?: "something went wrong")
+                app.say(e.message ?: "something went wrong", failed = true)
             } catch (e: Exception) {
-                app.say(e.message ?: e.toString())
+                app.say(e.message ?: e.toString(), failed = true)
             }
         }
     }
@@ -722,7 +728,8 @@ object MtgApp {
     }
 
     private suspend fun loadCard(nameNorm: String, label: String): AppState {
-        val (printings, uses, legal, rules) = Load.card(nameNorm)
+        val (face, printings, uses, legal, rules) = Load.card(nameNorm)
+        val f = api.query(face)
         val p = api.query(printings)
         val u = api.query(uses)
         val l = api.query(legal)
@@ -736,6 +743,7 @@ object MtgApp {
                 usedIn = CardQueries.decodeUses(u.cols, u.rows),
                 legalities = CardQueries.decodeLegalities(l.cols, l.rows),
                 rulings = CardQueries.decodeRulings(r.cols, r.rows),
+                faces = CardQueries.decodeFaces(f.cols, f.rows),
             ).named(owned),
         )
     }
@@ -813,11 +821,11 @@ object MtgApp {
             files.forEach { f ->
                 val bytes = f.size.toLong()
                 if (bytes > Upload.MAX_BYTES) {
-                    app = app.say("${f.name} is too big (${Upload.size(bytes)})")
+                    app = app.say("${f.name} is too big (${Upload.size(bytes)})", failed = true)
                     return@forEach
                 }
                 val text = readText(f)
-                if (text == null) app = app.say("could not read ${f.name}")
+                if (text == null) app = app.say("could not read ${f.name}", failed = true)
                 else texts += text
             }
             if (texts.isEmpty()) return@launch
@@ -850,7 +858,7 @@ object MtgApp {
 
             ExportTo.CLIPBOARD -> {
                 if (copy(text)) app.say("${r.rows.size} cards copied")
-                else app.say("could not reach the clipboard")
+                else app.say("could not reach the clipboard", failed = true)
             }
         }
     }
@@ -864,7 +872,7 @@ object MtgApp {
      * already on screen.
      */
     private suspend fun shareDeck(s: AppState, what: ShareWhat, where: ExportTo): AppState {
-        val deck = s.decks.open ?: return s.say("No deck open")
+        val deck = s.decks.open ?: return s.say("No deck open", failed = true)
         val text = when (what) {
             ShareWhat.LINK -> Share.link(s)
             ShareWhat.DECKLIST -> Export.deck(s.decks.cards)
@@ -883,7 +891,7 @@ object MtgApp {
                 if (copy(text)) {
                     app.say(if (what == ShareWhat.LINK) "Link copied" else "${s.decks.totalCards} cards copied")
                 } else {
-                    app.say("could not reach the clipboard")
+                    app.say("could not reach the clipboard", failed = true)
                 }
         }
     }
@@ -946,11 +954,11 @@ object MtgApp {
             for (f in files) {
                 val bytes = (f.size as Number).toLong()
                 if (Upload.tooBig(bytes)) {
-                    app = app.say("${f.name} is too big (${Upload.size(bytes)})")
+                    app = app.say("${f.name} is too big (${Upload.size(bytes)})", failed = true)
                     continue
                 }
                 val text = readText(f)
-                if (text == null) app = app.say("could not read ${f.name}")
+                if (text == null) app = app.say("could not read ${f.name}", failed = true)
                 else { chunks += text; names += f.name }
             }
             if (chunks.isEmpty()) return@launch

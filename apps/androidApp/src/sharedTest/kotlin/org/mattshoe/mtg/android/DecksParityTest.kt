@@ -9,6 +9,7 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasTextExactly
 import androidx.compose.ui.test.isHeading
+import androidx.compose.ui.test.isPopup
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
@@ -246,10 +247,22 @@ class DecksParityTest {
         content { DecksScreen(opened(), {}, {}) }
         Parity.check(
             Parity.Fact("the way back is in the header") { says("← Decks") },
-            Parity.Fact("the banner names the commander") {
-                says("Alela, Artful Provocateur · Bracket 3")
+            // The web's hierarchy, which Android now follows: the
+            // commander is the band's big line and the bracket, the
+            // colours and the count are the small one under it. These
+            // two facts used to read "Alela, Artful Provocateur ·
+            // Bracket 3" as one demoted line under the deck's own
+            // title, which is the arrangement section 5 of the audit
+            // called out.
+            Parity.Fact("the banner leads with the commander") {
+                says("Alela, Artful Provocateur")
             },
-            Parity.Fact("the deck's own name is on the screen") { says("Alela") },
+            Parity.Fact("the bracket is in the small line under it") { says("Bracket 3") },
+            // The deck's own name is deliberately absent. The web's
+            // open-deck `page-head` carries the back button, the share
+            // menu and the admin actions and no title at all — the
+            // name was on the tile that was tapped to get here.
+            Parity.Fact("the deck's own name is not repeated in the band") { !says("Alela") },
             Parity.Fact("and how many cards it holds") { says("6 cards") },
             Parity.Fact("a share is offered on an open deck") {
                 described("Share this deck") == 1
@@ -262,18 +275,20 @@ class DecksParityTest {
     fun theListIsGroupedByTypeInReadingOrderWithACountOnEachSection() {
         content { DecksScreen(opened(), {}, {}) }
         assertEquals(
+            // `.panel-head h2 { text-transform: uppercase }` on the
+            // web — the deck's own heading and every type section.
             listOf(
-                "The deck at a glance",
-                "Commander", "Creatures", "Artifacts", "Enchantments", "Lands",
+                "THE DECK AT A GLANCE",
+                "COMMANDER", "CREATURES", "ARTIFACTS", "ENCHANTMENTS", "LANDS",
             ),
             headings(),
             "the sections are not the web's, in the web's order",
         )
         Parity.check(
             Parity.Fact("the two creatures are counted on their heading") {
-                tagBeside("Creatures") == "2"
+                tagBeside("CREATURES") == "2"
             },
-            Parity.Fact("one commander, counted") { tagBeside("Commander") == "1" },
+            Parity.Fact("one commander, counted") { tagBeside("COMMANDER") == "1" },
             Parity.Fact("a section nothing falls into is not drawn at all") {
                 !says("Planeswalkers") && !says("Battles") && !says("Not in the collection")
             },
@@ -330,7 +345,7 @@ class DecksParityTest {
                     yOf("has 0") == yOf("Rhystic Study")
             },
             Parity.Fact("the twenty Plains are a land, not an unknown card") {
-                headings().contains("Lands")
+                headings().contains("LANDS")
             },
         )
     }
@@ -476,7 +491,13 @@ class DecksParityTest {
                     .fetchSemanticsNode().positionInRoot.y
             },
         )
-        rule.onRoot().shoot("deck-share-menu")
+        // The menu itself, not `onRoot()`. It is a `DropdownMenu` now,
+        // so with it open there are two roots — the page and the
+        // popup's own window — and `onRoot()` throws on the ambiguity.
+        // Only ever on a device: `shoot` is `needsRealRendering`, so
+        // the JVM skips it and this read as green until the emulator
+        // ran it.
+        rule.onNode(isPopup()).shoot("deck-share-menu")
 
         rule.onAllNodesWithText("Download")[1].performScrollTo().performClick()
         rule.waitForIdle()
@@ -520,9 +541,9 @@ class DecksParityTest {
     @Test
     fun theTokensAreCardsBelowTheListWithTheirOwnCount() {
         content { DecksScreen(withTokens(), {}, {}) }
-        assertEquals("Tokens", headings().last(), "the tokens are not the last thing on the screen")
+        assertEquals("TOKENS", headings().last(), "the tokens are not the last thing on the screen")
         Parity.check(
-            Parity.Fact("the heading counts them") { tagBeside("Tokens") == "3" },
+            Parity.Fact("the heading counts them") { tagBeside("TOKENS") == "3" },
             Parity.Fact("two Birds and a Clue") {
                 howMany("Bird") == 2 && says("Clue")
             },

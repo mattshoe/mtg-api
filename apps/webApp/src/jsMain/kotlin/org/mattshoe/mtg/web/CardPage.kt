@@ -15,6 +15,7 @@ import org.mattshoe.mtg.core.DeckCard
 import org.jetbrains.compose.web.attributes.disabled
 import org.mattshoe.mtg.core.CardDetail
 import org.mattshoe.mtg.core.CardQueries
+import org.mattshoe.mtg.core.Face
 import org.mattshoe.mtg.core.Printing
 import org.mattshoe.mtg.core.Prices
 
@@ -124,6 +125,41 @@ private fun Steps(previous: DeckCard?, next: DeckCard?, place: String, onStep: (
     }
 }
 
+/**
+ * One printed face: the cost, the type line, the rules text, the
+ * flavour and the little box in the corner.
+ *
+ * `.oracle` and `.flavor` have been sitting in `app.css` with nothing
+ * using them. The line breaks inside oracle text are meaningful — one
+ * ability per line is how a card is read — so both are `pre-wrap` and
+ * the text goes in unmangled.
+ *
+ * `named` is only true for a double-faced card, where saying which
+ * face you are reading is the entire point of showing two panels.
+ */
+@Composable
+private fun FacePanel(face: Face, named: Boolean) {
+    Div(attrs = { classes("panel", "card-face") }) {
+        Div(attrs = { classes("panel-body") }) {
+            Div(attrs = { classes("face-head") }) {
+                if (named) Span(attrs = { classes("face-name") }) { Text(face.name) }
+                Span(attrs = { classes("spacer") }) {}
+                ManaCostRow(face.manaCost)
+            }
+            if (face.typeLine.isNotBlank()) {
+                Div(attrs = { classes("type-line") }) { Text(face.typeLine) }
+            }
+            if (face.oracleText.isNotBlank()) {
+                Div(attrs = { classes("oracle") }) { Text(face.oracleText) }
+            }
+            if (face.flavorText.isNotBlank()) {
+                Div(attrs = { classes("flavor") }) { Text(face.flavorText) }
+            }
+            face.stats?.let { Div(attrs = { classes("ptbox") }) { Text(it) } }
+        }
+    }
+}
+
 @Composable
 private fun Body(card: CardDetail) {
     CardQueries.art(card.printings.firstOrNull()?.scryfallId)?.let { url ->
@@ -132,6 +168,10 @@ private fun Body(card: CardDetail) {
         // rendered at 745px and ran off the side of a phone.
         Img(src = url, alt = card.name, attrs = { classes("card-scan") })
     }
+
+    // What the card actually says. Everything under it is about the
+    // collection; this is the card.
+    card.faces.forEach { FacePanel(it, card.faces.size > 1) }
 
     Div(attrs = { classes("flex-wrap", "small") }) {
         Span(attrs = { classes("tag", "mini") }) { Text("${card.owned} owned") }

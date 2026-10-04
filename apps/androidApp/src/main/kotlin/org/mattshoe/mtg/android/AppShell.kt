@@ -1,8 +1,8 @@
 package org.mattshoe.mtg.android
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.CardRow
+import org.mattshoe.mtg.core.Completion
 import org.mattshoe.mtg.core.DeckCard
 import org.mattshoe.mtg.core.ExportTo
 import org.mattshoe.mtg.core.Found
@@ -49,6 +50,39 @@ import org.mattshoe.mtg.core.Route
 import org.mattshoe.mtg.core.ShareWhat
 import org.mattshoe.mtg.core.Tweak
 import org.mattshoe.mtg.core.View
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
+import kotlinx.coroutines.delay
+import org.mattshoe.mtg.core.Design
+import kotlin.math.roundToInt
 
 /**
  * The shell: the nav, the lock, whichever screen is current, and
@@ -70,7 +104,8 @@ fun AppShell(
     onRunSql: () -> Unit,
     onPreviewEntry: () -> Unit,
     onApplyEntry: () -> Unit,
-    onExport: () -> Unit = {},
+    /** The Library's filtered set, copied or downloaded. */
+    onExport: (ExportTo) -> Unit = {},
     onOpenCard: (CardRow) -> Unit = {},
     onOpenFound: (Found) -> Unit = {},
     /** A card tapped in a deck list. Carries its own `name_norm`. */
@@ -98,32 +133,95 @@ fun AppShell(
     onShare: (ShareWhat, ExportTo) -> Unit = { _, _ -> },
     onCheckNames: () -> Unit = {},
     onCreateDeck: () -> Unit = {},
+    /** The new deck wizard's commander box, which has its own suggestions. */
+    onCommanderTyped: (Completion) -> Unit = {},
     onExit: () -> Unit = {},
 ) {
     var showFilters by remember { mutableStateOf(false) }
+    // One hamburger at every width, so there is one behaviour to keep
+    // straight rather than two. See `NavMenu`.
+    var menuOpen by remember { mutableStateOf(false) }
+    // Where the bar ends, in root pixels, so the menu hangs off the
+    // bottom of it rather than off a guess. The bar sits inside
+    // `safeDrawingPadding`, whose size is the status bar's and is not
+    // known here.
+    var barBottom by remember { mutableStateOf(0) }
+    // Asked only once back has nowhere left to go but out, and only
+    // when `AppState.wouldExitWithUnsavedEntry` says there is a
+    // pasted list that exit would throw away — see `BackHandler`
+    // below.
+    var confirmDiscardOnExit by remember { mutableStateOf(false) }
     val keys = remember { FocusRequester() }
+
+    // Where the Library grid and each deck's card list were scrolled
+    // to, kept here rather than inside `LibraryScreen` or
+    // `DecksScreen`.
+    //
+    // The `when` below composes exactly one screen at a time. Opening
+    // a card switches `state.view` to `CARD`, which stops composing
+    // whichever screen was showing — and a `LazyGridState` or
+    // `ScrollState` remembered inside that screen dies with it, so
+    // coming back built a fresh one at offset zero. These two live
+    // here instead, above the `when`, so they survive a trip through
+    // `View.CARD` the same way `AppShell` itself does.
+    //
+    // Nothing here ever calls `scrollTo`: the state objects are
+    // simply kept rather than recreated, so there is no restore step
+    // to fire too early or to fight a scroll already in progress —
+    // the two rules the web's `Scroll` object exists to enforce only
+    // apply to a world that rebuilds the page from the network on
+    // every navigation. Android's doesn't: `state.library.rows` and
+    // `state.decks.cards` are still sitting in memory when the screen
+    // comes back, so reusing the same state object is restoring.
+    val libraryGridState = remember { LazyGridState() }
+
+    // One `ScrollState` per destination: the shelf of decks keeps its
+    // place under the empty-slug key, and every deck keeps its own
+    // under its slug. Reading deck A, opening a card, coming back,
+    // closing it and opening deck B must not hand B deck A's offset.
+    //
+    // The keying alone was not enough, because the list and the open
+    // deck were one composable inside one scrolling `Column` — so
+    // whichever offset the container happened to be holding was the
+    // one the next thing rendered at. They are two destinations now
+    // (`DecksListScreen` and `DeckDetailScreen`), each with its own
+    // container, which is what actually makes an inherited offset
+    // impossible rather than merely unlikely.
+    val deckScrollStates = remember { mutableMapOf<String, ScrollState>() }
+    val deckScrollState = deckScrollStates.getOrPut(state.decks.openSlug.orEmpty()) { ScrollState(0) }
 
     // Nothing focuses this by hand, so the shortcuts work from the
     // moment the app opens rather than after the first tap.
     LaunchedEffect(Unit) { runCatching { keys.requestFocus() } }
 
-    // Back dismisses what is on top, then backs out of a deck, then
-    // leaves. The same order the web's history stack produces, from the
-    // same `Overlays`.
+    // The order is `AppState.back`, in the shared core, so the phone
+    // cannot have its own idea of what back means. It used to: the
+    // order was written out here, and it asked whether a deck was
+    // open before it asked whether a card was on screen. Reading a
+    // card from a deck both are true, so the first press closed the
+    // deck underneath and left the card up — a press that visibly did
+    // nothing — and the second fell through to Library.
+    // A null `back()` used to go straight to `onExit()`, which is how
+    // a pasted-but-unapplied Mass Entry list disappeared without a
+    // word: Matt, after the fact — "if you get to exit early, i want
+    // you to alert the user that the changes will not be saved."
+    // `wouldExitWithUnsavedEntry` is the one check for whether this
+    // particular null is that kind of exit; everything else about
+    // when to leave is still `AppState.back`'s call alone.
     BackHandler {
-        val next = state.dismissTop()
+        val next = state.back()
         when {
             next != null -> onState(next)
-            state.decks.openSlug != null -> onState(state.copy(decks = state.decks.close()))
-            state.view != View.DEFAULT -> onState(state.navigate(View.DEFAULT))
+            state.wouldExitWithUnsavedEntry -> confirmDiscardOnExit = true
             else -> onExit()
         }
     }
 
-    Column(
-        Modifier.fillMaxSize()
-            // Otherwise the tab row sits under the clock.
-            .safeDrawingPadding()
+    Box(Modifier.fillMaxSize()) {
+        Column(
+            Modifier.fillMaxSize()
+                // Otherwise the bar sits under the clock.
+                .safeDrawingPadding()
             .focusRequester(keys)
             .focusable()
             // Bubbling, not preview, on purpose: a focused text field
@@ -131,101 +229,188 @@ fun AppShell(
             // typing" rule the web gets from checking the target's tag.
             .onKeyEvent { event -> event.handledBy(state, onState) },
     ) {
-        Row(
-            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(8.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            // Only the views the lock allows. Gated ones are absent, not
-            // greyed out — the same as the web.
-            state.admin.visible.forEach { view ->
-                NavPill(view.label, state.view == view) { onState(state.navigate(view)) }
+            // The bar: the way to everywhere, the way home, and what
+            // you are looking at. The web's `AppNav`, in the same
+            // order — burger, mark, title.
+            Row(
+                Modifier.fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                    .onGloballyPositioned { barBottom = it.boundsInRoot().bottom.roundToInt() },
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                NavBurger(menuOpen) { menuOpen = !menuOpen }
+                HomeMark {
+                    menuOpen = false
+                    onState(state.navigate(View.DEFAULT))
+                }
+                // `.topbar-title`. One line, clipped rather than
+                // wrapped: a deck called "Alela, Artful Provocateur"
+                // would otherwise push the bar to two rows and move
+                // every screen down with it.
+                Text(
+                    state.title,
+                    Modifier.weight(1f).padding(start = 4.dp).testTag("topbar-title"),
+                    color = Ink,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
-            Ghost(if (state.admin.unlocked) "Lock" else "Unlock") {
-                if (state.admin.unlocked) onState(state.copy(admin = state.admin.lock()).navigate(state.route))
-                else onState(state.opening(Overlay.UNLOCK))
+
+            when (state.view) {
+                View.LIBRARY -> LibraryScreen(
+                    state = state.library,
+                    onState = { onState(state.copy(library = it)) },
+                    onSearch = onSearch,
+                    onOpen = onOpenCard,
+                    showFilters = showFilters,
+                    onToggleFilters = { showFilters = !showFilters },
+                    onExport = onExport,
+                    complete = state.complete,
+                    onName = { c ->
+                        onState(state.typedCardName(c))
+                        if (c.worthAsking) onLookup(c.term)
+                        onSearch()
+                    },
+                    // Close the list and nothing else — not
+                    // `typedCardName`, which would also hand the name
+                    // filter whatever term this frame drew, and not a
+                    // search either. The only thing a tap somewhere
+                    // else asked for is the list out of the way.
+                    onDismissName = { onState(state.copy(complete = state.complete.closed())) },
+                    onCheatsheet = { onState(state.opening(Overlay.CHEATSHEET)) },
+                    // Without this every facet list in the panel — types,
+                    // set types, layouts, frames, borders, the deck and
+                    // format dropdowns — renders empty on the phone while
+                    // the website fills them from the same state.
+                    facets = state.facets,
+                    gridState = libraryGridState,
+                )
+
+                // Two destinations under one `View`, composed one at
+                // a time, and **the route decides which** — not
+                // whether the data has arrived. That is the whole
+                // point of calling it a destination: the address says
+                // where you are, and a deck whose cards are still in
+                // flight is still the deck you navigated to.
+                //
+                // Reading it off `state.decks.open` instead had the
+                // list reappear under you for as long as the fetch
+                // took, and left `← Decks` unable to get back at all
+                // when the deck was still loaded in state.
+                View.DECKS -> {
+                    val openDeck = state.decks.open.takeIf { state.route.rest.isNotEmpty() }
+                    if (state.route.rest.isEmpty()) {
+                        DecksListScreen(
+                            state = state.decks,
+                            scrollState = deckScrollState,
+                            admin = state.admin.unlocked,
+                            onOpen = { onOpenDeck(it.slug) },
+                            onNew = { onState(state.opening(Overlay.NEW_DECK)) },
+                        )
+                    } else if (openDeck == null) {
+                        // The address names a deck whose cards have
+                        // not landed. Still the deck's destination,
+                        // with the deck's own way back — not the
+                        // shelf, which would take the gesture.
+                        DeckLoadingScreen(
+                            slug = state.route.rest,
+                            error = state.decks.error,
+                            onClose = { onState(state.navigate(Route(View.DECKS))) },
+                        )
+                    } else {
+                        DeckDetailScreen(
+                            state = state.decks,
+                            open = openDeck,
+                            scrollState = deckScrollState,
+                            admin = state.admin.unlocked,
+                            onClose = { onState(state.navigate(Route(View.DECKS))) },
+                            onEdit = { onEditDeck(it.slug) },
+                            onDisassemble = { onAskDisassemble(it.slug) },
+                            onRename = { onAskRename(it.slug) },
+                            onOpenCard = { card, owner ->
+                                onOpenNamed(card.name, card.nameNorm, owner)
+                            },
+                            onAddCard = onAddCard,
+                            onTweak = onTweak,
+                            onShare = onShare,
+                        )
+                    }
+                }
+
+                View.STATS -> StatsScreen(state.stats) { owner: Owner? ->
+                    onState(state.copy(stats = state.stats.scopedTo(owner).loading()))
+                }
+
+                View.CONSOLE -> ConsoleScreen(
+                    state = state.console,
+                    onState = { onState(state.copy(console = it)) },
+                    onRun = onRunSql,
+                    onCheatsheet = { onState(state.opening(Overlay.CHEATSHEET)) },
+                )
+
+                View.LOGS -> LogsScreen(state.logs) { onState(state.copy(logs = it)) }
+
+                // A card is a destination here too, so the system back
+                // gesture leaves it the way it leaves any other screen.
+                View.CARD -> CardSheet(
+                    card = state.card ?: org.mattshoe.mtg.core.CardDetail(name = state.route.rest).loading(),
+                    onClose = { onState(state.leaveCard()) },
+                    // Reading a deck a card at a time, the same three
+                    // controls the web page puts under the card.
+                    previous = state.previousCard,
+                    next = state.nextCard,
+                    place = state.cardPlace,
+                    onStep = { c -> onOpenNamed(c.name, c.nameNorm, "") },
+                )
+
+                View.ENTRY -> MassEntryScreen(
+                    state = state.entry,
+                    onState = { onState(state.copy(entry = it)) },
+                    onPreview = onPreviewEntry,
+                    onApply = onApplyEntry,
+                    history = state.history,
+                    onPickFile = onPickFile,
+                    onReuse = onReuse,
+                    onClearHistory = onClearHistory,
+                )
             }
-            Ghost("Find") {
-                onState(state.opening(Overlay.PALETTE).copy(palette = state.palette.opened()))
-            }
+
         }
 
-        when (state.view) {
-            View.LIBRARY -> LibraryScreen(
-                state = state.library,
-                onState = { onState(state.copy(library = it)) },
-                onSearch = onSearch,
-                onOpen = onOpenCard,
-                showFilters = showFilters,
-                onToggleFilters = { showFilters = !showFilters },
-                onExport = onExport,
-                complete = state.complete,
-                onName = { c ->
-                    onState(state.typedCardName(c))
-                    if (c.worthAsking) onLookup(c.term)
-                    onSearch()
-                },
-                onCheatsheet = { onState(state.opening(Overlay.CHEATSHEET)) },
-                // Without this every facet list in the panel — types,
-                // set types, layouts, frames, borders, the deck and
-                // format dropdowns — renders empty on the phone while
-                // the website fills them from the same state.
-                facets = state.facets,
-            )
-
-            View.DECKS -> DecksScreen(
-                state = state.decks,
-                onOpen = { onOpenDeck(it.slug) },
-                onClose = { onState(state.copy(decks = state.decks.close())) },
-                admin = state.admin.unlocked,
-                onNew = { onState(state.opening(Overlay.NEW_DECK)) },
-                onEdit = { onEditDeck(it.slug) },
-                onDisassemble = { onAskDisassemble(it.slug) },
-                onRename = { onAskRename(it.slug) },
-                onOpenCard = { card, owner -> onOpenNamed(card.name, card.nameNorm, owner) },
-                onAddCard = onAddCard,
-                onTweak = onTweak,
-                onShare = onShare,
-            )
-
-            View.STATS -> StatsScreen(state.stats) { owner: Owner? ->
-                onState(state.copy(stats = state.stats.scopedTo(owner).loading()))
-            }
-
-            View.CONSOLE -> ConsoleScreen(
-                state = state.console,
-                onState = { onState(state.copy(console = it)) },
-                onRun = onRunSql,
-                onCheatsheet = { onState(state.opening(Overlay.CHEATSHEET)) },
-            )
-
-            View.LOGS -> LogsScreen(state.logs) { onState(state.copy(logs = it)) }
-
-            // A card is a destination here too, so the system back
-            // gesture leaves it the way it leaves any other screen.
-            View.CARD -> CardSheet(
-                card = state.card ?: org.mattshoe.mtg.core.CardDetail(name = state.route.rest).loading(),
-                onClose = { onState(state.leaveCard()) },
-                // Reading a deck a card at a time, the same three
-                // controls the web page puts under the card.
-                previous = state.previousCard,
-                next = state.nextCard,
-                place = state.cardPlace,
-                onStep = { c -> onOpenNamed(c.name, c.nameNorm, "") },
-            )
-
-            View.ENTRY -> MassEntryScreen(
-                state = state.entry,
-                onState = { onState(state.copy(entry = it)) },
-                onPreview = onPreviewEntry,
-                onApply = onApplyEntry,
-                history = state.history,
-                onPickFile = onPickFile,
-                onReuse = onReuse,
-                onClearHistory = onClearHistory,
-            )
+        // Floated over the screen rather than appended to the end of
+        // it, so it sits where this says and not wherever the current
+        // layout happened to run out — which on a phone was directly
+        // over the button you were reaching for.
+        state.toast?.let { message ->
+            ToastTray(message, onDismiss = { onState(state.say(null)) })
         }
 
-        state.toast?.let { Muted(it, Modifier.padding(16.dp)) }
+        // Over the page rather than inside the bar, so the menu is
+        // not clipped by a bar one row high and nothing underneath it
+        // takes the press meant for the backdrop.
+        if (menuOpen) {
+            // A press anywhere else closes it, the way a menu is
+            // expected to behave. `detectTapGestures` and not
+            // `clickable`: a full-screen `clickable` sets
+            // `shouldMergeDescendantSemantics`, which folds the whole
+            // page beneath it into one node and blinds every test
+            // that reads a tag.
+            Box(
+                Modifier.fillMaxSize()
+                    .testTag("nav-backdrop")
+                    .pointerInput(Unit) { detectTapGestures { menuOpen = false } },
+            )
+            NavMenu(
+                state = state,
+                top = barBottom,
+                // Closes even when the view picked is the one already
+                // showing — otherwise the menu sits open over the page.
+                onPick = { next -> menuOpen = false; onState(next) },
+            )
+        }
     }
 
     // ------------------------------------------------------- overlays
@@ -291,6 +476,8 @@ fun AppShell(
             onCheck = onCheckNames,
             onCreate = onCreateDeck,
             onClose = { onState(state.closing(Overlay.NEW_DECK)) },
+            onCommanderTyped = onCommanderTyped,
+            onPickFile = onPickFile,
         )
     }
 
@@ -328,7 +515,183 @@ fun AppShell(
             },
         )
     }
+
+    // Not an overlay: `AppState` has nothing open to track this
+    // against, because there is nothing left open by the time back
+    // gets here. The dialog itself is the only thing standing between
+    // the press and `onExit()`, so the safe choice — keep editing —
+    // is both the dismiss button and what an outside tap or a second
+    // back press does, and the destructive one has to be picked on
+    // purpose.
+    if (confirmDiscardOnExit) {
+        AlertDialog(
+            onDismissRequest = { confirmDiscardOnExit = false },
+            title = { Text("Leave without saving?") },
+            text = { Text("Your list has not been written to the collection yet.") },
+            confirmButton = {
+                TextButton(onClick = { confirmDiscardOnExit = false; onExit() }) { Text("Leave anyway") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDiscardOnExit = false }) { Text("Keep editing") }
+            },
+        )
+    }
 }
+
+// ------------------------------------------------------------- the nav
+
+// Every tag below is the website's own class name — `nav-burger`,
+// `app-menu`, `app-menu-sep`, `app-menu-group`, `topbar-title`,
+// `brand-mark` — so a test on either platform names the same thing.
+
+/** `.nav-burger`: 34dp of button, three bars, inside a thumb-sized box. */
+@Composable
+private fun NavBurger(open: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier.sizeIn(minWidth = TouchTarget, minHeight = TouchTarget)
+            .testTag("nav-burger")
+            // The web's `aria-label`, which is what a screen reader
+            // and every finder here read it by.
+            .semantics {
+                role = Role.Button
+                contentDescription = if (open) "Close menu" else "Menu"
+            }
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            Modifier.size(34.dp)
+                .background(Bg3, RoundedCornerShape(8.dp))
+                .border(1.dp, if (open) Line2 else Line, RoundedCornerShape(8.dp)),
+            verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            // `.nav-burger .bar`: 16 by 2, in the button's own colour.
+            repeat(3) { Box(Modifier.width(16.dp).height(2.dp).background(if (open) Ink else Ink2)) }
+        }
+    }
+}
+
+/**
+ * `.brand`: the app's own icon, and it goes home.
+ *
+ * The foreground layer rather than the adaptive icon beside it —
+ * `painterResource` wants something it can decode, and an
+ * `<adaptive-icon>` is a composition of two other drawables.
+ */
+@Composable
+private fun HomeMark(onClick: () -> Unit) {
+    Box(
+        Modifier.sizeIn(minWidth = TouchTarget, minHeight = TouchTarget)
+            .testTag("brand-mark")
+            .semantics { role = Role.Button; contentDescription = "Home" }
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Image(
+            painter = painterResource(R.drawable.ic_launcher_foreground),
+            contentDescription = null,
+            modifier = Modifier.size(34.dp),
+        )
+    }
+}
+
+/**
+ * `.app-menu`: everywhere you can go, in one list.
+ *
+ * The ungated views first, then the admin half behind a rule and a
+ * heading so it reads as a different kind of thing rather than three
+ * more places to go, then the lock. The same order as `AppNav`, off
+ * the same `state.admin.visible`, so neither platform can offer a
+ * screen the other does not.
+ *
+ * Hung off the bottom of the bar at a measured offset. `Popup` would
+ * place it too, but the suggestion list is already one and its
+ * dismissal is wound through `AppState.back`; a second window with
+ * its own idea of what back means is how that gets undone.
+ */
+@Composable
+private fun NavMenu(state: AppState, top: Int, onPick: (AppState) -> Unit) {
+    Box(Modifier.fillMaxSize()) {
+        Column(
+            Modifier
+                .offset { IntOffset(MENU_INSET.roundToPx(), top + MENU_GAP.roundToPx()) }
+                // Fixed rather than min-width: the rows fill it, and
+                // a row that fills a width nothing has decided takes
+                // the whole screen.
+                .width(MENU_WIDTH)
+                .background(Bg2, Radius)
+                .border(1.dp, Line2, Radius)
+                .padding(7.dp)
+                .testTag("app-menu"),
+            verticalArrangement = Arrangement.spacedBy(1.dp),
+        ) {
+            // Everything anybody can reach.
+            state.admin.visible.filterNot { it.gated }.forEach { view ->
+                MenuTab(view.label, state.view == view) { onPick(state.navigate(view)) }
+            }
+
+            // And the admin half, set apart.
+            Box(
+                Modifier.fillMaxWidth()
+                    .padding(start = 4.dp, end = 4.dp, top = 6.dp, bottom = 2.dp)
+                    .height(1.dp)
+                    .background(Line2)
+                    .testTag("app-menu-sep"),
+            )
+            Text(
+                "Admin".uppercase(),
+                Modifier.padding(start = 11.dp, end = 11.dp, top = 3.dp, bottom = 5.dp)
+                    .testTag("app-menu-group"),
+                color = Ink3,
+                fontSize = 10.5.sp,
+                fontWeight = FontWeight.Bold,
+            )
+
+            state.admin.visible.filter { it.gated }.forEach { view ->
+                MenuTab(view.label, state.view == view) { onPick(state.navigate(view)) }
+            }
+
+            MenuTab(if (state.admin.unlocked) "Lock" else "Unlock", on = false) {
+                onPick(
+                    if (state.admin.unlocked) {
+                        state.copy(admin = state.admin.lock()).navigate(state.route)
+                    } else {
+                        state.opening(Overlay.UNLOCK)
+                    },
+                )
+            }
+        }
+    }
+}
+
+/** `.app-tab` inside the menu: a full-width row, gold while it is the current view. */
+@Composable
+private fun MenuTab(label: String, on: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier.fillMaxWidth()
+            // A row of text is about 34dp on its own, which is the
+            // web's `.app-tab` and three quarters of a fingertip.
+            .heightIn(min = TouchTarget)
+            .background(if (on) AccentDim else Color.Transparent, RadiusSm)
+            .semantics { role = Role.Button }
+            .clickable(onClick = onClick)
+            .padding(horizontal = 11.dp),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Text(
+            label,
+            color = if (on) Accent2 else Ink2,
+            fontSize = Design.SMALL.sp,
+            fontWeight = FontWeight.Medium,
+        )
+    }
+}
+
+/** `top: calc(100% + 7px); left: 0` against the bar's own 8dp inset. */
+private val MENU_GAP = 7.dp
+private val MENU_INSET = 8.dp
+private val MENU_WIDTH = 220.dp
 
 /** Where a deck tap goes, as a route rather than a special case. */
 fun AppState.openDeck(slug: String) = navigate(Route(View.DECKS, slug))
@@ -354,4 +717,39 @@ private fun androidx.compose.ui.input.key.KeyEvent.handledBy(
         ?: return false
     onState(next)
     return true
+}
+
+@Composable
+private fun ToastTray(message: String, onDismiss: () -> Unit) {
+    val latest by rememberUpdatedState(message)
+    val onLatestDismiss by rememberUpdatedState(onDismiss)
+
+    LaunchedEffect(message) {
+        delay(AppState.TOAST_MS)
+        if (latest == message) onLatestDismiss()
+    }
+
+    val narrow = LocalConfiguration.current.screenWidthDp < 600
+    Box(
+        Modifier.fillMaxSize().padding(16.dp),
+        contentAlignment = if (narrow) Alignment.TopCenter else Alignment.BottomEnd,
+    ) {
+        Row(
+            Modifier
+                .widthIn(max = 380.dp)
+                .background(Bg2, RadiusSm)
+                .border(1.5.dp, Accent, RadiusSm)
+                .semantics {
+                    contentDescription = "Dismiss"
+                    role = Role.Button
+                }
+                .clickable(onClick = onDismiss)
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(message, Modifier.weight(1f), color = Ink, fontSize = Design.SMALL.sp)
+            Text("×", color = Ink2, fontSize = 17.sp)
+        }
+    }
 }

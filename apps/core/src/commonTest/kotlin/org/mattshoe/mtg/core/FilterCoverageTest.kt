@@ -464,14 +464,14 @@ class TheRestOfTheClaimsTest {
     @Test
     fun theDrawerAsksForLegalitiesAndRulings() {
         val queries = Load.card("sol ring")
-        assertEquals(4, queries.size, "printings, decks, legalities, rulings")
-        assertTrue(queries[2].sql.contains("FROM legalities"), queries[2].sql)
-        assertTrue(queries[3].sql.contains("FROM rulings"), queries[3].sql)
+        assertEquals(5, queries.size, "face, printings, decks, legalities, rulings")
+        assertTrue(queries[3].sql.contains("FROM legalities"), queries[3].sql)
+        assertTrue(queries[4].sql.contains("FROM rulings"), queries[4].sql)
         // Both key on the oracle id, which is what a ruling belongs
         // to — a printing does not have its own rulings.
-        assertTrue(queries[2].sql.contains("oracle_id"))
         assertTrue(queries[3].sql.contains("oracle_id"))
-        assertEquals(listOf("sol ring"), queries[2].params)
+        assertTrue(queries[4].sql.contains("oracle_id"))
+        assertEquals(listOf("sol ring"), queries[3].params)
     }
 
     @Test

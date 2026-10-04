@@ -7,16 +7,18 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.viewModels
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.mattshoe.mtg.core.Admin
+import org.mattshoe.mtg.core.AdminToken
 import org.mattshoe.mtg.core.ApiFailure
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.CardDetail
@@ -32,6 +34,7 @@ import org.mattshoe.mtg.core.DisassembleState
 import org.mattshoe.mtg.core.EntryHistory
 import org.mattshoe.mtg.core.Export
 import org.mattshoe.mtg.core.ExportTo
+import org.mattshoe.mtg.core.FacetQueries
 import org.mattshoe.mtg.core.Found
 import org.mattshoe.mtg.core.Load
 import org.mattshoe.mtg.core.MtgApi
@@ -63,16 +66,102 @@ import java.time.Instant
  */
 class MainActivity : ComponentActivity() {
 
-    private val api = MtgApi()
+    private var api = MtgApi()
     private val scryfall = Scryfall()
     private val prefs by lazy { getSharedPreferences("mtg", Context.MODE_PRIVATE) }
     private val store: Store by lazy { PrefsStore(prefs) }
+    private var downloads: Downloads = MediaStoreDownloads(this)
 
-    private var app by mutableStateOf(AppState())
+    /**
+     * The state, and the work in flight, both outliving this activity.
+     *
+     * Android recreates the activity on every configuration change,
+     * so anything held in a field here is gone on a rotation. See
+     * [MtgViewModel].
+     */
+    private val model: MtgViewModel by viewModels()
 
-    private var lookupJob: Job? = null
-    private var findJob: Job? = null
-    private var tweakJob: Job? = null
+    /**
+     * The state. Every write goes through here rather than through
+     * `onCreate`'s one `onState` callback, because `onUnlock` and the
+     * rest of `work`/`claim` write `app` directly and never touch it.
+     *
+     * `AdminToken.sync` diffs the token on every single write, so the
+     * nav row's Lock button, `Shortcuts`' own toggle, and whatever
+     * calls `app = ` next all clear the persisted copy the same way —
+     * there is no second step for any of them to skip.
+     */
+    private var app: AppState
+        get() = model.app
+        set(value) {
+            AdminToken.sync(store, model.app.admin, value.admin)
+            model.app = value
+        }
+
+    // All on the ViewModel, so a rotation mid-request neither cancels
+    // the work nor loses the handle to it.
+    private var lookupJob: Job?
+        get() = model.lookupJob
+        set(v) { model.lookupJob = v }
+    private var findJob: Job?
+        get() = model.findJob
+        set(v) { model.findJob = v }
+    private var tweakJob: Job?
+        get() = model.tweakJob
+        set(v) { model.tweakJob = v }
+    private var commanderJob: Job?
+        get() = model.commanderJob
+        set(v) { model.commanderJob = v }
+
+    /**
+     * The seam a test reaches through, the same way the web's
+     * `useForTesting` does: nothing here changes what the app does,
+     * only what it talks to. Called before `onCreate` — real
+     * `MtgApi()` has already been constructed, but nothing has used
+     * it yet.
+     */
+    internal fun useForTesting(api: MtgApi) {
+        this.api = api
+    }
+
+    /**
+     * The seam a test reaches through for a download, the same way
+     * [useForTesting] swaps the network. See [Downloads].
+     */
+    internal fun useDownloadsForTesting(downloads: Downloads) {
+        this.downloads = downloads
+    }
+
+    /**
+     * Where the app's coroutines run: the ViewModel's scope, not the
+     * activity's. `lifecycleScope` is cancelled when a configuration
+     * change destroys the activity, so a rotation part-way through a
+     * search abandoned the search.
+     */
+    private val scope get() = model.viewModelScope
+
+    /** What `onCreate` landed, for a test that cannot see a private field. */
+    internal fun stateForTesting(): AppState = app
+
+    /** Lets a test put the activity into a state it did not reach by pressing anything. */
+    internal fun setStateForTesting(state: AppState) {
+        app = state
+    }
+
+    /** `shareDeck`, for a test that cannot see a private method. */
+    internal fun shareDeckForTesting(what: ShareWhat, where: ExportTo): AppState {
+        app = shareDeck(what, where)
+        return app
+    }
+
+    /** `exportList`, for a test that cannot see a private method. */
+    internal suspend fun exportListForTesting(where: ExportTo): AppState {
+        app = exportList(where)
+        return app
+    }
+
+    /** A second load, the way a config change or a re-entry would ask for one. */
+    internal fun loadFacetsForTesting() = loadFacets()
 
     /**
      * Everything, because a narrow list greys out the file you actually
@@ -86,11 +175,19 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(saved: Bundle?) {
         super.onCreate(saved)
 
-        app = AppState(
-            admin = Admin(prefs.getString("token", "").orEmpty().ifBlank { null }),
-            history = EntryHistory.load(store),
-        )
-        loadFor(app)
+        // Only on a genuinely new start. `onCreate` runs again after
+        // every configuration change, and re-running this reset `app`
+        // to a fresh `AppState` — which emptied the app just as
+        // thoroughly as holding the state in a field did.
+        if (!model.started) {
+            model.started = true
+            app = AppState(
+                admin = Admin(AdminToken.restore(store)),
+                history = EntryHistory.load(store),
+            )
+            loadFor(app)
+            loadFacets()
+        }
 
         setContent {
             MtgTheme {
@@ -106,7 +203,8 @@ class MainActivity : ComponentActivity() {
                             claim(app.admin.canTry, { app.copy(admin = app.admin.tries()) }) {
                                 try {
                                     val t = api.unlock(password)
-                                    prefs.edit().putString("token", t).apply()
+                                    // Persisted by the `app` setter, which
+                                    // diffs the token on every write.
                                     app.copy(admin = app.admin.unlock(t)).say("Admin mode on")
                                 } catch (e: Exception) {
                                     app = app.copy(admin = app.admin.gaveUp())
@@ -115,7 +213,18 @@ class MainActivity : ComponentActivity() {
                             }
                         },
                         onSearch = { work { search() } },
-                        onOpenDeck = { slug -> work { openDeck(slug) } },
+                        // Through the address, the way every other
+                        // screen is reached. Loading the deck without
+                        // naming it in the route left the route saying
+                        // "the deck list", so a card opened from the
+                        // deck remembered the list as where it came
+                        // from and back landed there instead of in the
+                        // deck. `loadFor` sees the slug and fetches.
+                        onOpenDeck = { slug ->
+                            val next = app.navigate(Route(View.DECKS, slug))
+                            app = next
+                            loadFor(next)
+                        },
                         onRunSql = {
                             claim(
                                 app.console.canRun,
@@ -150,7 +259,7 @@ class MainActivity : ComponentActivity() {
                                 done
                             }
                         },
-                        onExport = { work { exportList() } },
+                        onExport = { where -> work { exportList(where) } },
                         onOpenCard = { row -> openCard(row) },
                         onOpenFound = { found -> openFound(found) },
                         onOpenNamed = { name, norm, owner -> openNamed(name, norm, owner) },
@@ -219,6 +328,7 @@ class MainActivity : ComponentActivity() {
                                 { app.copy(newDeck = app.newDeck.working("Creating…")) },
                             ) { createDeck() }
                         },
+                        onCommanderTyped = { c -> commanderTyped(c) },
                         onExit = { finish() },
                     )
                 }
@@ -247,7 +357,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun work(block: suspend () -> AppState) {
-        lifecycleScope.launch {
+        scope.launch {
             app = try {
                 block()
             } catch (e: ApiFailure) {
@@ -290,9 +400,84 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * The lists the filter panel offers, read once.
+     *
+     * The sibling of the web's `loadFacets` — same guard, same silent
+     * failure, same shape — so the phone's type checklist and deck
+     * picker fill from the collection instead of sitting empty
+     * forever. Launched once from `onCreate`, not from `loadFor`,
+     * because these lists do not change per screen and must not be
+     * refetched on every navigation.
+     */
+    /**
+     * The in-flight facet load, so a test can wait for it.
+     *
+     * Not for the app's benefit — nothing here joins it. It exists
+     * because the alternative is a test that depends on a dispatcher
+     * running the coroutine inline, and that test passed alone and
+     * failed in company depending on what else had touched
+     * `Dispatchers.Main` first. A job you can join is deterministic
+     * whoever ran before you.
+     */
+    internal val facetsJob: Job? get() = model.facetsJob
+
+    /**
+     * Why the facet load gave up, if it did.
+     *
+     * Production ignores a facet failure on purpose — a filter panel
+     * with typed fields is still usable. That makes the failure
+     * invisible, which cost three attempts at a flaky test that could
+     * only ever report "facets never loaded" and never why.
+     */
+    internal val facetsError: Exception? get() = model.facetsError
+
+    /**
+     * Whether the facet load actually wrote its result.
+     *
+     * Set immediately after the assignment, so a test can tell "the
+     * load never produced anything" from "the load produced it and
+     * something else overwrote it" — which are the two remaining
+     * stories behind an unloaded `facets`, and which the state alone
+     * cannot distinguish.
+     */
+    internal val facetsApplied: Boolean get() = model.facetsApplied
+
+    private fun loadFacets() {
+        if (app.facets.loaded) return
+        model.facetsError = null
+        model.facetsApplied = false
+        model.facetsJob = scope.launch {
+            try {
+                val all = FacetQueries.everything.map { api.query(it).let { r -> r.cols to r.rows } }
+                val d = api.query(FacetQueries.decks)
+                app = app.copy(
+                    facets = FacetQueries.decodeEverything(
+                        all,
+                        FacetQueries.decodeDecks(d.cols, d.rows),
+                    ),
+                )
+                model.facetsApplied = true
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // Never swallowed. `catch (e: Exception)` below would
+                // have caught this too, which is how a cancelled load
+                // used to be indistinguishable from a failed one — and
+                // `MainActivityFacetsTest` could then only report the
+                // symptom, "facets never loaded", with no cause.
+                throw e
+            } catch (e: Exception) {
+                // A panel with typed fields instead of checkbox lists is
+                // still a usable panel. Kept, but no longer silent: the
+                // throwable is held so a test can say what actually
+                // went wrong instead of only that nothing arrived.
+                model.facetsError = e
+            }
+        }
+    }
+
     /** Like `work`, but the failure lands on the screen that asked. */
     private fun intoPage(view: View, block: suspend () -> AppState) {
-        lifecycleScope.launch {
+        scope.launch {
             app = try {
                 block()
             } catch (e: ApiFailure) {
@@ -362,7 +547,8 @@ class MainActivity : ComponentActivity() {
     }
 
     private suspend fun loadCard(nameNorm: String, label: String): AppState {
-        val (printings, uses, legal, rules) = Load.card(nameNorm)
+        val (face, printings, uses, legal, rules) = Load.card(nameNorm)
+        val f = api.query(face)
         val p = api.query(printings)
         val u = api.query(uses)
         val l = api.query(legal)
@@ -375,6 +561,7 @@ class MainActivity : ComponentActivity() {
                 usedIn = CardQueries.decodeUses(u.cols, u.rows),
                 legalities = CardQueries.decodeLegalities(l.cols, l.rows),
                 rulings = CardQueries.decodeRulings(r.cols, r.rows),
+                faces = CardQueries.decodeFaces(f.cols, f.rows),
             ),
         )
     }
@@ -384,7 +571,7 @@ class MainActivity : ComponentActivity() {
     /** Debounced, and the one in flight is abandoned when a newer starts. */
     private fun find(term: String) {
         findJob?.cancel()
-        findJob = lifecycleScope.launch {
+        findJob = scope.launch {
             delay(Completion.DEBOUNCE_MS.toLong())
             try {
                 val r = api.query(PaletteQueries.find(term))
@@ -402,9 +589,23 @@ class MainActivity : ComponentActivity() {
 
     private fun lookup(term: String) {
         lookupJob?.cancel()
-        lookupJob = lifecycleScope.launch {
+        lookupJob = scope.launch {
             delay(Completion.DEBOUNCE_MS.toLong())
             app = app.copy(complete = app.complete.suggested(scryfall.complete(term)))
+        }
+    }
+
+    /**
+     * The new deck wizard's commander box, which has its own
+     * suggestions — separate from the Library's, so typing a
+     * commander here must not touch the search filter.
+     */
+    private fun commanderTyped(c: Completion) {
+        if (!c.worthAsking) return
+        commanderJob?.cancel()
+        commanderJob = scope.launch {
+            delay(Completion.DEBOUNCE_MS.toLong())
+            app = app.copy(newDeck = app.newDeck.copy(hint = app.newDeck.hint.suggested(scryfall.complete(c.term))))
         }
     }
 
@@ -459,7 +660,7 @@ class MainActivity : ComponentActivity() {
     /** Debounced, and the one in flight is abandoned when a newer starts. */
     private fun findForTweak(term: String) {
         tweakJob?.cancel()
-        tweakJob = lifecycleScope.launch {
+        tweakJob = scope.launch {
             delay(Completion.DEBOUNCE_MS.toLong())
             try {
                 val r = api.query(PaletteQueries.find(term))
@@ -515,11 +716,9 @@ class MainActivity : ComponentActivity() {
      * list is the deck itself, which is what somebody wants when they
      * are going to build it rather than read about it.
      *
-     * Both halves of `ExportTo` end up on the clipboard here, because
-     * a phone has nowhere useful to put a loose text file and pasting
-     * is what the next app is going to ask for either way. The wording
-     * still distinguishes them, so a tap on Download does not look
-     * like it did nothing.
+     * `where` decides where it lands — see [Downloads] for why Download
+     * still falls back to the clipboard on some phones, and why the
+     * toast always says which one actually happened.
      */
     private fun shareDeck(what: ShareWhat, where: ExportTo): AppState {
         val deck = app.decks.open ?: return app.say("No deck open")
@@ -531,37 +730,79 @@ class MainActivity : ComponentActivity() {
             ShareWhat.LINK -> "${deck.slug}-link.txt"
             ShareWhat.DECKLIST -> Export.deckFilename(deck.slug, today())
         }
-        val clip = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        clip.setPrimaryClip(ClipData.newPlainText(name, text))
-        return app.say(
-            when (what) {
-                ShareWhat.LINK -> "Link copied"
-                ShareWhat.DECKLIST -> "${app.decks.totalCards} cards copied"
-            },
-        )
+        val copiedLabel = if (what == ShareWhat.LINK) "Link copied" else "${app.decks.totalCards} cards copied"
+        return when (where) {
+            ExportTo.CLIPBOARD -> {
+                copyToClipboard(name, text)
+                app.say(copiedLabel)
+            }
+
+            ExportTo.FILE -> when (downloads.save(name, text)) {
+                DownloadResult.SAVED -> app.say(
+                    if (what == ShareWhat.LINK) "Link downloaded" else "${app.decks.totalCards} cards exported",
+                )
+
+                DownloadResult.UNSUPPORTED_OS -> {
+                    copyToClipboard(name, text)
+                    app.say("$copiedLabel — downloads need Android 10 or newer")
+                }
+
+                DownloadResult.FAILED -> {
+                    copyToClipboard(name, text)
+                    app.say("could not save the file — copied instead")
+                }
+            }
+        }
     }
 
     // ----------------------------------------------------------- export
 
     /**
-     * The whole filtered set as a decklist, on the clipboard.
+     * The whole filtered set as a decklist.
      *
-     * The web downloads a file because a browser can; a phone pastes it
-     * into whatever asked for it, which is what an export is for here.
-     * The text is identical — `Export.decklist`, shared.
+     * The web downloads a file because a browser always can; a phone
+     * can too, from Android 10 — see [Downloads]. Below that, or if
+     * the write itself fails, this falls back to the clipboard and the
+     * toast says so rather than claiming a download that did not
+     * happen. The text is identical either way — `Export.decklist`,
+     * shared with the web.
      */
-    private suspend fun exportList(): AppState {
+    private suspend fun exportList(where: ExportTo): AppState {
         val r = api.query(Export.query(app.library.filters))
         val text = Export.decklist(Rows.cards(r.cols, r.rows))
+        val name = Export.filename(today())
+        val copiedLabel = "Copied ${r.rows.size} cards as a decklist"
+        return when (where) {
+            ExportTo.CLIPBOARD -> {
+                copyToClipboard(name, text)
+                app.say(copiedLabel)
+            }
+
+            ExportTo.FILE -> when (downloads.save(name, text)) {
+                DownloadResult.SAVED -> app.say("Exported ${r.rows.size} cards")
+
+                DownloadResult.UNSUPPORTED_OS -> {
+                    copyToClipboard(name, text)
+                    app.say("$copiedLabel — downloads need Android 10 or newer")
+                }
+
+                DownloadResult.FAILED -> {
+                    copyToClipboard(name, text)
+                    app.say("could not save the file — copied instead")
+                }
+            }
+        }
+    }
+
+    private fun copyToClipboard(name: String, text: String) {
         val clip = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        clip.setPrimaryClip(ClipData.newPlainText(Export.filename(today()), text))
-        return app.say("Copied ${r.rows.size} cards as a decklist")
+        clip.setPrimaryClip(ClipData.newPlainText(name, text))
     }
 
     // ------------------------------------------------------------ files
 
     private fun readFiles(uris: List<Uri>) {
-        lifecycleScope.launch {
+        scope.launch {
             val chunks = mutableListOf<String>()
             val names = mutableListOf<String>()
             uris.forEach { uri ->

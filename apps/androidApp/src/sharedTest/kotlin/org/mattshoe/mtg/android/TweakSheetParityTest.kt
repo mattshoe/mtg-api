@@ -1,28 +1,24 @@
 package org.mattshoe.mtg.android
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
-import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextReplacement
-import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Rule
@@ -30,13 +26,19 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.mattshoe.mtg.android.Parity.Fact
 import org.mattshoe.mtg.android.Parity.shoot
+import org.mattshoe.mtg.core.Admin
+import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.Deck
 import org.mattshoe.mtg.core.DeckCard
 import org.mattshoe.mtg.core.DeckPlan
 import org.mattshoe.mtg.core.DeckTweak
+import org.mattshoe.mtg.core.DecksState
 import org.mattshoe.mtg.core.Found
+import org.mattshoe.mtg.core.Overlay
+import org.mattshoe.mtg.core.Route
 import org.mattshoe.mtg.core.Tally
 import org.mattshoe.mtg.core.Tweak
+import org.mattshoe.mtg.core.View
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
@@ -57,6 +59,15 @@ import kotlin.test.assertTrue
  * card, how many, and what that would mean. Nothing here touches the
  * network — the sheet is handed a `DeckTweak` and hands one back,
  * which is the whole reason the state lives in `:core`.
+ *
+ * Every one of them goes through a real `AppShell`, over an open deck,
+ * on a screen with edges. It used to mount the sheet alone in a `Box`
+ * of its own width, and that is why seventy green tests here said
+ * nothing at all about the sheet not being a dialog: a box has no
+ * screen to run off, nothing behind it to dim, and no outside to tap.
+ * `TweakSheetIsADialogTest` is the half of this that asserts those
+ * three things; this half is everything the sheet says and does, now
+ * asked of it where it actually lives.
  */
 @OptIn(androidx.compose.ui.test.ExperimentalTestApi::class)
 @RunWith(AndroidJUnit4::class)
@@ -65,33 +76,50 @@ class TweakSheetParityTest {
     @get:Rule
     val rule = createComposeRule()
 
-    /** The state, held outside the composable exactly as the shell holds it. */
-    private val live = mutableStateOf(DeckTweak())
+    /** The whole app's state, held the way `MainActivity` holds it. */
+    private val live = mutableStateOf(AppState())
 
     /** What the sheet asked the server to look up, in order. */
     private val asked = mutableListOf<String>()
     private var previewAsked = 0
     private var applyAsked = 0
-    private var closed = 0
 
-    /** A phone, because that is the device. */
-    private val phone = 400
+    /**
+     * The sheet, reached the way a person reaches it.
+     *
+     * A real `AppShell`, over the deck the tweak is about, with
+     * `Overlay.DECK_TWEAK` up — so the sheet is drawn by the code that
+     * actually draws it, on a screen of the device's own size, with the
+     * deck list behind it. The old mount handed `DeckTweakSheet` its
+     * own callbacks inside a `Box(Modifier.width(400.dp))`, which is
+     * the seam the missing dialog lived in.
+     */
+    private fun sheet(start: DeckTweak) {
+        live.value = AppState(
+            route = Route(View.DECKS, "alela"),
+            admin = Admin(token = "t"),
+            decks = DecksState().loaded(listOf(deck)).opened(
+                "alela",
+                listOf(card("Sol Ring", 1)),
+            ),
+        ).copy(deckTweak = start).opening(Overlay.DECK_TWEAK)
 
-    private fun sheet(start: DeckTweak, width: Int = phone) {
-        live.value = start
         rule.setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
                 Surface {
-                    Box(Modifier.width(width.dp)) {
-                        DeckTweakSheet(
-                            state = live.value,
-                            onState = { live.value = it },
-                            onFind = { asked += it },
-                            onPreview = { previewAsked++ },
-                            onApply = { applyAsked++ },
-                            onClose = { closed++ },
-                        )
-                    }
+                    AppShell(
+                        state = live.value,
+                        onState = { live.value = it },
+                        onUnlock = {},
+                        onSearch = {},
+                        onOpenDeck = {},
+                        onRunSql = {},
+                        onPreviewEntry = {},
+                        onApplyEntry = {},
+                        onTweakFind = { asked += it },
+                        onTweakPreview = { previewAsked++ },
+                        onTweakApply = { applyAsked++ },
+                    )
                 }
             }
         }
@@ -99,24 +127,52 @@ class TweakSheetParityTest {
         // `setContent` returns before the host activity has necessarily
         // finished launching on a cold emulator, and a finder that runs
         // first fails with "No compose hierarchies found" — which reads
-        // exactly like a real failure and is not one.
-        rule.waitUntil(timeoutMillis = 10_000) {
-            rule.onAllNodes(hasClickAction()).fetchSemanticsNodes().isNotEmpty()
-        }
+        // exactly like a real failure and is not one. The sheet is its
+        // own window now, so this waits for that window and not merely
+        // for the shell underneath it.
+        rule.waitUntil(timeoutMillis = 10_000) { present("tweak-sheet") }
     }
 
     /** What the sheet holds now, after whatever was just pressed. */
-    private fun state() = live.value
+    private fun state() = live.value.deckTweak ?: DeckTweak()
+
+    /**
+     * Whether the sheet is still up.
+     *
+     * Closing it is the shell's business — `onClose` is
+     * `state.closing(Overlay.DECK_TWEAK)` — so "it closed" is a
+     * question about the app's state, not a counter in the test.
+     */
+    private val up: Boolean get() = Overlay.DECK_TWEAK in live.value.overlays
 
     /** Push a server answer in, the way the shell's coroutine does. */
     private fun push(next: DeckTweak) {
-        rule.runOnIdle { live.value = next }
+        rule.runOnIdle { live.value = live.value.copy(deckTweak = next) }
         rule.waitForIdle()
     }
 
     // ---------------------------------------------------------- reading
 
-    private fun nodes(matcher: SemanticsMatcher) = rule.onAllNodes(matcher).fetchSemanticsNodes()
+    /**
+     * Every node matching, inside the sheet and nothing else.
+     *
+     * Scoped on purpose. The sheet is hosted in a real shell now, so
+     * the nav row and the open deck are on screen behind it, and a
+     * dialog's `boundsInRoot` lands in the same coordinate space as the
+     * shell's — so an unscoped search let the deck underneath answer
+     * questions asked about the sheet, in both directions: "the card is
+     * named" passing because the list behind says so, and "nothing runs
+     * off the edge" failing because something behind it did.
+     */
+    private fun nodes(matcher: SemanticsMatcher): List<SemanticsNode> {
+        // The sheet is a dialog, so it is its own window and its own
+        // semantics root. Same root means inside the sheet; anything
+        // else is the shell behind it.
+        val sheet = rule.onAllNodesWithTag("tweak-sheet").fetchSemanticsNodes().firstOrNull()
+            ?: return emptyList()
+        return rule.onAllNodes(matcher).fetchSemanticsNodes()
+            .filter { it.root === sheet.root }
+    }
 
     /**
      * The sheet's right edge, in the units a node's bounds are in.
@@ -285,7 +341,7 @@ class TweakSheetParityTest {
     @Test
     fun theSheetOpensAskingWhatToDoAndHasDecidedNothing() {
         sheet(choosing())
-        rule.onRoot().shoot("tweak-1-choose")
+        rule.onNodeWithTag("tweak-scrim").shoot("tweak-1-choose")
 
         Parity.check(
             fact("the sheet is headed 'Change this card' while nothing is chosen") {
@@ -417,7 +473,7 @@ class TweakSheetParityTest {
         sheet(choosing())
         rule.onNodeWithTag("tweak-close").performClick()
         rule.waitForIdle()
-        assertEquals(1, closed, "the close button did not close the sheet")
+        assertFalse(up, "the close button did not close the sheet")
     }
 
     // =================================================== 2. the finder
@@ -478,7 +534,7 @@ class TweakSheetParityTest {
             fact("the first hit is the card found") { hitRows()[0].contains("Lightning Bolt") },
             fact("there is no fourth row") { !present("tweak-hit-3") },
         )
-        rule.onRoot().shoot("tweak-2-finder")
+        rule.onNodeWithTag("tweak-scrim").shoot("tweak-2-finder")
     }
 
     @Test
@@ -692,7 +748,7 @@ class TweakSheetParityTest {
             type = "Legendary Creature — Eldrazi Horror Mutant",
             id = 11,
         )
-        sheet(adding(), width = 400)
+        sheet(adding())
         type("han")
         push(state().searched(listOf(long), listOf("Hanweir Battlements")))
         val edgeDp = rule.onNodeWithTag("tweak-sheet").getUnclippedBoundsInRoot().right.value + 1f
@@ -737,7 +793,7 @@ class TweakSheetParityTest {
             fact("it shows the number the state holds") { shown() == "7" },
             fact("and the state holds it") { state().qty == 7 },
         )
-        rule.onRoot().shoot("tweak-3-counter")
+        rule.onNodeWithTag("tweak-scrim").shoot("tweak-3-counter")
     }
 
     @Test
@@ -1035,7 +1091,7 @@ class TweakSheetParityTest {
     @Test
     fun aPlanShowsTheWebsitesThreeFigures() {
         sheet(swapping().picked(bolt).planned(plan()))
-        rule.onRoot().shoot("tweak-4-preview")
+        rule.onNodeWithTag("tweak-scrim").shoot("tweak-4-preview")
         Parity.check(
             fact("the plan is on screen") { present("tweak-plan") },
             fact("it says how many cards the deck would have after") {
@@ -1075,7 +1131,13 @@ class TweakSheetParityTest {
     @Test
     fun theWayBackDropsThePlanAndOffersAPreviewAgain() {
         sheet(counting(3).count(5).planned(plan()))
-        rule.onNodeWithText("← Change it").performClick()
+        // Scrolled to first, the way a thumb reaches it. A counter and
+        // a plan together are taller than the sheet's cap on a small
+        // screen, so the foot is past the fold — and a press aimed at
+        // where an unscrolled node *would* be lands on the scrim
+        // outside the sheet and dismisses it, which is not what this
+        // test is about.
+        rule.onNodeWithText("← Change it").performScrollTo().performClick()
         rule.waitForIdle()
         Parity.check(
             fact("the plan is gone from the state") { state().plan == null },
@@ -1126,7 +1188,7 @@ class TweakSheetParityTest {
     @Test
     fun theDoneStateSaysWhatHappenedAndOffersTheWayBack() {
         sheet(swapping().picked(bolt).planned(plan()).finished())
-        rule.onRoot().shoot("tweak-5-done")
+        rule.onNodeWithTag("tweak-scrim").shoot("tweak-5-done")
         Parity.check(
             fact("it says the change is done, and which one") {
                 summary() == "Done — Sol Ring → Lightning Bolt"
@@ -1137,7 +1199,7 @@ class TweakSheetParityTest {
         )
         rule.onNodeWithText("Back to the deck").performClick()
         rule.waitForIdle()
-        assertEquals(1, closed, "the done state would not let go of the sheet")
+        assertFalse(up, "the done state would not let go of the sheet")
     }
 
     @Test
@@ -1154,7 +1216,7 @@ class TweakSheetParityTest {
 
     @Test
     fun nothingOnTheSheetRunsOffAPhone() {
-        sheet(swapping().picked(bolt).planned(plan()), width = 400)
+        sheet(swapping().picked(bolt).planned(plan()))
         val edge = rightEdgePx()
         val over = nodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.Text))
             .filter { it.boundsInRoot.right > edge }

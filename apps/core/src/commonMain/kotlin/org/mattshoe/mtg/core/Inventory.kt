@@ -73,6 +73,10 @@ object Inventory {
                 "theOldAddAndRemoveNamesLandOnTheWizard", "theViewsAndWhichOfThemAreGated",
                 "everyViewIsReachableUnlocked", "switchingTabsSwapsTheScreen", "everyUnlockedTabRendersItsOwnScreen",
             )),
+        // One hamburger at every width, on both platforms. Android had
+        // a pill row that never collapsed, no title, and no admin
+        // group; the second half of this list is the phone's own proof
+        // of each, through the real `AppShell`.
         Feature(Area.SHELL, "Nav tabs, with the admin group hidden until unlocked", "app.js, index.html", logic = true, done = true,
             tests = listOf(
                 "lockedHidesTheAdminViewsEntirely", "unlockedShowsThemAll", "noViewIsLostBetweenTheNavAndTheRouter",
@@ -86,6 +90,12 @@ object Inventory {
                 "theMenuStaysOnScreenAtPhoneWidth", "thereIsNoFindButton",
                 "theHeaderSaysWhatYouAreLookingAt", "andAnOpenDeckPutsItsOwnNameThere",
                 "theMarkIsTheSameSizeAsTheHamburgerBesideIt",
+                "thereIsAHamburgerAndTheMenuIsShutBehindIt", "theHamburgerOpensIt",
+                "theHamburgerShutsItAgain", "theBackdropDoesNotSwallowTheTreeUnderIt",
+                "pickingTheViewYouAreAlreadyOnStillClosesIt", "andPickingAnotherOneGoesThere",
+                "theAdminHalfIsBehindARuleAndAHeading", "andLockIsLast",
+                "aGatedViewIsAbsentWhileLockedAndSoIsItsHalfOfTheMenu",
+                "theBarSaysWhatYouAreLookingAt", "soIsEveryRowOfTheMenuBehindIt",
             )),
         Feature(Area.ADMIN, "A retried write applies once, not twice",
             "api.js", logic = true, done = true,
@@ -164,13 +174,15 @@ object Inventory {
                 "theHelpToastListsOnlyWhatIsReachable", "questionMarkToasts", "aBareLetterNavigates",
                 "theSameLetterInATextFieldDoesNot", "theHelpKeyToasts",
             )),
-        // The website reaches it by ⌘K and `/`. A phone has neither, so
-        // Android keeps the button the web nav lost.
+        // ⌘K and `/` on both, and a button on neither. Android had one
+        // because a phone has no keyboard — Matt's ruling on that
+        // design difference was to match the web, so the palette is
+        // reached the same way in both apps now.
         Feature(Area.SHELL, "Quick find palette on ⌘K and /", "app.js", logic = true, done = true,
             tests = listOf(
                 "theFirstRowIsChosenUntilYouMove", "theHighlightStopsAtBothEnds", "itLooksAtBothFacesAndBothOwners",
                 "theTermIsBoundNotPasted", "slashOpensTheFinder", "theChordWorksWhileTyping",
-                "theFinderListsWhatWasFound", "theFindButtonOpensTheFinder",
+                "theFinderListsWhatWasFound", "theFinderIsOnTheSlashKeyRatherThanAButton",
             )),
         Feature(Area.SHELL, "Back button dismisses overlays instead of navigating", "overlay.js", logic = true, done = true,
             tests = listOf(

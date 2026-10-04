@@ -38,6 +38,9 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
 
       - name: Core and network, JVM and JS
         working-directory: apps
@@ -52,6 +55,14 @@ jobs:
       - name: Line coverage floor
         working-directory: apps
         run: ./gradlew --no-daemon :core:koverVerify
+
+      # A suite that shrinks is worse than one that fails, because it
+      # goes green. `test/suite-floors.json` is the committed number
+      # each suite has reached, and it may never go down.
+      - name: The suite did not shrink
+        run: >-
+          node scripts/check-suite-floor.mjs
+          core=apps/core/build/test-results/jvmTest
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -71,6 +82,9 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
 
       - name: Browser tests
         working-directory: apps
@@ -79,6 +93,11 @@ jobs:
       - name: It still builds
         working-directory: apps
         run: ./gradlew --no-daemon :webApp:jsBrowserDistribution
+
+      - name: The suite did not shrink
+        run: >-
+          node scripts/check-suite-floor.mjs
+          web=apps/webApp/build/test-results/jsBrowserTest
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -97,6 +116,9 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
 
       - name: It compiles
         working-directory: apps
@@ -121,6 +143,11 @@ jobs:
           node scripts/check-test-count.mjs
           apps/androidApp/src/sharedTest
           apps/androidApp/build/test-results/testDebugUnitTest
+
+      - name: The screens suite did not shrink
+        run: >-
+          node scripts/check-suite-floor.mjs
+          screens=apps/androidApp/build/test-results/testDebugUnitTest
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -155,6 +182,12 @@ jobs:
           node scripts/check-test-count.mjs
           apps/androidApp/src/sharedTest
           apps/androidApp/build/outputs/androidTest-results
+
+      - name: The device suite did not shrink
+        if: always()
+        run: >-
+          node scripts/check-suite-floor.mjs
+          device=apps/androidApp/build/outputs/androidTest-results
 
       - uses: actions/upload-artifact@v4
         if: always()

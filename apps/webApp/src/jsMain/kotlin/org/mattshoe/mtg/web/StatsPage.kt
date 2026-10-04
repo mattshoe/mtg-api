@@ -7,16 +7,21 @@ import org.jetbrains.compose.web.dom.H1
 import org.jetbrains.compose.web.dom.Span
 import org.jetbrains.compose.web.dom.Text
 import org.mattshoe.mtg.core.Owner
+import org.mattshoe.mtg.core.Prices
 import org.mattshoe.mtg.core.StatsState
 
 /** Collection totals, on the web. Sibling of `StatsScreen`. */
 @Composable
 fun StatsPage(state: StatsState, onScope: (Owner?) -> Unit) {
     Div(attrs = { classes("wrap") }) {
-        Div(attrs = { classes("flex-wrap") }) {
+        // `seg`, not `owner-opt`. `owner-opt` is the new-deck wizard's
+        // 130px-wide one-big-decision button, and the web's own test
+        // asserts it stays out of the rest of the app because three of
+        // them wrap onto two rows on a phone. Every other scope switcher
+        // is a segmented control; this was the last holdout.
+        Div(attrs = { classes("seg") }) {
             listOf(null to "Both", Owner.MATT to "Matt", Owner.KAYLA to "Kayla").forEach { (o, label) ->
                 Button(attrs = {
-                    classes("owner-opt")
                     if (state.scope.owner == o) classes("on")
                     onClick { onScope(o) }
                 }) { Text(label) }
@@ -38,7 +43,9 @@ fun StatsPage(state: StatsState, onScope: (Owner?) -> Unit) {
                             "Decks" to t.decks.toString(),
                             "Sets" to t.sets.toString(),
                             "Foils" to t.foils.toString(),
-                            "Value" to (t.value?.let { "$$it" } ?: "unpriced"),
+                            // `unpriced`, never `$0`: nothing priced and
+                            // nothing worth anything are different facts.
+                            "Value" to Prices.money(t.value, dash = "unpriced"),
                         ).forEach { (label, value) ->
                             Div(attrs = { classes("flex-wrap") }) {
                                 Span { Text(label) }

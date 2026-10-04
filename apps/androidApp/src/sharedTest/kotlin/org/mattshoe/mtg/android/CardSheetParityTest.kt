@@ -380,9 +380,11 @@ class CardSheetParityTest {
         )
         open(card)
         val lines = card.rulingsShown
+        // One space between the date and the ruling, which is what
+        // `r.day + " "` puts there on the web.
         val written = listOf(
-            "2004-10-04  First.", "2018-12-07  Second.",
-            "2019-05-03  Third.", "Undated.",
+            "2004-10-04 First.", "2018-12-07 Second.",
+            "2019-05-03 Third.", "Undated.",
         )
         Parity.check(
             Parity.Fact("four rulings come out as four lines") { lines.size == 4 },
@@ -392,7 +394,7 @@ class CardSheetParityTest {
             Parity.Fact("each dated ruling carries its day in front of it") {
                 written.all { seen(it) }
             },
-            Parity.Fact("an undated ruling is not given a date") { inside("  Undated.") == 0 },
+            Parity.Fact("an undated ruling is not given a date") { inside(" Undated.") == 0 },
             Parity.Fact("the lines sit down the page in reading order") {
                 val tops = written.map { topOf(it) }
                 tops == tops.sorted()
@@ -405,7 +407,7 @@ class CardSheetParityTest {
         open(shared().copy(rulings = listOf(Ruling("2018-12-07T00:00:00.000Z", "Timestamped."))))
         Parity.check(
             Parity.Fact("the timestamp never reaches the screen") { inside("T00:00:00") == 0 },
-            Parity.Fact("the day is trimmed to a date") { seen("2018-12-07  Timestamped.") },
+            Parity.Fact("the day is trimmed to a date") { seen("2018-12-07 Timestamped.") },
         )
     }
 
@@ -691,8 +693,8 @@ class CardSheetParityTest {
                 count("3 owned") == 2 && count("2 free") == 2
             },
             Parity.Fact("the rulings under it are oldest first") {
-                topOf("2004-10-04  It is a mana ability.") <
-                    topOf("2018-12-07  It checks the battlefield.")
+                topOf("2004-10-04 It is a mana ability.") <
+                    topOf("2018-12-07 It checks the battlefield.")
             },
         )
         rule.onNodeWithContentDescription("Sol Ring").assertExists()

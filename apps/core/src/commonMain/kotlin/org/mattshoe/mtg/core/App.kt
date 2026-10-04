@@ -39,6 +39,15 @@ data class AppState(
      */
     val from: Route? = null,
     val toast: String? = null,
+    /**
+     * Whether `toast` is reporting a failure.
+     *
+     * Both platforms used to say a dropped request and a finished
+     * save in the same voice — a toast is a toast. On the web that
+     * meant `.toast.ok` and `.toast.bad` sat in the stylesheet unused,
+     * because nothing ever told the DOM which one it was drawing.
+     */
+    val toastFailed: Boolean = false,
 ) {
     val view: View get() = route.view
 
@@ -54,6 +63,7 @@ data class AppState(
         return overlays.stack.fold(this) { s, o -> s.forget(o) }.copy(
             route = landed,
             toast = null,
+            toastFailed = false,
             overlays = overlays.clear(),
             card = null,
             // A route that does not name a deck has no deck open.
@@ -151,7 +161,8 @@ data class AppState(
             else -> view.label
         }
 
-    fun say(message: String?) = copy(toast = message)
+    fun say(message: String?, failed: Boolean = false) =
+        copy(toast = message, toastFailed = failed && message != null)
 
     /**
      * The screen a route lands on, marked as fetching.
@@ -179,7 +190,7 @@ data class AppState(
         View.STATS -> copy(stats = stats.failed(message))
         View.LOGS -> copy(logs = logs.failed(message))
         View.CARD -> copy(card = card?.failed(message))
-        View.CONSOLE, View.ENTRY -> say(message)
+        View.CONSOLE, View.ENTRY -> say(message, failed = true)
     }
 
     /**
@@ -197,7 +208,7 @@ data class AppState(
 
     // --------------------------------------------------------- overlays
 
-    fun opening(o: Overlay) = copy(overlays = overlays.open(o), toast = null)
+    fun opening(o: Overlay) = copy(overlays = overlays.open(o), toast = null, toastFailed = false)
 
     fun closing(o: Overlay) = copy(overlays = overlays.close(o)).forget(o)
 
@@ -212,6 +223,76 @@ data class AppState(
         val top = overlays.top ?: return null
         return copy(overlays = overlays.pop()).forget(top)
     }
+
+    /**
+     * One press of back, wherever you are.
+     *
+     * Returns null when there is nothing left to go back to and the
+     * app should close.
+     *
+     * The order is the one a browser's history produces, which is
+     * what the website gets for free and the phone has to be told:
+     * put the suggestion list away, then take off whatever is on top,
+     * then leave a card the way its own Close does, then come out of
+     * an open deck, then back to the default view, then out.
+     *
+     * The suggestion list goes first, and it goes first for the same
+     * reason an overlay does: it floats over the screen, and while it
+     * is up it is what a press is aimed at. Nothing used to ask about
+     * it at all — `dismissTop` has never heard of `complete` — so a
+     * press on Back with the card-name list open skipped it and acted
+     * on whatever was behind it instead: a deck closing, or the app
+     * leaving, while the suggestions stayed exactly where they were.
+     *
+     * A card is checked before a deck, and that ordering is the whole
+     * point. Reading a card from inside a deck, the deck is still
+     * open behind it, so a rule that asked about the deck first threw
+     * the deck away while leaving the card on screen — one press that
+     * visibly did nothing, and a second that fell through to Library.
+     * `leaveCard` goes to the route the card was opened from, which
+     * is the deck.
+     */
+    fun back(): AppState? = when {
+        // `closed()` and not a rebuilt `Completion`: closing has to
+        // leave the typed term alone. A press that handed back a whole
+        // new `Completion` would carry whatever term the frame it was
+        // built in happened to be drawing, which is how the web's
+        // version used to put a search you had just cleared back on
+        // the screen.
+        complete.open -> copy(complete = complete.closed())
+        overlays.any -> dismissTop()
+        view == View.CARD -> leaveCard()
+        // Back to the list as a route, not just by emptying `decks`.
+        // The open deck is in the address — that is what lets a card
+        // opened from it know where it came from — so closing it has
+        // to put the address back too, or the screen says list and
+        // the address still says deck.
+        decks.openSlug != null -> navigate(Route(View.DECKS))
+        view != View.DEFAULT -> navigate(View.DEFAULT)
+        else -> null
+    }
+
+    /**
+     * Would the next `back()` actually leave the app, with a pasted
+     * list still sitting unsent in Mass Entry?
+     *
+     * Matt: "if you get to exit early, i want you to alert the user
+     * that the changes will not be saved." `back()` only answers
+     * *where* the press goes; a platform that just forwards a null
+     * straight to its own exit — which is what Android's `BackHandler`
+     * did — closes over whatever is unsaved without ever asking.
+     * `entry.unsaved` is already the one rule for what counts as work
+     * worth losing (`MassEntry`'s own gate, not a second one invented
+     * here); this only tells a shell *when* that rule is the thing to
+     * check — on the press that would otherwise walk out the door,
+     * not on every press, and not on a press that is only moving to
+     * another tab. The web's `beforeunload` asks the same question a
+     * different way, by checking `entry.unsaved` against an event
+     * that only fires on an actual tab close — this is that same
+     * check, written so a second platform does not have to re-derive
+     * when "leaving" is.
+     */
+    val wouldExitWithUnsavedEntry: Boolean get() = back() == null && entry.unsaved
 
     /** Closing an overlay throws away whatever it was holding. */
     private fun forget(o: Overlay): AppState = when (o) {
@@ -290,6 +371,19 @@ data class AppState(
     fun recordEntry(now: String): AppState =
         if (entry.result == null) this
         else copy(history = history.remember(EntryHistory.of(entry, now)))
+
+    companion object {
+        /**
+         * How long a toast says its piece before it goes on its own.
+         *
+         * One number, shared by both platforms, because a `5000`
+         * hard-coded twice is exactly how a web fade and an Android
+         * fade drift apart. Long enough to read a sentence, short
+         * enough to stop mattering.
+         */
+        const val TOAST_MS = 5_000L
+    }
+
 }
 
 /**
@@ -310,8 +404,18 @@ object Load {
 
     fun stats(scope: StatsScope): Sql = StatsQueries.totals(scope)
 
-    /** Everything the drawer shows: printings, decks, legality, rulings. */
+    /**
+     * Everything the card page shows: the card itself, then the
+     * printings, the decks, the legality and the rulings.
+     *
+     * The face is first because it is the card. Every other query
+     * here is about the collection's relationship to it, and for a
+     * long time those four were the only ones, which is how both
+     * platforms ended up with a card page that never said what the
+     * card does.
+     */
     fun card(nameNorm: String): List<Sql> = listOf(
+        CardQueries.face(nameNorm),
         CardQueries.printings(nameNorm),
         CardQueries.usedIn(nameNorm),
         CardQueries.legalities(nameNorm),

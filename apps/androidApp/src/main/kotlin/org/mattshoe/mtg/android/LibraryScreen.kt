@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,8 +15,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
@@ -30,6 +31,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -76,12 +79,24 @@ fun LibraryScreen(
      */
     @Suppress("UNUSED_PARAMETER") showFilters: Boolean = false,
     @Suppress("UNUSED_PARAMETER") onToggleFilters: () -> Unit = {},
-    onExport: () -> Unit = {},
+    onExport: (ExportTo) -> Unit = {},
     complete: Completion = Completion(),
     onName: (Completion) -> Unit = {},
+    /**
+     * Put the suggestion list away without touching the name that was
+     * typed. A tap that landed somewhere else on the screen, or Back.
+     */
+    onDismissName: () -> Unit = {},
     @Suppress("UNUSED_PARAMETER") onCheatsheet: () -> Unit = {},
     /** The lists the panel offers, read once on the first search. */
     facets: Facets = Facets(),
+    /**
+     * Handed down from `AppShell`, which keeps it alive across a trip
+     * through the card screen — see the comment there. Defaulted so
+     * every test that mounts this screen on its own, rather than
+     * through the shell, keeps working unchanged.
+     */
+    gridState: LazyGridState = rememberLazyGridState(),
 ) {
     // One rule, the web's: anything that changes the filters asks the
     // database again. Without it, choosing a colour changed the state
@@ -101,6 +116,7 @@ fun LibraryScreen(
 
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 132.dp),
+        state = gridState,
         modifier = Modifier.fillMaxSize().testTag("library"),
         contentPadding = PaddingValues(Design.WRAP_PAD_NARROW.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -109,7 +125,7 @@ fun LibraryScreen(
         item(span = { GridItemSpan(maxLineSpan) }) {
             Column(verticalArrangement = Arrangement.spacedBy(Design.GAP.dp)) {
                 PageHead("Library")
-                Controls(state, ::apply, onSearch, onExport, complete, onName)
+                Controls(state, ::apply, onSearch, onExport, complete, onName, onDismissName)
                 FilterSheet(state.filters, facets) { apply(state.where(it)) }
                 when {
                     searching -> Line("Searching…", Ink3)
@@ -133,9 +149,10 @@ private fun Controls(
     state: Library,
     apply: (Library) -> Unit,
     onSearch: () -> Unit,
-    onExport: () -> Unit,
+    onExport: (ExportTo) -> Unit,
     complete: Completion,
     onName: (Completion) -> Unit,
+    onDismissName: () -> Unit,
 ) {
     Panel {
         // One callback, not two — see `AppState.typedCardName`.
@@ -144,24 +161,38 @@ private fun Controls(
             state = complete,
             onState = onName,
             onPick = { onSearch() },
+            onDismiss = onDismissName,
         )
 
-        // Sort and its direction on the left because they are what you
-        // reach for; export pushed to the right because it is the one
-        // thing here that leaves. No Search button and no owner
-        // picker: whose collection it is lives in the Collection
-        // group with every other filter.
-        Row(
+        // Sort and its direction first because they are what you
+        // reach for; export after, because it is the one thing here
+        // that leaves. No Search button and no owner picker: whose
+        // collection it is lives in the Collection group with every
+        // other filter.
+        //
+        // It wraps. A 176dp dropdown, its arrow and two text buttons
+        // come to more than a phone is wide, and as a `Row` with a
+        // `Spacer` pushing export right the overflow went off the
+        // edge of the screen — Download half gone at 320dp and
+        // entirely gone once the buttons were given a thumb-sized
+        // target. A second line is the only honest answer at this
+        // width.
+        FlowRow(
             Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Design.GAP.dp),
+            verticalArrangement = Arrangement.spacedBy(Design.GAP.dp),
         ) {
             SortPicker(state, apply)
-            Spacer(Modifier.weight(1f))
-            // Only the clipboard. The web offers a file as well; the
-            // phone's export hands the decklist to the clipboard, and
-            // wiring a second destination is `MainActivity`'s to do.
-            Ghost(ExportTo.CLIPBOARD.label, onClick = onExport)
+            // Both destinations, the way the web offers them.
+            // `MainActivity` decides what "Download" actually does —
+            // see `Downloads` — this just asks for one or the other.
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Ghost(ExportTo.CLIPBOARD.label) { onExport(ExportTo.CLIPBOARD) }
+                Ghost(ExportTo.FILE.label) { onExport(ExportTo.FILE) }
+            }
         }
     }
 }
@@ -232,8 +263,12 @@ private fun CardTile(card: CardRow, stale: Boolean, onOpen: (CardRow) -> Unit) {
                 modifier = Modifier.fillMaxSize().background(Bg3, frame).clip(frame),
                 contentScale = ContentScale.Crop,
             )
+            // Centred along the bottom, the same as the web's
+            // `.price-badge` (`left: 50%; transform: translateX(-50%)`).
+            // The bottom-left corner is where the set symbol and
+            // rarity dot already are.
             Prices.money(card.price, dash = "").takeIf { it.isNotEmpty() }?.let {
-                Badge(it, Accent2, Modifier.align(Alignment.BottomStart).padding(5.dp))
+                Badge(it, Accent2, Modifier.align(Alignment.BottomCenter).padding(bottom = 5.dp))
             }
         }
         // The name and how many, on one line. The name gives way so
@@ -251,7 +286,11 @@ private fun CardTile(card: CardRow, stale: Boolean, onOpen: (CardRow) -> Unit) {
                     color = Ink,
                     fontSize = Design.MINI.sp,
                     fontWeight = FontWeight.Medium,
-                    maxLines = 2,
+                    // One line, not two. `.card-meta .nm` is
+                    // `white-space: nowrap` with an ellipsis: the
+                    // tiles are a grid and a name allowed to wrap
+                    // made every row as tall as its longest name.
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
@@ -270,6 +309,9 @@ private fun Badge(label: String, tone: Color, modifier: Modifier) {
         color = tone,
         fontSize = Design.TINY.sp,
         fontWeight = FontWeight.SemiBold,
+        // `.price-badge` is `var(--mono)` on the web, so a $9 badge and
+        // a $120 one do not jump around as cards scroll past.
+        fontFamily = monoSmall.fontFamily,
     )
 }
 
@@ -277,11 +319,18 @@ private fun Badge(label: String, tone: Color, modifier: Modifier) {
 private fun Pager(state: Library, go: (Library) -> Unit) {
     FlowRow(
         Modifier.fillMaxWidth().testTag("pager").padding(top = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        // `.pager { justify-content: center }`. Packed to the left,
+        // Previous sat under the first column of cards and Next in
+        // the middle of the row, which reads as two controls that
+        // belong to the grid rather than one bar under it.
+        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Ghost("← Previous", enabled = state.hasPrev) { go(state.prev()) }
-        Line("Page ${state.page} of ${state.pages}", Ink3)
+        // `.pager .info` is `font-variant-numeric: tabular-nums` on the
+        // web, so "Next" does not jog sideways as the page number
+        // widens from one digit to two.
+        Line("Page ${state.page} of ${state.pages}", Ink3, tabularNums = true)
         Ghost("Next →", enabled = state.hasNext) { go(state.next()) }
     }
 }
@@ -294,10 +343,20 @@ internal fun Line(
     size: Int = Design.SMALL,
     weight: FontWeight = FontWeight.Normal,
     modifier: Modifier = Modifier,
+    /** `var(--mono)`: the curve's counts and axis labels, a deck row's "N×". */
+    fontFamily: FontFamily? = null,
+    /** `font-variant-numeric: tabular-nums`, for a number beside a control that must not move. */
+    tabularNums: Boolean = false,
+    /** `-webkit-line-clamp`: the deck hero's commander name clamps at two. */
+    maxLines: Int = Int.MAX_VALUE,
 ) = androidx.compose.material3.Text(
     value,
     modifier,
     color = color,
     fontSize = size.sp,
     fontWeight = weight,
+    fontFamily = fontFamily,
+    style = if (tabularNums) TextStyle(fontFeatureSettings = "tnum") else TextStyle.Default,
+    maxLines = maxLines,
+    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
 )

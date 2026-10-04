@@ -1,3 +1,4 @@
+import java.time.Duration
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -98,7 +99,75 @@ android {
             // `needsRealRendering` and runs on a device.
             all {
                 it.maxHeapSize = "2g"
+                // Fork a fresh JVM every few classes.
+                //
+                // `ComposeRootRegistry` holds every Compose root ever
+                // created in a weakly-referenced set, and every single
+                // `isIdleNow` call copies that whole set. Each dialog
+                // and each dropdown is its own root, so the set grows
+                // by thousands over a full run — and the entries are
+                // only cleared by a *full* GC, which never happens when
+                // the heap is 2g and the suite only ever uses 300MB. The
+                // result was a suite that got slower and slower and
+                // then stopped: around test 200 a single `waitForIdle()`
+                // would spin for twenty minutes inside
+                // `getCreatedComposeRoots().toSet()`. Proven by
+                // attaching to the stuck run and issuing `jcmd GC.run`,
+                // which let it advance immediately.
+                //
+                // Forking resets the registry, which is a guarantee
+                // rather than a hope about collector behaviour. All the
+                // classes share one Robolectric sandbox (sdk=34), so a
+                // fork costs one sandbox init; five of them is about
+                // forty seconds against a suite that otherwise cannot
+                // finish at all.
+                // One JVM per class.
+                //
+                // This was four, which was a number that worked on one
+                // laptop. CI is slower, and on CI the same accumulation
+                // crossed Espresso's 60-second idle ceiling: seven
+                // tests failed with "Compose did not get idle after
+                // 9,000,000 attempts", in classes that had nothing to
+                // do with the change. The registry grows with every
+                // root any test in the JVM has ever created, and
+                // `ConfigChangeKeepsStateTest` creates a fresh activity
+                // — and so a fresh root — on every rotation it
+                // simulates.
+                //
+                // So the isolation is per class and not per four. It is
+                // a guarantee rather than a number tuned against one
+                // machine's speed, which is the only kind of answer
+                // worth having here: the failure mode is a suite that
+                // goes green locally and red on hardware nobody has.
+                it.setForkEvery(1)
                 it.testLogging { events("failed") }
+                // A hung test used to be indistinguishable from a slow
+                // suite: the task sat there until the outer guard killed
+                // the process group, and the XML left on disk was the
+                // *previous* run's, so the run looked green. Two things
+                // stop that now.
+                //
+                // One, the task kills itself. Twelve minutes is about
+                // eight times the honest runtime, so this only ever
+                // fires on a hang.
+                it.timeout.set(Duration.ofMinutes(12))
+                // Two, every test writes its name as it starts and
+                // again as it ends, flushed. The last line with no
+                // matching end is the test that hung — which is the one
+                // thing the XML can never tell you, because a hung test
+                // never gets an XML entry at all.
+                val order = layout.buildDirectory.file("test-order.log").get().asFile
+                it.doFirst { order.parentFile.mkdirs(); order.writeText("") }
+                it.addTestListener(object : TestListener {
+                    override fun beforeSuite(d: TestDescriptor) {}
+                    override fun afterSuite(d: TestDescriptor, r: TestResult) {}
+                    override fun beforeTest(d: TestDescriptor) {
+                        order.appendText("START ${d.className}.${d.name}\n")
+                    }
+                    override fun afterTest(d: TestDescriptor, r: TestResult) {
+                        order.appendText("  END ${d.className}.${d.name} ${r.resultType}\n")
+                    }
+                })
             }
         }
     }
@@ -136,11 +205,20 @@ dependencies {
     implementation(compose.material3)
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+    // `viewModelScope` and `by viewModels()`. The whole `AppState`
+    // lives in a `ViewModel` now, because it used to live in an
+    // activity field and a rotation emptied the app.
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     // Card art. The web gets it from an <img>; Compose has no loader of
     // its own, and a grid of Magic cards without the pictures is not the
     // same screen.
     implementation("io.coil-kt.coil3:coil-compose:3.0.4")
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.0.4")
+    // Scryfall's mana symbols are SVGs. Without this Coil fetches them
+    // and has nothing that can decode one, so every pip comes back
+    // empty and the fallback letter is all you ever see.
+    implementation("io.coil-kt.coil3:coil-svg:3.0.4")
 
     // The screens are tested on a device, clicked, because "the port is
     // done" is a claim about what a person can do with the app.
@@ -158,4 +236,10 @@ dependencies {
     testImplementation("androidx.compose.ui:ui-test-junit4:1.7.6")
     testImplementation("org.robolectric:robolectric:4.14.1")
     testImplementation(kotlin("test"))
+    // For MainActivityFacetsTest: a fake network, and a Main dispatcher
+    // that runs eagerly instead of posting to Robolectric's looper.
+    testImplementation("io.ktor:ktor-client-mock:3.0.3")
+    testImplementation("io.ktor:ktor-client-content-negotiation:3.0.3")
+    testImplementation("io.ktor:ktor-serialization-kotlinx-json:3.0.3")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
 }

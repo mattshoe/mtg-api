@@ -355,6 +355,12 @@ select { appearance: none; background-image:
 .chip.mini { padding: 2px 7px; font-size: 11px; }
 .chip.ok { border-color: color-mix(in srgb, var(--ok) 45%, var(--line)); color: var(--ok); }
 .chip.bad { border-color: color-mix(in srgb, var(--bad) 45%, var(--line)); color: var(--bad); }
+.chip.warn { border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); color: var(--warn); }
+/* "Not legal" is not a failure, so it gets no alarm colour at all —
+   it reads as a dashed, dimmed chip, which a hue-blind eye tells
+   apart from `.chip.ok`/`.chip.bad`/`.chip.warn` by shape, not by
+   which of those three is lightest. */
+.chip.off { border-style: dashed; color: var(--text-3); }
 
 /* pip toggles, one per colour */
 .pips { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -407,6 +413,17 @@ td { padding: 7px 11px; border-bottom: 1px solid var(--line); vertical-align: mi
   tbody tr:hover { background: var(--bg-3); }
 }
 tbody tr.clickable { cursor: pointer; }
+/* A failed server-log row (ConsolePage's `classes("bad")`), marked
+   three ways, the same as Android's tinted/bold/ruled row — none of
+   them hue alone, because hue is the one channel this app's owner
+   does not have. */
+tbody tr.bad td {
+  background: color-mix(in srgb, var(--bad) 11%, transparent);
+  font-weight: 600;
+}
+tbody tr.bad td:first-child {
+  box-shadow: inset 3px 0 0 var(--bad);
+}
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 td.mono { font-family: var(--mono); font-size: 12.5px; }
 .t-name { font-weight: 550; }
@@ -502,8 +519,22 @@ td.mono { font-family: var(--mono); font-size: 12.5px; }
   display: block; margin: 0 auto 8px; box-shadow: var(--shadow);
 }
 
+/* The card's own face. `.oracle` and `.flavor` sat here for months
+   with nothing using them, because neither platform ever selected
+   `oracle_text` or `flavor_text`. They do now. */
 .oracle { white-space: pre-wrap; font-size: 13.5px; line-height: 1.6; }
 .flavor { white-space: pre-wrap; font-style: italic; color: var(--text-3); font-size: 12.5px; margin-top: 8px; }
+.card-face .panel-body { display: flex; flex-direction: column; gap: 7px; }
+.face-head { display: flex; align-items: center; gap: 8px; }
+.face-name { font-weight: 600; font-size: 14px; }
+.type-line { font-size: 12.5px; color: var(--text-2); }
+/* Bottom-right, the way it is printed on the card, and in the mono
+   face so a `3/4` and a `12/12` line up if two faces are stacked. */
+.ptbox {
+  align-self: flex-end; font-family: var(--mono); font-size: 13.5px; font-weight: 600;
+  padding: 2px 9px; border: 1px solid var(--line-2); border-radius: var(--radius-sm);
+  background: var(--bg-3);
+}
 
 .kv { display: grid; grid-template-columns: max-content 1fr; gap: 5px 14px; font-size: 13px; }
 .kv dt { color: var(--text-2); font-size: 11.5px; text-transform: uppercase; letter-spacing: .03em; padding-top: 2px; }
@@ -586,8 +617,17 @@ pre.out {
 }
 .toast-says { flex: 1; min-width: 0; }
 .toast-x { color: var(--text-2); font-size: 17px; line-height: 1; }
-.toast.ok  { border-left-color: var(--ok); }
-.toast.bad { border-left-color: var(--bad); }
+/* A failed toast (`state.toastFailed`), not just a redder accent bar:
+   a wider rule, bold text and a tinted background, so it still reads
+   as a failure with the colour thrown away. There is no `.toast.ok`
+   — a toast that is not marked failed is already the plain, successful
+   look, so a second class for it would paint nothing new. */
+.toast.bad {
+  border-left-color: var(--bad);
+  border-left-width: 5px;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--bad) 10%, var(--bg-2));
+}
 @keyframes pop { from { transform: translateY(6px); opacity: 0; } }
 
 /* command palette */
@@ -929,6 +969,10 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
 @media (hover: hover) {
   .deck-card:hover { border-color: var(--line-2); background: var(--bg-3); }
 }
+/* The tile has `overflow: hidden`, so the global focus ring at
+   `outline-offset: 2px` would sit outside the card and get clipped by
+   the grid gap. Inset, the same way `.deck-line[role=button]` does it. */
+.deck-card:focus-visible { outline: 2px solid var(--info); outline-offset: -2px; }
 
 /* commander art, cropped to a band across the top */
 .deck-banner { flex: none; height: 96px; background: var(--bg-3); overflow: hidden; }

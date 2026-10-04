@@ -199,6 +199,35 @@ class DeckStatsTest {
         assertEquals(3.0, s.medianManaValue)
     }
 
+    @Test
+    fun theManaValueTextHasNoTrailingPointZero() {
+        // `Double.toString()` is not one function: Kotlin/JS drops a
+        // whole value's ".0" and Kotlin/JVM never does. This test
+        // compiles for both targets (`commonTest`), so it is the two
+        // platforms agreeing with each other, not two assertions of
+        // the same string in two separate suites.
+        assertEquals("2", manaValueText(2.0))
+        assertEquals("0", manaValueText(0.0))
+        assertEquals("2.5", manaValueText(2.5))
+        assertEquals("2.24", manaValueText(2.24))
+        assertEquals("3", manaValueText(2.999), "rounds, rather than truncating, past two places")
+    }
+
+    @Test
+    fun theDeckStatsTextAgreesWithTheNumber() {
+        val s = DeckAnalysis.of(
+            listOf(
+                card("Island", type = "Basic Land — Island", cost = null, cmc = 0.0, qty = 20),
+                card("One", cmc = 1.0),
+                card("Three", cmc = 3.0),
+            ),
+        )
+        // Both land at exactly 2.0 — the value that read "2" on the
+        // website and "2.0" on the phone before `manaValueText`.
+        assertEquals("2", s.averageManaValueText)
+        assertEquals("2", s.medianManaValueText)
+    }
+
     // --------------------------------------------------------- colour
 
     @Test

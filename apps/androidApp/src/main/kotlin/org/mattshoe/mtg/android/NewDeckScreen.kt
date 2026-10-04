@@ -91,7 +91,7 @@ fun NewDeckDialog(
                     state.step == DeckStep.REVIEW -> ReviewStep(state)
                     state.step == DeckStep.DONE -> DoneStep(state)
                 }
-                state.error?.let { Text(it, fontSize = 13.sp) }
+                state.error?.let { ErrBox(it) }
             }
         },
     )
@@ -221,6 +221,12 @@ private fun CommanderStep(
             onTyped(c)
         },
         onPick = { name -> onState(s.setCommander(name)) },
+        // Its own, because the dialog is its own window: the Library's
+        // box and this one are never on screen together, and `hinting`
+        // is where this one's `Completion` lives. `closed()` rather
+        // than a rebuilt one, so the commander half-typed into the box
+        // survives the list going away.
+        onDismiss = { onState(s.hinting(s.hint.closed())) },
     )
     Text("A ${s.format?.label} deck needs one, and the server checks it too.", fontSize = 12.sp)
 }
