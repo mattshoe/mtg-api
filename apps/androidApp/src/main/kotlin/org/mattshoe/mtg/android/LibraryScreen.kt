@@ -82,6 +82,11 @@ fun LibraryScreen(
     onExport: (ExportTo) -> Unit = {},
     complete: Completion = Completion(),
     onName: (Completion) -> Unit = {},
+    /**
+     * Put the suggestion list away without touching the name that was
+     * typed. A tap that landed somewhere else on the screen, or Back.
+     */
+    onDismissName: () -> Unit = {},
     @Suppress("UNUSED_PARAMETER") onCheatsheet: () -> Unit = {},
     /** The lists the panel offers, read once on the first search. */
     facets: Facets = Facets(),
@@ -120,7 +125,7 @@ fun LibraryScreen(
         item(span = { GridItemSpan(maxLineSpan) }) {
             Column(verticalArrangement = Arrangement.spacedBy(Design.GAP.dp)) {
                 PageHead("Library")
-                Controls(state, ::apply, onSearch, onExport, complete, onName)
+                Controls(state, ::apply, onSearch, onExport, complete, onName, onDismissName)
                 FilterSheet(state.filters, facets) { apply(state.where(it)) }
                 when {
                     searching -> Line("Searching…", Ink3)
@@ -147,6 +152,7 @@ private fun Controls(
     onExport: (ExportTo) -> Unit,
     complete: Completion,
     onName: (Completion) -> Unit,
+    onDismissName: () -> Unit,
 ) {
     Panel {
         // One callback, not two — see `AppState.typedCardName`.
@@ -155,6 +161,7 @@ private fun Controls(
             state = complete,
             onState = onName,
             onPick = { onSearch() },
+            onDismiss = onDismissName,
         )
 
         // Sort and its direction first because they are what you

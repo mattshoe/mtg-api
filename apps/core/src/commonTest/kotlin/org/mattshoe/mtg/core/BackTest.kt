@@ -3,6 +3,7 @@ package org.mattshoe.mtg.core
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -35,6 +36,10 @@ class BackTest {
 
     private fun readingACardFromThatDeck() =
         onADeck().openCard(CardRef(nameNorm = "sol ring"), "Sol Ring")
+
+    /** The card-name box with a list of suggestions open over it. */
+    private fun suggesting() = Completion().typed("sol")
+        .suggested(listOf("Sol Ring", "Solemn Simulacrum"))
 
     // ------------------------------------------------- the reported bug
 
@@ -88,6 +93,71 @@ class BackTest {
         val atDeck = readingACardFromThatDeck().back() ?: error("nothing to go back to")
         val out = atDeck.back() ?: error("nothing to go back to")
         assertNull(out.decks.openSlug, "the second press did not come out of the deck")
+    }
+
+    // ----------------------------------------- the suggestion list
+
+    @Test
+    fun theSuggestionListIsTheFirstThingBackCloses() {
+        // The one that would have caught 1.4. Everything is true at
+        // once — a list over a card, over an open deck, under an
+        // overlay, on a view that is not the default — and the only
+        // thing back is allowed to touch is the list.
+        val s = readingACardFromThatDeck()
+            .opening(Overlay.CHEATSHEET)
+            .typedCardName(suggesting())
+        assertTrue(s.complete.open, "the fixture never opened the list")
+
+        val once = s.back() ?: error("back wanted to leave the app with a list open")
+
+        assertFalse(once.complete.open, "the suggestion list was left over the screen")
+        assertTrue(Overlay.CHEATSHEET in once.overlays, "an overlay back was not asked to touch came off")
+        assertEquals(View.CARD, once.view, "back left the card as well as the list")
+        assertEquals("alela", once.decks.openSlug, "a deck back was not asked to touch closed")
+    }
+
+    @Test
+    fun closingTheListLeavesWhatWasTypedAlone() {
+        // `closed()` and not a rebuilt `Completion`. One that carries
+        // a term hands back whatever the frame it was built in was
+        // drawing, which on the web put a search you had just cleared
+        // back on the screen.
+        val s = AppState().typedCardName(suggesting())
+        val once = s.back() ?: error("nothing to go back to")
+
+        assertEquals("sol", once.complete.term, "closing the list also emptied the box")
+        assertEquals("sol", once.library.filters.q, "closing the list rewrote the name filter")
+        assertEquals(listOf("Sol Ring", "Solemn Simulacrum"), once.complete.items)
+    }
+
+    @Test
+    fun aSecondPressAfterTheListGoesOnToWhatIsUnderneath() {
+        val s = onADeck().typedCardName(suggesting())
+
+        val closed = s.back() ?: error("nothing to go back to")
+        assertEquals("alela", closed.decks.openSlug, "the first press went past the list")
+
+        val out = closed.back() ?: error("nothing to go back to")
+        assertEquals(View.DECKS, out.view)
+        assertEquals("", out.route.rest, "the second press did not come out of the deck")
+    }
+
+    @Test
+    fun aListOnTheDefaultViewIsNotAnExit() {
+        // Without the list in `back()` this press fell through to
+        // null, which `AppShell` forwards to `onExit` — the app left
+        // while the suggestions were still on screen.
+        val s = AppState().typedCardName(suggesting())
+        assertNotNull(s.back(), "back with a list open still asked to leave the app")
+        assertFalse(s.wouldExitWithUnsavedEntry, "a press that only closes a list was read as an exit")
+    }
+
+    @Test
+    fun anAlreadyClosedListIsNotSomethingBackAnswersFor() {
+        // A term typed and a list that has been put away is not a
+        // reason to swallow the gesture.
+        val s = AppState().typedCardName(suggesting().closed())
+        assertNull(s.back(), "a closed list still ate the press")
     }
 
     // --------------------------------------------- the rest of the order
