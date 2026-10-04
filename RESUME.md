@@ -13,14 +13,14 @@ It has no PR yet. `main` is `c388bc1`.
 deleted. Fix agents told to use it came back with conflicts against
 newer work; that mistake cost a merge resolution already.
 
-Green as of the last run: core 2129, Android screens **402**, web 391,
+Green as of the last run: core 2134, Android screens **414**, web 391,
 worker 558. Screens takes about 3 minutes now, not 85 seconds —
 `forkEvery(4)`, and worth every second of it (see "Things that will
 bite").
 
-**The device suite is green too: 394 tests, 0 failures, ~21 minutes**
+**The device suite is green too: 406 tests, 0 failures, ~21 minutes**
 (`npm run test:android`, against the `parity2` AVD). That number
-matters more than it looks. 394 against the JVM's 402 is not a
+matters more than it looks. 406 against the JVM's 414 is not a
 shortfall — it is every test in `sharedTest`, including all 27 the JVM
 skips behind `Parity.needsRealRendering()`; the eight the device does
 not see live in `src/test` and are JVM-only by design. Run it after any
@@ -66,9 +66,11 @@ agent finished. Check each for a commit, then merge it, run
 
 | item | branch | what |
 |---|---|---|
-| 1.4 | fresh worktree | autocomplete dismissal, reworked — see below |
+| nav | fresh worktree | the hamburger, the title, the Admin group, no Find |
 
-4.6, 4.7, 4.8 and 4.9 are all merged. The whole of section 4 is done.
+Everything else is merged. Sections 1 to 4 are done, both web items are
+done, and two of the three design changes are in. The nav is the last
+thing in the queue.
 
 **1.3 (the toast) is done and the branch is deleted.** Not merged —
 dropped. Its content had already arrived through another agent's
@@ -83,7 +85,28 @@ code, not assumed.
 If a branch has no commit, the agent did not finish — reread the item
 in `ANDROID-PARITY.md` and relaunch it.
 
-### 1.4 needs rework before it can land
+### 1.4 is done — this section is history, kept for the lesson
+
+`parity/android-1-4-autocomplete-dismiss` is deleted. The rework
+landed in `6379e44`: the suggestion list is a `Popup` with
+`onDismissRequest` and
+`PopupProperties(focusable = false, dismissOnClickOutside = true,
+dismissOnBackPress = false)`, which gives the window
+`FLAG_NOT_FOCUSABLE | FLAG_WATCH_OUTSIDE_TOUCH` — the platform's own
+non-consuming outside-touch mechanism — so a control behind the list
+still fires. No shell-wide wrapper, and none of the 13 collateral
+failures.
+
+Two gaps it is honest about: Robolectric does not route touches
+between windows, so `ACTION_OUTSIDE` actually being *delivered* is
+device-only (the test asserts the window flags instead, which is what
+breaks if this ever becomes a focusable popup); and the new-deck
+wizard's commander list closes on tap-outside but not on Back,
+because `back()` knows `AppState.complete` and not `NewDeck.hint`.
+
+The lesson, which is why the rest of this section stays:
+
+### what the first attempt got wrong
 
 The autocomplete-dismiss branch is good work and its own suite passed,
 but merging it here broke **13 Android screen tests** that have nothing
@@ -98,20 +121,14 @@ installs at the screen root on `PointerEventPass.Initial` to notice
 taps outside the field. Core was unaffected (2124 green), so it is the
 Compose wrapper, not the shared `back()` change.
 
-The merge was aborted, not committed. To pick it up:
-
-1. Merge `parity/android-1-4-autocomplete-dismiss` again and expect
-   conflicts in `App.kt`, `BackTest.kt` and `AppShell.kt` — the branch
-   was cut from `main` and wrote its *own* `AppState.back()`, which
-   lacks this branch's `view == View.CARD` case (Matt's one-press back
-   fix). The merged order wants to be:
-   `complete.open` → `overlays.any` → `view == View.CARD` →
-   `decks.openSlug != null` → `view != View.DEFAULT` → null.
-2. `BackTest` is an add/add conflict — two whole classes of the same
-   name. Keep both sets; the agent's seven go in their own class.
-3. Then fix the pointer watcher so it observes without disturbing, and
-   do not trust the branch's own green — run the **whole** screens
-   suite, which is what caught this.
+The branch's own tests were green. The whole suite is what caught it.
+A root-level `pointerInput` running
+`awaitPointerEventScope { while (true) { awaitPointerEvent(Initial) } }`
+plus an extra full-screen `Box` at the root of the shell breaks touch
+injection for every test in the app, and no amount of care inside the
+feature's own tests would have shown that. Reach for the platform
+primitive — `Popup`, `DropdownMenu`, `AlertDialog` — before reaching
+for a watcher at the root of the tree.
 
 ## The queue, in order
 
@@ -156,11 +173,19 @@ become a `FlowRow` because it already overflowed at 320dp. And the
 goes in under the IME, so the keyboard was never what blocked it. That
 test guards the binding, it does not demonstrate the defect.
 
-**Design, now in scope** (section 5) — hamburger nav with the title and
-an Admin group and no Find button, hero leading with the commander,
-anchored share menu. The drag-and-drop zone is the one item to skip: a
-phone has no drag source, so it would be dead code. Say so rather than
-building it.
+**Design** (section 5) — the hero leads with the commander
+(`3de211f`), and the nav is with the agent above. The anchored share
+menu is the remaining one. The drag-and-drop zone is the item to skip:
+a phone has no drag source, so it would be dead code. Say so rather
+than building it.
+
+Two judgement calls in the hero worth knowing, both flagged to Matt:
+the deck's own name is now absent from the deck page entirely, because
+the web's open-deck `page-head` carries no title (one line to put back,
+and `DecksParityTest` states it as a fact rather than leaving it
+implied); and the colours there are real mana symbols rather than the
+web's plain "WU" letters, because Matt asked for symbols everywhere
+colours appear and the deck tile forty lines up already draws them.
 
 **Flagged, not queued** — the card page shows no mana cost, type line,
 oracle text, power/toughness or flavour on *either* platform, because
