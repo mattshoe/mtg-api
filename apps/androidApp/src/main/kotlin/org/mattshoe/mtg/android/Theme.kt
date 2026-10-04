@@ -76,6 +76,15 @@ val Warn = c(Design.WARN)
 val Bad = c(Design.BAD)
 val Info = c(Design.INFO)
 
+/**
+ * What a modal puts between itself and the page under it.
+ *
+ * `.palette-scrim`'s `rgba(4,6,10,.6)` in `frontend/css/app.css`, which
+ * is darker than any surface in the palette on purpose: the point is
+ * that the thing behind reads as out of reach.
+ */
+val Scrim = c(0x9904060A)
+
 val Radius = RoundedCornerShape(Design.RADIUS.dp)
 val RadiusSm = RoundedCornerShape(Design.RADIUS_SM.dp)
 val Pill = RoundedCornerShape(Design.RADIUS_PILL.dp)
