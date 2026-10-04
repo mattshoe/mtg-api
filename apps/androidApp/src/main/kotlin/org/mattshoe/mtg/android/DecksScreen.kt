@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -153,12 +154,29 @@ fun DecksScreen(
             ) {
                 Ghost("← Decks", onClick = onClose)
                 Spacer(Modifier.weight(1f))
-                ShareButton(sharing) { sharing = !sharing }
+                // Anchored to its own button, the way the website
+                // anchors `.app-menu.from-right` to `.menu-anchor`.
+                // It used to be inline — a panel pushed into the
+                // column under the header — on the reasoning that a
+                // menu which is part of the page cannot end up off
+                // the edge of the screen. True, but it also meant the
+                // menu shoved the whole deck down the page every time
+                // it opened, which is not what pressing a share
+                // button should do.
+                //
+                // `DropdownMenu` gets the anchoring without the
+                // clipping: it keeps itself inside the window by
+                // construction, so Android never has to solve the
+                // off-screen problem the web needed container
+                // queries for.
+                Box {
+                    ShareButton(sharing) { sharing = !sharing }
+                    ShareMenu(
+                        open = sharing,
+                        onDismiss = { sharing = false },
+                    ) { what, where -> sharing = false; onShare(what, where) }
+                }
             }
-            // Inline rather than a floating popup: a phone has the
-            // width for it, and a menu that is part of the page
-            // cannot end up off the edge of the screen.
-            if (sharing) ShareMenu { what, where -> sharing = false; onShare(what, where) }
             Hero(open, state)
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -511,13 +529,27 @@ private fun ShareButton(open: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun ShareMenu(onShare: (ShareWhat, ExportTo) -> Unit) {
-    Panel {
+private fun ShareMenu(
+    open: Boolean,
+    onDismiss: () -> Unit,
+    onShare: (ShareWhat, ExportTo) -> Unit,
+) {
+    androidx.compose.material3.DropdownMenu(
+        expanded = open,
+        onDismissRequest = onDismiss,
+        // The app's own panel, not Material's: `Bg2` behind a hairline
+        // of `Line`, the same as every other panel on the phone and
+        // the same as `.app-menu` on the web.
+        modifier = Modifier.background(Bg2, Radius).border(1.dp, Line, Radius),
+    ) {
         // A group is its label and the two options under it, close
         // enough together to read as one thing. Evenly spaced, the
         // second label sat as far from its own options as from the
         // group above it and the menu read as six loose words.
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(
+            Modifier.widthIn(min = 180.dp).padding(Design.PANEL_PAD.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
             ShareWhat.entries.forEach { what ->
                 Column {
                     Line(
