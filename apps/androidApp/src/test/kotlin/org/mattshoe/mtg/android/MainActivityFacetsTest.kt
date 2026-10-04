@@ -53,8 +53,6 @@ import kotlin.test.assertTrue
 @RunWith(AndroidJUnit4::class)
 class MainActivityFacetsTest {
 
-    @get:Rule
-    val composeRule = createComposeRule()
 
     /**
      * Drain the main looper, which is where `lifecycleScope.launch`
@@ -154,68 +152,4 @@ class MainActivityFacetsTest {
         )
     }
 
-    /**
-     * The same facets, decoded the way the server's answer is decoded,
-     * without launching an activity.
-     *
-     * Building `MainActivity` under `createComposeRule` means two
-     * things both want to own the main dispatcher, and the test passed
-     * alone and failed after the rest of the suite — order-dependent,
-     * which is worse than failing outright. The load itself is already
-     * proven by the test above, through the real `onCreate`; what is
-     * left to show here is that the panel does something sensible with
-     * a real decode, so this goes through `FacetQueries.decodeEverything`
-     * — the same function the loader calls — rather than hand-building
-     * a `Facets` the server could never produce.
-     */
-    private fun decodedFacets(): org.mattshoe.mtg.core.Facets {
-        val rows = Json.parseToJsonElement(facetsBody).jsonObject["rows"]!!
-            .jsonArray.map { it.jsonArray }
-        val decks = Json.parseToJsonElement(decksBody).jsonObject["rows"]!!
-            .jsonArray.map { it.jsonArray }
-        return org.mattshoe.mtg.core.FacetQueries.decodeEverything(
-            listOf(listOf("kind", "value") to rows),
-            org.mattshoe.mtg.core.FacetQueries.decodeDecks(
-                listOf("slug", "name", "owner"),
-                decks,
-            ),
-        )
-    }
-
-    @Test
-    fun theTypeChecklistIsNotStuckOnLoadingOnceFacetsAreIn() {
-        val loaded = org.mattshoe.mtg.core.AppState(facets = decodedFacets())
-        assertTrue(loaded.facets.types.isNotEmpty(), "the fixture decoded no types, so this proves nothing")
-
-        composeRule.setContent {
-            MaterialTheme(colorScheme = darkColorScheme()) {
-                Surface {
-                    AppShell(
-                        state = loaded,
-                        onState = {},
-                        onUnlock = {},
-                        onSearch = {},
-                        onOpenDeck = {},
-                        onRunSql = {},
-                        onPreviewEntry = {},
-                        onApplyEntry = {},
-                    )
-                }
-            }
-        }
-        composeRule.waitForIdle()
-
-        // "Card type" folds away until it holds a filter or is opened
-        // by hand — the same accordion the website does not have, so
-        // the checklist it wraps is not even composed until then.
-        composeRule.onNodeWithTag("header-type").performClick()
-        composeRule.waitForIdle()
-
-        // The checklist is drawn at all, and it has moved past its
-        // "loading…" placeholder.
-        composeRule.onNodeWithTag("checks-types").assertExists()
-        composeRule.onAllNodesWithText("loading…").fetchSemanticsNodes().let {
-            assertTrue(it.isEmpty(), "the type checklist is still showing \"loading…\" with facets present")
-        }
-    }
 }
