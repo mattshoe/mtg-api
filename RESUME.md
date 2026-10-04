@@ -13,8 +13,10 @@ It has no PR yet. `main` is `c388bc1`.
 deleted. Fix agents told to use it came back with conflicts against
 newer work; that mistake cost a merge resolution already.
 
-Green as of the last run: core 2124, Android screens 349, web 391,
-worker 558.
+Green as of the last run: core 2129, Android screens **377**, web 391,
+worker 558. Screens takes about 3 minutes now, not 85 seconds —
+`forkEvery(4)`, and worth every second of it (see "Things that will
+bite").
 
 ## Done and merged onto this branch
 
@@ -53,9 +55,20 @@ agent finished. Check each for a commit, then merge it, run
 
 | item | branch | what |
 |---|---|---|
-| 1.3 | `android-parity-1-3-toast` | **finished, not yet merged.** Auto-dismiss after 5s, tap to dismiss, docked top on a narrow screen. Its own report is honest that one of its four tests stayed green against the old code, because the old bare `Text` never consumed touches either. |
+| 4.6 | fresh worktree | dialog error styling |
+| 4.7 | fresh worktree | the tweak sheet as a real dialog |
+| 4.8, 4.9 | fresh worktree | tap targets, and the keyboard that blocks `*` |
 | 1.4 | `parity/android-1-4-autocomplete-dismiss` | **finished, merge REVERTED — see below.** |
-| 2.1-2.3 | `worktree-agent-aa3e17db39725e327` | **merged.** The web's dead CSS. |
+
+**1.3 (the toast) is done and the branch is deleted.** Not merged —
+dropped. Its content had already arrived through another agent's
+branch, and the branch itself had fallen 3,681 lines behind: merging
+it would have reverted a dozen features. HEAD's `ToastTray` in
+`AppShell.kt` has all three of 1.3's requirements — auto-dismiss on
+`AppState.TOAST_MS`, tap-to-dismiss via `clickable` with a "Dismiss"
+role, and a `fillMaxSize` tray where only the chip paints, docked
+top-center under 600dp and bottom-end above it. Checked against the
+code, not assumed.
 
 If a branch has no commit, the agent did not finish — reread the item
 in `ANDROID-PARITY.md` and relaunch it.
@@ -101,20 +114,19 @@ the web exactly on the six design differences in section 5.
 3. `ExportTo.FILE` on Android — share's Download and the Library's
    missing Download are one gap (1.9, 1.10)
 
-**Wrong on the web**
-4. Stats money unformatted, `$5046` against `$5,046` (2.4)
-5. Deck tile not keyboard reachable (2.5)
-6. Stats scope switcher still on `.owner-opt` (2.6)
+**Wrong on the web** — all three done (2.4 earlier; 2.5 and 2.6 in
+`faea45d`). The deck tile carries `role`/`tabindex`/`onKeyDown` like
+its sibling card row plus an inset focus ring, and the Stats scope
+switcher is a `.seg` instead of the wizard's `owner-opt`.
 
 **Wrong on both**
 7. Lock does not clear the stored token, so a restart re-unlocks (3.1)
 8. `Double.toString()` gives "2" on the web and "2.0" on Android from
    one shared value (3.3). Grep for other Doubles reaching a screen.
 
-**Presentation, Android** (4.1-4.9) — mono and tabular numbers,
-uppercase labels, art crop anchors, hairlines and owner-group spacing,
-dialog error styling, the tweak sheet as a real dialog, tap targets,
-the digits-only keyboard that blocks `*`.
+**Presentation, Android** — 4.1-4.5 merged (`b03eea6`): mono and
+tabular numbers, uppercase labels, art crop anchors, hairlines, and
+owner-group spacing. 4.6-4.9 are with the three agents above.
 
 **Design, now in scope** (section 5) — hamburger nav with the title and
 an Admin group and no Find button, hero leading with the commander,
@@ -145,8 +157,41 @@ parity gap. Matt has not asked for it.
 - **`createComposeRule` and `Robolectric.buildActivity` fight** over
   the main dispatcher. Together in one test they pass alone and fail in
   the suite.
+- **Never read a test count without checking the build succeeded.** A
+  killed Gradle test task leaves the *previous* run's XML on disk, so
+  the wrapper happily reports yesterday's green. That is exactly how
+  "356 tests, 0 failures" got reported out of a run that never
+  happened.
+- **`ComposeRootRegistry` never shrinks on its own.** It holds every
+  Compose root ever created in a weakly-referenced set, and *every*
+  `isIdleNow` call copies the whole set. Each dialog and each dropdown
+  is its own root, so the set reaches the thousands over a full run —
+  and the entries are cleared only by a *full* GC, which never comes
+  when the ceiling is 2g and the suite uses 300MB. Around test 200 one
+  `waitForIdle()` would spin for twenty minutes. `forkEvery(4)` in
+  `apps/androidApp/build.gradle.kts` is the fix and must stay: a fresh
+  JVM every four classes is a guarantee rather than a hope about
+  collector behaviour. The diagnosis came from `jstack` on the stuck
+  worker (RUNNABLE in `getCreatedComposeRoots`, 280s of CPU, parked
+  nowhere) plus `jcmd <pid> GC.run`, which let it advance a test
+  immediately.
+- **A hung test leaves no XML, so the log is the only witness.** Every
+  test writes START and END to `apps/androidApp/build/test-order.log`;
+  a START with no matching END names the test that hung. The task also
+  self-kills at 12 minutes instead of waiting for `guard.mjs`. Both in
+  `e1522ba`.
+- **A Robolectric test that builds a real `MainActivity` must destroy
+  it and flush the global snapshot.** `ComposeIdlingResource` also
+  pumps frames while `Snapshot.current.hasPendingChanges()` is true,
+  and that is process-global, not per-test — see the `@After` in
+  `DownloadDecisionTest`.
+- **Merging a far-behind branch duplicates code silently.** The 1.3
+  merge auto-merged a whole `ToastTray` function and 13 imports twice
+  without raising a conflict, and the same file once had an entire
+  `when` block duplicated by a "keep both sides" resolution. Check for
+  conflicting overloads after any merge, and resolve hunk by hunk.
 - `./gradlew` is at `apps/gradlew`. `--tests` works for `:core:jvmTest`
   and `:androidApp:testDebugUnitTest`, never for `:webApp:jsTest`.
-- `npm run test:screens` is 349 Android tests on the JVM in ~85s;
+- `npm run test:screens` is 377 Android tests on the JVM in ~3m;
   `npm run test:android` is the same source on a device in ~14 minutes
   and is where the 22 `needsRealRendering` tests actually run.
