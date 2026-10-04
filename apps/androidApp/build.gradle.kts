@@ -121,7 +121,25 @@ android {
                 // fork costs one sandbox init; five of them is about
                 // forty seconds against a suite that otherwise cannot
                 // finish at all.
-                it.setForkEvery(4)
+                // One JVM per class.
+                //
+                // This was four, which was a number that worked on one
+                // laptop. CI is slower, and on CI the same accumulation
+                // crossed Espresso's 60-second idle ceiling: seven
+                // tests failed with "Compose did not get idle after
+                // 9,000,000 attempts", in classes that had nothing to
+                // do with the change. The registry grows with every
+                // root any test in the JVM has ever created, and
+                // `ConfigChangeKeepsStateTest` creates a fresh activity
+                // — and so a fresh root — on every rotation it
+                // simulates.
+                //
+                // So the isolation is per class and not per four. It is
+                // a guarantee rather than a number tuned against one
+                // machine's speed, which is the only kind of answer
+                // worth having here: the failure mode is a suite that
+                // goes green locally and red on hardware nobody has.
+                it.setForkEvery(1)
                 it.testLogging { events("failed") }
                 // A hung test used to be indistinguishable from a slow
                 // suite: the task sat there until the outer guard killed

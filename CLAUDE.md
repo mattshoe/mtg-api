@@ -152,11 +152,21 @@ process group on timeout. Run long things in the background and read
 the output file; do not hand-roll `until ... sleep` wait loops, which
 become orphans of their own.
 
-`forkEvery(4)` in `apps/androidApp/build.gradle.kts` is load-bearing.
-`ComposeRootRegistry` keeps every Compose root ever created in a
-weakly-referenced set and every `isIdleNow` copies the whole set, so
-without forking the suite grinds to a halt around test 200. Do not
-remove it.
+`forkEvery(1)` in `apps/androidApp/build.gradle.kts` is load-bearing
+and costs about five minutes. `ComposeRootRegistry` keeps every
+Compose root ever created in a weakly-referenced set, cleared only by
+a full GC that never comes on a 2g ceiling, and every `isIdleNow`
+copies the whole set — so without forking the suite grinds to a halt
+around test 200.
+
+It was `forkEvery(4)` first, which was a number that worked on one
+laptop. CI is slower and the same accumulation crossed Espresso's
+60-second idle ceiling there: seven tests failed with "Compose did
+not get idle after 9,000,000 attempts", in classes unrelated to the
+change. One JVM per class is a guarantee instead of a number tuned
+against one machine's speed. Do not raise it to make the suite
+faster; the failure it prevents is a suite that goes green locally
+and red on hardware nobody has.
 
 ## Android state
 
