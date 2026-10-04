@@ -52,29 +52,15 @@ jobs:
         working-directory: apps
         run: ./gradlew --no-daemon :webApp:jsBrowserDistribution
 
-      # Everything that does not need a phone. A red test here stops
-      # the deploy rather than shipping a screen that lost a feature —
-      # including the browser suite, which is the only thing that
-      # catches a page that renders but cannot be typed into.
-      - name: Test the shared core
-        working-directory: apps
-        run: >-
-          ./gradlew --no-daemon
-          :core:jvmTest :core:jsNodeTest
-          :core-net:jvmTest :core-net:jsNodeTest
-
-      - name: Test the site in a browser
-        working-directory: apps
-        run: ./gradlew --no-daemon :webApp:jsBrowserTest
-
-      - name: Coverage floor
-        working-directory: apps
-        run: ./gradlew --no-daemon :core:koverVerify
-
-      - name: Count what ran
-        if: always()
-        run: python3 scripts/count_tests.py apps
-
+      # No tests here. They ran on the pull request — `apps.yml` is the
+      # gate, against this exact tree, and the shared core and the
+      # browser suite are both in it. Re-running them on the way out
+      # delayed every deploy by the length of the suite and could only
+      # ever tell us what we already knew.
+      #
+      # Branch protection is what makes that true: require the `apps`
+      # checks and main can only arrive through a pull request that
+      # passed them.
       - name: Stage the bundle
         run: |
           mkdir -p frontend/kmp
