@@ -118,113 +118,216 @@ fun DecksScreen(
     onTweak: (DeckCard, Tweak?) -> Unit = { _, _ -> },
     onShare: (ShareWhat, ExportTo) -> Unit = { _, _ -> },
 ) {
+
+    // Two destinations, not one screen with a mode.
+    //
+    // The list and an open deck used to share this composable, one
+    // scrolling `Column` and one hoisted `ScrollState`, which is how
+    // an offset could travel from the list into the deck you tapped.
+    // Matt, on finding it: "That should be its own destination in the
+    // nav graph." It is now — `AppShell` composes one or the other,
+    // never both, and each owns its own scroll container.
+    //
+    // This wrapper stays because seventy-odd tests mount
+    // `DecksScreen` directly and the split is not their subject.
+    val open = state.open
+    if (open == null) {
+        DecksListScreen(state, scrollState, admin, onOpen, onNew)
+    } else {
+        DeckDetailScreen(
+            state = state,
+            open = open,
+            scrollState = scrollState,
+            admin = admin,
+            onClose = onClose,
+            onEdit = onEdit,
+            onDisassemble = onDisassemble,
+            onRename = onRename,
+            onOpenCard = onOpenCard,
+            onAddCard = onAddCard,
+            onTweak = onTweak,
+            onShare = onShare,
+        )
+    }
+}
+
+/**
+ * The shelf of decks. Its own destination, with its own scroll
+ * container — `deck-list`.
+ */
+@Composable
+internal fun DecksListScreen(
+    state: DecksState,
+    scrollState: ScrollState = rememberScrollState(),
+    admin: Boolean = false,
+    onOpen: (Deck) -> Unit = {},
+    onNew: () -> Unit = {},
+) {
     Column(
         Modifier.fillMaxWidth()
+            .testTag("deck-list")
             .verticalScroll(scrollState)
             .padding(Design.WRAP_PAD_NARROW.dp),
         verticalArrangement = Arrangement.spacedBy(Design.GAP.dp),
     ) {
-        val open = state.open
-        if (open == null) {
-            PageHead("Decks") { if (admin) Primary("New deck", onClick = onNew) }
-            when {
-                state.busy -> Line("Loading…", Ink3)
-                state.error != null -> Line("Could not load decks: ${state.error}", Bad)
-                state.decks.isEmpty() -> Line("No decks yet.", Ink3)
-                else -> state.byOwner.forEachIndexed { i, (owner, decks) ->
-                    // A shelf, with a heading that says how many are on
-                    // it. The web's `.owner-head` is the name and the
-                    // count together, not a bare name, with a rule
-                    // under it (`border-bottom`). Two shelves have to
-                    // read as two shelves, so every one after the
-                    // first gets extra air above it on top of the
-                    // column's own gap — 28px against 11px on the web,
-                    // not Android's old uniform 8dp everywhere.
-                    GroupHead(
-                        owner.replaceFirstChar(Char::uppercase),
-                        "${decks.size} " + if (decks.size == 1) "deck" else "decks",
-                        Design.H2,
-                        underline = true,
-                        extraTopGap = if (i > 0) OwnerGroupExtraGap else 0.dp,
-                    )
-                    decks.forEach { DeckTile(it, onOpen) }
-                }
+        PageHead("Decks") { if (admin) Primary("New deck", onClick = onNew) }
+        when {
+            state.busy -> Line("Loading…", Ink3)
+            state.error != null -> Line("Could not load decks: ${state.error}", Bad)
+            state.decks.isEmpty() -> Line("No decks yet.", Ink3)
+            else -> state.byOwner.forEachIndexed { i, (owner, decks) ->
+                // A shelf, with a heading that says how many are on
+                // it. The web's `.owner-head` is the name and the
+                // count together, not a bare name, with a rule
+                // under it (`border-bottom`). Two shelves have to
+                // read as two shelves, so every one after the
+                // first gets extra air above it on top of the
+                // column's own gap — 28px against 11px on the web,
+                // not Android's old uniform 8dp everywhere.
+                GroupHead(
+                    owner.replaceFirstChar(Char::uppercase),
+                    "${decks.size} " + if (decks.size == 1) "deck" else "decks",
+                    Design.H2,
+                    underline = true,
+                    extraTopGap = if (i > 0) OwnerGroupExtraGap else 0.dp,
+                )
+                decks.forEach { DeckTile(it, onOpen) }
             }
-        } else {
-            var sharing by remember { mutableStateOf(false) }
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(Design.GAP.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Ghost("← Decks", onClick = onClose)
-                Spacer(Modifier.weight(1f))
-                // Anchored to its own button, the way the website
-                // anchors `.app-menu.from-right` to `.menu-anchor`.
-                // It used to be inline — a panel pushed into the
-                // column under the header — on the reasoning that a
-                // menu which is part of the page cannot end up off
-                // the edge of the screen. True, but it also meant the
-                // menu shoved the whole deck down the page every time
-                // it opened, which is not what pressing a share
-                // button should do.
-                //
-                // `DropdownMenu` gets the anchoring without the
-                // clipping: it keeps itself inside the window by
-                // construction, so Android never has to solve the
-                // off-screen problem the web needed container
-                // queries for.
-                Box {
-                    ShareButton(sharing) { sharing = !sharing }
-                    ShareMenu(
-                        open = sharing,
-                        onDismiss = { sharing = false },
-                    ) { what, where -> sharing = false; onShare(what, where) }
-                }
+        }
+    }
+}
+
+/**
+ * The deck's destination before its cards have arrived.
+ *
+ * Its own destination rather than the shelf, because the address
+ * already names this deck — showing the list here would mean the page
+ * changed under you twice for one tap, and would hand `← Decks` to
+ * the wrong screen.
+ */
+@Composable
+internal fun DeckLoadingScreen(
+    slug: String,
+    error: String? = null,
+    onClose: () -> Unit = {},
+) {
+    Column(
+        Modifier.fillMaxWidth()
+            .testTag("deck-detail")
+            .padding(Design.WRAP_PAD_NARROW.dp),
+        verticalArrangement = Arrangement.spacedBy(Design.GAP.dp),
+    ) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(Design.GAP.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Ghost("← Decks", onClick = onClose)
+        }
+        if (error != null) ErrBox(error) else Line("Loading $slug…", Ink3)
+    }
+}
+
+/**
+ * One deck, read. Its own destination, with its own scroll container
+ * — `deck-detail`, which is what makes it impossible for the list's
+ * offset to be inherited here.
+ */
+@Composable
+internal fun DeckDetailScreen(
+    state: DecksState,
+    open: Deck,
+    scrollState: ScrollState = rememberScrollState(),
+    admin: Boolean = false,
+    onClose: () -> Unit = {},
+    onEdit: (Deck) -> Unit = {},
+    onDisassemble: (Deck) -> Unit = {},
+    onRename: (Deck) -> Unit = {},
+    onOpenCard: (DeckCard, String) -> Unit = { _, _ -> },
+    onAddCard: () -> Unit = {},
+    onTweak: (DeckCard, Tweak?) -> Unit = { _, _ -> },
+    onShare: (ShareWhat, ExportTo) -> Unit = { _, _ -> },
+) {
+    Column(
+        Modifier.fillMaxWidth()
+            .testTag("deck-detail")
+            .verticalScroll(scrollState)
+            .padding(Design.WRAP_PAD_NARROW.dp),
+        verticalArrangement = Arrangement.spacedBy(Design.GAP.dp),
+    ) {
+        var sharing by remember { mutableStateOf(false) }
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(Design.GAP.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Ghost("← Decks", onClick = onClose)
+            Spacer(Modifier.weight(1f))
+            // Anchored to its own button, the way the website
+            // anchors `.app-menu.from-right` to `.menu-anchor`.
+            // It used to be inline — a panel pushed into the
+            // column under the header — on the reasoning that a
+            // menu which is part of the page cannot end up off
+            // the edge of the screen. True, but it also meant the
+            // menu shoved the whole deck down the page every time
+            // it opened, which is not what pressing a share
+            // button should do.
+            //
+            // `DropdownMenu` gets the anchoring without the
+            // clipping: it keeps itself inside the window by
+            // construction, so Android never has to solve the
+            // off-screen problem the web needed container
+            // queries for.
+            Box {
+                ShareButton(sharing) { sharing = !sharing }
+                ShareMenu(
+                    open = sharing,
+                    onDismiss = { sharing = false },
+                ) { what, where -> sharing = false; onShare(what, where) }
             }
-            Hero(open, state)
+        }
+        Hero(open, state)
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Tag("${state.totalCards} cards")
+            if (state.gaps.isNotEmpty()) Tag("${state.gaps.size} not owned", Bad)
+        }
+        if (admin) {
+            // Both of these move real cards, and both show the
+            // server's own dry run before they are allowed to.
             FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(Design.GAP.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                Tag("${state.totalCards} cards")
-                if (state.gaps.isNotEmpty()) Tag("${state.gaps.size} not owned", Bad)
+                Btn("Edit list") { onEdit(open) }
+                Btn("Rename") { onRename(open) }
+                Btn("Disassemble", danger = true) { onDisassemble(open) }
             }
-            if (admin) {
-                // Both of these move real cards, and both show the
-                // server's own dry run before they are allowed to.
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(Design.GAP.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    Btn("Edit list") { onEdit(open) }
-                    Btn("Rename") { onRename(open) }
-                    Btn("Disassemble", danger = true) { onDisassemble(open) }
-                }
-            }
-            DeckStatsPanel(DeckAnalysis.of(state.cards))
-            if (admin) {
-                Panel { Primary("+ Add a card", onClick = onAddCard) }
-            }
-            // `byType` is the core's, the same list the website reads,
-            // so the two cannot group or order a deck differently.
-            state.byType.forEach { (group, cards) ->
-                // The web wraps this in `.panel-head`: a shaded band
-                // with a rule under it, and the capitals every
-                // `.panel-head h2` gets.
-                GroupHead(group.title, "${cards.sumOf { it.qty }}", uppercase = true, banded = true)
-                Panel {
-                    cards.forEachIndexed { i, c ->
-                        // `.deck-line + .deck-line { border-top }`: a
-                        // rule between rows, not after the last one.
-                        if (i > 0) Hairline("deck-line-rule-${group.title}-$i")
-                        CardLine(c, open.owner, onOpenCard, admin, onTweak)
-                    }
-                }
-            }
-
-            TokenList(state.tokens)
         }
+        DeckStatsPanel(DeckAnalysis.of(state.cards))
+        if (admin) {
+            Panel { Primary("+ Add a card", onClick = onAddCard) }
+        }
+        // `byType` is the core's, the same list the website reads,
+        // so the two cannot group or order a deck differently.
+        state.byType.forEach { (group, cards) ->
+            // The web wraps this in `.panel-head`: a shaded band
+            // with a rule under it, and the capitals every
+            // `.panel-head h2` gets.
+            GroupHead(group.title, "${cards.sumOf { it.qty }}", uppercase = true, banded = true)
+            Panel {
+                cards.forEachIndexed { i, c ->
+                    // `.deck-line + .deck-line { border-top }`: a
+                    // rule between rows, not after the last one.
+                    if (i > 0) Hairline("deck-line-rule-${group.title}-$i")
+                    CardLine(c, open.owner, onOpenCard, admin, onTweak)
+                }
+            }
+        }
+
+        TokenList(state.tokens)
     }
 }
 

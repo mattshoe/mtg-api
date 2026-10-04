@@ -175,10 +175,18 @@ fun AppShell(
     // comes back, so reusing the same state object is restoring.
     val libraryGridState = remember { LazyGridState() }
 
-    // One `ScrollState` per deck (plus one for the list itself, under
-    // the empty-slug key), so reading deck A, opening a card, coming
-    // back, closing the deck and opening deck B does not hand B deck
-    // A's old offset.
+    // One `ScrollState` per destination: the shelf of decks keeps its
+    // place under the empty-slug key, and every deck keeps its own
+    // under its slug. Reading deck A, opening a card, coming back,
+    // closing it and opening deck B must not hand B deck A's offset.
+    //
+    // The keying alone was not enough, because the list and the open
+    // deck were one composable inside one scrolling `Column` — so
+    // whichever offset the container happened to be holding was the
+    // one the next thing rendered at. They are two destinations now
+    // (`DecksListScreen` and `DeckDetailScreen`), each with its own
+    // container, which is what actually makes an inherited offset
+    // impossible rather than merely unlikely.
     val deckScrollStates = remember { mutableMapOf<String, ScrollState>() }
     val deckScrollState = deckScrollStates.getOrPut(state.decks.openSlug.orEmpty()) { ScrollState(0) }
 
@@ -281,21 +289,56 @@ fun AppShell(
                     gridState = libraryGridState,
                 )
 
-                View.DECKS -> DecksScreen(
-                    state = state.decks,
-                    scrollState = deckScrollState,
-                    onOpen = { onOpenDeck(it.slug) },
-                    onClose = { onState(state.navigate(Route(View.DECKS))) },
-                    admin = state.admin.unlocked,
-                    onNew = { onState(state.opening(Overlay.NEW_DECK)) },
-                    onEdit = { onEditDeck(it.slug) },
-                    onDisassemble = { onAskDisassemble(it.slug) },
-                    onRename = { onAskRename(it.slug) },
-                    onOpenCard = { card, owner -> onOpenNamed(card.name, card.nameNorm, owner) },
-                    onAddCard = onAddCard,
-                    onTweak = onTweak,
-                    onShare = onShare,
-                )
+                // Two destinations under one `View`, composed one at
+                // a time, and **the route decides which** — not
+                // whether the data has arrived. That is the whole
+                // point of calling it a destination: the address says
+                // where you are, and a deck whose cards are still in
+                // flight is still the deck you navigated to.
+                //
+                // Reading it off `state.decks.open` instead had the
+                // list reappear under you for as long as the fetch
+                // took, and left `← Decks` unable to get back at all
+                // when the deck was still loaded in state.
+                View.DECKS -> {
+                    val openDeck = state.decks.open.takeIf { state.route.rest.isNotEmpty() }
+                    if (state.route.rest.isEmpty()) {
+                        DecksListScreen(
+                            state = state.decks,
+                            scrollState = deckScrollState,
+                            admin = state.admin.unlocked,
+                            onOpen = { onOpenDeck(it.slug) },
+                            onNew = { onState(state.opening(Overlay.NEW_DECK)) },
+                        )
+                    } else if (openDeck == null) {
+                        // The address names a deck whose cards have
+                        // not landed. Still the deck's destination,
+                        // with the deck's own way back — not the
+                        // shelf, which would take the gesture.
+                        DeckLoadingScreen(
+                            slug = state.route.rest,
+                            error = state.decks.error,
+                            onClose = { onState(state.navigate(Route(View.DECKS))) },
+                        )
+                    } else {
+                        DeckDetailScreen(
+                            state = state.decks,
+                            open = openDeck,
+                            scrollState = deckScrollState,
+                            admin = state.admin.unlocked,
+                            onClose = { onState(state.navigate(Route(View.DECKS))) },
+                            onEdit = { onEditDeck(it.slug) },
+                            onDisassemble = { onAskDisassemble(it.slug) },
+                            onRename = { onAskRename(it.slug) },
+                            onOpenCard = { card, owner ->
+                                onOpenNamed(card.name, card.nameNorm, owner)
+                            },
+                            onAddCard = onAddCard,
+                            onTweak = onTweak,
+                            onShare = onShare,
+                        )
+                    }
+                }
 
                 View.STATS -> StatsScreen(state.stats) { owner: Owner? ->
                     onState(state.copy(stats = state.stats.scopedTo(owner).loading()))
