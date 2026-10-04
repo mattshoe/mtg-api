@@ -17,6 +17,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.mattshoe.mtg.core.Admin
+import org.mattshoe.mtg.core.AdminToken
 import org.mattshoe.mtg.core.ApiFailure
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.CardDetail
@@ -69,7 +70,24 @@ class MainActivity : ComponentActivity() {
     private val prefs by lazy { getSharedPreferences("mtg", Context.MODE_PRIVATE) }
     private val store: Store by lazy { PrefsStore(prefs) }
 
-    private var app by mutableStateOf(AppState())
+    private var held by mutableStateOf(AppState())
+
+    /**
+     * The state. Every write goes through here rather than through
+     * `onCreate`'s one `onState` callback, because `onUnlock` and the
+     * rest of `work`/`claim` write `app` directly and never touch it.
+     *
+     * `AdminToken.sync` diffs the token on every single write, so the
+     * nav row's Lock button, `Shortcuts`' own toggle, and whatever
+     * calls `app = ` next all clear the persisted copy the same way —
+     * there is no second step for any of them to skip.
+     */
+    private var app: AppState
+        get() = held
+        set(value) {
+            AdminToken.sync(store, held.admin, value.admin)
+            held = value
+        }
 
     private var lookupJob: Job? = null
     private var findJob: Job? = null
@@ -106,7 +124,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(saved)
 
         app = AppState(
-            admin = Admin(prefs.getString("token", "").orEmpty().ifBlank { null }),
+            admin = Admin(AdminToken.restore(store)),
             history = EntryHistory.load(store),
         )
         loadFor(app)
@@ -126,7 +144,8 @@ class MainActivity : ComponentActivity() {
                             claim(app.admin.canTry, { app.copy(admin = app.admin.tries()) }) {
                                 try {
                                     val t = api.unlock(password)
-                                    prefs.edit().putString("token", t).apply()
+                                    // Persisted by the `app` setter, which
+                                    // diffs the token on every write.
                                     app.copy(admin = app.admin.unlock(t)).say("Admin mode on")
                                 } catch (e: Exception) {
                                     app = app.copy(admin = app.admin.gaveUp())

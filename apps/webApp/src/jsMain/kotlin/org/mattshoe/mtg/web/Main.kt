@@ -16,6 +16,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.jetbrains.compose.web.renderComposable
 import org.mattshoe.mtg.core.Admin
+import org.mattshoe.mtg.core.AdminToken
 import org.mattshoe.mtg.core.ApiFailure
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.CardDetail
@@ -118,6 +119,11 @@ object MtgApp {
         set(value) {
             val was = held
             held = value
+            // Every write lands here, so the token in `localStorage`
+            // cannot fall out of step with the one in memory — not the
+            // nav menu's Lock button, not Cmd+L, not whatever reaches
+            // this property next. See `AdminToken`.
+            AdminToken.sync(store, was.admin, value.admin)
             if (value.toast != null && value.toast != was.toast) fadeToast(value.toast!!)
             if (value.hash() == was.hash()) return
             // One rule for the whole app: going somewhere is a step
@@ -225,7 +231,8 @@ object MtgApp {
                         work {
                             try {
                                 val t = api.unlock(password)
-                                store.put("mtg.admin", """{"token":"$t","expires_at":null}""")
+                                // Persisted by the `app` setter, which
+                                // diffs the token on every write.
                                 app.copy(admin = app.admin.unlock(t)).say("Admin mode on")
                             } catch (e: Exception) {
                                 app = app.copy(admin = app.admin.gaveUp())

@@ -95,6 +95,47 @@ class ShellTest {
     fun lockingForgetsTheToken() {
         assertFalse(Admin().unlock("0.abc").lock().unlocked)
     }
+
+    /**
+     * `Admin.lock()` only ever cleared the copy in memory — reload the
+     * page or restart the app and the token in `localStorage` or
+     * `SharedPreferences` brought you right back in. Both platforms now
+     * route every write through `AdminToken.sync`, so this is the test
+     * that the *persisted* copy is gone, not just the flag in memory.
+     */
+    @Test
+    fun lockingClearsWhatWasStoredNotJustTheFlag() {
+        val store = Store.inMemory()
+        val anon = Admin()
+        val unlocked = anon.unlock("0.abc")
+        AdminToken.sync(store, anon, unlocked)
+        assertEquals("0.abc", store.get(AdminToken.KEY), "unlocking should have written the token")
+
+        val locked = unlocked.lock()
+        AdminToken.sync(store, unlocked, locked)
+        assertEquals(
+            null,
+            store.get(AdminToken.KEY),
+            "the stored token should be gone, not merely the in-memory one",
+        )
+    }
+
+    @Test
+    fun aTokenNeverWrittenRestoresAsNull() {
+        assertEquals(null, AdminToken.restore(Store.inMemory()))
+    }
+
+    @Test
+    fun syncIgnoresAWriteThatDidNotTouchTheToken() {
+        // Diffing old against new, not writing on every call: a state
+        // update that leaves the token alone — opening a dialog,
+        // navigating — must not disturb what is already stored.
+        val store = Store.inMemory()
+        val unlocked = Admin().unlock("0.abc")
+        AdminToken.sync(store, Admin(), unlocked)
+        AdminToken.sync(store, unlocked, unlocked.tries())
+        assertEquals("0.abc", store.get(AdminToken.KEY))
+    }
 }
 
 /** The password goes to the server once per press, not once per frame. */

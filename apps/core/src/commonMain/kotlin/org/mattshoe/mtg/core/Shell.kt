@@ -122,3 +122,37 @@ data class Admin(
     fun gaveUp() = copy(trying = false)
     fun lock() = copy(token = null, trying = false)
 }
+
+/**
+ * The token's one address outside memory, and the one function that
+ * writes it there or takes it away.
+ *
+ * `Admin.lock()` only ever changed the copy in memory — locking and
+ * reopening the app brought the old token right back, because
+ * clearing the persisted one was each platform's own job, and there
+ * turned out to be more than one place that locks: a nav-menu button
+ * and a keyboard shortcut, on two platforms, none of which remembered
+ * to forget. Fixing the button is fixing one of them.
+ *
+ * So neither platform calls `store.put`/`store.remove` for the token
+ * by hand any more. Each keeps its own `AppState` behind a single
+ * property with a custom setter (the web already had the shape, for
+ * the toast and the address bar) and calls [sync] from there, once,
+ * comparing the old `Admin` to the new one on every write. Whichever
+ * of the two UI paths produced the change, and whatever a third path
+ * does tomorrow, the token in storage cannot drift from the token in
+ * memory — there is no separate step to skip.
+ */
+object AdminToken {
+    const val KEY = "mtg.admin"
+
+    /** What a fresh launch finds, if anything. */
+    fun restore(store: Store): String? = store.get(KEY)
+
+    /** Call with the `Admin` before and after every write to `AppState`. */
+    fun sync(store: Store, was: Admin, next: Admin) {
+        if (was.token == next.token) return
+        val t = next.token
+        if (t.isNullOrBlank()) store.remove(KEY) else store.put(KEY, t)
+    }
+}

@@ -1,6 +1,27 @@
 package org.mattshoe.mtg.core
 
+import kotlin.math.abs
+import kotlin.math.round
 import kotlin.math.roundToInt
+
+/**
+ * A mana value, as text — "2", never "2.0".
+ *
+ * `Double.toString()` is not the same function on Kotlin/JS and
+ * Kotlin/JVM: JS drops a trailing ".0" and the JVM never does, so a
+ * deck whose average sat at exactly 2.0 read "2" on the website and
+ * "2.0" on the phone, off the one shared `Double`. Scaled to an
+ * integer of hundredths and back, the way `Prices` rounds cents,
+ * rather than trusting either platform's own formatter — there is
+ * nothing left for either to disagree about.
+ */
+fun manaValueText(v: Double): String {
+    val sign = if (v < 0) "-" else ""
+    val hundredths = round(abs(v) * 100).toLong()
+    val whole = hundredths / 100
+    val frac = hundredths % 100
+    return if (frac == 0L) "$sign$whole" else "$sign$whole.${frac.toString().padStart(2, '0').trimEnd('0')}"
+}
 
 /** One bar of a chart: what it is, how many, and what the number means. */
 data class Bar(val label: String, val value: Int, val note: String = "") {
@@ -94,6 +115,15 @@ data class DeckStats(
 
     /** Lands as a share of the deck, the number every deckbuilder checks first. */
     val landShare: Int get() = if (totalCards <= 0) 0 else ((lands * 100.0) / totalCards).roundToInt()
+
+    /**
+     * "2", not "2.0" — see [manaValueText]. A screen prints this
+     * instead of calling `averageManaValue.toString()` itself.
+     */
+    val averageManaValueText: String get() = manaValueText(averageManaValue)
+
+    /** The median's own text, for the same reason. */
+    val medianManaValueText: String get() = manaValueText(medianManaValue)
 
     /**
      * Colours the deck asks for but cannot produce.

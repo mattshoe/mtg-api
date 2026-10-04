@@ -15,10 +15,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
+import org.mattshoe.mtg.core.AdminToken
 import org.mattshoe.mtg.core.ApiFailure
 import org.mattshoe.mtg.core.MassEntry
 import org.mattshoe.mtg.core.MtgApi
 import org.mattshoe.mtg.core.SharedFile
+import org.mattshoe.mtg.core.Store
 
 /**
  * The share receiver, rebuilt on the shared core.
@@ -32,6 +34,7 @@ class NextShareActivity : ComponentActivity() {
 
     private val api = MtgApi()
     private val prefs by lazy { getSharedPreferences("mtg", Context.MODE_PRIVATE) }
+    private val store: Store by lazy { PrefsStore(prefs) }
 
     override fun onCreate(saved: Bundle?) {
         super.onCreate(saved)
@@ -79,7 +82,7 @@ class NextShareActivity : ComponentActivity() {
         }
     }
 
-    private fun token() = prefs.getString("token", "").orEmpty()
+    private fun token() = AdminToken.restore(store).orEmpty()
 
     private fun readShare(from: Intent?): MassEntry {
         val share = SharedFile.read(this, from)
