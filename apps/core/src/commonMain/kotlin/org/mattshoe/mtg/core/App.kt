@@ -246,6 +246,28 @@ data class AppState(
         else -> null
     }
 
+    /**
+     * Would the next `back()` actually leave the app, with a pasted
+     * list still sitting unsent in Mass Entry?
+     *
+     * Matt: "if you get to exit early, i want you to alert the user
+     * that the changes will not be saved." `back()` only answers
+     * *where* the press goes; a platform that just forwards a null
+     * straight to its own exit — which is what Android's `BackHandler`
+     * did — closes over whatever is unsaved without ever asking.
+     * `entry.unsaved` is already the one rule for what counts as work
+     * worth losing (`MassEntry`'s own gate, not a second one invented
+     * here); this only tells a shell *when* that rule is the thing to
+     * check — on the press that would otherwise walk out the door,
+     * not on every press, and not on a press that is only moving to
+     * another tab. The web's `beforeunload` asks the same question a
+     * different way, by checking `entry.unsaved` against an event
+     * that only fires on an actual tab close — this is that same
+     * check, written so a second platform does not have to re-derive
+     * when "leaving" is.
+     */
+    val wouldExitWithUnsavedEntry: Boolean get() = back() == null && entry.unsaved
+
     /** Closing an overlay throws away whatever it was holding. */
     private fun forget(o: Overlay): AppState = when (o) {
         Overlay.PALETTE -> copy(palette = palette.closed())

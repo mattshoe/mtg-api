@@ -103,6 +103,11 @@ fun AppShell(
     onExit: () -> Unit = {},
 ) {
     var showFilters by remember { mutableStateOf(false) }
+    // Asked only once back has nowhere left to go but out, and only
+    // when `AppState.wouldExitWithUnsavedEntry` says there is a
+    // pasted list that exit would throw away — see `BackHandler`
+    // below.
+    var confirmDiscardOnExit by remember { mutableStateOf(false) }
     val keys = remember { FocusRequester() }
 
     // Where the Library grid and each deck's card list were scrolled
@@ -145,7 +150,21 @@ fun AppShell(
     // card from a deck both are true, so the first press closed the
     // deck underneath and left the card up — a press that visibly did
     // nothing — and the second fell through to Library.
-    BackHandler { onState(state.back() ?: run { onExit(); return@BackHandler }) }
+    // A null `back()` used to go straight to `onExit()`, which is how
+    // a pasted-but-unapplied Mass Entry list disappeared without a
+    // word: Matt, after the fact — "if you get to exit early, i want
+    // you to alert the user that the changes will not be saved."
+    // `wouldExitWithUnsavedEntry` is the one check for whether this
+    // particular null is that kind of exit; everything else about
+    // when to leave is still `AppState.back`'s call alone.
+    BackHandler {
+        val next = state.back()
+        when {
+            next != null -> onState(next)
+            state.wouldExitWithUnsavedEntry -> confirmDiscardOnExit = true
+            else -> onExit()
+        }
+    }
 
     Column(
         Modifier.fillMaxSize()
@@ -354,6 +373,27 @@ fun AppShell(
             },
             dismissButton = {
                 TextButton(onClick = { onState(state.closing(Overlay.UNLOCK)) }) { Text("Cancel") }
+            },
+        )
+    }
+
+    // Not an overlay: `AppState` has nothing open to track this
+    // against, because there is nothing left open by the time back
+    // gets here. The dialog itself is the only thing standing between
+    // the press and `onExit()`, so the safe choice — keep editing —
+    // is both the dismiss button and what an outside tap or a second
+    // back press does, and the destructive one has to be picked on
+    // purpose.
+    if (confirmDiscardOnExit) {
+        AlertDialog(
+            onDismissRequest = { confirmDiscardOnExit = false },
+            title = { Text("Leave without saving?") },
+            text = { Text("Your list has not been written to the collection yet.") },
+            confirmButton = {
+                TextButton(onClick = { confirmDiscardOnExit = false; onExit() }) { Text("Leave anyway") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDiscardOnExit = false }) { Text("Keep editing") }
             },
         )
     }
