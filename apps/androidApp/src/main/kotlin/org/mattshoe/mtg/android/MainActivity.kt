@@ -390,8 +390,20 @@ class MainActivity : ComponentActivity() {
     internal var facetsJob: Job? = null
         private set
 
+    /**
+     * Why the facet load gave up, if it did.
+     *
+     * Production ignores a facet failure on purpose — a filter panel
+     * with typed fields is still usable. That makes the failure
+     * invisible, which cost three attempts at a flaky test that could
+     * only ever report "facets never loaded" and never why.
+     */
+    internal var facetsError: Exception? = null
+        private set
+
     private fun loadFacets() {
         if (app.facets.loaded) return
+        facetsError = null
         facetsJob = lifecycleScope.launch {
             try {
                 val all = FacetQueries.everything.map { api.query(it).let { r -> r.cols to r.rows } }
@@ -402,9 +414,19 @@ class MainActivity : ComponentActivity() {
                         FacetQueries.decodeDecks(d.cols, d.rows),
                     ),
                 )
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // Never swallowed. `catch (e: Exception)` below would
+                // have caught this too, which is how a cancelled load
+                // used to be indistinguishable from a failed one — and
+                // `MainActivityFacetsTest` could then only report the
+                // symptom, "facets never loaded", with no cause.
+                throw e
             } catch (e: Exception) {
                 // A panel with typed fields instead of checkbox lists is
-                // still a usable panel.
+                // still a usable panel. Kept, but no longer silent: the
+                // throwable is held so a test can say what actually
+                // went wrong instead of only that nothing arrived.
+                facetsError = e
             }
         }
     }

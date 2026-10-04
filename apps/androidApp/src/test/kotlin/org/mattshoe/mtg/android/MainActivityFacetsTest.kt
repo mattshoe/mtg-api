@@ -168,6 +168,11 @@ class MainActivityFacetsTest {
         settle(realActivity)
 
         val loaded = realActivity.stateForTesting()
+        // Ask why before asserting what. Production swallows a facet
+        // failure on purpose, so without this the only thing this test
+        // could ever say was "nothing arrived".
+        realActivity.facetsError?.let { throw AssertionError("the facet load threw: $it", it) }
+        assertTrue(realActivity.facetsJob != null, "loadFacets never ran — facetsJob is still null after onCreate")
         assertTrue(loaded.facets.loaded, "facets never loaded — app.facets.loaded is false after onCreate")
         assertTrue(loaded.facets.types.isNotEmpty(), "the type checklist's own list is empty")
         assertTrue(loaded.facets.layouts.isNotEmpty(), "layouts is empty")
