@@ -91,7 +91,7 @@ fun NewDeckDialog(
                     state.step == DeckStep.REVIEW -> ReviewStep(state)
                     state.step == DeckStep.DONE -> DoneStep(state)
                 }
-                state.error?.let { Text(it, fontSize = 13.sp) }
+                state.error?.let { ErrBox(it) }
             }
         },
     )

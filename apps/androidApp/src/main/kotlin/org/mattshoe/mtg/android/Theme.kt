@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.role
@@ -261,6 +263,55 @@ fun Tag(label: String, tone: Color = Ink2) {
         color = tone,
         fontSize = Design.TINY.sp,
     )
+}
+
+/**
+ * `.err`'s face and edge: the bad tone at 12% and 42%, straight off
+ * the `.err` rule in `app.css`. Not `:root` variables, so `DesignTest`
+ * cannot police them — they are written here beside the composable
+ * that uses them rather than hidden inside it.
+ */
+const val ERR_FILL = 0.12f
+const val ERR_EDGE = 0.42f
+
+/** `.err`'s `padding: 10px 13px`. */
+const val ERR_PAD_X = 13
+const val ERR_PAD_Y = 10
+
+/** What the box and the words inside it answer to, in tests. */
+const val ERR_TAG = "err"
+const val ERR_TEXT_TAG = "err-text"
+
+/**
+ * `.err`: an error is a box you are meant to find, not a sentence
+ * loose in the column.
+ *
+ * The website gives every error a tinted face, an edge a shade
+ * stronger than that face, 10px by 13px of air and the fixed-width
+ * family. Android drew the words at body size in the dialog's own
+ * prose colour, so in a wizard step with eight other lines of prose
+ * in it the one line saying what went wrong looked like all the rest.
+ *
+ * Three things set it apart here and not one of them is a hue: it is
+ * the only thing in the dialog with a ring round it, the only thing
+ * in a monospace face, and its face is lighter than the dialog
+ * behind it. Red on its own would say nothing at all to the person
+ * who reads this.
+ */
+@Composable
+fun ErrBox(message: String, modifier: Modifier = Modifier) {
+    Box(
+        modifier
+            .fillMaxWidth()
+            .testTag(ERR_TAG)
+            .background(Bad.copy(alpha = ERR_FILL), RadiusSm)
+            .border(1.dp, Bad.copy(alpha = ERR_EDGE), RadiusSm)
+            .padding(horizontal = ERR_PAD_X.dp, vertical = ERR_PAD_Y.dp),
+    ) {
+        // `monoSmall` already is `var(--mono)` at 12.5px; the tone is
+        // the only thing this adds to it.
+        Text(message, Modifier.testTag(ERR_TEXT_TAG), color = Bad, style = monoSmall)
+    }
 }
 
 /** `.muted.small`, which is most of the prose on the site. */
