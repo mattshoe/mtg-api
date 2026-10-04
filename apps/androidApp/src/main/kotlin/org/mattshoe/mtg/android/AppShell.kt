@@ -87,7 +87,8 @@ fun AppShell(
     onRunSql: () -> Unit,
     onPreviewEntry: () -> Unit,
     onApplyEntry: () -> Unit,
-    onExport: () -> Unit = {},
+    /** The Library's filtered set, copied or downloaded. */
+    onExport: (ExportTo) -> Unit = {},
     onOpenCard: (CardRow) -> Unit = {},
     onOpenFound: (Found) -> Unit = {},
     /** A card tapped in a deck list. Carries its own `name_norm`. */

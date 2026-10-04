@@ -68,6 +68,7 @@ class MainActivity : ComponentActivity() {
     private val scryfall = Scryfall()
     private val prefs by lazy { getSharedPreferences("mtg", Context.MODE_PRIVATE) }
     private val store: Store by lazy { PrefsStore(prefs) }
+    private var downloads: Downloads = MediaStoreDownloads(this)
 
     private var app by mutableStateOf(AppState())
 
@@ -87,8 +88,33 @@ class MainActivity : ComponentActivity() {
         this.api = api
     }
 
+    /**
+     * The seam a test reaches through for a download, the same way
+     * [useForTesting] swaps the network. See [Downloads].
+     */
+    internal fun useDownloadsForTesting(downloads: Downloads) {
+        this.downloads = downloads
+    }
+
     /** What `onCreate` landed, for a test that cannot see a private field. */
     internal fun stateForTesting(): AppState = app
+
+    /** Lets a test put the activity into a state it did not reach by pressing anything. */
+    internal fun setStateForTesting(state: AppState) {
+        app = state
+    }
+
+    /** `shareDeck`, for a test that cannot see a private method. */
+    internal fun shareDeckForTesting(what: ShareWhat, where: ExportTo): AppState {
+        app = shareDeck(what, where)
+        return app
+    }
+
+    /** `exportList`, for a test that cannot see a private method. */
+    internal suspend fun exportListForTesting(where: ExportTo): AppState {
+        app = exportList(where)
+        return app
+    }
 
     /** A second load, the way a config change or a re-entry would ask for one. */
     internal fun loadFacetsForTesting() = loadFacets()
@@ -181,7 +207,7 @@ class MainActivity : ComponentActivity() {
                                 done
                             }
                         },
-                        onExport = { work { exportList() } },
+                        onExport = { where -> work { exportList(where) } },
                         onOpenCard = { row -> openCard(row) },
                         onOpenFound = { found -> openFound(found) },
                         onOpenNamed = { name, norm, owner -> openNamed(name, norm, owner) },
@@ -590,11 +616,9 @@ class MainActivity : ComponentActivity() {
      * list is the deck itself, which is what somebody wants when they
      * are going to build it rather than read about it.
      *
-     * Both halves of `ExportTo` end up on the clipboard here, because
-     * a phone has nowhere useful to put a loose text file and pasting
-     * is what the next app is going to ask for either way. The wording
-     * still distinguishes them, so a tap on Download does not look
-     * like it did nothing.
+     * `where` decides where it lands — see [Downloads] for why Download
+     * still falls back to the clipboard on some phones, and why the
+     * toast always says which one actually happened.
      */
     private fun shareDeck(what: ShareWhat, where: ExportTo): AppState {
         val deck = app.decks.open ?: return app.say("No deck open")
@@ -606,31 +630,73 @@ class MainActivity : ComponentActivity() {
             ShareWhat.LINK -> "${deck.slug}-link.txt"
             ShareWhat.DECKLIST -> Export.deckFilename(deck.slug, today())
         }
-        val clip = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        clip.setPrimaryClip(ClipData.newPlainText(name, text))
-        return app.say(
-            when (what) {
-                ShareWhat.LINK -> "Link copied"
-                ShareWhat.DECKLIST -> "${app.decks.totalCards} cards copied"
-            },
-        )
+        val copiedLabel = if (what == ShareWhat.LINK) "Link copied" else "${app.decks.totalCards} cards copied"
+        return when (where) {
+            ExportTo.CLIPBOARD -> {
+                copyToClipboard(name, text)
+                app.say(copiedLabel)
+            }
+
+            ExportTo.FILE -> when (downloads.save(name, text)) {
+                DownloadResult.SAVED -> app.say(
+                    if (what == ShareWhat.LINK) "Link downloaded" else "${app.decks.totalCards} cards exported",
+                )
+
+                DownloadResult.UNSUPPORTED_OS -> {
+                    copyToClipboard(name, text)
+                    app.say("$copiedLabel — downloads need Android 10 or newer")
+                }
+
+                DownloadResult.FAILED -> {
+                    copyToClipboard(name, text)
+                    app.say("could not save the file — copied instead")
+                }
+            }
+        }
     }
 
     // ----------------------------------------------------------- export
 
     /**
-     * The whole filtered set as a decklist, on the clipboard.
+     * The whole filtered set as a decklist.
      *
-     * The web downloads a file because a browser can; a phone pastes it
-     * into whatever asked for it, which is what an export is for here.
-     * The text is identical — `Export.decklist`, shared.
+     * The web downloads a file because a browser always can; a phone
+     * can too, from Android 10 — see [Downloads]. Below that, or if
+     * the write itself fails, this falls back to the clipboard and the
+     * toast says so rather than claiming a download that did not
+     * happen. The text is identical either way — `Export.decklist`,
+     * shared with the web.
      */
-    private suspend fun exportList(): AppState {
+    private suspend fun exportList(where: ExportTo): AppState {
         val r = api.query(Export.query(app.library.filters))
         val text = Export.decklist(Rows.cards(r.cols, r.rows))
+        val name = Export.filename(today())
+        val copiedLabel = "Copied ${r.rows.size} cards as a decklist"
+        return when (where) {
+            ExportTo.CLIPBOARD -> {
+                copyToClipboard(name, text)
+                app.say(copiedLabel)
+            }
+
+            ExportTo.FILE -> when (downloads.save(name, text)) {
+                DownloadResult.SAVED -> app.say("Exported ${r.rows.size} cards")
+
+                DownloadResult.UNSUPPORTED_OS -> {
+                    copyToClipboard(name, text)
+                    app.say("$copiedLabel — downloads need Android 10 or newer")
+                }
+
+                DownloadResult.FAILED -> {
+                    copyToClipboard(name, text)
+                    app.say("could not save the file — copied instead")
+                }
+            }
+        }
+    }
+
+    private fun copyToClipboard(name: String, text: String) {
         val clip = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        clip.setPrimaryClip(ClipData.newPlainText(Export.filename(today()), text))
-        return app.say("Copied ${r.rows.size} cards as a decklist")
+        clip.setPrimaryClip(ClipData.newPlainText(name, text))
     }
 
     // ------------------------------------------------------------ files
