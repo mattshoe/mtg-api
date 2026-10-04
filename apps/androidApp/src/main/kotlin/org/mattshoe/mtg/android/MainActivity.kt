@@ -401,9 +401,22 @@ class MainActivity : ComponentActivity() {
     internal var facetsError: Exception? = null
         private set
 
+    /**
+     * Whether the facet load actually wrote its result.
+     *
+     * Set immediately after the assignment, so a test can tell "the
+     * load never produced anything" from "the load produced it and
+     * something else overwrote it" — which are the two remaining
+     * stories behind an unloaded `facets`, and which the state alone
+     * cannot distinguish.
+     */
+    internal var facetsApplied: Boolean = false
+        private set
+
     private fun loadFacets() {
         if (app.facets.loaded) return
         facetsError = null
+        facetsApplied = false
         facetsJob = lifecycleScope.launch {
             try {
                 val all = FacetQueries.everything.map { api.query(it).let { r -> r.cols to r.rows } }
@@ -414,6 +427,7 @@ class MainActivity : ComponentActivity() {
                         FacetQueries.decodeDecks(d.cols, d.rows),
                     ),
                 )
+                facetsApplied = true
             } catch (e: kotlinx.coroutines.CancellationException) {
                 // Never swallowed. `catch (e: Exception)` below would
                 // have caught this too, which is how a cancelled load

@@ -19,12 +19,7 @@ import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
 import android.os.Looper
 import androidx.compose.runtime.snapshots.Snapshot
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.resetMain
-import kotlinx.coroutines.test.setMain
 import org.junit.After
-import org.junit.Before
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.jsonArray
@@ -57,50 +52,46 @@ class MainActivityFacetsTest {
 
 
     /**
-     * Drain the main looper and wait for the load, in a loop.
+     * Pump Robolectric's main looper until the load has finished.
      *
-     * Three previous attempts at this test's flakiness fought over
-     * which dispatcher should own `Dispatchers.Main`. The actual
-     * problem is a thread, not a dispatcher.
+     * No test dispatcher. That is the whole fix, and the four
+     * attempts before it all failed because they kept one.
      *
-     * `lifecycleScope.launch` normally resumes on
-     * `Dispatchers.Main.immediate`, so in production the whole load
-     * — including the `app = app.copy(...)` at the end of it — runs
-     * on the main thread. The moment `setUp` swaps in an unconfined
-     * dispatcher, that guarantee is gone: Ktor's engine suspends on
-     * its own dispatcher and the continuation resumes on whichever
-     * background thread finished the call. So the write lands off the
-     * main thread, and whether the test sees it depends on timing.
-     * Under load — two other Gradle builds on the machine — it
-     * sometimes did not.
+     * In production `lifecycleScope.launch` resumes on
+     * `Dispatchers.Main.immediate`, so every continuation of every
+     * load — and every `app = app.copy(...)` that ends one — runs on
+     * the single main thread. Two loads in flight interleave only at
+     * suspension points and can never write at the same moment.
+     * `onCreate` starts exactly two: the view's own fetch and this
+     * facet load.
      *
-     * `runBlocking { join() }` looked like it fixed that and could
-     * not, because joining from the main thread blocks the very
-     * looper the framework half of the load needs in order to finish.
-     * Draining and polling does both jobs: the looper keeps moving,
-     * and the coroutine is given real time to land. Bounded, so a
-     * genuine hang still fails rather than sitting here.
+     * Swapping in an unconfined dispatcher threw that away. Ktor
+     * suspends on its own dispatcher and an unconfined resumption
+     * runs wherever the call happened to finish, so the two loads
+     * resumed on two different background threads and both did a
+     * read-modify-write of `app` with nothing between them. Whichever
+     * read first and wrote last erased the other. That is a genuine
+     * lost update, and it explains everything the symptom did: one
+     * run in several, only under load, passing alone, and reporting
+     * "facets never loaded" while the load itself had plainly
+     * succeeded.
+     *
+     * Idling the real looper instead reproduces production's
+     * threading exactly: every continuation lands back on the main
+     * thread and waits its turn. Bounded, so a real hang still fails.
      */
     private fun settle(activity: MainActivity? = null) {
         val looper = shadowOf(Looper.getMainLooper())
         val job = activity?.facetsJob
         repeat(SETTLE_TRIES) {
             looper.idle()
-            if (job == null || job.isCompleted) return
+            if (job == null || job.isCompleted) {
+                looper.idle()
+                return
+            }
             Thread.sleep(SETTLE_STEP_MS)
         }
         looper.idle()
-    }
-
-    @Before
-    fun setUp() {
-        // `lifecycleScope.launch` goes to `Dispatchers.Main`, which
-        // under Robolectric is a paused looper that nothing in a plain
-        // JUnit test ever pumps. The unconfined dispatcher starts the
-        // load inline so there is something to wait for; `settle`
-        // then does the waiting properly. See the note there for why
-        // this half alone was never enough.
-        Dispatchers.setMain(UnconfinedTestDispatcher())
     }
 
     private companion object {
@@ -137,7 +128,6 @@ class MainActivityFacetsTest {
         shadowOf(Looper.getMainLooper()).idle()
         Snapshot.sendApplyNotifications()
         shadowOf(Looper.getMainLooper()).idle()
-        Dispatchers.resetMain()
     }
 
     private var controller: ActivityController<MainActivity>? = null
@@ -202,7 +192,15 @@ class MainActivityFacetsTest {
         // name now.
         assertTrue(job!!.isCompleted, "the facet load had not finished when the test looked")
         assertTrue(!job.isCancelled, "the facet load was cancelled before it could finish")
-        assertTrue(loaded.facets.loaded, "facets never loaded — app.facets.loaded is false after onCreate")
+        assertTrue(
+            loaded.facets.loaded,
+            if (realActivity.facetsApplied) {
+                "the facet load wrote its result and something overwrote it afterwards — " +
+                    "a lost update between two coroutines, not a failed load"
+            } else {
+                "facets never loaded — the load finished without writing anything"
+            },
+        )
         assertTrue(loaded.facets.types.isNotEmpty(), "the type checklist's own list is empty")
         assertTrue(loaded.facets.layouts.isNotEmpty(), "layouts is empty")
         assertTrue(loaded.facets.setTypes.isNotEmpty(), "setTypes is empty")
