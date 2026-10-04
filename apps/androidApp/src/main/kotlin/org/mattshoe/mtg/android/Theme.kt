@@ -256,6 +256,18 @@ fun Primary(label: String, enabled: Boolean = true, onClick: () -> Unit) {
     )
 }
 
+/**
+ * `.btn { font-weight: 550 }`, which is not one of Material's named
+ * weights.
+ *
+ * Between Medium and SemiBold, and the website means the half step:
+ * at 500 "Reset everything" read as a label and at 600 it shouted
+ * next to the panel heading above it. `FontWeight` takes any value
+ * from 1 to 1000, so there is no reason to round it to one of the
+ * nine that have names.
+ */
+val ButtonWeight = FontWeight(550)
+
 /** `.btn`: bordered, a shade above the page. */
 @Composable
 fun Btn(label: String, enabled: Boolean = true, danger: Boolean = false, onClick: () -> Unit) {
@@ -268,7 +280,7 @@ fun Btn(label: String, enabled: Boolean = true, danger: Boolean = false, onClick
             .padding(horizontal = 14.dp, vertical = 8.dp),
         color = if (!enabled) Ink3 else if (danger) Bad else Ink,
         fontSize = 13.5.sp,
-        fontWeight = FontWeight.Medium,
+        fontWeight = ButtonWeight,
     )
 }
 

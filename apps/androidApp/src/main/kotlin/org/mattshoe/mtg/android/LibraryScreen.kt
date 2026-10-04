@@ -286,7 +286,11 @@ private fun CardTile(card: CardRow, stale: Boolean, onOpen: (CardRow) -> Unit) {
                     color = Ink,
                     fontSize = Design.MINI.sp,
                     fontWeight = FontWeight.Medium,
-                    maxLines = 2,
+                    // One line, not two. `.card-meta .nm` is
+                    // `white-space: nowrap` with an ellipsis: the
+                    // tiles are a grid and a name allowed to wrap
+                    // made every row as tall as its longest name.
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
@@ -315,7 +319,11 @@ private fun Badge(label: String, tone: Color, modifier: Modifier) {
 private fun Pager(state: Library, go: (Library) -> Unit) {
     FlowRow(
         Modifier.fillMaxWidth().testTag("pager").padding(top = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        // `.pager { justify-content: center }`. Packed to the left,
+        // Previous sat under the first column of cards and Next in
+        // the middle of the row, which reads as two controls that
+        // belong to the grid rather than one bar under it.
+        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Ghost("← Previous", enabled = state.hasPrev) { go(state.prev()) }

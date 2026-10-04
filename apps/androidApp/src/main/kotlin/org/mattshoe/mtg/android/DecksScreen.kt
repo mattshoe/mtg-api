@@ -658,7 +658,10 @@ private fun Curve(s: org.mattshoe.mtg.core.DeckStats) {
     val most = s.curve.maxOfOrNull { it.value } ?: 0
     Row(
         Modifier.fillMaxWidth().height(CURVE_HEIGHT).padding(top = 10.dp).testTag("curve"),
-        horizontalArrangement = Arrangement.spacedBy(5.dp),
+        // `.curve { gap: 6px }`. Five was a dp narrower than the
+        // page's, which over eight columns is a chart eight dp wider
+        // with eight slightly fatter bars in it.
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.Bottom,
     ) {
         s.curve.forEach { bar ->
