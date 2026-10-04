@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CardDefaults
@@ -31,6 +32,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.mattshoe.mtg.core.Design
@@ -354,6 +356,57 @@ const val ERR_PAD_Y = 10
 /** What the box and the words inside it answer to, in tests. */
 const val ERR_TAG = "err"
 const val ERR_TEXT_TAG = "err-text"
+
+/**
+ * The share mark: three nodes and two links, the same drawing the
+ * website makes.
+ *
+ * `.icon-share` in `app.css` is an inline SVG on a 24-unit viewBox —
+ * circles at (18,5), (6,12) and (18,19), radius 3, joined by a path
+ * from (8.6,13.5) to (15.4,17.5) and another from (15.4,6.5) to
+ * (8.6,10.5), all at stroke-width 1.9 with round caps. Those numbers
+ * are reproduced exactly here and scaled, so the phone and the page
+ * draw one symbol rather than two things that resemble each other.
+ *
+ * Android used to type it instead: `Line("⤴", …)`, a 16sp U+2934.
+ * That is an arrow pointing up and to the right, not a share mark; it
+ * came out around 11dp of actual ink inside a 44dp box; and what it
+ * looked like at all was down to whichever font the handset shipped.
+ */
+@Composable
+fun ShareMark(tint: Color, size: Dp = 20.dp, modifier: Modifier = Modifier) {
+    androidx.compose.foundation.Canvas(modifier.size(size).testTag(SHARE_MARK_TAG)) {
+        // One unit of the web's viewBox, so every number below is the
+        // number in the stylesheet.
+        val u = this.size.minDimension / 24f
+        val stroke = 1.9f * u
+        fun at(x: Float, y: Float) = androidx.compose.ui.geometry.Offset(x * u, y * u)
+
+        listOf(18f to 5f, 6f to 12f, 18f to 19f).forEach { (x, y) ->
+            drawCircle(
+                color = tint,
+                radius = 3f * u,
+                center = at(x, y),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke),
+            )
+        }
+        listOf(
+            at(8.6f, 13.5f) to at(15.4f, 17.5f),
+            at(15.4f, 6.5f) to at(8.6f, 10.5f),
+        ).forEach { (from, to) ->
+            drawLine(
+                color = tint,
+                start = from,
+                end = to,
+                strokeWidth = stroke,
+                cap = androidx.compose.ui.graphics.StrokeCap.Round,
+            )
+        }
+    }
+}
+
+/** What the share mark answers to in a test. */
+const val SHARE_MARK_TAG = "share-mark"
 
 /**
  * `.err`: an error is a box you are meant to find, not a sentence

@@ -623,7 +623,11 @@ private fun Hairline(tag: String) {
 @Composable
 private fun ShareButton(open: Boolean, onClick: () -> Unit) {
     Box(
-        Modifier.size(44.dp)
+        // `TouchTarget`, not 44dp. Item 4.8 put a 48dp floor under
+        // everything you press and this control was missed, because it
+        // is its own `Box` rather than a `Ghost` or a `NavPill`. Its
+        // own test caught it at 44.
+        Modifier.size(TouchTarget)
             .semantics {
                 role = Role.Button
                 contentDescription = "Share this deck"
@@ -635,10 +639,11 @@ private fun ShareButton(open: Boolean, onClick: () -> Unit) {
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        // The glyph, not the word - the web's button is icon-only.
-        // Boxed and gold while it is open, so "open" reads as a shape
-        // and a lightness rather than a hue nobody can see.
-        Line("⤴", if (open) Accent2 else Ink2, Design.H2, FontWeight.SemiBold)
+        // The mark, drawn — see `ShareMark`, which reproduces the
+        // website's own SVG. Boxed and gold while it is open, so
+        // "open" reads as a shape and a lightness rather than a hue
+        // nobody can see.
+        ShareMark(if (open) Accent2 else Ink2)
     }
 }
 
