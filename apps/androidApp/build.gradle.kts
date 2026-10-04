@@ -162,4 +162,10 @@ dependencies {
     testImplementation("androidx.compose.ui:ui-test-junit4:1.7.6")
     testImplementation("org.robolectric:robolectric:4.14.1")
     testImplementation(kotlin("test"))
+    // For MainActivityFacetsTest: a fake network, and a Main dispatcher
+    // that runs eagerly instead of posting to Robolectric's looper.
+    testImplementation("io.ktor:ktor-client-mock:3.0.3")
+    testImplementation("io.ktor:ktor-client-content-negotiation:3.0.3")
+    testImplementation("io.ktor:ktor-serialization-kotlinx-json:3.0.3")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
 }
