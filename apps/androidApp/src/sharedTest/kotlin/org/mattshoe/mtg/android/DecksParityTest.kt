@@ -246,10 +246,22 @@ class DecksParityTest {
         content { DecksScreen(opened(), {}, {}) }
         Parity.check(
             Parity.Fact("the way back is in the header") { says("← Decks") },
-            Parity.Fact("the banner names the commander") {
-                says("Alela, Artful Provocateur · Bracket 3")
+            // The web's hierarchy, which Android now follows: the
+            // commander is the band's big line and the bracket, the
+            // colours and the count are the small one under it. These
+            // two facts used to read "Alela, Artful Provocateur ·
+            // Bracket 3" as one demoted line under the deck's own
+            // title, which is the arrangement section 5 of the audit
+            // called out.
+            Parity.Fact("the banner leads with the commander") {
+                says("Alela, Artful Provocateur")
             },
-            Parity.Fact("the deck's own name is on the screen") { says("Alela") },
+            Parity.Fact("the bracket is in the small line under it") { says("Bracket 3") },
+            // The deck's own name is deliberately absent. The web's
+            // open-deck `page-head` carries the back button, the share
+            // menu and the admin actions and no title at all — the
+            // name was on the tile that was tapped to get here.
+            Parity.Fact("the deck's own name is not repeated in the band") { !says("Alela") },
             Parity.Fact("and how many cards it holds") { says("6 cards") },
             Parity.Fact("a share is offered on an open deck") {
                 described("Share this deck") == 1

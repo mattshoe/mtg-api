@@ -248,10 +248,14 @@ private fun DeckTile(deck: Deck, onOpen: (Deck) -> Unit) {
 
 /** WUBRG pips, or one colourless one. The `.mana` row on the web. */
 @Composable
-private fun Identity(ci: String) {
+private fun Identity(
+    ci: String,
+    size: androidx.compose.ui.unit.Dp = 16.dp,
+    text: androidx.compose.ui.unit.TextUnit = 10.sp,
+) {
     Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
         (ci.ifEmpty { "C" }).forEach { letter ->
-            ManaSymbol(letter.toString(), size = 16.dp, text = 10.sp)
+            ManaSymbol(letter.toString(), size = size, text = text)
         }
     }
 }
@@ -293,15 +297,54 @@ private fun Hero(deck: Deck, state: DecksState) {
             Modifier.align(Alignment.BottomStart).padding(horizontal = 14.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            Line(deck.title, Ink, Design.H2, FontWeight.SemiBold)
+            // The commander leads, the way the web's `.who` does, and
+            // the deck's own name is already the thing you tapped to
+            // get here — it was the big line on Android and the
+            // commander was demoted into the small one, so the hero
+            // repeated what the header above it already said and the
+            // card the deck is actually built around came second.
+            // Clamped at two lines: `-webkit-line-clamp: 2`, because
+            // "Rograkh, Son of Rohgahh" and friends do not fit on one.
+            val who = (cmdr?.shown ?: deck.commanderName)?.takeIf { it.isNotBlank() }
             Line(
-                listOfNotNull(
-                    cmdr?.shown ?: deck.commanderName,
-                    deck.bracket?.let { "Bracket $it" },
-                ).joinToString(" · "),
-                Ink2,
-                Design.MINI,
+                who ?: deck.title,
+                Ink,
+                Design.H2,
+                FontWeight.SemiBold,
+                // Tagged because the commander's name appears twice on
+                // this screen — here and as a row in the list below —
+                // so a test asking about "the hero's name" has to be
+                // able to say which one it means.
+                modifier = Modifier.testTag("deck-hero-who"),
+                maxLines = 2,
             )
+
+            // `Bracket N · <colours> · N cards`, the web's `.what` in
+            // the web's order. Android had no colours here at all and
+            // no count.
+            //
+            // One deliberate departure: the colours are real mana
+            // symbols, not the letters "WU". The web joins
+            // `colorPips` as text, but Matt asked for symbols on every
+            // colour pip, Android already draws them that way on the
+            // deck tile two composables up, and printing letters here
+            // would be the one place on the phone that went backwards.
+            Row(
+                Modifier.testTag("deck-hero-what"),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                val parts = buildList<@Composable () -> Unit> {
+                    deck.bracket?.let { b -> add { Line("Bracket $b", Ink2, Design.MINI) } }
+                    if (deck.identity.isNotEmpty()) {
+                        add { Identity(deck.identity, size = 13.dp, text = 8.sp) }
+                    }
+                    add { Line("${state.totalCards} cards", Ink2, Design.MINI) }
+                }
+                parts.forEachIndexed { i, part ->
+                    if (i > 0) Line(" · ", Ink2, Design.MINI)
+                    part()
+                }
+            }
         }
     }
 }

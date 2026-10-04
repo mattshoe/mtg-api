@@ -332,6 +332,8 @@ internal fun Line(
     fontFamily: FontFamily? = null,
     /** `font-variant-numeric: tabular-nums`, for a number beside a control that must not move. */
     tabularNums: Boolean = false,
+    /** `-webkit-line-clamp`: the deck hero's commander name clamps at two. */
+    maxLines: Int = Int.MAX_VALUE,
 ) = androidx.compose.material3.Text(
     value,
     modifier,
@@ -340,4 +342,6 @@ internal fun Line(
     fontWeight = weight,
     fontFamily = fontFamily,
     style = if (tabularNums) TextStyle(fontFeatureSettings = "tnum") else TextStyle.Default,
+    maxLines = maxLines,
+    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
 )
