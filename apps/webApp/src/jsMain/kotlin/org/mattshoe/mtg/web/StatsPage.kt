@@ -7,6 +7,7 @@ import org.jetbrains.compose.web.dom.H1
 import org.jetbrains.compose.web.dom.Span
 import org.jetbrains.compose.web.dom.Text
 import org.mattshoe.mtg.core.Owner
+import org.mattshoe.mtg.core.Prices
 import org.mattshoe.mtg.core.StatsState
 
 /** Collection totals, on the web. Sibling of `StatsScreen`. */
@@ -38,7 +39,9 @@ fun StatsPage(state: StatsState, onScope: (Owner?) -> Unit) {
                             "Decks" to t.decks.toString(),
                             "Sets" to t.sets.toString(),
                             "Foils" to t.foils.toString(),
-                            "Value" to (t.value?.let { "$$it" } ?: "unpriced"),
+                            // `unpriced`, never `$0`: nothing priced and
+                            // nothing worth anything are different facts.
+                            "Value" to Prices.money(t.value, dash = "unpriced"),
                         ).forEach { (label, value) ->
                             Div(attrs = { classes("flex-wrap") }) {
                                 Span { Text(label) }

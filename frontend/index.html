@@ -55,8 +55,13 @@
     return list;
   }
 
+  // Plain text under the one key `AdminToken` in `:core` owns — see
+  // `apps/core/.../Shell.kt`. It used to be a JSON blob with an
+  // `expires_at` nobody ever set; the Worker does not issue timed
+  // tokens, and keeping the format in two places (here and in the
+  // Kotlin that writes it) is exactly how they drift.
   function token() {
-    try { return (JSON.parse(localStorage.getItem('mtg.admin') || '{}') || {}).token || ''; }
+    try { return localStorage.getItem('mtg.admin') || ''; }
     catch (e) { return ''; }
   }
 

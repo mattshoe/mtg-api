@@ -446,7 +446,7 @@ internal fun DeckStatsPanel(s: org.mattshoe.mtg.core.DeckStats) {
         ) {
             Figure("${s.totalCards}", "cards")
             Figure("${s.lands}", "lands · ${s.landShare}%")
-            Figure(s.averageManaValue.toString(), "avg mana")
+            Figure(s.averageManaValueText, "avg mana")
             Figure("${s.spells}", "spells")
             // The hint is the web's `title`. A phone has nothing to
             // hover, so it is the figure's description instead —
@@ -568,7 +568,7 @@ private fun Curve(s: org.mattshoe.mtg.core.DeckStats) {
             }
         }
     }
-    Line("Median ${s.medianManaValue}. Lands excluded.", Ink3, Design.MINI)
+    Line("Median ${s.medianManaValueText}. Lands excluded.", Ink3, Design.MINI)
 }
 
 /**

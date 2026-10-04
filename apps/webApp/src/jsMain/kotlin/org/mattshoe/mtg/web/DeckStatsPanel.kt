@@ -27,7 +27,7 @@ fun DeckStatsPanel(s: DeckStats) {
         Div(attrs = { classes("figures") }) {
             figure("${s.totalCards}", "cards")
             figure("${s.lands}", "lands · ${s.landShare}%")
-            figure(s.averageManaValue.toString(), "avg mana")
+            figure(s.averageManaValueText, "avg mana")
             figure("${s.spells}", "spells")
             s.value?.let { figure(Prices.money(it), "value", hint = if (s.unpriced > 0) "${s.unpriced} cards have no price" else "") }
             if (s.missing > 0) figure("${s.missing}", "not owned", warn = true)
@@ -117,7 +117,7 @@ private fun Curve(s: DeckStats) {
     Div(attrs = { classes("curve") ; style { property("height", "auto") } }) {
         s.curve.forEach { bar -> Div(attrs = { classes("col") }) { Div(attrs = { classes("x") }) { Text(bar.label) } } }
     }
-    Div(attrs = { classes("sub") }) { Text("Median ${s.medianManaValue}. Lands excluded.") }
+    Div(attrs = { classes("sub") }) { Text("Median ${s.medianManaValueText}. Lands excluded.") }
 }
 
 /**

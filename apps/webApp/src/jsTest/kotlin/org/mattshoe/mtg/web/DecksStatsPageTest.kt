@@ -112,7 +112,10 @@ class DecksStatsPageTest {
         settle()
         assertTrue(root.textContent!!.contains("6032"))
         assertTrue(root.textContent!!.contains("3743"))
-        assertTrue(root.textContent!!.contains("$5046"))
+        // Grouped, through the shared `Prices.money` — this test used
+        // to pin the web's own bug, asserting the raw `$5046` that
+        // `Prices.money` would have caught.
+        assertTrue(root.textContent!!.contains("$5,046"))
     }
 
     @Test

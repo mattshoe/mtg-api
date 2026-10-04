@@ -384,7 +384,11 @@ class DeckStatsParityTest {
     @Test
     fun theMedianIsCaptionedUnderTheCurve() {
         show(deck())
-        rule.onNodeWithText("Median 2.0. Lands excluded.").assertExists()
+        // "2", not "2.0" — `Double.toString()` disagreed with itself
+        // between Kotlin/JS and Kotlin/JVM on exactly this value, and
+        // this assertion used to pin the JVM's own spelling of it.
+        // See `manaValueText` in `:core`.
+        rule.onNodeWithText("Median 2. Lands excluded.").assertExists()
     }
 
     @Test
