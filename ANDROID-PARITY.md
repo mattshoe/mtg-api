@@ -1,6 +1,6 @@
 # Android against the website
 
-**Everything in this report is done.** Sections 1, 2, 3 and 4 are
+**Everything in this report is done.** Sections 1, 2, 3, 4 and 6 are
 closed, both web-side bugs are fixed, and the design differences in
 section 5 are settled — the three Matt ruled on are built, and the
 drag-and-drop zone is deliberately skipped because a phone has no drag
