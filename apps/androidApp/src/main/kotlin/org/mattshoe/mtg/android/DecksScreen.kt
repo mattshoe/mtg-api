@@ -774,15 +774,23 @@ private fun Colours(s: org.mattshoe.mtg.core.DeckStats) {
         Ring("Needs", s.pips, Modifier.weight(1f))
         Ring("Makes", s.sources, Modifier.weight(1f))
     }
+    // One caption, the web's `.sub`, and the splash warning is the last
+    // sentence of it rather than a line of its own in amber. The web
+    // appends it to the same text node; amber on the phone made it a
+    // second thing to read and said "wrong" in the one channel this
+    // collection's owner cannot see anyway — the sentence itself is
+    // what carries it.
     Line(
         "Pips the deck asks for, against cards that can produce them. " +
-            "Hybrid pips count for both halves.",
+            "Hybrid pips count for both halves." +
+            if (s.unsupported.isNotEmpty()) {
+                " No source for ${s.unsupported.joinToString(", ")}."
+            } else {
+                ""
+            },
         Ink3,
         Design.MINI,
     )
-    if (s.unsupported.isNotEmpty()) {
-        Line("No source for ${s.unsupported.joinToString(", ")}.", Warn, Design.MINI)
-    }
 }
 
 /**

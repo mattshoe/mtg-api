@@ -324,12 +324,17 @@ private fun Body(card: CardDetail) {
                 // than to the date in front of it. One text node, not
                 // two: the line is one sentence to anything reading it
                 // out, which is how it reads on the page as well.
+                //
+                // One space after the date, not two. The web writes
+                // `r.day + " "` into a text node, and HTML would
+                // collapse a second one anyway; Compose does not, so
+                // two here was a visibly wider gap than the page's.
                 buildAnnotatedString {
                     if (r.day.isNotEmpty()) {
                         withStyle(SpanStyle(color = Ink3, fontFamily = FontFamily.Monospace)) {
                             append(r.day)
                         }
-                        append("  ")
+                        append(" ")
                     }
                     append(r.body)
                 },
