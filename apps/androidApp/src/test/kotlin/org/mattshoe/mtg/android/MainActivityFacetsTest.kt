@@ -66,7 +66,12 @@ class MainActivityFacetsTest {
      * that just fails. Idling Robolectric's own looper asks the
      * framework to finish what it has queued and takes nothing over.
      */
-    private fun settle() {
+    private fun settle(activity: MainActivity? = null) {
+        shadowOf(Looper.getMainLooper()).idle()
+        // Wait for the load itself rather than hoping a dispatcher ran
+        // it inline. That hope is what made this pass alone and fail
+        // after other classes had installed their own `Main`.
+        activity?.facetsJob?.let { kotlinx.coroutines.runBlocking { it.join() } }
         shadowOf(Looper.getMainLooper()).idle()
     }
 
@@ -129,7 +134,7 @@ class MainActivityFacetsTest {
         val realActivity = built.get()
         realActivity.useForTesting(fakeApi(seen))
         built.create().start().resume()
-        settle()
+        settle(realActivity)
 
         val loaded = realActivity.stateForTesting()
         assertTrue(loaded.facets.loaded, "facets never loaded — app.facets.loaded is false after onCreate")
@@ -144,7 +149,7 @@ class MainActivityFacetsTest {
 
         val requestsAfterFirstLoad = seen.size
         realActivity.loadFacetsForTesting()
-        settle()
+        settle(realActivity)
         assertEquals(
             requestsAfterFirstLoad,
             seen.size,

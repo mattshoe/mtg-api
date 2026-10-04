@@ -351,9 +351,22 @@ class MainActivity : ComponentActivity() {
      * because these lists do not change per screen and must not be
      * refetched on every navigation.
      */
+    /**
+     * The in-flight facet load, so a test can wait for it.
+     *
+     * Not for the app's benefit — nothing here joins it. It exists
+     * because the alternative is a test that depends on a dispatcher
+     * running the coroutine inline, and that test passed alone and
+     * failed in company depending on what else had touched
+     * `Dispatchers.Main` first. A job you can join is deterministic
+     * whoever ran before you.
+     */
+    internal var facetsJob: Job? = null
+        private set
+
     private fun loadFacets() {
         if (app.facets.loaded) return
-        lifecycleScope.launch {
+        facetsJob = lifecycleScope.launch {
             try {
                 val all = FacetQueries.everything.map { api.query(it).let { r -> r.cols to r.rows } }
                 val d = api.query(FacetQueries.decks)
