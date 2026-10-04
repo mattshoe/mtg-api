@@ -1,8 +1,64 @@
 # Where this stopped
 
-Bringing Android to parity with the website, from the 39-feature audit
-in `ANDROID-PARITY.md`. Read that first; this file is only the state of
-play.
+**The parity work is done.** All thirty-nine audits in
+`ANDROID-PARITY.md` are closed: sections 1 to 4, both web-side bugs,
+and the design differences in section 5. Nothing is in flight and no
+agent is running.
+
+Green on every suite, all verified on the same tree:
+
+| suite | count | how |
+|---|---|---|
+| `:core:jvmTest` | 2134 | `npm run test:core` |
+| Android screens, JVM | 432 (28 skipped) | `npm run test:screens`, ~3m20s |
+| Android screens, device | 424 | `npm run test:android`, ~22m |
+| web | 393 | `npm run test:web` |
+| worker | 558 | `npm test` |
+
+The 432 and the 424 are the same source. The device runs every test
+in `sharedTest`, including all 28 the JVM skips behind
+`Parity.needsRealRendering()`; the eight it does not see live in
+`src/test` and are JVM-only by design.
+
+**There is still no PR** for `fix/back-and-mana-symbols`. `main` is
+`c388bc1`.
+
+## What is left, and it is not much
+
+- **3.2, the card page** — no mana cost, type line, oracle text,
+  power/toughness or flavour on *either* platform, because
+  `CardDetail` has no fields for them. A missing feature rather than a
+  parity gap, and Matt has not asked for it.
+- **Section 6, the smaller cosmetics** — chip fills and weights, the
+  "going out" tag's colour, the amber on "No source for X", one space
+  against two after a ruling date, a placeholder present on one
+  platform and not the other, the curve's gradient and its 5dp against
+  6px bar gap, thumbnail radius, the two-line card name, the pager's
+  left alignment, the Reset button's weight, the line-count
+  pluralisation in the edit dialog. Collected but never queued.
+- **`MainActivityFacetsTest.facetsLoadOnceAtStartupAndASecondCallDoesNotRefetch`
+  is still flaky under load.** It has failed perhaps one run in four,
+  always while something else was hammering the machine, always
+  passing alone and on a re-run. It is no longer *mute*, though:
+  `loadFacets` used to end in `catch (e: Exception) {}`, so three
+  attempts at fixing it were working from "facets never loaded" and
+  nothing else. It now rethrows `CancellationException` and keeps the
+  throwable in `facetsError`, and the test rethrows that with the
+  cause attached. The next occurrence will name itself.
+
+## Two judgement calls Matt may want to reverse
+
+Both are one line, both are stated as facts in a test rather than
+left implied, and both came out of "match the web exactly".
+
+- **The deck's own name is no longer anywhere on the deck page.** The
+  web's open-deck `page-head` carries the back button, the share menu
+  and the admin actions and no title, so the hero leads with the
+  commander and the deck name is gone.
+- **The hero's colours are real mana symbols, not the web's plain
+  "WU" letters.** A deliberate departure: Matt asked for symbols
+  everywhere colours appear, and the deck tile forty lines up already
+  draws them.
 
 ## The branch
 
@@ -13,8 +69,7 @@ It has no PR yet. `main` is `c388bc1`.
 deleted. Fix agents told to use it came back with conflicts against
 newer work; that mistake cost a merge resolution already.
 
-Green as of the last run: core 2134, Android screens **414**, web 391,
-worker 558. Screens takes about 3 minutes now, not 85 seconds —
+Counts are in the table at the top of this file. Screens takes about 3 minutes now, not 85 seconds —
 `forkEvery(4)`, and worth every second of it (see "Things that will
 bite").
 
@@ -64,13 +119,8 @@ Three fix agents were running, each in its own worktree under
 agent finished. Check each for a commit, then merge it, run
 `npm run test:screens`, and only then move on.
 
-| item | branch | what |
-|---|---|---|
-| nav | fresh worktree | the hamburger, the title, the Admin group, no Find |
-
-Everything else is merged. Sections 1 to 4 are done, both web items are
-done, and two of the three design changes are in. The nav is the last
-thing in the queue.
+Nothing. Every branch is merged and every worktree that mattered is
+gone.
 
 **1.3 (the toast) is done and the branch is deleted.** Not merged —
 dropped. Its content had already arrived through another agent's
