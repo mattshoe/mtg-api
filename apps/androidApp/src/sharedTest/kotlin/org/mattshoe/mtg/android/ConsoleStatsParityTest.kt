@@ -186,6 +186,23 @@ class ConsoleStatsParityTest {
      */
     private fun lightness(t: String): Double = lightnessOf(tag(t).captureToImage().asAndroidBitmap())
 
+    /**
+     * The mean lightness of the middle of a node.
+     *
+     * Deliberately the middle rather than a band near the top:
+     * anything that measures an edge is measuring whatever happens to
+     * be laid out there, which is how the toggle test came to read the
+     * same blank strip twice. 30%-70% in both directions is inside any
+     * pill big enough to have a fill at all.
+     */
+    private fun middleLightnessOf(bmp: Bitmap): Double {
+        val y0 = (bmp.height * 0.30).toInt()
+        val y1 = maxOf(y0 + 1, (bmp.height * 0.70).toInt())
+        val x0 = (bmp.width * 0.30).toInt()
+        val x1 = maxOf(x0 + 1, (bmp.width * 0.70).toInt())
+        return mean(bmp, x0, x1, y0, y1)
+    }
+
     private fun lightnessOf(bmp: Bitmap): Double {
         val y0 = maxOf(1, (bmp.height * 0.08).toInt())
         val y1 = maxOf(y0 + 1, (bmp.height * 0.19).toInt())
@@ -711,14 +728,31 @@ class ConsoleStatsParityTest {
     fun theToggleIsMarkedWhileItIsInForce() {
         Parity.needsRealRendering()
         showLogs(LogsState().loaded(lines()))
-        val off = lightnessOf(
-            rule.onNode(hasText("Errors only (1)")).captureToImage().asAndroidBitmap(),
-        )
-        rule.onNode(hasText("Errors only (1)")).performClick()
+
+        // The pill, through the unmerged tree, not the control.
+        //
+        // This test measured nothing at all for as long as item 4.8
+        // has been in. `Ghost` wraps its label in a 48dp touch target
+        // and `pressable` merges the semantics, so
+        // `onNode(hasText(...))` stopped resolving to the tinted pill
+        // and started resolving to the box around it — and
+        // `lightnessOf` samples 8% to 19% of the node's height, which
+        // on a 48dp box is empty space above the pill. Both states
+        // sampled the same blank strip, so the two readings came back
+        // identical to thirteen decimal places and the assertion still
+        // passed on one emulator and not another. CI caught it; the
+        // only reason it survived here is that this is a
+        // `needsRealRendering` test, which never runs on the JVM.
+        //
+        // The middle of the pill is the thing that has to differ, so
+        // that is what gets read.
+        fun pill() = rule.onNode(hasText("Errors only (1)"), useUnmergedTree = true)
+
+        val off = middleLightnessOf(pill().captureToImage().asAndroidBitmap())
+        pill().performClick()
         rule.waitForIdle()
-        val on = lightnessOf(
-            rule.onNode(hasText("Errors only (1)")).captureToImage().asAndroidBitmap(),
-        )
+        val on = middleLightnessOf(pill().captureToImage().asAndroidBitmap())
+
         assertTrue(on - off > 4.0, "the toggle must look engaged without its hue; on $on vs off $off")
     }
 
