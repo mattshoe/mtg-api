@@ -14,10 +14,14 @@ import org.mattshoe.mtg.core.StatsState
 @Composable
 fun StatsPage(state: StatsState, onScope: (Owner?) -> Unit) {
     Div(attrs = { classes("wrap") }) {
-        Div(attrs = { classes("flex-wrap") }) {
+        // `seg`, not `owner-opt`. `owner-opt` is the new-deck wizard's
+        // 130px-wide one-big-decision button, and the web's own test
+        // asserts it stays out of the rest of the app because three of
+        // them wrap onto two rows on a phone. Every other scope switcher
+        // is a segmented control; this was the last holdout.
+        Div(attrs = { classes("seg") }) {
             listOf(null to "Both", Owner.MATT to "Matt", Owner.KAYLA to "Kayla").forEach { (o, label) ->
                 Button(attrs = {
-                    classes("owner-opt")
                     if (state.scope.owner == o) classes("on")
                     onClick { onScope(o) }
                 }) { Text(label) }

@@ -153,7 +153,17 @@ private fun Identity(ci: String) {
 private fun Tile(deck: Deck, onOpen: (Deck) -> Unit) {
     // The same markup the hand-written grid used: the commander's art
     // cropped to a band across the top, then the name and identity.
-    Div(attrs = { classes("deck-card"); onClick { onOpen(deck) } }) {
+    // Reachable by keyboard, the same way the card row below is. A bare
+    // clickable `div` is invisible to Tab and to a screen reader, and
+    // the deck grid is the only way into a deck.
+    Div(attrs = {
+        classes("deck-card")
+        attr("role", "button")
+        attr("tabindex", "0")
+        attr("title", deck.title)
+        onClick { onOpen(deck) }
+        onKeyDown { e -> if (e.key == "Enter" || e.key == " ") onOpen(deck) }
+    }) {
         val art = CardQueries.banner(deck.artId, deck.commanderName)
         Div(attrs = { classes("deck-banner"); if (art == null) classes("none") }) {
             art?.let { Img(src = it, alt = "", attrs = { attr("loading", "lazy") }) }

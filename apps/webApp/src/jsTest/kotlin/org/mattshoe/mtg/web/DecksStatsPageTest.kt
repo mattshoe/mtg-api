@@ -86,6 +86,29 @@ class DecksStatsPageTest {
     }
 
     @Test
+    fun aDeckTileCanBeReachedAndOpenedFromTheKeyboard() = runTest {
+        val root = mount { DecksPage(DecksState().loaded(listOf(deck("a", "matt", "Alela"))), { opened = it }, {}) }
+        settle()
+        val tile = root.querySelector(".deck-card") as HTMLElement
+        // The grid is the only way into a deck, so a tile that Tab
+        // cannot reach locks a keyboard user out of the whole app. The
+        // card row below it already carries all three.
+        assertEquals("button", tile.getAttribute("role"), "no role, so a screen reader reads a div")
+        assertEquals("0", tile.getAttribute("tabindex"), "not in the tab order")
+        // Enter, the way a real keypress arrives, rather than calling
+        // the handler directly — a `tabindex` with no key handler is
+        // the more likely half to be missing.
+        tile.dispatchEvent(
+            org.w3c.dom.events.KeyboardEvent(
+                "keydown",
+                org.w3c.dom.events.KeyboardEventInit(key = "Enter", bubbles = true),
+            ),
+        )
+        settle()
+        assertEquals("a", opened?.slug, "Enter on a focused tile did not open the deck")
+    }
+
+    @Test
     fun aDeckDetailCountsCardsAndFlagsWhatIsMissing() = runTest {
         val s = DecksState().loaded(listOf(deck("a", "matt", "Alela"))).opened(
             "a",
@@ -129,6 +152,25 @@ class DecksStatsPageTest {
         settle()
         assertEquals(Owner.KAYLA, scoped)
         assertEquals(1, scopeCalls)
+    }
+
+    @Test
+    fun theStatsScopeSwitcherIsASegmentedControl() = runTest {
+        val root = mount { StatsPage(StatsState().scopedTo(Owner.MATT).loaded(Totals())) { } }
+        settle()
+        // `owner-opt` is the new-deck wizard's 130px-minimum choice
+        // card. Three of them wrap onto two rows on a phone, which is
+        // why `FilterPanel` was moved off it and why the web's own test
+        // asserts it stays out of the rest of the app. Stats was the
+        // last place still using it.
+        assertEquals(0, root.querySelectorAll(".owner-opt").length)
+        val seg = root.querySelector(".seg")
+        assertTrue(seg != null, "the scope switcher is not a .seg")
+        assertEquals(3, root.querySelectorAll(".seg button").length)
+        // Inside the control, not merely somewhere on the page.
+        val inSeg = root.querySelectorAll(".seg button")
+        val labels = (0 until inSeg.length).map { (inSeg[it] as org.w3c.dom.HTMLElement).textContent }
+        assertEquals(listOf("Both", "Matt", "Kayla"), labels)
     }
 
     @Test

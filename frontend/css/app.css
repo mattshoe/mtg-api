@@ -955,6 +955,10 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
 @media (hover: hover) {
   .deck-card:hover { border-color: var(--line-2); background: var(--bg-3); }
 }
+/* The tile has `overflow: hidden`, so the global focus ring at
+   `outline-offset: 2px` would sit outside the card and get clipped by
+   the grid gap. Inset, the same way `.deck-line[role=button]` does it. */
+.deck-card:focus-visible { outline: 2px solid var(--info); outline-offset: -2px; }
 
 /* commander art, cropped to a band across the top */
 .deck-banner { flex: none; height: 96px; background: var(--bg-3); overflow: hidden; }
