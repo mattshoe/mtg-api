@@ -1,6 +1,7 @@
 package org.mattshoe.mtg.android
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -103,6 +105,35 @@ fun AppShell(
     var showFilters by remember { mutableStateOf(false) }
     val keys = remember { FocusRequester() }
 
+    // Where the Library grid and each deck's card list were scrolled
+    // to, kept here rather than inside `LibraryScreen` or
+    // `DecksScreen`.
+    //
+    // The `when` below composes exactly one screen at a time. Opening
+    // a card switches `state.view` to `CARD`, which stops composing
+    // whichever screen was showing — and a `LazyGridState` or
+    // `ScrollState` remembered inside that screen dies with it, so
+    // coming back built a fresh one at offset zero. These two live
+    // here instead, above the `when`, so they survive a trip through
+    // `View.CARD` the same way `AppShell` itself does.
+    //
+    // Nothing here ever calls `scrollTo`: the state objects are
+    // simply kept rather than recreated, so there is no restore step
+    // to fire too early or to fight a scroll already in progress —
+    // the two rules the web's `Scroll` object exists to enforce only
+    // apply to a world that rebuilds the page from the network on
+    // every navigation. Android's doesn't: `state.library.rows` and
+    // `state.decks.cards` are still sitting in memory when the screen
+    // comes back, so reusing the same state object is restoring.
+    val libraryGridState = remember { LazyGridState() }
+
+    // One `ScrollState` per deck (plus one for the list itself, under
+    // the empty-slug key), so reading deck A, opening a card, coming
+    // back, closing the deck and opening deck B does not hand B deck
+    // A's old offset.
+    val deckScrollStates = remember { mutableMapOf<String, ScrollState>() }
+    val deckScrollState = deckScrollStates.getOrPut(state.decks.openSlug.orEmpty()) { ScrollState(0) }
+
     // Nothing focuses this by hand, so the shortcuts work from the
     // moment the app opens rather than after the first tap.
     LaunchedEffect(Unit) { runCatching { keys.requestFocus() } }
@@ -170,10 +201,12 @@ fun AppShell(
                 // format dropdowns — renders empty on the phone while
                 // the website fills them from the same state.
                 facets = state.facets,
+                gridState = libraryGridState,
             )
 
             View.DECKS -> DecksScreen(
                 state = state.decks,
+                scrollState = deckScrollState,
                 onOpen = { onOpenDeck(it.slug) },
                 onClose = { onState(state.copy(decks = state.decks.close())) },
                 admin = state.admin.unlocked,

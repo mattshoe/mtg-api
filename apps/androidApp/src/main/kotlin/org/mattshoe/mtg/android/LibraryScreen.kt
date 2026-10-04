@@ -16,8 +16,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
@@ -82,6 +84,13 @@ fun LibraryScreen(
     @Suppress("UNUSED_PARAMETER") onCheatsheet: () -> Unit = {},
     /** The lists the panel offers, read once on the first search. */
     facets: Facets = Facets(),
+    /**
+     * Handed down from `AppShell`, which keeps it alive across a trip
+     * through the card screen — see the comment there. Defaulted so
+     * every test that mounts this screen on its own, rather than
+     * through the shell, keeps working unchanged.
+     */
+    gridState: LazyGridState = rememberLazyGridState(),
 ) {
     // One rule, the web's: anything that changes the filters asks the
     // database again. Without it, choosing a colour changed the state
@@ -101,6 +110,7 @@ fun LibraryScreen(
 
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 132.dp),
+        state = gridState,
         modifier = Modifier.fillMaxSize().testTag("library"),
         contentPadding = PaddingValues(Design.WRAP_PAD_NARROW.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),

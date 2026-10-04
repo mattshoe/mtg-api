@@ -1,6 +1,7 @@
 package org.mattshoe.mtg.android
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -65,6 +66,13 @@ fun DecksScreen(
     onOpen: (Deck) -> Unit,
     onClose: () -> Unit,
     admin: Boolean = false,
+    /**
+     * Handed down from `AppShell`, which keeps one of these per deck
+     * (and one for the list) alive across a trip through the card
+     * screen — see the comment there. Defaulted so every test that
+     * mounts this screen on its own keeps working unchanged.
+     */
+    scrollState: ScrollState = rememberScrollState(),
     onNew: () -> Unit = {},
     onEdit: (Deck) -> Unit = {},
     onDisassemble: (Deck) -> Unit = {},
@@ -78,7 +86,7 @@ fun DecksScreen(
 ) {
     Column(
         Modifier.fillMaxWidth()
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .padding(Design.WRAP_PAD_NARROW.dp),
         verticalArrangement = Arrangement.spacedBy(Design.GAP.dp),
     ) {
