@@ -9,10 +9,10 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontFamily
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -285,7 +285,13 @@ class DialogErrorBoxParityTest {
         shell(renameFailed())
         val d = rule.density.density
         val outer = box().getUnclippedBoundsInRoot()
-        val root = rule.onRoot().captureToImage().asAndroidBitmap()
+        // The dialog's own root, not `onRoot()`. With a dialog up there
+        // are two roots — the shell behind it and the dialog window —
+        // and `onRoot()` throws on the ambiguity. Only on a device:
+        // this is why the test had never actually run. The box's
+        // `getUnclippedBoundsInRoot` is already relative to this root,
+        // so the rectangles below line up with the bitmap.
+        val root = rule.onNode(isDialog()).captureToImage().asAndroidBitmap()
 
         fun px(v: Float) = (v * d).toInt()
         // Inside the band, clear of the ring and clear of the glyphs:

@@ -106,24 +106,42 @@ class TweakSheetIsADialogTest {
     /**
      * The sheet at its tallest, which is the shape that exposed this.
      *
-     * Ten hits at 44dp each, plus the subject, the box, the counter,
-     * the summary and the foot. On any phone that is more than a
-     * screenful, so it is the state that says whether the height is
-     * capped or merely unbounded.
+     * The row count comes off the screen rather than being written
+     * down, because ten rows was written down and ten rows is a
+     * screenful on Robolectric's 470dp and comfortably *not* one on a
+     * real 808dp phone. On the device the fixture quietly stopped
+     * overflowing, so the scroll test's own precondition failed and it
+     * said so: "the tenth hit already fits, so this proves nothing
+     * about scrolling". A fixture sized in dp cannot go stale that way.
      */
-    private fun long() = DeckTweak.add(deck(), "Alela, Artful Provocateur")
-        .typed("lightning")
-        .searched(
-            listOf(
-                found("Lightning Bolt", 4, "matt", 1),
-                found("Lightning Greaves", 2, "matt", 2),
-            ),
-            listOf(
-                "Lightning Helix", "Lightning Strike", "Lightning Axe",
-                "Lightning Mauler", "Lightning Runner", "Lightning Coils",
-                "Lightning Crafter", "Lightning Diadem",
-            ),
-        )
+    private fun hitNames(): List<String> = (0 until hits).map { "Lightning ${'A' + it % 26}$it" }
+
+    /** The name on the last row, derived the same way the fixture is. */
+    private val lastHitName: String get() = hitNames().last()
+
+    private fun long(): DeckTweak {
+        val names = hitNames()
+        return DeckTweak.add(deck(), "Alela, Artful Provocateur")
+            .typed("lightning")
+            .searched(
+                listOf(
+                    found("Lightning Bolt", 4, "matt", 1),
+                    found("Lightning Greaves", 2, "matt", 2),
+                ),
+                names,
+            )
+    }
+
+    /**
+     * Enough rows to beat the 82% cap on this screen with room to
+     * spare. A row is about 44dp; 20dp per row is deliberately
+     * pessimistic so the margin holds on a tall phone too, and the
+     * floor keeps Robolectric's small screen honest.
+     */
+    private val hits: Int get() = (tall / 20).coerceAtLeast(24)
+
+    /** The last row in [long], whichever screen sized the fixture. */
+    private val lastHit: String get() = "tweak-hit-${hits + 1}"
 
     /**
      * A real `AppShell` over mutable state, the way `MainActivity`
@@ -330,27 +348,28 @@ class TweakSheetIsADialogTest {
         // The last hit starts below the sheet's own bottom edge, which
         // is the whole point of capping it: the sheet has to be
         // scrollable, not merely shorter.
-        assertTrue(present("tweak-hit-9"), "the ten hits are not all on screen")
+        assertTrue(present(lastHit), "the $hits hits are not all on screen")
         assertTrue(
-            box("tweak-hit-9").top.value > box("tweak-sheet").bottom.value,
-            "the tenth hit already fits, so this proves nothing about scrolling",
+            box(lastHit).top.value > box("tweak-sheet").bottom.value,
+            "the last of $hits hits already fits on a ${tall}dp screen, so this " +
+                "proves nothing about scrolling — the fixture is too short for this device",
         )
 
-        rule.onNodeWithTag("tweak-hit-9").performScrollTo()
+        rule.onNodeWithTag(lastHit).performScrollTo()
         rule.waitForIdle()
         val sheet = box("tweak-sheet")
-        val hit = box("tweak-hit-9")
+        val hit = box(lastHit)
         assertTrue(
             hit.top.value >= sheet.top.value - 1f && hit.bottom.value <= sheet.bottom.value + 1f,
-            "the tenth hit did not scroll inside the sheet: $hit against $sheet",
+            "the last hit did not scroll inside the sheet: $hit against $sheet",
         )
 
         // And it is a live control once it is there, not a picture of
         // one that scrolled into view.
-        rule.onNodeWithTag("tweak-hit-9").performClick()
+        rule.onNodeWithTag(lastHit).performClick()
         rule.waitForIdle()
         assertEquals(
-            "Lightning Diadem",
+            lastHitName,
             read().deckTweak?.pick?.name,
             "the hit past the fold could be reached but not pressed",
         )
