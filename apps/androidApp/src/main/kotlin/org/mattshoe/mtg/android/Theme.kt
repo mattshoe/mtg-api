@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.LocalTextStyle
@@ -61,6 +62,25 @@ fun c(argb: Long) = Color(argb)
 private fun Modifier.pressable(enabled: Boolean, onClick: () -> Unit) = this
     .semantics { role = Role.Button; if (!enabled) disabled() }
     .clickable(enabled = enabled, onClick = onClick)
+
+/**
+ * The smallest a thing you tap is allowed to be.
+ *
+ * Android's own guideline, and the website has no equivalent to copy:
+ * a mouse pointer is one pixel and a fingertip is about nine
+ * millimetres. The nav's Lock and Find were 25dp boxes six dp apart,
+ * which on a phone is two targets inside one thumb.
+ *
+ * It is the *touchable* box, not the painted one. Every control that
+ * uses this keeps its own padding and draws at its own size inside a
+ * box this big, so the page looks much as it did and the thumb gets
+ * somewhere to land. Compose will stretch a hit area to this on its
+ * own, but only as a fringe around a small control — where two of
+ * them sit side by side the fringes overlap and whichever was laid
+ * out first takes the overlap, so the other is still unhittable.
+ * Real layout space is the only version of this that works.
+ */
+val TouchTarget = 48.dp
 
 val Bg = c(Design.BG)
 val Bg2 = c(Design.BG_2)
@@ -172,24 +192,44 @@ fun Panel(
 /** `.app-tab`: a nav pill, gold while it is the current view. */
 @Composable
 fun NavPill(label: String, on: Boolean, onClick: () -> Unit) {
-    Text(
-        label,
-        Modifier
-            .background(if (on) AccentDim else Bg2, Pill)
-            .border(1.dp, if (on) Accent else Line2, Pill)
-            .pressable(true, onClick)
-            .padding(horizontal = 13.dp, vertical = 7.dp),
-        color = if (on) Accent2 else Ink2,
-        fontSize = Design.SMALL.sp,
-        fontWeight = FontWeight.Medium,
-    )
+    Box(
+        Modifier.sizeIn(minWidth = TouchTarget, minHeight = TouchTarget).pressable(true, onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            Modifier
+                .background(if (on) AccentDim else Bg2, Pill)
+                .border(1.dp, if (on) Accent else Line2, Pill)
+                .padding(horizontal = 13.dp, vertical = 7.dp),
+            color = if (on) Accent2 else Ink2,
+            fontSize = Design.SMALL.sp,
+            fontWeight = FontWeight.Medium,
+        )
+    }
 }
 
-/** `.seg`: one row, one choice, hairlines between. */
+/**
+ * `.seg`: one row, one choice, hairlines between.
+ *
+ * `fill` is for a row of short labels — the five comparison
+ * operators, which are one glyph each. Left to size themselves off
+ * their own text they came out 26dp a side, five of them in a huddle,
+ * and the one you hit was whichever your thumb overlapped first.
+ * Filled, they share the row equally and each is its own target.
+ */
 @Composable
-fun Seg(options: List<Pair<String, String>>, selected: String?, onPick: (String) -> Unit) {
+fun Seg(
+    options: List<Pair<String, String>>,
+    selected: String?,
+    fill: Boolean = false,
+    onPick: (String) -> Unit,
+) {
     Row(
-        Modifier.background(Bg, RadiusSm).border(1.dp, Line2, RadiusSm),
+        Modifier
+            .then(if (fill) Modifier.fillMaxWidth() else Modifier)
+            .background(Bg, RadiusSm)
+            .border(1.dp, Line2, RadiusSm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         options.forEachIndexed { i, (value, label) ->
@@ -199,16 +239,24 @@ fun Seg(options: List<Pair<String, String>>, selected: String?, onPick: (String)
                     Text("", fontSize = Design.MINI.sp)
                 }
             }
-            Text(
-                label,
+            Box(
                 Modifier
+                    // Equal shares of the row, so no segment is a
+                    // sliver because its label is one character.
+                    .then(if (fill) Modifier.weight(1f) else Modifier)
+                    .sizeIn(minWidth = TouchTarget, minHeight = TouchTarget)
                     .background(if (on) AccentDim else Color.Transparent)
-                    .pressable(true) { onPick(value) }
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                color = if (on) Accent2 else Ink2,
-                fontSize = 12.5.sp,
-                fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
-            )
+                    .pressable(true) { onPick(value) },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    label,
+                    Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    color = if (on) Accent2 else Ink2,
+                    fontSize = 12.5.sp,
+                    fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
+                )
+            }
         }
     }
 }
@@ -247,17 +295,22 @@ fun Btn(label: String, enabled: Boolean = true, danger: Boolean = false, onClick
 /** `.btn.sm.ghost`, and `.on` when it is in force. */
 @Composable
 fun Ghost(label: String, on: Boolean = false, enabled: Boolean = true, onClick: () -> Unit) {
-    Text(
-        label,
-        Modifier
-            .background(if (on) AccentDim else Color.Transparent, RadiusSm)
-            .border(1.dp, if (on) Accent else Color.Transparent, RadiusSm)
-            .pressable(enabled, onClick)
-            .padding(horizontal = 10.dp, vertical = 5.dp),
-        color = if (on) Accent2 else if (enabled) Ink2 else Ink3,
-        fontSize = 12.5.sp,
-        fontWeight = FontWeight.Medium,
-    )
+    Box(
+        Modifier.sizeIn(minWidth = TouchTarget, minHeight = TouchTarget)
+            .pressable(enabled, onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            Modifier
+                .background(if (on) AccentDim else Color.Transparent, RadiusSm)
+                .border(1.dp, if (on) Accent else Color.Transparent, RadiusSm)
+                .padding(horizontal = 10.dp, vertical = 5.dp),
+            color = if (on) Accent2 else if (enabled) Ink2 else Ink3,
+            fontSize = 12.5.sp,
+            fontWeight = FontWeight.Medium,
+        )
+    }
 }
 
 /** `.tag`: a small stated fact, not a control. */

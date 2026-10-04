@@ -7,6 +7,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
@@ -120,7 +121,13 @@ class FilterPanelFacetsTest {
         // "Card type" folds away until it holds a filter or is opened
         // by hand — the same accordion the website does not have, so
         // the checklist it wraps is not even composed until then.
-        composeRule.onNodeWithTag("header-type").performClick()
+        //
+        // Scrolled to first. The panel sits under the Library's own
+        // controls inside one lazy grid header, and the third group
+        // down is below the fold on a 320dp screen; a lazy layout
+        // does not place what is off screen, so the checklist would
+        // not be found however right it was.
+        composeRule.onNodeWithTag("header-type").performScrollTo().performClick()
         composeRule.waitForIdle()
 
         // The checklist is drawn at all, and it has moved past its
