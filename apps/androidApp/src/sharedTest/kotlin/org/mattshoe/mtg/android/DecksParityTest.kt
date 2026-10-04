@@ -9,6 +9,7 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasTextExactly
 import androidx.compose.ui.test.isHeading
+import androidx.compose.ui.test.isPopup
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
@@ -490,7 +491,13 @@ class DecksParityTest {
                     .fetchSemanticsNode().positionInRoot.y
             },
         )
-        rule.onRoot().shoot("deck-share-menu")
+        // The menu itself, not `onRoot()`. It is a `DropdownMenu` now,
+        // so with it open there are two roots — the page and the
+        // popup's own window — and `onRoot()` throws on the ambiguity.
+        // Only ever on a device: `shoot` is `needsRealRendering`, so
+        // the JVM skips it and this read as green until the emulator
+        // ran it.
+        rule.onNode(isPopup()).shoot("deck-share-menu")
 
         rule.onAllNodesWithText("Download")[1].performScrollTo().performClick()
         rule.waitForIdle()

@@ -101,10 +101,21 @@ class TapTargetsParityTest {
      */
     private fun SemanticsNodeInteraction.touch() = fetchSemanticsNode().touchBoundsInRoot
 
+    /**
+     * 48dp, give or take a rounding error.
+     *
+     * The tolerance is not slack, it is arithmetic. A dp is converted
+     * to pixels, laid out, and converted back, and on a real device
+     * at 2.625x that round trip returns 47.999992 for a box that was
+     * set to exactly 48. Robolectric's density is a whole number, so
+     * it returned exactly 48 and this read as green on the JVM for as
+     * long as it was never run anywhere else. Half a dp is far below
+     * anything a fingertip can tell and far above float noise.
+     */
     private fun assertBigEnough(what: String, node: SemanticsNodeInteraction) {
         val b = node.box()
         assertTrue(
-            b.width.value >= 48f && b.height.value >= 48f,
+            b.width.value >= 47.5f && b.height.value >= 47.5f,
             "$what is ${b.width.value}x${b.height.value}dp of touch target, " +
                 "and Android asks for 48x48",
         )
