@@ -39,6 +39,15 @@ data class AppState(
      */
     val from: Route? = null,
     val toast: String? = null,
+    /**
+     * Whether `toast` is reporting a failure.
+     *
+     * Both platforms used to say a dropped request and a finished
+     * save in the same voice — a toast is a toast. On the web that
+     * meant `.toast.ok` and `.toast.bad` sat in the stylesheet unused,
+     * because nothing ever told the DOM which one it was drawing.
+     */
+    val toastFailed: Boolean = false,
 ) {
     val view: View get() = route.view
 
@@ -54,6 +63,7 @@ data class AppState(
         return overlays.stack.fold(this) { s, o -> s.forget(o) }.copy(
             route = landed,
             toast = null,
+            toastFailed = false,
             overlays = overlays.clear(),
             card = null,
             // A route that does not name a deck has no deck open.
@@ -151,7 +161,8 @@ data class AppState(
             else -> view.label
         }
 
-    fun say(message: String?) = copy(toast = message)
+    fun say(message: String?, failed: Boolean = false) =
+        copy(toast = message, toastFailed = failed && message != null)
 
     /**
      * The screen a route lands on, marked as fetching.
@@ -179,7 +190,7 @@ data class AppState(
         View.STATS -> copy(stats = stats.failed(message))
         View.LOGS -> copy(logs = logs.failed(message))
         View.CARD -> copy(card = card?.failed(message))
-        View.CONSOLE, View.ENTRY -> say(message)
+        View.CONSOLE, View.ENTRY -> say(message, failed = true)
     }
 
     /**
@@ -197,7 +208,7 @@ data class AppState(
 
     // --------------------------------------------------------- overlays
 
-    fun opening(o: Overlay) = copy(overlays = overlays.open(o), toast = null)
+    fun opening(o: Overlay) = copy(overlays = overlays.open(o), toast = null, toastFailed = false)
 
     fun closing(o: Overlay) = copy(overlays = overlays.close(o)).forget(o)
 

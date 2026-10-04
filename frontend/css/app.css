@@ -355,6 +355,12 @@ select { appearance: none; background-image:
 .chip.mini { padding: 2px 7px; font-size: 11px; }
 .chip.ok { border-color: color-mix(in srgb, var(--ok) 45%, var(--line)); color: var(--ok); }
 .chip.bad { border-color: color-mix(in srgb, var(--bad) 45%, var(--line)); color: var(--bad); }
+.chip.warn { border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); color: var(--warn); }
+/* "Not legal" is not a failure, so it gets no alarm colour at all —
+   it reads as a dashed, dimmed chip, which a hue-blind eye tells
+   apart from `.chip.ok`/`.chip.bad`/`.chip.warn` by shape, not by
+   which of those three is lightest. */
+.chip.off { border-style: dashed; color: var(--text-3); }
 
 /* pip toggles, one per colour */
 .pips { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -407,6 +413,17 @@ td { padding: 7px 11px; border-bottom: 1px solid var(--line); vertical-align: mi
   tbody tr:hover { background: var(--bg-3); }
 }
 tbody tr.clickable { cursor: pointer; }
+/* A failed server-log row (ConsolePage's `classes("bad")`), marked
+   three ways, the same as Android's tinted/bold/ruled row — none of
+   them hue alone, because hue is the one channel this app's owner
+   does not have. */
+tbody tr.bad td {
+  background: color-mix(in srgb, var(--bad) 11%, transparent);
+  font-weight: 600;
+}
+tbody tr.bad td:first-child {
+  box-shadow: inset 3px 0 0 var(--bad);
+}
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 td.mono { font-family: var(--mono); font-size: 12.5px; }
 .t-name { font-weight: 550; }
@@ -586,8 +603,17 @@ pre.out {
 }
 .toast-says { flex: 1; min-width: 0; }
 .toast-x { color: var(--text-2); font-size: 17px; line-height: 1; }
-.toast.ok  { border-left-color: var(--ok); }
-.toast.bad { border-left-color: var(--bad); }
+/* A failed toast (`state.toastFailed`), not just a redder accent bar:
+   a wider rule, bold text and a tinted background, so it still reads
+   as a failure with the colour thrown away. There is no `.toast.ok`
+   — a toast that is not marked failed is already the plain, successful
+   look, so a second class for it would paint nothing new. */
+.toast.bad {
+  border-left-color: var(--bad);
+  border-left-width: 5px;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--bad) 10%, var(--bg-2));
+}
 @keyframes pop { from { transform: translateY(6px); opacity: 0; } }
 
 /* command palette */

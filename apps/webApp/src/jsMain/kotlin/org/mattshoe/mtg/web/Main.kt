@@ -515,9 +515,9 @@ object MtgApp {
             app = try {
                 block()
             } catch (e: ApiFailure) {
-                app.say(e.message ?: "something went wrong")
+                app.say(e.message ?: "something went wrong", failed = true)
             } catch (e: Exception) {
-                app.say(e.message ?: e.toString())
+                app.say(e.message ?: e.toString(), failed = true)
             }
         }
     }
@@ -813,11 +813,11 @@ object MtgApp {
             files.forEach { f ->
                 val bytes = f.size.toLong()
                 if (bytes > Upload.MAX_BYTES) {
-                    app = app.say("${f.name} is too big (${Upload.size(bytes)})")
+                    app = app.say("${f.name} is too big (${Upload.size(bytes)})", failed = true)
                     return@forEach
                 }
                 val text = readText(f)
-                if (text == null) app = app.say("could not read ${f.name}")
+                if (text == null) app = app.say("could not read ${f.name}", failed = true)
                 else texts += text
             }
             if (texts.isEmpty()) return@launch
@@ -850,7 +850,7 @@ object MtgApp {
 
             ExportTo.CLIPBOARD -> {
                 if (copy(text)) app.say("${r.rows.size} cards copied")
-                else app.say("could not reach the clipboard")
+                else app.say("could not reach the clipboard", failed = true)
             }
         }
     }
@@ -864,7 +864,7 @@ object MtgApp {
      * already on screen.
      */
     private suspend fun shareDeck(s: AppState, what: ShareWhat, where: ExportTo): AppState {
-        val deck = s.decks.open ?: return s.say("No deck open")
+        val deck = s.decks.open ?: return s.say("No deck open", failed = true)
         val text = when (what) {
             ShareWhat.LINK -> Share.link(s)
             ShareWhat.DECKLIST -> Export.deck(s.decks.cards)
@@ -883,7 +883,7 @@ object MtgApp {
                 if (copy(text)) {
                     app.say(if (what == ShareWhat.LINK) "Link copied" else "${s.decks.totalCards} cards copied")
                 } else {
-                    app.say("could not reach the clipboard")
+                    app.say("could not reach the clipboard", failed = true)
                 }
         }
     }
@@ -946,11 +946,11 @@ object MtgApp {
             for (f in files) {
                 val bytes = (f.size as Number).toLong()
                 if (Upload.tooBig(bytes)) {
-                    app = app.say("${f.name} is too big (${Upload.size(bytes)})")
+                    app = app.say("${f.name} is too big (${Upload.size(bytes)})", failed = true)
                     continue
                 }
                 val text = readText(f)
-                if (text == null) app = app.say("could not read ${f.name}")
+                if (text == null) app = app.say("could not read ${f.name}", failed = true)
                 else { chunks += text; names += f.name }
             }
             if (chunks.isEmpty()) return@launch
