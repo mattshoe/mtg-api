@@ -11,39 +11,73 @@ Green on every suite, all verified on the same tree:
 |---|---|---|
 | `:core:jvmTest` | 2144 | `npm run test:core` |
 | Android screens, JVM | 453 (29 skipped) | `npm run test:screens`, ~3m30s |
+| Android screens, device | 445 | `npm run test:android`, ~23m |
 | web | 399 | `npm run test:web` |
 | worker | 559 | `npm test` |
 
-The device run has **not** been taken since section 6 landed, so the
-row for it is gone rather than left at a stale number. One of the 29
-skips is new — `theLongestCardNameInMagicReallyDoesStayOnOneLine` —
-and like the other 28 it is unproven until `npm run test:android`
-runs.
+The 453 and the 445 are the same source. The device runs every test
+in `sharedTest`, including all 29 the JVM skips behind
+`Parity.needsRealRendering()` — `theLongestCardNameInMagicReallyDoesStayOnOneLine`
+among them; the eight the device does not see live in `src/test` and
+are JVM-only by design. Run it after any presentation change: it has
+caught four tests that were green on the JVM and simply wrong.
 
 **There is still no PR** for `fix/back-and-mana-symbols`. `main` is
 `c388bc1`.
 
-## What is left, and it is not much
+## What is left
 
-- **3.2, the card page** — no mana cost, type line, oracle text,
-  power/toughness or flavour on *either* platform, because
-  `CardDetail` has no fields for them. A missing feature rather than a
-  parity gap, and Matt has not asked for it.
-- **Two judgement calls in section 6**, both one line to reverse. The
-  Console's SQL box and the mass entry box each lost a placeholder,
-  because the website's own boxes carry none and the heading above and
-  the count below already say what the placeholder said. If Matt wants
-  the example query back, it goes back on both platforms rather than
-  one.
-- **`MainActivityFacetsTest.facetsLoadOnceAtStartupAndASecondCallDoesNotRefetch`
-  is still flaky under load.** It has failed perhaps one run in four,
-  always while something else was hammering the machine, always
-  passing alone and on a re-run. It is no longer *mute*, though:
-  `loadFacets` used to end in `catch (e: Exception) {}`, so three
-  attempts at fixing it were working from "facets never loaded" and
-  nothing else. It now rethrows `CancellationException` and keeps the
-  throwable in `facetsError`, and the test rethrows that with the
-  cause attached. The next occurrence will name itself.
+**Nothing from the audit.** Every section is closed, 3.2 and section 6
+included. Both were sitting in this file as "not asked for", and the
+instruction that settled it was short: if you see bugs, fix them.
+
+- **3.2 is done.** The card page shows the card — mana cost, type
+  line, rules text, power and toughness, flavour, both faces of a
+  double-faced card, on both platforms. `CardDetail` had no fields
+  for any of it and the columns had been in `cards` since the first
+  import. Found two real bugs by running the SQL against the live
+  database instead of reading it: Sol Ring came back twice, once per
+  printing owned, which a `pick` CTE fixes. The golden-SQL fixture
+  means `npm test` now executes the face query against a real D1.
+- **Section 6 is done** — all eleven cosmetics, nothing skipped.
+- **The facets flake is fixed**, on the fifth attempt. See below,
+  because the four failures are more instructive than the fix.
+
+The only thing still open is **no PR** for
+`fix/back-and-mana-symbols`. `main` is `c388bc1`.
+
+## What four wrong attempts at one flaky test cost
+
+`MainActivityFacetsTest` failed about one run in several, always
+under machine load, always passing alone. Four attempts argued about
+which test dispatcher should own `Dispatchers.Main`. The answer was
+none of them.
+
+In production `lifecycleScope.launch` resumes on
+`Dispatchers.Main.immediate`, so every continuation and every
+`app = app.copy(...)` runs on the one main thread, and the two loads
+`onCreate` starts interleave only at suspension points.
+`Dispatchers.setMain(UnconfinedTestDispatcher())` deleted that
+guarantee: Ktor suspends on its own dispatcher, unconfined
+resumptions land on whichever background thread finished, and two
+coroutines did an unsynchronised read-modify-write of `app`.
+Whichever read first and wrote last erased the other.
+
+Two things made it take five tries. The symptom was a lie by
+omission — "facets never loaded" was reported for a load that had
+completed and written its result — and nobody had checked whether
+the swap was load-bearing. It was not; the test passes without it.
+
+The lessons, in order of how much time they would have saved:
+
+1. **Make the failure name itself.** `loadFacets` ended in
+   `catch (e: Exception) {}`, so three attempts debugged from one
+   sentence with the cause thrown away. The breakthrough was adding
+   `facetsApplied`, which told "never wrote" from "wrote and was
+   overwritten" — two completely different bugs behind one message.
+2. **Don't fix a test by changing its timing.** `runBlocking { join() }`
+   looked like a fix and was a coin-flip with better odds.
+3. **Ask whether the thing you are tuning is needed at all.**
 
 ## Two judgement calls Matt may want to reverse
 
