@@ -199,6 +199,7 @@ fun AppShell(
         Div(attrs = { classes("toasts") }) {
             Button(attrs = {
                 classes("toast")
+                if (state.toastFailed) classes("bad")
                 attr("title", "Dismiss")
                 attr("aria-label", "Dismiss")
                 onClick { onState(state.say(null)) }
