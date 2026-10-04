@@ -2,6 +2,7 @@ package org.mattshoe.mtg.core
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -135,5 +136,38 @@ class BackTest {
         val once = run.back() ?: error("nothing to go back to")
         assertEquals(View.DECKS, once.view, "back walked to the previous card instead of out")
         assertEquals("alela", once.route.rest)
+    }
+
+    // ------------------------------------------------- leaving with work
+
+    @Test
+    fun backThatWouldLeaveWithAPastedListFlagsIt() {
+        val s = AppState().copy(entry = MassEntry().copy(list = "1 Sol Ring"))
+        assertNull(s.back(), "the fixture is not on a bare default view")
+        assertTrue(s.wouldExitWithUnsavedEntry, "an unsent list did not flag the exit")
+    }
+
+    @Test
+    fun backThatWouldLeaveWithNothingPastedDoesNotFlagIt() {
+        val s = AppState()
+        assertNull(s.back(), "the fixture is not on a bare default view")
+        assertFalse(s.wouldExitWithUnsavedEntry, "an empty box flagged an exit anyway")
+    }
+
+    @Test
+    fun backThatWouldLeaveAfterAnAppliedListDoesNotFlagIt() {
+        val s = AppState().copy(entry = MassEntry().copy(list = "1 Sol Ring", result = Applied(applied = true)))
+        assertNull(s.back(), "the fixture is not on a bare default view")
+        assertFalse(s.wouldExitWithUnsavedEntry, "a list already applied still flagged the exit")
+    }
+
+    @Test
+    fun aPastedListDoesNotFlagAPressThatOnlyMovesWithinTheApp() {
+        // Reported as "leaving the mass entry screen", not "pressing
+        // back anywhere" — a press that is only coming off a card, an
+        // overlay or an open deck is not the one that loses the list,
+        // so it must not be the one that gets flagged.
+        val s = readingACardFromThatDeck().copy(entry = MassEntry().copy(list = "1 Sol Ring"))
+        assertFalse(s.wouldExitWithUnsavedEntry, "a press that only leaves a card flagged an exit")
     }
 }
