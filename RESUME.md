@@ -13,8 +13,8 @@ It has no PR yet. `main` is `c388bc1`.
 deleted. Fix agents told to use it came back with conflicts against
 newer work; that mistake cost a merge resolution already.
 
-Green as of the last run: core all passing, Android screens 349, web
-381, worker 558.
+Green as of the last run: core 2124, Android screens 349, web 391,
+worker 558.
 
 ## Done and merged onto this branch
 
@@ -34,6 +34,15 @@ Green as of the last run: core all passing, Android screens 349, web
   is Android's. "Keep editing" is what back and tap-outside do.
 - **The facets test made order-independent** (`6bda3fd`) — it passed
   alone and failed in the suite, which is worse than failing.
+- **The web's dead CSS** (`7174408`) — items 2.1-2.3. A failed log row
+  now actually paints (tint, bold, and a rule down the leading edge,
+  so it is not hue alone); `.chip.warn` and `.chip.off` exist, with
+  "not legal" marked by a dashed border rather than another colour;
+  and `AppState.toastFailed` gives the toast something to key on, so
+  `.toast.bad` is finally reachable. The tests read
+  `getComputedStyle`, not class names — and the proof that matters is
+  that the old class-name-only test stayed green while the seven new
+  ones went red.
 
 ## In flight when this stopped
 
@@ -46,7 +55,7 @@ agent finished. Check each for a commit, then merge it, run
 |---|---|---|
 | 1.3 | `android-parity-1-3-toast` | **finished, not yet merged.** Auto-dismiss after 5s, tap to dismiss, docked top on a narrow screen. Its own report is honest that one of its four tests stayed green against the old code, because the old bare `Text` never consumed touches either. |
 | 1.4 | `parity/android-1-4-autocomplete-dismiss` | **finished, merge REVERTED — see below.** |
-| 2.1-2.3 | `worktree-agent-aa3e17db39725e327` | the web's dead CSS: `tr.bad`, `.chip.warn`, `.chip.off`, `.toast.*` |
+| 2.1-2.3 | `worktree-agent-aa3e17db39725e327` | **merged.** The web's dead CSS. |
 
 If a branch has no commit, the agent did not finish — reread the item
 in `ANDROID-PARITY.md` and relaunch it.
