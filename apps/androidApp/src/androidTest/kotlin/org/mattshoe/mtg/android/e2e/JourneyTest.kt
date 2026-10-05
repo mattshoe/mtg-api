@@ -1,5 +1,7 @@
 package org.mattshoe.mtg.android.e2e
 
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasContentDescription
@@ -74,10 +76,27 @@ internal class JourneyTest : E2eTest() {
         until("the card page never got its text") {
             state().card?.face?.oracleText?.isNotBlank() == true
         }
+        // Exists, not displayed. Whether the oracle box has scrolled
+        // into view depends on how tall the phone is — it was on
+        // screen on a 2424px emulator and below the fold on CI's —
+        // and how a page lays out at a given height is what the
+        // measured tests in `sharedTest` are for. What a journey is
+        // entitled to claim is that tapping a card composed the
+        // card's page, with its text in it.
+        //
         // `onAllNodes`, because the first card in the fixture is
         // double-faced and a two-faced card draws an oracle box per
         // face. Asking for "the" oracle box found two and threw.
-        compose.onAllNodesWithTag("oracle").onFirst().assertIsDisplayed()
+        compose.onAllNodesWithTag("oracle").onFirst().assertExists()
+        // The header is at the top whatever the height, and on a
+        // card it carries the card's name — the one place the
+        // bottom bar cannot say where you are.
+        compose.onNodeWithTag("topbar-title").assertIsDisplayed()
+        assertEquals(
+            state().card?.name,
+            headerSays(),
+            "the card opened but the header is not naming it",
+        )
 
         compose.activity.onBackPressedDispatcher.let { dispatcher ->
             compose.runOnUiThread { dispatcher.onBackPressed() }
@@ -170,6 +189,13 @@ internal class JourneyTest : E2eTest() {
                 "rotation re-ran work the ViewModel was already holding: $again",
         )
     }
+
+    /** What the header actually says, read back off the node. */
+    private fun headerSays(): String =
+        compose.onNodeWithTag("topbar-title", useUnmergedTree = true)
+            .fetchSemanticsNode()
+            .config.getOrNull(SemanticsProperties.Text)
+            .orEmpty().joinToString("") { it.text }
 
     /**
      * The profile, open, with the row this test is about on screen.
