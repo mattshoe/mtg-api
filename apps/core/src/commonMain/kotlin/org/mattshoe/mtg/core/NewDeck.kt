@@ -213,10 +213,35 @@ data class NewDeck(
         )
     }
 
+    /**
+     * Where Back goes from here, or null when it should close the
+     * wizard rather than step inside it.
+     *
+     * Walks `steps` and not `DeckStep.entries`, so a sixty-card
+     * deck steps over the commander question the way the stepper
+     * already does. Null on the first step and on DONE, which is a
+     * receipt and not a step.
+     */
+    val previousStep: DeckStep?
+        get() = when (step) {
+            DeckStep.DONE -> null
+            else -> steps.getOrNull(steps.indexOf(step) - 1)
+        }
+
+    /**
+     * Go to a step, or to the last one that is actually reachable.
+     *
+     * A step **back** is never clamped. The same fault the entry
+     * wizard had: the clamp asks what is answered *now*, so
+     * emptying the card box pinned you to the box. Everything
+     * behind you was answered on the way past it.
+     */
     fun goTo(target: DeckStep): NewDeck {
+        val back = target != DeckStep.DONE &&
+            steps.indexOf(target) in 0 until maxOf(steps.indexOf(step), 0)
         val landing = steps.lastOrNull { reachable(it) && steps.indexOf(it) <= steps.indexOf(target) }
             ?: DeckStep.FORMAT
-        return copy(step = if (reachable(target)) target else landing, error = null)
+        return copy(step = if (back || reachable(target)) target else landing, error = null)
     }
 
     fun working(what: String) = copy(busy = what, error = null)

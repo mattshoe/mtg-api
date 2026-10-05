@@ -278,6 +278,12 @@ data class AppState(
         // version used to put a search you had just cleared back on
         // the screen.
         complete.open -> copy(complete = complete.closed())
+        // Inside the deck wizard, Back is a step first and a close
+        // second — the same rule the entry wizard gets below, and
+        // for the same reason: one press used to throw away every
+        // answer in a seven-step flow.
+        overlays.top == Overlay.NEW_DECK && newDeck.previousStep != null ->
+            copy(newDeck = newDeck.goTo(newDeck.previousStep!!))
         overlays.any -> dismissTop()
         view == View.CARD -> leaveCard()
         // Back to the list as a route, not just by emptying `decks`.

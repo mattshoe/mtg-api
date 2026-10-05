@@ -106,8 +106,17 @@ class DecksParityTest {
     private fun content(body: @androidx.compose.runtime.Composable () -> Unit) {
         rule.setContent { MaterialTheme(colorScheme = darkColorScheme()) { Surface { body() } } }
         rule.waitForIdle()
+        // Anything at all on the screen, not a clickable.
+        //
+        // It waited for a click target, which worked only because
+        // every state of this screen used to carry a New deck
+        // button. The button moved to the entry wizard's first
+        // question, so an empty, loading or failed shelf now has
+        // nothing you can press and the wait sat there for ten
+        // seconds before failing with a timeout rather than a fact.
         rule.waitUntil(timeoutMillis = 10_000) {
-            rule.onAllNodes(hasClickAction()).fetchSemanticsNodes().isNotEmpty()
+            rule.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.Text))
+                .fetchSemanticsNodes().isNotEmpty()
         }
     }
 
@@ -217,7 +226,10 @@ class DecksParityTest {
     fun theThreeEmptyStatesEachSayWhichOneTheyAre() {
         content { DecksScreen(DecksState(), {}, {}, admin = true) }
         assertTrue(says("No decks yet."), "an empty shelf says nothing at all")
-        rule.onNodeWithText("New deck").assertExists()
+        // And no New deck button: a deck is started from the entry
+        // wizard's first question now. Matt: "get rid of the one on
+        // the decks list page."
+        rule.onNodeWithText("New deck").assertDoesNotExist()
     }
 
     @Test

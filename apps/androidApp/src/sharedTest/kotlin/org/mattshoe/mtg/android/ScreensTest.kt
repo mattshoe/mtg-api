@@ -415,7 +415,7 @@ class ScreensTest {
     @Test
     fun theNewDeckWizardWillNotLeaveTheFirstStepUnanswered() {
         var s = NewDeck()
-        content { NewDeckDialog(s, { s = it }, {}, {}, {}) }
+        content { NewDeckScreen(s, { s = it }, {}, {}, {}) }
         rule.onNodeWithText("Continue →").assertIsNotEnabled()
         rule.onNodeWithText("Commander").performClick()
         rule.runOnIdle { assertNotNull(s.format) }

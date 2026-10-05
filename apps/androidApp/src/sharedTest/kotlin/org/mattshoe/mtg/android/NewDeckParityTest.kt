@@ -64,6 +64,21 @@ class NewDeckParityTest {
     private val broken = mutableListOf<String>()
 
     /** One fact about the screen. Checked, recorded, and carried on past. */
+    /**
+     * Whether that option is marked as chosen.
+     *
+     * `Choice` carries the tick as its own node inside the ring and
+     * the fact in `selected`, which is what `aria-pressed` is in the
+     * DOM. The old wizard's chips put "✓ " in front of the label, so
+     * these used to be string matches; the shape changed when the
+     * wizard was rebuilt out of the entry flow's pieces.
+     */
+    private fun ticked(label: String): Boolean {
+        val node = rule.onAllNodes(hasText(label)).fetchSemanticsNodes().firstOrNull()
+            ?: return false
+        return node.config.getOrNull(SemanticsProperties.Selected) ?: false
+    }
+
     private fun fact(what: String, body: () -> Unit) {
         try {
             body()
@@ -117,7 +132,7 @@ class NewDeckParityTest {
     ): MutableState<NewDeck> {
         val s = mutableStateOf(initial)
         content {
-            NewDeckDialog(
+            NewDeckScreen(
                 state = s.value,
                 onState = { s.value = it },
                 onCheck = onCheck,
@@ -234,7 +249,7 @@ class NewDeckParityTest {
     fun theFormatStepOffersEveryFormatAndWillNotBeSkipped() {
         val s = wizard(NewDeck())
 
-        shown("the title names the step", "New deck · Format")
+        shown("the panel says what it is asking", "Which format?")
         Format.entries.forEach { f -> shown("every format the web offers", f.label) }
         fact("Continue is refused until a format is chosen") {
             rule.onNodeWithText("Continue →").assertIsNotEnabled()
@@ -258,16 +273,16 @@ class NewDeckParityTest {
         // No commander step until a format that wants one is picked,
         // so Cards is the fourth step rather than the fifth.
         shown("no commander step before a format is chosen", "4 Cards")
-        absent("nothing is preselected", "✓ Commander")
+        absent("nothing is preselected", "✓")
         shoot("format")
 
         tap("Commander")
         fact("the chosen format is marked with a tick, not a colour") {
-            assertTrue(says("✓ Commander"), "it says: ${words()}")
+            assertTrue(ticked("Commander"), "it says: ${words()}")
         }
         // `aria-pressed`, which the web sets on every one of these.
         fact("and the choice is announced, not only drawn") {
-            rule.onNodeWithText("✓ Commander").assertIsSelected()
+            rule.onNodeWithText("Commander").assertIsSelected()
             rule.onNodeWithText("Standard").assertIsNotSelected()
         }
         fact("choosing a format arms Continue") {
@@ -277,7 +292,10 @@ class NewDeckParityTest {
             assertTrue(says("4 Commander") && says("5 Cards"), "it says: ${words()}")
         }
         fact("Continue goes to the owner") {
-            rule.onNodeWithText("Continue →").performClick()
+            // Scrolled to: twelve options now stand between the head
+            // of the panel and its foot, and the page is one long
+            // column rather than a dialog body.
+            rule.onNodeWithText("Continue →").performScrollTo().performClick()
             rule.runOnIdle { assertEquals(DeckStep.OWNER, s.value.step) }
         }
     }
@@ -285,7 +303,7 @@ class NewDeckParityTest {
     @Test
     fun aFormatThatWantsNoCommanderHasNoCommanderStep() {
         wizard(NewDeck().pick(Format.STANDARD))
-        shown("Standard keeps its tick", "✓ Standard")
+        fact("Standard keeps its tick") { assertTrue(ticked("Standard")) }
         absent("Standard has no commander step", "4 Commander")
         shown("so Cards is its fourth step", "4 Cards")
     }
@@ -296,16 +314,16 @@ class NewDeckParityTest {
     fun theOwnerStepAsksWhoseAndAssumesNeither() {
         val s = wizard(NewDeck().pick(Format.COMMANDER).goTo(DeckStep.OWNER))
 
-        shown("the title names the step", "New deck · Whose")
+        shown("the panel says what it is asking", "Whose deck?")
         Owner.entries.forEach { o -> shown("both owners are offered", o.label) }
-        absent("neither owner is assumed", "✓ Matt")
+        fact("neither owner is assumed") { assertTrue(!ticked("Matt")) }
         fact("Continue is refused until one is chosen") {
             rule.onNodeWithText("Continue →").assertIsNotEnabled()
         }
         shoot("owner")
 
         tap("Matt")
-        shown("the chosen owner is ticked", "✓ Matt")
+        fact("the chosen owner is ticked") { assertTrue(ticked("Matt")) }
         fact("choosing an owner arms Continue") {
             rule.onNodeWithText("Continue →").assertIsEnabled()
         }
@@ -348,7 +366,7 @@ class NewDeckParityTest {
         var typed: Completion? = null
         val s = wizard(named().goTo(DeckStep.COMMANDER).copy(hint = hint), onCommanderTyped = { typed = it })
 
-        shown("the title names the step", "New deck · Commander")
+        shown("the panel says what it is asking", "Who leads it?")
         shown("the web's own placeholder", "e.g. Alela, Artful Provocateur")
         absent("not the old bare box", "Commander")
         shown("and it says why", "A Commander deck needs one, and the server checks it too.")
@@ -381,8 +399,9 @@ class NewDeckParityTest {
             onPickFile = { asked = true },
         )
 
-        shown("the title names the step", "New deck · Cards")
-        shown("it counts the list against the format", "2 cards · Commander wants 100")
+        shown("the panel says what it is asking", "The decklist")
+        shown("it counts the list", "2")
+        shown("against what the format wants", "one card per line · Commander wants 100")
         // A deck you already have written down is in a file. The web
         // grew a drop zone here; Android had paste and nothing else.
         shown("a file is offered, not only pasted text", "Upload a file")
@@ -407,7 +426,8 @@ class NewDeckParityTest {
     @Test
     fun anEmptyCardListOffersNoFirstCardAndNoWayOn() {
         wizard(named().setCommander("Alela, Cunning Conqueror").goTo(DeckStep.CARDS))
-        shown("it counts nothing", "0 cards · Commander wants 100")
+        shown("it counts nothing", "0")
+        shown("it says what the format wants", "one card per line · Commander wants 100")
         shown("the file is still offered", "Upload a file")
         nowhere("there is no first card to offer", "First card is the commander")
         fact("an empty list goes no further") {
@@ -432,7 +452,7 @@ class NewDeckParityTest {
         var checked = false
         wizard(carded().goTo(DeckStep.CHECK), onCheck = { checked = true })
 
-        shown("the title names the step", "New deck · Check")
+        shown("the panel says what it is asking", "Are they real cards?")
         shown("it says what the check does", "Every name is checked against the collection first, then Scryfall.")
         shown("the check is offered", "Check the names")
         fact("an unchecked list goes no further") {
@@ -515,7 +535,7 @@ class NewDeckParityTest {
             onCreate = { created = true },
         )
 
-        shown("the title names the step", "New deck · Review")
+        shown("the panel says what it is asking", "Ready?")
         shown("what is being made", "Commander · Matt · 2 cards · Alela, Cunning Conqueror")
         // The tally is two figures, the way `.tally-cell` draws them:
         // the count big and what it counts small and uppercase under
@@ -550,7 +570,7 @@ class NewDeckParityTest {
         }
         shoot("review")
 
-        rule.onNodeWithText("Create Test Deck").performClick()
+        rule.onNodeWithText("Create Test Deck").performScrollTo().performClick()
         fact("pressing it creates the deck") { rule.runOnIdle { assertTrue(created) } }
         fact("the wizard did not move itself off the review") {
             rule.runOnIdle { assertEquals(DeckStep.REVIEW, s.value.step) }
@@ -561,10 +581,16 @@ class NewDeckParityTest {
     fun nothingIsOfferedTwiceWhileACreateIsInFlight() {
         // `canCreate` carries `busy == null`. The panel showing
         // "Creating…" is not the same as the button being refused.
-        wizard(carded().validated(checkedOk()).goTo(DeckStep.REVIEW).working("Creating…"))
+        val s = wizard(carded().validated(checkedOk()).goTo(DeckStep.REVIEW).working("Creating…"))
         shown("it says what it is doing", "Creating…")
         fact("and will not create a second deck") {
-            rule.onNodeWithText("Create Test Deck").assertIsNotEnabled()
+            // Stronger than it used to be. The dialog kept its
+            // confirm button in the frame and greyed it out; the
+            // page swaps the whole step for a "Working" panel, the
+            // way the entry wizard does, so there is no button to
+            // press twice.
+            rule.onNodeWithText("Create Test Deck").assertDoesNotExist()
+            assertTrue(!s.value.canCreate, "canCreate is still true mid-flight")
         }
         fact("the plan is not sitting there to be pressed either") {
             assertTrue(!somewhere("From bulk"), "it says: ${words()}")
@@ -578,7 +604,7 @@ class NewDeckParityTest {
         var closed = false
         wizard(carded().validated(checkedOk()).finished(), onClose = { closed = true })
 
-        shown("the title names the step", "New deck · Done")
+        shown("the panel says what it is asking", "Created")
         shown("the web's own word for it", "Created")
         shown("and where it lives", "Test Deck is at #/decks/test-deck")
         fact("there is nothing left to create") {

@@ -57,6 +57,8 @@ fun MassEntryScreen(
     onState: (MassEntry) -> Unit,
     onPreview: () -> Unit,
     onApply: () -> Unit,
+    /** The first question's third answer. See `Which`. */
+    onNewDeck: () -> Unit = {},
     history: EntryHistory = EntryHistory(),
     onPickFile: () -> Unit = {},
     onReuse: (HistoryEntry) -> Unit = {},
@@ -69,20 +71,28 @@ fun MassEntryScreen(
         // No heading: the tab says "Entry".
         Text(
             when (state.direction) {
-                null -> "Cards in or cards out, from a list or a file."
+                null -> if (state.startingADeck) {
+                    "A deck, built from a list and checked before anything moves."
+                } else {
+                    "Cards in or cards out, or a whole new deck."
+                }
                 Direction.ADD -> "Resolved against Scryfall, then written to the collection."
                 Direction.REMOVE -> "Matched against printings you already own."
             },
             fontSize = 14.sp,
         )
 
-        Stepper(state) { onState(state.goTo(it)) }
+        WizardSteps(
+            labels = Step.wizard.map { it.label },
+            at = Step.wizard.indexOf(state.step).let { if (it == -1) Step.wizard.size else it },
+            canGo = { i -> state.reachable(Step.wizard[i]) },
+        ) { i -> onState(state.goTo(Step.wizard[i])) }
 
         when {
             // "Working", headed, the same as the web — a panel with no
             // head is not the same screen as one that says what it is.
             state.busy != null -> Panel(head = "Working") { Line(state.busy!!) }
-            state.step == Step.WHICH -> Which(state, onState)
+            state.step == Step.WHICH -> Which(state, onState, onNewDeck)
             state.step == Step.LIST -> {
                 ListStep(state, onState, onPickFile)
                 // The history table puts an old list back in the box, so
@@ -99,33 +109,12 @@ fun MassEntryScreen(
 }
 
 @Composable
-private fun Stepper(s: MassEntry, go: (Step) -> Unit) {
-    val at = Step.wizard.indexOf(s.step).let { if (it == -1) Step.wizard.size else it }
-    // `.steps`: bordered chips at the site's radius, not Material's
-    // stadium. They wrap rather than squeeze, the same as the web's
-    // `flex-wrap`, because four of these do not fit a phone in a row.
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Step.wizard.forEachIndexed { i, step ->
-            val done = i < at
-            Btn(
-                "${if (done) "✓" else "${i + 1}"} ${step.label}",
-                // Same rule the web stepper uses, from the same object.
-                enabled = done && s.reachable(step),
-            ) { go(step) }
-        }
-    }
-}
-
-@Composable
-private fun Which(s: MassEntry, onState: (MassEntry) -> Unit) {
+private fun Which(s: MassEntry, onState: (MassEntry) -> Unit, onNewDeck: () -> Unit) {
     // Cards, not lines. "4 Lightning Bolt" is four cards already in
     // the box, and `cardCount` counts the line — which is the number
     // the request size is limited by and not the one to say here.
     Panel(
-        head = "Adding or removing?",
+        head = "What are you doing?",
         note = if (s.tally.cards > 0) "${s.tally.cards} cards already in the box" else null,
     ) {
         Choice(
@@ -138,10 +127,23 @@ private fun Which(s: MassEntry, onState: (MassEntry) -> Unit) {
             "Cards you sold, traded away or lost.",
             s.direction == Direction.REMOVE,
         ) { onState(s.choose(Direction.REMOVE)) }
+        // The third answer. It used to live as a button on the decks
+        // list, which is the one screen you are on when you already
+        // have the decks — Matt: "On the entry screen, we need a new
+        // option 'new deck' that launches the new deck flow. Then get
+        // rid of the one on the decks list page."
+        Choice(
+            "New deck",
+            "Build one from a list, checked against the collection.",
+            s.startingADeck,
+        ) { onState(s.startADeck()) }
         // One label, enabled or not. A button whose words change is a
         // different button, and the web's says "Continue →" either way.
-        Foot(hint = if (!s.canLeaveWhich) "Nothing is preselected on purpose." else null) {
-            Primary("Continue →", s.canLeaveWhich) { onState(s.goTo(Step.LIST)) }
+        // Where it goes is the answer's business, not the button's.
+        Foot(hint = if (!s.canContinue) "Nothing is preselected on purpose." else null) {
+            Primary("Continue →", s.canContinue) {
+                if (s.startingADeck) onNewDeck() else onState(s.goTo(Step.LIST))
+            }
         }
     }
 }
@@ -338,51 +340,6 @@ private fun Outcome(r: org.mattshoe.mtg.core.Applied) {
 
 // -------------------------------------------------------------- pieces
 
-/**
- * One thing you can pick.
- *
- * The same `.opt` row the web draws: a mark, a label and a line of
- * help, at the height of a button rather than the height of a card.
- *
- * What is chosen is said by a filled tick as well as by a colour,
- * because colour on its own is not a signal everybody can read — the
- * web asserts that and so does the Android suite. `selected` in the
- * semantics tree is what `aria-pressed` is in the DOM, so the same
- * fact is checkable on both.
- */
-@Composable
-private fun Choice(label: String, help: String?, on: Boolean, click: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth()
-            .padding(vertical = 3.dp)
-            .background(if (on) AccentDim else Bg2, Radius)
-            .border(1.dp, if (on) Accent else Line2, Radius)
-            .clickable(onClick = click)
-            .semantics(mergeDescendants = true) { selected = on; role = Role.Button }
-            .padding(horizontal = 16.dp, vertical = 18.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        // `.opt-mark`: the ring is drawn whether or not it is filled,
-        // so an unpicked option still looks like something you pick
-        // and the label does not shift when the tick arrives. Filled
-        // and dark-ticked when it is on — a shape and a lightness
-        // step, not a change of colour.
-        Box(
-            Modifier.size(19.dp)
-                .background(if (on) Accent else Color.Transparent, CircleShape)
-                .border(1.5.dp, if (on) Accent else Line2, CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (on) Line("✓", c(Design.ON_ACCENT), Design.TINY, FontWeight.Bold)
-        }
-        Column(Modifier.weight(1f)) {
-            Line(label, if (on) Accent2 else Ink, 15)
-            help?.let { Line(it, Ink3, Design.MINI) }
-        }
-    }
-}
-
 /** What was entered recently, and putting it back in the box. */
 @Composable
 private fun HistoryPanel(
@@ -407,67 +364,5 @@ private fun HistoryPanel(
             }
         }
         Ghost("Clear", onClick = onClear)
-    }
-}
-
-/**
- * `.tally`: three figures, as a grid of cells.
- *
- * The website draws these as a ruled, bordered block of equal cells —
- * a big mono number over a small uppercase label, hairlines between.
- * This was three loose columns bunched against the left margin with
- * nothing around them, which reads as a row of stray numbers rather
- * than as the summary of what is in the box.
- */
-@Composable
-private fun Tally(vararg cells: Pair<String, String>) {
-    Row(
-        Modifier.fillMaxWidth()
-            // The gridlines are the background showing through the
-            // 1dp gaps between cells, which is what `gap: 1px` over a
-            // `--line` ground does on the web.
-            .background(Line, RadiusSm)
-            .border(1.dp, Line, RadiusSm)
-            .clip(RadiusSm),
-        horizontalArrangement = Arrangement.spacedBy(1.dp),
-    ) {
-        cells.forEach { (value, label) ->
-            Column(
-                Modifier.weight(1f).background(Bg2).padding(vertical = 9.dp, horizontal = 6.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(3.dp),
-            ) {
-                Text(
-                    value,
-                    color = Ink,
-                    fontSize = 19.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    fontFamily = FontFamily.Monospace,
-                )
-                Line(label.uppercase(), Ink3, Design.TINY)
-            }
-        }
-    }
-}
-
-/**
- * `.wiz-foot`: every step ends the same way, in the same place.
- *
- * Ruled off from the body above it, and the reason a button is dead
- * on its own full-width line underneath — which is where the web puts
- * it, and where it is not mistaken for part of the button.
- */
-@Composable
-private fun Foot(hint: String? = null, buttons: @Composable () -> Unit) {
-    Column(
-        Modifier.fillMaxWidth().padding(top = 6.dp),
-        verticalArrangement = Arrangement.spacedBy(13.dp),
-    ) {
-        Box(Modifier.fillMaxWidth().height(1.dp).background(Line))
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) { buttons() }
-        hint?.let { Line(it, Ink, Design.SMALL) }
     }
 }

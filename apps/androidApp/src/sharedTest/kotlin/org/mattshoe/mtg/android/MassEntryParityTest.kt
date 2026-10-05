@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -117,7 +118,7 @@ class MassEntryParityTest {
 
     /** Every option on the step, top to bottom, by its label. */
     private fun options(): List<String> =
-        nodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.Selected))
+        nodes(hasTestTag("option"))
             .sortedBy { it.boundsInRoot.top }
             .map { node ->
                 node.config.getOrElse(SemanticsProperties.Text) { emptyList() }
@@ -183,12 +184,23 @@ class MassEntryParityTest {
         rule.onRoot().shoot("mass-entry-1-which")
 
         Parity.check(
-            fact("the first step is headed 'Adding or removing?'") { says("Adding or removing?") },
-            fact("the line under the title is the website's") {
-                says("Cards in or cards out, from a list or a file.")
+            // The head and the opening line are the phone's own now,
+            // because the phone's first question has a third answer
+            // the website does not offer: a new deck. Matt asked for
+            // it here and for the decks list to stop offering one.
+            fact("the first step is headed 'What are you doing?'") { says("What are you doing?") },
+            fact("the line under the title says what the three answers are") {
+                says("Cards in or cards out, or a whole new deck.")
             },
-            fact("both directions are offered, in the website's order") {
-                options() == listOf("Add to the collection", "Remove from the collection")
+            fact("both directions are offered, in the website's order, then the deck") {
+                options() == listOf(
+                    "Add to the collection",
+                    "Remove from the collection",
+                    "New deck",
+                )
+            },
+            fact("'New deck' carries its own line of help") {
+                says("Build one from a list, checked against the collection.")
             },
             fact("'Add' carries the website's line of help") {
                 says("Cards you bought, opened or were given.")
@@ -528,7 +540,7 @@ class MassEntryParityTest {
             assertEquals(Step.WHICH, live.value.step, "it did not go back to the start")
         }
         Parity.check(
-            fact("it is the first step of the wizard again") { says("Adding or removing?") },
+            fact("it is the first step of the wizard again") { says("What are you doing?") },
             fact("the receipt is off the screen") { !says("Applied") },
             fact("the old rows are gone") { !says("FRA 1") },
             fact("nothing is preselected the second time either") {
