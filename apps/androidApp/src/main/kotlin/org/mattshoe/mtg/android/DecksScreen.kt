@@ -170,7 +170,14 @@ internal fun DecksListScreen(
             .padding(Design.WRAP_PAD_NARROW.dp),
         verticalArrangement = Arrangement.spacedBy(Design.GAP.dp),
     ) {
-        PageHead("Decks") { if (admin) Primary("New deck", onClick = onNew) }
+        // No "Decks" heading — the tab says it. The one thing this
+        // row carried that nothing else does is the New deck button,
+        // so the button stays and the word goes.
+        if (admin) {
+            Row(Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
+                Primary("New deck", onClick = onNew)
+            }
+        }
         when {
             state.busy -> Line("Loading…", Ink3)
             state.error != null -> Line("Could not load decks: ${state.error}", Bad)
@@ -398,7 +405,9 @@ private fun Hero(deck: Deck, state: DecksState) {
     val cmdr = state.commander
     val url = cmdr?.art ?: CardQueries.banner(deck.artId, deck.commanderName)
     if (url == null) {
-        PageHead(deck.title)
+        // Nothing at all rather than the deck's name: the header at
+        // the top of the app is already showing it, because an open
+        // deck is the one thing the bottom bar cannot name.
         return
     }
     Box(Modifier.fillMaxWidth().height(150.dp).background(Bg3, Radius).clip(Radius)) {

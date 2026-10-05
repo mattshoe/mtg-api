@@ -53,7 +53,8 @@ fun LogsScreen(state: LogsState, onState: (LogsState) -> Unit) {
             .padding(Design.WRAP_PAD_NARROW.dp),
         verticalArrangement = Arrangement.spacedBy(Design.GAP.dp),
     ) {
-        PageHead("Server logs")
+        // No heading: this screen is not in the bar, so the header
+        // at the top carries its name on its own.
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Ghost("Errors only (${state.errorCount})", on = state.onlyErrors) {
                 onState(state.toggleErrors())

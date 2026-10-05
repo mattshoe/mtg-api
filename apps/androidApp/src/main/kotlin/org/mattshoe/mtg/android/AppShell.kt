@@ -779,7 +779,12 @@ private fun NavMenu(state: AppState, top: Int, onPick: (AppState) -> Unit) {
                 MenuTab(view.label, state.view == view) { onPick(state.navigate(view)) }
             }
 
-            MenuTab(if (state.admin.unlocked) "Lock" else "Unlock", on = false) {
+            // "Log out" and "Log in", not "Lock" and "Unlock". The
+            // row above it says "Admin" or "Not signed in", and a
+            // menu that offers to lock something it just called a
+            // sign-in is two metaphors for one thing. Matt: "Change
+            // lock to log out".
+            MenuTab(if (state.admin.unlocked) "Log out" else "Log in", on = false) {
                 onPick(
                     if (state.admin.unlocked) {
                         state.copy(admin = state.admin.lock()).navigate(state.route)

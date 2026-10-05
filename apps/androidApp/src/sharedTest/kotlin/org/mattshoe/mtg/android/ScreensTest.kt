@@ -130,7 +130,7 @@ class ScreensTest {
         rule.onAllNodesWithTextOrNothing("Entry")
         openTheProfile()
         rule.onAllNodesWithTextOrNothing("Server Logs")
-        rule.onNodeWithText("Unlock").assertExists()
+        rule.onNodeWithText("Log in").assertExists()
     }
 
     @Test
@@ -142,7 +142,7 @@ class ScreensTest {
         rule.onNodeWithText("Entry").assertExists()
         openTheProfile()
         rule.onNodeWithText("Server Logs").assertExists()
-        rule.onNodeWithText("Lock").assertExists()
+        rule.onNodeWithText("Log out").assertExists()
     }
 
     @Test

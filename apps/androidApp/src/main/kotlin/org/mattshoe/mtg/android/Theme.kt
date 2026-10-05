@@ -176,19 +176,6 @@ fun MtgTheme(content: @Composable () -> Unit) {
 
 // ------------------------------------------------------------- pieces
 
-/** `h1`, and the page it names. */
-@Composable
-fun PageHead(title: String, trailing: @Composable (() -> Unit)? = null) {
-    Row(
-        Modifier.fillMaxWidth().padding(bottom = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Text(title, fontSize = Design.H1.sp, fontWeight = FontWeight.SemiBold, color = Ink)
-        trailing?.invoke()
-    }
-}
-
 /** `.panel`: a bordered surface a shade above the page. */
 @Composable
 fun Panel(

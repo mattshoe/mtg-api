@@ -124,7 +124,8 @@ fun LibraryScreen(
     ) {
         item(span = { GridItemSpan(maxLineSpan) }) {
             Column(verticalArrangement = Arrangement.spacedBy(Design.GAP.dp)) {
-                PageHead("Library")
+                // No "Library" heading. The tab at the bottom says
+                // it, and a page that also says it says it twice.
                 Controls(state, ::apply, onSearch, onExport, complete, onName, onDismissName)
                 FilterSheet(state.filters, facets) { apply(state.where(it)) }
                 when {

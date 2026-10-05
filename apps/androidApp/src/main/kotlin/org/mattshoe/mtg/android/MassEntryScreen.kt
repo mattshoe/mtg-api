@@ -66,7 +66,7 @@ fun MassEntryScreen(
         Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Text("Mass entry", fontSize = 26.sp)
+        // No heading: the tab says "Entry".
         Text(
             when (state.direction) {
                 null -> "Cards in or cards out, from a list or a file."

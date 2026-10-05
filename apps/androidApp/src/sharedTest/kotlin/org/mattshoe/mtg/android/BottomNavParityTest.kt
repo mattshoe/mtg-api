@@ -242,6 +242,27 @@ class BottomNavParityTest {
     }
 
     @Test
+    fun noScreenPrintsItsOwnNameASecondTime() {
+        // The header was one of two offenders. The other is each
+        // screen's own `PageHead` — "Library" in 26sp directly under
+        // a header that said Library, directly above a tab that says
+        // Library. One of the three has to go and it is not the tab.
+        shell(unlocked())
+        listOf("Library", "Decks", "Stats", "Entry").forEach { label ->
+            tab(label).performClick()
+            rule.waitForIdle()
+            val printed = rule.onAllNodes(hasText(label), useUnmergedTree = true)
+                .fetchSemanticsNodes().size
+            assertEquals(
+                1,
+                printed,
+                "\"$label\" is written $printed times on the $label screen; " +
+                    "the tab in the bar is the only one that should say it",
+            )
+        }
+    }
+
+    @Test
     fun whatTheHeaderSaysInsteadIsTheAppsName() {
         shell(unlocked())
         assertEquals("MTG Collection", headerSays())
@@ -314,7 +335,7 @@ class BottomNavParityTest {
         rule.onNodeWithContentDescription("Profile").performClick()
         rule.waitForIdle()
         assertTrue(
-            rule.onAllNodes(hasText("Unlock")).fetchSemanticsNodes().isNotEmpty(),
+            rule.onAllNodes(hasText("Log in")).fetchSemanticsNodes().isNotEmpty(),
             "no way to sign in from the profile",
         )
     }
@@ -325,7 +346,7 @@ class BottomNavParityTest {
         rule.onNodeWithContentDescription("Profile").performClick()
         rule.waitForIdle()
         assertTrue(
-            rule.onAllNodes(hasText("Lock")).fetchSemanticsNodes().isNotEmpty(),
+            rule.onAllNodes(hasText("Log out")).fetchSemanticsNodes().isNotEmpty(),
             "no way to sign out from the profile",
         )
     }
