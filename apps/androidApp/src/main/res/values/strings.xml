@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">MTG Collection (next)</string>
+    <!-- Plain, with no marker. This module was the Compose rewrite
+         sitting beside the original `:app`, and "(next)" was how you
+         told two builds apart on one home screen. It then took over —
+         same applicationId, same signing key, so it installs over the
+         old one, and it is the only thing `release.yml` ships. The
+         label was the last thing still saying otherwise. -->
+    <string name="app_name">MTG Collection</string>
 </resources>
