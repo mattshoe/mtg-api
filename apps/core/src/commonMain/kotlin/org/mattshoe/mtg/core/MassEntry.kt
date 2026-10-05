@@ -37,6 +37,16 @@ data class MassEntry(
     val result: Applied? = null,
     val busy: String? = null,
     val error: String? = null,
+    /**
+     * The first question's third answer: not cards in or cards out,
+     * a new deck.
+     *
+     * Held here rather than in a screen so that both apps agree
+     * about what was picked, whether Continue is pressable and
+     * where Continue goes. Matt: "On the entry screen, we need a
+     * new option 'new deck' that launches the new deck flow."
+     */
+    val startingADeck: Boolean = false,
 ) {
 
     val cardCount: Int get() = DeckList.countCards(list)
@@ -64,8 +74,25 @@ data class MassEntry(
     //
     // One place, asked by both platforms, never re-derived by either.
 
-    /** A direction has to be chosen before there is anything to do. */
+    /**
+     * A direction has to be chosen before there is anything to do.
+     *
+     * Deliberately unmoved by [startingADeck]. This gates the list
+     * path, and the list path needs a direction — the step after it
+     * asks `direction`'s own question and the one after that writes
+     * to the collection. Picking the deck wizard answers the first
+     * question without answering this one; see [canContinue].
+     */
     val canLeaveWhich: Boolean get() = direction != null
+
+    /**
+     * Anything at all picked on the first question.
+     *
+     * What the Continue button is enabled by. Where it goes is the
+     * other half: [startingADeck] means the deck wizard, a direction
+     * means the list.
+     */
+    val canContinue: Boolean get() = canLeaveWhich || startingADeck
 
     /** A list has to be a list, and not an enormous one. */
     val canLeaveList: Boolean get() = canLeaveWhich && cardCount > 0 && !overLimit
@@ -98,7 +125,10 @@ data class MassEntry(
 
     // ------------------------------------------------------------ moves
 
-    fun choose(d: Direction) = copy(direction = d, error = null)
+    fun choose(d: Direction) = copy(direction = d, startingADeck = false, error = null)
+
+    /** The third answer. Exclusive with a direction, the way a radio is. */
+    fun startADeck() = copy(direction = null, startingADeck = true, error = null)
 
     /** Editing the list invalidates any dry run taken against the old one. */
     fun type(text: String) = copy(list = text, preview = null, error = null)
@@ -106,14 +136,44 @@ data class MassEntry(
     fun assign(o: Owner) = copy(owner = o, preview = null, error = null)
 
     /**
+     * Where Back goes from here, or null when it should leave the
+     * wizard rather than step inside it.
+     *
+     * Null on the first question, because there is nothing before
+     * it, and null on the receipt, because DONE is an ending: going
+     * "back" into Review from a receipt would offer to apply a list
+     * that has already been applied.
+     */
+    val previousStep: Step?
+        get() = when (step) {
+            Step.WHICH, Step.DONE -> null
+            else -> Step.wizard.getOrNull(Step.wizard.indexOf(step) - 1)
+        }
+
+    /**
      * Go to a step, or to the earliest one still unanswered.
      *
-     * Asking for somewhere unreachable is not an error and not a no-op —
-     * it lands on whatever is actually missing, so a stale link or a
-     * double tap cannot strand anyone on a half-filled screen.
+     * Asking for somewhere **ahead** that is unreachable is not an
+     * error and not a no-op — it lands on whatever is actually
+     * missing, so a stale link or a double tap cannot strand anyone
+     * on a half-filled screen.
+     *
+     * A step **back** is never clamped, and that is the fix for what
+     * Matt called back being "really wonky and doing weird things a
+     * lot". The clamp was applied to every move, so going back asked
+     * "what is still unanswered?" and answered with the step you were
+     * standing on or one in front of it: from the List step with an
+     * empty box, "← Back" landed on List, because the box was empty;
+     * from Who with a full box it landed on Who, because nobody had
+     * been named. Deleting what you had typed was enough to pin you
+     * where you were.
+     *
+     * Everything behind you has been answered by definition — that
+     * is how you got past it — so there is nothing to clamp to.
      */
     fun goTo(target: Step): MassEntry {
         val landing = when {
+            target.ordinal < step.ordinal -> target
             !canLeaveWhich -> Step.WHICH
             target == Step.LIST -> Step.LIST
             !canLeaveList -> Step.LIST

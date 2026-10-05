@@ -35,6 +35,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.text.font.FontFamily
 import org.mattshoe.mtg.core.Design
 
 /**
@@ -278,10 +284,16 @@ val ButtonWeight = FontWeight(550)
 
 /** `.btn`: bordered, a shade above the page. */
 @Composable
-fun Btn(label: String, enabled: Boolean = true, danger: Boolean = false, onClick: () -> Unit) {
+fun Btn(
+    label: String,
+    enabled: Boolean = true,
+    danger: Boolean = false,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
     Text(
         label,
-        Modifier
+        modifier
             .background(Bg3, RadiusSm)
             .border(1.dp, if (danger) Bad.copy(alpha = 0.6f) else Line2, RadiusSm)
             .pressable(enabled, onClick)
@@ -483,3 +495,155 @@ val monoSmall = TextStyle(
     fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
     fontSize = 12.5.sp,
 )
+
+// --------------------------------------------- the wizard’s pieces
+//
+// Written for the entry wizard and lifted here unchanged when the
+// new-deck wizard was rebuilt in the same shape. Matt: "I like the
+// format of the entry flow, so make sure the new deck flow matches
+// that style exactly" — which is a thing you promise by sharing the
+// components, not by drawing them twice and keeping them in step.
+
+/**
+ * One thing you can pick.
+ *
+ * The same `.opt` row the web draws: a mark, a label and a line of
+ * help, at the height of a button rather than the height of a card.
+ *
+ * What is chosen is said by a filled tick as well as by a colour,
+ * because colour on its own is not a signal everybody can read — the
+ * web asserts that and so does the Android suite. `selected` in the
+ * semantics tree is what `aria-pressed` is in the DOM, so the same
+ * fact is checkable on both.
+ */
+@Composable
+fun Choice(label: String, help: String?, on: Boolean, click: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth()
+            // Tagged, because "every option on this step" used to
+            // mean "every node carrying `selected`" and the stepper
+            // carries that too now.
+            .testTag("option")
+            .padding(vertical = 3.dp)
+            .background(if (on) AccentDim else Bg2, Radius)
+            .border(1.dp, if (on) Accent else Line2, Radius)
+            .clickable(onClick = click)
+            .semantics(mergeDescendants = true) { selected = on; role = Role.Button }
+            .padding(horizontal = 16.dp, vertical = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        // `.opt-mark`: the ring is drawn whether or not it is filled,
+        // so an unpicked option still looks like something you pick
+        // and the label does not shift when the tick arrives. Filled
+        // and dark-ticked when it is on — a shape and a lightness
+        // step, not a change of colour.
+        Box(
+            Modifier.size(19.dp)
+                .background(if (on) Accent else Color.Transparent, CircleShape)
+                .border(1.5.dp, if (on) Accent else Line2, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (on) Line("✓", c(Design.ON_ACCENT), Design.TINY, FontWeight.Bold)
+        }
+        Column(Modifier.weight(1f)) {
+            Line(label, if (on) Accent2 else Ink, 15)
+            help?.let { Line(it, Ink3, Design.MINI) }
+        }
+    }
+}
+
+/**
+ * `.tally`: three figures, as a grid of cells.
+ *
+ * The website draws these as a ruled, bordered block of equal cells —
+ * a big mono number over a small uppercase label, hairlines between.
+ * This was three loose columns bunched against the left margin with
+ * nothing around them, which reads as a row of stray numbers rather
+ * than as the summary of what is in the box.
+ */
+@Composable
+fun Tally(vararg cells: Pair<String, String>) {
+    Row(
+        Modifier.fillMaxWidth()
+            // The gridlines are the background showing through the
+            // 1dp gaps between cells, which is what `gap: 1px` over a
+            // `--line` ground does on the web.
+            .background(Line, RadiusSm)
+            .border(1.dp, Line, RadiusSm)
+            .clip(RadiusSm),
+        horizontalArrangement = Arrangement.spacedBy(1.dp),
+    ) {
+        cells.forEach { (value, label) ->
+            Column(
+                Modifier.weight(1f).background(Bg2).padding(vertical = 9.dp, horizontal = 6.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
+                Text(
+                    value,
+                    color = Ink,
+                    fontSize = 19.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    fontFamily = FontFamily.Monospace,
+                )
+                Line(label.uppercase(), Ink3, Design.TINY)
+            }
+        }
+    }
+}
+
+/**
+ * `.wiz-foot`: every step ends the same way, in the same place.
+ *
+ * Ruled off from the body above it, and the reason a button is dead
+ * on its own full-width line underneath — which is where the web puts
+ * it, and where it is not mistaken for part of the button.
+ */
+@Composable
+fun Foot(hint: String? = null, buttons: @Composable () -> Unit) {
+    Column(
+        Modifier.fillMaxWidth().padding(top = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(13.dp),
+    ) {
+        Box(Modifier.fillMaxWidth().height(1.dp).background(Line))
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) { buttons() }
+        hint?.let { Line(it, Ink, Design.SMALL) }
+    }
+}
+
+/**
+ * `.steps`: where you are in a wizard, and the way back to anywhere
+ * you have already answered.
+ *
+ * Bordered chips at the site's radius, not Material's stadium, and
+ * they wrap rather than squeeze — the same as the web's `flex-wrap`,
+ * because four of these do not fit a phone in a row.
+ *
+ * Index-based rather than typed, because the two wizards step
+ * through different enums and one of them drops a step depending on
+ * the format. What they share is the shape, so the shape is what
+ * lives here.
+ */
+@Composable
+fun WizardSteps(labels: List<String>, at: Int, canGo: (Int) -> Boolean, go: (Int) -> Unit) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        labels.forEachIndexed { i, label ->
+            val done = i < at
+            // `.step.on` in the semantics as well as in the ink.
+            // Seven identical pills said nothing about where you
+            // were, and a screen reader was told even less.
+            Btn(
+                "${if (done) "✓" else "${i + 1}"} $label",
+                enabled = done && canGo(i),
+                modifier = Modifier.semantics { selected = i == at },
+            ) { go(i) }
+        }
+    }
+}

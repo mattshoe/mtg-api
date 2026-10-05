@@ -323,7 +323,6 @@ fun AppShell(
                                 scrollState = deckScrollState,
                                 admin = state.admin.unlocked,
                                 onOpen = { onOpenDeck(it.slug) },
-                                onNew = { onState(state.opening(Overlay.NEW_DECK)) },
                             )
                         } else if (openDeck == null) {
                             // The address names a deck whose cards have
@@ -380,16 +379,39 @@ fun AppShell(
                         onShare = { onShareCard(Share.link(state)) },
                     )
 
-                    View.ENTRY -> MassEntryScreen(
-                        state = state.entry,
-                        onState = { onState(state.copy(entry = it)) },
-                        onPreview = onPreviewEntry,
-                        onApply = onApplyEntry,
-                        history = state.history,
-                        onPickFile = onPickFile,
-                        onReuse = onReuse,
-                        onClearHistory = onClearHistory,
-                    )
+                    // Two screens under one `View`, the way DECKS
+                    // holds the shelf and an open deck. The deck
+                    // wizard is reached from the entry wizard's first
+                    // question and is drawn in the same shape, so
+                    // putting it anywhere but here would be a second
+                    // place for the same flow to live.
+                    //
+                    // Still an overlay rather than a route, which is
+                    // what keeps Back stepping it — see
+                    // `AppState.back`.
+                    View.ENTRY -> if (Overlay.NEW_DECK in state.overlays) {
+                        NewDeckScreen(
+                            state = state.newDeck,
+                            onState = { onState(state.copy(newDeck = it)) },
+                            onCheck = onCheckNames,
+                            onCreate = onCreateDeck,
+                            onClose = { onState(state.closing(Overlay.NEW_DECK)) },
+                            onCommanderTyped = onCommanderTyped,
+                            onPickFile = onPickFile,
+                        )
+                    } else {
+                        MassEntryScreen(
+                            state = state.entry,
+                            onState = { onState(state.copy(entry = it)) },
+                            onPreview = onPreviewEntry,
+                            onApply = onApplyEntry,
+                            onNewDeck = { onState(state.opening(Overlay.NEW_DECK)) },
+                            history = state.history,
+                            onPickFile = onPickFile,
+                            onReuse = onReuse,
+                            onClearHistory = onClearHistory,
+                        )
+                    }
                 }
 
                 // Floated over the current screen rather than appended
@@ -491,18 +513,6 @@ fun AppShell(
             onState = { onState(state.copy(rename = it)) },
             onSave = onSaveRename,
             onClose = { onState(state.closing(Overlay.RENAME)) },
-        )
-    }
-
-    if (Overlay.NEW_DECK in state.overlays) {
-        NewDeckDialog(
-            state = state.newDeck,
-            onState = { onState(state.copy(newDeck = it)) },
-            onCheck = onCheckNames,
-            onCreate = onCreateDeck,
-            onClose = { onState(state.closing(Overlay.NEW_DECK)) },
-            onCommanderTyped = onCommanderTyped,
-            onPickFile = onPickFile,
         )
     }
 

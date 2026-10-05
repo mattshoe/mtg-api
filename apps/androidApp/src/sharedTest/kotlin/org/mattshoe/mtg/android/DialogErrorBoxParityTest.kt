@@ -100,7 +100,11 @@ class DialogErrorBoxParityTest {
         )
         .opening(Overlay.DISASSEMBLE)
 
+    // On the Entry tab: the deck wizard is a page there now rather
+    // than a dialog floating over whatever was behind it.
     private fun newDeckFailed() = AppState(
+        admin = Admin(token = "t").unlock("t"),
+        route = Route(View.ENTRY),
         newDeck = NewDeck(format = Format.COMMANDER, owner = Owner.MATT, error = said),
     ).opening(Overlay.NEW_DECK)
 
@@ -207,7 +211,9 @@ class DialogErrorBoxParityTest {
     @Test
     fun theNewDeckWizardReadsItsErrorInTheWebsErrBox() {
         shell(newDeckFailed())
-        rule.onNodeWithText("New deck · ${NewDeck().step.label}").assertExists()
+        // The panel's head, not a dialog title: the wizard is a page
+        // in the Entry tab now, built out of the entry flow's pieces.
+        rule.onNodeWithText("Which format?").assertExists()
         assertTheWebsErrBox("the new deck wizard")
     }
 

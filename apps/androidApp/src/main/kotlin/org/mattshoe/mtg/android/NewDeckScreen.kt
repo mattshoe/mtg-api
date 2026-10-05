@@ -45,15 +45,26 @@ import org.mattshoe.mtg.core.Owner
 import org.mattshoe.mtg.core.Source
 
 /**
- * The new deck wizard, on Android. Sibling of `NewDeckDialog` on the
- * web.
+ * The new deck wizard, on Android, in the entry wizard's shape.
+ *
+ * It was an `AlertDialog`: a stepper of outlined chips, a scrolling
+ * body capped at 460dp, and the way on living in the dialog's
+ * confirm slot where the Cancel button sat beside it. Matt: "I like
+ * the format of the entry flow, so make sure the new deck flow
+ * matches that style exactly."
+ *
+ * So it is a page now, built out of the same pieces the entry
+ * wizard is built out of — `WizardSteps`, `Panel`, `Choice`, `Foot`
+ * — which live in `Theme.kt` precisely so "exactly" is something
+ * the compiler keeps true rather than something two files have to
+ * agree about by hand.
  *
  * Creating a deck moves real cards — it pulls from bulk and records
  * what bulk cannot cover as bought — so every gate on the way is
  * `NewDeck` in the shared core rather than anything decided here.
  */
 @Composable
-fun NewDeckDialog(
+fun NewDeckScreen(
     state: NewDeck,
     onState: (NewDeck) -> Unit,
     onCheck: () -> Unit,
@@ -68,197 +79,197 @@ fun NewDeckDialog(
     /** A file for the card list. The web drops one on the same step. */
     onPickFile: () -> Unit = {},
 ) {
-    AlertDialog(
-        onDismissRequest = onClose,
-        title = { Text("New deck · ${state.step.label}") },
-        confirmButton = { Confirm(state, onState, onCheck, onCreate, onClose) },
-        dismissButton = { TextButton(onClick = onClose) { Text("Cancel") } },
-        text = {
-            Column(
-                Modifier.fillMaxWidth().heightIn(max = 460.dp).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Stepper(state) { onState(state.goTo(it)) }
-                when {
-                    state.busy != null -> Text(state.busy!!)
-                    state.step == DeckStep.FORMAT -> FormatStep(state, onState)
-                    state.step == DeckStep.OWNER -> OwnerStep(state, onState)
-                    state.step == DeckStep.NAME -> NameStep(state, onState)
-                    state.step == DeckStep.COMMANDER ->
-                        CommanderStep(state, onState, onCommanderTyped)
-                    state.step == DeckStep.CARDS -> CardsStep(state, onState, onPickFile)
-                    state.step == DeckStep.CHECK -> CheckStep(state, onState, onCheck)
-                    state.step == DeckStep.REVIEW -> ReviewStep(state)
-                    state.step == DeckStep.DONE -> DoneStep(state)
-                }
-                state.error?.let { ErrBox(it) }
-            }
-        },
-    )
+    Column(
+        Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Text(blurb(state), fontSize = 14.sp)
+
+        val steps = state.steps
+        WizardSteps(
+            labels = steps.map { it.label },
+            at = steps.indexOf(state.step).let { if (it == -1) steps.size else it },
+            canGo = { i -> state.reachable(steps[i]) },
+        ) { i -> onState(state.goTo(steps[i])) }
+
+        when {
+            state.busy != null -> Panel(head = "Working") { Line(state.busy!!) }
+            state.step == DeckStep.FORMAT -> FormatStep(state, onState, onClose)
+            state.step == DeckStep.OWNER -> OwnerStep(state, onState)
+            state.step == DeckStep.NAME -> NameStep(state, onState)
+            state.step == DeckStep.COMMANDER -> CommanderStep(state, onState, onCommanderTyped)
+            state.step == DeckStep.CARDS -> CardsStep(state, onState, onPickFile)
+            state.step == DeckStep.CHECK -> CheckStep(state, onState, onCheck)
+            state.step == DeckStep.REVIEW -> ReviewStep(state, onState, onCreate)
+            state.step == DeckStep.DONE -> DoneStep(state, onClose)
+        }
+
+        // `ErrBox` and not a bare line, which is what the website
+        // draws and what the dialog drew before this was a page. The
+        // tinted box with an edge round it is the only thing marking
+        // a failure as a failure for somebody who cannot see the
+        // tone, so it survives the restyle.
+        state.error?.let { ErrBox(it) }
+    }
 }
 
+/** The one line under the bar, the way the entry wizard opens. */
+private fun blurb(s: NewDeck): String = when (s.step) {
+    DeckStep.DONE -> "Created. It is in the deck list now."
+    DeckStep.REVIEW -> "What will happen to every card, before anything happens to any of them."
+    else -> "A deck, built from a list and checked before anything moves."
+}
+
+/** Back to the step behind this one, or out if there is none. */
 @Composable
-private fun Confirm(
+private fun DeckFoot(
     s: NewDeck,
     onState: (NewDeck) -> Unit,
-    onCheck: () -> Unit,
-    onCreate: () -> Unit,
     onClose: () -> Unit,
+    hint: String? = null,
+    forward: @Composable () -> Unit,
 ) {
-    when (s.step) {
-        DeckStep.FORMAT -> Next(s.canLeaveFormat) { onState(s.goTo(DeckStep.OWNER)) }
-        DeckStep.OWNER -> Next(s.canLeaveOwner) { onState(s.goTo(DeckStep.NAME)) }
-        DeckStep.NAME -> Next(s.canLeaveName) {
-            onState(s.goTo(if (s.needsCommander) DeckStep.COMMANDER else DeckStep.CARDS))
+    Foot(hint = hint) {
+        val back = s.previousStep
+        if (back == null) {
+            Ghost("Cancel", onClick = onClose)
+        } else {
+            Ghost("← Back") { onState(s.goTo(back)) }
         }
-        DeckStep.COMMANDER -> Next(s.canLeaveCommander) { onState(s.goTo(DeckStep.CARDS)) }
-        DeckStep.CARDS -> Next(s.canLeaveCards) { onState(s.goTo(DeckStep.CHECK)) }
-        // Continue, always — and the check itself sits in the body
-        // beside it, the way the web shows both. Swapping one button
-        // for the other meant a verdict you had no way to ask for
-        // twice, and the only way back was to edit the list, which
-        // throws the verdict away.
-        DeckStep.CHECK -> Next(s.canLeaveCheck) { onState(s.goTo(DeckStep.REVIEW)) }
-        DeckStep.REVIEW -> TextButton(onClick = onCreate, enabled = s.canCreate) {
-            Text("Create ${s.name}")
-        }
-        DeckStep.DONE -> TextButton(onClick = onClose) { Text("Done") }
+        forward()
     }
 }
 
 @Composable
-private fun Next(enabled: Boolean, click: () -> Unit) {
-    TextButton(onClick = click, enabled = enabled) { Text("Continue →") }
+private fun Next(s: NewDeck, onState: (NewDeck) -> Unit, enabled: Boolean, to: DeckStep) {
+    Primary("Continue →", enabled) { onState(s.goTo(to)) }
 }
 
 @Composable
-private fun Stepper(s: NewDeck, go: (DeckStep) -> Unit) {
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        // Numbered, and gated on `reachable` alone — the same two
-        // rules the web stepper draws. The step you are on stays
-        // pressable there, so it does here.
-        s.steps.forEachIndexed { i, step ->
-            // `.steps .step.on`: the one you are on is marked. Android
-            // drew all seven identically, so eight steps into a wizard
-            // the only thing saying where you were was the title. The
-            // mark is weight and a filled face, not a hue — and it is
-            // `selected` in the semantics as well, which is what the
-            // web's `.on` means and what a screen reader needs.
-            val here = step == s.step
-            OutlinedButton(
-                onClick = { go(step) },
-                enabled = s.reachable(step),
-                // `.steps .step` is `8px 14px` round 13px text.
-                // Material's own button is 40dp tall with 24dp of air
-                // either side, which turned seven short words into
-                // four rows and half the dialog — on the Cards step
-                // it pushed the upload button clean off the bottom.
-                modifier = Modifier
-                    .semantics { selected = here }
-                    .defaultMinSize(minWidth = 1.dp, minHeight = 32.dp),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                border = BorderStroke(1.dp, if (here) Accent else Line),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    containerColor = if (here) AccentDim else Bg2,
-                    contentColor = if (here) Accent2 else Ink2,
-                    disabledContainerColor = Bg2,
-                    disabledContentColor = Ink3,
-                ),
-            ) {
-                Text(
-                    "${i + 1} ${step.label}",
-                    fontSize = Design.MINI.sp,
-                    fontWeight = if (here) FontWeight.SemiBold else FontWeight.Normal,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun FormatStep(s: NewDeck, onState: (NewDeck) -> Unit) {
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+private fun FormatStep(s: NewDeck, onState: (NewDeck) -> Unit, onClose: () -> Unit) {
+    Panel(head = "Which format?") {
+        // Rows, not chips. `Choice` is the entry wizard's option and
+        // it carries its own help line, which is where the deck size
+        // belongs — it was only ever in the Cards step's small print
+        // before, three screens after the question that decides it.
         Format.entries.forEach { f ->
-            Pick(f.label, s.format == f) { onState(s.pick(f)) }
+            Choice(
+                f.label,
+                "${f.size} cards" + if (f.wantsCommander) ", with a commander" else "",
+                s.format == f,
+            ) { onState(s.pick(f)) }
+        }
+        DeckFoot(
+            s,
+            onState,
+            onClose,
+            hint = if (!s.canLeaveFormat) "Nothing is preselected on purpose." else null,
+        ) {
+            Next(s, onState, s.canLeaveFormat, DeckStep.OWNER)
         }
     }
 }
 
 @Composable
 private fun OwnerStep(s: NewDeck, onState: (NewDeck) -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Owner.entries.forEach { o -> Pick(o.label, s.owner == o) { onState(s.assign(o)) } }
+    Panel(head = "Whose deck?", note = s.format?.label) {
+        Owner.entries.forEach { o -> Choice(o.label, null, s.owner == o) { onState(s.assign(o)) } }
+        DeckFoot(s, onState, {}, hint = if (!s.canLeaveOwner) "Pick whose deck this is." else null) {
+            Next(s, onState, s.canLeaveOwner, DeckStep.NAME)
+        }
     }
 }
 
 @Composable
 private fun NameStep(s: NewDeck, onState: (NewDeck) -> Unit) {
-    OutlinedTextField(
-        value = s.name,
-        onValueChange = { onState(s.rename(it)) },
-        modifier = Modifier.fillMaxWidth(),
-        singleLine = true,
-        label = { Text("Deck name") },
-    )
-    if (s.name.isNotBlank()) Text("It will live at #/decks/${s.slug}", fontSize = 12.sp)
+    Panel(
+        head = "What is it called?",
+        note = if (s.name.isNotBlank()) "It will live at #/decks/${s.slug}" else null,
+    ) {
+        OutlinedTextField(
+            value = s.name,
+            onValueChange = { onState(s.rename(it)) },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            label = { Text("Deck name") },
+        )
+        DeckFoot(s, onState, {}) {
+            Next(
+                s,
+                onState,
+                s.canLeaveName,
+                if (s.needsCommander) DeckStep.COMMANDER else DeckStep.CARDS,
+            )
+        }
+    }
 }
 
 @Composable
-private fun CommanderStep(
-    s: NewDeck,
-    onState: (NewDeck) -> Unit,
-    onTyped: (Completion) -> Unit,
-) {
-    // The same suggestion field the Library uses, and the same one the
-    // web wizard uses. This was a bare text box, so the one name in
-    // the whole wizard that has to be spelt exactly right was the one
-    // name with no help spelling it.
-    AutocompleteField(
-        label = "e.g. Alela, Artful Provocateur",
-        state = s.hint,
-        onState = { c ->
-            onState(s.hinting(c))
-            onTyped(c)
-        },
-        onPick = { name -> onState(s.setCommander(name)) },
-        // Its own, because the dialog is its own window: the Library's
-        // box and this one are never on screen together, and `hinting`
-        // is where this one's `Completion` lives. `closed()` rather
-        // than a rebuilt one, so the commander half-typed into the box
-        // survives the list going away.
-        onDismiss = { onState(s.hinting(s.hint.closed())) },
-    )
-    Text("A ${s.format?.label} deck needs one, and the server checks it too.", fontSize = 12.sp)
+private fun CommanderStep(s: NewDeck, onState: (NewDeck) -> Unit, onTyped: (Completion) -> Unit) {
+    Panel(
+        head = "Who leads it?",
+        note = "A ${s.format?.label} deck needs one, and the server checks it too.",
+    ) {
+        // The same suggestion field the Library uses, and the same one
+        // the web wizard uses. This was a bare text box, so the one
+        // name in the whole wizard that has to be spelt exactly right
+        // was the one name with no help spelling it.
+        AutocompleteField(
+            label = "e.g. Alela, Artful Provocateur",
+            state = s.hint,
+            onState = { c ->
+                onState(s.hinting(c))
+                onTyped(c)
+            },
+            onPick = { name -> onState(s.setCommander(name)) },
+            // `closed()` rather than a rebuilt one, so a commander
+            // half-typed into the box survives the list going away.
+            onDismiss = { onState(s.hinting(s.hint.closed())) },
+        )
+        DeckFoot(s, onState, {}) { Next(s, onState, s.canLeaveCommander, DeckStep.CARDS) }
+    }
 }
 
 @Composable
 private fun CardsStep(s: NewDeck, onState: (NewDeck) -> Unit, onPickFile: () -> Unit) {
-    OutlinedTextField(
-        value = s.list,
-        onValueChange = { onState(s.type(it)) },
-        // `clamp(150px, 34vh, 320px)`. A dialog body capped at 460dp
-        // is the short viewport that clamp has a floor for: at 220dp
-        // the box and the stepper filled the step and what you do
-        // next was off the bottom with nothing saying so.
-        modifier = Modifier.fillMaxWidth().height(150.dp),
-        label = { Text("One card per line") },
-    )
     val wanted = s.format?.size ?: 0
-    Text(
-        "${s.cardCount} cards" + if (wanted > 0) " · ${s.format!!.label} wants $wanted" else "",
-        fontSize = 12.sp,
-    )
-    // A deck you already have written down is in a file. Reading one
-    // only fills the box — it never submits and never moves a step,
-    // the same as the web and the same as mass entry.
-    OutlinedButton(onClick = onPickFile) { Text("Upload a file") }
-    if (s.needsCommander) {
-        // Every decklist export puts the commander first, so cutting
-        // it out by hand and retyping it is work the list has done.
-        DeckList.firstCard(s.list)?.let { first ->
-            OutlinedButton(onClick = { onState(s.commanderFromList()) }) {
-                Text("First card is the commander (${first.name})", fontSize = 12.sp)
+    Panel(
+        head = "The decklist",
+        note = "one card per line" + if (wanted > 0) " · ${s.format!!.label} wants $wanted" else "",
+    ) {
+        OutlinedTextField(
+            value = s.list,
+            onValueChange = { onState(s.type(it)) },
+            // The entry wizard's box, at the entry wizard's height.
+            // It was 150dp because a dialog body capped at 460dp had
+            // nowhere else to put it; a page has the room.
+            modifier = Modifier.fillMaxWidth().height(260.dp),
+        )
+        Tally(
+            "${s.cardCount}" to if (s.cardCount == 1) "card" else "cards",
+            "$wanted" to "wanted",
+        )
+        // A deck you already have written down is in a file. Reading
+        // one only fills the box — it never submits and never moves a
+        // step, the same as the web and the same as mass entry.
+        Btn("Upload a file", onClick = onPickFile)
+        if (s.needsCommander) {
+            // Every decklist export puts the commander first, so
+            // cutting it out by hand and retyping it is work the list
+            // has already done.
+            DeckList.firstCard(s.list)?.let { first ->
+                Btn("First card is the commander (${first.name})") {
+                    onState(s.commanderFromList())
+                }
             }
+        }
+        DeckFoot(
+            s,
+            onState,
+            {},
+            hint = if (!s.canLeaveCards) "Paste a list, or drop a file on the box." else null,
+        ) {
+            Next(s, onState, s.canLeaveCards, DeckStep.CHECK)
         }
     }
 }
@@ -266,103 +277,101 @@ private fun CardsStep(s: NewDeck, onState: (NewDeck) -> Unit, onPickFile: () -> 
 @Composable
 private fun CheckStep(s: NewDeck, onState: (NewDeck) -> Unit, onCheck: () -> Unit) {
     val v = s.checked
-    when {
-        v == null -> Text(
-            "Every name is checked against the collection first, then Scryfall.",
-            fontSize = 13.sp,
-        )
-        // `.tag.ok` / `.tag.bad`: the verdict is a tag on the website,
-        // a stated fact with an edge round it, not a bold sentence
-        // loose in the column. Which verdict it is is carried by the
-        // words — "real cards" against "not found" — because the two
-        // tones are a hue apart and that is no use to the person who
-        // reads this.
-        v.ok -> Tag("All ${v.checked} names are real cards", Ok)
-        else -> {
-            Tag("${v.unknown} not found", Bad)
-            // `.chips`: one chip per name. Joined into "a, b, c" the
-            // names ran together, and the one you had to find was in
-            // the middle of a sentence instead of in its own box.
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
-                verticalArrangement = Arrangement.spacedBy(5.dp),
-            ) {
-                v.bad.forEach { BadChip(it.name) }
-            }
-            if (v.suggestions.isNotEmpty()) {
-                Text("Tap one to use it", fontSize = 12.sp)
-            }
-            v.suggestions.forEach { (wrong, right) ->
-                // `correct` rather than a rewrite of the list, because
-                // the commander lives in its own field — the name most
-                // likely to be typed from memory was the one the
-                // button could not fix.
-                OutlinedButton(onClick = { onState(s.correct(wrong, right)) }) {
-                    Text("$wrong → $right", fontSize = 12.sp)
+    Panel(head = "Are they real cards?", note = "${s.cardCount} names") {
+        when {
+            v == null -> Line(
+                "Every name is checked against the collection first, then Scryfall.",
+                Ink2,
+                Design.SMALL,
+            )
+            // `.tag.ok` / `.tag.bad`: the verdict is a tag, a stated
+            // fact with an edge round it. Which verdict it is is
+            // carried by the words — "real cards" against "not found"
+            // — because the two tones are a hue apart and that is no
+            // use to the person who reads this.
+            v.ok -> Tag("All ${v.checked} names are real cards", Ok)
+            else -> {
+                Tag("${v.unknown} not found", Bad)
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    verticalArrangement = Arrangement.spacedBy(5.dp),
+                ) {
+                    v.bad.forEach { BadChip(it.name) }
+                }
+                if (v.suggestions.isNotEmpty()) Line("Tap one to use it", Ink3, Design.MINI)
+                v.suggestions.forEach { (wrong, right) ->
+                    // `correct` rather than a rewrite of the list,
+                    // because the commander lives in its own field.
+                    Btn("$wrong → $right") { onState(s.correct(wrong, right)) }
                 }
             }
         }
-    }
-    // The check itself, beside the verdict rather than instead of the
-    // way on. A list that checked out can still be checked again.
-    OutlinedButton(onClick = onCheck, enabled = s.busy == null) {
-        Text(if (v == null) "Check the names" else "Check again")
+        // The check itself, beside the verdict rather than instead of
+        // the way on. A list that checked out can still be checked
+        // again.
+        Btn(if (v == null) "Check the names" else "Check again", enabled = s.busy == null) {
+            onCheck()
+        }
+        DeckFoot(
+            s,
+            onState,
+            {},
+            hint = if (!s.canLeaveCheck) "Every name has to be found before anything moves." else null,
+        ) {
+            Next(s, onState, s.canLeaveCheck, DeckStep.REVIEW)
+        }
     }
 }
 
 @Composable
-private fun ReviewStep(s: NewDeck) {
-    // One line per card and nothing to answer. The wizard used to ask
-    // where every copy should come from and then not send it — the
-    // create call has no `sources` field. What happens is decided by
-    // what the collection already holds.
-    Text(
-        "${s.format?.label} · ${s.owner?.label} · ${s.cardCount} cards" +
-            if (s.commander.isNotBlank()) " · ${s.commander}" else "",
-        fontSize = 13.sp,
-    )
+private fun ReviewStep(s: NewDeck, onState: (NewDeck) -> Unit, onCreate: () -> Unit) {
     val plan = s.plan
     val adding = s.adding
-    // Two figures, the way the website draws them: the number big
-    // and what it counts small underneath. As one sentence it was
-    // the same words and none of the glance.
-    //
-    // `.tally` is one bordered block with a hairline down it rather
-    // than two tiles with air between them, and the difference is
-    // whether the pair reads as one count split in two or as two
-    // unrelated numbers.
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(1.dp),
-        modifier = Modifier.fillMaxWidth()
-            .clip(RadiusSm)
-            .border(1.dp, Line, RadiusSm)
-            .background(Line),
+    Panel(
+        head = "Ready?",
+        note = "${s.format?.label} · ${s.owner?.label} · ${s.cardCount} cards" +
+            if (s.commander.isNotBlank()) " · ${s.commander}" else "",
     ) {
-        PlanFigure("${plan.size - adding.size}", "from bulk", Modifier.weight(1f))
-        PlanFigure("${adding.size}", "added to bulk", Modifier.weight(1f))
-    }
-    // Every line, not the first two hundred of them. A list longer
-    // than the cap silently lost rows off the bottom, which on the
-    // one screen whose job is to say what will happen to each card is
-    // the worst place to be approximate.
-    plan.forEach { line -> PlanRow(line) }
-    if (adding.isNotEmpty()) {
-        Text(
-            "${adding.size} card${if (adding.size == 1) "" else "s"} " +
-                "the collection does not hold yet will be added to bulk.",
-            fontSize = 12.sp,
-        )
+        // Two figures, the way the website draws them: the number big
+        // and what it counts small underneath. As one sentence it was
+        // the same words and none of the glance.
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(1.dp),
+            modifier = Modifier.fillMaxWidth()
+                .clip(RadiusSm)
+                .border(1.dp, Line, RadiusSm)
+                .background(Line),
+        ) {
+            PlanFigure("${plan.size - adding.size}", "from bulk", Modifier.weight(1f))
+            PlanFigure("${adding.size}", "added to bulk", Modifier.weight(1f))
+        }
+        // Every line, not the first two hundred of them. A list
+        // longer than the cap silently lost rows off the bottom,
+        // which on the one screen whose job is to say what will
+        // happen to each card is the worst place to be approximate.
+        plan.forEach { line -> PlanRow(line) }
+        if (adding.isNotEmpty()) {
+            Line(
+                "${adding.size} card${if (adding.size == 1) "" else "s"} " +
+                    "the collection does not hold yet will be added to bulk.",
+                Ink3,
+                Design.MINI,
+            )
+        }
+        DeckFoot(s, onState, {}, hint = "This is the press that moves cards.") {
+            Primary("Create ${s.name}", s.canCreate, onCreate)
+        }
     }
 }
 
 /** What the web's `DoneStep` says: created, and where it lives. */
 @Composable
-private fun DoneStep(s: NewDeck) {
-    // `.tag.ok`, the same tag the check's verdict uses. It was a bold
-    // word with nothing round it, which on the one screen that exists
-    // to say "it worked" read as a heading for the line underneath.
-    Tag("Created", Ok)
-    Text("${s.name} is at #/decks/${s.slug}", fontSize = 12.sp)
+private fun DoneStep(s: NewDeck, onClose: () -> Unit) {
+    Panel(head = "Created") {
+        Tag("Created", Ok)
+        Line("${s.name} is at #/decks/${s.slug}", Ink2, Design.SMALL)
+        Foot { Primary("Done", onClick = onClose) }
+    }
 }
 
 /**
@@ -386,31 +395,6 @@ private fun BadChip(name: String) {
         fontSize = Design.TINY.sp,
     )
 }
-
-@Composable
-private fun Pick(label: String, on: Boolean, click: () -> Unit) {
-    Button(
-        onClick = click,
-        // `aria-pressed`, which the web sets on every one of these and
-        // Android said nothing about at all.
-        modifier = Modifier.semantics { selected = on },
-        // `.opt` and `.opt.on`: a tinted face and a gold edge, not a
-        // button flooded with gold. Material's filled default was a
-        // different thing from what the website draws.
-        border = BorderStroke(1.dp, if (on) Accent else Line2),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = if (on) AccentDim else Bg2,
-            contentColor = if (on) Accent2 else Ink,
-        ),
-    ) {
-        // The tick, the way the web marks the chosen option. Fill
-        // against outline is a lightness difference and a colour one,
-        // and neither is any use to somebody who cannot tell this
-        // app's two greens apart — a character can be read.
-        Text(if (on) "✓ $label" else label, fontSize = 12.sp)
-    }
-}
-
 
 /**
  * One of the two figures above the list.

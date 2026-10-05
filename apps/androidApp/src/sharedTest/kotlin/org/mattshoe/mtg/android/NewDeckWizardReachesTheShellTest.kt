@@ -12,12 +12,15 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mattshoe.mtg.core.Admin
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.Completion
 import org.mattshoe.mtg.core.DeckStep
 import org.mattshoe.mtg.core.Format
 import org.mattshoe.mtg.core.NewDeck
 import org.mattshoe.mtg.core.Overlay
+import org.mattshoe.mtg.core.Route
+import org.mattshoe.mtg.core.View
 import org.mattshoe.mtg.core.Owner
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -44,7 +47,13 @@ class NewDeckWizardReachesTheShellTest {
     @get:Rule
     val rule = createComposeRule()
 
+    // On the Entry tab, because that is where the wizard lives now:
+    // it is the other half of the entry wizard's first question, and
+    // the shell composes it in place of the entry wizard rather than
+    // floating it over whatever tab you happened to be on.
     private fun opened(step: DeckStep) = AppState(
+        admin = Admin(token = "t").unlock("t"),
+        route = Route(View.ENTRY),
         newDeck = NewDeck(
             step = step,
             format = Format.COMMANDER,

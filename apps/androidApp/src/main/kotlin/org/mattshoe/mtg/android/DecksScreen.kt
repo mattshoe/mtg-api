@@ -107,7 +107,6 @@ fun DecksScreen(
      * mounts this screen on its own keeps working unchanged.
      */
     scrollState: ScrollState = rememberScrollState(),
-    onNew: () -> Unit = {},
     onEdit: (Deck) -> Unit = {},
     onDisassemble: (Deck) -> Unit = {},
     /** Rename the open deck. The slug moves with the name. */
@@ -132,7 +131,7 @@ fun DecksScreen(
     // `DecksScreen` directly and the split is not their subject.
     val open = state.open
     if (open == null) {
-        DecksListScreen(state, scrollState, admin, onOpen, onNew)
+        DecksListScreen(state, scrollState, admin, onOpen)
     } else {
         DeckDetailScreen(
             state = state,
@@ -161,7 +160,6 @@ internal fun DecksListScreen(
     scrollState: ScrollState = rememberScrollState(),
     admin: Boolean = false,
     onOpen: (Deck) -> Unit = {},
-    onNew: () -> Unit = {},
 ) {
     Column(
         Modifier.fillMaxWidth()
@@ -170,14 +168,10 @@ internal fun DecksListScreen(
             .padding(Design.WRAP_PAD_NARROW.dp),
         verticalArrangement = Arrangement.spacedBy(Design.GAP.dp),
     ) {
-        // No "Decks" heading — the tab says it. The one thing this
-        // row carried that nothing else does is the New deck button,
-        // so the button stays and the word goes.
-        if (admin) {
-            Row(Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
-                Primary("New deck", onClick = onNew)
-            }
-        }
+        // No heading and no New deck button. The tab at the bottom
+        // says Decks, and a deck is started from the entry wizard's
+        // first question now — Matt: "get rid of the one on the decks
+        // list page."
         when {
             state.busy -> Line("Loading…", Ink3)
             state.error != null -> Line("Could not load decks: ${state.error}", Bad)

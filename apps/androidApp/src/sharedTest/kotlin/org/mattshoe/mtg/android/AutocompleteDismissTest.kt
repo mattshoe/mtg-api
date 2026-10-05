@@ -304,7 +304,7 @@ class AutocompleteDismissTest {
         rule.setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
                 Surface {
-                    NewDeckDialog(
+                    NewDeckScreen(
                         state = s.value,
                         onState = { s.value = it },
                         onCheck = {},
