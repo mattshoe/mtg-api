@@ -597,7 +597,25 @@ private fun HomeMark(onClick: () -> Unit) {
         contentAlignment = Alignment.Center,
     ) {
         Image(
-            painter = painterResource(R.drawable.ic_launcher_foreground),
+            // `brand_mark`: the lotus and its five pips, cut out of
+            // the launcher icon by `scripts/make-brand-mark.py`.
+            //
+            // It used to be `ic_launcher_foreground`, which is two
+            // problems under one name. It is not a foreground: every
+            // pixel is opaque `#0E1116`, corners included, so on a
+            // dark bar it drew a black tile behind the lotus. And an
+            // adaptive icon's foreground keeps its art inside a safe
+            // zone the launcher masks away, roughly the middle two
+            // thirds, so what was left looked tiny in a 34dp box.
+            //
+            // The website's `icons/icon-32.png` has the same plate —
+            // right for a favicon, wrong here — so copying it only
+            // moved the black square. The plate is flooded in from
+            // the edges rather than colour-keyed, because one of the
+            // five pips is black and a key would have deleted it,
+            // and the result is cropped, which is what fixes the
+            // safe zone.
+            painter = painterResource(R.drawable.brand_mark),
             contentDescription = null,
             modifier = Modifier.size(34.dp),
         )
