@@ -79,7 +79,6 @@ private fun busyOn(s: AppState, v: View): Boolean = when (v) {
     View.STATS -> s.stats.busy
     View.LOGS -> s.logs.busy
     View.CARD -> s.card?.busy == true
-    View.CONSOLE -> s.console.busy
     View.ENTRY -> s.entry.busy != null
 }
 
@@ -89,7 +88,6 @@ private fun errorOn(s: AppState, v: View): String? = when (v) {
     View.STATS -> s.stats.error
     View.LOGS -> s.logs.error
     View.CARD -> s.card?.error
-    View.CONSOLE -> s.console.error
     View.ENTRY -> s.entry.error
 }
 
@@ -1485,13 +1483,13 @@ class AdminGateTest {
     @Test
     fun theMenuOffersTheUngatedOnesWhileLocked() {
         assertEquals(View.entries.filter { it.inNav && !it.gated }, locked.visible)
-        assertEquals(4, locked.visible.size)
+        assertEquals(3, locked.visible.size)
     }
 
     @Test
     fun andEveryOneInTheNavWhenOpen() {
         assertEquals(View.entries.filter { it.inNav }, open.visible)
-        assertEquals(6, open.visible.size)
+        assertEquals(5, open.visible.size)
     }
 
     @Test
@@ -1868,7 +1866,7 @@ class RouteSpellingTest {
     fun parsingIsIdempotentThroughTheHash() {
         listOf(
             "#/search", "#/search?q=bolt", "#/decks", "#/decks/alela", "#/decks/alela?x=1",
-            "#/stats/matt", "#/console", "#/entry", "#/logs", "#/card/sol+ring", "#/card/a%2Fb",
+            "#/stats/matt", "#/entry", "#/logs", "#/card/sol+ring", "#/card/a%2Fb",
         ).forEach {
             assertEquals(it, Route.parse(it).toHash(), it)
             assertEquals(it, Route.parse(Route.parse(it).toHash()).toHash(), it)
@@ -1880,7 +1878,7 @@ class ViewTableTest {
 
     @Test
     fun thereAreSevenOfThem() {
-        assertEquals(7, View.entries.size)
+        assertEquals(6, View.entries.size)
     }
 
     @Test
@@ -1972,7 +1970,7 @@ class FetchingTest {
 
     @Test
     fun andTheOnesThatDoNotAreLeftExactlyAsTheyWere() {
-        listOf(View.CONSOLE, View.ENTRY).forEach {
+        listOf(View.ENTRY).forEach {
             assertEquals(withACard, withACard.fetching(it), it.slug)
         }
     }
@@ -2045,7 +2043,7 @@ class FetchFailedTest {
 
     @Test
     fun theTwoWithNowhereToSayItToastInstead() {
-        listOf(View.CONSOLE, View.ENTRY).forEach {
+        listOf(View.ENTRY).forEach {
             assertEquals("the database said no", withACard.fetchFailed("the database said no", it).toast, it.slug)
         }
     }
@@ -2117,7 +2115,7 @@ class LoadNeedsTest {
                 View.STATS -> listOf("totals")
                 View.LOGS -> listOf("logs")
                 View.CARD -> listOf("card")
-                View.CONSOLE, View.ENTRY -> emptyList()
+                View.ENTRY -> emptyList()
             }
             assertEquals(expected, Load.needs(Route(it)), it.slug)
         }
@@ -2150,7 +2148,7 @@ class LoadNeedsTest {
     @Test
     fun onlyTheTwoScreensThatFetchNothingAskForNothing() {
         View.entries.forEach {
-            val quiet = it == View.CONSOLE || it == View.ENTRY
+            val quiet = it == View.ENTRY
             assertEquals(quiet, Load.needs(Route(it)).isEmpty(), it.slug)
         }
     }
@@ -2489,7 +2487,12 @@ class SayTest {
 
     @Test
     fun aFailureOnAScreenWithNowhereToShowItBecomesOne() {
-        assertEquals("boom", AppState().navigate(View.CONSOLE).fetchFailed("boom").toast)
+        // Mass Entry is the only screen left with nowhere of its own
+        // to put an error, and it is gated — so this needs to be
+        // unlocked, or `navigate` bounces straight back to the
+        // Library, which does have somewhere and never toasts.
+        val admin = AppState(admin = Admin(token = "t").unlock("t"))
+        assertEquals("boom", admin.navigate(View.ENTRY).fetchFailed("boom").toast)
     }
 }
 
@@ -2656,7 +2659,7 @@ class OnKeyShellTest {
     fun everyLetterThatNamesAReachableViewGoesThere() {
         mapOf(
             "s" to View.LIBRARY, "d" to View.DECKS, "g" to View.STATS,
-            "c" to View.CONSOLE, "e" to View.ENTRY, "v" to View.LOGS,
+            "e" to View.ENTRY, "v" to View.LOGS,
         ).forEach { (key, view) ->
             assertEquals(view, open.onKey(key)?.view, key)
         }
@@ -2801,7 +2804,7 @@ class OnKeyShellTest {
 
     @Test
     fun aViewKeyIsNotHandledAnyDifferentlyFromTheNavBar() {
-        mapOf("s" to View.LIBRARY, "d" to View.DECKS, "g" to View.STATS, "c" to View.CONSOLE)
+        mapOf("s" to View.LIBRARY, "d" to View.DECKS, "g" to View.STATS)
             .forEach { (key, view) ->
                 assertEquals(locked.navigate(view), locked.onKey(key), key)
             }

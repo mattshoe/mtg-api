@@ -15,13 +15,29 @@ enum class View(
     val gated: Boolean = false,
     /** Whether the menu offers it. A card is reached from a card, not from a list of places. */
     val inNav: Boolean = true,
+    /**
+     * Whether it belongs in the bottom bar rather than behind the
+     * profile.
+     *
+     * The bar is for the places you move between constantly; the
+     * profile is for who you are and the things that follow from
+     * that. The server log is a thing you look at once a month when
+     * something is wrong, so it sits behind the profile with the
+     * lock rather than taking a fifth of the bar forever.
+     *
+     * A bar label is drawn under an icon, so it is one short word.
+     * `everyItemInTheBarIsOneShortWord` enforces that rather than
+     * leaving it to whoever adds the next one.
+     */
+    val bar: Boolean = true,
 ) {
     LIBRARY("search", "Library"),
     DECKS("decks", "Decks"),
     STATS("stats", "Stats"),
-    CONSOLE("console", "Query"),
-    ENTRY("entry", "Mass Entry", gated = true),
-    LOGS("logs", "Server Logs", gated = true),
+    // "Mass Entry" wrapped onto two lines under an icon. The screen
+    // is unchanged; only what the bar calls it.
+    ENTRY("entry", "Entry", gated = true),
+    LOGS("logs", "Server Logs", gated = true, bar = false),
 
     /**
      * One card, as its own destination.
@@ -32,7 +48,7 @@ enum class View(
      * deck it was opened from, back had to guess whether to dismiss
      * or navigate, and the page behind it kept its own scroll.
      */
-    CARD("card", "Card", inNav = false),
+    CARD("card", "Card", inNav = false, bar = false),
     ;
 
     companion object {
@@ -106,6 +122,22 @@ data class Admin(
     fun reachable(view: View): Boolean = !view.gated || unlocked
 
     val visible: List<View> get() = View.entries.filter { it.inNav && reachable(it) }
+
+    /**
+     * The bottom bar: everywhere you go often, in order.
+     *
+     * Three while locked, four while not — `Entry` joins rather than
+     * the bar changing shape around it.
+     */
+    val bar: List<View> get() = visible.filter { it.bar }
+
+    /**
+     * Everywhere the profile offers, which today is the server log.
+     *
+     * Empty while locked, because there is nothing behind the
+     * profile but admin and the things admin unlocks.
+     */
+    val behindProfile: List<View> get() = visible.filter { !it.bar }
 
     /**
      * Where a route actually lands.

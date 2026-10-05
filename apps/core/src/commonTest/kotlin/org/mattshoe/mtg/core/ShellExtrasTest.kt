@@ -81,7 +81,6 @@ class ShortcutsTest {
         assertEquals(Action.Go(View.LIBRARY), Shortcuts.of("s", false, locked, false))
         assertEquals(Action.Go(View.DECKS), Shortcuts.of("d", false, locked, false))
         assertEquals(Action.Go(View.STATS), Shortcuts.of("g", false, locked, false))
-        assertEquals(Action.Go(View.CONSOLE), Shortcuts.of("c", false, locked, false))
     }
 
     @Test

@@ -23,7 +23,6 @@ object Shortcuts {
         "d" to View.DECKS,
         "e" to View.ENTRY,
         "g" to View.STATS,
-        "c" to View.CONSOLE,
         "v" to View.LOGS,
     )
 

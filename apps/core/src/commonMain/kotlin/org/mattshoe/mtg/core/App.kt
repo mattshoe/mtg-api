@@ -180,7 +180,7 @@ data class AppState(
         View.STATS -> copy(stats = stats.loading())
         View.LOGS -> copy(logs = logs.loading())
         View.CARD -> copy(card = card?.loading())
-        View.CONSOLE, View.ENTRY -> this
+        View.ENTRY -> this
     }
 
     /** And the same screen, told why it has nothing to show. */
@@ -190,7 +190,7 @@ data class AppState(
         View.STATS -> copy(stats = stats.failed(message))
         View.LOGS -> copy(logs = logs.failed(message))
         View.CARD -> copy(card = card?.failed(message))
-        View.CONSOLE, View.ENTRY -> say(message, failed = true)
+        View.ENTRY -> say(message, failed = true)
     }
 
     /**
@@ -440,7 +440,7 @@ object Load {
         View.STATS -> listOf("totals")
         View.LOGS -> listOf("logs")
         View.CARD -> listOf("card")
-        View.CONSOLE, View.ENTRY -> emptyList()
+        View.ENTRY -> emptyList()
     }
 
     /** Stats scoping lives in the route: `#/stats/matt`. */

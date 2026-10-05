@@ -16,7 +16,7 @@ class ShellTest {
 
     @Test
     fun theViewsAndWhichOfThemAreGated() {
-        assertEquals(7, View.entries.size)
+        assertEquals(6, View.entries.size)
         assertEquals(
             listOf(View.ENTRY, View.LOGS),
             View.entries.filter { it.gated },
@@ -62,14 +62,14 @@ class ShellTest {
         assertFalse(locked.reachable(View.ENTRY))
         assertFalse(locked.reachable(View.LOGS))
         assertTrue(locked.reachable(View.LIBRARY))
-        assertEquals(4, locked.visible.size)
+        assertEquals(3, locked.visible.size)
     }
 
     @Test
     fun unlockedShowsThemAll() {
         val open = Admin().unlock("0.abc")
         assertTrue(open.unlocked)
-        assertEquals(6, open.visible.size)
+        assertEquals(5, open.visible.size)
         assertTrue(open.reachable(View.LOGS))
     }
 

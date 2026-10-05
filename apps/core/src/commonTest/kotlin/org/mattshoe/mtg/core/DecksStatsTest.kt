@@ -170,8 +170,8 @@ class DecksTest {
 
     @Test
     fun aScreenWithNothingToFetchIsLeftAlone() {
-        val s = AppState().navigate(View.CONSOLE)
-        assertEquals(s, s.fetching(View.CONSOLE))
+        val s = AppState().navigate(View.ENTRY)
+        assertEquals(s, s.fetching(View.ENTRY))
     }
 
     // ------------------------------------------------ grouped by type
