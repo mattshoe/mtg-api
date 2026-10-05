@@ -3,6 +3,8 @@ package org.mattshoe.mtg.android
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasTestTag
@@ -86,6 +88,13 @@ class BottomNavParityTest {
      * 0.0dp tall.
      */
     private fun tab(label: String) = rule.onNodeWithContentDescription(label)
+
+    /** What the header actually says, read back off the node. */
+    private fun headerSays(): String =
+        rule.onNodeWithTag("topbar-title", useUnmergedTree = true)
+            .fetchSemanticsNode()
+            .config.getOrNull(SemanticsProperties.Text)
+            .orEmpty().joinToString("") { it.text }
 
     // --------------------------------------------------------- the bar
 
@@ -210,6 +219,34 @@ class BottomNavParityTest {
         )
     }
 
+    @Test
+    fun theHeaderDoesNotRepeatTheTabYouAreOn() {
+        // Matt, on a screenshot of this very bar: "Why THE FUCK does
+        // it say library twice?!?! Are all the fucking pages like
+        // that?!?!" They were — every one of them, because the
+        // header printed `view.label` and so does the bar.
+        shell(unlocked())
+        listOf("Library", "Decks", "Stats", "Entry").forEach { label ->
+            tab(label).performClick()
+            rule.waitForIdle()
+            assertEquals(
+                label,
+                held.value.view.label,
+                "the $label tab did not go to $label, so this proves nothing",
+            )
+            assertTrue(
+                headerSays() != label,
+                "on the $label tab the header also says \"$label\"",
+            )
+        }
+    }
+
+    @Test
+    fun whatTheHeaderSaysInsteadIsTheAppsName() {
+        shell(unlocked())
+        assertEquals("MTG Collection", headerSays())
+    }
+
     // ----------------------------------------------------- the profile
 
     @Test
@@ -223,6 +260,29 @@ class BottomNavParityTest {
         )
         val w = profile.right.value - profile.left.value
         assertTrue(w >= 47.5f, "the profile control is only ${w}dp")
+    }
+
+    @Test
+    fun theProfileMenuHangsUnderTheProfileAndNotOffToTheLeft() {
+        // It opened against the left edge, because the inset it uses
+        // was written for the hamburger, which was on the left. The
+        // control is on the right now and a menu that appears
+        // somewhere other than under the thing you pressed reads as
+        // a different menu.
+        shell(unlocked())
+        val profile = rule.onNodeWithContentDescription("Profile").getUnclippedBoundsInRoot()
+        rule.onNodeWithContentDescription("Profile").performClick()
+        rule.waitForIdle()
+        val menu = rule.onNodeWithTag("app-menu", useUnmergedTree = true)
+            .getUnclippedBoundsInRoot()
+        assertTrue(
+            kotlin.math.abs(menu.right.value - profile.right.value) <= 9f,
+            "the menu's right edge is at ${menu.right} and the profile's at ${profile.right}",
+        )
+        assertTrue(
+            menu.top.value >= profile.bottom.value - 1f,
+            "the menu is at ${menu.top}, over the profile at ${profile.bottom} rather than under it",
+        )
     }
 
     @Test

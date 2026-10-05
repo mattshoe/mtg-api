@@ -4,6 +4,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mattshoe.mtg.core.Brand
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 
@@ -36,6 +37,11 @@ class AppNameTest {
     @Test
     fun theAppIsCalledMtgCollection() {
         assertEquals("MTG Collection", label())
+        // And the shared constant says the same, because the Android
+        // header prints `Brand.NAME` now. Two spellings of the app's
+        // own name would show one in the launcher and the other at
+        // the top of every page.
+        assertEquals(Brand.NAME, label())
     }
 
     @Test

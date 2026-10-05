@@ -188,3 +188,14 @@ object AdminToken {
         if (t.isNullOrBlank()) store.remove(KEY) else store.put(KEY, t)
     }
 }
+
+/**
+ * What the thing is called.
+ *
+ * One string, because it is the launcher label, the page title and
+ * the word in the Android header, and three copies of it drift. The
+ * Android label is checked against this in `AppNameTest`.
+ */
+object Brand {
+    const val NAME = "MTG Collection"
+}

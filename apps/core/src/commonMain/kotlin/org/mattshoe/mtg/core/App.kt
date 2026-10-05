@@ -161,6 +161,24 @@ data class AppState(
             else -> view.label
         }
 
+    /**
+     * The title, for a chrome that already names where you are.
+     *
+     * Android has a bottom bar now, and the bar prints the current
+     * view's label four inches below the header — so every page read
+     * its own name twice, "Library / Library". Matt: "Why THE FUCK
+     * does it say library twice?!?!"
+     *
+     * A title that only repeats a tab gives way to the app's name. A
+     * title the bar cannot say — which deck, which card, a screen
+     * that is not in the bar at all — is still worth printing, and
+     * still printed. Pass an empty bar and nothing changes, which is
+     * the web: it shows no list of places, so it has nothing to
+     * duplicate.
+     */
+    fun titleBeside(bar: List<View>): String =
+        if (view in bar && title == view.label) Brand.NAME else title
+
     fun say(message: String?, failed: Boolean = false) =
         copy(toast = message, toastFailed = failed && message != null)
 

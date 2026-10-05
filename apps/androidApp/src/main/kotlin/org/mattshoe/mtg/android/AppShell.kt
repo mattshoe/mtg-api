@@ -250,8 +250,14 @@ fun AppShell(
                 // wrapped: a deck called "Alela, Artful Provocateur"
                 // would otherwise push the bar to two rows and move
                 // every screen down with it.
+                //
+                // `titleBeside` and not `title`, because the bar at
+                // the bottom prints the current view's label already
+                // and this was printing it again — "Library /
+                // Library" on every page. The web passes no bar and
+                // gets the title unchanged.
                 Text(
-                    state.title,
+                    state.titleBeside(state.admin.bar),
                     Modifier.weight(1f).padding(start = 4.dp).testTag("topbar-title"),
                     color = Ink,
                     fontSize = 16.sp,
@@ -711,7 +717,12 @@ private fun NavMenu(state: AppState, top: Int, onPick: (AppState) -> Unit) {
     Box(Modifier.fillMaxSize()) {
         Column(
             Modifier
-                .offset { IntOffset(MENU_INSET.roundToPx(), top + MENU_GAP.roundToPx()) }
+                // Under the profile, which is on the right. The inset
+                // used to be measured from the left, where the
+                // hamburger was, so the menu opened against the far
+                // edge from the control that opened it.
+                .align(Alignment.TopEnd)
+                .offset { IntOffset(-MENU_INSET.roundToPx(), top + MENU_GAP.roundToPx()) }
                 // Fixed rather than min-width: the rows fill it, and
                 // a row that fills a width nothing has decided takes
                 // the whole screen.
