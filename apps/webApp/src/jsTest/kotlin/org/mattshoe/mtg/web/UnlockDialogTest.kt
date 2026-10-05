@@ -71,7 +71,7 @@ class UnlockDialogTest {
                 state = s.value,
                 onState = { s.value = it },
                 onUnlock = { handed += it },
-                onSearch = {}, onOpenDeck = {}, onRunSql = {},
+                onSearch = {}, onOpenDeck = {},
                 onPreviewEntry = {}, onApplyEntry = {},
             )
         }

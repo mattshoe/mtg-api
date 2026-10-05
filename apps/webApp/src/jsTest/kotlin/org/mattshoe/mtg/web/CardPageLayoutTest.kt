@@ -128,7 +128,7 @@ class CardPageLayoutTest {
             var s by androidx.compose.runtime.remember {
                 androidx.compose.runtime.mutableStateOf(state)
             }
-            AppShell(s, { s = it; state = it }, {}, {}, {}, {}, {}, {})
+            AppShell(s, { s = it; state = it }, {}, {}, {}, {}, {})
         }
         settle()
         assertTrue(root.all("div.card-page").isNotEmpty(), "the card page is not showing")
