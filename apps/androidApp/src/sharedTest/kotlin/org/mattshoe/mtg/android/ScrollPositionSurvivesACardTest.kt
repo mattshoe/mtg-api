@@ -7,6 +7,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -141,7 +143,13 @@ class ScrollPositionSurvivesACardTest {
         // scrolled off, not absent.
         rule.onNodeWithText("Card 0").assertIsNotDisplayed()
 
+        // Through the carousel, which is what a row opens now. The
+        // trip is longer than it was and the claim is the same: the
+        // deck comes back where you left it.
         rule.onNodeWithText("Card 39").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithTag("card-carousel").assertExists()
+        rule.onNodeWithText("Full details").performClick()
         rule.waitForIdle()
         rule.onNodeWithText("← Back").assertIsDisplayed()
 
@@ -149,5 +157,30 @@ class ScrollPositionSurvivesACardTest {
         rule.waitForIdle()
 
         rule.onNodeWithText("Card 39").assertIsDisplayed()
+    }
+
+    @Test
+    fun theOpenDeckKeepsItsScrollPositionBehindTheCarouselItself() {
+        // The overlay is the point: the deck is still there under the
+        // scrim, still where it was, so closing the carousel is not a
+        // navigation and has nothing to restore.
+        val deck = Deck("alela", "Alela", "matt", "Alela, Artful Provocateur (ELD) 324", "UW", 3, null)
+        val cards = (0 until 60).map { deckCard("Card $it") }
+        shell(
+            AppState(
+                route = Route(View.DECKS, "alela"),
+                decks = DecksState().loaded(listOf(deck)).opened("alela", cards),
+            ),
+        )
+
+        rule.onNodeWithText("Card 39").performScrollTo()
+        rule.onNodeWithText("Card 39").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithTag("card-carousel").assertExists()
+        rule.onNodeWithTag("deck-detail").assertExists()
+
+        rule.onNodeWithTag("card-carousel").performClick()
+        rule.waitForIdle()
+        rule.onAllNodesWithText("Card 39").onFirst().assertIsDisplayed()
     }
 }

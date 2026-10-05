@@ -80,6 +80,15 @@ data class Deck(
     }
 }
 
+/**
+ * Which card of a deck the carousel is showing, or none.
+ *
+ * A position rather than a card: see `AppState.peekAt`.
+ */
+data class Peek(val at: Int = -1) {
+    val open: Boolean get() = at >= 0
+}
+
 data class DeckCard(
     val name: String,
     val qty: Int,
@@ -99,8 +108,22 @@ data class DeckCard(
     val colorIdentity: String? = null,
     val rarity: String? = null,
     val price: Double? = null,
+    // Which printing the collection holds, for the sheet under the
+    // card carousel. Null for a card the deck wants that nobody
+    // owns, which has no printing to read anything off.
+    val setCode: String? = null,
+    val setName: String? = null,
+    val collectorNumber: String? = null,
 ) {
     val isCommander: Boolean get() = role == "commander"
+
+    /** "M3C · 409", the way a collector writes a printing down. */
+    val printing: String?
+        get() {
+            val set = setCode?.takeIf { it.isNotBlank() }?.uppercase() ?: return null
+            val number = collectorNumber?.takeIf { it.isNotBlank() } ?: return set
+            return "$set · $number"
+        }
 
     /**
      * The name to show.
@@ -257,15 +280,22 @@ object DeckQueries {
                   COALESCE(mine.oracle_text, alt.oracle_text)     AS oracle_text,
                   COALESCE(mine.color_identity, alt.color_identity) AS color_identity,
                   COALESCE(mine.rarity, alt.rarity)               AS rarity,
-                  COALESCE(pm.usd, pa.usd)                        AS price
+                  COALESCE(pm.usd, pa.usd)                        AS price,
+                  -- For the sheet under the card carousel, which says
+                  -- which printing of the card the collection holds.
+                  COALESCE(mine.setcode, alt.setcode)             AS setcode,
+                  COALESCE(mine.set_name, alt.set_name)           AS set_name,
+                  COALESCE(mine.collector_number, alt.collector_number) AS collector_number
              FROM deck_cards dc
              JOIN decks d ON d.id = dc.deck_id
              LEFT JOIN (SELECT owner, name_norm, MIN(id) AS id, scryfall_id, type_line,
-                               mana_cost, cmc, produced_mana, oracle_text, color_identity, rarity
+                               mana_cost, cmc, produced_mana, oracle_text, color_identity, rarity,
+                               setcode, set_name, collector_number
                           FROM cards GROUP BY owner, name_norm) mine
                ON mine.name_norm = dc.name_norm AND mine.owner = d.owner
              LEFT JOIN (SELECT name_norm, MIN(id) AS id, scryfall_id, type_line,
-                               mana_cost, cmc, produced_mana, oracle_text, color_identity, rarity
+                               mana_cost, cmc, produced_mana, oracle_text, color_identity, rarity,
+                               setcode, set_name, collector_number
                           FROM cards GROUP BY name_norm) alt
                ON alt.name_norm = dc.name_norm
              LEFT JOIN prices pm ON pm.scryfall_id = mine.scryfall_id
@@ -318,6 +348,9 @@ object DeckQueries {
                 colorIdentity = it.str("color_identity"),
                 rarity = it.str("rarity"),
                 price = it.str("price")?.toDoubleOrNull(),
+                setCode = it.str("setcode"),
+                setName = it.str("set_name"),
+                collectorNumber = it.str("collector_number"),
             )
         }
     }

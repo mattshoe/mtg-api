@@ -18,6 +18,14 @@ enum class Overlay {
     UNLOCK,
     NEW_DECK,
     RENAME,
+
+    /**
+     * The card carousel over an open deck.
+     *
+     * Matt: "this should be what happens when you tap a card in the
+     * deck list. This is not a special feature that launch."
+     */
+    CARD_PEEK,
 }
 
 /**

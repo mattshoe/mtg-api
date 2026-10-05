@@ -28,6 +28,8 @@ data class AppState(
     val deckTweak: DeckTweak? = null,
     val disassemble: DisassembleState? = null,
     val rename: RenameState? = null,
+    /** Where the card carousel is over an open deck. See [peekAt]. */
+    val peek: Peek = Peek(),
     /** What is on top, and therefore what back closes. */
     val overlays: Overlays = Overlays(),
     /** Set when a share arrived and has not been used yet. */
@@ -140,6 +142,59 @@ data class AppState(
 
     val previousCard: DeckCard? get() = cardAt.takeIf { it > 0 }?.let { deckRun[it - 1] }
     val nextCard: DeckCard? get() = cardAt.takeIf { it in 0 until deckRun.size - 1 }?.let { deckRun[it + 1] }
+
+    // --------------------------------------------------- the carousel
+
+    /**
+     * Where the carousel is, in the open deck's page order.
+     *
+     * A number and not the card itself. The sheet under the carousel
+     * sets counts, swaps cards and removes them, so a held copy
+     * would be stale the moment it was used and the carousel would
+     * be showing a card the deck no longer has.
+     */
+    fun peekAt(index: Int): AppState {
+        val run = decks.pageOrder
+        if (index !in run.indices) return this
+        return opening(Overlay.CARD_PEEK).copy(peek = Peek(index))
+    }
+
+    /** The row that was tapped, by the card on it. */
+    fun peekCard(card: DeckCard): AppState =
+        peekAt(decks.pageOrder.indexOfFirst { it.nameNorm == card.nameNorm })
+
+    /** A swipe. Clamped, because a carousel has two ends. */
+    fun peekTo(index: Int): AppState {
+        val run = decks.pageOrder
+        if (run.isEmpty() || !peek.open) return this
+        return copy(peek = Peek(index.coerceIn(0, run.lastIndex)))
+    }
+
+    /**
+     * The card under the carousel.
+     *
+     * Clamped rather than nulled when the deck gets shorter: removing
+     * the card you are looking at should show whatever took its
+     * place, which is what every other carousel does and the only
+     * alternative is a blank screen at the exact moment you pressed
+     * something.
+     */
+    val peeked: DeckCard?
+        get() {
+            if (!peek.open) return null
+            val run = decks.pageOrder
+            return run.getOrNull(peek.at.coerceAtMost(run.lastIndex))
+        }
+
+    /** "7 of 99", under the carousel. */
+    val peekPlace: String?
+        get() = peeked?.let { "${peek.at.coerceAtMost(decks.pageOrder.lastIndex) + 1} of ${decks.pageOrder.size}" }
+
+    /** The button out of the carousel and into the card's own page. */
+    fun openPeeked(): AppState {
+        val card = peeked ?: return this
+        return closing(Overlay.CARD_PEEK).openCard(CardRef(card.nameNorm), card.name)
+    }
 
     /** "7 of 99", for somebody halfway down a deck. */
     val cardPlace: String? get() = cardAt.takeIf { it >= 0 }?.let { "${it + 1} of ${deckRun.size}" }
@@ -334,6 +389,7 @@ data class AppState(
         Overlay.DISASSEMBLE -> copy(disassemble = null)
         Overlay.NEW_DECK -> copy(newDeck = NewDeck())
         Overlay.RENAME -> copy(rename = null)
+        Overlay.CARD_PEEK -> copy(peek = Peek())
         Overlay.CHEATSHEET, Overlay.UNLOCK -> this
     }
 
