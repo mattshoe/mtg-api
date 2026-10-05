@@ -60,23 +60,25 @@ class OwnerGroupSpacingParityTest {
             rule.onAllNodes(hasClickAction()).fetchSemanticsNodes().isNotEmpty()
         }
 
-        // Both of these are "the gap above an owner's own heading" —
-        // the same kind of gap, measured twice, so whatever a heading
-        // always carries (its own top padding, the column's own gap)
-        // is common to both and cancels out. The only thing that can
-        // tell them apart is whichever owner is not the first one.
+        // The two gaps the claim is about, which is the pair the
+        // web measures as well: inside a shelf, and between two.
         //
-        // Before the very first heading: the page title to Kayla's name.
-        val gapBeforeFirstOwner = topOf("Kayla") - bottomOf("Decks")
-        // Before the second owner's heading: the end of Kayla's tiles
-        // to Matt's name.
-        val gapBeforeSecondOwner = topOf("Matt") - bottomOf("Chulane")
+        // It used to measure the first one from the "Decks" page
+        // title down to the first owner's name. That title is gone —
+        // the bottom bar says Decks and the page was saying it twice
+        // — so the inside-a-group gap is measured where it actually
+        // lives, between an owner's name and the first deck under
+        // it. The claim is unchanged and so is the number it has to
+        // beat.
+        val gapInsideAShelf = topOf("Bello") - bottomOf("Kayla")
+        // Between the end of Kayla's tiles and Matt's name.
+        val gapBetweenShelves = topOf("Matt") - bottomOf("Chulane")
 
-        assertTrue(gapBeforeFirstOwner > 0f, "the page title does not even sit above the first shelf")
+        assertTrue(gapInsideAShelf > 0f, "an owner's name does not even sit above their own decks")
         assertTrue(
-            gapBeforeSecondOwner > gapBeforeFirstOwner * 1.5f,
-            "the gap above a second owner's heading (${gapBeforeSecondOwner}dp) is not meaningfully " +
-                "bigger than the gap above the very first one (${gapBeforeFirstOwner}dp) — two " +
+            gapBetweenShelves > gapInsideAShelf * 1.5f,
+            "the gap between two owners' shelves (${gapBetweenShelves}dp) is not meaningfully " +
+                "bigger than the gap inside one (${gapInsideAShelf}dp) — two " +
                 "owners read as one list",
         )
     }

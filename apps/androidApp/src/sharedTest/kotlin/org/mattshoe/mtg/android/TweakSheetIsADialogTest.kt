@@ -169,7 +169,6 @@ class TweakSheetIsADialogTest {
                         onUnlock = {},
                         onSearch = {},
                         onOpenDeck = {},
-                        onRunSql = {},
                         onPreviewEntry = {},
                         onApplyEntry = {},
                         onTweakPreview = { previewAsked++ },

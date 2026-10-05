@@ -60,7 +60,6 @@ class AppTest {
         assertEquals(listOf("decks"), Load.needs(Route(View.DECKS)))
         assertEquals(listOf("decks", "deck"), Load.needs(Route(View.DECKS, "alela")))
         assertEquals(listOf("totals"), Load.needs(Route(View.STATS)))
-        assertTrue(Load.needs(Route(View.CONSOLE)).isEmpty(), "the console fetches nothing until you run something")
         assertTrue(Load.needs(Route(View.ENTRY)).isEmpty())
     }
 

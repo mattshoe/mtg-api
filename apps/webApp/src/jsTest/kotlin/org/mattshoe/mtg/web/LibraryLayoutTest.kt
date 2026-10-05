@@ -76,7 +76,7 @@ class LibraryLayoutTest {
                         .let { it.copy(library = it.library.loaded(List(6) { i -> card("Card $i") }, 250)) },
                 )
             }
-            AppShell(s, { s = it }, {}, {}, {}, {}, {}, {})
+            AppShell(s, { s = it }, {}, {}, {}, {}, {})
         }
         return frame
     }
@@ -260,7 +260,7 @@ class LibraryLayoutTest {
         document.body!!.appendChild(frame)
         roots += frame
         renderComposable(root = frame) {
-            AppShell(AppState().opening(org.mattshoe.mtg.core.Overlay.UNLOCK), {}, {}, {}, {}, {}, {}, {})
+            AppShell(AppState().opening(org.mattshoe.mtg.core.Overlay.UNLOCK), {}, {}, {}, {}, {}, {})
         }
         settle()
         if (!styled()) return@runTest

@@ -4,10 +4,8 @@ import kotlinx.browser.document
 import kotlinx.coroutines.await
 import kotlinx.coroutines.test.runTest
 import org.jetbrains.compose.web.renderComposable
-import org.mattshoe.mtg.core.ConsoleState
 import org.mattshoe.mtg.core.LogLine
 import org.mattshoe.mtg.core.LogsState
-import org.mattshoe.mtg.core.Table
 import org.w3c.dom.HTMLButtonElement
 import org.w3c.dom.HTMLElement
 import org.w3c.dom.get
@@ -18,18 +16,21 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-/** The console and the log viewer, in headless Chrome. */
-class ConsolePageTest {
+/**
+ * The log viewer, in headless Chrome.
+ *
+ * This was `ConsolePageTest` and covered the query console as well.
+ * The console is gone; the four tests that drove it went with it.
+ */
+class LogsPageTest {
 
     private val roots = mutableListOf<HTMLElement>()
-    private var state: ConsoleState? = null
     private var logs: LogsState? = null
 
     @AfterTest
     fun cleanUp() {
         roots.forEach { it.remove() }
         roots.clear()
-        state = null
         logs = null
     }
 
@@ -48,47 +49,6 @@ class ConsolePageTest {
     private fun HTMLElement.buttons(): List<HTMLButtonElement> {
         val f = querySelectorAll("button")
         return (0 until f.length).mapNotNull { f[it] as? HTMLButtonElement }
-    }
-
-    @Test
-    fun runIsRefusedWithNothingToRun() = runTest {
-        val root = mount { ConsolePage(ConsoleState(), {}, {}) }
-        settle()
-        assertTrue(root.buttons().first { it.textContent == "Run" }.disabled)
-    }
-
-    @Test
-    fun aResultRendersAsARealTable() = runTest {
-        val s = ConsoleState(sql = "SELECT 1").ran(
-            Table(listOf("name", "qty"), listOf(listOf("Sol Ring", "3"), listOf("Opt", null))),
-            7,
-        )
-        val root = mount { ConsolePage(s, {}, {}) }
-        settle()
-        assertEquals(2, root.querySelectorAll("th").length)
-        assertEquals(4, root.querySelectorAll("td").length)
-        assertTrue(root.textContent!!.contains("Sol Ring"))
-        assertTrue(root.textContent!!.contains("null"), "a null cell must not render as empty")
-        assertTrue(root.textContent!!.contains("2 rows in 7ms"))
-    }
-
-    /** An old table under a new error reads as though the query worked. */
-    @Test
-    fun anErrorReplacesTheStaleResultRatherThanSittingAboveIt() = runTest {
-        val s = ConsoleState(sql = "SELEC 1")
-            .ran(Table(listOf("x"), listOf(listOf("1"))), 2)
-            .failed("near \"SELEC\": syntax error")
-        val root = mount { ConsolePage(s, {}, {}) }
-        settle()
-        assertTrue(root.textContent!!.contains("syntax error"))
-        assertEquals(0, root.querySelectorAll("table").length)
-    }
-
-    @Test
-    fun anEmptyResultSaysSoRatherThanShowingAnEmptyTable() = runTest {
-        val root = mount { ConsolePage(ConsoleState(sql = "SELECT 1").ran(Table(listOf("x")), 1), {}, {}) }
-        settle()
-        assertTrue(root.textContent!!.contains("No rows"))
     }
 
     @Test

@@ -12,7 +12,6 @@ import org.jetbrains.compose.web.renderComposable
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.CardDetail
 import org.mattshoe.mtg.core.Overlay
-import org.mattshoe.mtg.core.View
 import org.w3c.dom.HTMLElement
 import org.w3c.dom.get
 import kotlin.js.Promise
@@ -59,12 +58,15 @@ class OverlayScrollTest {
         roots += root
         renderComposable(root = root) {
             var s by remember { mutableStateOf(start) }
-            AppShell(s, { s = it }, {}, {}, {}, {}, {}, {})
+            AppShell(s, { s = it }, {}, {}, {}, {}, {})
         }
         return root
     }
 
-    private fun withAnOverlayOpen() = AppState().navigate(View.CONSOLE).opening(Overlay.CHEATSHEET)
+    // The Library, which is where the app starts and where a
+    // flick that reached the end of the drawer used to carry on into
+    // the results. It was the Query page until that page went.
+    private fun withAnOverlayOpen() = AppState().opening(Overlay.CHEATSHEET)
 
     // ------------------------------------------------- the stylesheet
 

@@ -50,7 +50,6 @@ import org.mattshoe.mtg.core.Share
 import org.mattshoe.mtg.core.ShareWhat
 import org.mattshoe.mtg.core.StatsQueries
 import org.mattshoe.mtg.core.Store
-import org.mattshoe.mtg.core.Table
 import org.mattshoe.mtg.core.Upload
 import org.mattshoe.mtg.core.View
 import org.mattshoe.mtg.core.query
@@ -243,12 +242,6 @@ object MtgApp {
                 },
                 onSearch = { searchSoon() },
                 onOpenDeck = { slug -> work { openDeck(app, slug) } },
-                onRunSql = {
-                    if (app.console.canRun) {
-                        app = app.copy(console = app.console.running())
-                        work { runSql(app) }
-                    }
-                },
                 onPreviewEntry = {
                     if (app.entry.canPreview) {
                         app = app.copy(entry = app.entry.working("Checking…"))
@@ -694,11 +687,6 @@ object MtgApp {
         val scope = Load.scopeFrom(s.route.rest)
         val r = api.query(StatsQueries.totals(scope))
         return app.copy(stats = app.stats.scopedTo(scope.owner).loaded(StatsQueries.decode(r.cols, r.rows)))
-    }
-
-    private suspend fun runSql(s: AppState): AppState {
-        val r = api.queryRaw(s.console.sql, emptyList())
-        return app.copy(console = app.console.ran(Table.of(r.cols, r.rows), r.n))
     }
 
     // ------------------------------------------------------ card detail

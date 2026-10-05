@@ -113,7 +113,6 @@ class TweakSheetParityTest {
                         onUnlock = {},
                         onSearch = {},
                         onOpenDeck = {},
-                        onRunSql = {},
                         onPreviewEntry = {},
                         onApplyEntry = {},
                         onTweakFind = { asked += it },

@@ -83,6 +83,24 @@ class LibraryTest {
     }
 
     @Test
+    fun aTwoFacedCardDoesNotShowItsBackTwice() {
+        // What the database actually holds. `cards.name` is the whole
+        // printed name, both halves, and `cards.face2` is the second
+        // half again — so joining them put the back face on twice:
+        // "Brazen Borrower // Petty Theft // Petty Theft" on every
+        // tile, every alt text and every exported list.
+        //
+        // The test above has been green since the day it was written
+        // and never saw this, because it builds a row the query
+        // cannot return: a name with one face in it and a `face2`
+        // beside it. An end-to-end journey against the real fixture
+        // is what found it.
+        val card = Rows.cards(cols, oneRow()).single()
+            .copy(name = "Brazen Borrower // Petty Theft", face2 = "Petty Theft")
+        assertEquals("Brazen Borrower // Petty Theft", card.fullName)
+    }
+
+    @Test
     fun colorIdentityIsReadLetterByLetter() {
         val card = Rows.cards(cols, oneRow()).single().copy(colorIdentity = "UW")
         assertEquals(listOf("U", "W"), card.colors)

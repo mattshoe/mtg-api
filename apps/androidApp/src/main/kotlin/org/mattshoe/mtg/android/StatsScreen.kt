@@ -34,8 +34,7 @@ fun StatsScreen(state: StatsState, onScope: (Owner?) -> Unit) {
             .padding(Design.WRAP_PAD_NARROW.dp),
         verticalArrangement = Arrangement.spacedBy(Design.GAP.dp),
     ) {
-        PageHead("Stats")
-
+        // No heading: the tab says "Stats".
         Box(Modifier.testTag("scope")) {
             Seg(
                 listOf("both" to "Both", "matt" to "Matt", "kayla" to "Kayla"),

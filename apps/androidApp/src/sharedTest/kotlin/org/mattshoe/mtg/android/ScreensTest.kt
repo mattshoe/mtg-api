@@ -114,35 +114,35 @@ class ScreensTest {
 
     // ------------------------------------------------------------ shell
 
-    /** The places you can go live behind the hamburger now, at every width. */
-    private fun openTheMenu() {
-        rule.onNodeWithContentDescription("Menu").performClick()
+    /** The profile: admin, the way in and out of it, and the log. */
+    private fun openTheProfile() {
+        rule.onNodeWithContentDescription("Profile").performClick()
         rule.waitForIdle()
     }
 
     @Test
     fun gatedTabsAreAbsentWhileLocked() {
-        content { AppShell(AppState(), {}, {}, {}, {}, {}, {}, {}) }
-        openTheMenu()
-        // "Library" is the menu row, the bar's title and the heading
-        // below it.
+        content { AppShell(AppState(), {}, {}, {}, {}, {}, {}) }
+        // The bar is the three anybody can reach; the gated pair is
+        // not hiding anywhere, including behind the profile.
         rule.onAllNodesWithText("Library").onFirst().assertIsDisplayed()
         rule.onNodeWithText("Decks").assertExists()
-        rule.onAllNodesWithTextOrNothing("Mass Entry")
+        rule.onAllNodesWithTextOrNothing("Entry")
+        openTheProfile()
         rule.onAllNodesWithTextOrNothing("Server Logs")
-        rule.onNodeWithText("Unlock").assertExists()
+        rule.onNodeWithText("Log in").assertExists()
     }
 
     @Test
     fun unlockingBringsTheGatedTabsBack() {
-        var state = AppState(admin = Admin(token = "t"))
-        content { AppShell(state, { state = it }, {}, {}, {}, {}, {}, {}) }
-        openTheMenu()
-        // The menu is taller than a small screen, so these are present
-        // rather than necessarily on screen.
-        rule.onNodeWithText("Mass Entry").assertExists()
+        var state = AppState(admin = Admin(token = "t").unlock("t"))
+        content { AppShell(state, { state = it }, {}, {}, {}, {}, {}) }
+        // Entry joins the bar; the log and the lock are behind the
+        // profile, which is the split Matt asked for.
+        rule.onNodeWithText("Entry").assertExists()
+        openTheProfile()
         rule.onNodeWithText("Server Logs").assertExists()
-        rule.onNodeWithText("Lock").assertExists()
+        rule.onNodeWithText("Log out").assertExists()
     }
 
     @Test
@@ -152,7 +152,7 @@ class ScreensTest {
         // only way either platform opens it now.
         var state = AppState()
         content {
-            AppShell(state, { state = it }, {}, {}, {}, {}, {}, {})
+            AppShell(state, { state = it }, {}, {}, {}, {}, {})
         }
         rule.onNodeWithText("Find").assertDoesNotExistNow()
         rule.onRoot().performKeyInput { pressKey(Key.Slash) }
@@ -165,7 +165,7 @@ class ScreensTest {
     @Test
     fun aBareLetterNavigates() {
         var state = AppState()
-        content { AppShell(state, { state = it }, {}, {}, {}, {}, {}, {}) }
+        content { AppShell(state, { state = it }, {}, {}, {}, {}, {}) }
         rule.onRoot().performKeyInput { pressKey(Key.D) }
         rule.runOnIdle { assertEquals(View.DECKS, state.view) }
     }
@@ -173,7 +173,7 @@ class ScreensTest {
     @Test
     fun theHelpKeyToasts() {
         var state = AppState()
-        content { AppShell(state, { state = it }, {}, {}, {}, {}, {}, {}) }
+        content { AppShell(state, { state = it }, {}, {}, {}, {}, {}) }
         // Shift-slash, which is how a keyboard actually produces it.
         rule.onRoot().performKeyInput {
             keyDown(Key.ShiftLeft)
@@ -529,10 +529,8 @@ class ScreensTest {
         // The tray itself carries no background and no click handler;
         // only the chip inside it does. A tap elsewhere on the screen,
         // toast showing or not, has to keep reaching whatever is
-        // really there underneath it — the hamburger, and then the
-        // menu row it opens.
-        openTheMenu()
-        rule.onNodeWithText("Decks").performClick()
+        // really there underneath it — a tab in the bottom bar.
+        rule.onNodeWithContentDescription("Decks").performClick()
         rule.waitForIdle()
 
         assertEquals(View.DECKS, held.value.view, "a control under the toast tray did not get the tap")
@@ -549,7 +547,7 @@ class ScreensTest {
         content {
             held = remember { mutableStateOf(start) }
             val shell = @androidx.compose.runtime.Composable {
-                AppShell(held.value, { held.value = it }, {}, {}, {}, {}, {}, {})
+                AppShell(held.value, { held.value = it }, {}, {}, {}, {}, {})
             }
             if (wide) {
                 // Wide enough that the toast docks bottom-end instead

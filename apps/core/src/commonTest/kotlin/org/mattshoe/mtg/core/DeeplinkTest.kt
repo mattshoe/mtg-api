@@ -64,7 +64,7 @@ class DeeplinkTest {
             AppState().navigate(Route(View.DECKS, "alela")),
             AppState().navigate(Route(View.CARD, "matt:sol+ring")),
             AppState().navigate(View.STATS),
-            AppState().navigate(View.CONSOLE),
+            AppState().navigate(View.LOGS),
             AppState(),
         )
         states.forEach { state ->

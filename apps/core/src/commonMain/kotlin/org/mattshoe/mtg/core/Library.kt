@@ -43,8 +43,24 @@ data class CardRow(
     /** Copies with no market price, so a partial total can say so. */
     val unpriced: Int = 0,
 ) {
-    /** Both faces, the way the card is actually named. */
-    val fullName: String get() = if (face2.isNullOrBlank()) name else "$name // $face2"
+    /**
+     * Both faces, the way the card is actually named.
+     *
+     * `cards.name` already holds the whole printed name for most
+     * two-faced cards — "Brazen Borrower // Petty Theft" — and
+     * `cards.face2` holds the second half of it again, so joining
+     * them unconditionally printed the back face twice everywhere a
+     * card is named. The guard is on the name rather than on the
+     * layout because the layout column distinguishes transform from
+     * adventure from split and this does not care which it is: if
+     * the name already says both, it is already both.
+     */
+    val fullName: String
+        get() = when {
+            face2.isNullOrBlank() -> name
+            name.contains(" // ") -> name
+            else -> "$name // $face2"
+        }
 
     val colors: List<String> get() = (colorIdentity ?: "").map { it.toString() }
 

@@ -94,7 +94,6 @@ class AutocompleteDismissTest {
                         onUnlock = {},
                         onSearch = {},
                         onOpenDeck = {},
-                        onRunSql = {},
                         onPreviewEntry = {},
                         onApplyEntry = {},
                         onExport = { exported += it },

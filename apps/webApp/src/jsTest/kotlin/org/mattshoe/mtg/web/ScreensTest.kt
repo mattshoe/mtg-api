@@ -107,7 +107,7 @@ class ScreensTest {
     // nothing to navigate with.
     private fun shell(state: AppState, onState: (AppState) -> Unit = {}) = mount {
         AppNav(state, onState)
-        AppShell(state, onState, {}, {}, {}, {}, {}, {})
+        AppShell(state, onState, {}, {}, {}, {}, {})
     }
 
     // ------------------------------------------------------------ shell
@@ -118,7 +118,7 @@ class ScreensTest {
         settle()
         assertTrue(root.hasButton("Library"))
         assertTrue(root.hasButton("Decks"))
-        assertFalse(root.hasButton("Mass Entry"), "a gated tab while locked")
+        assertFalse(root.hasButton("Entry"), "a gated tab while locked")
         assertFalse(root.hasButton("Server Logs"))
         assertTrue(root.hasButton("Unlock"))
     }
@@ -127,7 +127,7 @@ class ScreensTest {
     fun unlockingBringsTheGatedTabsBack() = runTest {
         val root = shell(AppState(admin = Admin(token = "t")))
         settle()
-        assertTrue(root.hasButton("Mass Entry"))
+        assertTrue(root.hasButton("Entry"))
         assertTrue(root.hasButton("Server Logs"))
         assertTrue(root.hasButton("Lock"))
     }
@@ -613,9 +613,9 @@ class NavTest {
         val box = nav.getBoundingClientRect()
         assertTrue(box.width > 0 && box.height > 0, "the nav is not rendered: $box")
         assertEquals(1, root.querySelectorAll("button.nav-burger").length, "no hamburger")
-        // Four views while locked, plus Unlock. Nothing loose beside
-        // the burger.
-        assertEquals(5, root.querySelectorAll(".app-menu button").length)
+        // Three views while locked, plus Unlock. Nothing loose beside
+        // the burger. It was four views until the Query page went.
+        assertEquals(4, root.querySelectorAll(".app-menu button").length)
     }
 
     @Test
@@ -728,8 +728,8 @@ class NavTest {
         assertTrue(rule > 0, "no rule in the menu")
         val above = labels.take(rule).mapNotNull { it.textContent?.trim() }
         val below = labels.drop(rule).mapNotNull { it.textContent?.trim() }
-        assertEquals(listOf("Library", "Decks", "Stats", "Query"), above)
-        assertTrue(below.contains("Mass Entry"), below.toString())
+        assertEquals(listOf("Library", "Decks", "Stats"), above)
+        assertTrue(below.contains("Entry"), below.toString())
         assertTrue(below.contains("Server Logs"), below.toString())
         assertTrue(below.contains("Lock"), below.toString())
     }

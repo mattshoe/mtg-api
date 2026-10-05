@@ -33,81 +33,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import org.mattshoe.mtg.core.ConsoleState
 import org.mattshoe.mtg.core.Design
 import org.mattshoe.mtg.core.LogLine
 import org.mattshoe.mtg.core.LogsState
 
-/** The query console, on Android. Sibling of `ConsolePage`. */
-@Composable
-fun ConsoleScreen(
-    state: ConsoleState,
-    onState: (ConsoleState) -> Unit,
-    onRun: () -> Unit,
-    onCheatsheet: () -> Unit = {},
-) {
-    Column(
-        Modifier.fillMaxWidth()
-            // The web page scrolls, and so does every other screen
-            // here. Without this the bottom of a tall result is simply
-            // unreachable on a short phone.
-            .verticalScroll(rememberScrollState())
-            .padding(Design.WRAP_PAD_NARROW.dp),
-        verticalArrangement = Arrangement.spacedBy(Design.GAP.dp),
-    ) {
-        PageHead("Query") { Ghost("Cheatsheet", onClick = onCheatsheet) }
-
-        Panel {
-            Field(
-                value = state.sql,
-                onValueChange = { onState(state.type(it)) },
-                // No placeholder. The web's box is a bare
-                // `TextArea` with none, and the Cheatsheet beside it
-                // is where an example query lives on both platforms —
-                // an example in the box reads as text somebody typed
-                // and left there.
-                placeholder = "",
-                modifier = Modifier.height(180.dp).testTag("sql"),
-                singleLine = false,
-                mono = true,
-            )
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(Design.GAP.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Primary(if (state.busy) "Running…" else "Run", enabled = state.canRun, onClick = onRun)
-                state.result?.let {
-                    Line(
-                        "${it.rows.size} rows in ${state.took}ms",
-                        Ink3,
-                        modifier = Modifier.testTag("result-count"),
-                    )
-                }
-            }
-            // `.err`: a bordered, tinted block, because a message in red
-            // and nothing else is a message the owner cannot see.
-            state.error?.let { ErrBlock(it) }
-            state.result?.let { t ->
-                if (t.isEmpty) {
-                    // `.empty`: an empty table has nothing to read, so say it.
-                    Line("No rows.", Ink3, modifier = Modifier.testTag("result-empty"))
-                } else {
-                    // Selectable, because a result is something you copy out of.
-                    SelectionContainer {
-                        Grid(
-                            cols = t.cols,
-                            rows = t.rows.map { r -> r.map { it ?: "null" } },
-                            tag = "result",
-                            maxHeight = 380.dp,
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-/** The server log, on Android. Sibling of `LogsPage`. */
+/**
+ * The server log, on Android. Sibling of `LogsPage`.
+ *
+ * Reached through the profile rather than the bottom bar: it is a
+ * screen you open when something is wrong, not one you move between,
+ * and a bar is for the latter. It shared a file with the query
+ * console until that page was dropped.
+ */
 @Composable
 fun LogsScreen(state: LogsState, onState: (LogsState) -> Unit) {
     Column(
@@ -116,7 +53,8 @@ fun LogsScreen(state: LogsState, onState: (LogsState) -> Unit) {
             .padding(Design.WRAP_PAD_NARROW.dp),
         verticalArrangement = Arrangement.spacedBy(Design.GAP.dp),
     ) {
-        PageHead("Server logs")
+        // No heading: this screen is not in the bar, so the header
+        // at the top carries its name on its own.
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Ghost("Errors only (${state.errorCount})", on = state.onlyErrors) {
                 onState(state.toggleErrors())

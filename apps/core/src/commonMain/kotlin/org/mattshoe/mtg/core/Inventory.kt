@@ -20,7 +20,6 @@ enum class Area(val label: String) {
     LIBRARY("Library"),
     DECKS("Decks"),
     STATS("Stats"),
-    QUERY("Query console"),
     ENTRY("Mass entry"),
     LOGS("Server logs"),
     CARD("Card detail"),
@@ -73,10 +72,12 @@ object Inventory {
                 "theOldAddAndRemoveNamesLandOnTheWizard", "theViewsAndWhichOfThemAreGated",
                 "everyViewIsReachableUnlocked", "switchingTabsSwapsTheScreen", "everyUnlockedTabRendersItsOwnScreen",
             )),
-        // One hamburger at every width, on both platforms. Android had
-        // a pill row that never collapsed, no title, and no admin
-        // group; the second half of this list is the phone's own proof
-        // of each, through the real `AppShell`.
+        // A hamburger on the website, a bottom bar on the phone. They
+        // were the same once; they are not any more, and the split is
+        // deliberate — a hamburger is right for a page with a mouse
+        // and wrong for a thumb. The shared half is which views exist
+        // and where each belongs, which `NavShapeTest` owns; the
+        // per-platform halves are the chrome that reads it.
         Feature(Area.SHELL, "Nav tabs, with the admin group hidden until unlocked", "app.js, index.html", logic = true, done = true,
             tests = listOf(
                 "lockedHidesTheAdminViewsEntirely", "unlockedShowsThemAll", "noViewIsLostBetweenTheNavAndTheRouter",
@@ -89,13 +90,19 @@ object Inventory {
                 "theGatedViewsSitUnderTheRuleAndTheOthersAbove",
                 "theMenuStaysOnScreenAtPhoneWidth", "thereIsNoFindButton",
                 "theHeaderSaysWhatYouAreLookingAt", "andAnOpenDeckPutsItsOwnNameThere",
-                "theMarkIsTheSameSizeAsTheHamburgerBesideIt",
-                "thereIsAHamburgerAndTheMenuIsShutBehindIt", "theHamburgerOpensIt",
-                "theHamburgerShutsItAgain", "theBackdropDoesNotSwallowTheTreeUnderIt",
-                "pickingTheViewYouAreAlreadyOnStillClosesIt", "andPickingAnotherOneGoesThere",
-                "theAdminHalfIsBehindARuleAndAHeading", "andLockIsLast",
-                "aGatedViewIsAbsentWhileLockedAndSoIsItsHalfOfTheMenu",
-                "theBarSaysWhatYouAreLookingAt", "soIsEveryRowOfTheMenuBehindIt",
+                // The phone's bottom bar and its profile.
+                "theBarIsTheThreeYouCanReachWhileLocked", "adminAddsEntryAndNothingElse",
+                "everyTabIsAnIconAboveAWord", "theBarIsAtTheBottom", "tappingATabGoesThere",
+                "theTabYouAreOnIsMarkedWithoutRelyingOnHue", "thereIsNoHamburger",
+                "thereIsAProfileInTheTopRight", "theProfileSaysWhetherYouAreAdmin",
+                "theProfileSaysSoWhenYouAreAdmin", "theProfileIsTheWayInAndTheWayOut",
+                "theProfileOffersLockWhileUnlocked", "theServerLogIsBehindTheProfile",
+                "theProfileOffersNoLogWhileLocked", "soIsEveryTabInTheBottomBar",
+                // Which views exist and where each one is offered.
+                "thereIsNoQueryPage", "theBarIsTheThreeAnybodyCanReach",
+                "unlockingAddsEntryToTheBarAndNothingElse", "massEntryIsOneWordInTheBar",
+                "theServerLogLivesBehindTheProfileAndNotInTheBar",
+                "everyItemInTheBarIsOneShortWord", "everythingReachableIsOfferedSomewhere",
             )),
         Feature(Area.ADMIN, "A retried write applies once, not twice",
             "api.js", logic = true, done = true,
@@ -509,7 +516,7 @@ object Inventory {
             )),
         Feature(Area.SHELL, "No panel offers to start work it is already doing", "app.js", logic = true, done = true,
             tests = listOf(
-                "massEntryOffersNothingWhileItIsApplying", "theConsoleOffersNothingWhileItIsRunning",
+                "massEntryOffersNothingWhileItIsApplying",
                 "aDeckSaveOffersNothingWhileItIsSaving", "aDisassembleOffersNothingWhileItIsRunning",
             )),
         Feature(Area.LIBRARY, "One row per card, not one per owner", "library.js", logic = true, done = true,
@@ -547,15 +554,9 @@ object Inventory {
                 "theActiveScopeIsMarkedAndSwitchingAsksForTheOther", "aRouteParses",
             )),
 
-        // ---------------------------------------------------------- query
-        Feature(Area.QUERY, "Free SQL against the collection, read-only", "console.js", logic = true, done = true,
-            tests = listOf(
-                "aTableKeepsColumnOrderAndNulls", "nothingToRunIsNotRunnable",
-                "aFailureClearsTheStaleResultRatherThanLeavingItOnScreen", "runIsRefusedWithNothingToRun",
-                "aResultRendersAsARealTable", "anErrorReplacesTheStaleResultRatherThanSittingAboveIt",
-                "anEmptyResultSaysSoRatherThanShowingAnEmptyTable",
-                "theConsoleSendsWhatWasTypedAndLetsTheServerRefuseIt",
-            )),
+        // The Query page was here. It is gone — "none of the apps
+        // need that" — and `thereIsNoQueryPage` in the shell feature
+        // above is what keeps it gone.
 
         // ---------------------------------------------------------- entry
         Feature(Area.ENTRY, "Four step wizard: which, list, who, review", "manage.js", logic = true, done = true,
