@@ -3,6 +3,7 @@ package org.mattshoe.mtg.android
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -30,6 +31,7 @@ import org.mattshoe.mtg.core.DeckCard
 import org.mattshoe.mtg.core.DeckEditState
 import org.mattshoe.mtg.core.DeckQueries
 import org.mattshoe.mtg.core.DeckTweak
+import org.mattshoe.mtg.core.Deeplink
 import org.mattshoe.mtg.core.DisassembleState
 import org.mattshoe.mtg.core.EntryHistory
 import org.mattshoe.mtg.core.Export
@@ -140,6 +142,38 @@ class MainActivity : ComponentActivity() {
      */
     private val scope get() = model.viewModelScope
 
+    /**
+     * A second link, arriving at an app that is already open.
+     *
+     * `MainActivity` is `singleTask`, so the system hands the link to
+     * the running instance rather than starting another. An app that
+     * only reads `intent` in `onCreate` follows the first link of a
+     * session and silently ignores every one after it.
+     */
+    override fun onNewIntent(incoming: Intent) {
+        super.onNewIntent(incoming)
+        // So `intent` is the new one for anything that reads it later.
+        setIntent(incoming)
+        if (followLink(incoming)) loadFor(app)
+    }
+
+    /**
+     * Follow an `mtg.mattshoe.org` link, if that is what this is.
+     *
+     * Returns whether it moved. Where the link goes is
+     * `Deeplink.landing` in `:core`, shared with the website's own
+     * address parsing, so a link cannot open one place in the browser
+     * and another on the phone. Anything else — a plain launch, a
+     * share from another app, somebody else's host — is left alone.
+     */
+    private fun followLink(from: Intent?): Boolean {
+        if (from?.action != Intent.ACTION_VIEW) return false
+        val next = Deeplink.landing(app, from.dataString) 
+        if (next == app) return false
+        app = next
+        return true
+    }
+
     /** What `onCreate` landed, for a test that cannot see a private field. */
     internal fun stateForTesting(): AppState = app
 
@@ -185,6 +219,10 @@ class MainActivity : ComponentActivity() {
                 admin = Admin(AdminToken.restore(store)),
                 history = EntryHistory.load(store),
             )
+            // A link that started the app decides where it opens,
+            // before the first fetch, so nothing is read for the
+            // Library and then thrown away for the deck.
+            followLink(intent)
             loadFor(app)
             loadFacets()
         }
@@ -310,6 +348,7 @@ class MainActivity : ComponentActivity() {
                             ) { applyTweak() }
                         },
                         onShare = { what, where -> work { shareDeck(what, where) } },
+                        onShareCard = { link -> app = shareCard(link) },
                         onDisassemble = {
                             claim(
                                 app.disassemble?.canGo == true,
@@ -720,6 +759,19 @@ class MainActivity : ComponentActivity() {
      * still falls back to the clipboard on some phones, and why the
      * toast always says which one actually happened.
      */
+    /**
+     * A link to the open card, on the clipboard.
+     *
+     * The clipboard rather than the share sheet, the same as every
+     * other share on this app, and the toast says "copied" rather
+     * than "shared" so the wording never claims something that did
+     * not happen.
+     */
+    internal fun shareCard(link: String): AppState {
+        copyToClipboard("${app.card?.name.orEmpty().ifBlank { "card" }}-link.txt", link)
+        return app.say("Link copied")
+    }
+
     private fun shareDeck(what: ShareWhat, where: ExportTo): AppState {
         val deck = app.decks.open ?: return app.say("No deck open")
         val text = when (what) {

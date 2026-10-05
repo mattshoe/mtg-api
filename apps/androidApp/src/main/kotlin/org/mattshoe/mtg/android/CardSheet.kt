@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,6 +24,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -66,6 +71,16 @@ fun CardSheet(
     /** "7 of 99", when the card is part of a deck. */
     place: String? = null,
     onStep: (DeckCard) -> Unit = {},
+    /**
+     * Hand over a link to this card.
+     *
+     * The website's `CardPage` has had this since it was written —
+     * "Copy a link to this card" — and the phone had no share on a
+     * card at all, from any route. A card is its own destination with
+     * its own address, so it is the screen where a link is most
+     * obviously the point.
+     */
+    onShare: () -> Unit = {},
     // Last, so `CardSheet(card) {}` still means "and this is how you
     // leave it" — which is how every caller and every test writes it.
     onClose: () -> Unit,
@@ -80,6 +95,10 @@ fun CardSheet(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             TextButton(onClick = onClose) { Text("← Back") }
+            Spacer(Modifier.weight(1f))
+            // The same header shape as the website's card page: back
+            // on the left, the share on the right, nothing between.
+            ShareCardButton(onShare)
         }
         // Selectable, the same as the web. Copying a card name off the
         // page is most of what the page is for.
@@ -356,6 +375,30 @@ private fun Body(card: CardDetail) {
  * `named` only on a double-faced card, where saying which face you
  * are reading is the entire point of drawing two of these.
  */
+/**
+ * The share, on a card. Sibling of the deck's, and the same mark.
+ *
+ * One share symbol in the app rather than two: `ShareMark` draws the
+ * website's own SVG, and a second one typed as a font glyph is how
+ * the deck page ended up with an arrow nobody recognised. `TouchTarget`
+ * because item 4.8 put a 48dp floor under everything you press and a
+ * new control is the easiest place to lose it.
+ */
+@Composable
+private fun ShareCardButton(onShare: () -> Unit) {
+    Box(
+        Modifier.size(TouchTarget)
+            .semantics {
+                role = Role.Button
+                contentDescription = "Share this card"
+            }
+            .clickable(onClick = onShare),
+        contentAlignment = Alignment.Center,
+    ) {
+        ShareMark(Ink2)
+    }
+}
+
 @Composable
 private fun FacePanel(face: Face, named: Boolean) {
     Panel {

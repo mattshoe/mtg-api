@@ -106,6 +106,31 @@ jobs:
           # publishing one to the Download button.
           "$ANDROID_HOME"/build-tools/35.0.0/apksigner verify --print-certs mtg-collection.apk
 
+      # The deep links only work while the site vouches for this exact
+      # certificate. If the key is ever rotated and
+      # `frontend/.well-known/assetlinks.json` is not, Android stops
+      # verifying the link and every mtg.mattshoe.org tap quietly opens
+      # a browser instead of the app — with nothing failing anywhere.
+      # So the APK that is about to ship is checked against the file
+      # the site is about to serve.
+      - name: The site still vouches for this signing key
+        if: steps.key.outputs.have == 'yes'
+        run: |
+          APK_SHA=$("$ANDROID_HOME"/build-tools/35.0.0/apksigner verify --print-certs             mtg-collection.apk | grep -i 'SHA-256 digest' | head -1             | sed 's/.*: *//' | tr -d ' \n' | tr 'A-F' 'a-f')
+          SITE_SHA=$(grep -oE '[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){31}'             frontend/.well-known/assetlinks.json | head -1 | tr -d ':' | tr 'A-F' 'a-f')
+          echo "apk:  $APK_SHA"
+          echo "site: $SITE_SHA"
+          if [ -z "$SITE_SHA" ]; then
+            echo "::error::frontend/.well-known/assetlinks.json has no fingerprint in it"
+            exit 1
+          fi
+          if [ "$APK_SHA" != "$SITE_SHA" ]; then
+            echo "::error::The APK is signed with a key the site does not vouch for." \
+                 "Deep links will stop opening the app. Put $APK_SHA into" \
+                 "frontend/.well-known/assetlinks.json (colon-separated, uppercase)."
+            exit 1
+          fi
+
       - name: Publish it where the site looks for it
         if: steps.key.outputs.have == 'yes'
         env:

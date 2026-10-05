@@ -47,6 +47,7 @@ import org.mattshoe.mtg.core.HistoryEntry
 import org.mattshoe.mtg.core.Overlay
 import org.mattshoe.mtg.core.Owner
 import org.mattshoe.mtg.core.Route
+import org.mattshoe.mtg.core.Share
 import org.mattshoe.mtg.core.ShareWhat
 import org.mattshoe.mtg.core.Tweak
 import org.mattshoe.mtg.core.View
@@ -131,6 +132,8 @@ fun AppShell(
     onTweakApply: () -> Unit = {},
     /** The deck, as a link or as a list, copied or downloaded. */
     onShare: (ShareWhat, ExportTo) -> Unit = { _, _ -> },
+    /** Hand over a link to the open card. The website's `CardPage` has always had one. */
+    onShareCard: (String) -> Unit = {},
     onCheckNames: () -> Unit = {},
     onCreateDeck: () -> Unit = {},
     /** The new deck wizard's commander box, which has its own suggestions. */
@@ -364,6 +367,11 @@ fun AppShell(
                     next = state.nextCard,
                     place = state.cardPlace,
                     onStep = { c -> onOpenNamed(c.name, c.nameNorm, "") },
+                    // The card's own address, which is the card alone
+                    // — `openCard` never puts the deck underneath into
+                    // the route, so this link is the same whichever
+                    // way the card was reached.
+                    onShare = { onShareCard(Share.link(state)) },
                 )
 
                 View.ENTRY -> MassEntryScreen(

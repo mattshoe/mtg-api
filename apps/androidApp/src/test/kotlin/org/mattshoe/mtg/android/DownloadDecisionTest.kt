@@ -283,4 +283,28 @@ class DownloadDecisionTest {
         )
         assertNotNull(clipboardText(activity))
     }
+
+    @Test
+    fun sharingACardPutsItsLinkOnTheClipboard() {
+        // Through the real activity, because `CardShareParityTest`
+        // drives `AppShell` directly — and `AppShell`'s `onShareCard`
+        // has a no-op default, so a button wired to nothing at all
+        // passes there and does nothing on the phone. That gap is the
+        // whole reason this one exists.
+        val activity = launch(FakeDownloads(DownloadResult.SAVED))
+        activity.setStateForTesting(
+            activity.stateForTesting().openCard(org.mattshoe.mtg.core.CardRef("sol ring")),
+        )
+        settle()
+
+        val after = activity.shareCard(org.mattshoe.mtg.core.Share.link(activity.stateForTesting()))
+        settle()
+
+        assertEquals("Link copied", after.toast)
+        val clip = clipboardText(activity).orEmpty()
+        assertTrue(
+            clip.startsWith("https://mtg.mattshoe.org/#/card/"),
+            "the clipboard does not hold a link to the card: $clip",
+        )
+    }
 }
