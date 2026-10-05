@@ -10,11 +10,13 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mattshoe.mtg.android.Parity.shoot
 import org.mattshoe.mtg.core.Admin
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.View
@@ -287,5 +289,21 @@ class BottomNavParityTest {
             rule.onAllNodes(hasText("Server Logs")).fetchSemanticsNodes().isEmpty(),
             "a locked app offers the server log",
         )
+    }
+
+    // ------------------------------------------------------ the picture
+
+    @Test
+    fun theUnlockedBarIsPhotographed() {
+        // Evidence, not an assertion. The assertions above already
+        // say the bar has four tabs, each an icon over a word, with
+        // the current one marked — this is so a person can look at it.
+        Parity.needsRealRendering()
+        shell(unlocked())
+        rule.onNodeWithTag("bottom-nav").shoot("bottom-nav-admin")
+        rule.onRoot().shoot("shell-admin")
+        rule.onNodeWithContentDescription("Profile").performClick()
+        rule.waitForIdle()
+        rule.onRoot().shoot("profile-open-admin")
     }
 }
