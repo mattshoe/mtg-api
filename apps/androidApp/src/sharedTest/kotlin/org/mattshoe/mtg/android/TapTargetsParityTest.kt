@@ -121,10 +121,10 @@ class TapTargetsParityTest {
         )
     }
 
-    /** Everything in the bar, which is now the hamburger and the way home. */
+    /** Everything in the top bar: the way home and the profile. */
     private fun barControls() = listOf(
-        "the hamburger" to rule.onNodeWithTag("nav-burger"),
         "the home mark" to rule.onNodeWithTag("brand-mark"),
+        "the profile" to rule.onNodeWithTag("profile"),
     )
 
     @Test
@@ -135,21 +135,19 @@ class TapTargetsParityTest {
     }
 
     /**
-     * And every row of the menu behind it.
+     * And every tab in the bottom bar.
      *
-     * The pills these replaced were about 30dp of painted box inside a
-     * 48dp target. A menu row is full width, so only its height is in
-     * question — and left to its own text it is 34dp, which is the
-     * website's `.app-tab` and three quarters of a fingertip.
+     * The menu this used to measure is gone — the hamburger went with
+     * it — so what needs a thumb now is the bar, where four tabs
+     * divide the width and each one has to stay 48dp tall whatever
+     * that division gives it.
      */
     @Test
-    fun soIsEveryRowOfTheMenuBehindIt() {
+    fun soIsEveryTabInTheBottomBar() {
         shell(AppState(admin = Admin(token = "t")))
-        rule.onNodeWithContentDescription("Menu").performClick()
-        rule.waitForIdle()
-        val rows = AppState(admin = Admin(token = "t")).admin.visible.map { it.label } + "Lock"
-        rows.forEach { label -> assertBigEnough("the $label row", control(label)) }
-        rule.onNodeWithTag("app-menu").shoot("tap-targets-menu")
+        Admin(token = "t").unlock("t").bar.forEach { view ->
+            assertBigEnough("the ${view.label} tab", rule.onNodeWithContentDescription(view.label))
+        }
     }
 
     /**
@@ -160,12 +158,10 @@ class TapTargetsParityTest {
      */
     @Test
     fun noTwoNavControlsClaimTheSameTouchArea() {
-        shell(AppState(admin = Admin(token = "t")))
-        rule.onNodeWithContentDescription("Menu").performClick()
-        rule.waitForIdle()
-        val rows = AppState(admin = Admin(token = "t")).admin.visible.map { it.label } + "Lock"
+        shell(AppState(admin = Admin(token = "t").unlock("t")))
+        val tabs = Admin(token = "t").unlock("t").bar.map { it.label }
         val boxes = barControls().map { (what, node) -> what to node.touch() } +
-            rows.map { it to control(it).touch() }
+            tabs.map { it to rule.onNodeWithContentDescription(it).touch() }
         boxes.forEachIndexed { i, (a, ra) ->
             boxes.drop(i + 1).forEach { (b, rb) ->
                 assertTrue(

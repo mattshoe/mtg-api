@@ -32,7 +32,6 @@ import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.mattshoe.mtg.core.ConsoleState
 import org.mattshoe.mtg.core.LogLine
 import org.mattshoe.mtg.core.LogsState
 import org.mattshoe.mtg.core.Owner
@@ -46,7 +45,10 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * The query console, the server log and the stats screen, on a device.
+ * The server log and the stats screen, on a device.
+ *
+ * The query console used to be here too. That page is gone — "none
+ * of the apps need that" — and its thirty-one tests went with it.
  *
  * Every check here has a sibling in `ConsolePageTest` or
  * `DecksStatsPageTest` under Karma, and the ones that have no sibling
@@ -62,26 +64,14 @@ import kotlin.test.assertTrue
  */
 @OptIn(androidx.compose.ui.test.ExperimentalTestApi::class)
 @RunWith(AndroidJUnit4::class)
-class ConsoleStatsParityTest {
+class LogsStatsParityTest {
 
     @get:Rule
     val rule = createComposeRule()
 
     // ------------------------------------------------------- the fixtures
 
-    private fun table() = Table(
-        listOf("name", "qty"),
-        listOf(listOf("Sol Ring", "3"), listOf("Opt", null)),
-    )
 
-    /** A short first cell over a long one: the shove that breaks a row. */
-    private fun ragged() = Table(
-        listOf("name", "qty", "set"),
-        listOf(
-            listOf("Opt", "1", "ELD"),
-            listOf("Thassa's Oracle, Merfolk Wizard", "12", "THB"),
-        ),
-    )
 
     private fun lines() = listOf(
         LogLine("2026-09-28T01:02:03Z", "info", null, "POST", "/query", 200, 12, null),
@@ -96,16 +86,12 @@ class ConsoleStatsParityTest {
 
     // ------------------------------------------------------------ mounting
 
-    private var console by mutableStateOf(ConsoleState())
     private var logs by mutableStateOf(LogsState())
     private var stats by mutableStateOf(StatsState())
 
-    private var lastConsole: ConsoleState? = null
     private var lastLogs: LogsState? = null
     private var scoped: Owner? = null
     private var scopeCalls = 0
-    private var runs = 0
-    private var sheets = 0
 
     /**
      * A phone's width, and nothing else.
@@ -119,20 +105,6 @@ class ConsoleStatsParityTest {
         MtgTheme { Box(Modifier.width(390.dp).testTag("frame")) { content() } }
     }
 
-    private fun showConsole(state: ConsoleState) {
-        console = state
-        rule.setContent {
-            Frame {
-                ConsoleScreen(
-                    state = console,
-                    onState = { lastConsole = it; console = it },
-                    onRun = { runs++ },
-                    onCheatsheet = { sheets++ },
-                )
-            }
-        }
-        settle()
-    }
 
     private fun showLogs(state: LogsState) {
         logs = state
@@ -261,250 +233,6 @@ class ConsoleStatsParityTest {
         val inside = mean(bmp, l, r, top + 3, top + 9)
         val outside = mean(bmp, l, r, top - 8, top - 2)
         return inside - outside
-    }
-
-    // ======================================================= the SQL box
-
-    @Test
-    fun theSqlBoxShowsWhatIsInIt() {
-        showConsole(ConsoleState(sql = "SELECT 1"))
-        tag("sql").assertExists()
-        assertTrue(textSomewhere("SELECT 1"))
-    }
-
-    @Test
-    fun typingInTheSqlBoxIsReportedThroughTheCallback() {
-        showConsole(ConsoleState())
-        rule.onNodeWithTag("sql").performTextInput("SELECT 2")
-        rule.waitForIdle()
-        assertEquals("SELECT 2", lastConsole?.sql)
-    }
-
-    @Test
-    fun runIsRefusedWithNothingToRun() {
-        showConsole(ConsoleState())
-        rule.onNodeWithText("Run").assertIsNotEnabled()
-    }
-
-    @Test
-    fun runIsRefusedWhenTheBoxHoldsOnlyWhitespace() {
-        showConsole(ConsoleState(sql = "   \n  "))
-        rule.onNodeWithText("Run").assertIsNotEnabled()
-    }
-
-    @Test
-    fun runIsOfferedOnceThereIsSomethingToRun() {
-        showConsole(ConsoleState(sql = "SELECT 1"))
-        rule.onNodeWithText("Run").assertIsEnabled()
-    }
-
-    @Test
-    fun pressingRunAsksThroughTheCallback() {
-        showConsole(ConsoleState(sql = "SELECT 1"))
-        rule.onNodeWithText("Run").performClick()
-        rule.waitForIdle()
-        assertEquals(1, runs)
-    }
-
-    @Test
-    fun runReadsRunningWhileItRuns() {
-        showConsole(ConsoleState(sql = "SELECT 1").running())
-        rule.onNodeWithText("Running…").assertExists()
-        rule.onNodeWithText("Run").assertDoesNotExist()
-    }
-
-    @Test
-    fun runIsRefusedWhileItIsAlreadyRunning() {
-        showConsole(ConsoleState(sql = "SELECT 1").running())
-        rule.onNodeWithText("Running…").assertIsNotEnabled()
-    }
-
-    @Test
-    fun startingARunClearsTheOldResult() {
-        showConsole(ConsoleState(sql = "SELECT 1").ran(table(), 7).running())
-        assertFalse(exists("result-grid"), "a new run must not leave the last table up")
-        assertFalse(exists("result-count"))
-    }
-
-    @Test
-    fun theCheatsheetIsOfferedAndAsksThroughTheCallback() {
-        showConsole(ConsoleState())
-        rule.onNodeWithText("Cheatsheet").assertExists()
-        rule.onNodeWithText("Cheatsheet").performClick()
-        rule.waitForIdle()
-        assertEquals(1, sheets)
-    }
-
-    // ================================================== the result table
-
-    @Test
-    fun aResultRendersAsARealTable() {
-        showConsole(ConsoleState(sql = "SELECT 1").ran(table(), 7))
-        tag("result-grid").assertExists()
-        assertEquals("NAME", cell("result-head-0"))
-        assertEquals("QTY", cell("result-head-1"))
-        assertEquals("Sol Ring", cell("result-cell-0-0"))
-        assertEquals("3", cell("result-cell-0-1"))
-    }
-
-    @Test
-    fun thereIsAHeaderCellPerColumnAndNoMore() {
-        showConsole(ConsoleState(sql = "SELECT 1").ran(table(), 7))
-        assertTrue(exists("result-head-0") && exists("result-head-1"))
-        assertFalse(exists("result-head-2"), "a third header for a two-column result")
-    }
-
-    @Test
-    fun thereIsACellPerValueAndNoMore() {
-        showConsole(ConsoleState(sql = "SELECT 1").ran(table(), 7))
-        (0..1).forEach { r -> (0..1).forEach { c -> assertTrue(exists("result-cell-$r-$c")) } }
-        assertFalse(exists("result-cell-2-0"), "a third row for a two-row result")
-        assertFalse(exists("result-cell-0-2"))
-    }
-
-    /** The bug this screen had: every row as one `Text` of pipes. */
-    @Test
-    fun theRowsAreNotOneRunOfPipedText() {
-        showConsole(ConsoleState(sql = "SELECT 1").ran(table(), 7))
-        assertFalse(textSomewhere("  |  "), "the table is ruled, not joined with pipes")
-        assertFalse(textSomewhere("Sol Ring  |  3"))
-    }
-
-    @Test
-    fun aHeaderCellSitsOverItsOwnColumn() {
-        showConsole(ConsoleState(sql = "SELECT 1").ran(table(), 7))
-        assertTrue(same(left("result-head-0"), left("result-cell-0-0")), "column 0 head over column 0")
-        assertTrue(same(left("result-head-1"), left("result-cell-0-1")), "column 1 head over column 1")
-        assertTrue(bottom("result-head-0") <= top("result-cell-0-0") + 0.75f, "the head is above the body")
-    }
-
-    /** A long cell in one row must not shove the next column in another. */
-    @Test
-    fun aLongCellDoesNotShoveTheColumnsOutOfLine() {
-        showConsole(ConsoleState(sql = "SELECT 1").ran(ragged(), 3))
-        assertTrue(same(left("result-cell-0-1"), left("result-cell-1-1")), "qty column must not stagger")
-        assertTrue(same(left("result-cell-0-2"), left("result-cell-1-2")), "set column must not stagger")
-        assertTrue(same(left("result-head-2"), left("result-cell-0-2")))
-    }
-
-    @Test
-    fun theColumnsRunInOrderWithoutOverlapping() {
-        showConsole(ConsoleState(sql = "SELECT 1").ran(ragged(), 3))
-        assertTrue(left("result-head-1") >= right("result-head-0") - 0.75f)
-        assertTrue(left("result-head-2") >= right("result-head-1") - 0.75f)
-    }
-
-    @Test
-    fun theCellsOfOneRowShareItsLine() {
-        showConsole(ConsoleState(sql = "SELECT 1").ran(ragged(), 3))
-        assertTrue(same(top("result-cell-1-0"), top("result-cell-1-1")))
-        assertTrue(same(top("result-cell-1-0"), top("result-cell-1-2")))
-        assertTrue(top("result-cell-1-0") >= bottom("result-cell-0-0") - 0.75f, "row 1 is under row 0")
-    }
-
-    @Test
-    fun aNullCellSaysNullRatherThanNothing() {
-        showConsole(ConsoleState(sql = "SELECT 1").ran(table(), 7))
-        assertEquals("null", cell("result-cell-1-1"))
-    }
-
-    @Test
-    fun theRowCountAndTimingAreStated() {
-        showConsole(ConsoleState(sql = "SELECT 1").ran(table(), 7))
-        assertEquals("2 rows in 7ms", cell("result-count"))
-    }
-
-    @Test
-    fun theRowCountIsTheWebsExactWordingEvenForOneRow() {
-        showConsole(ConsoleState(sql = "SELECT 1").ran(Table(listOf("x"), listOf(listOf("1"))), 3))
-        assertEquals("1 rows in 3ms", cell("result-count"))
-    }
-
-    @Test
-    fun anEmptyResultSaysSoRatherThanShowingAnEmptyTable() {
-        showConsole(ConsoleState(sql = "SELECT 1").ran(Table(listOf("x")), 1))
-        assertEquals("No rows.", cell("result-empty"))
-        assertFalse(exists("result-grid"), "an empty table has nothing to read")
-    }
-
-    @Test
-    fun anEmptyResultStillSaysHowLongItTook() {
-        showConsole(ConsoleState(sql = "SELECT 1").ran(Table(listOf("x")), 1))
-        assertEquals("0 rows in 1ms", cell("result-count"))
-    }
-
-    @Test
-    fun noTableIsDrawnBeforeAnythingHasRun() {
-        showConsole(ConsoleState(sql = "SELECT 1"))
-        assertFalse(exists("result-grid"))
-        assertFalse(exists("result-count"))
-        assertFalse(exists("result-empty"))
-    }
-
-    @Test
-    fun aTableWiderThanThePhoneScrollsSidewaysRatherThanVanishing() {
-        Parity.needsRealRendering()
-        val cols = (0..7).map { "column_$it" }
-        showConsole(
-            ConsoleState(sql = "SELECT 1")
-                .ran(Table(cols, listOf(cols.map { "value_of_$it" })), 4),
-        )
-        assertTrue(right("result-head-7") > 390f, "eight columns are wider than the phone")
-        tag("result-head-7").performScrollTo()
-        rule.waitForIdle()
-        tag("result-head-7").assertIsDisplayed()
-    }
-
-    // ========================================================= the error
-
-    @Test
-    fun anErrorReplacesTheStaleResultRatherThanSittingAboveIt() {
-        showConsole(
-            ConsoleState(sql = "SELEC 1").ran(table(), 2).failed("near \"SELEC\": syntax error"),
-        )
-        assertTrue(textSomewhere("syntax error"))
-        assertFalse(exists("result-grid"), "the old table under a new error reads as success")
-        assertFalse(textSomewhere("Sol Ring"))
-        assertFalse(exists("result-count"))
-    }
-
-    @Test
-    fun theErrorIsShownWhereTheResultWouldHaveBeen() {
-        showConsole(ConsoleState(sql = "SELEC 1").failed("boom"))
-        assertEquals("boom", cell("err"))
-    }
-
-    @Test
-    fun theErrorIsNotToldByItsColourAlone() {
-        Parity.needsRealRendering()
-        showConsole(ConsoleState(sql = "SELEC 1").failed("boom"))
-        val lift = ownSurface("err")
-        assertTrue(
-            lift > 4.0,
-            "the error needs a surface of its own, not just a colour; lift $lift",
-        )
-    }
-
-    @Test
-    fun theErrorIsAlsoAnnouncedAsOne() {
-        showConsole(ConsoleState(sql = "SELEC 1").failed("boom"))
-        rule.onNodeWithContentDescription("error: boom", useUnmergedTree = true).assertExists()
-    }
-
-    @Test
-    fun theFailedSqlIsKeptSoItCanBeFixed() {
-        showConsole(ConsoleState(sql = "SELEC 1").failed("boom"))
-        assertTrue(textSomewhere("SELEC 1"))
-        rule.onNodeWithText("Run").assertIsEnabled()
-    }
-
-    @Test
-    fun typingAfterAFailureClearsTheError() {
-        showConsole(ConsoleState(sql = "SELEC").failed("boom"))
-        rule.onNodeWithTag("sql").performTextInput("T")
-        rule.waitForIdle()
-        assertEquals(null, lastConsole?.error)
-        assertFalse(exists("err"))
     }
 
     // ====================================================== the log rows
@@ -992,28 +720,6 @@ class ConsoleStatsParityTest {
      * found by someone looking at one of these after the words had
      * already been asserted to match.
      */
-    @Test
-    fun theConsoleIsPhotographed() {
-        Parity.needsRealRendering()
-        showConsole(ConsoleState())
-        shootRoot("c01-empty")
-        console = ConsoleState(sql = "SELECT name, qty FROM cards LIMIT 10").running()
-        rule.waitForIdle()
-        shootRoot("c02-running")
-        console = ConsoleState(sql = "SELECT name, qty FROM cards LIMIT 10").ran(table(), 7)
-        rule.waitForIdle()
-        shootRoot("c03-result")
-        console = ConsoleState(sql = "SELECT name, qty FROM cards LIMIT 10").ran(Table(listOf("x")), 1)
-        rule.waitForIdle()
-        shootRoot("c04-no-rows")
-        console = ConsoleState(sql = "SELEC 1").ran(table(), 2).failed("near \"SELEC\": syntax error")
-        rule.waitForIdle()
-        shootRoot("c05-error")
-        console = ConsoleState(sql = "SELECT * FROM cards").ran(ragged(), 11)
-        rule.waitForIdle()
-        shoot("c06-ragged-grid", "result-grid")
-    }
-
     @Test
     fun theLogIsPhotographed() {
         Parity.needsRealRendering()

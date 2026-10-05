@@ -148,9 +148,7 @@ class ExitWarnsOnUnsavedEntryTest {
         val read = shell(start) { exited++ }
 
         // Behind the hamburger now, at every width (section 5).
-        rule.onNodeWithContentDescription("Menu").performClick()
-        rule.waitForIdle()
-        rule.onNodeWithText("Decks").performClick()
+        rule.onNodeWithContentDescription("Decks").performClick()
         rule.waitForIdle()
 
         assertEquals(0, exited, "switching tabs exited the app")

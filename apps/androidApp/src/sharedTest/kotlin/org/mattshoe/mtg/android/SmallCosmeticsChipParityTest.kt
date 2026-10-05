@@ -20,7 +20,6 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.CardDetail
-import org.mattshoe.mtg.core.ConsoleState
 import org.mattshoe.mtg.core.Design
 import org.mattshoe.mtg.core.Direction
 import org.mattshoe.mtg.core.Legality
@@ -181,21 +180,6 @@ class SmallCosmeticsChipParityTest {
         )
     }
 
-    // ===================================== placeholders the web has not
-
-    @Test
-    fun theQueryBoxOffersNoExampleTheWebDoesNotOffer() {
-        shell(AppState(route = Route(View.CONSOLE), console = ConsoleState()))
-        rule.onNodeWithTag("sql").assertExists()
-        // The web's SQL box is a bare `<textarea>` with no
-        // `placeholder` attribute. Android pre-filled it with a
-        // sample query, which on an empty box reads like something
-        // somebody typed and left behind.
-        assertTrue(
-            nothingSays("SELECT name, qty FROM cards"),
-            "the query box still shows an example query the website does not",
-        )
-    }
 
     @Test
     fun theMassEntryBoxOffersNoPlaceholderTheWebDoesNotOffer() {
