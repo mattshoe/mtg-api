@@ -286,6 +286,14 @@ data class AppState(
         // to put the address back too, or the screen says list and
         // the address still says deck.
         decks.openSlug != null -> navigate(Route(View.DECKS))
+        // Inside the entry wizard, Back is a step and not an exit.
+        // It had never heard of the wizard, so the gesture went
+        // straight from step four to the Library and whatever was
+        // half-filled in went with it. `previousStep` is null on the
+        // first question and on the receipt, which is how this falls
+        // through to leaving the screen at the ends.
+        view == View.ENTRY && entry.previousStep != null ->
+            copy(entry = entry.goTo(entry.previousStep!!))
         view != View.DEFAULT -> navigate(View.DEFAULT)
         else -> null
     }
