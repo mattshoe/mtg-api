@@ -58,6 +58,7 @@ private fun holding(): AppState = AppState(
     deckTweak = DeckTweak(slug = "alela", deckName = "Alela"),
     disassemble = DisassembleState(slug = "alela", deckName = "Alela"),
     rename = RenameState(slug = "alela", was = "Alela"),
+    peek = Peek(2),
 )
 
 /** Which field each overlay is the lid on. */
@@ -68,6 +69,7 @@ private val HOLDERS: Map<Overlay, (AppState) -> Boolean> = mapOf(
     Overlay.DISASSEMBLE to { s: AppState -> s.disassemble != null },
     Overlay.NEW_DECK to { s: AppState -> s.newDeck != NewDeck() },
     Overlay.RENAME to { s: AppState -> s.rename != null },
+    Overlay.CARD_PEEK to { s: AppState -> s.peek != Peek() },
 )
 
 /** The two that are pure chrome. */
@@ -1280,8 +1282,8 @@ class OverlaysStackTest {
     }
 
     @Test
-    fun thereAreEightOfThemAndEachIsAccountedFor() {
-        assertEquals(8, Overlay.entries.size)
+    fun thereAreNineOfThemAndEachIsAccountedFor() {
+        assertEquals(9, Overlay.entries.size)
         Overlay.entries.forEach {
             assertTrue(it in HOLDERS || it in HOLDS_NOTHING, "${it.name} is not covered by the forget tests")
         }

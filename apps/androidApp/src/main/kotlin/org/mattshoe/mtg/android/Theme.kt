@@ -138,6 +138,14 @@ val Pill = RoundedCornerShape(Design.RADIUS_PILL.dp)
 /** `.deck-line .thumb`: a 40px square of art, rounded by 6px and no more. */
 val RadiusThumb = RoundedCornerShape(Design.RADIUS_THUMB.dp)
 
+/** Rounded at the top only: a sheet that has come up from the bottom edge. */
+val SheetShape = RoundedCornerShape(
+    topStart = Design.RADIUS.dp,
+    topEnd = Design.RADIUS.dp,
+    bottomStart = 0.dp,
+    bottomEnd = 0.dp,
+)
+
 private val scheme = darkColorScheme(
     primary = Accent,
     onPrimary = c(Design.ON_ACCENT),

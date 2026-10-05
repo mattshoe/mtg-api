@@ -344,9 +344,13 @@ fun AppShell(
                                 onEdit = { onEditDeck(it.slug) },
                                 onDisassemble = { onAskDisassemble(it.slug) },
                                 onRename = { onAskRename(it.slug) },
-                                onOpenCard = { card, owner ->
-                                    onOpenNamed(card.name, card.nameNorm, owner)
-                                },
+                                // The carousel, not the card's page.
+                                // Matt: "this should be what happens
+                                // when you tap a card in the deck
+                                // list. This is not a special feature
+                                // that launch." The page is a button
+                                // inside it.
+                                onOpenCard = { card, _ -> onState(state.peekCard(card)) },
                                 onAddCard = onAddCard,
                                 onTweak = onTweak,
                                 onShare = onShare,
@@ -456,6 +460,23 @@ fun AppShell(
                 // Closes even when the view picked is the one already
                 // showing — otherwise the menu sits open over the page.
                 onPick = { next -> menuOpen = false; onState(next) },
+            )
+        }
+
+        // Over everything, the bar included, because it is modal in a
+        // way the nav menu is not: the deck shows through the scrim
+        // so you can see where you are, and the only ways out are the
+        // scrim, Back and the buttons on the sheet.
+        if (Overlay.CARD_PEEK in state.overlays) {
+            CardCarousel(
+                cards = state.decks.pageOrder,
+                at = state.peek.at,
+                place = state.peekPlace,
+                admin = state.admin.unlocked,
+                onSwipe = { onState(state.peekTo(it)) },
+                onClose = { onState(state.closing(Overlay.CARD_PEEK)) },
+                onDetails = { onState(state.openPeeked()) },
+                onTweak = { card, how -> onTweak(card, how) },
             )
         }
     }
