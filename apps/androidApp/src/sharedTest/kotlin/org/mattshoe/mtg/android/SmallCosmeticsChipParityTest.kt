@@ -84,7 +84,6 @@ class SmallCosmeticsChipParityTest {
                         onUnlock = {},
                         onSearch = {},
                         onOpenDeck = {},
-                        onRunSql = {},
                         onPreviewEntry = {},
                         onApplyEntry = {},
                     )

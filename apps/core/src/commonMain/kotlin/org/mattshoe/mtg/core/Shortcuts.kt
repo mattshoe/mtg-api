@@ -57,7 +57,7 @@ object Shortcuts {
     fun help(admin: Admin): String = buildString {
         append("s search · d decks")
         if (admin.unlocked) append(" · e entry")
-        append(" · g stats · c console")
+        append(" · g stats")
         if (admin.unlocked) append(" · v logs")
         append(" · l ").append(if (admin.unlocked) "lock" else "unlock")
         append(" · / or ⌘K find · esc close")

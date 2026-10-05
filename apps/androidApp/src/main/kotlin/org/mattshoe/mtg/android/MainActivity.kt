@@ -263,12 +263,6 @@ class MainActivity : ComponentActivity() {
                             app = next
                             loadFor(next)
                         },
-                        onRunSql = {
-                            claim(
-                                app.console.canRun,
-                                { app.copy(console = app.console.running()) },
-                            ) { runSql() }
-                        },
                         onPreviewEntry = {
                             claim(
                                 app.entry.canPreview,
@@ -553,10 +547,6 @@ class MainActivity : ComponentActivity() {
         return app.copy(stats = app.stats.scopedTo(scope.owner).loaded(StatsQueries.decode(r.cols, r.rows)))
     }
 
-    private suspend fun runSql(): AppState {
-        val r = api.queryRaw(app.console.sql, emptyList())
-        return app.copy(console = app.console.ran(Table.of(r.cols, r.rows), r.n))
-    }
 
     // ------------------------------------------------------ card detail
 

@@ -83,7 +83,6 @@ class ScrollPositionSurvivesACardTest {
                         onUnlock = {},
                         onSearch = {},
                         onOpenDeck = {},
-                        onRunSql = {},
                         onPreviewEntry = {},
                         onApplyEntry = {},
                         onOpenCard = { row ->

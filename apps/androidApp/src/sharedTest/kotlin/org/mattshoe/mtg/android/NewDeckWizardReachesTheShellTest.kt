@@ -71,7 +71,6 @@ class NewDeckWizardReachesTheShellTest {
                         onUnlock = {},
                         onSearch = {},
                         onOpenDeck = {},
-                        onRunSql = {},
                         onPreviewEntry = {},
                         onApplyEntry = {},
                         onCommanderTyped = onCommanderTyped,

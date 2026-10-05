@@ -103,7 +103,6 @@ class SmallCosmeticsWordsParityTest {
                         onUnlock = {},
                         onSearch = {},
                         onOpenDeck = {},
-                        onRunSql = {},
                         onPreviewEntry = {},
                         onApplyEntry = {},
                     )

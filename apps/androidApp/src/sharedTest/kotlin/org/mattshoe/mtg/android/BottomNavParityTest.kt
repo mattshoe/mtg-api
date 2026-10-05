@@ -60,7 +60,6 @@ class BottomNavParityTest {
                         onUnlock = {},
                         onSearch = {},
                         onOpenDeck = {},
-                        onRunSql = {},
                         onPreviewEntry = {},
                         onApplyEntry = {},
                     )

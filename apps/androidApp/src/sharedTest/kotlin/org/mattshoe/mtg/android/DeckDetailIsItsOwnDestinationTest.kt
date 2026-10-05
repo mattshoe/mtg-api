@@ -100,7 +100,6 @@ class DeckDetailIsItsOwnDestinationTest {
                                 )
                                 .navigate(Route(View.DECKS, slug))
                         },
-                        onRunSql = {},
                         onPreviewEntry = {},
                         onApplyEntry = {},
                     )

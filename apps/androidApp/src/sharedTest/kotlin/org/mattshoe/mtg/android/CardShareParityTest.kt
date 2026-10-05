@@ -95,7 +95,6 @@ class CardShareParityTest {
                         onUnlock = {},
                         onSearch = {},
                         onOpenDeck = {},
-                        onRunSql = {},
                         onPreviewEntry = {},
                         onApplyEntry = {},
                         onShareCard = { shared = it },

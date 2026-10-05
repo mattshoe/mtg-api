@@ -102,7 +102,6 @@ class DeckActionsReachTheShellTest {
                         onUnlock = {},
                         onSearch = {},
                         onOpenDeck = {},
-                        onRunSql = {},
                         onPreviewEntry = {},
                         onApplyEntry = {},
                         onShare = onShare,

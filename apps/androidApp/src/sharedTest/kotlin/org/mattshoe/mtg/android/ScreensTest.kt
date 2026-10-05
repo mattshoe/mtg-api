@@ -122,7 +122,7 @@ class ScreensTest {
 
     @Test
     fun gatedTabsAreAbsentWhileLocked() {
-        content { AppShell(AppState(), {}, {}, {}, {}, {}, {}, {}) }
+        content { AppShell(AppState(), {}, {}, {}, {}, {}, {}) }
         // The bar is the three anybody can reach; the gated pair is
         // not hiding anywhere, including behind the profile.
         rule.onAllNodesWithText("Library").onFirst().assertIsDisplayed()
@@ -136,7 +136,7 @@ class ScreensTest {
     @Test
     fun unlockingBringsTheGatedTabsBack() {
         var state = AppState(admin = Admin(token = "t").unlock("t"))
-        content { AppShell(state, { state = it }, {}, {}, {}, {}, {}, {}) }
+        content { AppShell(state, { state = it }, {}, {}, {}, {}, {}) }
         // Entry joins the bar; the log and the lock are behind the
         // profile, which is the split Matt asked for.
         rule.onNodeWithText("Entry").assertExists()
@@ -152,7 +152,7 @@ class ScreensTest {
         // only way either platform opens it now.
         var state = AppState()
         content {
-            AppShell(state, { state = it }, {}, {}, {}, {}, {}, {})
+            AppShell(state, { state = it }, {}, {}, {}, {}, {})
         }
         rule.onNodeWithText("Find").assertDoesNotExistNow()
         rule.onRoot().performKeyInput { pressKey(Key.Slash) }
@@ -165,7 +165,7 @@ class ScreensTest {
     @Test
     fun aBareLetterNavigates() {
         var state = AppState()
-        content { AppShell(state, { state = it }, {}, {}, {}, {}, {}, {}) }
+        content { AppShell(state, { state = it }, {}, {}, {}, {}, {}) }
         rule.onRoot().performKeyInput { pressKey(Key.D) }
         rule.runOnIdle { assertEquals(View.DECKS, state.view) }
     }
@@ -173,7 +173,7 @@ class ScreensTest {
     @Test
     fun theHelpKeyToasts() {
         var state = AppState()
-        content { AppShell(state, { state = it }, {}, {}, {}, {}, {}, {}) }
+        content { AppShell(state, { state = it }, {}, {}, {}, {}, {}) }
         // Shift-slash, which is how a keyboard actually produces it.
         rule.onRoot().performKeyInput {
             keyDown(Key.ShiftLeft)
@@ -547,7 +547,7 @@ class ScreensTest {
         content {
             held = remember { mutableStateOf(start) }
             val shell = @androidx.compose.runtime.Composable {
-                AppShell(held.value, { held.value = it }, {}, {}, {}, {}, {}, {})
+                AppShell(held.value, { held.value = it }, {}, {}, {}, {}, {})
             }
             if (wide) {
                 // Wide enough that the toast docks bottom-end instead

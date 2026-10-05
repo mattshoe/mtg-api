@@ -58,7 +58,6 @@ class ExitWarnsOnUnsavedEntryTest {
                         onUnlock = {},
                         onSearch = {},
                         onOpenDeck = {},
-                        onRunSql = {},
                         onPreviewEntry = {},
                         onApplyEntry = {},
                         onExit = onExit,

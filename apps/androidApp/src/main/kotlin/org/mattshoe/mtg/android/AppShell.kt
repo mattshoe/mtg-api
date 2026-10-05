@@ -103,7 +103,6 @@ fun AppShell(
     onUnlock: (String) -> Unit,
     onSearch: () -> Unit,
     onOpenDeck: (String) -> Unit,
-    onRunSql: () -> Unit,
     onPreviewEntry: () -> Unit,
     onApplyEntry: () -> Unit,
     /** The Library's filtered set, copied or downloaded. */
