@@ -9,6 +9,27 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- A link to the site opens the app on the same thing the
+                 browser would have shown. `autoVerify` is what makes it
+                 open without a chooser, and it only holds while
+                 https://mtg.mattshoe.org/.well-known/assetlinks.json
+                 names this package and this signing certificate — see
+                 frontend/.well-known/assetlinks.json.
+
+                 Both hosts, because a link that has been through a
+                 messaging app comes back with whatever `www.` the
+                 sender's keyboard added. No path filter: the site is
+                 hash-routed, the fragment never reaches the filter, so
+                 every address on the host is this app's. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="mtg.mattshoe.org" />
+                <data android:scheme="https" android:host="www.mtg.mattshoe.org" />
+                <data android:scheme="http" android:host="mtg.mattshoe.org" />
+                <data android:scheme="http" android:host="www.mtg.mattshoe.org" />
+            </intent-filter>
         </activity>
         <!-- A share from another app lands straight on the wizard,
              which is the whole reason this build exists. -->

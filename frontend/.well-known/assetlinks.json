@@ -1,0 +1,10 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "org.mattshoe.mtg.share",
+      "sha256_cert_fingerprints": ["1D:8D:15:4D:6A:97:2F:8C:67:04:9C:C5:AD:99:9A:CB:7A:E8:7F:2E:34:7E:65:2E:22:D5:95:4C:7A:C0:7F:FE"]
+    }
+  }
+]
