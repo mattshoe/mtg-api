@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug builds only, and only for the loopback address.
+
+  The end-to-end harness runs a real HTTP server on a port on the
+  phone so the app's own Ktor/OkHttp stack does a real round trip.
+  Android blocks cleartext by default, which is right, and the
+  release build keeps that: this file lives in `src/debug` and is
+  merged into nothing else.
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
+    </domain-config>
+</network-security-config>

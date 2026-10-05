@@ -251,7 +251,16 @@ private fun SortPicker(state: Library, apply: (Library) -> Unit) {
 @Composable
 private fun CardTile(card: CardRow, stale: Boolean, onOpen: (CardRow) -> Unit) {
     Column(
-        Modifier.fillMaxWidth().alpha(if (stale) 0.55f else 1f).clickable { onOpen(card) },
+        Modifier.fillMaxWidth()
+            // Addressable. `clickable` below sets
+            // `shouldMergeDescendantSemantics`, which folds the
+            // picture, the name and the count into one node, and a
+            // test looking for a tile by its card's name was finding
+            // nothing to scroll to. One tag on the tile is what an
+            // end-to-end journey needs to reach a card at all.
+            .testTag("card-tile")
+            .alpha(if (stale) 0.55f else 1f)
+            .clickable { onOpen(card) },
         verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
         Box(Modifier.fillMaxWidth().aspectRatio(Design.CARD_ASPECT)) {

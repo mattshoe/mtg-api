@@ -71,6 +71,43 @@ them. Prefer a test that runs on the JVM. If a check
 genuinely needs pixels, run `npm run test:android` before believing
 it, and say plainly in the commit that it is otherwise unproven.
 
+### End to end, on a phone
+
+`apps/androidApp/src/androidTest/.../e2e/` is a different kind of
+test from everything in `sharedTest`, and the difference is the
+point. Those mount `AppShell` with a hand-built `AppState`; these
+launch the real `MainActivity` and press its buttons, and the rows
+come back over a real socket from SQL that actually ran.
+
+`FakeWorker` is a `MockWebServer` in front of a real SQLite — the
+bundled one from `androidx.sqlite:sqlite-bundled`, because Android's
+own build has no `fts5` module and `:core` searches through
+`card_search MATCH ?`. It loads the repository's own `schema.sql`
+and `test/fixtures/seed.sql`, the same bytes the worker's vitest
+suite uses, copied into the test APK by the `e2eAssets` task.
+
+So the harness never has to know what the app is going to ask. A
+recorded fixture keyed by SQL would answer yesterday's query
+perfectly and go stale the moment anybody edits one, which is the
+opposite of what a journey is for.
+
+Things it has already found that nothing else could:
+
+- `CardRow.fullName` printed the back of a two-faced card twice —
+  "Brazen Borrower // Petty Theft // Petty Theft" — everywhere a
+  card is named. The unit test beside it had been green for weeks
+  because it built a row with one face in the name and a `face2`
+  beside it, which the query cannot return.
+- Every failure toast on Android was styled as a success, because
+  `work` called `say(message)` without `failed = true`. The website's
+  own `work` has always passed it.
+- A journey left the admin token in `SharedPreferences` and the next
+  journey started signed in.
+
+Write a journey for anything a person does in a sequence. Keep
+asserting on measured geometry in `sharedTest`; that is still where
+layout belongs.
+
 ## Say what was red, in the commit message
 
 Not because anything checks it — nothing can. A commit is a finished

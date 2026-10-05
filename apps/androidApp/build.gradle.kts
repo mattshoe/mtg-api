@@ -86,6 +86,11 @@ android {
     sourceSets {
         getByName("test").kotlin.srcDir("src/sharedTest/kotlin")
         getByName("androidTest").kotlin.srcDir("src/sharedTest/kotlin")
+        // The end-to-end harness runs the repository's own schema
+        // and fixture against a real SQLite on the phone, so both
+        // files are copied into the test APK rather than a second
+        // copy of them living here and drifting. See `e2eAssets`.
+        getByName("androidTest").assets.srcDir(layout.buildDirectory.dir("e2e-assets"))
     }
 
     testOptions {
@@ -197,6 +202,26 @@ android {
     }
 }
 
+/**
+ * `schema.sql` and `test/fixtures/seed.sql`, into the test APK.
+ *
+ * The same bytes the worker's own vitest suite runs against. A
+ * hand-written Android copy of either would be a second source of
+ * truth that goes stale silently, and the failure it causes — a
+ * journey seeing no rows — looks exactly like a bug in the app.
+ */
+val e2eAssets by tasks.registering(Copy::class) {
+    val repo = rootProject.layout.projectDirectory.dir("..")
+    from(repo.file("schema.sql"))
+    from(repo.file("test/fixtures/seed.sql"))
+    into(layout.buildDirectory.dir("e2e-assets"))
+}
+
+tasks.matching { it.name.startsWith("generate") && it.name.contains("AndroidTestAssets") }
+    .configureEach { dependsOn(e2eAssets) }
+tasks.matching { it.name.contains("AndroidTestAssets") || it.name.contains("MergeAssets") }
+    .configureEach { dependsOn(e2eAssets) }
+
 dependencies {
     implementation(project(":core"))
     implementation(project(":core-net"))
@@ -227,6 +252,18 @@ dependencies {
     androidTestImplementation("androidx.compose.ui:ui-test-junit4:1.7.6")
     androidTestImplementation(kotlin("test"))
     debugImplementation("androidx.compose.ui:ui-test-manifest:1.7.6")
+    // The end-to-end harness: a real HTTP server on a loopback port,
+    // so the app's own Ktor/OkHttp stack does a real round trip
+    // rather than a mock engine standing in for one.
+    androidTestImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    // SQLite with FTS5 in it. Android's own build has no fts5
+    // module — `CREATE VIRTUAL TABLE card_search USING fts5(...)`
+    // fails outright with "no such module" — and the text filter in
+    // `:core` searches through `card_search MATCH ?`. A harness on
+    // the system SQLite would have to rewrite the app's query to
+    // run it, which is the one thing it must not do.
+    androidTestImplementation("androidx.sqlite:sqlite-bundled:2.5.2")
+    androidTestImplementation("androidx.test:rules:1.6.1")
 
     // The same Compose test API, on the JVM. A test that mounts one
     // Text and asserts it costs about 2.7 seconds on an emulator —

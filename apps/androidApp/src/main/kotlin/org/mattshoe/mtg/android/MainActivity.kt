@@ -68,7 +68,10 @@ import java.time.Instant
  */
 class MainActivity : ComponentActivity() {
 
-    private var api = MtgApi()
+    // `Wiring.apiBase` is null everywhere but an end-to-end test,
+    // where the fake worker is already listening on a loopback port
+    // by the time the system builds this activity. See [Wiring].
+    private var api = MtgApi(Wiring.apiBase ?: MtgApi.DEFAULT_BASE)
     private val scryfall = Scryfall()
     private val prefs by lazy { getSharedPreferences("mtg", Context.MODE_PRIVATE) }
     private val store: Store by lazy { PrefsStore(prefs) }
@@ -394,9 +397,15 @@ class MainActivity : ComponentActivity() {
             app = try {
                 block()
             } catch (e: ApiFailure) {
-                app.say(e.message ?: "something went wrong")
+                // `failed = true`, the same as the website's own
+                // `work`. Without it a refused password, a dead
+                // network and a successful export all came up in the
+                // same toast with the same colour, and the one
+                // person using this is colourblind, so the wording
+                // was the only thing telling them apart.
+                app.say(e.message ?: "something went wrong", failed = true)
             } catch (e: Exception) {
-                app.say(e.message ?: e.toString())
+                app.say(e.message ?: e.toString(), failed = true)
             }
         }
     }
