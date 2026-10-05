@@ -51,7 +51,7 @@ class AppShellTest {
                 state = s.value,
                 onState = { s.value = it },
                 onUnlock = { unlocked = it },
-                onSearch = {}, onOpenDeck = {}, onRunSql = {},
+                onSearch = {}, onOpenDeck = {},
                 onPreviewEntry = {}, onApplyEntry = {},
             )
         }
@@ -69,7 +69,14 @@ class AppShellTest {
 
     private fun HTMLElement.tabs() = buttons().mapNotNull { it.textContent?.trim() }
 
-    /** Gated views are absent while locked, not greyed out. */
+    /**
+     * Gated views are absent while locked, not greyed out.
+     *
+     * Four entries in the menu, not four views: Library, Decks and
+     * Stats, then Unlock. The Query page used to be the fourth view
+     * and it is gone, so the count holds for a different reason than
+     * it did.
+     */
     @Test
     fun lockedShowsFourTabsAndNoAdminOnes() = runTest {
         val root = mount(AppState())
@@ -78,10 +85,11 @@ class AppShellTest {
         assertTrue(tabs.contains("Library"))
         assertTrue(tabs.contains("Decks"))
         assertTrue(tabs.contains("Stats"))
-        assertTrue(tabs.contains("Query"))
-        assertFalse(tabs.contains("Mass Entry"), "a gated tab must not be visible")
+        assertFalse(tabs.contains("Query"), "the Query page is gone")
+        assertFalse(tabs.contains("Entry"), "a gated tab must not be visible")
         assertFalse(tabs.contains("Server Logs"))
         assertTrue(tabs.contains("Unlock"))
+        assertEquals(4, root.querySelectorAll(".app-menu button").length, tabs.toString())
     }
 
     @Test
@@ -89,7 +97,7 @@ class AppShellTest {
         val root = mount(AppState(admin = Admin("0.abc")))
         settle()
         val tabs = root.tabs()
-        assertTrue(tabs.contains("Mass Entry"))
+        assertTrue(tabs.contains("Entry"))
         assertTrue(tabs.contains("Server Logs"))
         assertTrue(tabs.contains("Lock"))
     }

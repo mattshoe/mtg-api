@@ -20,7 +20,7 @@ import kotlin.test.assertTrue
 /**
  * `LogsPage`'s failed row, against the real stylesheet.
  *
- * `ConsolePage.kt` puts `classes("bad")` on a failed row's `<tr>`, and
+ * `LogsPage.kt` puts `classes("bad")` on a failed row's `<tr>`, and
  * the only `bad` rules in `app.css` were `.chip.bad`, `.tag.bad` and
  * `.toast.bad` — none of them a bare row, so the class painted
  * nothing at all. A test asserting the class name was present would

@@ -1,15 +1,11 @@
 package org.mattshoe.mtg.web
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import kotlinx.browser.document
 import kotlinx.coroutines.await
 import kotlinx.coroutines.test.runTest
 import org.jetbrains.compose.web.renderComposable
 import org.mattshoe.mtg.core.Applied
 import org.mattshoe.mtg.core.Change
-import org.mattshoe.mtg.core.ConsoleState
 import org.mattshoe.mtg.core.DeckEditState
 import org.mattshoe.mtg.core.Direction
 import org.mattshoe.mtg.core.DisassembleState
@@ -94,17 +90,6 @@ class MutatingButtonsTest {
         assertTrue(
             root.liveStarters(listOf("Add ", "Remove ", "Preview")).isEmpty(),
             "mass entry is still offering: ${root.liveStarters(listOf("Add ", "Remove ", "Preview"))}",
-        )
-    }
-
-    @Test
-    fun theConsoleOffersNothingWhileItIsRunning() = runTest {
-        var s by mutableStateOf(ConsoleState(sql = "DELETE FROM cards").running())
-        val root = mount { ConsolePage(s, { s = it }, {}) }
-        settle()
-        assertTrue(
-            root.liveStarters(listOf("Run")).isEmpty(),
-            "the console is still offering: ${root.liveStarters(listOf("Run"))}",
         )
     }
 

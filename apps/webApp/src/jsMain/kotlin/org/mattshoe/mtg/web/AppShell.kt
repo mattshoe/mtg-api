@@ -49,7 +49,6 @@ fun AppShell(
     onUnlock: (String) -> Unit,
     onSearch: () -> Unit,
     onOpenDeck: (String) -> Unit,
-    onRunSql: () -> Unit,
     onPreviewEntry: () -> Unit,
     onApplyEntry: () -> Unit,
     onExport: (ExportTo) -> Unit = {},
@@ -154,13 +153,6 @@ fun AppShell(
         View.STATS -> StatsPage(state.stats) { owner: Owner? ->
             onState(state.copy(stats = state.stats.scopedTo(owner).loading()))
         }
-
-        View.CONSOLE -> ConsolePage(
-            state = state.console,
-            onState = { onState(state.copy(console = it)) },
-            onRun = onRunSql,
-            onCheatsheet = { onState(state.opening(Overlay.CHEATSHEET)) },
-        )
 
         View.LOGS -> LogsPage(state.logs) { onState(state.copy(logs = it)) }
 

@@ -52,7 +52,7 @@ class ToastLookTest {
                 state = state,
                 onState = {},
                 onUnlock = {},
-                onSearch = {}, onOpenDeck = {}, onRunSql = {},
+                onSearch = {}, onOpenDeck = {},
                 onPreviewEntry = {}, onApplyEntry = {},
             )
         }

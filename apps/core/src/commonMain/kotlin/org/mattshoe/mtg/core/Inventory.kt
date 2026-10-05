@@ -509,7 +509,7 @@ object Inventory {
             )),
         Feature(Area.SHELL, "No panel offers to start work it is already doing", "app.js", logic = true, done = true,
             tests = listOf(
-                "massEntryOffersNothingWhileItIsApplying", "theConsoleOffersNothingWhileItIsRunning",
+                "massEntryOffersNothingWhileItIsApplying",
                 "aDeckSaveOffersNothingWhileItIsSaving", "aDisassembleOffersNothingWhileItIsRunning",
             )),
         Feature(Area.LIBRARY, "One row per card, not one per owner", "library.js", logic = true, done = true,
