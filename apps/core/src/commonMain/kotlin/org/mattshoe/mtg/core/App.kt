@@ -146,49 +146,102 @@ data class AppState(
     // --------------------------------------------------- the carousel
 
     /**
-     * Where the carousel is, in the open deck's page order.
+     * Where the carousel is, as a position in whichever run it is
+     * over.
      *
      * A number and not the card itself. The sheet under the carousel
      * sets counts, swaps cards and removes them, so a held copy
      * would be stale the moment it was used and the carousel would
      * be showing a card the deck no longer has.
      */
-    fun peekAt(index: Int): AppState {
-        val run = decks.pageOrder
-        if (index !in run.indices) return this
-        return opening(Overlay.CARD_PEEK).copy(peek = Peek(index))
+    fun peekAt(index: Int, of: PeekOf = PeekOf.DECK): AppState {
+        if (index !in runFor(of).indices) return this
+        return opening(Overlay.CARD_PEEK).copy(peek = Peek(index, of))
     }
 
-    /** The row that was tapped, by the card on it. */
+    /** The deck row that was tapped, by the card on it. */
     fun peekCard(card: DeckCard): AppState =
-        peekAt(decks.pageOrder.indexOfFirst { it.nameNorm == card.nameNorm })
+        peekAt(decks.pageOrder.indexOfFirst { it.nameNorm == card.nameNorm }, PeekOf.DECK)
+
+    /** The Library tile that was tapped, by the row behind it. */
+    fun peekRow(row: CardRow): AppState =
+        peekAt(
+            library.rows.indexOfFirst { it.owner == row.owner && it.nameNorm == row.nameNorm },
+            PeekOf.LIBRARY,
+        )
 
     /** A swipe. Clamped, because a carousel has two ends. */
     fun peekTo(index: Int): AppState {
-        val run = decks.pageOrder
+        val run = runFor(peek.of)
         if (run.isEmpty() || !peek.open) return this
-        return copy(peek = Peek(index.coerceIn(0, run.lastIndex)))
+        return copy(peek = peek.copy(at = index.coerceIn(0, run.lastIndex)))
     }
+
+    private fun runFor(of: PeekOf): List<DeckCard> = when (of) {
+        PeekOf.DECK -> decks.pageOrder
+        // Sized only; the Library's own rows are mapped in `peekRun`.
+        PeekOf.LIBRARY -> library.rows.map { DeckCard(it.name, 0, null, 0, it.nameNorm) }
+    }
+
+    /** Every card the carousel can reach from here, in the order it draws them. */
+    val peekRun: List<PeekCard>
+        get() = when (peek.of) {
+            PeekOf.DECK -> decks.pageOrder.map { card ->
+                PeekCard(
+                    title = card.shown,
+                    nameNorm = card.nameNorm,
+                    scryfallId = card.scryfallId,
+                    typeLine = card.knownTypeLine,
+                    printing = card.printing,
+                    price = card.price,
+                    tags = listOf(
+                        PeekTag("${card.qty}× in deck"),
+                        // The one bad fact a deck row can state: the
+                        // deck wants more than the collection holds.
+                        PeekTag("${card.owned} owned", bad = card.short > 0),
+                    ),
+                    inDeck = card,
+                )
+            }
+
+            PeekOf.LIBRARY -> library.rows.map { row ->
+                PeekCard(
+                    title = row.fullName,
+                    nameNorm = row.nameNorm,
+                    scryfallId = row.scryfallId,
+                    typeLine = row.typeLine,
+                    printing = row.printing,
+                    price = row.price,
+                    tags = listOfNotNull(
+                        PeekTag("${row.qty} owned"),
+                        row.free?.let { PeekTag("$it free") },
+                    ),
+                )
+            }
+        }
 
     /**
      * The card under the carousel.
      *
-     * Clamped rather than nulled when the deck gets shorter: removing
-     * the card you are looking at should show whatever took its
-     * place, which is what every other carousel does and the only
+     * Clamped rather than nulled when the run gets shorter: removing
+     * the card you are looking at, or searching again under an open
+     * carousel, should show whatever took its place. The only
      * alternative is a blank screen at the exact moment you pressed
      * something.
      */
-    val peeked: DeckCard?
+    val peeked: PeekCard?
         get() {
             if (!peek.open) return null
-            val run = decks.pageOrder
+            val run = peekRun
             return run.getOrNull(peek.at.coerceAtMost(run.lastIndex))
         }
 
     /** "7 of 99", under the carousel. */
     val peekPlace: String?
-        get() = peeked?.let { "${peek.at.coerceAtMost(decks.pageOrder.lastIndex) + 1} of ${decks.pageOrder.size}" }
+        get() = peeked?.let {
+            val run = peekRun
+            "${peek.at.coerceAtMost(run.lastIndex) + 1} of ${run.size}"
+        }
 
     /** "7 of 99", for somebody halfway down a deck. */
     val cardPlace: String? get() = cardAt.takeIf { it >= 0 }?.let { "${it + 1} of ${deckRun.size}" }

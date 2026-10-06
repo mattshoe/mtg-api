@@ -35,7 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import org.mattshoe.mtg.core.CardQueries
-import org.mattshoe.mtg.core.DeckCard
+import org.mattshoe.mtg.core.PeekCard
 import org.mattshoe.mtg.core.Design
 import org.mattshoe.mtg.core.Prices
 import org.mattshoe.mtg.core.Tweak
@@ -58,13 +58,13 @@ import org.mattshoe.mtg.core.Tweak
  */
 @Composable
 fun CardCarousel(
-    cards: List<DeckCard>,
+    cards: List<PeekCard>,
     at: Int,
     place: String?,
     admin: Boolean,
     onSwipe: (Int) -> Unit,
     onDetails: () -> Unit,
-    onTweak: (DeckCard, Tweak) -> Unit,
+    onTweak: (org.mattshoe.mtg.core.DeckCard, Tweak) -> Unit,
 ) {
     if (cards.isEmpty()) return
     val index = at.coerceIn(0, cards.lastIndex)
@@ -139,7 +139,7 @@ fun CardCarousel(
 
 /** One card, as big as the width allows. */
 @Composable
-private fun CardFace(card: DeckCard) {
+private fun CardFace(card: PeekCard) {
     val url = CardQueries.art(card.scryfallId, "normal")
     Box(
         Modifier.fillMaxWidth()
@@ -148,7 +148,7 @@ private fun CardFace(card: DeckCard) {
             // a card frame by.
             .clip(androidx.compose.foundation.shape.RoundedCornerShape(5))
             .background(Bg3)
-            .semantics { contentDescription = card.shown },
+            .semantics { contentDescription = card.title },
     ) {
         if (url != null) {
             AsyncImage(
@@ -162,7 +162,7 @@ private fun CardFace(card: DeckCard) {
             // and so no picture. Its name, rather than a grey
             // rectangle that reads as a failure to load.
             Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-                Line(card.shown, Ink2, Design.H3, FontWeight.SemiBold)
+                Line(card.title, Ink2, Design.H3, FontWeight.SemiBold)
             }
         }
     }
@@ -183,11 +183,11 @@ private fun CardFace(card: DeckCard) {
  */
 @Composable
 private fun CardSheet(
-    card: DeckCard,
+    card: PeekCard,
     place: String?,
     admin: Boolean,
     onDetails: () -> Unit,
-    onTweak: (DeckCard, Tweak) -> Unit,
+    onTweak: (org.mattshoe.mtg.core.DeckCard, Tweak) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -209,7 +209,7 @@ private fun CardSheet(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Line(card.shown, Ink, Design.H3, FontWeight.SemiBold)
+                Line(card.title, Ink, Design.H3, FontWeight.SemiBold)
                 // The printing and what it is worth, on one line.
                 // `printing` is null for a card nobody owns, which is
                 // also the card with no price, so the line collapses
@@ -220,7 +220,7 @@ private fun CardSheet(
                 ).takeIf { it.isNotEmpty() }?.let {
                     Line(it.joinToString(" · "), Ink2, Design.SMALL)
                 }
-                card.knownTypeLine?.takeIf { it.isNotBlank() }?.let {
+                card.typeLine?.takeIf { it.isNotBlank() }?.let {
                     Line(it, Ink3, Design.MINI)
                 }
             }
@@ -232,8 +232,12 @@ private fun CardSheet(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Tag("${card.qty}× in deck")
-            Tag("${card.owned} owned", if (card.short > 0) Bad else Ink2)
+            // Already worded by `:core`, because what a run can
+            // state about a card differs — a deck knows how many it
+            // wants, the Library knows how many are spare — and that
+            // is a fact about the run rather than a rendering
+            // decision.
+            card.tags.forEach { Tag(it.text, if (it.bad) Bad else Ink2) }
         }
 
         FlowRow(
@@ -241,10 +245,13 @@ private fun CardSheet(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Primary("Full details", onClick = onDetails)
-            if (admin) {
-                Btn("Count") { onTweak(card, Tweak.QUANTITY) }
-                Btn("Swap") { onTweak(card, Tweak.SWAP) }
-                Btn("Remove", danger = true) { onTweak(card, Tweak.REMOVE) }
+            // On the deck row rather than on `admin`: being admin in
+            // the Library still leaves nothing to count, swap or
+            // remove, because there is no deck.
+            card.inDeck?.takeIf { admin }?.let { row ->
+                Btn("Count") { onTweak(row, Tweak.QUANTITY) }
+                Btn("Swap") { onTweak(row, Tweak.SWAP) }
+                Btn("Remove", danger = true) { onTweak(row, Tweak.REMOVE) }
             }
         }
     }

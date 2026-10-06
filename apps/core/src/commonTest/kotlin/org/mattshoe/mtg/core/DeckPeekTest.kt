@@ -81,7 +81,7 @@ class DeckPeekTest {
     fun tappingACardOpensTheCarouselOnThatCard() {
         val s = threeCards().peekAt(1)
         assertTrue(Overlay.CARD_PEEK in s.overlays)
-        assertEquals("Cultivate", assertNotNull(s.peeked).name)
+        assertEquals("Cultivate", assertNotNull(s.peeked).title)
     }
 
     @Test
@@ -91,7 +91,7 @@ class DeckPeekTest {
         // The shell hands over the card and the core finds it.
         val s = threeCards()
         val sol = s.decks.pageOrder.last()
-        assertEquals("Sol Ring", assertNotNull(s.peekCard(sol).peeked).name)
+        assertEquals("Sol Ring", assertNotNull(s.peekCard(sol).peeked).title)
     }
 
     @Test
@@ -112,15 +112,15 @@ class DeckPeekTest {
     @Test
     fun swipingMovesAlongThePageOrder() {
         val s = threeCards().peekAt(0).peekTo(2)
-        assertEquals("Sol Ring", assertNotNull(s.peeked).name)
+        assertEquals("Sol Ring", assertNotNull(s.peeked).title)
         assertEquals("3 of 3", s.peekPlace)
     }
 
     @Test
     fun aSwipeCannotFallOffEitherEnd() {
         val s = threeCards().peekAt(0)
-        assertEquals("Counterspell", assertNotNull(s.peekTo(-1).peeked).name)
-        assertEquals("Sol Ring", assertNotNull(s.peekTo(9).peeked).name)
+        assertEquals("Counterspell", assertNotNull(s.peekTo(-1).peeked).title)
+        assertEquals("Sol Ring", assertNotNull(s.peekTo(9).peeked).title)
     }
 
     @Test
@@ -143,7 +143,7 @@ class DeckPeekTest {
         // worst possible answer.
         val s = threeCards().peekAt(2)
         val shorter = s.copy(decks = s.decks.opened("alela", listOf(card("Sol Ring"))))
-        assertEquals("Sol Ring", assertNotNull(shorter.peeked).name)
+        assertEquals("Sol Ring", assertNotNull(shorter.peeked).title)
     }
 
     @Test
@@ -169,7 +169,7 @@ class DeckPeekTest {
         val peeking = threeCards().peekAt(1)
         val card = peeking.peeked!!
         val s = peeking.closing(Overlay.CARD_PEEK)
-            .openCard(CardRef(card.nameNorm), card.name)
+            .openCard(CardRef(card.nameNorm), card.title)
         assertEquals(View.CARD, s.view)
         assertEquals("Cultivate", s.card?.name)
         assertFalse(Overlay.CARD_PEEK in s.overlays, "the carousel is still over the card page")

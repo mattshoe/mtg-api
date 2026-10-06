@@ -46,6 +46,7 @@ import org.mattshoe.mtg.core.ExportTo
 import org.mattshoe.mtg.core.Found
 import org.mattshoe.mtg.core.HistoryEntry
 import org.mattshoe.mtg.core.Overlay
+import org.mattshoe.mtg.core.PeekCard
 import org.mattshoe.mtg.core.Owner
 import org.mattshoe.mtg.core.Route
 import org.mattshoe.mtg.core.Share
@@ -112,7 +113,7 @@ fun AppShell(
     /** A card tapped in a deck list. Carries its own `name_norm`. */
     onOpenNamed: (String, String, String) -> Unit = { _, _, _ -> },
     /** "Full details" on the carousel's sheet. See `onDetails` below. */
-    onOpenPeeked: (DeckCard) -> Unit = {},
+    onOpenPeeked: (PeekCard) -> Unit = {},
     onFind: (String) -> Unit = {},
     onLookup: (String) -> Unit = {},
     onPickFile: () -> Unit = {},
@@ -281,7 +282,10 @@ fun AppShell(
                         state = state.library,
                         onState = { onState(state.copy(library = it)) },
                         onSearch = onSearch,
-                        onOpen = onOpenCard,
+                        // The carousel, the same as a deck's rows.
+                        // Matt: "let's use the same carousel for the
+                        // library page."
+                        onOpen = { row -> onState(state.peekRow(row)) },
                         showFilters = showFilters,
                         onToggleFilters = { showFilters = !showFilters },
                         onExport = onExport,
@@ -471,7 +475,7 @@ fun AppShell(
         // scrim, Back and the buttons on the sheet.
         if (Overlay.CARD_PEEK in state.overlays) {
             CardCarousel(
-                cards = state.decks.pageOrder,
+                cards = state.peekRun,
                 at = state.peek.at,
                 place = state.peekPlace,
                 admin = state.admin.unlocked,

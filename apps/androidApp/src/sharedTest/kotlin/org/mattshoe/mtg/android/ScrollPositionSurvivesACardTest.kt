@@ -103,7 +103,7 @@ class ScrollPositionSurvivesACardTest {
                         onOpenPeeked = { c ->
                             held.value = held.value
                                 .closing(org.mattshoe.mtg.core.Overlay.CARD_PEEK)
-                                .openCard(CardRef(c.nameNorm), c.name)
+                                .openCard(CardRef(c.nameNorm), c.title)
                             state = held.value
                         },
                     )
@@ -128,7 +128,12 @@ class ScrollPositionSurvivesACardTest {
         // Far enough from the top that a reset back to zero is unmissable.
         rule.onNodeWithText("Card 0").assertDoesNotExist()
 
+        // Through the carousel, which is what a tile opens now —
+        // the Library's rows use the same one a deck's do.
         rule.onNodeWithText("Card 39").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithTag("card-carousel").assertExists()
+        rule.onNodeWithText("Full details").performClick()
         rule.waitForIdle()
         rule.onNodeWithText("← Back").assertIsDisplayed()
 

@@ -211,7 +211,7 @@ class AppDriverTest {
         val view = mount("#/search")
         settle()
         waitFor("the grid") { view.all("div.card").isNotEmpty() }
-        view.all("div.card").first().click()
+        openFromTheGrid(view)
         waitFor("the card page") { cardPages() == 1 }
         assertEquals("#/card/sol+ring", hash())
     }
@@ -230,7 +230,7 @@ class AppDriverTest {
         val view = mount("#/search")
         settle()
         waitFor("the grid") { view.all("div.card").isNotEmpty() }
-        view.all("div.card").first().click()
+        openFromTheGrid(view)
         waitFor("the card page") { cardPages() == 1 }
 
         window.history.back()
@@ -243,7 +243,7 @@ class AppDriverTest {
         val view = mount("#/search")
         settle()
         waitFor("the grid") { view.all("div.card").isNotEmpty() }
-        view.all("div.card").first().click()
+        openFromTheGrid(view)
         waitFor("the card page") { cardPages() == 1 }
 
         backButton().click()
@@ -268,7 +268,7 @@ class AppDriverTest {
         settle()
         repeat(3) { round ->
             waitFor("round $round: the grid") { view.all("div.card").isNotEmpty() }
-            view.all("div.card").first().click()
+            openFromTheGrid(view)
             waitFor("round $round: the card page") { cardPages() == 1 }
             backButton().click()
             waitFor("round $round: back on the search") { cardPages() == 0 }
@@ -380,7 +380,7 @@ class AppDriverTest {
         roots += filler
         window.scrollTo(0.0, 1100.0)
 
-        view.all("div.card").first().click()
+        openFromTheGrid(view)
         waitFor("the card page") { cardPages() == 1 }
         settle()
         assertTrue(window.scrollY < 10, "the card opened at ${window.scrollY}")
@@ -453,6 +453,19 @@ class AppDriverTest {
      * itself, so pressing their buttons through `press` found
      * nothing and said "saw []".
      */
+    /**
+     * Open the first card in the grid, through the carousel.
+     *
+     * A tile opens the carousel now rather than the card's page —
+     * the Library uses the same one a deck's rows do — and the page
+     * is "Full details" on its sheet.
+     */
+    private suspend fun openFromTheGrid(view: HTMLElement) {
+        view.all("div.card").first().click()
+        waitFor("the carousel") { document.querySelector(".peek-scrim") != null }
+        pressOnThePage("Full details")
+    }
+
     private fun pressOnThePage(label: String) {
         val all = document.querySelectorAll("button").let { n ->
             (0 until n.length).mapNotNull { n[it] as? HTMLButtonElement }
@@ -786,7 +799,7 @@ class AppDriverTest {
         waitFor("the first search to land") { searches >= 1 }
         val asked = searches
 
-        view.all("div.card").first().click()
+        openFromTheGrid(view)
         waitFor("the card page") { cardPages() == 1 }
         window.history.back()
         waitFor("the list again") { view.all("div.card").isNotEmpty() && cardPages() == 0 }
@@ -849,7 +862,7 @@ class AppDriverTest {
     fun aCardOpenedFromTheLibraryHasNoDeckToStepThrough() = runTest {
         val view = mount("#/search")
         waitFor("the grid") { view.all("div.card").isNotEmpty() }
-        view.all("div.card").first().click()
+        openFromTheGrid(view)
         waitFor("the card page") { cardPages() == 1 }
         settle()
         assertTrue(
@@ -870,7 +883,7 @@ class AppDriverTest {
         window.scrollTo(0.0, 1300.0)
         assertTrue(window.scrollY > 1000, "the page would not scroll, nothing to test")
 
-        view.all("div.card").first().click()
+        openFromTheGrid(view)
         waitFor("the card page") { cardPages() == 1 }
         settle()
         assertTrue(window.scrollY < 10, "the card opened at ${window.scrollY}")

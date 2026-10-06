@@ -72,7 +72,13 @@ internal class JourneyTest : E2eTest() {
     fun tappingACardOpensItAndBackComesHome() {
         settled()
         showCard(firstCardOnScreen()).performClick()
-        until("tapping a card did not open it") { state().view == View.CARD }
+        // Through the carousel, which is what a tile opens now. The
+        // card's own page is "Full details" on its sheet.
+        until("tapping a card did not open the carousel") {
+            compose.onAllNodesWithTag("card-carousel").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithText("Full details").performClick()
+        until("Full details did not open the card") { state().view == View.CARD }
         until("the card page never got its text") {
             state().card?.face?.oracleText?.isNotBlank() == true
         }

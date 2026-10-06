@@ -27,6 +27,7 @@ import org.mattshoe.mtg.core.ExportTo
 import org.mattshoe.mtg.core.Found
 import org.mattshoe.mtg.core.HistoryEntry
 import org.mattshoe.mtg.core.Overlay
+import org.mattshoe.mtg.core.PeekCard
 import org.mattshoe.mtg.core.ShareWhat
 import org.mattshoe.mtg.core.Owner
 import org.mattshoe.mtg.core.Route
@@ -57,7 +58,7 @@ fun AppShell(
     /** A card tapped in a deck list. Carries its own `name_norm`. */
     onOpenNamed: (String, String, String) -> Unit = { _, _, _ -> },
     /** "Full details" on the carousel's sheet. See `onDetails` below. */
-    onOpenPeeked: (DeckCard) -> Unit = {},
+    onOpenPeeked: (PeekCard) -> Unit = {},
     /** Copy a link to whatever is on screen. */
     onShare: () -> Unit = {},
     /** The deck has four ways to hand itself over rather than one. */
@@ -111,7 +112,8 @@ fun AppShell(
             state = state.library,
             onState = { onState(state.copy(library = it)) },
             onSearch = onSearch,
-            onOpen = onOpenCard,
+            // The carousel, the same as a deck's rows.
+            onOpen = { row -> onState(state.peekRow(row)) },
             onExport = onExport,
             complete = state.complete,
             // Whoever holds the live state decides what a change to
@@ -256,7 +258,7 @@ fun AppShell(
 
     if (Overlay.CARD_PEEK in state.overlays) {
         CardCarousel(
-            cards = state.decks.pageOrder,
+            cards = state.peekRun,
             at = state.peek.at,
             place = state.peekPlace,
             admin = state.admin.unlocked,

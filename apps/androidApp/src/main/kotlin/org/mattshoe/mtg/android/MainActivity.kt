@@ -316,7 +316,7 @@ class MainActivity : ComponentActivity() {
                         // close and the open, in that order.
                         onOpenPeeked = { card ->
                             app = app.closing(Overlay.CARD_PEEK)
-                            openNamed(card.name, card.nameNorm, app.decks.open?.owner.orEmpty())
+                            openNamed(card.title, card.nameNorm, app.decks.open?.owner.orEmpty())
                         },
                         onFind = { term -> find(term) },
                         onLookup = { term -> lookup(term) },
