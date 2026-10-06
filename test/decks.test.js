@@ -664,7 +664,11 @@ describe('POST /decks/create', () => {
       [{ ...NEW, name: '' }, /name/],
       [{ ...NEW, format: 'pauperish' }, /format/],
       [{ ...NEW, owner: '' }, /whose/],
-      [{ ...NEW, owner: 'dave' }, /whose/],
+      // `dave` used to be refused for not being one of the two
+      // collections there were. Any slug is a legitimate owner now —
+      // who may write to it is checked before anything here runs —
+      // so what is left to refuse is a string that is not a slug.
+      [{ ...NEW, owner: 'Not A Slug!' }, /whose/],
     ];
     for (const [body, pattern] of bad) {
       const r = await post('/decks/create', { ...body, list: '1 Lightning Bolt' }, stubScryfall());

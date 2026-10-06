@@ -26,10 +26,53 @@ import { validateNames } from './validate.js';
 import { addCards, removeCards } from './cards.js';
 import { disassembleDeck, editDeckList, createDeck, renameDeck, FORMATS } from './decks.js';
 import { mintToken, verifyToken, bearer } from './admin.js';
+import {
+  whoAmI, canEdit, profileOf, endSession, signIn, newSession, cookieValue, SESSION_COOKIE,
+} from './accounts.js';
+import { startSignIn, finishSignIn } from './google.js';
 import { lookupPrices } from './prices.js';
 import { runMaintenance, CRON_TASKS } from './maintenance.js';
 import { newEntry, writeEntry, buildLogQuery, logStats } from './log.js';
 import { keyFrom, claim, remember, release } from './idempotency.js';
+
+/**
+ * May this caller change that collection, and if not, why not.
+ *
+ * One place, because "only the collection's owner may edit that
+ * collection" is one rule and six endpoints enforce it.
+ */
+async function mayEdit(env, request, ownerSlug) {
+  const who = await whoAmI(env, request, verifyToken);
+  if (canEdit(who, ownerSlug)) return { ok: true, who };
+
+  // Signed in, but it is not your collection. The only case that is
+  // genuinely a 403: the credentials are good and the answer is
+  // still no.
+  if (who.user) {
+    return {
+      ok: false,
+      response: json({
+        error: `that is ${ownerSlug || 'somebody else'}'s collection, and you are signed in as ${who.user.slug}`,
+      }, 403),
+    };
+  }
+
+  // A token was presented and named nobody. Say which way it failed —
+  // "expired" and "not a token at all" are different problems and the
+  // caller can only act on one of them.
+  if (who.bearer) {
+    const v = await verifyToken(env, who.bearer);
+    return { ok: false, response: denied(v.ok ? 'that token is not a session' : v.reason) };
+  }
+  return { ok: false, response: denied('sign in to change a collection') };
+}
+
+/** Whose deck that is. Null for a deck that does not exist. */
+async function deckOwner(db, slug) {
+  if (!slug) return null;
+  const row = await db.prepare('SELECT owner FROM decks WHERE slug = ?1').bind(String(slug)).first();
+  return row?.owner ?? null;
+}
 
 /**
  * On every response, the error ones included — a CORS failure is invisible
@@ -43,6 +86,48 @@ const CORS = {
   'access-control-allow-origin': '*',
   'access-control-expose-headers': 'retry-after',
 };
+
+/**
+ * The sites allowed to send their session cookie here.
+ *
+ * A browser refuses `access-control-allow-origin: *` the moment
+ * credentials are involved, so a credentialed request has to be
+ * answered with its own origin named — which means an allowlist
+ * rather than a wildcard. Reads from anywhere else still work; they
+ * just arrive as nobody, which is exactly right for a public
+ * collection.
+ */
+const SITES = new Set([
+  'https://mtg.mattshoe.org',
+  'http://localhost:8788',
+  'http://localhost:5173',
+]);
+
+/** The response, with the CORS headers this request has earned. */
+function withCors(request, res) {
+  const origin = request.headers.get('origin');
+  if (!origin || !SITES.has(origin)) return res;
+  const headers = new Headers(res.headers);
+  headers.set('access-control-allow-origin', origin);
+  headers.set('access-control-allow-credentials', 'true');
+  headers.set('vary', 'origin');
+  return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+}
+
+/** The CORS headers for this request: credentialed only for a known site. */
+function corsFor(request) {
+  const origin = request.headers.get('origin');
+  if (origin && SITES.has(origin)) {
+    return {
+      'access-control-allow-origin': origin,
+      'access-control-allow-credentials': 'true',
+      'access-control-allow-headers': 'content-type, authorization',
+      'vary': 'origin',
+      'access-control-expose-headers': 'retry-after',
+    };
+  }
+  return CORS;
+}
 
 const JSON_HEADERS = {
   'content-type': 'application/json; charset=utf-8',
@@ -119,7 +204,12 @@ const INDEX = {
   endpoints: {
     'GET /schema': 'tables, views, columns, row counts',
     'GET /query': '?sql=SELECT+...&fmt=rows|objects|tsv&limit=5000 (read-only)',
-    'POST /query': '{"sql":"SELECT ...","params":[],"fmt":"rows|objects|tsv","limit":5000}',
+    'POST /query': '{"sql":"SELECT ...","params":[],"fmt":"rows|objects|tsv","limit":5000} (read-only)',
+    'GET /auth/google': 'start signing in with Google',
+    'GET /auth/callback/google': 'where Google sends you back',
+    'POST /admin/sql': 'arbitrary SQL, for the server operator and the nightly job',
+    'GET /auth/me': 'the signed-in account, or nulls',
+    'POST /auth/logout': 'end this session',
     'POST /cards/add': '{"owner":"matt","list":"4 Lightning Bolt (2X2) 117","dry_run":false}',
     'POST /cards/remove': '{"owner":"matt","list":"1 Sol Ring","dry_run":false}',
     'POST /decks/disassemble': '{"slug":"...","dry_run":false} — deletes the deck, its cards go back to bulk; needs admin',
@@ -142,6 +232,11 @@ const INDEX = {
 
 /** 401 with the reason, in the shape every other error uses. */
 const denied = (reason) => json({ error: reason, admin_required: true }, 401);
+
+/** The one round trip's worth of state a sign-in needs. */
+const PENDING_COOKIE = 'mtg_oauth';
+
+const safeJson = (text) => { try { return JSON.parse(text); } catch { return null; } };
 
 /**
  * Does this statement go near the log table? Checked against the SQL with
@@ -180,7 +275,12 @@ export default {
     }
     // After the response, never in front of it.
     ctx.waitUntil(writeEntry(env, entry, res.status));
-    return res;
+    // One place, at the end: every response carries `*` until here,
+    // and a request from a site allowed to send its cookie has those
+    // headers replaced with its own origin. Threading the request
+    // through every `json(...)` to do it earlier would have touched
+    // sixty call sites to change two headers.
+    return withCors(request, res);
   },
 };
 
@@ -201,7 +301,12 @@ function queryDetail(body, out) {
   };
   if (out.body?.changes !== undefined) d.changes = out.body.changes;
   if (out.body?.truncated) d.truncated = out.body.truncated;
+  // `failed` is what a statement that ran and threw reports. A
+  // statement refused before it ran — a syntax error caught while
+  // compiling, a write this endpoint will not make — never got as far
+  // as running, and its reason was being dropped from the log.
   if (out.failed) d.error = String(out.failed).slice(0, 300);
+  else if (out.status >= 400 && out.body?.error) d.error = String(out.body.error).slice(0, 300);
   return d;
 }
 
@@ -470,16 +575,28 @@ async function route(request, env, ctx, entry) {
       if (method !== 'POST') return notAllowed('GET', 'POST');
     const { body, error } = await readJson(request);
     if (error) return json({ error }, 400);
+    // Arbitrary SQL cannot write, whoever is asking.
+    //
+    // A statement is not a collection, so there is nothing to check an
+    // owner against — "only the collection's owner may edit that
+    // collection" is a rule this endpoint has no way to enforce. Every
+    // write the apps make already has an endpoint of its own that does
+    // enforce it, so nothing is lost but the hole.
+    //
+    // `readOnly` rather than a check of our own, so GET and POST refuse
+    // the same statements for the same stated reason, and so a
+    // statement that does not compile is still reported as the syntax
+    // error it is rather than as a refusal.
     const writes = await mayWrite(env.DB, body.sql);
     // Reads are open, except the log — see /logs. Gating the endpoint but
     // not the table would leave the data one SELECT away.
-    if (writes || touchesLogs(body.sql)) {
+    if (touchesLogs(body.sql)) {
       const v = await verifyToken(env, bearer(request));
       if (!v.ok) return denied(v.reason);
       entry.admin = true;
     }
     entry.write = writes;
-    const out = await runQuery(env.DB, body);
+    const out = await runQuery(env.DB, body, { readOnly: true });
     entry.detail = queryDetail(body, out);
     if (out.status >= 500) entry.level = 'error';
     else if (slow(out)) entry.level = 'warn';
@@ -491,10 +608,10 @@ async function route(request, env, ctx, entry) {
       if (method !== 'POST') return notAllowed('POST');
       // Gated whole, dry runs included: a preview is part of editing, and
       // one rule is easier to trust than a carve-out.
-      const v = await verifyToken(env, bearer(request));
-      if (!v.ok) return denied(v.reason);
       const { body, error } = await readJson(request);
       if (error) return json({ error }, 400);
+      const gate = await mayEdit(env, request, body.owner || 'matt');
+      if (!gate.ok) return gate.response;
       entry.admin = true;
       entry.write = true;
       const r = path === '/cards/add'
@@ -511,6 +628,110 @@ async function route(request, env, ctx, entry) {
       };
       if (r.body?.failed) entry.level = 'warn';
       return send(r);
+    }
+
+    if (path === '/admin/sql') {
+      if (method !== 'POST') return notAllowed('POST');
+      // Arbitrary SQL, for the one caller that needs it: the nightly
+      // job, which backfills tags and refreshes prices — rows no
+      // endpoint models and no account owns.
+      //
+      // The door `/query` used to be, with the difference that
+      // matters: an account cannot reach this however many
+      // collections it owns, so one person's session can never
+      // rewrite somebody else's cards.
+      const who = await whoAmI(env, request, verifyToken);
+      if (!who.operator && who.user?.role !== 'admin') {
+        return who.user
+          ? json({ error: 'that needs the server role' }, 403)
+          : denied('this is the operator\'s door');
+      }
+      const { body, error } = await readJson(request);
+      if (error) return json({ error }, 400);
+      entry.admin = true;
+      entry.write = await mayWrite(env.DB, body.sql);
+      const out = await runQuery(env.DB, body);
+      entry.detail = queryDetail(body, out);
+      if (out.status >= 500) entry.level = 'error';
+      if (out.status >= 400) entry.message = out.body?.error;
+      return send(out);
+    }
+
+    if (path === '/auth/google') {
+      if (method !== 'GET') return notAllowed('GET');
+      const { url: to, state, verifier } = startSignIn(env);
+      // State and verifier ride in a cookie the page cannot read and
+      // that dies in ten minutes: they are single-use secrets for one
+      // round trip, and there is nothing to clean up afterwards.
+      const where = url.searchParams.get('return') || '';
+      return new Response(null, {
+        status: 302,
+        headers: {
+          location: to,
+          'set-cookie': `${PENDING_COOKIE}=${encodeURIComponent(JSON.stringify({ state, verifier, where }))}`
+            + '; Path=/; Max-Age=600; HttpOnly; Secure; SameSite=Lax',
+          ...CORS,
+        },
+      });
+    }
+
+    if (path === '/auth/callback/google') {
+      if (method !== 'GET') return notAllowed('GET');
+      const pending = safeJson(cookieValue(request.headers.get('cookie'), PENDING_COOKIE));
+      const state = url.searchParams.get('state');
+      const code = url.searchParams.get('code');
+      // Both halves, and they have to be the pair this browser was
+      // sent away with. Without the state check a link somebody else
+      // made could sign you into their account.
+      if (!code || !state || !pending?.state || pending.state !== state) {
+        return json({ error: 'that sign-in did not start here' }, 400);
+      }
+      let identity;
+      try {
+        identity = await finishSignIn(env, code, pending.verifier, env.AUTH_FETCH);
+      } catch (e) {
+        entry.level = 'warn';
+        entry.message = `google sign-in refused: ${String(e?.message ?? e).slice(0, 200)}`;
+        return json({
+          error: 'that sign-in could not be verified',
+          ...(env.AUTH_DEBUG ? { why: String(e?.message ?? e) } : {}),
+        }, 401);
+      }
+      const user = await signIn(env.DB, identity);
+      const token = await newSession(env.DB, user.id);
+      entry.detail = { slug: user.slug };
+      const site = env.SITE_URL || 'https://mtg.mattshoe.org';
+      const back = pending.where && pending.where.startsWith('/') ? pending.where : '';
+      return new Response(null, {
+        status: 302,
+        headers: {
+          location: `${site}${back}`,
+          // `SameSite=None`, because the site and the API are on
+          // different registrable domains and a Lax cookie would
+          // never be sent at all. What stops a third party using it
+          // is CORS: `access-control-allow-origin` is echoed only for
+          // the sites above, and every write carries a JSON body,
+          // which is not a simple request — so it is preflighted, and
+          // the preflight is refused.
+          'set-cookie': `${SESSION_COOKIE}=${token}; Path=/; Max-Age=${90 * 24 * 3600}`
+            + '; HttpOnly; Secure; SameSite=None',
+          ...CORS,
+        },
+      });
+    }
+
+    if (path === '/auth/me') {
+      const who = await whoAmI(env, request, verifyToken);
+      return json(profileOf(who.user));
+    }
+
+    if (path === '/auth/logout') {
+      if (method !== 'POST') return notAllowed('POST');
+      const who = await whoAmI(env, request, verifyToken);
+      if (who.token) await endSession(env.DB, who.token);
+      return json({ ok: true }, 200, {
+        'set-cookie': `${SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=None`,
+      });
     }
 
     if (path === '/cards/validate') {
@@ -532,10 +753,10 @@ async function route(request, env, ctx, entry) {
 
     if (path === '/decks/create') {
       if (method !== 'POST') return notAllowed('POST');
-      const v = await verifyToken(env, bearer(request));
-      if (!v.ok) return denied(v.reason);
       const { body, error } = await readJson(request);
       if (error) return json({ error }, 400);
+      const gate = await mayEdit(env, request, body?.owner || 'matt');
+      if (!gate.ok) return gate.response;
       entry.admin = true;
       entry.write = true;
       const r = await createDeck(env.DB, body, env.SCRYFALL_FETCH || fetch);
@@ -554,10 +775,10 @@ async function route(request, env, ctx, entry) {
 
     if (path === '/decks/rename') {
       if (method !== 'POST') return notAllowed('POST');
-      const v = await verifyToken(env, bearer(request));
-      if (!v.ok) return denied(v.reason);
       const { body, error } = await readJson(request);
       if (error) return json({ error }, 400);
+      const gate = await mayEdit(env, request, await deckOwner(env.DB, body?.slug));
+      if (!gate.ok) return gate.response;
       entry.admin = true;
       entry.write = true;
       const r = await renameDeck(env.DB, body);
@@ -572,10 +793,10 @@ async function route(request, env, ctx, entry) {
 
     if (path === '/decks/list') {
       if (method !== 'POST') return notAllowed('POST');
-      const v = await verifyToken(env, bearer(request));
-      if (!v.ok) return denied(v.reason);
       const { body, error } = await readJson(request);
       if (error) return json({ error }, 400);
+      const gate = await mayEdit(env, request, await deckOwner(env.DB, body?.slug));
+      if (!gate.ok) return gate.response;
       entry.admin = true;
       entry.write = true;
       const r = await editDeckList(env.DB, body, env.SCRYFALL_FETCH || fetch);
@@ -596,10 +817,10 @@ async function route(request, env, ctx, entry) {
     if (path === '/decks/disassemble') {
       if (method !== 'POST') return notAllowed('POST');
       // Gated whole, dry runs included, the same as add and remove.
-      const v = await verifyToken(env, bearer(request));
-      if (!v.ok) return denied(v.reason);
       const { body, error } = await readJson(request);
       if (error) return json({ error }, 400);
+      const gate = await mayEdit(env, request, await deckOwner(env.DB, body?.slug));
+      if (!gate.ok) return gate.response;
       entry.admin = true;
       entry.write = true;
       const r = await disassembleDeck(env.DB, body);

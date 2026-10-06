@@ -76,32 +76,38 @@ describe('POST /query limits', () => {
     expect((await post('/query', { sql: 'SELECT 1', limit: 1.5 })).status).toBe(400);
   });
 
-  it('does not wrap a write in a LIMIT', async () => {
+  it('never sees a write to wrap in the first place', async () => {
+    // It used to wrap reads in a LIMIT and leave writes alone, which
+    // mattered because writes came through here. None do now.
     const r = await post('/query', {
       sql: "UPDATE cards SET qty = qty WHERE name_norm = 'arcane signet'",
     });
-    expect(r.status).toBe(200);
-    expect(r.body.changes).toBeGreaterThan(0);
+    expect(r.status).toBe(403);
   });
 });
 
-describe('POST /query writes', () => {
-  it('inserts and the row is there afterwards', async () => {
+describe('POST /query does not write', () => {
+  // It did, with a token. Collections have owners now and a statement
+  // is not a collection — there is nothing to check an owner against,
+  // so "only the collection's owner may edit it" is a rule this
+  // endpoint cannot enforce. Every write the apps make has an endpoint
+  // of its own that can.
+  it('refuses an insert, and nothing is inserted', async () => {
     const r = await post('/query', {
-      sql: "INSERT INTO deck_notes (deck_id, section, body) VALUES (?, ?, ?)",
+      sql: 'INSERT INTO deck_notes (deck_id, section, body) VALUES (?, ?, ?)',
       params: [1, 'Gameplan', 'beat down'],
     });
-    expect(r.status).toBe(200);
-    expect(r.body.changes).toBe(1);
-    const rows = await sql("SELECT body FROM deck_notes WHERE section = 'Gameplan' AND body = 'beat down'");
-    expect(rows).toHaveLength(1);
+    expect(r.status).toBe(403);
+    expect(r.body.error).toMatch(/read-only/);
+    const rows = await sql("SELECT body FROM deck_notes WHERE body = 'beat down'");
+    expect(rows).toHaveLength(0);
   });
 
-  it('deletes', async () => {
+  it('refuses a delete, and nothing is deleted', async () => {
     const before = await count('deck_notes');
-    await post('/query', { sql: 'DELETE FROM deck_notes' });
-    expect(await count('deck_notes')).toBe(0);
-    expect(before).toBeGreaterThanOrEqual(0);
+    const r = await post('/query', { sql: 'DELETE FROM deck_notes' });
+    expect(r.status).toBe(403);
+    expect(await count('deck_notes')).toBe(before);
   });
 });
 
@@ -252,7 +258,7 @@ describe('GET /query', () => {
       "ATTACH DATABASE 'x' AS y",
     ]) {
       const r = await get(`/query?sql=${encodeURIComponent(sql)}`);
-      expect(r.status, `${sql} was not refused`).toBe(405);
+      expect(r.status, `${sql} was not refused`).toBe(403);
       expect(r.body.error).toMatch(/read-only/);
     }
     expect(await count('deck_notes')).toBe(before);
@@ -278,13 +284,15 @@ describe('GET /query', () => {
 
   it('still rejects two statements', async () => {
     const r = await get('/query?sql=' + encodeURIComponent('SELECT 1; SELECT 2'));
-    expect([400, 405]).toContain(r.status);
+    expect([400, 403]).toContain(r.status);
   });
 
-  it('POST is still allowed to write', async () => {
+  it('POST refuses a write for the same reason GET does', async () => {
+    // The two used to differ — GET read, POST wrote — and the whole
+    // point of this pair now is that they do not.
     const r = await post('/query', { sql: 'DELETE FROM deck_notes' });
-    expect(r.status).toBe(200);
-    expect(await count('deck_notes')).toBe(0);
+    expect(r.status).toBe(403);
+    expect(await count('deck_notes')).toBeGreaterThan(0);
   });
 });
 
@@ -359,7 +367,7 @@ describe('GET /query — writes that must stay refused', () => {
     it(`refuses ${label}, and changes nothing`, async () => {
       const before = await snapshot();
       const r = await getSql(sql);
-      expect(r.status, JSON.stringify(r.body)).toBe(405);
+      expect(r.status, JSON.stringify(r.body)).toBe(403);
       expect(r.body.error).toMatch(/read-only/);
       expect(await snapshot()).toEqual(before);
     });
@@ -408,24 +416,27 @@ describe('GET /query — errors that explain themselves', () => {
   });
 });
 
-describe('POST /query — the auth gate follows the same truth', () => {
+describe('POST /query — a write is refused however it is dressed', () => {
   it('lets an anonymous read use replace() without demanding a token', async () => {
     const r = await postAnon('/query', { sql: "SELECT replace(name,'a','b') AS x FROM cards LIMIT 1" });
     expect(r.status, JSON.stringify(r.body)).toBe(200);
   });
 
-  it('still demands a token for a write hidden behind a CTE', async () => {
+  it('refuses a write hidden behind a CTE', async () => {
+    // The reason the check compiles the statement rather than reading
+    // its first word: this one begins "WITH".
     const before = await snapshot();
     const r = await postAnon('/query', {
       sql: "WITH t AS (SELECT 'x' AS s) INSERT INTO tags (slug, kind, label) SELECT s, 'k', 'l' FROM t",
     });
-    expect(r.status).toBe(401);
+    expect(r.status).toBe(403);
     expect(await snapshot()).toEqual(before);
   });
 
-  it('still demands a token for a plain write', async () => {
+  it('refuses a plain write', async () => {
     const r = await postAnon('/query', { sql: 'DELETE FROM cards' });
-    expect(r.status).toBe(401);
+    expect(r.status).toBe(403);
+    expect(await count('cards')).toBeGreaterThan(0);
   });
 });
 

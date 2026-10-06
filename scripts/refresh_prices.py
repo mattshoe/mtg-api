@@ -10,7 +10,7 @@ already downloads that file three times a day for the deck tooling, so the
 prices are sitting on disk with no API call needed at all.
 
 Reads the newest default-cards bulk file, keeps the printings the
-collection actually owns, and writes them through POST /query.
+collection actually owns, and writes them through POST /admin/sql.
 
     python3 scripts/refresh_prices.py [--dry-run] [--api URL]
 """
@@ -55,7 +55,10 @@ def query(api, sql, params=None, admin=False):
     headers = {"Content-Type": "application/json", "User-Agent": "mtg-api-scripts/1.0"}
     if admin:
         headers["Authorization"] = f"Bearer {admin_token(api)}"
-    req = urllib.request.Request(f"{api}/query", data=body, headers=headers)
+    # Reads stay on /query; the writes go through the operator's door,
+    # because /query does not write any more.
+    path = "/admin/sql" if admin else "/query"
+    req = urllib.request.Request(f"{api}{path}", data=body, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=120) as r:
             return json.load(r)

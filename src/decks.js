@@ -623,7 +623,15 @@ export const FORMATS = [
 
 const FORMAT_IDS = new Set(FORMATS.map((f) => f.id));
 const COMMANDER_FORMATS = new Set(FORMATS.filter((f) => f.singleton).map((f) => f.id));
-const OWNERS = new Set(['matt', 'kayla']);
+// Who may own a deck is not a list any more.
+//
+// It was `['matt','kayla']`, which was true when there were two
+// collections and no way to make a third. An account owns the
+// collection whose slug it carries, and the caller's right to write
+// to this one has already been checked by the time anything here
+// runs — so the only question left is whether the owner is a slug at
+// all.
+const SLUG = /^[a-z0-9][a-z0-9-]{0,62}$/;
 
 /** A name -> a slug that is safe in a URL and unlikely to collide. */
 export function slugify(name) {
@@ -690,8 +698,8 @@ export async function createDeck(db, body, fetchImpl) {
   if (!FORMAT_IDS.has(format)) {
     return { status: 400, body: { error: 'pick a format', formats: [...FORMAT_IDS] } };
   }
-  if (!OWNERS.has(owner)) {
-    return { status: 400, body: { error: 'pick whose deck this is', owners: [...OWNERS] } };
+  if (!SLUG.test(owner)) {
+    return { status: 400, body: { error: 'pick whose deck this is' } };
   }
 
   const wantsCommander = COMMANDER_FORMATS.has(format);

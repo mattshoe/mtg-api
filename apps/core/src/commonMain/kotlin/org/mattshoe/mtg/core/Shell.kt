@@ -107,13 +107,58 @@ data class Route(val view: View, val rest: String = "", val query: String = "") 
  * from the Android share sheet is a fresh launch, and being asked for
  * the password every time was worse than useless.
  */
+/**
+ * Somebody signed in.
+ *
+ * `slug` is both who they are and where their collection lives:
+ * `cards.owner` has held a slug since the first day, so an account
+ * whose slug is `matt` owns every row that says `matt`.
+ *
+ * `role` is about running the server — the log, the maintenance job —
+ * and not about owning cards. Every account owns its own collection
+ * with no role at all, which is what Matt asked for: "admin rights by
+ * default for their own cards and only their own cards".
+ */
+data class Account(
+    val slug: String,
+    val name: String? = null,
+    val avatar: String? = null,
+    val role: String = "user",
+) {
+    val isOperator: Boolean get() = role == "admin"
+
+    /** What to call them. A Google account can arrive with no name on it. */
+    val shownName: String get() = name?.takeIf { it.isNotBlank() } ?: slug
+
+    /** Whether this account may edit that collection. */
+    fun owns(collection: String): Boolean =
+        isOperator || (collection.isNotEmpty() && collection == slug)
+}
+
 data class Admin(
     val token: String? = null,
     /** A password already gone to the server and not yet answered. */
     val trying: Boolean = false,
+    /** Who is signed in, if anybody. */
+    val account: Account? = null,
 ) {
 
-    val unlocked: Boolean get() = !token.isNullOrBlank()
+    val signedIn: Boolean get() = account != null
+
+    /** What to call whoever is here. */
+    val shownName: String? get() = account?.shownName
+
+    /**
+     * Whether this app may offer to change anything.
+     *
+     * An account, or the operator's password — the nightly job holds
+     * one of those and the phone has nothing else yet.
+     *
+     * Only an affordance. "Only the collection's owner may edit that
+     * collection" is the server's rule and the server keeps it; what
+     * this decides is whether to draw the button.
+     */
+    val unlocked: Boolean get() = signedIn || !token.isNullOrBlank()
 
     /** Offered once, until the server has said something back. */
     val canTry: Boolean get() = !trying
@@ -152,6 +197,11 @@ data class Admin(
     fun tries() = copy(trying = true)
     fun unlock(token: String) = copy(token = token, trying = false)
     fun gaveUp() = copy(trying = false)
+
+    fun signIn(account: Account) = copy(account = account, trying = false)
+
+    /** Out of both: the account and whatever password was held. */
+    fun signOut() = Admin()
     fun lock() = copy(token = null, trying = false)
 }
 

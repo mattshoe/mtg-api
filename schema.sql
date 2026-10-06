@@ -283,3 +283,47 @@ SELECT cu.owner, cu.name, cu.owned, cu.in_decks, cu.deck_count,
                AND (d2.status IS NULL OR d2.status NOT LIKE 'PROPOSED%')) AS decks
 FROM card_usage cu
 WHERE cu.in_decks > cu.owned;
+
+
+-- ------------------------------------------------------------ accounts
+--
+-- An account owns a collection, and `users.slug` is which one: the
+-- `owner` column on `cards` and `decks` has always held a slug, so
+-- nothing in the collection moves when accounts arrive. The slug is
+-- also the address — `#/c/<slug>` — which is why it is unique and why
+-- it is never rewritten once issued.
+--
+-- Every collection is readable by anyone. `role` is a server-wide
+-- thing and not a collection thing: owning your own cards needs no
+-- role at all, and 'admin' is for the log and the maintenance job.
+CREATE TABLE users (
+  id            INTEGER PRIMARY KEY,
+  slug          TEXT NOT NULL UNIQUE,
+  display_name  TEXT,
+  email         TEXT,
+  avatar_url    TEXT,
+  role          TEXT NOT NULL DEFAULT 'user',
+  created_at    TEXT NOT NULL
+);
+
+-- One row per way of signing in. Keyed on the provider's own stable
+-- subject and never on the email address, which a provider may let
+-- change and which somebody else may later be issued.
+CREATE TABLE identities (
+  provider    TEXT NOT NULL,
+  subject     TEXT NOT NULL,
+  user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at  TEXT NOT NULL,
+  PRIMARY KEY (provider, subject)
+);
+CREATE INDEX idx_identities_user ON identities(user_id);
+
+-- Only the hash. The token itself exists in the browser's cookie and
+-- nowhere else, so reading this table gets you nobody's session.
+CREATE TABLE sessions (
+  token_hash  TEXT PRIMARY KEY,
+  user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at  TEXT NOT NULL,
+  expires_at  TEXT NOT NULL
+);
+CREATE INDEX idx_sessions_user ON sessions(user_id);

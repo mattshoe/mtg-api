@@ -80,6 +80,17 @@ class MtgApi internal constructor(
     @Serializable
     private data class ErrorBody(val error: String = "")
 
+    /**
+     * Where to send somebody to sign in.
+     *
+     * Only the address is shared. The session itself is an HttpOnly
+     * cookie, and how a platform gets one sent — `credentials:
+     * 'include'` in a browser, a cookie jar or a bearer header on a
+     * phone — differs enough that a single client would be pretending.
+     */
+    fun signInUrl(returnTo: String = ""): String =
+        "$base/auth/google" + if (returnTo.isEmpty()) "" else "?return=$returnTo"
+
     /** Password in, token out. The password is never kept. */
     suspend fun unlock(password: String): String {
         val res = http.post("$base/admin") {

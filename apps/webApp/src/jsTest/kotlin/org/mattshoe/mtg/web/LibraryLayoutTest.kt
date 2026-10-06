@@ -283,7 +283,7 @@ class LibraryLayoutTest {
         frame.style.left = "0px"
         document.body!!.appendChild(frame)
         roots += frame
-        renderComposable(root = frame) { AppNav(AppState()) {} }
+        renderComposable(root = frame) { AppNav(AppState(), onState = {}) }
         settle()
         if (!styled()) return@runTest
 

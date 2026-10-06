@@ -21,6 +21,15 @@ export default defineWorkersConfig({
           // the suite never depends on production config.
           bindings: {
             ADMIN_PASSWORD: 'test-password',
+            // The real pair are Worker secrets. The tests sign their
+            // own tokens against their own key pair, so the only thing
+            // that has to match is the audience.
+            GOOGLE_CLIENT_ID: 'test-client.apps.googleusercontent.com',
+            GOOGLE_CLIENT_SECRET: 'test-client-secret',
+            SITE_URL: 'https://mtg.mattshoe.org',
+            // The sign-in tests assert on *why* a token was refused;
+            // production says only that it was.
+            AUTH_DEBUG: '1',
             // The edge cache is real and shared; leaving it on would let
             // one test's fetch satisfy the next test's assertion.
             DISABLE_PRICE_CACHE: '1',

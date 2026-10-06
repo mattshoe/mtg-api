@@ -4,7 +4,7 @@
 Tags come from a bulk file with no per-card endpoint, so a card added through
 the API arrives untagged. This reads the local Scryfall index that
 prefetch_scryfall.py already keeps warm, finds oracle ids in D1 with no tags,
-and pushes the missing rows through /query.
+and pushes the missing rows through /admin/sql.
 
 Read-only against the index. Never touches the collection shards.
 
@@ -50,7 +50,7 @@ def admin_token(api):
 def query(api, sql, params=None, fmt="rows"):
     body = json.dumps({"sql": sql, "params": params or [], "fmt": fmt}).encode()
     req = urllib.request.Request(
-        f"{api}/query", data=body,
+        f"{api}/admin/sql", data=body,
         # Cloudflare's bot protection answers urllib's default User-Agent
         # with a 403 (error 1010), so say who we are.
         headers={"Content-Type": "application/json",

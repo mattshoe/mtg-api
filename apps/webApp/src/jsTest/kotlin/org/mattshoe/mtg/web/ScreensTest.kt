@@ -587,7 +587,7 @@ class NavTest {
         val root = document.createElement("div") as org.w3c.dom.HTMLElement
         document.body!!.appendChild(root)
         roots += root
-        renderComposable(root = root) { AppNav(state) {} }
+        renderComposable(root = root) { AppNav(state, onState = {}) }
         return root
     }
 
@@ -613,9 +613,11 @@ class NavTest {
         val box = nav.getBoundingClientRect()
         assertTrue(box.width > 0 && box.height > 0, "the nav is not rendered: $box")
         assertEquals(1, root.querySelectorAll("button.nav-burger").length, "no hamburger")
-        // Three views while locked, plus Unlock. Nothing loose beside
-        // the burger. It was four views until the Query page went.
-        assertEquals(4, root.querySelectorAll(".app-menu button").length)
+        // Three views while locked, plus the way in with an account
+        // and the operator's password. Nothing loose beside the
+        // burger. It was four views until the Query page went, and
+        // four buttons until accounts arrived.
+        assertEquals(5, root.querySelectorAll(".app-menu button").length)
     }
 
     @Test
@@ -715,7 +717,12 @@ class NavTest {
             "Admin",
             (root.querySelector(".app-menu-group") as org.w3c.dom.HTMLElement).textContent?.trim(),
         )
-        assertEquals(1, root.querySelectorAll("button.app-lock").length, "the lock is not in the menu")
+        // Two `.app-lock` buttons while nobody is signed in: the
+        // account's and the operator's. Signing in leaves the
+        // account's alone, because a password is not an account and
+        // offering both at once reads as two ways to be the same
+        // thing.
+        assertEquals(2, root.querySelectorAll("button.app-lock").length, "the lock is not in the menu")
     }
 
     @Test

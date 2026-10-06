@@ -6,6 +6,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.browser.document
+import org.mattshoe.mtg.core.Account
+import org.w3c.fetch.RequestInit
+import org.w3c.fetch.RequestCredentials
 import kotlinx.browser.window
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -194,6 +197,9 @@ object MtgApp {
         listen()
         loadFor(app)
         loadFacets()
+        // Asked for rather than awaited: the page is useful to a
+        // stranger, so nothing waits to find out whether this one is.
+        loadAccount()
 
         composition = renderComposable(root = root) {
             val state = app
@@ -360,11 +366,16 @@ object MtgApp {
     fun mountNav(root: HTMLElement) {
         navComposition?.dispose()
         navComposition = renderComposable(root = root) {
-            AppNav(app) { next ->
-                val was = app
-                app = next
-                if (next.view != was.view || next.route.rest != was.route.rest) loadFor(next)
-            }
+            AppNav(
+                app,
+                onState = { next ->
+                    val was = app
+                    app = next
+                    if (next.view != was.view || next.route.rest != was.route.rest) loadFor(next)
+                },
+                onSignIn = { window.location.href = api.signInUrl(window.location.hash) },
+                onSignOut = { signOut() },
+            )
         }
     }
 
@@ -726,6 +737,53 @@ object MtgApp {
      * brings the depth down without asking the browser for anything,
      * and the push that follows is what the back gesture lands on.
      */
+    /**
+     * Who is signed in, asked of the server rather than remembered.
+     *
+     * The session is an HttpOnly cookie this page cannot read, which
+     * is the point of it — so the only way to know is to ask, and the
+     * answer stays true after the cookie expires.
+     *
+     * `credentials: 'include'` because the API is on another domain:
+     * without it the browser sends no cookie at all and everybody is
+     * a stranger. Written as a cast because Kotlin's binding for the
+     * enum has no member for it.
+     */
+    private fun loadAccount() {
+        scope.launch {
+            val who = runCatching { fetchAccount() }.getOrNull()
+            app = app.copy(admin = if (who == null) app.admin else app.admin.signIn(who))
+        }
+    }
+
+    private suspend fun fetchAccount(): Account? {
+        val res = window.fetch(
+            "${MtgApi.DEFAULT_BASE}/auth/me",
+            RequestInit(credentials = "include".unsafeCast<RequestCredentials>()),
+        ).await()
+        if (!res.ok) return null
+        val body = res.json().await().asDynamic()
+        val slug = body.slug as? String ?: return null
+        return Account(
+            slug = slug,
+            name = body.name as? String,
+            avatar = body.avatar as? String,
+            role = (body.role as? String) ?: "user",
+        )
+    }
+
+    private fun signOut() {
+        scope.launch {
+            runCatching {
+                window.fetch(
+                    "${MtgApi.DEFAULT_BASE}/auth/logout",
+                    RequestInit(method = "POST", credentials = "include".unsafeCast<RequestCredentials>()),
+                ).await()
+            }
+            app = app.copy(admin = app.admin.signOut()).navigate(app.route)
+        }
+    }
+
     private fun openFromCarousel(card: PeekCard) {
         OverlayHistory.forget(1)
         app = app.closing(Overlay.CARD_PEEK)
