@@ -160,6 +160,34 @@ removed a test, edit `test/suite-floors.json` by hand and say why in
 the message — which is the point: it takes a deliberate, visible,
 reviewable act.
 
+## A schema change needs both files
+
+`schema.sql` is what a database built from scratch gets — including
+the one this suite builds. `migrations/` is what the live one gets.
+Only ever one of them gets edited, and both ways round have now
+shipped broken to production a day apart:
+
+- three tables added to `schema.sql` and no migration written, so the
+  deploy sent code querying `users` to a database that had never
+  heard of it
+- a column added to `migrations/0002`, which had already been
+  applied. Wrangler records a migration as done **by name**, so
+  editing one that has run is a no-op on the live database and a
+  double-add on a fresh one. Every sign-in failed on the INSERT.
+
+Neither could be caught by a test that builds from `schema.sql`,
+because both are about the file it does not read. `test/migrations.test.js`
+reads both and holds them to each other, and the second rule is the
+one worth saying out loud: **an applied migration is never edited.
+The fix is always another file.** The hashes in
+`test/fixtures/migration-hashes.json` are what makes that checkable;
+a new name is ordinary work, a changed hash on an existing name is
+the mistake.
+
+`test/fixtures/schema-baseline.json` is the tables that predate
+`migrations/`. They were applied by hand and have no migration;
+everything after them needs one.
+
 ## Never trust a test count without a successful build
 
 A killed Gradle test task leaves the **previous** run's XML on disk.
