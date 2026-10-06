@@ -46,7 +46,7 @@ class AppShellTest {
             // Both, over one state — the arrangement the real app has.
             // The menu lives in the header's own slot, so mounting the
             // shell alone would leave nothing to navigate with.
-            AppNav(s.value) { s.value = it }
+            AppNav(s.value, onState = { s.value = it })
             AppShell(
                 state = s.value,
                 onState = { s.value = it },
@@ -89,7 +89,10 @@ class AppShellTest {
         assertFalse(tabs.contains("Entry"), "a gated tab must not be visible")
         assertFalse(tabs.contains("Server Logs"))
         assertTrue(tabs.contains("Unlock"))
-        assertEquals(4, root.querySelectorAll(".app-menu button").length, tabs.toString())
+        // Five now: the three views, the way in with an account, and
+        // the operator's password beneath it.
+        assertTrue(tabs.contains("Sign in with Google"))
+        assertEquals(5, root.querySelectorAll(".app-menu button").length, tabs.toString())
     }
 
     @Test

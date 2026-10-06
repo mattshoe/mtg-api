@@ -50,7 +50,7 @@ class QueryPageGoneTest {
         roots += root
         renderComposable(root = root) {
             val s = remember { mutableStateOf(initial) }
-            AppNav(s.value) { s.value = it }
+            AppNav(s.value, onState = { s.value = it })
             AppShell(
                 state = s.value,
                 onState = { s.value = it },
@@ -145,7 +145,7 @@ class QueryPageGoneTest {
         val shut = mount(locked)
         settle()
         assertEquals(
-            listOf("Library", "Decks", "Stats", "Unlock"),
+            listOf("Library", "Decks", "Stats", "Sign in with Google", "Unlock"),
             shut.menuLabels(),
             "the locked menu changed shape",
         )
@@ -153,7 +153,10 @@ class QueryPageGoneTest {
         val open = mount(unlocked)
         settle()
         assertEquals(
-            listOf("Library", "Decks", "Stats", "Entry", "Server Logs", "Lock"),
+            // Unlocked by a password rather than an account, so the
+            // sign-in is still offered and the password's own Lock is
+            // still there.
+            listOf("Library", "Decks", "Stats", "Entry", "Server Logs", "Sign in with Google", "Lock"),
             open.menuLabels(),
             "the unlocked menu changed shape",
         )

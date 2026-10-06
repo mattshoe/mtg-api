@@ -66,7 +66,7 @@ class UnlockDialogTest {
         renderComposable(root = root) {
             val s = remember { mutableStateOf(initial) }
             cell = s
-            AppNav(s.value) { s.value = it }
+            AppNav(s.value, onState = { s.value = it })
             AppShell(
                 state = s.value,
                 onState = { s.value = it },

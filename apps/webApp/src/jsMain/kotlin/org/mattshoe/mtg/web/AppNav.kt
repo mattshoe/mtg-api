@@ -29,7 +29,13 @@ import org.mattshoe.mtg.core.Overlay
  * with no navigation at all.
  */
 @Composable
-fun AppNav(state: AppState, onState: (AppState) -> Unit) {
+fun AppNav(
+    state: AppState,
+    onState: (AppState) -> Unit,
+    /** Off to Google. The shell owns the address; see `MtgApi.signInUrl`. */
+    onSignIn: () -> Unit = {},
+    onSignOut: () -> Unit = {},
+) {
     var open by remember { mutableStateOf(false) }
 
     Nav(attrs = { classes("app-nav") }) {
@@ -79,17 +85,44 @@ fun AppNav(state: AppState, onState: (AppState) -> Unit) {
                 }) { Text(view.label) }
             }
 
+            // Who you are, and the way in or out of being them.
+            //
+            // The account is the ordinary way now; the password stays
+            // beneath it because the nightly job holds one and because
+            // the server role that will replace it is not assigned
+            // yet. Matt: "Leverage the profile icon for the account
+            // information and log in log out."
+            state.admin.account?.let { who ->
+                Div(attrs = { classes("app-who") }) {
+                    Text(who.shownName)
+                    Span(attrs = { classes("app-who-slug") }) { Text("/c/${who.slug}") }
+                }
+            }
+
             Button(attrs = {
                 classes("app-tab", "app-lock")
                 onClick {
                     open = false
-                    if (state.admin.unlocked) {
-                        onState(state.copy(admin = state.admin.lock()).navigate(state.route))
-                    } else {
-                        onState(state.opening(Overlay.UNLOCK))
-                    }
+                    if (state.admin.signedIn) onSignOut() else onSignIn()
                 }
-            }) { Text(if (state.admin.unlocked) "Lock" else "Unlock") }
+            }) { Text(if (state.admin.signedIn) "Sign out" else "Sign in with Google") }
+
+            // The operator's own way in, and only while nobody is
+            // signed in: a password is not an account and offering
+            // both at once reads as two ways to be the same thing.
+            if (!state.admin.signedIn) {
+                Button(attrs = {
+                    classes("app-tab", "app-lock")
+                    onClick {
+                        open = false
+                        if (state.admin.unlocked) {
+                            onState(state.copy(admin = state.admin.lock()).navigate(state.route))
+                        } else {
+                            onState(state.opening(Overlay.UNLOCK))
+                        }
+                    }
+                }) { Text(if (state.admin.unlocked) "Lock" else "Unlock") }
+            }
         }
     }
 

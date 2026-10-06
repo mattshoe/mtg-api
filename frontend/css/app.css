@@ -1631,3 +1631,19 @@ select.sort {
 .peek-place { font-size: 12px; color: var(--text-3); white-space: nowrap; }
 .peek-tags { display: flex; gap: 8px; flex-wrap: wrap; }
 .peek-acts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+/* Who is signed in, in the nav drawer. The slug is the address their
+   collection lives at, so it is shown as one rather than as a name. */
+.app-who {
+  padding: 10px 14px 4px;
+  color: var(--text);
+  font-weight: 600;
+  display: grid;
+  gap: 2px;
+}
+.app-who-slug {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-3);
+}
