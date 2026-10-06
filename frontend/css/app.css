@@ -1569,3 +1569,65 @@ select.sort {
   background: var(--bg-3); border-color: var(--line-2);
   min-width: 31px; height: 31px; padding: 0;
 }
+
+/* ---------------------------------------------------- the card carousel
+
+   Tapping a card in a deck opens this over the deck. The deck shows
+   through, which is what makes it an overlay rather than a page, and
+   a press on the scrim is swallowed rather than dismissing — only
+   Back closes it. The phone's `CardCarousel.kt` is the same thing.   */
+.peek-scrim {
+  position: fixed; inset: 0; z-index: 90;
+  background: rgba(4, 6, 10, .72);
+  display: grid; grid-template-rows: 1fr auto;
+}
+
+/* The browser's own horizontal scroll with snap points, rather than a
+   drag handler: a trackpad, a touchscreen, a scrollbar and
+   shift-wheel all already work this way. */
+.peek-rail {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  align-items: center;
+  min-height: 0;
+}
+.peek-rail::-webkit-scrollbar { display: none; }
+
+.peek-card {
+  scroll-snap-align: center;
+  display: grid; place-items: center;
+  padding: 16px 28px;
+  min-height: 0;
+}
+.peek-card img {
+  max-width: 100%; max-height: 100%;
+  border-radius: 4.75% / 3.5%;
+  display: block;
+}
+.peek-blank {
+  width: 100%; aspect-ratio: 488 / 680;
+  display: grid; place-items: center;
+  background: var(--bg-3); border-radius: 4.75% / 3.5%;
+  color: var(--text-2); font-size: 18px; text-align: center; padding: 24px;
+}
+
+.peek-sheet {
+  background: var(--bg-2);
+  border-top: 1px solid var(--line);
+  border-radius: var(--radius) var(--radius) 0 0;
+  padding: 14px 16px calc(14px + env(safe-area-inset-bottom));
+  display: grid; gap: 8px;
+}
+.peek-head { display: flex; align-items: center; gap: 10px; }
+.peek-titles { min-width: 0; flex: 1; }
+.peek-name { font-size: 17px; font-weight: 600; color: var(--text); }
+.peek-sub { font-size: 13px; color: var(--text-2); }
+.peek-type { font-size: 12px; color: var(--text-3); }
+.peek-place { font-size: 12px; color: var(--text-3); white-space: nowrap; }
+.peek-tags { display: flex; gap: 8px; flex-wrap: wrap; }
+.peek-acts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }

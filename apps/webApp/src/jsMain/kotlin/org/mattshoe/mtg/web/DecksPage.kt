@@ -32,7 +32,6 @@ fun DecksPage(
     onOpen: (Deck) -> Unit,
     onClose: () -> Unit,
     admin: Boolean = false,
-    onNew: () -> Unit = {},
     onEdit: (Deck) -> Unit = {},
     onDisassemble: (Deck) -> Unit = {},
     /** Rename the open deck. The slug moves with the name. */
@@ -46,15 +45,9 @@ fun DecksPage(
     Div(attrs = { classes("wrap") }) {
         val open = state.open
         if (open == null) {
-            if (admin) {
-                Div(attrs = { classes("page-head") }) {
-                    Span(attrs = { classes("spacer") }) {}
-                    Button(attrs = {
-                        classes("btn", "sm", "primary")
-                        onClick { onNew() }
-                    }) { Text("New deck") }
-                }
-            }
+            // No New deck button. A deck is started from the entry
+            // wizard's first question now, the same as on the phone —
+            // Matt: "get rid of the one on the decks list page."
             when {
                 state.busy -> Div(attrs = { classes("empty") }) { Text("Loading…") }
                 state.error != null -> Div(attrs = { classes("err") }) { Text("Could not load decks: ${state.error}") }

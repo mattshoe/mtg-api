@@ -55,6 +55,12 @@ class MtgViewModel : ViewModel() {
     /** Whether the facet load actually wrote its result. */
     var facetsApplied: Boolean = false
 
+    /**
+     * The token load, held so a test can wait for it rather than
+     * guess — the same reason `facetsJob` is held.
+     */
+    var tokensJob: Job? = null
+
     var lookupJob: Job? = null
     var findJob: Job? = null
     var tweakJob: Job? = null

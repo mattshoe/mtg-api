@@ -190,12 +190,6 @@ data class AppState(
     val peekPlace: String?
         get() = peeked?.let { "${peek.at.coerceAtMost(decks.pageOrder.lastIndex) + 1} of ${decks.pageOrder.size}" }
 
-    /** The button out of the carousel and into the card's own page. */
-    fun openPeeked(): AppState {
-        val card = peeked ?: return this
-        return closing(Overlay.CARD_PEEK).openCard(CardRef(card.nameNorm), card.name)
-    }
-
     /** "7 of 99", for somebody halfway down a deck. */
     val cardPlace: String? get() = cardAt.takeIf { it >= 0 }?.let { "${it + 1} of ${deckRun.size}" }
 

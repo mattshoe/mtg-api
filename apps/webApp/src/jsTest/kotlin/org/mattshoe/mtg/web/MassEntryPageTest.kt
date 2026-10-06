@@ -111,7 +111,7 @@ class MassEntryPageTest {
         settle()
         assertEquals(0, root.querySelectorAll("canvas").length, "Compose HTML must not paint to a canvas")
         assertTrue(root.querySelectorAll("button").length > 0)
-        assertTrue(root.textContent!!.contains("Adding or removing?"))
+        assertTrue(root.textContent!!.contains("What are you doing?"))
     }
 
     @Test
@@ -192,9 +192,13 @@ class MassEntryPageTest {
         settle()
         if (!Stylesheet.applied()) return@runTest
         val opts = root.all("button.opt")
-        assertEquals(2, opts.size)
+        // Three since a deck became the first question's third
+        // answer. The claim is unchanged: they stack.
+        assertEquals(3, opts.size)
         val tops = opts.map { it.getBoundingClientRect().top }
-        assertTrue(tops[1] - tops[0] > 20, "the two options are side by side at ${PHONE}px")
+        tops.zipWithNext().forEach { (above, below) ->
+            assertTrue(below - above > 20, "the options are side by side at ${PHONE}px")
+        }
         opts.forEach {
             // Minus the page gutter and the panel's own padding.
             val w = it.getBoundingClientRect().width

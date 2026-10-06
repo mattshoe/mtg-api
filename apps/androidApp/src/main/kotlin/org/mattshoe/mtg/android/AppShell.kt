@@ -111,6 +111,8 @@ fun AppShell(
     onOpenFound: (Found) -> Unit = {},
     /** A card tapped in a deck list. Carries its own `name_norm`. */
     onOpenNamed: (String, String, String) -> Unit = { _, _, _ -> },
+    /** "Full details" on the carousel's sheet. See `onDetails` below. */
+    onOpenPeeked: (DeckCard) -> Unit = {},
     onFind: (String) -> Unit = {},
     onLookup: (String) -> Unit = {},
     onPickFile: () -> Unit = {},
@@ -474,8 +476,15 @@ fun AppShell(
                 place = state.peekPlace,
                 admin = state.admin.unlocked,
                 onSwipe = { onState(state.peekTo(it)) },
-                onClose = { onState(state.closing(Overlay.CARD_PEEK)) },
-                onDetails = { onState(state.openPeeked()) },
+                // Through `onOpenNamed`, the same way every other card
+                // is opened — `openPeeked` only moves the state, and a
+                // card page whose detail was never fetched spins
+                // forever.
+                // One callback, because leaving the carousel for the
+                // card's page costs different things on the two
+                // platforms — the website has a history entry per open
+                // overlay to account for, and the phone does not.
+                onDetails = { state.peeked?.let(onOpenPeeked) },
                 onTweak = { card, how -> onTweak(card, how) },
             )
         }
