@@ -18,6 +18,7 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.yield
 import org.mattshoe.mtg.core.Admin
 import org.mattshoe.mtg.core.AdminToken
 import org.mattshoe.mtg.core.ApiFailure
@@ -593,6 +594,22 @@ class MainActivity : ComponentActivity() {
      */
     private fun loadTokens(slug: String, ids: List<String>) {
         model.tokensJob = scope.launch {
+            // Let the deck land first.
+            //
+            // This is launched from inside `openDeck`, before the
+            // state it just built has been assigned, and
+            // `viewModelScope` dispatches on `Main.immediate` — so a
+            // launched coroutine runs *synchronously* up to its first
+            // real suspension. Against a fake network that never
+            // suspends, the whole token load finished before
+            // `app = opened` executed, and the assignment then
+            // overwrote the tokens it had just written. CI found it;
+            // the same test had been passing locally on the ordering
+            // going the other way.
+            //
+            // `yield` puts this behind the assignment whatever the
+            // engine does.
+            yield()
             // Swallowed on purpose, the way the website swallows it.
             // Scryfall being down is not a reason for a deck to show
             // an error; it is a reason for the deck to have no token
@@ -601,7 +618,10 @@ class MainActivity : ComponentActivity() {
             val found = runCatching { scryfall.tokens(ids) }.getOrDefault(emptyList())
             // Still the same deck? Opening another one while this was
             // in flight must not hang the first deck's tokens on it.
-            if (app.decks.openSlug == slug) {
+            // Asked of the route rather than the loaded deck, because
+            // the route names the deck from the moment you navigate
+            // and the loaded one only once its cards are back.
+            if (app.route.rest == slug && app.view == View.DECKS) {
                 app = app.copy(decks = app.decks.withTokens(found))
             }
         }
