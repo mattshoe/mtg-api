@@ -441,11 +441,31 @@ class FilterEmptyInputTest {
     @Test
     fun anEmptyFilterObjectIsNoWhereClauseAtAll() = addsNothing("defaults", Filters())
 
+    /**
+     * An empty owner is "nobody said", and it reads nothing.
+     *
+     * It used to be the one blank that widened a search instead of
+     * leaving it alone: no clause, so every collection at once. That
+     * is how somebody else's cards got onto the screen in the gap
+     * before `/auth/me` answered — Matt: "why are kaylas decks
+     * showing for me in the web app?!?!?!" The pooled read has to ask
+     * for `both` by name now.
+     */
     @Test
-    fun anEmptyOwnerMeansBothCollections() = addsNothing("owner", Filters(owner = ""))
+    fun anEmptyOwnerReadsNothingRatherThanEverything() {
+        assertEquals("1=0", where(Filters(owner = "")), "an empty owner widened the search")
+        assertTrue(params(Filters(owner = "")).isEmpty())
+    }
 
     @Test
-    fun aWhitespaceOwnerMeansBothCollections() = addsNothing("owner", Filters(owner = "   "))
+    fun andSoDoesAWhitespaceOne() {
+        assertEquals("1=0", where(Filters(owner = "   ")))
+        assertTrue(params(Filters(owner = "   ")).isEmpty())
+    }
+
+    @Test
+    fun bothIsThePooledReadAndStillAddsNothing() =
+        addsNothing("owner", Filters(owner = "both"))
 
     @Test
     fun anEmptyFinishMeansAnyFinish() = addsNothing("finish", Filters(finish = ""))

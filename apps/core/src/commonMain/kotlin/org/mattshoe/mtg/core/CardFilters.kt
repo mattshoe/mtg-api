@@ -404,7 +404,13 @@ internal fun colorClause(column: String, mode: ColorMode, selected: List<String>
 fun conditions(s: Filters): Sql {
     val c = Clauses()
 
-    if (s.owner.isNotBlank() && s.owner != "both") c.add("c.owner = ?", s.owner)
+    // An empty owner is "no collection known", which is not "every
+    // collection": `1=0` rather than no clause, because a search with
+    // nothing to scope to returning everybody's cards is how somebody
+    // else's collection ended up on the screen. `both` is still the
+    // pooled read, for the places that genuinely want one.
+    if (s.owner.isBlank()) c.add("1=0")
+    else if (s.owner != "both") c.add("c.owner = ?", s.owner)
 
     // Both faces, so "bolt" finds a card whose back is the bolt.
     // `name_norm` is stored lowercased; the other two are lowered here.

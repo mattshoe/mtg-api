@@ -88,11 +88,12 @@ class AppShellTest {
         assertFalse(tabs.contains("Query"), "the Query page is gone")
         assertFalse(tabs.contains("Entry"), "a gated tab must not be visible")
         assertFalse(tabs.contains("Server Logs"))
-        assertTrue(tabs.contains("Unlock"))
-        // Five now: the three views, the way in with an account, and
-        // the operator's password beneath it.
+        // Both ways in are behind the profile avatar, not in the
+        // hamburger, which is places to go and nothing else.
+        assertTrue(tabs.contains("Log in"))
         assertTrue(tabs.contains("Sign in with Google"))
-        assertEquals(5, root.querySelectorAll(".app-menu button").length, tabs.toString())
+        assertEquals(3, root.querySelectorAll(".app-menu button").length, tabs.toString())
+        assertEquals(2, root.querySelectorAll(".profile-menu .app-lock").length, tabs.toString())
     }
 
     @Test
@@ -102,7 +103,7 @@ class AppShellTest {
         val tabs = root.tabs()
         assertTrue(tabs.contains("Entry"))
         assertTrue(tabs.contains("Server Logs"))
-        assertTrue(tabs.contains("Lock"))
+        assertTrue(tabs.contains("Log out"))
     }
 
     @Test
@@ -127,7 +128,7 @@ class AppShellTest {
     fun theUnlockDialogAsksAndHandsThePasswordBack() = runTest {
         val root = mount(AppState())
         settle()
-        root.buttons().first { it.textContent == "Unlock" }.click()
+        root.buttons().first { it.textContent == "Log in" }.click()
         settle()
         assertTrue(root.textContent!!.contains("Admin mode"))
         assertTrue(root.textContent!!.contains("never stored"))

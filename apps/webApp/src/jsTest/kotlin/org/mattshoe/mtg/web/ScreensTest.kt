@@ -119,7 +119,10 @@ class ScreensTest {
         assertTrue(root.hasButton("Decks"))
         assertFalse(root.hasButton("Entry"), "a gated tab while locked")
         assertFalse(root.hasButton("Server Logs"))
-        assertTrue(root.hasButton("Unlock"))
+        // "Log in", behind the profile: the operator's password is not
+        // a place to go, and "Lock" was a second metaphor for the one
+        // thing a sign-out already is.
+        assertTrue(root.hasButton("Log in"))
     }
 
     @Test
@@ -128,7 +131,7 @@ class ScreensTest {
         settle()
         assertTrue(root.hasButton("Entry"))
         assertTrue(root.hasButton("Server Logs"))
-        assertTrue(root.hasButton("Lock"))
+        assertTrue(root.hasButton("Log out"))
     }
 
     @Test
@@ -612,11 +615,13 @@ class NavTest {
         val box = nav.getBoundingClientRect()
         assertTrue(box.width > 0 && box.height > 0, "the nav is not rendered: $box")
         assertEquals(1, root.querySelectorAll("button.nav-burger").length, "no hamburger")
-        // Three views while locked, plus the way in with an account
-        // and the operator's password. Nothing loose beside the
-        // burger. It was four views until the Query page went, and
-        // four buttons until accounts arrived.
-        assertEquals(5, root.querySelectorAll(".app-menu button").length)
+        // Three views while locked, and nothing else: who you are and
+        // the ways in moved behind the profile avatar. It was four
+        // views until the Query page went, and five buttons while the
+        // account lived in here too.
+        assertEquals(3, root.querySelectorAll(".app-menu button").length)
+        // The avatar beside it, which is the other half of the pair.
+        assertEquals(1, root.querySelectorAll("button.nav-profile").length, "no profile button")
     }
 
     @Test
@@ -708,36 +713,55 @@ class NavTest {
         (root.querySelector(".topbar-title") as? org.w3c.dom.HTMLElement)?.textContent?.trim()
 
     @Test
-    fun theAdminHalfIsItsOwnSectionWithTheLockInIt() = runTest {
+    fun bothWaysInSitUnderTheNameBehindTheProfile() = runTest {
+        // It was an "Admin" group inside the one menu, under a rule.
+        // The group is gone with the menu it divided: the profile
+        // menu's own head is who you are, and everything under its
+        // rule follows from that.
         val root = mount(AppState())
         settle()
-        assertEquals(1, root.querySelectorAll(".app-menu-sep").length, "no rule between the halves")
-        assertEquals(
-            "Admin",
-            (root.querySelector(".app-menu-group") as org.w3c.dom.HTMLElement).textContent?.trim(),
+        assertEquals(1, root.querySelectorAll(".profile-menu .app-menu-sep").length, "no rule under the name")
+        assertEquals(0, root.querySelectorAll(".app-menu-group").length, "the Admin heading outlived its menu")
+        assertTrue(
+            (root.querySelector(".profile-menu .app-who") as? org.w3c.dom.HTMLElement)
+                ?.textContent.orEmpty().contains("Not signed in"),
+            "the profile does not say who is here",
         )
         // Two `.app-lock` buttons while nobody is signed in: the
         // account's and the operator's. Signing in leaves the
         // account's alone, because a password is not an account and
         // offering both at once reads as two ways to be the same
         // thing.
-        assertEquals(2, root.querySelectorAll("button.app-lock").length, "the lock is not in the menu")
+        assertEquals(
+            2,
+            root.querySelectorAll(".profile-menu button.app-lock").length,
+            "the ways in are not behind the profile",
+        )
     }
 
     @Test
-    fun theGatedViewsSitUnderTheRuleAndTheOthersAbove() = runTest {
+    fun theHamburgerIsPlacesAndTheProfileIsWhoYouAre() = runTest {
+        // The rule used to divide the one menu into views and admin.
+        // There are two controls now — Matt: "Why the fuck is all
+        // that shit still in the hamburger menu!!!!!" — so the
+        // division is which menu a thing is in, and the rule sits
+        // under the name at the head of the profile.
         val root = mount(AppState(admin = org.mattshoe.mtg.core.Admin("t")))
         settle()
-        val items = root.querySelectorAll(".app-menu > *")
-        val labels = (0 until items.length).map { (items[it] as org.w3c.dom.HTMLElement) }
-        val rule = labels.indexOfFirst { it.className.contains("app-menu-sep") }
-        assertTrue(rule > 0, "no rule in the menu")
-        val above = labels.take(rule).mapNotNull { it.textContent?.trim() }
-        val below = labels.drop(rule).mapNotNull { it.textContent?.trim() }
-        assertEquals(listOf("Library", "Decks", "Stats"), above)
-        assertTrue(below.contains("Entry"), below.toString())
-        assertTrue(below.contains("Server Logs"), below.toString())
-        assertTrue(below.contains("Lock"), below.toString())
+        fun labels(css: String) = root.querySelectorAll(css).let { n ->
+            (0 until n.length).mapNotNull { (n[it] as? org.w3c.dom.HTMLElement)?.textContent?.trim() }
+        }
+        assertEquals(listOf("Library", "Decks", "Stats", "Entry"), labels(".app-menu button"))
+        assertEquals(0, root.querySelectorAll(".app-menu .app-menu-sep").length, "a rule with nothing to divide")
+
+        val behind = labels(".profile-menu button")
+        assertTrue(behind.contains("Server Logs"), behind.toString())
+        // Unlocked by a password, so the password's own row offers the
+        // way out of it. "Log in" is what it says while locked.
+        assertTrue(behind.contains("Log out"), behind.toString())
+        assertTrue(behind.contains("Sign in with Google"), behind.toString())
+        assertFalse(behind.contains("Library"), behind.toString())
+        assertEquals(1, root.querySelectorAll(".profile-menu .app-menu-sep").length, "no rule under the name")
     }
 
     @Test

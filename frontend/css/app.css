@@ -177,6 +177,37 @@ h3 { font-size: 14px; }
 }
 .nav-burger .bar { display: block; width: 16px; height: 2px; background: currentColor; border-radius: 1px; }
 
+/* Who you are, at the right-hand end of the bar, where a profile
+   lives and where the phone's is. Square like the hamburger beside
+   it, because two controls the same size read as a pair rather than
+   as a button and an afterthought. */
+.nav-profile {
+  display: grid; place-items: center;
+  width: 34px; height: 34px; padding: 0; margin-left: 7px;
+  border: 1px solid var(--line); border-radius: 50%;
+  background: var(--bg-3); color: var(--text-2); cursor: pointer; font: inherit;
+  overflow: hidden; flex: none;
+}
+@media (hover: hover) {
+  .nav-profile:hover { color: var(--text); border-color: var(--line-2); }
+}
+.nav-profile.on { color: var(--accent-2); border-color: var(--accent-2); }
+/* The account's own picture fills it; the fallback mark sits inside
+   it at text size. */
+.nav-profile .app-avatar { width: 100%; height: 100%; border: 0; border-radius: 50%; }
+.nav-profile .icon { width: 19px; height: 19px; }
+
+/* The profile's own panel. Same slab as the hamburger's, hung off the
+   right edge so it cannot run off the side of a phone. */
+.profile-menu {
+  display: none;
+  position: absolute; top: calc(100% + 7px); right: 0; z-index: 45;
+  min-width: 210px; padding: 7px;
+  background: var(--bg-2); border: 1px solid var(--line-2);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.profile-menu.open { display: flex; flex-direction: column; gap: 1px; }
+
 /* A press anywhere else closes the menu. */
 .nav-backdrop { position: fixed; inset: 0; z-index: 44; }
 
@@ -810,6 +841,11 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
 /* A button that is only an icon is square, and says what it is
    through its title rather than through a word taking three times
    the room. */
+/* A head and shoulders, the shape the phone's `ProfileIcon` draws. */
+.icon-profile {
+  -webkit-mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round'><circle cx='12' cy='8.5' r='4'/><path d='M4.5 20c.5-4 14.5-4 15 0'/></svg>");
+  mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round'><circle cx='12' cy='8.5' r='4'/><path d='M4.5 20c.5-4 14.5-4 15 0'/></svg>");
+}
 .icon-close {
   -webkit-mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.1' stroke-linecap='round'><path d='M6 6l12 12'/><path d='M18 6L6 18'/></svg>");
   mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.1' stroke-linecap='round'><path d='M6 6l12 12'/><path d='M18 6L6 18'/></svg>");
@@ -1631,10 +1667,11 @@ select.sort {
 .peek-tags { display: flex; gap: 8px; flex-wrap: wrap; }
 .peek-acts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 
-/* Who is signed in, in the nav drawer. The slug is the address their
-   collection lives at, so it is shown as one rather than as a name. */
+/* Who is signed in, at the head of the profile menu. The slug is the
+   address their collection lives at, so it is shown as one rather
+   than as a name. */
 .app-who {
-  padding: 10px 14px 4px;
+  padding: 8px 10px 8px;
   color: var(--text);
   font-weight: 600;
   display: flex;
@@ -1648,6 +1685,7 @@ select.sort {
   object-fit: cover;
   flex: none;
 }
+.app-who > div { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .app-who-slug {
   font-family: var(--mono);
   font-size: 12px;

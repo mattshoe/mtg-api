@@ -545,7 +545,20 @@ object MtgApp {
      * it if the load failed because the failure went to a toast
      * instead of to the page. It read as the decks having vanished.
      */
+    /**
+     * Nothing scoped is fetched before there is a collection to scope
+     * it to.
+     *
+     * The three pages below are somebody's collection. Until the
+     * server has said who this session is, or a key in the address
+     * has been resolved, there is no "somebody" — and asking anyway
+     * read every collection at once, which is how Kayla's decks got
+     * onto Matt's screen. `AppState.collectionKnown` is the gate, and
+     * the queries refuse an empty owner as well, so a shell
+     * forgetting this cannot leak a row.
+     */
     private fun loadFor(s: AppState) {
+        if (!s.collectionKnown && s.view in View.COLLECTION) return
         when (s.view) {
             // Only if the rows on screen do not already answer it.
             // Coming back from a card asked the database for the same
@@ -667,7 +680,10 @@ object MtgApp {
      */
     private suspend fun loadDecks(): AppState {
         // One collection's decks, not every deck in the database.
-        val r = api.query(DeckQueries.all(app.viewing))
+        // The collection on screen, or every one of them for a reader
+        // the server has said is nobody. Never an empty owner: that is
+        // "nobody said yet", which `DeckQueries` refuses outright.
+        val r = api.query(DeckQueries.all(app.viewing.ifEmpty { DeckQueries.EVERY }))
         return app.copy(decks = app.decks.loaded(DeckQueries.decode(r.cols, r.rows)))
     }
 
@@ -755,7 +771,11 @@ object MtgApp {
     private fun loadAccount() {
         scope.launch {
             val who = runCatching { fetchAccount() }.getOrNull()
-            if (who != null) app = app.copy(admin = app.admin.signIn(who))
+            // Settled either way: "nobody" is an answer, and the
+            // scoped pages are waiting on one before they fetch.
+            app = app.copy(
+                admin = if (who != null) app.admin.signIn(who) else app.admin.settle(),
+            )
             // Arrived without naming a collection? Go to your own, and
             // put its key in the address — so the link in the bar is
             // one that can be copied and handed to somebody else.
@@ -767,6 +787,8 @@ object MtgApp {
                 app = app.copy(route = home)
             }
             resolveCollection()
+            // Whatever was waiting on who this is can go now.
+            if (app.route.collection.isEmpty()) loadFor(app)
         }
     }
 
@@ -782,6 +804,9 @@ object MtgApp {
         val key = app.route.collection
         if (key.isEmpty()) {
             app = app.browsing("")
+            // An account with no key in the address is still a
+            // collection: their own.
+            if (app.collectionKnown) loadFor(app)
             return
         }
         scope.launch {

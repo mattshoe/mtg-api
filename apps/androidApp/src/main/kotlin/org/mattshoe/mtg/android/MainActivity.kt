@@ -271,6 +271,9 @@ class MainActivity : ComponentActivity() {
         val key = app.route.collection
         if (key.isEmpty()) {
             app = app.browsing("")
+            // An account with no key in the address is still a
+            // collection: their own.
+            if (app.collectionKnown) loadFor(app)
             return
         }
         scope.launch {
@@ -286,10 +289,22 @@ class MainActivity : ComponentActivity() {
 
     private fun restoreAccount() {
         val held = app.admin.token
-        if (held.isNullOrBlank()) return
+        if (held.isNullOrBlank()) {
+            // Nothing to ask about, so it is already answered.
+            app = app.copy(admin = app.admin.settle())
+            return
+        }
         scope.launch {
-            val who = runCatching { api.me(held) }.getOrNull() ?: return@launch
-            app = app.copy(admin = app.admin.signIn(who, held))
+            val who = runCatching { api.me(held) }.getOrNull()
+            // Settled either way: a stale session is "nobody", which
+            // the scoped pages are waiting on before they fetch.
+            app = app.copy(
+                admin = if (who != null) app.admin.signIn(who, held) else app.admin.settle(),
+            )
+            // The page that was waiting for an answer can go now.
+            // Without this the screen stayed empty until something
+            // else navigated.
+            loadFor(app)
         }
     }
 
@@ -538,7 +553,20 @@ class MainActivity : ComponentActivity() {
      * still in flight, and keeps rendering it when the load fails
      * because the failure goes to a toast that has already gone.
      */
+    /**
+     * Nothing scoped is fetched before there is a collection to scope
+     * it to.
+     *
+     * The three pages below are somebody's collection. Until the
+     * server has said who this session is, or a key in the address
+     * has been resolved, there is no "somebody" — and asking anyway
+     * read every collection at once, which is how Kayla's decks got
+     * onto Matt's screen. `AppState.collectionKnown` is the gate, and
+     * the queries refuse an empty owner as well, so a shell
+     * forgetting this cannot leak a row.
+     */
     private fun loadFor(s: AppState) {
+        if (!s.collectionKnown && s.view in View.COLLECTION) return
         when (s.view) {
             View.LIBRARY -> {
                 app = app.fetching(View.LIBRARY)
@@ -663,7 +691,10 @@ class MainActivity : ComponentActivity() {
 
     private suspend fun loadDecks(): AppState {
         // One collection's decks, not every deck in the database.
-        val r = api.query(DeckQueries.all(app.viewing))
+        // The collection on screen, or every one of them for a reader
+        // the server has said is nobody. Never an empty owner: that is
+        // "nobody said yet", which `DeckQueries` refuses outright.
+        val r = api.query(DeckQueries.all(app.viewing.ifEmpty { DeckQueries.EVERY }))
         return app.copy(decks = app.decks.loaded(DeckQueries.decode(r.cols, r.rows)))
     }
 
