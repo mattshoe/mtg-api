@@ -27,8 +27,9 @@ import { addCards, removeCards } from './cards.js';
 import { disassembleDeck, editDeckList, createDeck, renameDeck, FORMATS } from './decks.js';
 import { mintToken, verifyToken, bearer } from './admin.js';
 import {
-  whoAmI, canEdit, profileOf, endSession, SESSION_COOKIE,
+  whoAmI, canEdit, profileOf, endSession, signIn, newSession, cookieValue, SESSION_COOKIE,
 } from './accounts.js';
+import { startSignIn, finishSignIn } from './google.js';
 import { lookupPrices } from './prices.js';
 import { runMaintenance, CRON_TASKS } from './maintenance.js';
 import { newEntry, writeEntry, buildLogQuery, logStats } from './log.js';
@@ -162,6 +163,8 @@ const INDEX = {
     'GET /schema': 'tables, views, columns, row counts',
     'GET /query': '?sql=SELECT+...&fmt=rows|objects|tsv&limit=5000 (read-only)',
     'POST /query': '{"sql":"SELECT ...","params":[],"fmt":"rows|objects|tsv","limit":5000} (read-only)',
+    'GET /auth/google': 'start signing in with Google',
+    'GET /auth/callback/google': 'where Google sends you back',
     'POST /admin/sql': 'arbitrary SQL, for the server operator and the nightly job',
     'GET /auth/me': 'the signed-in account, or nulls',
     'POST /auth/logout': 'end this session',
@@ -187,6 +190,11 @@ const INDEX = {
 
 /** 401 with the reason, in the shape every other error uses. */
 const denied = (reason) => json({ error: reason, admin_required: true }, 401);
+
+/** The one round trip's worth of state a sign-in needs. */
+const PENDING_COOKIE = 'mtg_oauth';
+
+const safeJson = (text) => { try { return JSON.parse(text); } catch { return null; } };
 
 /**
  * Does this statement go near the log table? Checked against the SQL with
@@ -600,6 +608,62 @@ async function route(request, env, ctx, entry) {
       if (out.status >= 500) entry.level = 'error';
       if (out.status >= 400) entry.message = out.body?.error;
       return send(out);
+    }
+
+    if (path === '/auth/google') {
+      if (method !== 'GET') return notAllowed('GET');
+      const { url: to, state, verifier } = startSignIn(env);
+      // State and verifier ride in a cookie the page cannot read and
+      // that dies in ten minutes: they are single-use secrets for one
+      // round trip, and there is nothing to clean up afterwards.
+      const where = url.searchParams.get('return') || '';
+      return new Response(null, {
+        status: 302,
+        headers: {
+          location: to,
+          'set-cookie': `${PENDING_COOKIE}=${encodeURIComponent(JSON.stringify({ state, verifier, where }))}`
+            + '; Path=/; Max-Age=600; HttpOnly; Secure; SameSite=Lax',
+          ...CORS,
+        },
+      });
+    }
+
+    if (path === '/auth/callback/google') {
+      if (method !== 'GET') return notAllowed('GET');
+      const pending = safeJson(cookieValue(request.headers.get('cookie'), PENDING_COOKIE));
+      const state = url.searchParams.get('state');
+      const code = url.searchParams.get('code');
+      // Both halves, and they have to be the pair this browser was
+      // sent away with. Without the state check a link somebody else
+      // made could sign you into their account.
+      if (!code || !state || !pending?.state || pending.state !== state) {
+        return json({ error: 'that sign-in did not start here' }, 400);
+      }
+      let identity;
+      try {
+        identity = await finishSignIn(env, code, pending.verifier, env.AUTH_FETCH);
+      } catch (e) {
+        entry.level = 'warn';
+        entry.message = `google sign-in refused: ${String(e?.message ?? e).slice(0, 200)}`;
+        return json({
+          error: 'that sign-in could not be verified',
+          ...(env.AUTH_DEBUG ? { why: String(e?.message ?? e) } : {}),
+        }, 401);
+      }
+      const user = await signIn(env.DB, identity);
+      const token = await newSession(env.DB, user.id);
+      entry.detail = { slug: user.slug };
+      const site = env.SITE_URL || 'https://mtg.mattshoe.org';
+      const back = pending.where && pending.where.startsWith('/') ? pending.where : '';
+      return new Response(null, {
+        status: 302,
+        headers: {
+          location: `${site}${back}`,
+          'set-cookie': `${SESSION_COOKIE}=${token}; Path=/; Max-Age=${90 * 24 * 3600}`
+            + '; HttpOnly; Secure; SameSite=Lax',
+          ...CORS,
+        },
+      });
     }
 
     if (path === '/auth/me') {
