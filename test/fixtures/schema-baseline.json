@@ -1,0 +1,26 @@
+{
+  "_why": "Tables that existed before migrations/ did. The database was built by applying schema.sql by hand, so these have no migration and never will. Anything added after this list has to have one.",
+  "tables": [
+    "aliases",
+    "card_colors",
+    "card_faces",
+    "card_finishes",
+    "card_frame_effects",
+    "card_games",
+    "card_keywords",
+    "card_promo_types",
+    "card_search",
+    "card_tags",
+    "card_types",
+    "cards",
+    "deck_cards",
+    "deck_notes",
+    "decks",
+    "legalities",
+    "logs",
+    "maintenance_log",
+    "prices",
+    "rulings",
+    "tags"
+  ]
+}
