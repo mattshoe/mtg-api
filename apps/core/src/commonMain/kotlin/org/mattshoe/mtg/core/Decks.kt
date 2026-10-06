@@ -273,7 +273,15 @@ object DeckQueries {
      * row by nine, which is how a tile list once showed the same deck
      * repeatedly.
      */
-    fun all() = Sql(
+    /**
+     * Every deck, or every deck of one collection.
+     *
+     * The owner is new. Without it the decks page listed whatever was
+     * in the database, which with more than one collection in it
+     * meant showing somebody else's decks to somebody who had signed
+     * in as themselves.
+     */
+    fun all(owner: String = "") = Sql(
         """SELECT d.slug, d.name, d.owner, d.commander, d.colors, d.bracket,
                   c.scryfall_id AS art_id
              FROM decks d
@@ -283,8 +291,9 @@ object DeckQueries {
                     WHEN instr(d.commander, ' (') > 0
                     THEN substr(d.commander, 1, instr(d.commander, ' (') - 1)
                     ELSE d.commander END))
+            ${if (owner.isEmpty()) "" else "WHERE d.owner = ?"}
             ORDER BY d.owner, d.name""",
-        emptyList(),
+        if (owner.isEmpty()) emptyList() else listOf(owner),
     )
 
     /**

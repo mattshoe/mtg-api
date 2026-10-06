@@ -143,7 +143,7 @@ fun AppShell(
             state = state.decks,
             onOpen = { onOpenDeck(it.slug) },
             onClose = { onState(state.copy(decks = state.decks.close())) },
-            admin = state.admin.unlocked,
+            admin = state.canEdit,
             onEdit = { onEditDeck(it.slug) },
             onRename = { onAskRename(it.slug) },
             onDisassemble = { onAskDisassemble(it.slug) },
@@ -261,7 +261,7 @@ fun AppShell(
             cards = state.peekRun,
             at = state.peek.at,
             place = state.peekPlace,
-            admin = state.admin.unlocked,
+            admin = state.canEdit,
             onSwipe = { onState(state.peekTo(it)) },
             // Through `onOpenNamed`, the same way every other card is
             // opened — `openPeeked` only moves the state, and a card

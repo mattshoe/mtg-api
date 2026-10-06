@@ -618,7 +618,10 @@ class MainActivity : ComponentActivity() {
     }
 
     private suspend fun search(): AppState {
-        val (page, count) = Load.library(app.library)
+        // Scoped to the collection on screen, which is your own
+        // unless the address names somebody else's. Unscoped, a
+        // search returned every collection's cards at once.
+        val (page, count) = Load.library(app.scopedLibrary())
         val rows = api.query(page)
         val total = api.query(count)
         return app.copy(
@@ -627,7 +630,8 @@ class MainActivity : ComponentActivity() {
     }
 
     private suspend fun loadDecks(): AppState {
-        val r = api.query(DeckQueries.all())
+        // One collection's decks, not every deck in the database.
+        val r = api.query(DeckQueries.all(app.viewing))
         return app.copy(decks = app.decks.loaded(DeckQueries.decode(r.cols, r.rows)))
     }
 

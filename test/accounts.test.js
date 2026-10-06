@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { env } from 'cloudflare:test';
+import { get, postAnon, stubScryfall } from './helpers.js';
 import {
   signIn, newSession, userForToken, endSession, slugFor, hashToken,
 } from '../src/accounts.js';
@@ -124,5 +125,88 @@ describe('accounts', () => {
   it('two sessions are two tokens', async () => {
     const user = await signIn(env.DB, { ...google, name: 'Some One' });
     expect(await newSession(env.DB, user.id)).not.toBe(await newSession(env.DB, user.id));
+  });
+});
+
+/**
+ * The public key a collection is shared by.
+ *
+ * Matt: "I need these to be scoped in the url [...] It's important
+ * that you can share your own collection with other people.
+ * Otherwise if i copy the url then they'll just go to their own
+ * fucking collection"; "these slugs must be VERY unique. Probably a
+ * small like 8 digit hash or something. Like a user key. BUT the
+ * user key should NEVER be sufficient for edit privileges. It's just
+ * a public user identifier."
+ *
+ * So the address carries a key and not a name. A name-derived slug
+ * would have collided — two Matts, and the second one's URL is
+ * `matt-2` — and worse, it is guessable, which matters for a thing
+ * that is going to be pasted into chats.
+ *
+ * The key identifies and never authorises. Nothing anywhere asks
+ * "does this request carry the right key"; editing asks who the
+ * *session* says you are, which a URL cannot say.
+ */
+describe('a collection key', () => {
+  const google = { provider: 'google', subject: 'k-1', name: 'Some One' };
+
+  it('every account gets one', async () => {
+    const user = await signIn(env.DB, google);
+    expect(user.key).toMatch(/^[0-9a-hjkmnp-tv-z]{8}$/);
+  });
+
+  it('two accounts never share one', async () => {
+    const a = await signIn(env.DB, { provider: 'google', subject: '1', name: 'Same Name' });
+    const b = await signIn(env.DB, { provider: 'google', subject: '2', name: 'Same Name' });
+    expect(a.key).not.toBe(b.key);
+    // And the names collided, which is the thing a key is for.
+    expect(b.slug).toBe('same-name-2');
+  });
+
+  it('it is not a name, so it gives nothing away', async () => {
+    const user = await signIn(env.DB, { ...google, name: 'Matthew Shoemaker' });
+    expect(user.key).not.toMatch(/matt|shoe/i);
+  });
+
+  it('it leaves out the letters people mistype', async () => {
+    // Crockford's alphabet: no i, l, o or u. A key gets read off a
+    // screen and typed into another one.
+    const keys = [];
+    for (let i = 0; i < 40; i += 1) {
+      keys.push((await signIn(env.DB, { provider: 'google', subject: `n-${i}`, name: 'X' })).key);
+    }
+    expect(keys.join('')).not.toMatch(/[ilou]/);
+  });
+
+  it('it never changes, because people paste it places', async () => {
+    const first = await signIn(env.DB, google);
+    const again = await signIn(env.DB, { ...google, name: 'Renamed Entirely' });
+    expect(again.key).toBe(first.key);
+  });
+
+  it('a collection can be looked up by it, and says nothing private', async () => {
+    const user = await signIn(env.DB, { ...google, email: 'private@example.com' });
+    const r = await get(`/c/${user.key}`);
+    expect(r.status).toBe(200);
+    expect(r.body.key).toBe(user.key);
+    expect(r.body.slug).toBe(user.slug);
+    expect(r.body.name).toBe('Some One');
+    // Somebody else's address is not their inbox.
+    expect(JSON.stringify(r.body)).not.toContain('private@example.com');
+  });
+
+  it('a key nobody has is a 404', async () => {
+    expect((await get('/c/zzzzzzzz')).status).toBe(404);
+  });
+
+  it('holding the key is not permission to edit', async () => {
+    // The whole point. Anyone can read a collection by its key and
+    // nobody can write to one by holding it.
+    const user = await signIn(env.DB, google);
+    const r = await postAnon('/cards/add', {
+      owner: user.slug, list: '1 Sol Ring (M3C) 409', dry_run: true, key: user.key,
+    }, stubScryfall());
+    expect(r.status).toBe(401);
   });
 });

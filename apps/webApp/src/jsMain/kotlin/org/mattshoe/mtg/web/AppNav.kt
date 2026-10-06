@@ -94,8 +94,16 @@ fun AppNav(
             // information and log in log out."
             state.admin.account?.let { who ->
                 Div(attrs = { classes("app-who") }) {
-                    Text(who.shownName)
-                    Span(attrs = { classes("app-who-slug") }) { Text("/c/${who.slug}") }
+                    // Their own picture when Google sent one: it says
+                    // *which* account at a glance rather than that
+                    // there is one. A name on its own otherwise.
+                    who.avatar?.takeIf { it.isNotBlank() }?.let { url ->
+                        Img(src = url, alt = "", attrs = { classes("app-avatar") })
+                    }
+                    Div {
+                        Text(who.shownName)
+                        Span(attrs = { classes("app-who-slug") }) { Text("/c/${who.slug}") }
+                    }
                 }
             }
 

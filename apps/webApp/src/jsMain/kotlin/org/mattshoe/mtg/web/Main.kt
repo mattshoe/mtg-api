@@ -644,7 +644,9 @@ object MtgApp {
     }
 
     private suspend fun search(s: AppState): AppState {
-        val (page, count) = Load.library(s.library)
+        // Scoped to the collection on screen, which is your own
+        // unless the address names somebody else's.
+        val (page, count) = Load.library(s.scopedLibrary())
         val rows = api.query(page)
         val total = api.query(count)
         return app.copy(
@@ -664,7 +666,8 @@ object MtgApp {
      * watch it.
      */
     private suspend fun loadDecks(): AppState {
-        val r = api.query(DeckQueries.all())
+        // One collection's decks, not every deck in the database.
+        val r = api.query(DeckQueries.all(app.viewing))
         return app.copy(decks = app.decks.loaded(DeckQueries.decode(r.cols, r.rows)))
     }
 

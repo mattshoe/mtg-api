@@ -27,7 +27,8 @@ import { addCards, removeCards } from './cards.js';
 import { disassembleDeck, editDeckList, createDeck, renameDeck, FORMATS } from './decks.js';
 import { mintToken, verifyToken, bearer } from './admin.js';
 import {
-  whoAmI, canEdit, profileOf, endSession, signIn, newSession, cookieValue, SESSION_COOKIE,
+  whoAmI, canEdit, profileOf, endSession, signIn, newSession, cookieValue,
+  collectionByKey, SESSION_COOKIE,
 } from './accounts.js';
 import { startSignIn, finishSignIn, verifyIdToken } from './google.js';
 import { lookupPrices } from './prices.js';
@@ -209,6 +210,7 @@ const INDEX = {
     'POST /auth/google/token': 'a Google ID token in, a session out — for the phone',
     'GET /auth/callback/google': 'where Google sends you back',
     'POST /admin/sql': 'arbitrary SQL, for the server operator and the nightly job',
+    'GET /c/:key': 'whose collection that address names',
     'GET /auth/me': 'the signed-in account, or nulls',
     'POST /auth/logout': 'end this session',
     'POST /cards/add': '{"owner":"matt","list":"4 Lightning Bolt (2X2) 117","dry_run":false}',
@@ -746,6 +748,15 @@ async function route(request, env, ctx, entry) {
       const token = await newSession(env.DB, user.id);
       entry.detail = { slug: user.slug };
       return json({ token, ...profileOf(user) });
+    }
+
+    // A collection, by the key in its address. Open to anybody:
+    // every collection is public to read, and this is how a link
+    // somebody pasted resolves to whose it is.
+    if (path.startsWith('/c/')) {
+      if (method !== 'GET') return notAllowed('GET');
+      const found = await collectionByKey(env.DB, path.slice(3));
+      return found ? json(found) : json({ error: 'no collection with that key' }, 404);
     }
 
     if (path === '/auth/me') {

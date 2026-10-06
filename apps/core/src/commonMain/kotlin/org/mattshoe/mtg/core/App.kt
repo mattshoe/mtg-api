@@ -30,6 +30,11 @@ data class AppState(
     val rename: RenameState? = null,
     /** Where the card carousel is over an open deck. See [peekAt]. */
     val peek: Peek = Peek(),
+    /**
+     * Whose collection is on screen, when it is somebody's in
+     * particular. Empty means nobody named one — see [viewing].
+     */
+    val collection: String = "",
     /** What is on top, and therefore what back closes. */
     val overlays: Overlays = Overlays(),
     /** Set when a share arrived and has not been used yet. */
@@ -142,6 +147,43 @@ data class AppState(
 
     val previousCard: DeckCard? get() = cardAt.takeIf { it > 0 }?.let { deckRun[it - 1] }
     val nextCard: DeckCard? get() = cardAt.takeIf { it in 0 until deckRun.size - 1 }?.let { deckRun[it + 1] }
+
+    // ------------------------------------------------ whose collection
+
+    /**
+     * The collection on screen.
+     *
+     * The address wins, because a public collection having an address
+     * is the whole point of it. Otherwise it is your own — which is
+     * the bit that was missing, and why somebody signed in was being
+     * shown everybody's decks at once.
+     *
+     * Empty for a visitor who has named nobody: every collection, the
+     * way it has always been for somebody who has not said who they
+     * are.
+     */
+    val viewing: String
+        get() = collection.ifEmpty { admin.account?.slug.orEmpty() }
+
+    /** Look at somebody's collection. Theirs or anybody's. */
+    fun browsing(slug: String): AppState = copy(collection = slug)
+
+    /**
+     * May you change what is on screen?
+     *
+     * About *this* collection and no other. It used to ask
+     * `admin.unlocked` — "are you unlocked" — which a stored password
+     * answered yes for everybody's cards, so the edit buttons were on
+     * Kayla's decks too. The server never allowed the write; the app
+     * was offering it.
+     */
+    val canEdit: Boolean get() = admin.account?.owns(viewing) == true
+
+    /** The Library, scoped to the collection being looked at. */
+    fun scopedLibrary(): Library =
+        viewing.takeIf { it.isNotEmpty() }
+            ?.let { library.copy(filters = library.filters.copy(owner = it)) }
+            ?: library
 
     // --------------------------------------------------- the carousel
 
@@ -534,6 +576,9 @@ object Load {
     fun library(s: Library): Pair<Sql, Sql> = s.queries()
 
     fun decks(): Sql = DeckQueries.all()
+
+    /** The decks of one collection. */
+    fun decks(owner: String): Sql = DeckQueries.all(owner)
 
     fun deck(slug: String): Sql = DeckQueries.cards(slug)
 

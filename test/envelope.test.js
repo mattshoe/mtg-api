@@ -164,6 +164,11 @@ describe('a path that does not exist', () => {
     const listing = (await get('/nope')).body.see;
     for (const key of Object.keys(listing)) {
       const [method, path] = key.split(' ');
+      // A path with a parameter in it cannot be probed as written:
+      // `/c/:key` is a real route and `:key` is nobody's collection,
+      // so it answers 404 on its merits. The route's own tests cover
+      // it; this one is about paths that are advertised and absent.
+      if (path.includes(':')) continue;
       const r = method === 'GET' ? await get(path) : await postAnon(path, {});
       expect(r.status, `${key} is advertised but answers ${r.status}`).not.toBe(404);
       expect(r.status, `${key} is advertised with the wrong method`).not.toBe(405);

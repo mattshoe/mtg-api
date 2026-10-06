@@ -36,6 +36,7 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.utf16CodePoint
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.mattshoe.mtg.core.AppState
@@ -66,11 +67,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
@@ -83,6 +87,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
+import coil3.compose.AsyncImage
 import kotlinx.coroutines.delay
 import org.mattshoe.mtg.core.Design
 import kotlin.math.roundToInt
@@ -272,7 +277,7 @@ fun AppShell(
                     overflow = TextOverflow.Ellipsis,
                 )
                 // Who you are, on the right, where a profile lives.
-                ProfileButton(menuOpen) { menuOpen = !menuOpen }
+                ProfileButton(menuOpen, state.admin.account?.avatar) { menuOpen = !menuOpen }
             }
 
             // The screens take the room that is left and the bar keeps
@@ -330,7 +335,7 @@ fun AppShell(
                             DecksListScreen(
                                 state = state.decks,
                                 scrollState = deckScrollState,
-                                admin = state.admin.unlocked,
+                                admin = state.canEdit,
                                 onOpen = { onOpenDeck(it.slug) },
                             )
                         } else if (openDeck == null) {
@@ -348,7 +353,7 @@ fun AppShell(
                                 state = state.decks,
                                 open = openDeck,
                                 scrollState = deckScrollState,
-                                admin = state.admin.unlocked,
+                                admin = state.canEdit,
                                 onClose = { onState(state.navigate(Route(View.DECKS))) },
                                 onEdit = { onEditDeck(it.slug) },
                                 onDisassemble = { onAskDisassemble(it.slug) },
@@ -483,7 +488,7 @@ fun AppShell(
                 cards = state.peekRun,
                 at = state.peek.at,
                 place = state.peekPlace,
-                admin = state.admin.unlocked,
+                admin = state.canEdit,
                 onSwipe = { onState(state.peekTo(it)) },
                 // Through `onOpenNamed`, the same way every other card
                 // is opened — `openPeeked` only moves the state, and a
@@ -628,7 +633,7 @@ fun AppShell(
  * screen that only exists because it is.
  */
 @Composable
-private fun ProfileButton(open: Boolean, onClick: () -> Unit) {
+private fun ProfileButton(open: Boolean, avatar: String?, onClick: () -> Unit) {
     Box(
         Modifier.size(TouchTarget)
             .testTag("profile")
@@ -640,8 +645,34 @@ private fun ProfileButton(open: Boolean, onClick: () -> Unit) {
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        ProfileIcon(if (open) Accent2 else Ink2)
+        Avatar(avatar, open, size = 26.dp)
     }
+}
+
+/**
+ * Whoever is signed in, as their own picture.
+ *
+ * Google sends one with the profile and it is a better answer than a
+ * drawn glyph: it says *which* account at a glance rather than that
+ * there is one. The glyph is what a visitor gets, and what somebody
+ * whose Google account has no picture gets — Matt: "If they don't
+ * have one then the existing image is fine."
+ */
+@Composable
+private fun Avatar(url: String?, on: Boolean, size: Dp) {
+    if (url.isNullOrBlank()) {
+        ProfileIcon(if (on) Accent2 else Ink2, size = size)
+        return
+    }
+    AsyncImage(
+        model = url,
+        contentDescription = null,
+        modifier = Modifier.size(size)
+            .testTag("profile-avatar")
+            .clip(CircleShape)
+            .border(1.dp, if (on) Accent else Line2, CircleShape),
+        contentScale = ContentScale.Crop,
+    )
 }
 
 /**
@@ -800,7 +831,7 @@ private fun NavMenu(
                 horizontalArrangement = Arrangement.spacedBy(9.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                ProfileIcon(if (state.admin.unlocked) Accent2 else Ink3, size = 26.dp)
+                Avatar(state.admin.account?.avatar, state.admin.unlocked, size = 26.dp)
                 Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                     Line(
                         state.admin.shownName
