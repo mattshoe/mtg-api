@@ -184,7 +184,7 @@ class NewDeckInEntryParityTest {
         inTheWizard()
         tap("Commander")
         tap("Continue →")
-        assertEquals(DeckStep.OWNER, held.value.newDeck.step)
+        assertEquals(DeckStep.NAME, held.value.newDeck.step)
         assertTrue(says("← Back"), "no way back from the second step")
         assertTrue(says("Continue →"), "the wizard's buttons are not the entry wizard's")
     }

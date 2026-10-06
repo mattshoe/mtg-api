@@ -46,7 +46,6 @@ import org.mattshoe.mtg.core.Library
 import org.mattshoe.mtg.core.MassEntry
 import org.mattshoe.mtg.core.NewDeck
 import org.mattshoe.mtg.core.Overlay
-import org.mattshoe.mtg.core.Owner
 import org.mattshoe.mtg.core.PaletteState
 import org.mattshoe.mtg.core.Printing
 import org.mattshoe.mtg.core.Step
@@ -459,7 +458,7 @@ class ScreensTest {
 
     @Test
     fun applyIsNotOfferedWithoutADryRun() {
-        val s = MassEntry().choose(Direction.ADD).type("1 Sol Ring").assign(Owner.MATT).goTo(Step.REVIEW)
+        val s = MassEntry().choose(Direction.ADD).type("1 Sol Ring").goTo(Step.REVIEW)
         content { MassEntryScreen(s, {}, {}, {}) }
         rule.onNodeWithText("Nothing to apply").assertIsNotEnabled()
     }

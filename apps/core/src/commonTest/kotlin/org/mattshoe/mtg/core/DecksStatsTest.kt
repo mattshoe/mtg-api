@@ -114,19 +114,6 @@ class DecksTest {
         assertEquals(12, s.totalCards)
     }
 
-    @Test
-    fun decksGroupByOwnerInAStableOrder() {
-        val s = DecksState().loaded(
-            listOf(
-                Deck("b", "B", "matt", null, null, null, null),
-                Deck("a", "A", "kayla", null, null, null, null),
-                Deck("c", "C", "matt", null, null, null, null),
-            ),
-        )
-        assertEquals(listOf("kayla", "matt"), s.byOwner.map { it.first })
-        assertEquals(2, s.byOwner.last().second.size)
-    }
-
     // --------------------------------------- saying it is still loading
 
     @Test
@@ -297,7 +284,7 @@ class StatsTest {
 
     @Test
     fun theDefaultScopeIsEveryone() {
-        assertEquals("Both", StatsScope().label)
+        assertEquals("Everything", StatsScope().label)
         assertTrue(StatsQueries.totals(StatsScope()).params.isEmpty())
     }
 
@@ -307,7 +294,7 @@ class StatsTest {
      */
     @Test
     fun aScopedQueryBindsTheOwnerOncePerSubquery() {
-        val q = StatsQueries.totals(StatsScope(Owner.MATT))
+        val q = StatsQueries.totals(StatsScope("matt"))
         assertEquals(8, q.params.size)
         assertTrue(q.params.all { it == "matt" })
         assertEquals(8, Regex("owner = \\?").findAll(q.sql).count())
@@ -351,10 +338,10 @@ class StatsTest {
 
     @Test
     fun choosingAnOwnerReplacesTheScopeAndDropsAnyStaleError() {
-        val s = StatsState(error = "network down").scopedTo(Owner.KAYLA)
-        assertEquals(Owner.KAYLA, s.scope.owner)
+        val s = StatsState(error = "network down").scopedTo("kayla")
+        assertEquals("kayla", s.scope.owner)
         assertNull(s.error)
-        assertEquals(StatsScope(), StatsState().scopedTo(null).scope, "null is both, not a third owner")
+        assertEquals(StatsScope(), StatsState().scopedTo(null).scope, "null is everything, not a third collection")
     }
 
     @Test

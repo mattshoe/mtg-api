@@ -24,7 +24,6 @@ import org.mattshoe.mtg.core.Applied
 import org.mattshoe.mtg.core.Change
 import org.mattshoe.mtg.core.Direction
 import org.mattshoe.mtg.core.MassEntry
-import org.mattshoe.mtg.core.Owner
 import org.mattshoe.mtg.core.Step
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -153,7 +152,6 @@ class MassEntryParityTest {
     private fun reviewed(changes: List<Change> = threeChanges) =
         MassEntry(direction = Direction.ADD)
             .type(changes.indices.joinToString("\n") { "1 A Card With Quite A Long Name Number ${it + 1}" })
-            .assign(Owner.MATT)
             .previewed(Applied(dryRun = true, resolved = changes.size, changes = changes))
 
     private fun done(
@@ -164,7 +162,6 @@ class MassEntryParityTest {
         direction: Direction = Direction.ADD,
     ) = MassEntry(direction = direction)
         .type("1 A Card With Quite A Long Name Number 1\n1 A Card With Quite A Long Name Number 2")
-        .assign(Owner.MATT)
         .previewed(Applied(dryRun = true, resolved = changes.size, changes = changes))
         .finished(
             Applied(
@@ -297,7 +294,7 @@ class MassEntryParityTest {
             },
             fact("a file only fills the box, and is offered here") { says("Upload a file") },
             fact("there is a way back") { says("← Back") },
-            fact("'Continue →' is pressable with a list in the box") { pressable("Continue →") },
+            fact("the dry run is offered with a list in the box") { pressable("Preview changes →") },
             fact("it says out loud that nothing has been written") {
                 says("Nothing is written until you press the button on the last step.")
             },
@@ -314,8 +311,8 @@ class MassEntryParityTest {
         Parity.check(
             fact("the removal question, not the addition one") { says("What are you removing?") },
             fact("nothing in the box is nought lines") { says("0 lines") },
-            fact("'Continue →' is on screen and refused") {
-                says("Continue →") && !pressable("Continue →")
+            fact("the dry run is on screen and refused") {
+                says("Preview changes →") && !pressable("Preview changes →")
             },
             fact("it says what to do about it") { says("Paste a list, or drop a file on the box.") },
             fact("it does not promise a write nobody can reach yet") {
@@ -324,56 +321,27 @@ class MassEntryParityTest {
         )
     }
 
-    // ======================================================== 3. who
+    // ===================================== 3. there is no third step
 
     @Test
-    fun theOwnerStepOffersBothAndPresumesNeither() {
-        wizard(MassEntry(direction = Direction.ADD).type("4 Lightning Bolt\n1 Sol Ring").goTo(Step.WHO))
-        rule.onRoot().shoot("mass-entry-3-who")
+    fun theListStepAsksForTheDryRunAndNothingAsksWhoseCollection() {
+        // There was a step here, "Whose collection?", with two tests
+        // over it: both names offered and neither presumed, and the
+        // tick moving from one to the other. The page is somebody's
+        // collection now, so the list is the last thing anybody has
+        // to say and the dry run is asked for from the box.
+        wizard(MassEntry(direction = Direction.ADD).type("4 Lightning Bolt\n1 Sol Ring").goTo(Step.LIST))
+        rule.onRoot().shoot("mass-entry-2-list-ready")
 
         Parity.check(
-            fact("the step is headed 'Whose collection?'") { says("Whose collection?") },
-            fact("the note counts cards on the list, not lines") { says("5 cards on the list") },
-            fact("the two collections are the two collections, in order") {
-                options() == listOf("Matt", "Kayla")
-            },
-            fact("neither owner is preselected") { !ticked("Matt") && !ticked("Kayla") },
-            fact("neither owner wears a tick") { !wearsATick("Matt") && !wearsATick("Kayla") },
-            fact("no owner arrived in the state") { live.value.owner == null },
-            fact("the button says 'Preview changes →' and is refused") {
-                says("Preview changes →") && !pressable("Preview changes →")
-            },
-            fact("the button is not relabelled when it is dead") { !says("Pick one to continue") },
-            fact("it says why: 'Pick whose collection this goes to.'") {
-                says("Pick whose collection this goes to.")
+            fact("nothing asks whose collection it is") { !says("Whose collection?") },
+            fact("neither of the two names is offered") { !says("Matt") && !says("Kayla") },
+            fact("the dry run is offered from the box") {
+                says("Preview changes →") && pressable("Preview changes →")
             },
             fact("no write is on screen with no dry run behind it") {
                 !says("printings", substring = true)
             },
-            fact("there is a way back to the box") { says("← Back") },
-        )
-    }
-
-    @Test
-    fun namingAnOwnerMovesTheTickRatherThanAddingOne() {
-        wizard(MassEntry(direction = Direction.ADD).type("4 Lightning Bolt\n1 Sol Ring").goTo(Step.WHO))
-
-        rule.onNodeWithText("Matt").performScrollTo().performClick()
-        rule.waitForIdle()
-        Parity.check(
-            fact("Matt took") { live.value.owner == Owner.MATT },
-            fact("Matt wears the tick") { ticked("Matt") && wearsATick("Matt") },
-            fact("the dry run is now offered") { pressable("Preview changes →") },
-            fact("the hint is gone") { !says("Pick whose collection this goes to.") },
-        )
-
-        rule.onNodeWithText("Kayla").performScrollTo().performClick()
-        rule.waitForIdle()
-        Parity.check(
-            fact("the second tap took") { live.value.owner == Owner.KAYLA },
-            fact("the tick moved rather than multiplied") { howMany("✓") == 1 },
-            fact("Kayla is the one marked") { ticked("Kayla") && wearsATick("Kayla") },
-            fact("Matt is no longer marked") { !ticked("Matt") && !wearsATick("Matt") },
         )
 
         rule.onNodeWithText("Preview changes →").performScrollTo().performClick()
@@ -385,7 +353,7 @@ class MassEntryParityTest {
     @Test
     fun noWriteIsOfferedBeforeADryRun() {
         // The rule the whole wizard exists for.
-        val ready = MassEntry(direction = Direction.ADD).type("1 Sol Ring").assign(Owner.MATT)
+        val ready = MassEntry(direction = Direction.ADD).type("1 Sol Ring")
         assertTrue(ready.canPreview, "the fixture cannot even ask for a dry run")
         wizard(ready.goTo(Step.REVIEW))
 
@@ -393,7 +361,6 @@ class MassEntryParityTest {
             fact("the step is headed 'Preview — nothing written yet'") {
                 says("Preview — nothing written yet")
             },
-            fact("whose collection it would write is on the step") { says("matt") },
             fact("it says there is no preview") { says("No preview yet.") },
             fact("the button says 'Nothing to apply' and is refused") {
                 says("Nothing to apply") && !pressable("Nothing to apply")
@@ -480,7 +447,6 @@ class MassEntryParityTest {
 
         Parity.check(
             fact("the receipt is headed 'Applied'") { says("Applied") },
-            fact("it says whose collection it wrote") { says("matt") },
             fact("three printings moved") { howMany("3") == 1 },
             fact("five copies moved") { howMany("5") == 1 },
             fact("two of them were new") { howMany("2") == 1 },
@@ -552,35 +518,35 @@ class MassEntryParityTest {
     // ===================================================== the stepper
 
     @Test
-    fun theStepperShowsFourStepsAndRefusesTheUnanswered() {
+    fun theStepperShowsThreeStepsAndRefusesTheUnanswered() {
         wizard()
 
         Parity.check(
-            fact("four steps, numbered, in the website's order") {
-                says("1 Which") && says("2 List") && says("3 Who") && says("4 Review")
+            fact("three steps, numbered, in the website's order") {
+                says("1 Which") && says("2 List") && says("3 Review")
             },
-            fact("the ending is not one of the steps") { !says("Done") && !says("5 Done") },
+            fact("the step that asked whose collection is not one of them") { !says("Who") },
+            fact("the ending is not one of the steps") { !says("Done") && !says("4 Done") },
             fact("nothing is reachable from the stepper before it is answered") {
-                !pressable("1 Which") && !pressable("2 List") &&
-                    !pressable("3 Who") && !pressable("4 Review")
+                !pressable("1 Which") && !pressable("2 List") && !pressable("3 Review")
             },
         )
     }
 
     @Test
     fun theStepperOpensUpBehindYouAndNotAheadOfYou() {
-        wizard(MassEntry(direction = Direction.ADD).type("1 Sol Ring").goTo(Step.WHO))
+        wizard(MassEntry(direction = Direction.ADD).type("1 Sol Ring").goTo(Step.LIST))
 
         Parity.check(
-            fact("the steps behind are ticked") { says("✓ Which") && says("✓ List") },
-            fact("and pressable") { pressable("✓ Which") && pressable("✓ List") },
-            fact("the step you are on is not a way back to itself") { !pressable("3 Who") },
-            fact("the step ahead stays shut") { !pressable("4 Review") },
+            fact("the step behind is ticked") { says("✓ Which") },
+            fact("and pressable") { pressable("✓ Which") },
+            fact("the step you are on is not a way back to itself") { !pressable("2 List") },
+            fact("the step ahead stays shut") { !pressable("3 Review") },
         )
 
-        rule.onNodeWithText("✓ List").performScrollTo().performClick()
+        rule.onNodeWithText("✓ Which").performScrollTo().performClick()
         rule.waitForIdle()
-        rule.runOnIdle { assertEquals(Step.LIST, live.value.step, "the stepper did not go back") }
+        rule.runOnIdle { assertEquals(Step.WHICH, live.value.step, "the stepper did not go back") }
     }
 
     @Test
@@ -594,14 +560,16 @@ class MassEntryParityTest {
         rule.waitForIdle()
 
         rule.runOnIdle {
-            assertEquals(Step.WHO, live.value.step, "Back did not go back")
+            assertEquals(Step.LIST, live.value.step, "Back did not go back")
             assertNull(live.value.preview, "the dry run survived being walked away from")
             assertTrue(!live.value.canApply, "a write was still reachable off a stale dry run")
         }
         Parity.check(
-            fact("it is the owner step again") { says("Whose collection?") },
+            fact("it is the box again") { says("What are you adding?") },
             fact("the write is not on screen any more") { !says("Add 3 printings") },
-            fact("the owner that was named is still named") { ticked("Matt") },
+            fact("the list that was typed is still in the box") {
+                says("A Card With Quite A Long Name Number 1", substring = true)
+            },
         )
     }
 

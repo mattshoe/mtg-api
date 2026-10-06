@@ -198,11 +198,11 @@ private fun Group(
 
 @Composable
 private fun CollectionGroup(f: Filters, facets: Facets, onChange: (Filters) -> Unit) {
-    FRow("Whose") {
-        Seg(listOf("matt" to "Matt", "kayla" to "Kayla", "both" to "Both"), f.owner) {
-            onChange(f.copy(owner = it))
-        }
-    }
+    // A Matt / Kayla / Both switch was the first row here. The page
+    // is one collection now, whichever the address names, and
+    // `AppState.scopedLibrary` is what puts the slug on the filters —
+    // so offering to look at somebody else's cards from inside
+    // somebody's collection was offering a thing that cannot happen.
     FRow("Pool") {
         Seg(
             listOf("all" to "All", "free" to "Unassigned", "committed" to "In decks"),

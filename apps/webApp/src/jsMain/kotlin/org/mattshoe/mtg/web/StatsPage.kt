@@ -1,32 +1,23 @@
 package org.mattshoe.mtg.web
 
 import androidx.compose.runtime.Composable
-import org.jetbrains.compose.web.dom.Button
 import org.jetbrains.compose.web.dom.Div
 import org.jetbrains.compose.web.dom.H1
 import org.jetbrains.compose.web.dom.Span
 import org.jetbrains.compose.web.dom.Text
-import org.mattshoe.mtg.core.Owner
 import org.mattshoe.mtg.core.Prices
 import org.mattshoe.mtg.core.StatsState
 
 /** Collection totals, on the web. Sibling of `StatsScreen`. */
 @Composable
-fun StatsPage(state: StatsState, onScope: (Owner?) -> Unit) {
+fun StatsPage(state: StatsState) {
     Div(attrs = { classes("wrap") }) {
-        // `seg`, not `owner-opt`. `owner-opt` is the new-deck wizard's
-        // 130px-wide one-big-decision button, and the web's own test
-        // asserts it stays out of the rest of the app because three of
-        // them wrap onto two rows on a phone. Every other scope switcher
-        // is a segmented control; this was the last holdout.
-        Div(attrs = { classes("seg") }) {
-            listOf(null to "Both", Owner.MATT to "Matt", Owner.KAYLA to "Kayla").forEach { (o, label) ->
-                Button(attrs = {
-                    if (state.scope.owner == o) classes("on")
-                    onClick { onScope(o) }
-                }) { Text(label) }
-            }
-        }
+        // A caption, where a Both / Matt / Kayla segmented control
+        // used to be. The page is one collection now — whichever the
+        // address names — so there is nothing to switch between, and
+        // the only thing left worth saying is which one these numbers
+        // are about.
+        Div(attrs = { classes("muted", "small") }) { Text(state.scope.label) }
 
         when {
             state.busy -> Div(attrs = { classes("empty") }) { Text("Loading…") }

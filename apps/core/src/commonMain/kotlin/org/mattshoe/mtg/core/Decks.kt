@@ -424,10 +424,6 @@ data class DecksState(
 ) {
     val open: Deck? get() = decks.firstOrNull { it.slug == openSlug }
 
-    /** Grouped the way the page shows them, owners in a stable order. */
-    val byOwner: List<Pair<String, List<Deck>>>
-        get() = decks.groupBy { it.owner }.toList().sortedBy { it.first }
-
     /** A card the deck wants more of than its owner has. Basics never count. */
     val gaps: List<DeckCard> get() = cards.filter { it.short > 0 }
 

@@ -65,14 +65,14 @@ class NextShareActivity : ComponentActivity() {
                         onPreview = {
                             work("Checking against Scryfall…") {
                                 state.previewed(
-                                    api.cards(token(), state.direction!!, state.owner!!, state.list, dryRun = true),
+                                    api.cards(token(), state.direction!!, mine(), state.list, dryRun = true),
                                 )
                             }
                         },
                         onApply = {
                             work("Writing…") {
                                 state.finished(
-                                    api.cards(token(), state.direction!!, state.owner!!, state.list, dryRun = false),
+                                    api.cards(token(), state.direction!!, mine(), state.list, dryRun = false),
                                 )
                             }
                         },
@@ -83,6 +83,19 @@ class NextShareActivity : ComponentActivity() {
     }
 
     private fun token() = AdminToken.restore(store).orEmpty()
+
+    /**
+     * Which collection a shared list lands in: the one the session
+     * owns.
+     *
+     * The wizard used to ask, and a share sheet is the worst place to
+     * be asked anything. This activity holds no `AppState`, so it
+     * asks the server who the session is rather than keeping a slug
+     * of its own that could go stale behind a sign-out.
+     */
+    private suspend fun mine(): String =
+        api.me(token())?.slug
+            ?: throw ApiFailure("Sign in on the app before sharing a list to it")
 
     private fun readShare(from: Intent?): MassEntry {
         val share = SharedFile.read(this, from)

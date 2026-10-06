@@ -504,7 +504,7 @@ class AppDriverTest {
 
         // A step at a time. Each wait keys off something only the
         // next step has — the stepper down the side names every step
-        // on every step, so waiting for the word "Whose" to appear
+        // on every step, so waiting for a step's own name to appear
         // is waiting for something that never went away.
         suspend fun onward(nextStep: String, there: () -> Boolean) {
             waitFor("Continue to come alive") {
@@ -515,8 +515,8 @@ class AppDriverTest {
         }
 
         press("Commander")
-        onward("owner") { option("Matt") != null }
-        press("Matt")
+        // Straight to the name. The step between them asked whose
+        // deck it was, which the collection on screen already says.
         onward("name") { box("Deck name") != null }
         typeInto("Deck name", "Test Deck")
         onward("commander") { box("e.g. Alela, Artful Provocateur") != null }
@@ -562,10 +562,6 @@ class AppDriverTest {
         val box = view.all("textarea").first() as org.w3c.dom.HTMLTextAreaElement
         box.value = "4 Sol Ring"
         box.dispatchEvent(org.w3c.dom.events.Event("input", js("({bubbles: true})")))
-        waitFor("the list to count") { !view.button("Continue →").disabled }
-        view.button("Continue →").click()
-        waitFor("the owner step") { view.has("Matt") }
-        view.button("Matt").click()
         waitFor("preview to arm") { !view.button("Preview changes →").disabled }
         view.button("Preview changes →").click()
         waitFor("the preview") { view.has("Add 1 printings") }

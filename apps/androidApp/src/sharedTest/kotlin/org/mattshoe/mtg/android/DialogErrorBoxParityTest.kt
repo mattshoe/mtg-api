@@ -28,7 +28,6 @@ import org.mattshoe.mtg.core.DisassembleState
 import org.mattshoe.mtg.core.Format
 import org.mattshoe.mtg.core.NewDeck
 import org.mattshoe.mtg.core.Overlay
-import org.mattshoe.mtg.core.Owner
 import org.mattshoe.mtg.core.RenameState
 import org.mattshoe.mtg.core.Route
 import org.mattshoe.mtg.core.View
@@ -105,7 +104,7 @@ class DialogErrorBoxParityTest {
     private fun newDeckFailed() = AppState(
         admin = Admin(token = "t").unlock("t"),
         route = Route(View.ENTRY),
-        newDeck = NewDeck(format = Format.COMMANDER, owner = Owner.MATT, error = said),
+        newDeck = NewDeck(format = Format.COMMANDER, error = said),
     ).opening(Overlay.NEW_DECK)
 
     /**

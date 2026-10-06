@@ -383,7 +383,7 @@ class MainActivity : ComponentActivity() {
                                 val s = app.entry
                                 app.copy(
                                     entry = s.previewed(
-                                        api.cards(token(), s.direction!!, s.owner!!, s.list, dryRun = true),
+                                        api.cards(token(), s.direction!!, app.viewing, s.list, dryRun = true),
                                     ),
                                 )
                             }
@@ -396,7 +396,7 @@ class MainActivity : ComponentActivity() {
                                 val s = app.entry
                                 val done = app.copy(
                                     entry = s.finished(
-                                        api.cards(token(), s.direction!!, s.owner!!, s.list, dryRun = false),
+                                        api.cards(token(), s.direction!!, app.viewing, s.list, dryRun = false),
                                     ),
                                 ).shareUsed().recordEntry(now())
                                 EntryHistory.save(store, done.history)
@@ -731,7 +731,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private suspend fun loadStats(): AppState {
-        val scope = Load.scopeFrom(app.route.rest)
+        val scope = app.statsScope()
         val r = api.query(StatsQueries.totals(scope))
         return app.copy(stats = app.stats.scopedTo(scope.owner).loaded(StatsQueries.decode(r.cols, r.rows)))
     }
@@ -1135,7 +1135,7 @@ class MainActivity : ComponentActivity() {
                 token = token(),
                 name = n.name,
                 format = n.format!!.slug,
-                owner = n.owner!!,
+                owner = app.viewing,
                 commander = n.commander.ifBlank { null },
                 list = n.list,
                 dryRun = false,

@@ -219,7 +219,7 @@ class LibraryDriverTest {
         assertTrue(app.maybeButton("Download") != null, "no file export")
         assertTrue(app.maybeButton("Search") == null, "the Search button is back")
         assertTrue(app.maybeButton("Filters") == null, "the Filters collapser is back")
-        assertTrue(app.maybeButton("Kayla") == null, "the owner picker is back above the panel")
+        assertTrue(app.maybeButton("Kayla") == null, "the owner picker is back")
     }
 
     @Test
@@ -324,7 +324,6 @@ class LibraryDriverTest {
 
         (app.facet("collection").querySelector("summary") as HTMLElement).click()
         settle()
-        run("choosing an owner") { app.button("Kayla").click() }
         run("choosing a pool") { app.button("Unassigned").click() }
 
         run("picking a sort") { app.pick("select.sort", "name") }

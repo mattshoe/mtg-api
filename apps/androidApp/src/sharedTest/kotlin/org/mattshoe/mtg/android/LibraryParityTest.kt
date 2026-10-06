@@ -539,11 +539,17 @@ class LibraryParityTest {
     }
 
     @Test
-    fun theCollectionGroupHoldsWhoseItIsAndWhichDeck() {
+    fun theCollectionGroupHoldsWhichDeckAndNotWhoseItIs() {
+        // A Matt / Kayla / Both switch was the first row of this
+        // group. The page is one collection now, whichever the
+        // address names, so a filter offering somebody else's cards
+        // from inside it cannot mean anything.
         panel()
         fold(Facet.COLLECTION)
-        pressText("Kayla")
-        assertEquals("kayla", f().owner)
+        Parity.check(
+            Fact("nothing asks whose collection it is") { !said("Whose") },
+            Fact("and neither of the two names is offered") { !said("Kayla") },
+        )
         pressText("Unassigned")
         assertEquals(Pool.FREE, f().pool)
         press("select-deck")
@@ -706,12 +712,11 @@ class LibraryParityTest {
         ran("changing the colour mode") { pressText("At least") }
         fold(Facet.COLOUR)
         fold(Facet.COLLECTION)
-        ran("choosing an owner") { pressText("Kayla") }
         ran("choosing a pool") { pressText("Unassigned") }
         Parity.check(
             Fact("and narrowing goes back to page one") { library.value.page == 1 },
             Fact("the colour reached the filters") { library.value.filters.colors == listOf("G") },
-            Fact("and so did the owner") { library.value.filters.owner == "kayla" },
+            Fact("and so did the pool") { library.value.filters.pool == Pool.FREE },
         )
     }
 }

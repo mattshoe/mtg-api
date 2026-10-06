@@ -191,6 +191,21 @@ data class AppState(
     fun browsing(slug: String): AppState = copy(resolvedCollection = slug)
 
     /**
+     * Which collection the stats are about: the one on screen.
+     *
+     * Not a choice. The page used to carry a Both / Matt / Kayla
+     * switch, which was a list of the only two people there would
+     * ever be and a third option nobody owns.
+     *
+     * A rest on a stats route still wins, because that is how the
+     * switch used to spell itself into the address and somebody's
+     * bookmark still says `#/stats/kayla`.
+     */
+    fun statsScope(): StatsScope =
+        if (view == View.STATS && route.rest.isNotBlank()) Load.scopeFrom(route.rest)
+        else StatsScope(viewing.takeIf { it.isNotEmpty() })
+
+    /**
      * May you change what is on screen?
      *
      * About *this* collection and no other. It used to ask
@@ -569,7 +584,7 @@ data class AppState(
      */
     fun recordEntry(now: String): AppState =
         if (entry.result == null) this
-        else copy(history = history.remember(EntryHistory.of(entry, now)))
+        else copy(history = history.remember(EntryHistory.of(entry, now, viewing)))
 
     companion object {
         /**
@@ -645,7 +660,11 @@ object Load {
         View.ENTRY -> emptyList()
     }
 
-    /** Stats scoping lives in the route: `#/stats/matt`. */
-    fun scopeFrom(rest: String): StatsScope =
-        StatsScope(Owner.entries.firstOrNull { it.slug == rest })
+    /**
+     * Stats scoping used to live in the route — `#/stats/matt` — back
+     * when the page had a switch to set it with. The page is one
+     * collection's now, so the scope comes from which collection is
+     * on screen; this stays only so an old bookmark still names one.
+     */
+    fun scopeFrom(rest: String): StatsScope = StatsScope(rest.takeIf { it.isNotBlank() })
 }

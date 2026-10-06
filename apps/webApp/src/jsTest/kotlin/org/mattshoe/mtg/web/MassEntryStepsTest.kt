@@ -10,7 +10,6 @@ import org.mattshoe.mtg.core.Applied
 import org.mattshoe.mtg.core.Change
 import org.mattshoe.mtg.core.Direction
 import org.mattshoe.mtg.core.MassEntry
-import org.mattshoe.mtg.core.Owner
 import org.mattshoe.mtg.core.Step
 import org.w3c.dom.HTMLButtonElement
 import org.w3c.dom.HTMLElement
@@ -25,11 +24,11 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * The two ends of the wizard: "Whose collection?" and "Applied".
+ * The two ends of the wizard: the list and "Applied".
  *
- * `MassEntryPageTest` walks as far as the owner step and stops there,
- * and nothing ever rendered the done step in a browser at all — which
- * is how a title that says "Applied" over nothing at all survived.
+ * `MassEntryPageTest` walks as far as the list and stops there, and
+ * nothing ever rendered the done step in a browser at all — which is
+ * how a title that says "Applied" over nothing at all survived.
  *
  * Everything here is clicked rather than reasoned about. Compose HTML
  * recomposes on `requestAnimationFrame`, so every assertion comes
@@ -122,11 +121,11 @@ class MassEntryStepsTest {
 
     // ----------------------------------------------------- the states
 
-    /** A list, a direction, and nobody named yet: the owner step. */
-    private fun atWho(direction: Direction = Direction.ADD): MassEntry =
+    /** A direction and a list, which is everything the wizard asks. */
+    private fun atList(direction: Direction = Direction.ADD): MassEntry =
         MassEntry(direction = direction)
             .type("4 Lightning Bolt\n1 Sol Ring")
-            .goTo(Step.WHO)
+            .goTo(Step.LIST)
 
     private fun change(i: Int, before: Int = 1, after: Int = 2) = Change(
         name = "A Card With Quite A Long Name Number $i",
@@ -146,7 +145,6 @@ class MassEntryStepsTest {
         direction: Direction = Direction.ADD,
     ): MassEntry = MassEntry(direction = direction)
         .type("1 A Card With Quite A Long Name Number 1\n1 A Card With Quite A Long Name Number 2")
-        .assign(Owner.MATT)
         .previewed(Applied(dryRun = true, resolved = changes.size, changes = changes))
         .finished(
             Applied(
@@ -158,132 +156,45 @@ class MassEntryStepsTest {
             ),
         )
 
-    // =============================================== whose collection?
+    // ======================================================= the list
 
     @Test
-    fun theOwnerStepOffersBothAndPresumesNeither() = runTest {
-        val root = mount(atWho())
+    fun theListStepAsksForTheDryRunItself() = runTest {
+        // There was a step between this one and the review, "Whose
+        // collection?", and the dry run was asked for from there.
+        // Seven tests lived here over it: both names offered, neither
+        // preselected, the mark moving from one to the other, the
+        // answer surviving a step back. The page is somebody's
+        // collection now, so the list is the whole of the question.
+        val root = mount(atList())
         settle()
-        assertEquals("Whose collection?", root.title())
-
-        val opts = root.all("button.opt")
-        assertEquals(2, opts.size, "both owners are not on the screen: ${opts.map { it.textContent }}")
-        assertEquals(
-            listOf("Matt", "Kayla"),
-            opts.map { (it as HTMLButtonElement).says() },
-            "the two collections are not the two collections",
-        )
-        opts.forEach {
-            assertEquals("false", it.getAttribute("aria-pressed"), "'${it.textContent}' came preselected")
-        }
-        assertEquals(0, root.all("button.opt.on").size, "something was already chosen")
-        assertNull(current.owner, "the state arrived with an owner in it")
+        assertEquals("What are you adding?", root.title())
+        assertFalse(root.button("Preview changes →").disabled, "a list that is a list went no further")
+        assertNull(root.maybeButton("Matt"), "the page still offers to pick a collection")
+        assertNull(root.maybeButton("Kayla"), "the page still offers to pick a collection")
     }
 
     @Test
-    fun thePreviewIsRefusedUntilSomebodyIsNamed() = runTest {
-        val root = mount(atWho())
+    fun anEmptyListStillGoesNowhere() = runTest {
+        val root = mount(MassEntry(direction = Direction.ADD).goTo(Step.LIST))
         settle()
-        assertTrue(root.button("Preview changes →").disabled, "a dry run was offered with no owner")
+        assertTrue(root.button("Preview changes →").disabled, "a dry run was offered with no list")
         assertTrue(
-            root.words().contains("Pick whose collection this goes to."),
+            root.words().contains("Paste a list, or drop a file on the box."),
             "nothing said why the button is dead: ${root.words()}",
         )
-
-        root.button("Matt").click()
-        settle()
-        assertFalse(root.button("Preview changes →").disabled, "naming an owner did not free the button")
-        assertFalse(
-            root.words().contains("Pick whose collection this goes to."),
-            "the hint stayed up after the question was answered",
-        )
     }
 
     @Test
-    fun theChosenOwnerIsMarkedByShapeAndNotOnlyByColour() = runTest {
-        // Colour on its own is not a signal everybody can read, so the
-        // mark has to carry a glyph as well as a fill.
-        val root = mount(atWho())
-        settle()
-        val matt = root.button("Matt")
-        assertEquals("", matt.querySelector(".opt-mark")?.textContent, "an empty choice already wore a tick")
-
-        matt.click()
-        settle()
-        assertEquals("true", root.button("Matt").getAttribute("aria-pressed"))
-        assertEquals(
-            "✓",
-            root.button("Matt").querySelector(".opt-mark")?.textContent,
-            "the choice is said by colour alone",
-        )
-    }
-
-    @Test
-    fun namingTheOtherOwnerMovesTheMarkRatherThanAddingOne() = runTest {
-        val root = mount(atWho())
-        settle()
-        root.button("Matt").click()
-        settle()
-        assertEquals(Owner.MATT, current.owner)
-
-        root.button("Kayla").click()
-        settle()
-        assertEquals(Owner.KAYLA, current.owner, "the second tap did not take")
-        assertEquals(1, root.all("button.opt.on").size, "both collections are selected at once")
-        assertEquals("true", root.button("Kayla").getAttribute("aria-pressed"))
-        assertEquals("false", root.button("Matt").getAttribute("aria-pressed"), "the first choice is still marked")
-        assertEquals("", root.button("Matt").querySelector(".opt-mark")?.textContent, "two ticks on screen")
-    }
-
-    @Test
-    fun steppingBackAndForwardKeepsWhoYouSaid() = runTest {
-        val root = mount(atWho())
-        settle()
-        root.button("Kayla").click(); settle()
-        root.button("← Back").click(); settle()
-        assertEquals(Step.LIST, current.step, "Back did not go back")
-
-        root.button("Continue →").click(); settle()
-        assertEquals("Whose collection?", root.title())
-        assertEquals(Owner.KAYLA, current.owner, "the owner was forgotten on the way back")
-        assertEquals("true", root.button("Kayla").getAttribute("aria-pressed"), "the mark did not come back")
-        assertFalse(root.button("Preview changes →").disabled, "the kept answer did not count")
-    }
-
-    @Test
-    fun changingTheOwnerThrowsAwayTheDryRun() = runTest {
-        // A dry run describes a list going to one collection. Pointed
-        // at another it is not an answer to anything.
-        val root = mount(
-            MassEntry(
-                step = Step.WHO,
-                direction = Direction.ADD,
-                list = "1 A Card With Quite A Long Name Number 1",
-                owner = Owner.MATT,
-                preview = Applied(dryRun = true, resolved = 1, changes = listOf(change(1))),
-            ),
-        )
-        settle()
-        root.button("Kayla").click()
-        settle()
-        assertEquals(Owner.KAYLA, current.owner)
-        assertNull(current.preview, "the dry run taken for Matt survived being pointed at Kayla")
-        assertFalse(current.canApply, "a write was still reachable off a stale dry run")
-    }
-
-    @Test
-    fun theOwnerStepFitsAPhone() = runTest {
-        val root = mount(atWho(), width = PHONE)
+    fun theListStepFitsAPhone() = runTest {
+        val root = mount(atList(), width = PHONE)
         settle()
         if (!Stylesheet.applied()) return@runTest
         assertEquals(emptyList(), root.overflowing(), "something hangs off a ${PHONE}px screen")
-        (root.all("button.opt") + root.all("div.wiz-foot button")).forEach { b ->
+        root.all("div.wiz-foot button").forEach { b ->
             val h = b.getBoundingClientRect().height
             assertTrue(h >= 43.5, "'${b.textContent?.trim()}' is only ${h}px tall")
         }
-        // One per row. Two 170px-wide names is not a choice anybody can hit.
-        val tops = root.all("button.opt").map { it.getBoundingClientRect().top }
-        assertTrue(tops[1] - tops[0] > 20, "the two collections are side by side at ${PHONE}px")
     }
 
     // ========================================================== applied
@@ -293,7 +204,6 @@ class MassEntryStepsTest {
         val root = mount(done())
         settle()
         assertEquals("Applied", root.title())
-        assertTrue(root.words().contains("matt"), "the done screen does not say whose collection it wrote")
     }
 
     @Test
@@ -363,7 +273,6 @@ class MassEntryStepsTest {
     fun theDoneStepCannotBeReachedWithoutAResult() = runTest {
         val ready = MassEntry(direction = Direction.ADD)
             .type("1 Sol Ring")
-            .assign(Owner.MATT)
         assertTrue(ready.canPreview, "the fixture cannot ask for a dry run")
         assertFalse(ready.reachable(Step.DONE), "a done step with nothing done")
 

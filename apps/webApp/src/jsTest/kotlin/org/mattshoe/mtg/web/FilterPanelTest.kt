@@ -420,9 +420,6 @@ class FilterPanelTest {
     fun theCollectionGroupWritesItsFields() = runTest {
         val p = mount(open = "collection")
         settle()
-        p.button("Kayla").click(); settle()
-        assertEquals("kayla", p.filters().owner)
-
         p.button("Unassigned").click(); settle()
         assertEquals(Pool.FREE, p.filters().pool)
 
@@ -627,9 +624,9 @@ class FilterApplyTest {
         val p = mount(open = "collection")
         settle()
         val before = p.searches
-        p.button("Matt").click(); settle()
-        assertTrue(p.searches > before, "choosing an owner did not re-run the search")
-        assertEquals("matt", p.library.filters.owner)
+        p.button("Unassigned").click(); settle()
+        assertTrue(p.searches > before, "choosing a pool did not re-run the search")
+        assertEquals(Pool.FREE, p.library.filters.pool)
     }
 
     @Test
@@ -643,16 +640,24 @@ class FilterApplyTest {
     }
 
     @Test
-    fun andWhoseCollectionItIsLivesWithTheOtherFilters() = runTest {
-        // It was duplicated above the panel, which is the one place
-        // you would not look for a filter.
+    fun andNothingInThePanelAsksWhoseCollectionItIs() = runTest {
+        // It was a Matt / Kayla / Both switch in the collection group.
+        // The page is one collection now — whichever the address names
+        // — and a filter offering to look at somebody else's cards
+        // from inside it is a filter that cannot mean anything.
         val p = mount()
         settle()
-        assertTrue(p.buttons().none { it.textContent?.trim() == "Kayla" })
         p.root.querySelector("details[data-facet=collection] summary")
             ?.let { (it as HTMLElement).click() }
         settle()
-        assertTrue(p.buttons().any { it.textContent?.trim() == "Kayla" })
+        val labels = p.root.querySelectorAll("div.frow label").let { n ->
+            (0 until n.length).mapNotNull { (n[it] as? HTMLElement)?.textContent?.trim() }
+        }
+        assertTrue("Whose" !in labels, "the collection group still asks whose: $labels")
+        assertTrue(
+            p.buttons().none { it.textContent?.trim() in listOf("Matt", "Kayla", "Both") },
+            "a list of the only two people there would ever be is still on the panel",
+        )
     }
 
     @Test

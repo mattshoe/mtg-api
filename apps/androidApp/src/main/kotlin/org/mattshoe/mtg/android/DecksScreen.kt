@@ -86,14 +86,6 @@ private val HeroCrop = topBias(34)
  */
 private val RowCrop = topBias(32)
 
-/**
- * On top of the gap every item in the column already gets, so one
- * owner's shelf and the next read as two groups rather than one long
- * list. The web's `.owner-group + .owner-group` is 28px against the
- * 11px `.owner-head` keeps beneath its own name.
- */
-private val OwnerGroupExtraGap = 16.dp
-
 @Composable
 fun DecksScreen(
     state: DecksState,
@@ -176,23 +168,19 @@ internal fun DecksListScreen(
             state.busy -> Line("Loading…", Ink3)
             state.error != null -> Line("Could not load decks: ${state.error}", Bad)
             state.decks.isEmpty() -> Line("No decks yet.", Ink3)
-            else -> state.byOwner.forEachIndexed { i, (owner, decks) ->
-                // A shelf, with a heading that says how many are on
-                // it. The web's `.owner-head` is the name and the
-                // count together, not a bare name, with a rule
-                // under it (`border-bottom`). Two shelves have to
-                // read as two shelves, so every one after the
-                // first gets extra air above it on top of the
-                // column's own gap — 28px against 11px on the web,
-                // not Android's old uniform 8dp everywhere.
+            // One shelf. It was a group per owner with the owner's
+            // name over it, which was two shelves when there were two
+            // collections in one database and is one shelf with
+            // somebody's name pointlessly over it now that the page
+            // is their collection.
+            else -> {
                 GroupHead(
-                    owner.replaceFirstChar(Char::uppercase),
-                    "${decks.size} " + if (decks.size == 1) "deck" else "decks",
+                    "${state.decks.size} " + if (state.decks.size == 1) "deck" else "decks",
+                    null,
                     Design.H2,
                     underline = true,
-                    extraTopGap = if (i > 0) OwnerGroupExtraGap else 0.dp,
                 )
-                decks.forEach { DeckTile(it, onOpen) }
+                state.decks.forEach { DeckTile(it, onOpen) }
             }
         }
     }
@@ -568,7 +556,8 @@ private fun RowAction(card: DeckCard, onTweak: (DeckCard, Tweak?) -> Unit) {
 @Composable
 private fun GroupHead(
     title: String,
-    count: String,
+    /** Null where the heading is the count, as the deck shelf's is. */
+    count: String?,
     size: Int = Design.H3,
     /** `.panel-head h2 { text-transform: uppercase }`. `.owner-head` is not one of these. */
     uppercase: Boolean = false,
@@ -598,7 +587,7 @@ private fun GroupHead(
                 FontWeight.SemiBold,
                 Modifier.weight(1f).semantics { heading() },
             )
-            Tag(count)
+            count?.let { Tag(it) }
         }
         if (underline || banded) {
             Box(

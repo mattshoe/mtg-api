@@ -27,7 +27,6 @@ import org.mattshoe.mtg.core.DeckStep
 import org.mattshoe.mtg.core.ExportTo
 import org.mattshoe.mtg.core.Format
 import org.mattshoe.mtg.core.NewDeck
-import org.mattshoe.mtg.core.Owner
 import org.mattshoe.mtg.core.Route
 import org.mattshoe.mtg.core.View
 import kotlin.test.assertEquals
@@ -298,7 +297,7 @@ class AutocompleteDismissTest {
         val hint = Completion().typed("ale")
             .suggested(listOf("Alela, Artful Provocateur", "Alela, Cunning Conqueror"))
         val s = mutableStateOf(
-            NewDeck().pick(Format.COMMANDER).assign(Owner.MATT).rename("Test Deck")
+            NewDeck().pick(Format.COMMANDER).rename("Test Deck")
                 .goTo(DeckStep.COMMANDER).copy(hint = hint),
         )
         rule.setContent {

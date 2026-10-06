@@ -26,23 +26,11 @@ import kotlin.test.assertTrue
  */
 class ModelTest {
 
-    // ------------------------------------------------------------- Owner
-
-    @Test
-    fun ownerLabelsAreCapitalisedSlugs() {
-        assertEquals("matt", Owner.MATT.slug)
-        assertEquals("Matt", Owner.MATT.label)
-        assertEquals("kayla", Owner.KAYLA.slug)
-        assertEquals("Kayla", Owner.KAYLA.label)
-    }
-
-    @Test
-    fun thereAreExactlyTwoOwnersAndNoDefault() {
-        // "There is no default, anywhere, on purpose" is the comment
-        // on the type — proving the enum still has exactly these two
-        // entries is what keeps that true.
-        assertEquals(listOf(Owner.MATT, Owner.KAYLA), Owner.entries)
-    }
+    // There was an `Owner` enum here, MATT and KAYLA, and two tests
+    // holding it to exactly those two entries. A collection belongs to
+    // an account now and there is no list of the accounts there could
+    // be, so a slug is a string the server checks and not a case the
+    // app enumerates.
 
     // --------------------------------------------------------- Direction
 

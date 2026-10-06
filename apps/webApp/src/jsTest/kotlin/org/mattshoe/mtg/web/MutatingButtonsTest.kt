@@ -10,7 +10,6 @@ import org.mattshoe.mtg.core.DeckEditState
 import org.mattshoe.mtg.core.Direction
 import org.mattshoe.mtg.core.DisassembleState
 import org.mattshoe.mtg.core.MassEntry
-import org.mattshoe.mtg.core.Owner
 import org.mattshoe.mtg.core.Step
 import org.w3c.dom.HTMLButtonElement
 import org.w3c.dom.HTMLElement
@@ -80,7 +79,6 @@ class MutatingButtonsTest {
             step = Step.REVIEW,
             direction = Direction.ADD,
             list = "4 Sol Ring",
-            owner = Owner.MATT,
             preview = plan,
         ).working("Applying…")
         val root = mount {

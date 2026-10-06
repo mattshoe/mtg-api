@@ -39,7 +39,6 @@ import org.mattshoe.mtg.core.Direction
 import org.mattshoe.mtg.core.EntryHistory
 import org.mattshoe.mtg.core.HistoryEntry
 import org.mattshoe.mtg.core.MassEntry
-import org.mattshoe.mtg.core.Owner
 import org.mattshoe.mtg.core.Step
 
 /**
@@ -94,12 +93,11 @@ fun MassEntryScreen(
             state.busy != null -> Panel(head = "Working") { Line(state.busy!!) }
             state.step == Step.WHICH -> Which(state, onState, onNewDeck)
             state.step == Step.LIST -> {
-                ListStep(state, onState, onPickFile)
+                ListStep(state, onState, onPreview, onPickFile)
                 // The history table puts an old list back in the box, so
                 // it belongs on the step that has the box.
                 HistoryPanel(history, onReuse, onClearHistory)
             }
-            state.step == Step.WHO -> Who(state, onState, onPreview)
             state.step == Step.REVIEW -> Review(state, onState, onApply)
             state.step == Step.DONE -> Done(state) { onState(state.again()) }
         }
@@ -149,7 +147,12 @@ private fun Which(s: MassEntry, onState: (MassEntry) -> Unit, onNewDeck: () -> U
 }
 
 @Composable
-private fun ListStep(s: MassEntry, onState: (MassEntry) -> Unit, onPickFile: () -> Unit) {
+private fun ListStep(
+    s: MassEntry,
+    onState: (MassEntry) -> Unit,
+    preview: () -> Unit,
+    onPickFile: () -> Unit,
+) {
     val kind = if (s.isCsv) " · CSV" else ""
     val over = if (s.overLimit) " — over the ${MassEntry.MAX_CARDS} line limit" else ""
     Panel(head = s.direction!!.question, note = "${s.tally.lines} lines$kind$over") {
@@ -174,8 +177,8 @@ private fun ListStep(s: MassEntry, onState: (MassEntry) -> Unit, onPickFile: () 
         // advances a step, the same as the web.
         Btn("Upload a file", onClick = onPickFile)
         // Why the button beside it is not doing anything yet, and —
-        // said out loud rather than assumed — that two more steps
-        // stand between this box and the collection.
+        // said out loud rather than assumed — that one more step
+        // stands between this box and the collection.
         Foot(
             hint = when {
                 !s.canLeaveList && s.tally.cards == 0 -> "Paste a list, or drop a file on the box."
@@ -184,20 +187,10 @@ private fun ListStep(s: MassEntry, onState: (MassEntry) -> Unit, onPickFile: () 
             },
         ) {
             Ghost("← Back") { onState(s.goTo(Step.WHICH)) }
-            Primary("Continue →", s.canLeaveList) { onState(s.goTo(Step.WHO)) }
-        }
-    }
-}
-
-@Composable
-private fun Who(s: MassEntry, onState: (MassEntry) -> Unit, preview: () -> Unit) {
-    Panel(head = "Whose collection?", note = "${s.tally.cards} cards on the list") {
-        Owner.entries.forEach { o -> Choice(o.label, null, s.owner == o) { onState(s.assign(o)) } }
-        Foot(hint = if (!s.canPreview) "Pick whose collection this goes to." else null) {
-            Ghost("← Back") { onState(s.goTo(Step.LIST)) }
-            // The web's label, unchanged by whether it is pressable.
-            // Who was named is said by the tick on the row above it,
-            // and again by the note on the step after this one.
+            // The step after this one asked whose collection the list
+            // was going to, and asked for the dry run from there. The
+            // list is the last thing anybody has to say, so the dry
+            // run is asked for from here.
             Primary("Preview changes →", s.canPreview, preview)
         }
     }
@@ -206,10 +199,10 @@ private fun Who(s: MassEntry, onState: (MassEntry) -> Unit, preview: () -> Unit)
 @Composable
 private fun Review(s: MassEntry, onState: (MassEntry) -> Unit, apply: () -> Unit) {
     val p = s.preview
-    Panel(head = "Preview — nothing written yet", note = s.owner?.slug) {
+    Panel(head = "Preview — nothing written yet", note = "${s.tally.cards} cards on the list") {
         if (p == null) Text("No preview yet.") else Outcome(p)
         Foot {
-            Ghost("← Back") { onState(s.goTo(Step.WHO)) }
+            Ghost("← Back") { onState(s.goTo(Step.LIST)) }
             Primary(
                 if (s.canApply) "${s.direction!!.verb} ${p!!.changes.size} printings" else "Nothing to apply",
                 s.canApply,
@@ -233,7 +226,7 @@ private fun Review(s: MassEntry, onState: (MassEntry) -> Unit, apply: () -> Unit
 private fun Done(s: MassEntry, again: () -> Unit) {
     val r = s.result!!
     val moved = r.applied && r.changes.isNotEmpty()
-    Panel(head = if (moved) "Applied" else "Nothing applied", note = s.owner?.slug) {
+    Panel(head = if (moved) "Applied" else "Nothing applied") {
         Outcome(r)
         Foot { Primary("Enter more", true, again) }
     }

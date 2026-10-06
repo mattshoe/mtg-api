@@ -42,9 +42,10 @@ class DeckListHairlinesParityTest {
     private fun deck(slug: String, owner: String, name: String = slug) =
         Deck(slug, name, owner, "Alela, Artful Provocateur (ELD) 324", "UW", 3, null)
 
-    private fun twoOwners() = DecksState().loaded(
+    /** One collection's shelf: the only kind the page shows now. */
+    private fun shelf() = DecksState().loaded(
         listOf(
-            deck("a", "kayla", "Bello"), deck("b", "kayla", "Chulane"),
+            deck("a", "matt", "Bello"), deck("b", "matt", "Chulane"),
             deck("c", "matt", "Alela"), deck("d", "matt", "Dihada"),
         ),
     )
@@ -83,23 +84,26 @@ class DeckListHairlinesParityTest {
     private fun topOfTag(tag: String) = rule.onNodeWithTag(tag).getUnclippedBoundsInRoot().top.value
     private fun bottomOfTag(tag: String) = rule.onNodeWithTag(tag).getUnclippedBoundsInRoot().bottom.value
 
-    // ----------------------------------------------------- the owner heading
+    // ----------------------------------------------------- the shelf heading
 
     @Test
-    fun everyOwnerHeadingHasARuleUnderIt() {
-        content { DecksScreen(twoOwners(), {}, {}) }
-        assertTrue(exists("group-rule-Kayla"), "no rule under Kayla's heading")
-        assertTrue(exists("group-rule-Matt"), "no rule under Matt's heading")
+    fun theShelfHeadingHasARuleUnderIt() {
+        // It was a heading per owner, with their name on it. The page
+        // is one collection, so there is one shelf and its heading is
+        // how many decks are on it.
+        content { DecksScreen(shelf(), {}, {}) }
+        assertTrue(exists("group-rule-4 decks"), "no rule under the shelf heading")
+        assertFalse(exists("group-rule-Matt"), "the owner's name is still a heading")
     }
 
     @Test
-    fun theRuleSitsBetweenTheHeadingAndItsOwnDecksNotAboveIt() {
-        content { DecksScreen(twoOwners(), {}, {}) }
-        val headBottom = bottomOf("Kayla")
-        val ruleTop = topOfTag("group-rule-Kayla")
+    fun theRuleSitsBetweenTheHeadingAndTheDecksNotAboveIt() {
+        content { DecksScreen(shelf(), {}, {}) }
+        val headBottom = bottomOf("4 decks")
+        val ruleTop = topOfTag("group-rule-4 decks")
         val tileTop = topOf("Bello")
-        assertTrue(ruleTop >= headBottom - 1f, "the rule sits above Kayla's own name")
-        assertTrue(tileTop >= bottomOfTag("group-rule-Kayla") - 1f, "the rule sits below Kayla's own tiles")
+        assertTrue(ruleTop >= headBottom - 1f, "the rule sits above the heading")
+        assertTrue(tileTop >= bottomOfTag("group-rule-4 decks") - 1f, "the rule sits below the tiles")
     }
 
     // ------------------------------------------------ the type-group heading
@@ -112,7 +116,7 @@ class DeckListHairlinesParityTest {
     }
 
     @Test
-    fun theBandedHeadingIndentsItsTextWhereThePlainOwnerHeadingDoesNot() {
+    fun theBandedHeadingIndentsItsTextWhereThePlainShelfHeadingDoesNot() {
         // The band is `.panel-head`'s own horizontal padding; a plain
         // `.owner-head` carries none of it. Both headings sit in the
         // same screen padding, so if the band's padding is really
@@ -123,17 +127,17 @@ class DeckListHairlinesParityTest {
         // per test.
         content {
             androidx.compose.foundation.layout.Column {
-                DecksScreen(twoOwners(), {}, {})
+                DecksScreen(shelf(), {}, {})
                 DecksScreen(opened(), {}, {})
             }
         }
-        val ownerHeadingLeft = rule.onNodeWithText("Kayla").getUnclippedBoundsInRoot().left.value
+        val ownerHeadingLeft = rule.onNodeWithText("4 decks").getUnclippedBoundsInRoot().left.value
         val bandedHeadingLeft = rule.onNodeWithText("COMMANDER").getUnclippedBoundsInRoot().left.value
 
         assertTrue(
             bandedHeadingLeft > ownerHeadingLeft + 4f,
             "the banded section heading starts at ${bandedHeadingLeft}dp, barely past the plain " +
-                "owner heading at ${ownerHeadingLeft}dp — there is no shaded band's padding to speak of",
+                "shelf heading at ${ownerHeadingLeft}dp — there is no shaded band's padding to speak of",
         )
     }
 

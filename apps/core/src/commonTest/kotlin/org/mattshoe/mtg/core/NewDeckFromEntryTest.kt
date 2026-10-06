@@ -73,8 +73,8 @@ class NewDeckFromEntryTest {
 
     @Test
     fun theDeckWizardKnowsWhatIsBehindIt() {
-        val s = NewDeck().pick(Format.COMMANDER).assign(Owner.MATT).goTo(DeckStep.NAME)
-        assertEquals(DeckStep.OWNER, s.previousStep)
+        val s = NewDeck().pick(Format.COMMANDER).goTo(DeckStep.NAME)
+        assertEquals(DeckStep.FORMAT, s.previousStep)
         assertEquals(null, NewDeck().previousStep, "the first step has something behind it")
     }
 
@@ -83,7 +83,7 @@ class NewDeckFromEntryTest {
         // `steps` already drops the commander for a sixty-card deck,
         // and Back has to walk the same list or it stops on a step
         // that is not in the wizard.
-        val s = NewDeck().pick(Format.MODERN).assign(Owner.MATT).rename("Burn").goTo(DeckStep.CARDS)
+        val s = NewDeck().pick(Format.MODERN).rename("Burn").goTo(DeckStep.CARDS)
         assertEquals(DeckStep.CARDS, s.step, "the fixture never reached the card list")
         assertEquals(DeckStep.NAME, s.previousStep)
     }
@@ -95,7 +95,7 @@ class NewDeckFromEntryTest {
         // could never pin you the way the entry wizard's clamp did.
         // Worth pinning anyway, because the rule is now written down
         // rather than true by accident.
-        val s = NewDeck().pick(Format.COMMANDER).assign(Owner.MATT).rename("Alela")
+        val s = NewDeck().pick(Format.COMMANDER).rename("Alela")
             .setCommander("Alela, Artful Provocateur")
             .type("1 Sol Ring").goTo(DeckStep.CHECK).type("")
         assertEquals(DeckStep.CHECK, s.step, "the fixture is not where this test thinks")
@@ -108,7 +108,7 @@ class NewDeckFromEntryTest {
         val s = AppState(admin = Admin(token = "t").unlock("t"))
             .navigate(View.ENTRY)
             .opening(Overlay.NEW_DECK)
-            .let { it.copy(newDeck = it.newDeck.pick(Format.COMMANDER).goTo(DeckStep.OWNER)) }
+            .let { it.copy(newDeck = it.newDeck.pick(Format.COMMANDER).goTo(DeckStep.NAME)) }
         val back = assertNotNull(s.back())
         assertTrue(Overlay.NEW_DECK in back.overlays, "one press threw the whole wizard away")
         assertEquals(DeckStep.FORMAT, back.newDeck.step)

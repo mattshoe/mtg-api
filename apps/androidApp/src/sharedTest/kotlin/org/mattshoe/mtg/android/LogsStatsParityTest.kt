@@ -34,7 +34,6 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.mattshoe.mtg.core.LogLine
 import org.mattshoe.mtg.core.LogsState
-import org.mattshoe.mtg.core.Owner
 import org.mattshoe.mtg.core.StatsState
 import org.mattshoe.mtg.core.Table
 import org.mattshoe.mtg.core.Totals
@@ -90,8 +89,6 @@ class LogsStatsParityTest {
     private var stats by mutableStateOf(StatsState())
 
     private var lastLogs: LogsState? = null
-    private var scoped: Owner? = null
-    private var scopeCalls = 0
 
     /**
      * A phone's width, and nothing else.
@@ -115,7 +112,7 @@ class LogsStatsParityTest {
     private fun showStats(state: StatsState) {
         stats = state
         rule.setContent {
-            Frame { StatsScreen(stats) { o -> scoped = o; scopeCalls++; stats = stats.scopedTo(o) } }
+            Frame { StatsScreen(stats) }
         }
         settle()
     }
@@ -602,88 +599,27 @@ class LogsStatsParityTest {
         assertFalse(textSomewhere("Prices from"))
     }
 
-    // ================================================ the scope switcher
+    // ==================================================== whose numbers
 
     @Test
-    fun theScopeSwitcherOffersBothMattAndKayla() {
+    fun theStatsScreenSaysWhichCollectionTheNumbersAreAboutAndOffersNoChoice() {
+        // Eight tests lived here over a Both / Matt / Kayla segmented
+        // control: which segment was lit, that only one was lit at a
+        // time, that it was not said by hue alone, that pressing one
+        // asked for the other. "Both" is not a collection anybody
+        // owns and the other two were a list of the only two people
+        // there would ever be, so the screen says which collection it
+        // is showing and offers nothing to press.
+        showStats(StatsState().scopedTo("kayla").loaded(totals()))
+        assertEquals("kayla", cell("scope-label"))
+        assertFalse(textSomewhere("Both"), "the scope switcher is still on the screen")
+        assertFalse(textSomewhere("Matt"), "the screen still offers somebody else's collection")
+    }
+
+    @Test
+    fun everyCollectionAtOnceIsSaidInWordsRatherThanLeftBlank() {
         showStats(StatsState().loaded(totals()))
-        tag("scope").assertExists()
-        rule.onNodeWithText("Both").assertExists()
-        rule.onNodeWithText("Matt").assertExists()
-        rule.onNodeWithText("Kayla").assertExists()
-    }
-
-    @Test
-    fun bothIsTheScopeWhenNoOwnerIsChosen() {
-        Parity.needsRealRendering()
-        showStats(StatsState().loaded(totals()))
-        val both = seg("Both")
-        assertTrue(both - seg("Matt") > 4.0, "Both is the one in force; $both vs ${seg("Matt")}")
-        assertTrue(both - seg("Kayla") > 4.0)
-    }
-
-    @Test
-    fun theActiveScopeIsMarked() {
-        Parity.needsRealRendering()
-        showStats(StatsState().scopedTo(Owner.MATT).loaded(totals()))
-        val matt = seg("Matt")
-        assertTrue(matt - seg("Both") > 4.0, "Matt is the one in force; $matt vs ${seg("Both")}")
-        assertTrue(matt - seg("Kayla") > 4.0)
-    }
-
-    @Test
-    fun theActiveScopeIsNotMarkedByHueAlone() {
-        Parity.needsRealRendering()
-        showStats(StatsState().scopedTo(Owner.KAYLA).loaded(totals()))
-        // Lightness is the whole assertion: these numbers come off the
-        // screen through a grey filter, which is what the owner sees.
-        assertTrue(seg("Kayla") - seg("Both") > 4.0)
-        assertTrue(seg("Kayla") - seg("Matt") > 4.0)
-    }
-
-    @Test
-    fun onlyOneScopeIsMarkedAtATime() {
-        Parity.needsRealRendering()
-        showStats(StatsState().scopedTo(Owner.MATT).loaded(totals()))
-        val lit = listOf("Both", "Matt", "Kayla").associateWith { seg(it) }
-        val brightest = lit.maxByOrNull { it.value }!!
-        assertEquals("Matt", brightest.key, "the wrong segment is the lit one: $lit")
-        val rest = lit.filterKeys { it != "Matt" }.values
-        assertTrue(
-            rest.all { brightest.value - it > 4.0 },
-            "every other segment must read as off: $lit",
-        )
-        assertTrue(
-            abs(rest.first() - rest.last()) < 2.0,
-            "two segments look lit at once: $lit",
-        )
-    }
-
-    @Test
-    fun switchingScopeAsksForTheOther() {
-        showStats(StatsState().loaded(totals()))
-        rule.onNodeWithText("Kayla").performClick()
-        rule.waitForIdle()
-        assertEquals(Owner.KAYLA, scoped)
-        assertEquals(1, scopeCalls)
-    }
-
-    @Test
-    fun switchingBackToBothAsksForNobody() {
-        showStats(StatsState().scopedTo(Owner.MATT).loaded(totals()))
-        rule.onNodeWithText("Both").performClick()
-        rule.waitForIdle()
-        assertEquals(null, scoped)
-        assertEquals(1, scopeCalls)
-    }
-
-    @Test
-    fun theMarkMovesWithTheChoice() {
-        Parity.needsRealRendering()
-        showStats(StatsState().loaded(totals()))
-        rule.onNodeWithText("Kayla").performClick()
-        rule.waitForIdle()
-        assertTrue(seg("Kayla") - seg("Both") > 4.0, "the mark followed the press")
+        assertEquals("Everything", cell("scope-label"))
     }
 
     // =================================================== the stats states
@@ -696,11 +632,9 @@ class LogsStatsParityTest {
     }
 
     @Test
-    fun theScopeSwitcherStaysUpWhileTheNumbersLoad() {
-        Parity.needsRealRendering()
-        showStats(StatsState().scopedTo(Owner.MATT).loading())
-        rule.onNodeWithText("Matt").assertExists()
-        assertTrue(seg("Matt") - seg("Both") > 4.0)
+    fun whoseNumbersTheyAreStaysUpWhileTheyLoad() {
+        showStats(StatsState().scopedTo("matt").loading())
+        assertEquals("matt", cell("scope-label"))
     }
 
     @Test
@@ -742,7 +676,7 @@ class LogsStatsParityTest {
         Parity.needsRealRendering()
         showStats(StatsState().loaded(totals()))
         shootRoot("s01-both")
-        stats = StatsState().scopedTo(Owner.MATT).loaded(totals())
+        stats = StatsState().scopedTo("matt").loaded(totals())
         rule.waitForIdle()
         shootRoot("s02-matt")
         shoot("s03-scope", "scope")
@@ -758,9 +692,6 @@ class LogsStatsParityTest {
     }
 
     // --------------------------------------------------------- the camera
-
-    private fun seg(label: String): Double =
-        lightnessOf(rule.onNodeWithText(label).captureToImage().asAndroidBitmap())
 
     /** What is written inside a tagged wrapper, such as a `.tag` pill. */
     private fun tagText(t: String): String =

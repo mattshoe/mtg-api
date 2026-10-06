@@ -16,30 +16,29 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import org.mattshoe.mtg.core.Design
-import org.mattshoe.mtg.core.Owner
 import org.mattshoe.mtg.core.Prices
 import org.mattshoe.mtg.core.StatsState
 
 /**
  * Collection totals, on Android. Sibling of `StatsPage`.
  *
- * The same key-and-number list the site shows, in the same panel, with
- * the same segmented scope control across the top.
+ * The same key-and-number list the site shows, in the same panel,
+ * over the same caption naming whose collection it is.
  */
 @Composable
-fun StatsScreen(state: StatsState, onScope: (Owner?) -> Unit) {
+fun StatsScreen(state: StatsState) {
     Column(
         Modifier.fillMaxWidth()
             .verticalScroll(rememberScrollState())
             .padding(Design.WRAP_PAD_NARROW.dp),
         verticalArrangement = Arrangement.spacedBy(Design.GAP.dp),
     ) {
-        // No heading: the tab says "Stats".
+        // No heading: the tab says "Stats". A Both / Matt / Kayla
+        // segmented control was here, which was a list of the only two
+        // people there would ever be. The page is one collection now,
+        // so this says which one rather than offering a choice.
         Box(Modifier.testTag("scope")) {
-            Seg(
-                listOf("both" to "Both", "matt" to "Matt", "kayla" to "Kayla"),
-                state.scope.owner?.slug ?: "both",
-            ) { slug -> onScope(Owner.entries.firstOrNull { it.slug == slug }) }
+            Line(state.scope.label, Ink3, modifier = Modifier.testTag("scope-label"))
         }
 
         when {

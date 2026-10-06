@@ -195,7 +195,14 @@ class MtgApi internal constructor(
     suspend fun cards(
         token: String,
         direction: Direction,
-        owner: Owner,
+        /**
+         * Which collection, as its slug.
+         *
+         * One of two names once, when that was every collection there
+         * would ever be. Whether this session may write to it is the
+         * server's call and always was.
+         */
+        owner: String,
         list: String,
         dryRun: Boolean,
     ): Applied {
@@ -203,7 +210,7 @@ class MtgApi internal constructor(
             contentType(ContentType.Application.Json)
             header("Authorization", "Bearer $token")
             header(Idempotency.HEADER, Idempotency.key())
-            setBody(CardsRequest(owner.slug, list, dryRun))
+            setBody(CardsRequest(owner, list, dryRun))
         }
         return res.decode()
     }
@@ -282,7 +289,7 @@ class MtgApi internal constructor(
         token: String,
         name: String,
         format: String,
-        owner: Owner,
+        owner: String,
         commander: String?,
         list: String,
         dryRun: Boolean,
@@ -291,7 +298,7 @@ class MtgApi internal constructor(
             contentType(ContentType.Application.Json)
             header("Authorization", "Bearer $token")
             header(Idempotency.HEADER, Idempotency.key())
-            setBody(CreateDeckRequest(name, format, owner.slug, commander, list, dryRun))
+            setBody(CreateDeckRequest(name, format, owner, commander, list, dryRun))
         }
         return res.decode()
     }

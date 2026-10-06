@@ -7,7 +7,6 @@ import org.jetbrains.compose.web.renderComposable
 import org.mattshoe.mtg.core.Deck
 import org.mattshoe.mtg.core.DeckCard
 import org.mattshoe.mtg.core.DecksState
-import org.mattshoe.mtg.core.Owner
 import org.mattshoe.mtg.core.StatsState
 import org.mattshoe.mtg.core.Totals
 import org.w3c.dom.HTMLButtonElement
@@ -24,16 +23,12 @@ class DecksStatsPageTest {
 
     private val roots = mutableListOf<HTMLElement>()
     private var opened: Deck? = null
-    private var scoped: Owner? = null
-    private var scopeCalls = 0
 
     @AfterTest
     fun cleanUp() {
         roots.forEach { it.remove() }
         roots.clear()
         opened = null
-        scoped = null
-        scopeCalls = 0
     }
 
     private fun mount(block: @androidx.compose.runtime.Composable () -> Unit): HTMLElement {
@@ -57,13 +52,30 @@ class DecksStatsPageTest {
         Deck(slug, name, owner, "Alela, Artful Provocateur (ELD) 324", "UW", 3, null)
 
     @Test
-    fun decksAreGroupedByOwner() = runTest {
-        val s = DecksState().loaded(listOf(deck("a", "matt", "Alela"), deck("b", "kayla", "Bello")))
+    fun theShelfIsOneShelfWithACountAndNobodysNameOverIt() = runTest {
+        // It was a group per owner with the owner's name as its
+        // heading, which is one group with somebody's name
+        // pointlessly over it now that the page is their collection.
+        val s = DecksState().loaded(listOf(deck("a", "matt", "Alela"), deck("b", "matt", "Bello")))
         val root = mount { DecksPage(s, { opened = it }, {}) }
         settle()
-        assertTrue(root.textContent!!.contains("Matt"))
-        assertTrue(root.textContent!!.contains("Kayla"))
+        assertTrue(root.textContent!!.contains("2 decks"), "the shelf does not say how many")
         assertTrue(root.textContent!!.contains("Alela"))
+        assertTrue(root.textContent!!.contains("Bello"))
+        assertEquals(
+            1,
+            root.querySelectorAll("div.deck-grid").length,
+            "the decks are still split into a grid per owner",
+        )
+        assertTrue(!root.textContent!!.contains("Matt"), "the owner's name is still over the shelf")
+    }
+
+    @Test
+    fun oneDeckIsADeckRatherThanOneDecks() = runTest {
+        val root = mount { DecksPage(DecksState().loaded(listOf(deck("a", "matt", "Alela"))), {}, {}) }
+        settle()
+        assertTrue(root.textContent!!.contains("1 deck"))
+        assertTrue(!root.textContent!!.contains("1 decks"))
     }
 
     @Test
@@ -131,7 +143,7 @@ class DecksStatsPageTest {
         val s = StatsState().loaded(
             Totals(printings = 6032, uniques = 3481, physical = 3743, decks = 24, value = 5046.0),
         )
-        val root = mount { StatsPage(s) { } }
+        val root = mount { StatsPage(s) }
         settle()
         assertTrue(root.textContent!!.contains("6032"))
         assertTrue(root.textContent!!.contains("3743"))
@@ -142,40 +154,31 @@ class DecksStatsPageTest {
     }
 
     @Test
-    fun theActiveScopeIsMarkedAndSwitchingAsksForTheOther() = runTest {
-        val s = StatsState().scopedTo(Owner.MATT).loaded(Totals())
-        val root = mount { StatsPage(s) { scoped = it; scopeCalls++ } }
+    fun theStatsPageSaysWhichCollectionTheNumbersAreAboutAndOffersNoChoice() = runTest {
+        // A Both / Matt / Kayla segmented control was here. "Both" is
+        // not a collection anybody owns and the other two were a list
+        // of the only two people there would ever be.
+        val root = mount { StatsPage(StatsState().scopedTo("kayla").loaded(Totals())) }
         settle()
-        val matt = root.buttons().first { it.textContent == "Matt" }
-        assertTrue(matt.className.contains("on"), matt.className)
-        root.buttons().first { it.textContent == "Kayla" }.click()
-        settle()
-        assertEquals(Owner.KAYLA, scoped)
-        assertEquals(1, scopeCalls)
+        assertTrue(root.textContent!!.contains("kayla"), "nothing says whose numbers these are")
+        assertEquals(0, root.querySelectorAll(".seg").length, "the scope switcher is still on the page")
+        assertEquals(0, root.querySelectorAll(".owner-opt").length)
+        assertTrue(
+            root.buttons().none { it.textContent?.trim() in listOf("Both", "Matt", "Kayla") },
+            "the page still offers somebody else's collection",
+        )
     }
 
     @Test
-    fun theStatsScopeSwitcherIsASegmentedControl() = runTest {
-        val root = mount { StatsPage(StatsState().scopedTo(Owner.MATT).loaded(Totals())) { } }
+    fun everyCollectionAtOnceIsSaidInWordsRatherThanLeftBlank() = runTest {
+        val root = mount { StatsPage(StatsState().loaded(Totals())) }
         settle()
-        // `owner-opt` is the new-deck wizard's 130px-minimum choice
-        // card. Three of them wrap onto two rows on a phone, which is
-        // why `FilterPanel` was moved off it and why the web's own test
-        // asserts it stays out of the rest of the app. Stats was the
-        // last place still using it.
-        assertEquals(0, root.querySelectorAll(".owner-opt").length)
-        val seg = root.querySelector(".seg")
-        assertTrue(seg != null, "the scope switcher is not a .seg")
-        assertEquals(3, root.querySelectorAll(".seg button").length)
-        // Inside the control, not merely somewhere on the page.
-        val inSeg = root.querySelectorAll(".seg button")
-        val labels = (0 until inSeg.length).map { (inSeg[it] as org.w3c.dom.HTMLElement).textContent }
-        assertEquals(listOf("Both", "Matt", "Kayla"), labels)
+        assertTrue(root.textContent!!.contains("Everything"), root.textContent!!)
     }
 
     @Test
     fun anUnpricedCollectionSaysSoRatherThanShowingZero() = runTest {
-        val root = mount { StatsPage(StatsState().loaded(Totals(value = null))) { } }
+        val root = mount { StatsPage(StatsState().loaded(Totals(value = null))) }
         settle()
         assertTrue(root.textContent!!.contains("unpriced"))
     }

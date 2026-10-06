@@ -21,7 +21,6 @@ import org.mattshoe.mtg.core.NewDeck
 import org.mattshoe.mtg.core.Overlay
 import org.mattshoe.mtg.core.Route
 import org.mattshoe.mtg.core.View
-import org.mattshoe.mtg.core.Owner
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -57,7 +56,6 @@ class NewDeckWizardReachesTheShellTest {
         newDeck = NewDeck(
             step = step,
             format = Format.COMMANDER,
-            owner = Owner.MATT,
             name = "Test Deck",
             commander = if (step == DeckStep.CARDS) "Alela, Artful Provocateur" else "",
         ),
