@@ -156,7 +156,11 @@ h3 { font-size: 14px; }
    every width — the row of tabs only ever fitted on a desk, and two
    behaviours to keep straight is how the phone ended up with no
    navigation at all. */
-.topbar-nav { display: flex; align-items: center; gap: 11px; min-width: 0; }
+/* The whole bar, so the profile can sit at the right-hand end of it
+   the way the phone's does. It used to be a content-width slot with a
+   separate `topbar-right` div beside it holding a link; the slot is
+   the bar now and the shared build draws everything in it. */
+.topbar-nav { display: flex; align-items: center; gap: 11px; min-width: 0; flex: 1; }
 /* What you are looking at, in the bar. One line, cut rather than
    wrapped — a deck called "League of Legends Proxy Deck" must not
    push the header to two rows. */
@@ -183,7 +187,7 @@ h3 { font-size: 14px; }
    as a button and an afterthought. */
 .nav-profile {
   display: grid; place-items: center;
-  width: 34px; height: 34px; padding: 0; margin-left: 7px;
+  width: 34px; height: 34px; padding: 0;
   border: 1px solid var(--line); border-radius: 50%;
   background: var(--bg-3); color: var(--text-2); cursor: pointer; font: inherit;
   overflow: hidden; flex: none;
@@ -196,6 +200,12 @@ h3 { font-size: 14px; }
    it at text size. */
 .nav-profile .app-avatar { width: 100%; height: 100%; border: 0; border-radius: 50%; }
 .nav-profile .icon { width: 19px; height: 19px; }
+
+/* Pushed to the right-hand end of the bar, and the thing the menu
+   under it hangs from — `position: relative` here is what makes the
+   panel's `right: 0` mean the bar's right edge rather than the
+   hamburger's. */
+.nav-profile-box { margin-left: auto; position: relative; display: flex; align-items: center; flex: none; }
 
 /* The profile's own panel. Same slab as the hamburger's, hung off the
    right edge so it cannot run off the side of a phone. */
@@ -274,6 +284,15 @@ h3 { font-size: 14px; }
 
 /* The admin half, set apart so it reads as a different kind of thing
    rather than three more places to go. */
+/* The one entry in the menu that leaves the app. Dimmer than a view,
+   with the arrow the old header link wore, so it does not read as a
+   fourth page of the site. */
+.app-away { color: var(--text-3); font-weight: 400; text-decoration: none; }
+.app-away::after { content: " \2197"; opacity: .75; }
+@media (hover: hover) {
+  .app-away:hover { color: var(--text); text-decoration: none; }
+}
+
 .app-menu-sep { height: 1px; margin: 6px 4px 2px; background: var(--line-2); }
 .app-menu-group {
   padding: 3px 11px 5px; font-size: 10.5px; font-weight: 700;

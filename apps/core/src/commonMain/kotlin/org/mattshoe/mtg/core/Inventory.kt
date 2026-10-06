@@ -93,7 +93,15 @@ object Inventory {
                 "thereIsAProfileButtonInTheHeader", "itWearsTheGooglePictureWhenThereIsOne",
                 "andTheGenericIconWhenThereIsNot", "theHamburgerIsPlacesToGoAndNothingElse",
                 "theProfileMenuIsWhoYouAreAndWhatFollowsFromIt", "theTwoMenusAreNeverOpenAtOnce",
-                "theProfileSitsAtTheRightHandEndOfTheHeader",
+                "theProfileSitsAtTheRightHandEndOfTheBarTheWayThePhonesDoes",
+                "andItsMenuHangsOffThatEndRatherThanRunningOffTheSide",
+                // The Android app is a place you can go, in the menu
+                // with the other places. It was a loose link in the
+                // static header, which nothing mounted and no parity
+                // pass could see.
+                "theAndroidAppIsInTheHamburgerWithTheOtherPlacesToGo",
+                "theBarIsASlotForTheSharedBuild", "andHoldsNoLinkOfItsOwn",
+                "norAnyButton", "andDoesNotOfferTheAndroidAppFromOutsideTheApp",
                 "theMenuStaysOnScreenAtPhoneWidth", "thereIsNoFindButton",
                 "theHeaderSaysWhatYouAreLookingAt", "andAnOpenDeckPutsItsOwnNameThere",
                 // The phone's bottom bar and its profile.
