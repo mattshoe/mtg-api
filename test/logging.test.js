@@ -30,14 +30,16 @@ describe('requests are logged', () => {
   it('classifies levels by outcome', async () => {
     await get('/schema');                                            // read -> debug
     await postAnon('/query', { sql: 'SELECT * FROM nope' });          // 400 -> warn
-    await post('/query', { sql: 'DELETE FROM deck_notes WHERE 0' });  // write -> info
+    await post('/query', { sql: 'SELECT 1 AS n' });                   // read -> debug
     await settle();
     const byPath = async (p, status) => (await sql(
       'SELECT level FROM logs WHERE path = ? AND status = ? ORDER BY id DESC LIMIT 1', p, status,
     ))[0]?.level;
     expect(await byPath('/schema', 200)).toBe('debug');
     expect(await byPath('/query', 400)).toBe('warn');
-    expect(await byPath('/query', 200)).toBe('info');
+    // A read, which is all this endpoint does now. It was a write
+    // here, and a write logged `info`.
+    expect(await byPath('/query', 200)).toBe('debug');
   });
 
   it('records what a query did without the whole result', async () => {
@@ -150,11 +152,13 @@ describe('the log is admin-only', () => {
     expect(g.status).toBe(401);
   });
 
-  it('SQL it cannot prove is read-only is treated as a write', async () => {
-    // Fail-safe: a statement the parser cannot classify asks for a token
-    // rather than being waved through.
+  it('SQL it cannot prove is read-only is refused rather than waved through', async () => {
+    // Fail-safe. It used to ask for a token; nothing writes here any
+    // more, so what it asks for is a different statement — and a
+    // statement that does not compile is told so.
     const r = await postAnon('/query', { sql: 'SELEC 1' });
-    expect(r.status).toBe(401);
+    expect(r.status).toBe(400);
+    expect(r.body.error).toMatch(/SELEC/);
   });
 
   it('a card called "logs" does not trip the gate', async () => {

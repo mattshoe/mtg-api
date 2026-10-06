@@ -93,21 +93,52 @@ const WRITE_OPCODES = new Set([
  * does not compile — in which case the message has offsets into the caller's
  * own SQL, which the wrapped execution below cannot give.
  */
-export async function readOnlyCheck(db, sql, params = []) {
-  if (!isReadOnlyShape(sql)) {
-    return {
-      ok: false,
-      reason: 'only SELECT, WITH, VALUES and EXPLAIN statements can be read over GET',
-    };
+/** The compile error that statement has, or null when it compiles. */
+async function syntaxError(db, sql, params) {
+  try {
+    await db.prepare(`EXPLAIN ${sql}`).bind(...params).all();
+    return null;
+  } catch (e) {
+    // ATTACH and a PRAGMA write compile perfectly well and are refused
+    // by SQLite's own authorizer, which is a refusal and not a typo.
+    // Reporting those as syntax errors told the caller their statement
+    // was malformed when it was merely not allowed.
+    if (/not authorized|SQLITE_AUTH/i.test(String(e?.message ?? e))) return null;
+    // An overloaded database is not a malformed statement. Swallowing
+    // it here turned every 503 this endpoint can emit into a 400 that
+    // told the caller their SQL was wrong.
+    if (isOverloaded(e)) throw e;
+    return { ok: false, syntax: true, reason: withTruncationHint(cleanError(e), sql) };
   }
+}
+
+export async function readOnlyCheck(db, sql, params = []) {
   // EXPLAIN and EXPLAIN QUERY PLAN list a program, they never run it, and
   // EXPLAIN cannot be applied to itself.
   if (/^\s*explain\b/i.test(stripLiterals(sql))) return { ok: true };
+
+  // The shape first, because it is the gate: ATTACH and PRAGMA compile
+  // perfectly well and have no business running here.
+  //
+  // But a statement that does not compile is a typo, not a refusal, and
+  // saying "this endpoint is read-only" to `SELEC 1` is true of the
+  // endpoint and no help at all about the typo. So a refused shape is
+  // compiled before the refusal is reported, and the syntax error wins
+  // when there is one.
+  if (!isReadOnlyShape(sql)) {
+    const broken = await syntaxError(db, sql, params);
+    if (broken) return broken;
+    return {
+      ok: false,
+      reason: 'this endpoint is read-only: only SELECT, WITH, VALUES and EXPLAIN run here',
+    };
+  }
 
   let rows;
   try {
     rows = (await db.prepare(`EXPLAIN ${sql}`).bind(...params).all()).results || [];
   } catch (e) {
+    if (isOverloaded(e)) throw e;
     return { ok: false, syntax: true, reason: withTruncationHint(cleanError(e), sql) };
   }
 
@@ -115,7 +146,8 @@ export async function readOnlyCheck(db, sql, params = []) {
   if (writes.length) {
     return {
       ok: false,
-      reason: `that statement writes to the database (${writes.join(', ')}); use POST`,
+      reason: 'this endpoint is read-only and that statement writes to the database '
+        + `(${writes.join(', ')}); use /cards/add, /cards/remove or /decks/* instead`,
     };
   }
   return { ok: true };
@@ -279,10 +311,15 @@ export async function runQuery(db, body, { readOnly = false } = {}) {
     const verdict = await readOnlyCheck(db, sql, params);
     if (!verdict.ok) {
       // A statement that does not compile is a bad request; one that
-      // compiles and writes is the wrong method for this endpoint.
+      // compiles and writes is refused outright.
+      //
+      // 403 and not 405. It was 405 when GET was the read-only one and
+      // POST wrote, so "wrong method" was true and actionable. Nothing
+      // writes here now, whoever asks and however they ask, which is a
+      // refusal rather than a signpost to another verb.
       return verdict.syntax
         ? { status: 400, body: { error: verdict.reason } }
-        : { status: 405, body: { error: `GET /query is read-only: ${verdict.reason}` } };
+        : { status: 403, body: { error: verdict.reason } };
     }
   }
 

@@ -26,10 +26,52 @@ import { validateNames } from './validate.js';
 import { addCards, removeCards } from './cards.js';
 import { disassembleDeck, editDeckList, createDeck, renameDeck, FORMATS } from './decks.js';
 import { mintToken, verifyToken, bearer } from './admin.js';
+import {
+  whoAmI, canEdit, profileOf, endSession, SESSION_COOKIE,
+} from './accounts.js';
 import { lookupPrices } from './prices.js';
 import { runMaintenance, CRON_TASKS } from './maintenance.js';
 import { newEntry, writeEntry, buildLogQuery, logStats } from './log.js';
 import { keyFrom, claim, remember, release } from './idempotency.js';
+
+/**
+ * May this caller change that collection, and if not, why not.
+ *
+ * One place, because "only the collection's owner may edit that
+ * collection" is one rule and six endpoints enforce it.
+ */
+async function mayEdit(env, request, ownerSlug) {
+  const who = await whoAmI(env, request, verifyToken);
+  if (canEdit(who, ownerSlug)) return { ok: true, who };
+
+  // Signed in, but it is not your collection. The only case that is
+  // genuinely a 403: the credentials are good and the answer is
+  // still no.
+  if (who.user) {
+    return {
+      ok: false,
+      response: json({
+        error: `that is ${ownerSlug || 'somebody else'}'s collection, and you are signed in as ${who.user.slug}`,
+      }, 403),
+    };
+  }
+
+  // A token was presented and named nobody. Say which way it failed —
+  // "expired" and "not a token at all" are different problems and the
+  // caller can only act on one of them.
+  if (who.bearer) {
+    const v = await verifyToken(env, who.bearer);
+    return { ok: false, response: denied(v.ok ? 'that token is not a session' : v.reason) };
+  }
+  return { ok: false, response: denied('sign in to change a collection') };
+}
+
+/** Whose deck that is. Null for a deck that does not exist. */
+async function deckOwner(db, slug) {
+  if (!slug) return null;
+  const row = await db.prepare('SELECT owner FROM decks WHERE slug = ?1').bind(String(slug)).first();
+  return row?.owner ?? null;
+}
 
 /**
  * On every response, the error ones included — a CORS failure is invisible
@@ -119,7 +161,10 @@ const INDEX = {
   endpoints: {
     'GET /schema': 'tables, views, columns, row counts',
     'GET /query': '?sql=SELECT+...&fmt=rows|objects|tsv&limit=5000 (read-only)',
-    'POST /query': '{"sql":"SELECT ...","params":[],"fmt":"rows|objects|tsv","limit":5000}',
+    'POST /query': '{"sql":"SELECT ...","params":[],"fmt":"rows|objects|tsv","limit":5000} (read-only)',
+    'POST /admin/sql': 'arbitrary SQL, for the server operator and the nightly job',
+    'GET /auth/me': 'the signed-in account, or nulls',
+    'POST /auth/logout': 'end this session',
     'POST /cards/add': '{"owner":"matt","list":"4 Lightning Bolt (2X2) 117","dry_run":false}',
     'POST /cards/remove': '{"owner":"matt","list":"1 Sol Ring","dry_run":false}',
     'POST /decks/disassemble': '{"slug":"...","dry_run":false} — deletes the deck, its cards go back to bulk; needs admin',
@@ -201,7 +246,12 @@ function queryDetail(body, out) {
   };
   if (out.body?.changes !== undefined) d.changes = out.body.changes;
   if (out.body?.truncated) d.truncated = out.body.truncated;
+  // `failed` is what a statement that ran and threw reports. A
+  // statement refused before it ran — a syntax error caught while
+  // compiling, a write this endpoint will not make — never got as far
+  // as running, and its reason was being dropped from the log.
   if (out.failed) d.error = String(out.failed).slice(0, 300);
+  else if (out.status >= 400 && out.body?.error) d.error = String(out.body.error).slice(0, 300);
   return d;
 }
 
@@ -470,16 +520,28 @@ async function route(request, env, ctx, entry) {
       if (method !== 'POST') return notAllowed('GET', 'POST');
     const { body, error } = await readJson(request);
     if (error) return json({ error }, 400);
+    // Arbitrary SQL cannot write, whoever is asking.
+    //
+    // A statement is not a collection, so there is nothing to check an
+    // owner against — "only the collection's owner may edit that
+    // collection" is a rule this endpoint has no way to enforce. Every
+    // write the apps make already has an endpoint of its own that does
+    // enforce it, so nothing is lost but the hole.
+    //
+    // `readOnly` rather than a check of our own, so GET and POST refuse
+    // the same statements for the same stated reason, and so a
+    // statement that does not compile is still reported as the syntax
+    // error it is rather than as a refusal.
     const writes = await mayWrite(env.DB, body.sql);
     // Reads are open, except the log — see /logs. Gating the endpoint but
     // not the table would leave the data one SELECT away.
-    if (writes || touchesLogs(body.sql)) {
+    if (touchesLogs(body.sql)) {
       const v = await verifyToken(env, bearer(request));
       if (!v.ok) return denied(v.reason);
       entry.admin = true;
     }
     entry.write = writes;
-    const out = await runQuery(env.DB, body);
+    const out = await runQuery(env.DB, body, { readOnly: true });
     entry.detail = queryDetail(body, out);
     if (out.status >= 500) entry.level = 'error';
     else if (slow(out)) entry.level = 'warn';
@@ -491,10 +553,10 @@ async function route(request, env, ctx, entry) {
       if (method !== 'POST') return notAllowed('POST');
       // Gated whole, dry runs included: a preview is part of editing, and
       // one rule is easier to trust than a carve-out.
-      const v = await verifyToken(env, bearer(request));
-      if (!v.ok) return denied(v.reason);
       const { body, error } = await readJson(request);
       if (error) return json({ error }, 400);
+      const gate = await mayEdit(env, request, body.owner || 'matt');
+      if (!gate.ok) return gate.response;
       entry.admin = true;
       entry.write = true;
       const r = path === '/cards/add'
@@ -511,6 +573,47 @@ async function route(request, env, ctx, entry) {
       };
       if (r.body?.failed) entry.level = 'warn';
       return send(r);
+    }
+
+    if (path === '/admin/sql') {
+      if (method !== 'POST') return notAllowed('POST');
+      // Arbitrary SQL, for the one caller that needs it: the nightly
+      // job, which backfills tags and refreshes prices — rows no
+      // endpoint models and no account owns.
+      //
+      // The door `/query` used to be, with the difference that
+      // matters: an account cannot reach this however many
+      // collections it owns, so one person's session can never
+      // rewrite somebody else's cards.
+      const who = await whoAmI(env, request, verifyToken);
+      if (!who.operator && who.user?.role !== 'admin') {
+        return who.user
+          ? json({ error: 'that needs the server role' }, 403)
+          : denied('this is the operator\'s door');
+      }
+      const { body, error } = await readJson(request);
+      if (error) return json({ error }, 400);
+      entry.admin = true;
+      entry.write = await mayWrite(env.DB, body.sql);
+      const out = await runQuery(env.DB, body);
+      entry.detail = queryDetail(body, out);
+      if (out.status >= 500) entry.level = 'error';
+      if (out.status >= 400) entry.message = out.body?.error;
+      return send(out);
+    }
+
+    if (path === '/auth/me') {
+      const who = await whoAmI(env, request, verifyToken);
+      return json(profileOf(who.user));
+    }
+
+    if (path === '/auth/logout') {
+      if (method !== 'POST') return notAllowed('POST');
+      const who = await whoAmI(env, request, verifyToken);
+      if (who.token) await endSession(env.DB, who.token);
+      return json({ ok: true }, 200, {
+        'set-cookie': `${SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`,
+      });
     }
 
     if (path === '/cards/validate') {
@@ -532,10 +635,10 @@ async function route(request, env, ctx, entry) {
 
     if (path === '/decks/create') {
       if (method !== 'POST') return notAllowed('POST');
-      const v = await verifyToken(env, bearer(request));
-      if (!v.ok) return denied(v.reason);
       const { body, error } = await readJson(request);
       if (error) return json({ error }, 400);
+      const gate = await mayEdit(env, request, body?.owner || 'matt');
+      if (!gate.ok) return gate.response;
       entry.admin = true;
       entry.write = true;
       const r = await createDeck(env.DB, body, env.SCRYFALL_FETCH || fetch);
@@ -554,10 +657,10 @@ async function route(request, env, ctx, entry) {
 
     if (path === '/decks/rename') {
       if (method !== 'POST') return notAllowed('POST');
-      const v = await verifyToken(env, bearer(request));
-      if (!v.ok) return denied(v.reason);
       const { body, error } = await readJson(request);
       if (error) return json({ error }, 400);
+      const gate = await mayEdit(env, request, await deckOwner(env.DB, body?.slug));
+      if (!gate.ok) return gate.response;
       entry.admin = true;
       entry.write = true;
       const r = await renameDeck(env.DB, body);
@@ -572,10 +675,10 @@ async function route(request, env, ctx, entry) {
 
     if (path === '/decks/list') {
       if (method !== 'POST') return notAllowed('POST');
-      const v = await verifyToken(env, bearer(request));
-      if (!v.ok) return denied(v.reason);
       const { body, error } = await readJson(request);
       if (error) return json({ error }, 400);
+      const gate = await mayEdit(env, request, await deckOwner(env.DB, body?.slug));
+      if (!gate.ok) return gate.response;
       entry.admin = true;
       entry.write = true;
       const r = await editDeckList(env.DB, body, env.SCRYFALL_FETCH || fetch);
@@ -596,10 +699,10 @@ async function route(request, env, ctx, entry) {
     if (path === '/decks/disassemble') {
       if (method !== 'POST') return notAllowed('POST');
       // Gated whole, dry runs included, the same as add and remove.
-      const v = await verifyToken(env, bearer(request));
-      if (!v.ok) return denied(v.reason);
       const { body, error } = await readJson(request);
       if (error) return json({ error }, 400);
+      const gate = await mayEdit(env, request, await deckOwner(env.DB, body?.slug));
+      if (!gate.ok) return gate.response;
       entry.admin = true;
       entry.write = true;
       const r = await disassembleDeck(env.DB, body);

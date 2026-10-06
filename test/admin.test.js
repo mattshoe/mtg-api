@@ -74,7 +74,11 @@ describe('writes are gated', () => {
     expect(r.status).toBe(401);
   });
 
-  it('a mutating /query is refused without a token, and changes nothing', async () => {
+  it('a mutating /query is refused and changes nothing', async () => {
+    // It used to be refused for want of a token and accepted with
+    // one. Collections have owners now, and a statement is not a
+    // collection — there is nothing to check an owner against — so
+    // the endpoint reads and does not write, whoever is asking.
     const before = await count('deck_notes');
     for (const s of [
       "INSERT INTO deck_notes (deck_id, section, body) VALUES (1,'x','y')",
@@ -83,8 +87,7 @@ describe('writes are gated', () => {
       'DROP TABLE cards',
     ]) {
       const r = await postAnon('/query', { sql: s });
-      expect(r.status, `${s} was allowed`).toBe(401);
-      expect(r.body.admin_required).toBe(true);
+      expect(r.status, `${s} was allowed`).toBe(403);
     }
     expect(await count('deck_notes')).toBe(before);
     expect(await count('cards', 'qty = 0')).toBe(0);
@@ -98,13 +101,15 @@ describe('writes are gated', () => {
     expect(await count('cards', "name_norm = 'lightning bolt'")).toBe(1);
   });
 
-  it('accepts a mutating query once a token is presented', async () => {
+  it('refuses a mutating query even with a token', async () => {
+    // The hole this closes: one leaked password used to be able to
+    // rewrite every collection on the server with one statement.
     const token = await adminToken();
     const r = await postAs('/query', {
       sql: "INSERT INTO deck_notes (deck_id, section, body) VALUES (1,'Gameplan','ok')",
     }, token);
-    expect(r.status).toBe(200);
-    expect(r.body.changes).toBe(1);
+    expect(r.status).toBe(403);
+    expect(r.body.error).toMatch(/read-only/);
   });
 });
 
@@ -156,8 +161,10 @@ describe('token handling', () => {
   it('the token it issues does not expire', async () => {
     const token = await adminToken();
     expect(token.split('.')[0]).toBe('0');
-    const r = await postAs('/query', { sql: 'DELETE FROM deck_notes WHERE 0' }, token);
-    expect(r.status).toBe(200);
+    const r = await postAs('/decks/disassemble', { slug: 'nope', dry_run: true }, token);
+    // Not a 401: the token was accepted. What it then ran into is the
+    // deck not existing, which is this endpoint's own business.
+    expect(r.status).not.toBe(401);
   });
 
   it('still rejects one of the old timed tokens once it has lapsed', async () => {
@@ -192,14 +199,14 @@ describe('token handling', () => {
     const a = await adminToken();
     const b = await adminToken();
     for (const t of [a, b]) {
-      const r = await postAs('/query', { sql: 'DELETE FROM deck_notes WHERE 0' }, t);
-      expect(r.status).toBe(200);
+      const r = await postAs('/decks/disassemble', { slug: 'nope', dry_run: true }, t);
+      expect(r.status).not.toBe(401);
     }
   });
 
   it('is case sensitive about the Bearer scheme but tolerant of spacing', async () => {
     const token = await adminToken();
-    const r = await postAs('/query', { sql: 'DELETE FROM deck_notes WHERE 0' }, `  ${token}  `.trim());
-    expect(r.status).toBe(200);
+    const r = await postAs('/decks/disassemble', { slug: 'nope', dry_run: true }, `  ${token}  `.trim());
+    expect(r.status).not.toBe(401);
   });
 });
