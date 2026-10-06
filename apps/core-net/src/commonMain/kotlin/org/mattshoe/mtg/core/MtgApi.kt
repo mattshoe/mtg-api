@@ -4,6 +4,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -90,6 +91,64 @@ class MtgApi internal constructor(
      */
     fun signInUrl(returnTo: String = ""): String =
         "$base/auth/google" + if (returnTo.isEmpty()) "" else "?return=$returnTo"
+
+    /**
+     * A Google ID token in, a session out.
+     *
+     * The phone's way in. Credential Manager hands the app a token
+     * directly, so there is no code to exchange — and the session
+     * comes back in the body rather than a cookie, because a phone
+     * has nowhere good to keep one and already sends a bearer header
+     * for everything else.
+     */
+    suspend fun signInWithGoogle(idToken: String): Session {
+        val res = http.post("$base/auth/google/token") {
+            contentType(ContentType.Application.Json)
+            setBody(IdTokenRequest(idToken))
+        }
+        return res.decode()
+    }
+
+    /** Who that session is, as the server sees it. */
+    suspend fun me(session: String): Account? {
+        val res = http.get("$base/auth/me") { header("Authorization", "Bearer $session") }
+        if (!res.status.isSuccess()) return null
+        val body: Profile = res.decode()
+        return body.slug?.let {
+            Account(slug = it, name = body.name, avatar = body.avatar, role = body.role ?: "user")
+        }
+    }
+
+    /** End it, server-side as well as locally. */
+    suspend fun signOut(session: String) {
+        runCatching {
+            http.post("$base/auth/logout") { header("Authorization", "Bearer $session") }
+        }
+    }
+
+    @Serializable
+    private data class IdTokenRequest(@SerialName("id_token") val idToken: String)
+
+    @Serializable
+    data class Session(
+        val token: String,
+        val slug: String? = null,
+        val name: String? = null,
+        val avatar: String? = null,
+        val role: String? = null,
+    ) {
+        val account: Account?
+            get() = slug?.let { Account(it, name, avatar, role ?: "user") }
+    }
+
+    @Serializable
+    private data class Profile(
+        val slug: String? = null,
+        val name: String? = null,
+        val email: String? = null,
+        val avatar: String? = null,
+        val role: String? = null,
+    )
 
     /** Password in, token out. The password is never kept. */
     suspend fun unlock(password: String): String {

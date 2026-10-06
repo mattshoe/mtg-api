@@ -19,6 +19,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mattshoe.mtg.android.Parity.shoot
+import org.mattshoe.mtg.core.Account
 import org.mattshoe.mtg.core.Admin
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.View
@@ -337,6 +338,36 @@ class BottomNavParityTest {
         assertTrue(
             rule.onAllNodes(hasText("Log in")).fetchSemanticsNodes().isNotEmpty(),
             "no way to sign in from the profile",
+        )
+    }
+
+    @Test
+    fun theProfileOffersGoogleToSomebodyWhoIsNobody() {
+        shell()
+        rule.onNodeWithContentDescription("Profile").performClick()
+        rule.waitForIdle()
+        assertTrue(
+            rule.onAllNodes(hasText("Sign in with Google")).fetchSemanticsNodes().isNotEmpty(),
+            "the profile does not offer an account",
+        )
+    }
+
+    @Test
+    fun theProfileSaysWhoYouAreAndWhereYourCardsLive() {
+        val me = Account(slug = "matt", name = "Matt")
+        shell(AppState(admin = Admin().signIn(me, session = "s")))
+        rule.onNodeWithContentDescription("Profile").performClick()
+        rule.waitForIdle()
+        assertTrue(rule.onAllNodes(hasText("Matt")).fetchSemanticsNodes().isNotEmpty(), "no name")
+        assertTrue(
+            rule.onAllNodes(hasText("/c/matt")).fetchSemanticsNodes().isNotEmpty(),
+            "nothing says where the collection lives",
+        )
+        // The password's own way in is not offered beside it: a
+        // password is not an account.
+        assertTrue(
+            rule.onAllNodes(hasText("Log in")).fetchSemanticsNodes().isEmpty(),
+            "both ways in are offered at once",
         )
     }
 

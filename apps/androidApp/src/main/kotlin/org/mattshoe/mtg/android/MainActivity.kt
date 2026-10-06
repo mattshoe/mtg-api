@@ -14,6 +14,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -203,6 +204,64 @@ class MainActivity : ComponentActivity() {
         return app
     }
 
+    /**
+     * Sign in with Google, natively.
+     *
+     * Credential Manager puts the sheet up, Google hands back an ID
+     * token, and the Worker turns that into a session — the same
+     * session the website gets, verified the same way. See
+     * `GoogleSignIn`.
+     */
+    private fun signInWithGoogle() {
+        scope.launch {
+            val idToken = try {
+                GoogleSignIn.idToken(this@MainActivity)
+            } catch (e: GetCredentialCancellationException) {
+                // Somebody changed their mind. That is not an error and
+                // deserves no toast.
+                return@launch
+            } catch (e: Exception) {
+                app = app.say(e.message ?: "could not reach Google", failed = true)
+                return@launch
+            }
+            app = try {
+                val session = api.signInWithGoogle(idToken)
+                val who = session.account
+                if (who == null) {
+                    app.say("that sign-in came back without an account", failed = true)
+                } else {
+                    app.copy(admin = app.admin.signIn(who, session.token))
+                        .say("Signed in as ${who.shownName}")
+                }
+            } catch (e: Exception) {
+                app.say(e.message ?: "could not sign in", failed = true)
+            }
+        }
+    }
+
+    /** End the session, on the server as well as here. */
+    private fun signOutOfGoogle() {
+        val held = app.admin.token
+        app = app.copy(admin = app.admin.signOut()).navigate(app.route)
+        if (!held.isNullOrBlank()) scope.launch { runCatching { api.signOut(held) } }
+    }
+
+    /**
+     * What a held token turns out to be.
+     *
+     * It is a session if the server recognises it, the old password
+     * token if it does not, and nothing at all if it has lapsed —
+     * and only the server can tell those apart.
+     */
+    private fun restoreAccount() {
+        val held = app.admin.token
+        if (held.isNullOrBlank()) return
+        scope.launch {
+            val who = runCatching { api.me(held) }.getOrNull() ?: return@launch
+            app = app.copy(admin = app.admin.signIn(who, held))
+        }
+    }
+
     /** A second load, the way a config change or a re-entry would ask for one. */
     internal fun loadFacetsForTesting() = loadFacets()
 
@@ -234,6 +293,12 @@ class MainActivity : ComponentActivity() {
                 admin = Admin(AdminToken.restore(store)),
                 history = EntryHistory.load(store),
             )
+            // Whatever was held last time might be a session, might be
+            // the old password, might be stale. Asking the server
+            // which is the only way to find out, and it happens
+            // alongside the first fetch rather than in front of it —
+            // the app is useful to somebody who is not signed in.
+            restoreAccount()
             // A link that started the app decides where it opens,
             // before the first fetch, so nothing is read for the
             // Library and then thrown away for the deck.
@@ -314,6 +379,8 @@ class MainActivity : ComponentActivity() {
                         // Nothing to account for here — the phone has
                         // no history entry per overlay — so it is the
                         // close and the open, in that order.
+                        onSignIn = { signInWithGoogle() },
+                        onSignOut = { signOutOfGoogle() },
                         onOpenPeeked = { card ->
                             app = app.closing(Overlay.CARD_PEEK)
                             openNamed(card.title, card.nameNorm, app.decks.open?.owner.orEmpty())

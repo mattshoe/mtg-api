@@ -229,6 +229,13 @@ dependencies {
     implementation(compose.foundation)
     implementation(compose.material3)
     implementation("androidx.activity:activity-compose:1.9.3")
+    // Sign in with Google, natively. Credential Manager is the
+    // supported way now — the old Google Sign-In SDK is deprecated —
+    // and it hands back an ID token the Worker verifies exactly as it
+    // verifies the browser's. See `GoogleSignIn.kt`.
+    implementation("androidx.credentials:credentials:1.3.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     // `viewModelScope` and `by viewModels()`. The whole `AppState`
     // lives in a `ViewModel` now, because it used to live in an

@@ -29,7 +29,7 @@ import { mintToken, verifyToken, bearer } from './admin.js';
 import {
   whoAmI, canEdit, profileOf, endSession, signIn, newSession, cookieValue, SESSION_COOKIE,
 } from './accounts.js';
-import { startSignIn, finishSignIn } from './google.js';
+import { startSignIn, finishSignIn, verifyIdToken } from './google.js';
 import { lookupPrices } from './prices.js';
 import { runMaintenance, CRON_TASKS } from './maintenance.js';
 import { newEntry, writeEntry, buildLogQuery, logStats } from './log.js';
@@ -206,6 +206,7 @@ const INDEX = {
     'GET /query': '?sql=SELECT+...&fmt=rows|objects|tsv&limit=5000 (read-only)',
     'POST /query': '{"sql":"SELECT ...","params":[],"fmt":"rows|objects|tsv","limit":5000} (read-only)',
     'GET /auth/google': 'start signing in with Google',
+    'POST /auth/google/token': 'a Google ID token in, a session out — for the phone',
     'GET /auth/callback/google': 'where Google sends you back',
     'POST /admin/sql': 'arbitrary SQL, for the server operator and the nightly job',
     'GET /auth/me': 'the signed-in account, or nulls',
@@ -718,6 +719,33 @@ async function route(request, env, ctx, entry) {
           ...CORS,
         },
       });
+    }
+
+    if (path === '/auth/google/token') {
+      if (method !== 'POST') return notAllowed('POST');
+      // The phone's way in. Credential Manager hands the app a Google
+      // ID token directly, so there is no code to exchange and no
+      // redirect to come back from — and the session goes back in the
+      // body rather than a cookie, because a phone has nowhere good
+      // to keep one.
+      const { body, error } = await readJson(request);
+      if (error) return json({ error }, 400);
+      if (!body?.id_token) return json({ error: 'id_token is required' }, 400);
+      let identity;
+      try {
+        identity = await verifyIdToken(env, body.id_token, env.AUTH_FETCH);
+      } catch (e) {
+        entry.level = 'warn';
+        entry.message = `google id token refused: ${String(e?.message ?? e).slice(0, 200)}`;
+        return json({
+          error: 'that sign-in could not be verified',
+          ...(env.AUTH_DEBUG ? { why: String(e?.message ?? e) } : {}),
+        }, 401);
+      }
+      const user = await signIn(env.DB, identity);
+      const token = await newSession(env.DB, user.id);
+      entry.detail = { slug: user.slug };
+      return json({ token, ...profileOf(user) });
     }
 
     if (path === '/auth/me') {

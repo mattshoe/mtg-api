@@ -198,7 +198,16 @@ data class Admin(
     fun unlock(token: String) = copy(token = token, trying = false)
     fun gaveUp() = copy(trying = false)
 
-    fun signIn(account: Account) = copy(account = account, trying = false)
+    /**
+     * Signed in, and carrying the session that proves it.
+     *
+     * The session goes in `token` on purpose rather than a field of
+     * its own: that is already the bearer every write sends and
+     * already what `AdminToken` persists, so an account's session is
+     * kept and presented by the code that was doing both anyway.
+     */
+    fun signIn(account: Account, session: String? = null) =
+        copy(account = account, token = session ?: token, trying = false)
 
     /** Out of both: the account and whatever password was held. */
     fun signOut() = Admin()
