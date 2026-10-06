@@ -82,6 +82,29 @@ class MtgApi internal constructor(
     private data class ErrorBody(val error: String = "")
 
     /**
+     * Whose collection an address names.
+     *
+     * The key in `#/c/<key>` is public and means nothing on its own:
+     * `cards.owner` holds a slug, and only this says which slug a key
+     * belongs to. No credentials, because every collection is public
+     * to read — and holding the answer is still not permission to
+     * write to it.
+     */
+    suspend fun collection(key: String): CollectionRef? {
+        val res = http.get("$base/c/$key")
+        if (!res.status.isSuccess()) return null
+        return res.decode<CollectionRef>()
+    }
+
+    @Serializable
+    data class CollectionRef(
+        val key: String,
+        val slug: String,
+        val name: String? = null,
+        val avatar: String? = null,
+    )
+
+    /**
      * Where to send somebody to sign in.
      *
      * Only the address is shared. The session itself is an HttpOnly

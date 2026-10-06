@@ -127,3 +127,45 @@ class CollectionRouteTest {
         assertTrue(s.canEdit)
     }
 }
+
+/**
+ * A shared link, opened on a phone.
+ *
+ * `Deeplink` is what turns an `mtg.mattshoe.org` URL into a route,
+ * and it is shared with the website's own address parsing precisely
+ * so a link cannot open one place in a browser and another in the
+ * app. A collection in the address has to survive that trip or a
+ * link somebody sent opens the reader's own collection, which is the
+ * one thing a link is for not doing.
+ */
+class SharedLinkTest {
+
+    private val key = "a1b2c3d4"
+
+    @Test
+    fun aSharedCollectionSurvivesTheTripThroughADeepLink() {
+        val landed = Deeplink.parse("https://mtg.mattshoe.org/#/c/$key/decks/alela")
+        assertEquals(key, landed?.collection)
+        assertEquals(View.DECKS, landed?.view)
+        assertEquals("alela", landed?.rest)
+    }
+
+    @Test
+    fun anAddressWithNoCollectionStillLands() {
+        assertEquals(View.DECKS, Deeplink.parse("https://mtg.mattshoe.org/#/decks")?.view)
+        assertEquals("", Deeplink.parse("https://mtg.mattshoe.org/#/decks")?.collection)
+    }
+
+    @Test
+    fun somebodyElsesLinkIsNotPermissionToEditIt() {
+        // The property the whole key design rests on: following a
+        // link makes you a reader of that collection and nothing
+        // more, whoever you are signed in as.
+        val me = Account(slug = "matt", name = "Matt", key = "mykey123")
+        val s = AppState(admin = Admin().signIn(me, "t"))
+            .navigate(Deeplink.parse("https://mtg.mattshoe.org/#/c/$key/decks")!!)
+            .browsing("kayla")
+        assertEquals("kayla", s.viewing)
+        assertTrue(!s.canEdit, "a shared link handed out edit rights")
+    }
+}
