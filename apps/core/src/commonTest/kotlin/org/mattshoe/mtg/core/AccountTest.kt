@@ -51,6 +51,24 @@ class AccountTest {
     }
 
     @Test
+    fun theSessionIsTheBearerEveryWriteAlreadySends() {
+        // Not a field of its own. `token` is what writes present and
+        // what `AdminToken` persists, so an account's session is kept
+        // and sent by the code that was doing both already.
+        val s = Admin().signIn(me, session = "sess-abc")
+        assertEquals("sess-abc", s.token)
+        assertTrue(s.unlocked)
+    }
+
+    @Test
+    fun signingInWithoutASessionLeavesWhateverWasHeld() {
+        // The website never sees its session — it is an HttpOnly
+        // cookie — so it signs in with an account and no token, and
+        // that must not wipe a password somebody is holding.
+        assertEquals("pw", Admin(token = "pw").signIn(me).token)
+    }
+
+    @Test
     fun signingOutTakesBothAway() {
         val s = Admin(token = "t").unlock("t").signIn(me).signOut()
         assertFalse(s.signedIn)

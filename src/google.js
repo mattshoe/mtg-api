@@ -85,6 +85,18 @@ export async function finishSignIn(env, code, verifier, fetchImpl) {
   }
   const idToken = tokens.id_token;
 
+  return verifyIdToken(env, idToken, fetchImpl);
+}
+
+/**
+ * A Google ID token, checked and turned into an identity.
+ *
+ * Shared by the two ways in. The browser gets here after exchanging a
+ * code; the phone gets here with a token Credential Manager handed
+ * it directly and no code at all — and the checks have to be the
+ * same either way, because a token is a token however it arrived.
+ */
+export async function verifyIdToken(env, idToken, fetchImpl) {
   const keys = jose.createRemoteJWKSet(new URL(JWKS_URL), {
     ...(fetchImpl ? { [jose.customFetch]: fetchImpl } : {}),
   });
@@ -93,6 +105,11 @@ export async function finishSignIn(env, code, verifier, fetchImpl) {
     // The check that separates "a valid Google token" from "a token
     // for this application". Without it, anybody with a token from
     // any Google-signed app could present it here.
+    //
+    // The phone's own OAuth clients are not in this list on purpose:
+    // Credential Manager is given the *web* client id as its
+    // `serverClientId`, so the token it produces is audienced to the
+    // same client the browser's is.
     audience: env.GOOGLE_CLIENT_ID,
   });
 

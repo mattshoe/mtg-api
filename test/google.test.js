@@ -206,3 +206,91 @@ describe('sign in with Google', () => {
     expect(r.headers.get('access-control-allow-credentials')).toBeNull();
   });
 });
+
+/**
+ * Signing in from the phone.
+ *
+ * Android does not bounce through a browser: Credential Manager hands
+ * the app a Google ID token directly, so there is no code to exchange
+ * and no redirect to come back from. What the server has to do is the
+ * half that was always the important half — verify the token — and
+ * hand back a session the app can carry in a header, because a phone
+ * has nowhere good to keep a cookie.
+ */
+describe('signing in with an ID token', () => {
+  async function keys() {
+    const { publicKey, privateKey } = await jose.generateKeyPair('RS256', { extractable: true });
+    const jwk = await jose.exportJWK(publicKey);
+    return { privateKey, jwks: { keys: [{ ...jwk, kid: 'test-key', alg: 'RS256', use: 'sig' }] } };
+  }
+
+  async function token(privateKey, claims = {}) {
+    return new jose.SignJWT({ email: 'phone@example.com', name: 'Phone Person', ...claims })
+      .setProtectedHeader({ alg: 'RS256', kid: 'test-key' })
+      .setIssuer(claims.iss ?? ISSUER)
+      .setAudience(claims.aud ?? env.GOOGLE_CLIENT_ID)
+      .setSubject(claims.sub ?? 'phone-subject')
+      .setIssuedAt()
+      .setExpirationTime(claims.exp ?? '5m')
+      .sign(privateKey);
+  }
+
+  const serveJwks = (jwks) => async () => new Response(JSON.stringify(jwks), {
+    headers: { 'content-type': 'application/json' },
+  });
+
+  async function post(idToken, jwks) {
+    return call('/auth/google/token', {
+      method: 'POST',
+      body: { id_token: idToken },
+      fetchImpl: serveJwks(jwks),
+    });
+  }
+
+  it('a good token comes back as a session the app can carry', async () => {
+    const { privateKey, jwks } = await keys();
+    const r = await post(await token(privateKey), jwks);
+    expect(r.status).toBe(200);
+    expect(r.body.token).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(r.body.slug).toBeTruthy();
+    // And it works as a bearer, which is the whole point of handing
+    // it over rather than setting a cookie.
+    const me = await call('/auth/me', { method: 'GET', token: r.body.token });
+    expect(me.body.slug).toBe(r.body.slug);
+  });
+
+  it('the same person on the phone and the laptop is one account', async () => {
+    const { privateKey, jwks } = await keys();
+    await post(await token(privateKey), jwks);
+    await post(await token(privateKey), jwks);
+    expect(await sql('SELECT 1 FROM users')).toHaveLength(1);
+    expect(await sql('SELECT 1 FROM sessions')).toHaveLength(2);
+  });
+
+  it('a token for somebody else\'s client is refused', async () => {
+    const { privateKey, jwks } = await keys();
+    const r = await post(await token(privateKey, { aud: 'someone-else.apps.googleusercontent.com' }), jwks);
+    expect(r.status).toBe(401);
+    expect(await sql('SELECT 1 FROM users')).toHaveLength(0);
+  });
+
+  it('a token signed by the wrong key is refused', async () => {
+    const stranger = await jose.generateKeyPair('RS256', { extractable: true });
+    const { jwks } = await keys();
+    const r = await post(await token(stranger.privateKey), jwks);
+    expect(r.status).toBe(401);
+    expect(await sql('SELECT 1 FROM users')).toHaveLength(0);
+  });
+
+  it('an expired token is refused', async () => {
+    const { privateKey, jwks } = await keys();
+    const r = await post(await token(privateKey, { exp: Math.floor(Date.now() / 1000) - 60 }), jwks);
+    expect(r.status).toBe(401);
+  });
+
+  it('no token at all is a 400 rather than a 401', async () => {
+    // Nothing was presented, so nothing was refused.
+    const r = await call('/auth/google/token', { method: 'POST', body: {} });
+    expect(r.status).toBe(400);
+  });
+});

@@ -114,6 +114,9 @@ fun AppShell(
     onOpenNamed: (String, String, String) -> Unit = { _, _, _ -> },
     /** "Full details" on the carousel's sheet. See `onDetails` below. */
     onOpenPeeked: (PeekCard) -> Unit = {},
+    /** Sign in with Google, from the profile. See `GoogleSignIn`. */
+    onSignIn: () -> Unit = {},
+    onSignOut: () -> Unit = {},
     onFind: (String) -> Unit = {},
     onLookup: (String) -> Unit = {},
     onPickFile: () -> Unit = {},
@@ -466,6 +469,8 @@ fun AppShell(
                 // Closes even when the view picked is the one already
                 // showing — otherwise the menu sits open over the page.
                 onPick = { next -> menuOpen = false; onState(next) },
+                onSignIn = onSignIn,
+                onSignOut = onSignOut,
             )
         }
 
@@ -757,7 +762,13 @@ private fun HomeMark(onClick: () -> Unit) {
  * its own idea of what back means is how that gets undone.
  */
 @Composable
-private fun NavMenu(state: AppState, top: Int, onPick: (AppState) -> Unit) {
+private fun NavMenu(
+    state: AppState,
+    top: Int,
+    onPick: (AppState) -> Unit,
+    onSignIn: () -> Unit = {},
+    onSignOut: () -> Unit = {},
+) {
     Box(Modifier.fillMaxSize()) {
         Column(
             Modifier
@@ -778,9 +789,12 @@ private fun NavMenu(state: AppState, top: Int, onPick: (AppState) -> Unit) {
             verticalArrangement = Arrangement.spacedBy(1.dp),
         ) {
             // Who you are. Not a list of places any more — the bar
-            // below is that — so the first thing this says is
-            // whether admin is on, because everything else in here
-            // follows from it.
+            // below is that — so the first thing this says is who is
+            // here, because everything else in here follows from it.
+            //
+            // An account says its own name and the address its
+            // collection lives at. The password says "Admin", because
+            // that is all it can say: it is not anybody.
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 11.dp, vertical = 7.dp),
                 horizontalArrangement = Arrangement.spacedBy(9.dp),
@@ -789,18 +803,16 @@ private fun NavMenu(state: AppState, top: Int, onPick: (AppState) -> Unit) {
                 ProfileIcon(if (state.admin.unlocked) Accent2 else Ink3, size = 26.dp)
                 Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                     Line(
-                        if (state.admin.unlocked) "Admin" else "Not signed in",
+                        state.admin.shownName
+                            ?: if (state.admin.unlocked) "Admin" else "Not signed in",
                         if (state.admin.unlocked) Accent2 else Ink,
                         Design.SMALL,
                         FontWeight.SemiBold,
                         Modifier.testTag("profile-status"),
                     )
                     Line(
-                        if (state.admin.unlocked) {
-                            "Everything is editable"
-                        } else {
-                            "Read only"
-                        },
+                        state.admin.account?.let { "/c/${it.slug}" }
+                            ?: if (state.admin.unlocked) "Everything is editable" else "Read only",
                         Ink3,
                         Design.MINI,
                     )
@@ -828,7 +840,15 @@ private fun NavMenu(state: AppState, top: Int, onPick: (AppState) -> Unit) {
             // menu that offers to lock something it just called a
             // sign-in is two metaphors for one thing. Matt: "Change
             // lock to log out".
-            MenuTab(if (state.admin.unlocked) "Log out" else "Log in", on = false) {
+            // The account's own way in and out. Google is the way in
+            // now; the password beneath it stays while the server role
+            // that will replace it is unassigned.
+            MenuTab(if (state.admin.signedIn) "Log out" else "Sign in with Google", on = false) {
+                onPick(state.closing(Overlay.UNLOCK))
+                if (state.admin.signedIn) onSignOut() else onSignIn()
+            }
+
+            if (!state.admin.signedIn) MenuTab(if (state.admin.unlocked) "Log out" else "Log in", on = false) {
                 onPick(
                     if (state.admin.unlocked) {
                         state.copy(admin = state.admin.lock()).navigate(state.route)
