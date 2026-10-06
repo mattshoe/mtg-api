@@ -87,6 +87,48 @@ const CORS = {
   'access-control-expose-headers': 'retry-after',
 };
 
+/**
+ * The sites allowed to send their session cookie here.
+ *
+ * A browser refuses `access-control-allow-origin: *` the moment
+ * credentials are involved, so a credentialed request has to be
+ * answered with its own origin named — which means an allowlist
+ * rather than a wildcard. Reads from anywhere else still work; they
+ * just arrive as nobody, which is exactly right for a public
+ * collection.
+ */
+const SITES = new Set([
+  'https://mtg.mattshoe.org',
+  'http://localhost:8788',
+  'http://localhost:5173',
+]);
+
+/** The response, with the CORS headers this request has earned. */
+function withCors(request, res) {
+  const origin = request.headers.get('origin');
+  if (!origin || !SITES.has(origin)) return res;
+  const headers = new Headers(res.headers);
+  headers.set('access-control-allow-origin', origin);
+  headers.set('access-control-allow-credentials', 'true');
+  headers.set('vary', 'origin');
+  return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+}
+
+/** The CORS headers for this request: credentialed only for a known site. */
+function corsFor(request) {
+  const origin = request.headers.get('origin');
+  if (origin && SITES.has(origin)) {
+    return {
+      'access-control-allow-origin': origin,
+      'access-control-allow-credentials': 'true',
+      'access-control-allow-headers': 'content-type, authorization',
+      'vary': 'origin',
+      'access-control-expose-headers': 'retry-after',
+    };
+  }
+  return CORS;
+}
+
 const JSON_HEADERS = {
   'content-type': 'application/json; charset=utf-8',
   ...CORS,
@@ -233,7 +275,12 @@ export default {
     }
     // After the response, never in front of it.
     ctx.waitUntil(writeEntry(env, entry, res.status));
-    return res;
+    // One place, at the end: every response carries `*` until here,
+    // and a request from a site allowed to send its cookie has those
+    // headers replaced with its own origin. Threading the request
+    // through every `json(...)` to do it earlier would have touched
+    // sixty call sites to change two headers.
+    return withCors(request, res);
   },
 };
 
@@ -659,8 +706,15 @@ async function route(request, env, ctx, entry) {
         status: 302,
         headers: {
           location: `${site}${back}`,
+          // `SameSite=None`, because the site and the API are on
+          // different registrable domains and a Lax cookie would
+          // never be sent at all. What stops a third party using it
+          // is CORS: `access-control-allow-origin` is echoed only for
+          // the sites above, and every write carries a JSON body,
+          // which is not a simple request — so it is preflighted, and
+          // the preflight is refused.
           'set-cookie': `${SESSION_COOKIE}=${token}; Path=/; Max-Age=${90 * 24 * 3600}`
-            + '; HttpOnly; Secure; SameSite=Lax',
+            + '; HttpOnly; Secure; SameSite=None',
           ...CORS,
         },
       });
@@ -676,7 +730,7 @@ async function route(request, env, ctx, entry) {
       const who = await whoAmI(env, request, verifyToken);
       if (who.token) await endSession(env.DB, who.token);
       return json({ ok: true }, 200, {
-        'set-cookie': `${SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`,
+        'set-cookie': `${SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=None`,
       });
     }
 

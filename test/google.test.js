@@ -178,6 +178,31 @@ describe('sign in with Google', () => {
     const cookie = r.headers.get('set-cookie');
     expect(cookie).toMatch(/HttpOnly/i);
     expect(cookie).toMatch(/Secure/i);
-    expect(cookie).toMatch(/SameSite=Lax/i);
+    // `None`, not `Lax`: the site and the API are on different
+    // registrable domains, so a Lax cookie would never be sent at
+    // all. CORS is what keeps it to the sites we know.
+    expect(cookie).toMatch(/SameSite=None/i);
+  });
+
+  it('a known site gets its own origin back, so the cookie can travel', async () => {
+    const r = await call('/auth/me', {
+      method: 'GET',
+      headers: { origin: 'https://mtg.mattshoe.org' },
+    });
+    expect(r.headers.get('access-control-allow-origin')).toBe('https://mtg.mattshoe.org');
+    expect(r.headers.get('access-control-allow-credentials')).toBe('true');
+    expect(r.headers.get('vary')).toMatch(/origin/i);
+  });
+
+  it('anywhere else reads as a stranger and sends no cookie', async () => {
+    // Still allowed to read — every collection is public — but with
+    // `*` and no credentials, which is a browser's own refusal to
+    // attach one.
+    const r = await call('/auth/me', {
+      method: 'GET',
+      headers: { origin: 'https://evil.example.com' },
+    });
+    expect(r.headers.get('access-control-allow-origin')).toBe('*');
+    expect(r.headers.get('access-control-allow-credentials')).toBeNull();
   });
 });
