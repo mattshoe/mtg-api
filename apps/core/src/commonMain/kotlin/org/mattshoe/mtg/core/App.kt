@@ -191,6 +191,28 @@ data class AppState(
     fun browsing(slug: String): AppState = copy(resolvedCollection = slug)
 
     /**
+     * Whether it is yet known whose collection this is.
+     *
+     * False for the moment between the page opening and the server
+     * answering who this session is. Nothing collection-scoped is
+     * fetched while it is false, and that is the fix for Matt: "why
+     * are kaylas decks showing for me in the web app?!?!?!"
+     *
+     * The answer was not that the app asked the wrong question, it is
+     * that it asked before there was an answer. An unanswered
+     * `/auth/me` and "nobody is signed in" are the same empty slug,
+     * every scoped query read an empty owner as "no WHERE clause",
+     * and so the first load of the decks page was every deck in the
+     * database — Kayla's included. On a slow answer that unscoped
+     * result is the one that lands last and stays.
+     *
+     * A key in the address settles it without an account, because
+     * that key names a collection outright: a link somebody sent
+     * works for a stranger, which is the whole point of having one.
+     */
+    val collectionKnown: Boolean get() = admin.settled || resolvedCollection.isNotEmpty()
+
+    /**
      * Which collection the stats are about: the one on screen.
      *
      * Not a choice. The page used to carry a Both / Matt / Kayla
@@ -216,7 +238,14 @@ data class AppState(
      */
     val canEdit: Boolean get() = admin.account?.owns(viewing) == true
 
-    /** The Library, scoped to the collection being looked at. */
+    /**
+     * The Library, scoped to the collection being looked at.
+     *
+     * With no collection it keeps `both`, which is the deliberate
+     * pooled read — the word, not an empty string. An empty owner is
+     * "nobody said", and `conditions` refuses it rather than
+     * quietly dropping the clause.
+     */
     fun scopedLibrary(): Library =
         viewing.takeIf { it.isNotEmpty() }
             ?.let { library.copy(filters = library.filters.copy(owner = it)) }
@@ -612,7 +641,8 @@ object Load {
     /** The Library needs its page and its count, from the same search. */
     fun library(s: Library): Pair<Sql, Sql> = s.queries()
 
-    fun decks(): Sql = DeckQueries.all()
+    /** Every collection's, for a reader the server has said is nobody. */
+    fun decks(): Sql = DeckQueries.all(DeckQueries.EVERY)
 
     /** The decks of one collection. */
     fun decks(owner: String): Sql = DeckQueries.all(owner)
@@ -651,10 +681,23 @@ object Load {
      * the Stats tab cannot fetch different things on Android than on the
      * web.
      */
-    fun needs(route: Route): List<String> = when (route.view) {
-        View.LIBRARY -> listOf("cards", "count")
-        View.DECKS -> if (route.rest.isEmpty()) listOf("decks") else listOf("decks", "deck")
-        View.STATS -> listOf("totals")
+    /**
+     * What a route has to fetch before its page means anything.
+     *
+     * `collectionKnown` is the gate on the three scoped pages. There
+     * is nothing for them to show until there is a collection to show
+     * — see `AppState.collectionKnown` — and asking anyway is what
+     * read every collection at once. A card is not a collection, so
+     * its page still loads for a stranger following a link.
+     */
+    fun needs(route: Route, collectionKnown: Boolean = true): List<String> = when (route.view) {
+        View.LIBRARY -> if (collectionKnown) listOf("cards", "count") else emptyList()
+        View.DECKS -> when {
+            !collectionKnown -> emptyList()
+            route.rest.isEmpty() -> listOf("decks")
+            else -> listOf("decks", "deck")
+        }
+        View.STATS -> if (collectionKnown) listOf("totals") else emptyList()
         View.LOGS -> listOf("logs")
         View.CARD -> listOf("card")
         View.ENTRY -> emptyList()

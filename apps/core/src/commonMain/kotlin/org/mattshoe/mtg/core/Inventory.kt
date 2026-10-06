@@ -86,8 +86,14 @@ object Inventory {
                 "theNavDoesNotBorrowTheClassTheHeadersOwnScriptOpens",
                 "itIsOneHamburgerAndNothingElse", "theHamburgerOpensAndClosesTheMenu",
                 "aPressAnywhereElseClosesIt", "pickingTheTabYouAreAlreadyOnStillClosesTheMenu",
-                "theAdminHalfIsItsOwnSectionWithTheLockInIt",
-                "theGatedViewsSitUnderTheRuleAndTheOthersAbove",
+                "bothWaysInSitUnderTheNameBehindTheProfile",
+                "theHamburgerIsPlacesAndTheProfileIsWhoYouAre",
+                // The website's profile avatar, which the phone has
+                // had since accounts landed.
+                "thereIsAProfileButtonInTheHeader", "itWearsTheGooglePictureWhenThereIsOne",
+                "andTheGenericIconWhenThereIsNot", "theHamburgerIsPlacesToGoAndNothingElse",
+                "theProfileMenuIsWhoYouAreAndWhatFollowsFromIt", "theTwoMenusAreNeverOpenAtOnce",
+                "theProfileSitsAtTheRightHandEndOfTheHeader",
                 "theMenuStaysOnScreenAtPhoneWidth", "thereIsNoFindButton",
                 "theHeaderSaysWhatYouAreLookingAt", "andAnOpenDeckPutsItsOwnNameThere",
                 // The phone's bottom bar and its profile.

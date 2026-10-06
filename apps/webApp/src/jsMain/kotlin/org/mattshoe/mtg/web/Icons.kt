@@ -37,3 +37,18 @@ fun CloseIcon() {
         attr("aria-hidden", "true")
     }) {}
 }
+
+/**
+ * A head and shoulders, where the account's own picture would be.
+ *
+ * The same mask trick as the others, and the same shape the phone
+ * draws in `NavIcons.ProfileIcon` — a circle over an arc — so the two
+ * profile buttons are recognisably one control on two platforms.
+ */
+@Composable
+fun ProfileIcon() {
+    Span(attrs = {
+        classes("icon", "icon-profile")
+        attr("aria-hidden", "true")
+    }) {}
+}

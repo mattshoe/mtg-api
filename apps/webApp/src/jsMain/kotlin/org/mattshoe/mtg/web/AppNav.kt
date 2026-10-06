@@ -27,6 +27,16 @@ import org.mattshoe.mtg.core.Overlay
  * One hamburger at every width. The row of tabs only ever fitted on a
  * desk, and two behaviours to keep straight is how the phone ended up
  * with no navigation at all.
+ *
+ * Two controls, not one. The hamburger is where you are going —
+ * `Admin.bar`, the same list the phone draws along the bottom. The
+ * avatar beside it is who you are and what follows from being them —
+ * `Admin.behindProfile`, the account, the way in and out. The core has
+ * modelled that split since the account work landed and the phone has
+ * drawn it since; the website read `visible` and poured the lot into
+ * one menu, so the account, the sign-out and the server log sat under
+ * the same hamburger as Library and Decks. Matt: "Why the fuck is all
+ * that shit still in the hamburger menu!!!!!"
  */
 @Composable
 fun AppNav(
@@ -36,84 +46,125 @@ fun AppNav(
     onSignIn: () -> Unit = {},
     onSignOut: () -> Unit = {},
 ) {
-    var open by remember { mutableStateOf(false) }
+    // Which of the two is down, or neither. One value rather than a
+    // flag each: two panels over each other is neither a place to go
+    // nor a profile, and two booleans is one more state than there
+    // are menus.
+    var shown by remember { mutableStateOf<Menu?>(null) }
+    val open = shown == Menu.PLACES
+    val profileOpen = shown == Menu.PROFILE
 
     Nav(attrs = { classes("app-nav") }) {
         Button(attrs = {
             classes("nav-burger")
             attr("aria-label", if (open) "Close menu" else "Menu")
             attr("aria-expanded", open.toString())
-            onClick { open = !open }
+            onClick { shown = if (open) null else Menu.PLACES }
         }) { repeat(3) { Span(attrs = { classes("bar") }) {} } }
 
-        if (open) {
+        if (shown != null) {
             // A press anywhere else closes it, the way a menu is
             // expected to behave. A backdrop rather than a document
             // listener, so there is nothing to unregister.
             Div(attrs = {
                 classes("nav-backdrop")
-                onClick { open = false }
+                onClick { shown = null }
             }) {}
         }
 
+        // Where you are going, and nothing else. `bar` is the phone's
+        // bottom row — Library, Decks, Stats, and Entry once there is
+        // somebody to write as.
         Div(attrs = {
             classes("app-menu")
             if (open) classes("open")
         }) {
-            // Everything anybody can reach.
-            state.admin.visible.filterNot { it.gated }.forEach { view ->
+            state.admin.bar.forEach { view ->
                 Button(attrs = {
                     classes("app-tab")
                     if (state.view == view) classes("on")
                     // Closes even when the view picked is the one
                     // already showing — otherwise the menu sits open
                     // over the page.
-                    onClick { open = false; onState(state.navigate(view)) }
+                    onClick { shown = null; onState(state.navigate(view)) }
                 }) { Text(view.label) }
             }
+        }
 
-            // And the admin half, set apart so it reads as a different
-            // kind of thing rather than three more places to go.
+        // Who you are, on the right, where a profile lives — and
+        // where the phone's is. Matt, on an earlier attempt that put
+        // it on the left: "why the fuck does the profile menu show on
+        // the left fucking side".
+        Button(attrs = {
+            classes("nav-profile")
+            if (profileOpen) classes("on")
+            attr("aria-label", "Profile")
+            attr("aria-expanded", profileOpen.toString())
+            onClick { shown = if (profileOpen) null else Menu.PROFILE }
+        }) {
+            // Their own picture when Google sent one: it says *which*
+            // account at a glance rather than that there is one.
+            // Matt: "use the user's Google profile image as the
+            // profile icon. If they don't have one then the existing
+            // image is fine."
+            val face = state.admin.account?.avatar?.takeIf { it.isNotBlank() }
+            if (face != null) {
+                Img(src = face, alt = "", attrs = { classes("app-avatar") })
+            } else {
+                ProfileIcon()
+            }
+        }
+
+        Div(attrs = {
+            classes("profile-menu")
+            if (profileOpen) classes("open")
+        }) {
+            // The first thing it says is who is here, because
+            // everything under it follows from that. An account says
+            // its own name and the address its collection lives at;
+            // the operator's password says "Admin", because that is
+            // all it can say — it is not anybody.
+            Div(attrs = { classes("app-who") }) {
+                state.admin.account?.avatar?.takeIf { it.isNotBlank() }
+                    ?.let { Img(src = it, alt = "", attrs = { classes("app-avatar") }) }
+                Div {
+                    Text(
+                        state.admin.shownName
+                            ?: if (state.admin.unlocked) "Admin" else "Not signed in",
+                    )
+                    Span(attrs = { classes("app-who-slug") }) {
+                        Text(
+                            state.admin.account?.let { "/c/${it.slug}" }
+                                ?: if (state.admin.unlocked) "Everything is editable" else "Read only",
+                        )
+                    }
+                }
+            }
+
             Div(attrs = { classes("app-menu-sep") }) {}
-            Div(attrs = { classes("app-menu-group") }) { Text("Admin") }
 
-            state.admin.visible.filter { it.gated }.forEach { view ->
+            // What being admin gets you, which today is the log. It
+            // sits here rather than in the hamburger because it is a
+            // screen you open when something is wrong, not one you
+            // move between.
+            state.admin.behindProfile.forEach { view ->
                 Button(attrs = {
                     classes("app-tab")
                     if (state.view == view) classes("on")
-                    onClick { open = false; onState(state.navigate(view)) }
+                    onClick { shown = null; onState(state.navigate(view)) }
                 }) { Text(view.label) }
             }
 
-            // Who you are, and the way in or out of being them.
-            //
-            // The account is the ordinary way now; the password stays
-            // beneath it because the nightly job holds one and because
-            // the server role that will replace it is not assigned
-            // yet. Matt: "Leverage the profile icon for the account
-            // information and log in log out."
-            state.admin.account?.let { who ->
-                Div(attrs = { classes("app-who") }) {
-                    // Their own picture when Google sent one: it says
-                    // *which* account at a glance rather than that
-                    // there is one. A name on its own otherwise.
-                    who.avatar?.takeIf { it.isNotBlank() }?.let { url ->
-                        Img(src = url, alt = "", attrs = { classes("app-avatar") })
-                    }
-                    Div {
-                        Text(who.shownName)
-                        Span(attrs = { classes("app-who-slug") }) { Text("/c/${who.slug}") }
-                    }
-                }
-            }
-
+            // "Log out", not "Sign out": the phone says "Log out" and
+            // the row above says "Not signed in", so one word for one
+            // thing across both. Matt: "Change lock to log out".
             Button(attrs = {
                 classes("app-tab", "app-lock")
                 onClick {
-                    open = false
+                    shown = null
                     if (state.admin.signedIn) onSignOut() else onSignIn()
                 }
-            }) { Text(if (state.admin.signedIn) "Sign out" else "Sign in with Google") }
+            }) { Text(if (state.admin.signedIn) "Log out" else "Sign in with Google") }
 
             // The operator's own way in, and only while nobody is
             // signed in: a password is not an account and offering
@@ -122,14 +173,14 @@ fun AppNav(
                 Button(attrs = {
                     classes("app-tab", "app-lock")
                     onClick {
-                        open = false
+                        shown = null
                         if (state.admin.unlocked) {
                             onState(state.copy(admin = state.admin.lock()).navigate(state.route))
                         } else {
                             onState(state.opening(Overlay.UNLOCK))
                         }
                     }
-                }) { Text(if (state.admin.unlocked) "Lock" else "Unlock") }
+                }) { Text(if (state.admin.unlocked) "Log out" else "Log in") }
             }
         }
     }
@@ -143,3 +194,6 @@ fun AppNav(
     }
     Span(attrs = { classes("topbar-title") }) { Text(state.title) }
 }
+
+/** Which of the header's two menus is down. */
+private enum class Menu { PLACES, PROFILE }

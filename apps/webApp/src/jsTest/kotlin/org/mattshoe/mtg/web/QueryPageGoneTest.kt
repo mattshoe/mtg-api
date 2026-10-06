@@ -77,6 +77,10 @@ class QueryPageGoneTest {
     private fun HTMLElement.menuLabels() =
         all(".app-menu button").map { it.textContent.orEmpty().trim() }
 
+    /** And everything behind the profile avatar. */
+    private fun HTMLElement.profileLabels() =
+        all(".profile-menu button").map { it.textContent.orEmpty().trim() }
+
     /** Every button on the whole page, menu and screen alike. */
     private fun HTMLElement.everyLabel() =
         all("button").mapNotNull { (it as? HTMLButtonElement)?.textContent?.trim() }
@@ -144,8 +148,12 @@ class QueryPageGoneTest {
     fun theLockStillHidesExactlyWhatItHidBefore() = runTest {
         val shut = mount(locked)
         settle()
+        // The hamburger is places to go. Who you are, the way in and
+        // the operator's password moved behind the profile avatar —
+        // Matt: "Why the fuck is all that shit still in the hamburger
+        // menu!!!!!" — so the lock's effect on it is one entry now.
         assertEquals(
-            listOf("Library", "Decks", "Stats", "Sign in with Google", "Unlock"),
+            listOf("Library", "Decks", "Stats"),
             shut.menuLabels(),
             "the locked menu changed shape",
         )
@@ -153,12 +161,18 @@ class QueryPageGoneTest {
         val open = mount(unlocked)
         settle()
         assertEquals(
-            // Unlocked by a password rather than an account, so the
-            // sign-in is still offered and the password's own Lock is
-            // still there.
-            listOf("Library", "Decks", "Stats", "Entry", "Server Logs", "Sign in with Google", "Lock"),
+            // Entry joins the places you go. The log is not one of
+            // them — it is a screen you open when something is wrong
+            // — so it sits behind the profile with the sign-in and
+            // the password, exactly as it does on the phone.
+            listOf("Library", "Decks", "Stats", "Entry"),
             open.menuLabels(),
             "the unlocked menu changed shape",
+        )
+        assertEquals(
+            listOf("Server Logs", "Sign in with Google", "Log out"),
+            open.profileLabels(),
+            "the profile menu changed shape",
         )
     }
 
@@ -172,15 +186,26 @@ class QueryPageGoneTest {
         listOf("locked" to locked, "unlocked" to unlocked).forEach { (what, start) ->
             val root = mount(start)
             settle()
-            val items = root.all(".app-menu > *")
+            // The hamburger is places to go and has nothing to divide,
+            // so the rule it used to carry is the profile's now: under
+            // the name, over what being that person gets you.
+            assertEquals(
+                0,
+                root.all(".app-menu .app-menu-sep").size,
+                "$what: a rule in a menu with nothing to divide",
+            )
+            val items = root.all(".profile-menu > *")
             val rule = items.indexOfFirst { it.className.contains("app-menu-sep") }
             assertEquals(
                 1,
                 items.count { it.className.contains("app-menu-sep") },
                 "$what: the menu has more than one rule in it",
             )
+            // Above it is who you are, which is a block of text and
+            // not a button — the head of the menu rather than
+            // something to press.
             assertTrue(
-                items.take(rule).any { it.tagName.lowercase() == "button" },
+                items.take(rule).any { it.className.contains("app-who") },
                 "$what: the rule has nothing above it",
             )
             assertTrue(

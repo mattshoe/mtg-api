@@ -103,7 +103,9 @@ class UnlockDialogTest {
         get() = root.querySelector(".palette-scrim .btn.ghost") as HTMLButtonElement
 
     private suspend fun Shell.open() {
-        root.buttons().first { it.textContent == "Unlock" }.click()
+        // Behind the profile now, and called "Log in" there: the
+        // dialog it opens is still the password box.
+        root.buttons().first { it.textContent == "Log in" }.click()
         settle()
     }
 

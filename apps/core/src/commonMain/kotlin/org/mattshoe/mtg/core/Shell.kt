@@ -54,6 +54,17 @@ enum class View(
     companion object {
         val DEFAULT = LIBRARY
 
+        /**
+         * The views that are somebody's collection.
+         *
+         * One answer rather than one per shell: both `loadFor`s gate
+         * on it, and a view added to the app has to be classified
+         * here rather than quietly reading every collection at once.
+         * A card is not in it — a card page is the card, and says
+         * which collections hold copies.
+         */
+        val COLLECTION = setOf(LIBRARY, DECKS, STATS)
+
         fun of(slug: String?) = entries.firstOrNull { it.slug == slug }
 
         /**
@@ -169,6 +180,22 @@ data class Admin(
     val trying: Boolean = false,
     /** Who is signed in, if anybody. */
     val account: Account? = null,
+    /**
+     * Whether the server has said who this session is.
+     *
+     * False for the moment between the page opening and `/auth/me`
+     * answering. It matters because an unanswered question and "no
+     * account" look identical in this object otherwise, and the app
+     * read the second: every collection-scoped query went out with an
+     * empty owner, which meant *every* collection, so the first load
+     * of the decks page was everybody's decks. Matt: "why are kaylas
+     * decks showing for me in the web app?!?!?!"
+     *
+     * Nothing scoped is fetched until this is true. The answer itself
+     * can be "nobody", which is settled too — a stranger following a
+     * link is a legitimate reader.
+     */
+    val settled: Boolean = false,
 ) {
 
     val signedIn: Boolean get() = account != null
@@ -235,10 +262,19 @@ data class Admin(
      * kept and presented by the code that was doing both anyway.
      */
     fun signIn(account: Account, session: String? = null) =
-        copy(account = account, token = session ?: token, trying = false)
+        copy(account = account, token = session ?: token, trying = false, settled = true)
+
+    /**
+     * The server answered, and the answer was nobody.
+     *
+     * `settle`, not `settled`: Kotlin/JS gives a property and a
+     * function of the same name the same JavaScript name, and the
+     * two clash at compile time.
+     */
+    fun settle() = copy(settled = true)
 
     /** Out of both: the account and whatever password was held. */
-    fun signOut() = Admin()
+    fun signOut() = Admin(settled = true)
     fun lock() = copy(token = null, trying = false)
 }
 

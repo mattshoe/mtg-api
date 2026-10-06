@@ -280,8 +280,23 @@ object DeckQueries {
      * in the database, which with more than one collection in it
      * meant showing somebody else's decks to somebody who had signed
      * in as themselves.
+     *
+     * No owner is `WHERE 1=0` and not "no WHERE at all". Leaving the
+     * clause off meant an unknown collection and every collection
+     * were the same query, and that is exactly how Kayla's decks got
+     * onto Matt's screen in the gap before `/auth/me` answered. A
+     * query with nothing to scope to returns nothing.
      */
-    fun all(owner: String = "") = Sql(
+    /**
+     * Every collection's decks, said out loud.
+     *
+     * The pooled read is a word rather than an omission, so an empty
+     * owner can stay refused. Only a session the server has said is
+     * nobody gets here — a reader at the root domain with no key.
+     */
+    const val EVERY = "*"
+
+    fun all(owner: String = EVERY) = Sql(
         """SELECT d.slug, d.name, d.owner, d.commander, d.colors, d.bracket,
                   c.scryfall_id AS art_id
              FROM decks d
@@ -291,10 +306,25 @@ object DeckQueries {
                     WHEN instr(d.commander, ' (') > 0
                     THEN substr(d.commander, 1, instr(d.commander, ' (') - 1)
                     ELSE d.commander END))
-            ${if (owner.isEmpty()) "" else "WHERE d.owner = ?"}
+            ${scopeOf(owner)}
             ORDER BY d.owner, d.name""",
-        if (owner.isEmpty()) emptyList() else listOf(owner),
+        if (owner.isEmpty() || owner == EVERY) emptyList() else listOf(owner),
     )
+
+    /**
+     * `""` is "nobody said", which is not "everybody".
+     *
+     * Leaving the clause off for an empty owner meant an unknown
+     * collection and every collection were the same query, and that
+     * is how Kayla's decks got onto Matt's screen in the gap before
+     * `/auth/me` answered. A query with nothing to scope to returns
+     * nothing; the pooled read has to ask for [EVERY] by name.
+     */
+    private fun scopeOf(owner: String) = when (owner) {
+        "" -> "WHERE 1=0"
+        EVERY -> ""
+        else -> "WHERE d.owner = ?"
+    }
 
     /**
      * One deck's list, with how many of each the owner actually has,
