@@ -89,12 +89,38 @@ fun AppNav(
                     onClick { shown = null; onState(state.navigate(view)) }
                 }) { Text(view.label) }
             }
-        }
 
-        // Who you are, on the right, where a profile lives — and
-        // where the phone's is. Matt, on an earlier attempt that put
-        // it on the left: "why the fuck does the profile menu show on
-        // the left fucking side".
+            // The phone, which is a place you can go and not a view.
+            // It was a loose link in `index.html`'s header, where no
+            // Kotlin test mounts and no parity pass could see it —
+            // Matt: "MOVE THE GOD DAMN LINK INTO THE HAMBURGER
+            // MENU!" It never wears the current-view mark, because it
+            // leaves the app entirely.
+            A(href = "app/", attrs = {
+                classes("app-tab", "app-away")
+                onClick { shown = null }
+            }) { Text("Android app") }
+        }
+    }
+
+    // Home, then what you are looking at. Drawn here rather than left
+    // in the static header because the title changes with the route,
+    // and repeated as a heading on every page it was saying the same
+    // thing twice.
+    A(href = "#/search", attrs = { classes("brand") }) {
+        Img(src = "icons/icon-32.png", alt = "Home", attrs = { classes("brand-mark") })
+    }
+    Span(attrs = { classes("topbar-title") }) { Text(state.title) }
+
+    // Who you are, at the right-hand end of the bar, which is where
+    // the phone draws it — past a title that takes `weight(1f)`.
+    //
+    // Its own box rather than another child of the hamburger's
+    // `<nav>`: `margin-left: auto` needs the slack of the whole bar
+    // to push into, and the menu hangs off this box, so its
+    // `right: 0` means the bar's right edge. Matt: "put the fucking
+    // profile menu in the same fucking place on web as android".
+    Div(attrs = { classes("nav-profile-box") }) {
         Button(attrs = {
             classes("nav-profile")
             if (profileOpen) classes("on")
@@ -184,15 +210,6 @@ fun AppNav(
             }
         }
     }
-
-    // Home, then what you are looking at. Drawn here rather than left
-    // in the static header because the title changes with the route,
-    // and repeated as a heading on every page it was saying the same
-    // thing twice.
-    A(href = "#/search", attrs = { classes("brand") }) {
-        Img(src = "icons/icon-32.png", alt = "Home", attrs = { classes("brand-mark") })
-    }
-    Span(attrs = { classes("topbar-title") }) { Text(state.title) }
 }
 
 /** Which of the header's two menus is down. */

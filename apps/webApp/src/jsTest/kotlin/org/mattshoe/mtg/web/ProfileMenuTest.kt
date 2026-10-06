@@ -73,6 +73,33 @@ class ProfileMenuTest {
         return root
     }
 
+    /**
+     * Mounted in the bar it really lives in, at a known width.
+     *
+     * The slot is `<div id="nav" class="topbar-nav">` inside
+     * `<header class="topbar">` — `index.html` is static only because
+     * the header is — so anything about where a control sits in the
+     * bar has to be measured with the bar around it.
+     */
+    private fun inTheBar(initial: AppState, width: Int = 420): Pair<HTMLElement, HTMLElement> {
+        val bar = document.createElement("header") as HTMLElement
+        bar.className = "topbar"
+        bar.style.width = "${width}px"
+        bar.style.position = "absolute"
+        bar.style.left = "0px"
+        val slot = document.createElement("div") as HTMLElement
+        slot.id = "nav"
+        slot.className = "topbar-nav"
+        bar.appendChild(slot)
+        document.body!!.appendChild(bar)
+        roots += bar
+        renderComposable(root = slot) {
+            val s = remember { mutableStateOf(initial) }
+            AppNav(s.value, onState = { s.value = it })
+        }
+        return bar to slot
+    }
+
     private fun HTMLElement.all(css: String): List<HTMLElement> =
         querySelectorAll(css).let { n -> (0 until n.length).mapNotNull { n[it] as? HTMLElement } }
 
@@ -208,17 +235,68 @@ class ProfileMenuTest {
     }
 
     @Test
-    fun theProfileSitsAtTheRightHandEndOfTheHeader() = runTest {
-        // Where a profile lives, and where the phone's is. It was on
-        // the left once, which Matt had something to say about.
-        val root = mount(AppState(admin = Admin().signIn(me, "t")))
+    fun theProfileSitsAtTheRightHandEndOfTheBarTheWayThePhonesDoes() = runTest {
+        // Matt: "And put the fucking profile menu in the same fucking
+        // place on web as android!!"
+        //
+        // The phone draws it as the last thing in the top bar, past a
+        // title that takes `weight(1f)` — so it is at the right-hand
+        // edge, not merely to the right of the hamburger. The first
+        // cut of this sat it next to the burger at the left-hand end,
+        // because that is where the nav slot starts, and a test that
+        // only asked "is it past the burger" was happy with that.
+        val (bar, root) = inTheBar(AppState(admin = Admin().signIn(me, "t")))
         settle()
         if (!Stylesheet.applied()) return@runTest
+        val edge = bar.getBoundingClientRect()
         val burger = root.all("button.nav-burger").first().getBoundingClientRect()
         val profile = root.profile().getBoundingClientRect()
         assertTrue(
             profile.left > burger.right,
             "the profile is not past the hamburger (profile ${profile.left}, burger ${burger.right})",
         )
+        // Within the bar's own padding of the right edge. 14px each
+        // side, so anything inside 20 is "at the end".
+        assertTrue(
+            edge.right - profile.right < 20,
+            "the profile is ${edge.right - profile.right}px short of the bar's right edge",
+        )
+    }
+
+    @Test
+    fun andItsMenuHangsOffThatEndRatherThanRunningOffTheSide() = runTest {
+        val (bar, root) = inTheBar(AppState(admin = Admin().signIn(me, "t")))
+        settle()
+        root.profile().click()
+        settle()
+        if (!Stylesheet.applied()) return@runTest
+        val edge = bar.getBoundingClientRect()
+        val menu = root.all(".profile-menu.open").first().getBoundingClientRect()
+        assertTrue(menu.right <= edge.right + 1, "the profile menu runs off the right of a ${edge.width}px bar")
+        assertTrue(menu.left >= edge.left - 1, "the profile menu runs off the left of a ${edge.width}px bar")
+    }
+
+    @Test
+    fun theAndroidAppIsInTheHamburgerWithTheOtherPlacesToGo() = runTest {
+        // Matt: "WHY THE FUCK IS THE ANDROID APP LINK IN THE FUCKING
+        // HEADER STILL!!!! [...] MOVE THE GOD DAMN LINK INTO THE
+        // HAMBURGER MENU!"
+        //
+        // It was a loose `<a>` in `index.html`'s header, which no
+        // Kotlin test mounts — see `test/static-header.test.js` for
+        // the half of this that holds the static page to carrying no
+        // controls of its own. It is a place you can go, so it goes
+        // with the places you can go.
+        val root = mount(AppState())
+        settle()
+        val away = assertNotNull(
+            root.all(".app-menu a").firstOrNull(),
+            "the Android app is not in the hamburger; it has ${root.all(".app-menu a").size} links",
+        )
+        assertEquals("Android app", away.textContent?.trim())
+        assertTrue(away.getAttribute("href")!!.endsWith("app/"), away.getAttribute("href")!!)
+        // It leaves the app, so it never lights up as the view you
+        // are on — that mark belongs to the three that are views.
+        assertFalse(away.className.contains("on"), "an outbound link marked as the current view")
     }
 }

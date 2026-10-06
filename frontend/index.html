@@ -25,12 +25,13 @@
   <!-- The menu, the mark and the page title belong in the bar. The
        shared build draws all three here; the slot is static only
        because the header itself is. -->
+  <!-- The whole bar, so the shared build can put the profile at the
+       right-hand end of it the way the phone does. There was an
+       "Android app" link in a `topbar-right` slot beside this one;
+       it is a place you can go, so it is in the menu with the other
+       places you can go, and the header holds nothing pressable that
+       no Kotlin test mounts. `StaticHeaderTest` keeps it that way. -->
   <div id="nav" class="topbar-nav"></div>
-  <div class="topbar-right">
-    <!-- Leaves the app entirely, so it is not a view and never lights
-         up as the current one. -->
-    <a href="app/" class="tabs-away">Android app</a>
-  </div>
 </header>
 
 <!-- The nav, the screens and every dialog are drawn by the shared
