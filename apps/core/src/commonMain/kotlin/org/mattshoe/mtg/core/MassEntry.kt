@@ -17,14 +17,13 @@ package org.mattshoe.mtg.core
 enum class Step(val label: String) {
     WHICH("Which"),
     LIST("List"),
-    WHO("Who"),
     REVIEW("Review"),
     DONE("Done"),
     ;
 
     companion object {
         /** The four that appear in the stepper. DONE is an ending, not a step. */
-        val wizard = listOf(WHICH, LIST, WHO, REVIEW)
+        val wizard = listOf(WHICH, LIST, REVIEW)
     }
 }
 
@@ -32,7 +31,6 @@ data class MassEntry(
     val step: Step = Step.WHICH,
     val direction: Direction? = null,
     val list: String = "",
-    val owner: Owner? = null,
     val preview: Applied? = null,
     val result: Applied? = null,
     val busy: String? = null,
@@ -97,8 +95,15 @@ data class MassEntry(
     /** A list has to be a list, and not an enormous one. */
     val canLeaveList: Boolean get() = canLeaveWhich && cardCount > 0 && !overLimit
 
-    /** Whose it is, said out loud. */
-    val canPreview: Boolean get() = canLeaveList && owner != null && busy == null
+    /**
+     * A list, and nothing already in flight.
+     *
+     * It used to need an owner too, which a whole step existed to
+     * collect. An account owns one collection and the server refuses
+     * a write to anybody else's, so the answer was never in doubt and
+     * the question could only be got wrong.
+     */
+    val canPreview: Boolean get() = canLeaveList && busy == null
 
     /**
      * The one that matters. A write is offered only when a dry run has
@@ -118,7 +123,6 @@ data class MassEntry(
     fun reachable(target: Step): Boolean = when (target) {
         Step.WHICH -> true
         Step.LIST -> canLeaveWhich
-        Step.WHO -> canLeaveList
         Step.REVIEW -> canPreview
         Step.DONE -> result != null
     }
@@ -133,7 +137,6 @@ data class MassEntry(
     /** Editing the list invalidates any dry run taken against the old one. */
     fun type(text: String) = copy(list = text, preview = null, error = null)
 
-    fun assign(o: Owner) = copy(owner = o, preview = null, error = null)
 
     /**
      * Where Back goes from here, or null when it should leave the
@@ -177,8 +180,6 @@ data class MassEntry(
             !canLeaveWhich -> Step.WHICH
             target == Step.LIST -> Step.LIST
             !canLeaveList -> Step.LIST
-            target == Step.WHO -> Step.WHO
-            !canPreview -> Step.WHO
             target == Step.DONE && result == null -> Step.REVIEW
             else -> target
         }

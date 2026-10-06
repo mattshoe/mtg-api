@@ -3,6 +3,7 @@ package org.mattshoe.mtg.core
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -23,7 +24,7 @@ class MassEntryTest {
         val s = MassEntry()
         assertEquals(Step.WHICH, s.step)
         assertNull(s.direction)
-        assertNull(s.owner)
+        // Nothing to assert about an owner: the wizard stopped asking.
         assertFalse(s.canLeaveWhich)
     }
 
@@ -31,7 +32,7 @@ class MassEntryTest {
     fun aDirectionIsNeededBeforeAnythingElse() {
         val s = MassEntry()
         assertEquals(Step.WHICH, s.goTo(Step.LIST).step)
-        assertEquals(Step.WHICH, s.goTo(Step.WHO).step)
+        assertEquals(Step.WHICH, s.goTo(Step.LIST).step)
         assertEquals(Step.WHICH, s.goTo(Step.REVIEW).step)
     }
 
@@ -40,7 +41,7 @@ class MassEntryTest {
         val s = MassEntry().choose(Direction.ADD)
         assertTrue(s.canLeaveWhich)
         assertFalse(s.canLeaveList)
-        assertEquals(Step.LIST, s.goTo(Step.WHO).step)
+        assertEquals(Step.LIST, s.goTo(Step.REVIEW).step)
     }
 
     @Test
@@ -49,15 +50,18 @@ class MassEntryTest {
         val s = MassEntry().choose(Direction.ADD).type(huge)
         assertTrue(s.overLimit)
         assertFalse(s.canLeaveList)
-        assertEquals(Step.LIST, s.goTo(Step.WHO).step)
+        assertEquals(Step.LIST, s.goTo(Step.REVIEW).step)
     }
 
     @Test
-    fun neitherOwnerIsAssumed() {
+    fun aListIsAllTheWizardAsksFor() {
+        // There used to be a third question — whose collection this
+        // lands in — and a typed list that had not answered it went
+        // no further. The page is somebody's collection now, so the
+        // list is the whole of it.
         val s = MassEntry().choose(Direction.REMOVE).type(listOfTwo)
-        assertNull(s.owner)
-        assertFalse(s.canPreview)
-        assertEquals(Step.WHO, s.goTo(Step.REVIEW).step)
+        assertTrue(s.canPreview)
+        assertEquals(Step.REVIEW, s.goTo(Step.REVIEW).step)
     }
 
     @Test
@@ -65,7 +69,7 @@ class MassEntryTest {
         val ready = MassEntry()
             .choose(Direction.ADD)
             .type(listOfTwo)
-            .assign(Owner.MATT)
+            
 
         assertTrue(ready.canPreview)
         assertFalse(ready.canApply, "a write was reachable with no dry run behind it")
@@ -79,14 +83,14 @@ class MassEntryTest {
 
     @Test
     fun aPreviewThatResolvedNothingOffersNoWrite() {
-        val s = MassEntry().choose(Direction.ADD).type("1 Biterblosom").assign(Owner.MATT)
+        val s = MassEntry().choose(Direction.ADD).type("1 Biterblosom")
             .previewed(Applied(dryRun = true, resolved = 0, errors = listOf("no card named Biterblosom")))
         assertFalse(s.canApply)
     }
 
     @Test
     fun applyIsNotOfferedTwice() {
-        val done = MassEntry().choose(Direction.ADD).type(listOfTwo).assign(Owner.KAYLA)
+        val done = MassEntry().choose(Direction.ADD).type(listOfTwo)
             .previewed(Applied(dryRun = true, changes = listOf(change())))
             .finished(Applied(applied = true, changes = listOf(change())))
         assertEquals(Step.DONE, done.step)
@@ -95,7 +99,7 @@ class MassEntryTest {
 
     @Test
     fun editingTheListThrowsAwayTheDryRunItWasTakenAgainst() {
-        val s = MassEntry().choose(Direction.ADD).type(listOfTwo).assign(Owner.MATT)
+        val s = MassEntry().choose(Direction.ADD).type(listOfTwo)
             .previewed(Applied(dryRun = true, changes = listOf(change())))
         assertTrue(s.canApply)
 
@@ -105,17 +109,21 @@ class MassEntryTest {
     }
 
     @Test
-    fun changingTheOwnerThrowsAwayTheDryRunToo() {
-        val s = MassEntry().choose(Direction.ADD).type(listOfTwo).assign(Owner.MATT)
+    fun editingTheListThrowsAwayTheDryRun() {
+        // It used to be "changing the owner" as well. There is no
+        // owner to change, and the list is the only thing left that a
+        // dry run can go stale against.
+        val s = MassEntry().choose(Direction.ADD).type(listOfTwo)
             .previewed(Applied(dryRun = true, changes = listOf(change())))
-        val moved = s.assign(Owner.KAYLA)
-        assertNull(moved.preview)
-        assertFalse(moved.canApply)
+        assertNotNull(s.preview)
+        val edited = s.type("1 Black Lotus")
+        assertNull(edited.preview)
+        assertFalse(edited.canApply)
     }
 
     @Test
     fun steppingBackFromReviewThrowsAwayTheDryRun() {
-        val s = MassEntry().choose(Direction.ADD).type(listOfTwo).assign(Owner.MATT)
+        val s = MassEntry().choose(Direction.ADD).type(listOfTwo)
             .previewed(Applied(dryRun = true, changes = listOf(change())))
         val back = s.goTo(Step.LIST)
         assertEquals(Step.LIST, back.step)
@@ -131,8 +139,10 @@ class MassEntryTest {
 
         val listed = fresh.choose(Direction.ADD).type(listOfTwo)
         assertTrue(listed.reachable(Step.LIST))
-        assertTrue(listed.reachable(Step.WHO))
-        assertFalse(listed.reachable(Step.REVIEW))
+        // Review is reachable as soon as there is a list: the step
+        // between them asked whose collection it was, and nothing
+        // asks that now.
+        assertTrue(listed.reachable(Step.REVIEW))
     }
 
     @Test
@@ -140,20 +150,20 @@ class MassEntryTest {
         val s = MassEntry.fromShare("Name,Quantity\nSol Ring,1\nLightning Bolt,2")
         assertEquals(Step.WHICH, s.step)
         assertNull(s.direction)
-        assertNull(s.owner)
+        // No owner to be unset.
         assertEquals(2, s.cardCount)
         assertTrue(s.isCsv)
     }
 
     @Test
     fun enterMoreClearsEverything() {
-        val again = MassEntry().choose(Direction.REMOVE).type(listOfTwo).assign(Owner.MATT)
+        val again = MassEntry().choose(Direction.REMOVE).type(listOfTwo)
             .previewed(Applied(dryRun = true, changes = listOf(change())))
             .finished(Applied(applied = true))
             .again()
         assertEquals(Step.WHICH, again.step)
         assertNull(again.direction)
-        assertNull(again.owner)
+        // No owner to forget.
         assertNull(again.preview)
         assertNull(again.result)
         assertEquals("", again.list)
@@ -161,12 +171,12 @@ class MassEntryTest {
 
     @Test
     fun aFailureIsHeldWithoutLosingWhereYouWere() {
-        val s = MassEntry().choose(Direction.ADD).type(listOfTwo).assign(Owner.MATT)
+        val s = MassEntry().choose(Direction.ADD).type(listOfTwo)
             .working("Checking against Scryfall…")
             .failed("admin session expired")
         assertNull(s.busy)
         assertEquals("admin session expired", s.error)
-        assertEquals(Owner.MATT, s.owner)
+        // The owner is the collection on screen, not a field here.
         assertEquals(listOfTwo, s.list)
     }
 
@@ -203,7 +213,7 @@ class MassEntryTest {
 
     @Test
     fun doneIsOnlyReachableOnceAResultHasActuallyComeBack() {
-        val ready = MassEntry().choose(Direction.ADD).type(listOfTwo).assign(Owner.MATT)
+        val ready = MassEntry().choose(Direction.ADD).type(listOfTwo)
             .previewed(Applied(dryRun = true, changes = listOf(change())))
         assertFalse(ready.reachable(Step.DONE), "nothing has been applied yet")
 
@@ -215,7 +225,7 @@ class MassEntryTest {
     fun askingForDoneBeforeAnythingHasBeenAppliedLandsOnReviewInstead() {
         // DONE means "a result came back", not "I asked to go there" —
         // a stale link or a double tap must not be able to fake it.
-        val ready = MassEntry().choose(Direction.ADD).type(listOfTwo).assign(Owner.MATT)
+        val ready = MassEntry().choose(Direction.ADD).type(listOfTwo)
             .previewed(Applied(dryRun = true, changes = listOf(change())))
         val landed = ready.goTo(Step.DONE)
         assertEquals(Step.REVIEW, landed.step)
@@ -224,7 +234,7 @@ class MassEntryTest {
 
     @Test
     fun askingForDoneAfterAResultHasComeBackActuallyGoesThere() {
-        val done = MassEntry().choose(Direction.ADD).type(listOfTwo).assign(Owner.MATT)
+        val done = MassEntry().choose(Direction.ADD).type(listOfTwo)
             .previewed(Applied(dryRun = true, changes = listOf(change())))
             .finished(Applied(applied = true, changes = listOf(change())))
         assertEquals(Step.DONE, done.goTo(Step.DONE).step)
@@ -232,7 +242,7 @@ class MassEntryTest {
 
     @Test
     fun navigatingToReviewDirectlyLandsThereAndKeepsThePreviewInHand() {
-        val previewed = MassEntry().choose(Direction.ADD).type(listOfTwo).assign(Owner.MATT)
+        val previewed = MassEntry().choose(Direction.ADD).type(listOfTwo)
             .previewed(Applied(dryRun = true, changes = listOf(change())))
         val again = previewed.goTo(Step.REVIEW)
         assertEquals(Step.REVIEW, again.step)
@@ -243,7 +253,7 @@ class MassEntryTest {
     fun theWizardListsExactlyTheFourAnsweredStepsInOrderNotIncludingDone() {
         // DONE is an ending, not a question the stepper offers to jump
         // back to — the UI on both platforms indexes into this list.
-        assertEquals(listOf(Step.WHICH, Step.LIST, Step.WHO, Step.REVIEW), Step.wizard)
+        assertEquals(listOf(Step.WHICH, Step.LIST, Step.REVIEW), Step.wizard)
         assertFalse(Step.DONE in Step.wizard)
     }
 }
@@ -263,7 +273,6 @@ class EntryInFlightTest {
         step = Step.REVIEW,
         direction = Direction.ADD,
         list = "4 Sol Ring",
-        owner = Owner.MATT,
         preview = Applied(
             applied = false,
             resolved = 1,

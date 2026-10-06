@@ -27,7 +27,14 @@ data class HistoryEntry(
     val isAdd: Boolean get() = direction == Direction.ADD.slug
 
     fun asDirection(): Direction? = Direction.entries.firstOrNull { it.slug == direction }
-    fun asOwner(): Owner? = Owner.entries.firstOrNull { it.slug == owner }
+    /**
+     * Which collection it went to, as the slug it was recorded with.
+     *
+     * It used to resolve to one of two names. There is no list of
+     * collections to resolve against any more, and a row is a record
+     * of what happened rather than something to validate.
+     */
+    fun asOwner(): String? = owner.takeIf { it.isNotEmpty() }
 }
 
 data class EntryHistory(val entries: List<HistoryEntry> = emptyList()) {
@@ -77,11 +84,18 @@ data class EntryHistory(val entries: List<HistoryEntry> = emptyList()) {
             else store.put(KEY, json.encodeToString(ListSerializer(HistoryEntry.serializer()), history.entries))
         }
 
-        /** What actually happened, as a row. */
-        fun of(entry: MassEntry, now: String) = HistoryEntry(
+        /**
+         * What actually happened, as a row.
+         *
+         * The collection comes from the caller now rather than off
+         * the entry: the wizard stopped asking whose it is, because
+         * an account owns one and the server refuses a write to any
+         * other.
+         */
+        fun of(entry: MassEntry, now: String, owner: String) = HistoryEntry(
             at = now,
             direction = entry.direction?.slug.orEmpty(),
-            owner = entry.owner?.slug.orEmpty(),
+            owner = owner,
             count = entry.cardCount,
             list = entry.list,
         )

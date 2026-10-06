@@ -31,7 +31,6 @@ enum class Format(val slug: String, val label: String, val wantsCommander: Boole
 
 enum class DeckStep(val label: String) {
     FORMAT("Format"),
-    OWNER("Whose"),
     NAME("Name"),
     COMMANDER("Commander"),
     CARDS("Cards"),
@@ -58,7 +57,6 @@ enum class Source(val slug: String, val label: String) {
 data class NewDeck(
     val step: DeckStep = DeckStep.FORMAT,
     val format: Format? = null,
-    val owner: Owner? = null,
     val name: String = "",
     val commander: String = "",
     val list: String = "",
@@ -88,8 +86,7 @@ data class NewDeck(
     // ------------------------------------------------------------ gates
 
     val canLeaveFormat: Boolean get() = format != null
-    val canLeaveOwner: Boolean get() = canLeaveFormat && owner != null
-    val canLeaveName: Boolean get() = canLeaveOwner && name.isNotBlank()
+    val canLeaveName: Boolean get() = canLeaveFormat && name.isNotBlank()
     val canLeaveCommander: Boolean
         get() = canLeaveName && (!needsCommander || commander.isNotBlank())
     val canLeaveCards: Boolean get() = canLeaveCommander && cardCount > 0
@@ -136,8 +133,7 @@ data class NewDeck(
 
     fun reachable(target: DeckStep): Boolean = when (target) {
         DeckStep.FORMAT -> true
-        DeckStep.OWNER -> canLeaveFormat
-        DeckStep.NAME -> canLeaveOwner
+        DeckStep.NAME -> canLeaveFormat
         DeckStep.COMMANDER -> canLeaveName
         DeckStep.CARDS -> canLeaveCommander
         DeckStep.CHECK -> canLeaveCards
@@ -148,7 +144,6 @@ data class NewDeck(
     // ------------------------------------------------------------ moves
 
     fun pick(f: Format) = copy(format = f, error = null)
-    fun assign(o: Owner) = copy(owner = o, error = null)
     fun rename(n: String) = copy(name = n, error = null)
     fun setCommander(c: String) =
         copy(commander = c, checked = null, error = null, hint = hint.typed(c))

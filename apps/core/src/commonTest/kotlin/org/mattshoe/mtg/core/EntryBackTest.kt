@@ -33,7 +33,7 @@ class EntryBackTest {
 
     private fun onList() = MassEntry().choose(Direction.ADD).goTo(Step.LIST)
 
-    private fun onWho() = onList().type("4 Lightning Bolt").goTo(Step.WHO)
+    private fun onList2() = onList().type("4 Lightning Bolt")
 
     // ------------------------------------------------- the wizard's own back
 
@@ -47,21 +47,21 @@ class EntryBackTest {
         // The exact sequence Matt described: cards in, forward, back,
         // cards deleted. The empty box used to pin you to the List
         // step because the clamp read it as the unanswered question.
-        val emptied = onWho().goTo(Step.LIST).type("")
+        val emptied = onList2().goTo(Step.LIST).type("")
         assertEquals(Step.LIST, emptied.step, "the fixture is not where this test thinks")
         assertEquals(Step.WHICH, emptied.goTo(Step.WHICH).step, "back stopped working")
     }
 
     @Test
     fun backFromWhoReachesTheList() {
-        assertEquals(Step.LIST, onWho().goTo(Step.LIST).step)
+        assertEquals(Step.LIST, onList2().goTo(Step.LIST).step)
     }
 
     @Test
     fun backFromReviewReachesWhoEvenWithNoDryRunLeft() {
-        val reviewing = onWho().assign(Owner.MATT).previewed(Applied())
+        val reviewing = onList2().previewed(Applied())
         assertEquals(Step.REVIEW, reviewing.step)
-        assertEquals(Step.WHO, reviewing.goTo(Step.WHO).step)
+        assertEquals(Step.LIST, reviewing.goTo(Step.LIST).step)
     }
 
     @Test
@@ -72,12 +72,12 @@ class EntryBackTest {
         // behind it.
         assertEquals(Step.WHICH, MassEntry().goTo(Step.REVIEW).step)
         assertEquals(Step.LIST, onList().goTo(Step.REVIEW).step)
-        assertEquals(Step.WHO, onWho().goTo(Step.REVIEW).step)
+        assertEquals(Step.REVIEW, onList2().goTo(Step.REVIEW).step)
     }
 
     @Test
     fun steppingBackThrowsAwayTheDryRun() {
-        val reviewing = onWho().assign(Owner.MATT).previewed(Applied())
+        val reviewing = onList2().previewed(Applied())
         assertNotNull(reviewing.preview)
         assertNull(reviewing.goTo(Step.LIST).preview, "a stale dry run survived a step back")
     }
@@ -99,8 +99,7 @@ class EntryBackTest {
     fun theBackGestureWalksAllTheWayOutOneStepAtATime() {
         var s = AppState(admin = Admin(token = "t").unlock("t"))
             .navigate(View.ENTRY)
-            .let { it.copy(entry = it.entry.choose(Direction.ADD).type("4 Bolt").goTo(Step.WHO)) }
-        s = assertNotNull(s.back()); assertEquals(Step.LIST, s.entry.step)
+            .let { it.copy(entry = it.entry.choose(Direction.ADD).type("4 Bolt").goTo(Step.LIST)) }
         s = assertNotNull(s.back()); assertEquals(Step.WHICH, s.entry.step)
         // Only once there is no step left does it leave the screen.
         s = assertNotNull(s.back()); assertEquals(View.DEFAULT, s.view)

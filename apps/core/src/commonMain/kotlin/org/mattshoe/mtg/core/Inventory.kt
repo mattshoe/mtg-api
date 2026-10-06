@@ -229,12 +229,13 @@ object Inventory {
                 "aGroupHoldingAFilterOpensItselfSoTheFilterCanBeSeen",
                 "thePanelHasEveryGroupTheOldPageHad",
             )),
-        Feature(Area.LIBRARY, "Filter panel: owner, pool, deck, finish, quantity", "filters.js", logic = true, done = true,
+        Feature(Area.LIBRARY, "Filter panel: pool, deck, finish, quantity", "filters.js", logic = true, done = true,
             tests = listOf(
                 "bothMeansNoOwnerClause", "poolFiltersOnFreeCopies", "deckAnyAndNoneAreTheirOwnClauses",
                 "theThreePoolsAreTheThreeAnswers", "deckByNameIsBoundBySlug",
                 "finishIsAnEqualsAndAnEmptyFinishMeansAny", "theCollectionGroupWritesItsFields",
-                "andWhoseCollectionItIsLivesWithTheOtherFilters",
+                "andNothingInThePanelAsksWhoseCollectionItIs",
+                "theCollectionGroupHoldsWhichDeckAndNotWhoseItIs",
             )),
         Feature(Area.LIBRARY, "Search boxes read like Scryfall: words, \"phrases\", !exclusions",
             "filters.js", logic = true, done = true,
@@ -328,8 +329,9 @@ object Inventory {
         Feature(Area.DECKS, "Deck detail with its card list", "decks.js", logic = true, done = true,
             tests = listOf(
                 "gapsAreTheCardsTheOwnerIsShortOf", "oneDecksCardsAreBoundBySlug", "closingADeckForgetsItsCards",
-                "decksGroupByOwnerInAStableOrder", "aDeckDetailCountsCardsAndFlagsWhatIsMissing",
-                "openingADeckAsksThroughTheCallback", "decksAreGroupedByOwner", "eachRouteSaysWhatItNeeds",
+                "aDeckDetailCountsCardsAndFlagsWhatIsMissing",
+                "openingADeckAsksThroughTheCallback", "eachRouteSaysWhatItNeeds",
+                "theShelfIsOneShelfWithACountAndNobodysNameOverIt",
             )),
         Feature(Area.CARD, "A card is its own page, at its own address",
             "app.js", logic = true, done = true,
@@ -548,10 +550,15 @@ object Inventory {
                 "totalsDecode", "missingNumbersAreZeroRatherThanACrash", "anEmptyResultIsZeroesNotAnException",
                 "statsShowTheTotals", "anUnpricedCollectionSaysSoRatherThanShowingZero",
             )),
-        Feature(Area.STATS, "Per-owner scoping at #/stats/matt and /kayla", "stats.js", logic = true, done = true,
+        // The numbers are about the collection on screen, not about
+        // one of two names chosen from a switch on the page.
+        Feature(Area.STATS, "Scoped to the collection on screen", "stats.js", logic = true, done = true,
             tests = listOf(
                 "statsScopeComesOutOfTheRoute", "aScopedQueryBindsTheOwnerOncePerSubquery",
-                "theActiveScopeIsMarkedAndSwitchingAsksForTheOther", "aRouteParses",
+                "statsAreTheCollectionYouAreLookingAtAndNotAChoice", "aRouteParses",
+                "anOldStatsLinkThatNamesACollectionStillMeansThatCollection",
+                "theStatsPageSaysWhichCollectionTheNumbersAreAboutAndOffersNoChoice",
+                "theStatsScreenSaysWhichCollectionTheNumbersAreAboutAndOffersNoChoice",
             )),
 
         // The Query page was here. It is gone — "none of the apps
@@ -559,25 +566,30 @@ object Inventory {
         // above is what keeps it gone.
 
         // ---------------------------------------------------------- entry
-        Feature(Area.ENTRY, "Four step wizard: which, list, who, review", "manage.js", logic = true, done = true,
+        Feature(Area.ENTRY, "Three step wizard: which, list, review", "manage.js", logic = true, done = true,
             tests = listOf(
                 "startsWithNothingChosen", "aDirectionIsNeededBeforeAnythingElse", "anEmptyListGoesNoFurther",
                 "theStepperOnlyOffersStepsAlreadyAnswered", "enterMoreClearsEverything",
-                "theWizardWalksToTheOwnerStep", "choosingADirectionEnablesContinue",
+                "theWizardIsThreeStepsAndNoneOfThemAskWhose", "choosingADirectionEnablesContinue",
                 "theStepperRefusesStepsNotYetAnswered",
             )),
         Feature(Area.ENTRY, "Mandatory dry run before any write", "manage.js", logic = true, done = true,
             tests = listOf(
                 "applyIsUnreachableUntilTheServerHasSaidWhatItWouldDo", "aPreviewThatResolvedNothingOffersNoWrite",
                 "applyIsNotOfferedTwice", "editingTheListThrowsAwayTheDryRunItWasTakenAgainst",
-                "changingTheOwnerThrowsAwayTheDryRunToo", "noWriteIsOfferedBeforeADryRun",
+                "noWriteIsOfferedBeforeADryRun",
                 "applyIsNotOfferedWithoutADryRun", "aPreviewSaysDryRunAndCarriesTheToken",
             )),
-        Feature(Area.ENTRY, "Owner never preselected", "manage.js", logic = true, done = true,
+        // "Owner never preselected" was here, and was the whole of a
+        // feature: the wizard asked whose collection a list was going
+        // to and refused to preselect an answer. A page is somebody's
+        // collection now and a write goes where the page is, so there
+        // is no question to preselect an answer to.
+        Feature(Area.ENTRY, "A write goes to the collection being looked at", "manage.js", logic = true, done = true,
             tests = listOf(
-                "neitherOwnerIsAssumed", "nothingIsPreselectedInTheWizard", "theWizardWalksToTheOwnerStep",
-                "testNeitherOwnerIsPreselectedAndPreviewIsNotOfferedUntilOneIs",
-                "reusePutsTheListBackWithoutTheOwner", "aShareOpensTheWizardWithTheListAlreadyInIt",
+                "aListIsAllTheWizardAsksFor", "theWizardIsThreeStepsAndNoneOfThemAskWhose",
+                "reusePutsTheListBackReadyToGo", "aShareOpensTheWizardWithTheListAlreadyInIt",
+                "aFinishedEntryBecomesARow",
             )),
         Feature(Area.ENTRY, "Decklist and CSV parsing", "manage.js, parse.js", logic = true, done = true,
             tests = listOf(

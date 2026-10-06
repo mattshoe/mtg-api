@@ -41,7 +41,6 @@ import org.mattshoe.mtg.core.Design
 import org.mattshoe.mtg.core.DeckStep
 import org.mattshoe.mtg.core.Format
 import org.mattshoe.mtg.core.NewDeck
-import org.mattshoe.mtg.core.Owner
 import org.mattshoe.mtg.core.Source
 
 /**
@@ -95,7 +94,6 @@ fun NewDeckScreen(
         when {
             state.busy != null -> Panel(head = "Working") { Line(state.busy!!) }
             state.step == DeckStep.FORMAT -> FormatStep(state, onState, onClose)
-            state.step == DeckStep.OWNER -> OwnerStep(state, onState)
             state.step == DeckStep.NAME -> NameStep(state, onState)
             state.step == DeckStep.COMMANDER -> CommanderStep(state, onState, onCommanderTyped)
             state.step == DeckStep.CARDS -> CardsStep(state, onState, onPickFile)
@@ -165,17 +163,7 @@ private fun FormatStep(s: NewDeck, onState: (NewDeck) -> Unit, onClose: () -> Un
             onClose,
             hint = if (!s.canLeaveFormat) "Nothing is preselected on purpose." else null,
         ) {
-            Next(s, onState, s.canLeaveFormat, DeckStep.OWNER)
-        }
-    }
-}
-
-@Composable
-private fun OwnerStep(s: NewDeck, onState: (NewDeck) -> Unit) {
-    Panel(head = "Whose deck?", note = s.format?.label) {
-        Owner.entries.forEach { o -> Choice(o.label, null, s.owner == o) { onState(s.assign(o)) } }
-        DeckFoot(s, onState, {}, hint = if (!s.canLeaveOwner) "Pick whose deck this is." else null) {
-            Next(s, onState, s.canLeaveOwner, DeckStep.NAME)
+            Next(s, onState, s.canLeaveFormat, DeckStep.NAME)
         }
     }
 }
@@ -329,7 +317,7 @@ private fun ReviewStep(s: NewDeck, onState: (NewDeck) -> Unit, onCreate: () -> U
     val adding = s.adding
     Panel(
         head = "Ready?",
-        note = "${s.format?.label} · ${s.owner?.label} · ${s.cardCount} cards" +
+        note = "${s.format?.label} · ${s.cardCount} cards" +
             if (s.commander.isNotBlank()) " · ${s.commander}" else "",
     ) {
         // Two figures, the way the website draws them: the number big

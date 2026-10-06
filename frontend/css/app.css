@@ -950,11 +950,10 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
 .token .w { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* deck list */
-/* Decks are grouped by whose they are, and that heading used to be a
-   bare h2 — `margin: 0` like every other heading here — so one
-   person's shelf ran straight into the next with nothing between
-   them. The rule is the section break. */
-.owner-group + .owner-group { margin-top: 28px; }
+/* The shelf's heading: how many decks are on it, with a rule under.
+   Decks were grouped by whose they were and this was the group's
+   heading, back when one database held two collections — a page is
+   one collection now, so there is one shelf. */
 .owner-head {
   display: flex; align-items: baseline; gap: 8px;
   margin-bottom: 11px; padding-bottom: 7px; border-bottom: 1px solid var(--line);

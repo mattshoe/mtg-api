@@ -6,14 +6,6 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonPrimitive
 
-/** Whose collection. There is no default, anywhere, on purpose. */
-enum class Owner(val slug: String) {
-    MATT("matt"),
-    KAYLA("kayla");
-
-    val label: String get() = slug.replaceFirstChar(Char::uppercaseChar)
-}
-
 /** Cards in or cards out. The first question the wizard asks. */
 enum class Direction(val slug: String, val verb: String) {
     ADD("add", "Add"),

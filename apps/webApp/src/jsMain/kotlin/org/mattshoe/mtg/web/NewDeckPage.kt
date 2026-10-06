@@ -18,7 +18,6 @@ import org.w3c.files.File
 import org.mattshoe.mtg.core.DeckStep
 import org.mattshoe.mtg.core.Format
 import org.mattshoe.mtg.core.NewDeck
-import org.mattshoe.mtg.core.Owner
 import org.mattshoe.mtg.core.Source
 
 /**
@@ -64,7 +63,6 @@ fun NewDeckDialog(
                 when {
                     state.busy != null -> Div(attrs = { classes("empty") }) { Text(state.busy!!) }
                     state.step == DeckStep.FORMAT -> FormatStep(state, onState)
-                    state.step == DeckStep.OWNER -> OwnerStep(state, onState)
                     state.step == DeckStep.NAME -> NameStep(state, onState)
                     state.step == DeckStep.COMMANDER -> CommanderStep(state, onState, onCommanderTyped)
                     state.step == DeckStep.CARDS -> CardsStep(state, onState, onFiles)
@@ -113,27 +111,7 @@ private fun FormatStep(s: NewDeck, onState: (NewDeck) -> Unit) {
             }
         }
     }
-    Next("Continue →", s.canLeaveFormat) { onState(s.goTo(DeckStep.OWNER)) }
-}
-
-@Composable
-private fun OwnerStep(s: NewDeck, onState: (NewDeck) -> Unit) {
-    Div(attrs = { classes("pick") }) {
-        Owner.entries.forEach { o ->
-            Button(attrs = {
-                classes("opt")
-                if (s.owner == o) classes("on")
-                attr("aria-pressed", (s.owner == o).toString())
-                onClick { onState(s.assign(o)) }
-            }) {
-                Span(attrs = { classes("opt-mark") }) { if (s.owner == o) Text("✓") }
-                Span(attrs = { classes("opt-text") }) {
-                    Span(attrs = { classes("opt-label") }) { Text(o.label) }
-                }
-            }
-        }
-    }
-    Next("Continue →", s.canLeaveOwner) { onState(s.goTo(DeckStep.NAME)) }
+    Next("Continue →", s.canLeaveFormat) { onState(s.goTo(DeckStep.NAME)) }
 }
 
 @Composable
@@ -264,7 +242,7 @@ private fun ReviewStep(s: NewDeck, onCreate: () -> Unit) {
     val adding = s.adding
     Div(attrs = { classes("muted", "small") }) {
         Text(
-            "${s.format?.label} · ${s.owner?.label} · ${s.cardCount} cards" +
+            "${s.format?.label} · ${s.cardCount} cards" +
                 if (s.commander.isNotBlank()) " · ${s.commander}" else "",
         )
     }

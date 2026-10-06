@@ -37,7 +37,8 @@ class AppTest {
         assertEquals(View.ENTRY, s.view)
         assertEquals(1, s.entry.cardCount, "the header row is not a card")
         assertNull(s.entry.direction)
-        assertNull(s.entry.owner)
+        // The wizard no longer decides whose collection this lands in:
+        // an account owns one, and the server refuses a write to any other.
         assertEquals("Name,Quantity\nSol Ring,1", s.sharedList)
     }
 
@@ -66,9 +67,13 @@ class AppTest {
     @Test
     fun statsScopeComesOutOfTheRoute() {
         assertNull(Load.scopeFrom("").owner)
-        assertEquals(Owner.MATT, Load.scopeFrom("matt").owner)
-        assertEquals(Owner.KAYLA, Load.scopeFrom("kayla").owner)
-        assertNull(Load.scopeFrom("nonsense").owner, "a bad scope is everyone, not a crash")
+        assertEquals("matt", Load.scopeFrom("matt").owner)
+        assertEquals("kayla", Load.scopeFrom("kayla").owner)
+        // A slug this app has never heard of is still a slug: there is
+        // no list of the collections there could be any more, so there
+        // is nothing to check it against. The query returns nothing,
+        // which is what an empty collection looks like.
+        assertEquals("nonsense", Load.scopeFrom("nonsense").owner)
     }
 
     @Test

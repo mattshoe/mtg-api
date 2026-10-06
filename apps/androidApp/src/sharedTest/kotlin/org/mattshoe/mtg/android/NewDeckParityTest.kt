@@ -32,7 +32,6 @@ import org.mattshoe.mtg.core.DeckStep
 import org.mattshoe.mtg.core.Format
 import org.mattshoe.mtg.core.NameCheck
 import org.mattshoe.mtg.core.NewDeck
-import org.mattshoe.mtg.core.Owner
 import org.mattshoe.mtg.core.Validation
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -228,7 +227,7 @@ class NewDeckParityTest {
 
     private val list = "1 Sol Ring\n1 Arcane Signet"
 
-    private fun named() = NewDeck().pick(Format.COMMANDER).assign(Owner.MATT).rename("Test Deck")
+    private fun named() = NewDeck().pick(Format.COMMANDER).rename("Test Deck")
 
     private fun carded() = named().setCommander("Alela, Cunning Conqueror").type(list)
 
@@ -257,9 +256,10 @@ class NewDeckParityTest {
         // The stepper is numbered on the web, and a step you cannot
         // reach yet is disabled rather than hidden.
         shown("the stepper numbers its steps", "1 Format")
-        shown("the stepper names the owner step", "2 Whose")
+        shown("the stepper names the step after it", "2 Name")
+        absent("no step asks whose deck it is", "Whose")
         fact("an unreachable step is disabled, not missing") {
-            rule.onNodeWithText("2 Whose").assertIsNotEnabled()
+            rule.onNodeWithText("2 Name").assertIsNotEnabled()
         }
         // `.step.on`. Seven identical pills said nothing about where
         // you were, and the one thing that did was the title.
@@ -267,12 +267,11 @@ class NewDeckParityTest {
             rule.onNodeWithText("1 Format").assertIsSelected()
         }
         fact("and marks no other") {
-            rule.onNodeWithText("2 Whose").assertIsNotSelected()
-            rule.onNodeWithText("3 Name").assertIsNotSelected()
+            rule.onNodeWithText("2 Name").assertIsNotSelected()
         }
         // No commander step until a format that wants one is picked,
-        // so Cards is the fourth step rather than the fifth.
-        shown("no commander step before a format is chosen", "4 Cards")
+        // so Cards is the third step rather than the fourth.
+        shown("no commander step before a format is chosen", "3 Cards")
         absent("nothing is preselected", "✓")
         shoot("format")
 
@@ -289,14 +288,14 @@ class NewDeckParityTest {
             rule.onNodeWithText("Continue →").assertIsEnabled()
         }
         fact("the commander step appears for a format that wants one") {
-            assertTrue(says("4 Commander") && says("5 Cards"), "it says: ${words()}")
+            assertTrue(says("3 Commander") && says("4 Cards"), "it says: ${words()}")
         }
-        fact("Continue goes to the owner") {
+        fact("Continue goes to the name") {
             // Scrolled to: twelve options now stand between the head
             // of the panel and its foot, and the page is one long
             // column rather than a dialog body.
             rule.onNodeWithText("Continue →").performScrollTo().performClick()
-            rule.runOnIdle { assertEquals(DeckStep.OWNER, s.value.step) }
+            rule.runOnIdle { assertEquals(DeckStep.NAME, s.value.step) }
         }
     }
 
@@ -304,37 +303,32 @@ class NewDeckParityTest {
     fun aFormatThatWantsNoCommanderHasNoCommanderStep() {
         wizard(NewDeck().pick(Format.STANDARD))
         fact("Standard keeps its tick") { assertTrue(ticked("Standard")) }
-        absent("Standard has no commander step", "4 Commander")
-        shown("so Cards is its fourth step", "4 Cards")
+        absent("Standard has no commander step", "3 Commander")
+        shown("so Cards is its third step", "3 Cards")
     }
 
-    // --------------------------------------------------------- 2 · owner
+    // ------------------------------------------- there is no owner step
 
     @Test
-    fun theOwnerStepAsksWhoseAndAssumesNeither() {
-        val s = wizard(NewDeck().pick(Format.COMMANDER).goTo(DeckStep.OWNER))
+    fun noStepAsksWhoseDeckItIs() {
+        // There was a step here, "Whose deck?", offering Matt and
+        // Kayla and presuming neither. A deck lands in the collection
+        // being looked at, which is the only one the server will take
+        // a write for.
+        val s = wizard(NewDeck().pick(Format.COMMANDER).goTo(DeckStep.NAME))
 
-        shown("the panel says what it is asking", "Whose deck?")
-        Owner.entries.forEach { o -> shown("both owners are offered", o.label) }
-        fact("neither owner is assumed") { assertTrue(!ticked("Matt")) }
-        fact("Continue is refused until one is chosen") {
-            rule.onNodeWithText("Continue →").assertIsNotEnabled()
+        absent("nothing asks whose deck it is", "Whose deck?")
+        absent("neither of the two names is offered", "Kayla")
+        fact("the step after the format is the name") {
+            rule.runOnIdle { assertEquals(DeckStep.NAME, s.value.step) }
         }
-        shoot("owner")
-
-        tap("Matt")
-        fact("the chosen owner is ticked") { assertTrue(ticked("Matt")) }
-        fact("choosing an owner arms Continue") {
-            rule.onNodeWithText("Continue →").assertIsEnabled()
-        }
-        fact("it was recorded") { rule.runOnIdle { assertEquals(Owner.MATT, s.value.owner) } }
     }
 
     // ---------------------------------------------------------- 3 · name
 
     @Test
     fun theNameStepSaysWhereTheDeckWillLive() {
-        val s = wizard(NewDeck().pick(Format.COMMANDER).assign(Owner.MATT).goTo(DeckStep.NAME))
+        val s = wizard(NewDeck().pick(Format.COMMANDER).goTo(DeckStep.NAME))
 
         shown("the box is labelled the way the web's is", "Deck name")
         absent("no address before there is a name", "It will live at #/decks/test-deck")
@@ -438,7 +432,7 @@ class NewDeckParityTest {
     @Test
     fun aFormatWithNoCommanderIsNotOfferedTheFirstCard() {
         wizard(
-            NewDeck().pick(Format.STANDARD).assign(Owner.MATT).rename("Mono Red")
+            NewDeck().pick(Format.STANDARD).rename("Mono Red")
                 .goTo(DeckStep.CARDS).type(list),
         )
         nowhere("Standard has no commander to lift", "First card is the commander")
@@ -536,7 +530,7 @@ class NewDeckParityTest {
         )
 
         shown("the panel says what it is asking", "Ready?")
-        shown("what is being made", "Commander · Matt · 2 cards · Alela, Cunning Conqueror")
+        shown("what is being made", "Commander · 2 cards · Alela, Cunning Conqueror")
         // The tally is two figures, the way `.tally-cell` draws them:
         // the count big and what it counts small and uppercase under
         // it, each pair in its own cell. Written out as the sentence

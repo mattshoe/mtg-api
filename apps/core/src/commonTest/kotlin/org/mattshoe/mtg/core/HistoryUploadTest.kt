@@ -38,16 +38,17 @@ class EntryHistoryTest {
     }
 
     @Test
-    fun reusePutsTheListBackWithoutTheOwner() {
-        // Whose collection this lands in is the one question the app
-        // never answers for you, and a remembered answer is an answer.
+    fun reusePutsTheListBackReadyToGo() {
+        // The row remembers which collection it went to, and the
+        // wizard does not ask: a reused list lands in the collection
+        // being looked at, which is the only one the server will
+        // take a write for.
         val e = HistoryEntry("2026-09-28T10:00:00Z", "remove", "kayla", 3, "3 Sol Ring")
         val entry = EntryHistory().reuse(e)
         assertEquals("3 Sol Ring", entry.list)
         assertEquals(Direction.REMOVE, entry.direction)
         assertEquals(Step.LIST, entry.step)
-        assertNull(entry.owner)
-        assertFalse(entry.canPreview)
+        assertTrue(entry.canPreview, "a reused list still needs a question answered")
     }
 
     @Test
@@ -88,7 +89,7 @@ class EntryHistoryTest {
 
     @Test
     fun aRowCanNameBackTheOwnerItWasEnteredFor() {
-        assertEquals(Owner.MATT, entry(1).copy(owner = "matt").asOwner())
+        assertEquals("matt", entry(1).copy(owner = "matt").asOwner())
         // A row old enough to predate an owner being required at all.
         assertNull(entry(1).copy(owner = "").asOwner())
     }
@@ -98,9 +99,8 @@ class EntryHistoryTest {
         val done = MassEntry()
             .choose(Direction.ADD)
             .type("2 Sol Ring\n1 Arcane Signet")
-            .assign(Owner.KAYLA)
             .finished(Applied(applied = true, resolved = 2))
-        val state = AppState(entry = done).recordEntry("2026-09-28T10:00:00Z")
+        val state = AppState(entry = done).browsing("kayla").recordEntry("2026-09-28T10:00:00Z")
         assertEquals(1, state.history.entries.size)
         val row = state.history.entries.first()
         assertEquals("add", row.direction)

@@ -952,67 +952,11 @@ class DecksStateExhaustiveTest {
         assertEquals("b", s.open?.slug)
     }
 
-    // ----------------------------------------------------- by owner
-
-    @Test fun ownersAreInAStableOrder() {
-        val s = DecksState().loaded(three)
-        assertEquals(listOf("kayla", "matt"), s.byOwner.map { it.first })
-    }
-
-    @Test fun eachOwnerAppearsOnce() {
-        val s = DecksState().loaded(three)
-        assertEquals(s.byOwner.map { it.first }.distinct().size, s.byOwner.size)
-    }
-
-    @Test fun aDecksOwnersListKeepsTheOrderTheRowsArrivedIn() {
-        // The query already sorts by name; grouping must not reshuffle.
-        val s = DecksState().loaded(three)
-        assertEquals(listOf("B", "C"), s.byOwner.last().second.map { it.name })
-    }
-
-    @Test fun everyDeckEndsUpInExactlyOneGroup() {
-        val s = DecksState().loaded(three)
-        assertEquals(3, s.byOwner.sumOf { it.second.size })
-    }
-
-    @Test fun noDecksMeansNoGroups() = assertTrue(DecksState().byOwner.isEmpty())
-
-    @Test fun oneOwnerIsOneGroup() {
-        val s = DecksState().loaded(listOf(deck(slug = "a"), deck(slug = "b")))
-        assertEquals(1, s.byOwner.size)
-        assertEquals(2, s.byOwner.single().second.size)
-    }
-
-    @Test fun groupingIsTheSameEveryTimeItIsAskedFor() {
-        val s = DecksState().loaded(three)
-        assertEquals(s.byOwner, s.byOwner)
-        assertEquals(s.byOwner.map { it.first }, s.byOwner.map { it.first })
-    }
-
-    @Test fun anOwnerlessDeckSortsFirst() {
-        val s = DecksState().loaded(listOf(deck(slug = "a", owner = "matt"), deck(slug = "b", owner = "")))
-        assertEquals(listOf("", "matt"), s.byOwner.map { it.first })
-    }
-
-    @Test fun ownersSortByTheirCharacterCodes() {
-        // Capitals before lowercase, which is what sortedBy does and
-        // is at least predictable.
-        val s = DecksState().loaded(
-            listOf(deck(slug = "a", owner = "matt"), deck(slug = "b", owner = "Kayla")),
-        )
-        assertEquals(listOf("Kayla", "matt"), s.byOwner.map { it.first })
-    }
-
-    @Test fun threeOwnersAreThreeGroups() {
-        val s = DecksState().loaded(
-            listOf(
-                deck(slug = "a", owner = "zoe"),
-                deck(slug = "b", owner = "matt"),
-                deck(slug = "c", owner = "kayla"),
-            ),
-        )
-        assertEquals(listOf("kayla", "matt", "zoe"), s.byOwner.map { it.first })
-    }
+    // There were ten tests here, over `DecksState.byOwner`: owners in
+    // a stable order, one group each, an ownerless deck sorting
+    // first. The shelf is not grouped by owner any more — the page is
+    // one collection, so there was one group with its owner's name
+    // over it — and the property they were about is gone with it.
 
     // ------------------------------------------------- the commander
 

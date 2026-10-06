@@ -80,8 +80,8 @@ class CoreSqlDump {
         // --- everything else, which no test has ever executed
         case("decks", Load.decks())
         case("one deck", Load.deck("a-deck"))
-        Owner.entries.forEach { o -> case("stats for ${o.slug}", Load.stats(StatsScope(o))) }
-        case("stats for both", Load.stats(StatsScope()))
+        listOf("matt", "kayla").forEach { o -> case("stats for $o", Load.stats(StatsScope(o))) }
+        case("stats for everything", Load.stats(StatsScope()))
         case("stats per owner", StatsQueries.perOwner())
         Load.card("sol ring").forEachIndexed { i, s -> case("card detail $i", s) }
         case("palette find", Load.find("sol"))

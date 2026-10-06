@@ -48,7 +48,6 @@ import org.mattshoe.mtg.core.Found
 import org.mattshoe.mtg.core.HistoryEntry
 import org.mattshoe.mtg.core.Overlay
 import org.mattshoe.mtg.core.PeekCard
-import org.mattshoe.mtg.core.Owner
 import org.mattshoe.mtg.core.Route
 import org.mattshoe.mtg.core.Share
 import org.mattshoe.mtg.core.ShareWhat
@@ -372,9 +371,7 @@ fun AppShell(
                         }
                     }
 
-                    View.STATS -> StatsScreen(state.stats) { owner: Owner? ->
-                        onState(state.copy(stats = state.stats.scopedTo(owner).loading()))
-                    }
+                    View.STATS -> StatsScreen(state.stats)
 
 
                     View.LOGS -> LogsScreen(state.logs) { onState(state.copy(logs = it)) }

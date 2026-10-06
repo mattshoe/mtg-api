@@ -66,9 +66,10 @@ class DecksLayoutTest {
     private fun deck(slug: String, owner: String, name: String = slug) =
         Deck(slug, name, owner, "Alela, Artful Provocateur (ELD) 324", "UW", 3, null)
 
-    private fun twoOwners() = DecksState().loaded(
+    /** One collection's shelf: the only kind the page shows now. */
+    private fun shelf() = DecksState().loaded(
         listOf(
-            deck("a", "kayla", "Bello"), deck("b", "kayla", "Chulane"),
+            deck("a", "matt", "Bello"), deck("b", "matt", "Chulane"),
             deck("c", "matt", "Alela"), deck("d", "matt", "Dihada"),
         ),
     )
@@ -93,31 +94,26 @@ class DecksLayoutTest {
             ),
         )
 
-    // ------------------------------------------------- one owner, then the next
+    // ------------------------------------------------------- one shelf
 
     @Test
-    fun eachOwnerIsItsOwnGroup() = runTest {
-        val frame = mount(1000) { DecksPage(twoOwners(), {}, {}) }
+    fun theShelfIsOneGroupWithACountOverIt() = runTest {
+        // There were four tests here over one group per owner: the air
+        // between one owner's decks and the next owner's name, the
+        // line under a name, the count under each. The page is one
+        // collection, so a group per owner is one group with somebody's
+        // name pointlessly over it.
+        val frame = mount(1000) { DecksPage(shelf(), {}, {}) }
         settle()
-        assertEquals(2, frame.all("div.owner-group").size, "the owners are not grouped at all")
-        assertEquals(2, frame.all("div.owner-head").size)
+        assertEquals(1, frame.all("div.deck-grid").size, "the decks are still split per owner")
+        assertEquals(1, frame.all("div.owner-head").size)
+        assertTrue(frame.textContent.orEmpty().contains("4 decks"), frame.textContent.orEmpty())
+        assertTrue(!frame.textContent.orEmpty().contains("Matt"), "the owner's name is over the shelf")
     }
 
     @Test
-    fun thereIsRealAirBetweenOneOwnersDecksAndTheNextOwnersName() = runTest {
-        val frame = mount(1000) { DecksPage(twoOwners(), {}, {}) }
-        settle()
-        if (!Stylesheet.applied()) return@runTest
-        val groups = frame.all("div.owner-group")
-        val firstGridBottom = groups[0].all("div.deck-grid").first().getBoundingClientRect().bottom
-        val secondHeadTop = groups[1].all("div.owner-head").first().getBoundingClientRect().top
-        val gap = secondHeadTop - firstGridBottom
-        assertTrue(gap >= 20, "only ${gap}px between one owner's decks and the next owner's name")
-    }
-
-    @Test
-    fun anOwnerHeadingIsSeparatedFromTheDecksUnderIt() = runTest {
-        val frame = mount(1000) { DecksPage(twoOwners(), {}, {}) }
+    fun theCountIsSeparatedFromTheDecksUnderIt() = runTest {
+        val frame = mount(1000) { DecksPage(shelf(), {}, {}) }
         settle()
         if (!Stylesheet.applied()) return@runTest
         val head = frame.all("div.owner-head").first()
@@ -126,15 +122,8 @@ class DecksLayoutTest {
         assertTrue(gap >= 8, "the heading sits ${gap}px off the cards it labels")
         assertTrue(
             window.getComputedStyle(head).borderBottomWidth != "0px",
-            "nothing draws the line under an owner's name",
+            "nothing draws the line under the shelf's heading",
         )
-    }
-
-    @Test
-    fun theHeadingSaysHowManyDecksAreUnderIt() = runTest {
-        val frame = mount(1000) { DecksPage(twoOwners(), {}, {}) }
-        settle()
-        assertTrue(frame.textContent.orEmpty().contains("2 decks"), frame.textContent.orEmpty())
     }
 
     // ------------------------------------------------------- one deck, opened
@@ -221,7 +210,7 @@ class DecksLayoutTest {
 
     @Test
     fun nothingOverflowsTheDecksPageAtPhoneWidth() = runTest {
-        val frame = mount(390) { DecksPage(twoOwners(), {}, {}) }
+        val frame = mount(390) { DecksPage(shelf(), {}, {}) }
         settle()
         if (!Stylesheet.applied()) return@runTest
         val limit = frame.getBoundingClientRect().right + 1

@@ -61,9 +61,10 @@ class DecksParityTest {
     private fun deck(slug: String, owner: String, name: String = slug) =
         Deck(slug, name, owner, "Alela, Artful Provocateur (ELD) 324", "UW", 3, null)
 
-    private fun twoOwners() = DecksState().loaded(
+    /** One collection's shelf: the only kind the page shows now. */
+    private fun shelf() = DecksState().loaded(
         listOf(
-            deck("a", "kayla", "Bello"), deck("b", "kayla", "Chulane"),
+            deck("a", "matt", "Bello"), deck("b", "matt", "Chulane"),
             deck("c", "matt", "Alela"), deck("d", "matt", "Dihada"),
         ),
     )
@@ -160,22 +161,18 @@ class DecksParityTest {
     // ------------------------------------------------------- the deck shelf
 
     @Test
-    fun theShelfIsGroupedByOwnerWithACountOnEveryHeading() {
-        content { DecksScreen(twoOwners(), {}, {}) }
+    fun theShelfIsOneShelfWithACountAndNobodysNameOverIt() {
+        // It was a group per owner with the owner's name as its
+        // heading. The page is one collection, so that was one group
+        // with somebody's name pointlessly over it.
+        content { DecksScreen(shelf(), {}, {}) }
         Parity.check(
-            Parity.Fact("each owner has a heading of their own") {
-                says("Kayla") && says("Matt")
+            Parity.Fact("the heading says how many decks are on the shelf") {
+                howMany("4 decks") == 1
             },
-            Parity.Fact("the owner heading says how many decks are under it") {
-                howMany("2 decks") == 2
-            },
-            Parity.Fact("the headings are the owners, in a stable order") {
-                headings().take(2) == listOf("Kayla", "Matt")
-            },
-            Parity.Fact("Kayla's shelf comes before Matt's") {
-                yOf("Kayla") < yOf("Matt")
-            },
-            Parity.Fact("every deck on both shelves is listed") {
+            Parity.Fact("nobody's name is over the shelf") { !says("Matt") },
+            Parity.Fact("the heading is the count") { headings().take(1) == listOf("4 decks") },
+            Parity.Fact("every deck on the shelf is listed") {
                 says("Bello") && says("Chulane") && says("Alela") && says("Dihada")
             },
         )
@@ -247,7 +244,7 @@ class DecksParityTest {
     @Test
     fun theTileIsTheTargetRatherThanAnOpenButton() {
         var opened: Deck? = null
-        content { DecksScreen(twoOwners(), { opened = it }, {}) }
+        content { DecksScreen(shelf(), { opened = it }, {}) }
         rule.onNodeWithText("Bello").performScrollTo().performClick()
         rule.runOnIdle { assertEquals("a", opened?.slug) }
     }

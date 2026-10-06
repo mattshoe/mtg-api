@@ -52,19 +52,18 @@ fun DecksPage(
                 state.busy -> Div(attrs = { classes("empty") }) { Text("Loading…") }
                 state.error != null -> Div(attrs = { classes("err") }) { Text("Could not load decks: ${state.error}") }
                 state.decks.isEmpty() -> Div(attrs = { classes("empty") }) { Text("No decks yet.") }
-                else -> state.byOwner.forEach { (owner, decks) ->
-                    // A group, not a loose heading followed by a grid.
-                    // The two people's shelves have to look like two
-                    // shelves.
-                    Div(attrs = { classes("owner-group") }) {
-                        Div(attrs = { classes("owner-head") }) {
-                            H2 { Text(owner.replaceFirstChar(Char::uppercase)) }
-                            Span(attrs = { classes("count") }) {
-                                Text("${decks.size} " + if (decks.size == 1) "deck" else "decks")
-                            }
+                // One shelf. It was a group per owner with the owner's
+                // name over it, which was two shelves when there were
+                // two collections in one database and is one shelf
+                // with somebody's name pointlessly over it now that
+                // the page is their collection.
+                else -> {
+                    Div(attrs = { classes("owner-head") }) {
+                        Span(attrs = { classes("count") }) {
+                            Text("${state.decks.size} " + if (state.decks.size == 1) "deck" else "decks")
                         }
-                        Div(attrs = { classes("deck-grid") }) { decks.forEach { Tile(it, onOpen) } }
                     }
+                    Div(attrs = { classes("deck-grid") }) { state.decks.forEach { Tile(it, onOpen) } }
                 }
             }
         } else {

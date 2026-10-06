@@ -19,7 +19,6 @@ import org.mattshoe.mtg.core.EntryHistory
 import org.mattshoe.mtg.core.HistoryEntry
 import org.mattshoe.mtg.core.Applied
 import org.mattshoe.mtg.core.MassEntry
-import org.mattshoe.mtg.core.Owner
 import org.mattshoe.mtg.core.Step
 import org.w3c.files.File
 import org.w3c.files.FileList
@@ -82,12 +81,11 @@ fun MassEntryPage(
                 next = { if (s.startingADeck) onNewDeck() else onState(s.goTo(Step.LIST)) },
             )
             s.step == Step.LIST -> {
-                ListStep(s, { onState(s.type(it)) }, { onState(s.goTo(it)) }, onFiles)
+                ListStep(s, { onState(s.type(it)) }, { onState(s.goTo(it)) }, onPreview, onFiles)
                 // The history table puts an old list back in the box, so
                 // it belongs on the step that has the box.
                 HistoryPanel(history, onReuse, onClearHistory)
             }
-            s.step == Step.WHO -> WhoStep(s, { onState(s.assign(it)) }, { onState(s.goTo(it)) }, onPreview)
             s.step == Step.REVIEW -> ReviewStep(s, { onState(s.goTo(it)) }, onApply)
             s.step == Step.DONE -> DoneStep(s) { onState(s.again()) }
         }
@@ -165,6 +163,7 @@ private fun ListStep(
     s: MassEntry,
     type: (String) -> Unit,
     go: (Step) -> Unit,
+    preview: () -> Unit,
     onFiles: (List<File>) -> Unit,
 ) {
     val kind = if (s.isCsv) " · CSV" else ""
@@ -179,11 +178,14 @@ private fun ListStep(
         FileDrop(onFiles)
         Foot {
             Ghost("← Back") { go(Step.WHICH) }
-            Primary("Continue →", s.canLeaveList)  { go(Step.WHO) }
+            // The step after this one was "Whose collection?", and the
+            // dry run was asked for from there. The list is the last
+            // thing anybody has to say, so it is asked for from here.
+            Primary("Preview changes →", s.canPreview, preview)
             if (!s.canLeaveList && s.tally.cards == 0) {
                 Hint("Paste a list, or drop a file on the box.")
             } else if (s.unsaved) {
-                // Said out loud rather than assumed: two more steps
+                // Said out loud rather than assumed: one more step
                 // before anything reaches the collection.
                 Hint("Nothing is written until you press the button on the last step.")
             }
@@ -192,30 +194,16 @@ private fun ListStep(
 }
 
 @Composable
-private fun WhoStep(s: MassEntry, assign: (Owner) -> Unit, go: (Step) -> Unit, preview: () -> Unit) {
-    Panel("Whose collection?", note = "${s.tally.cards} cards on the list") {
-        Div(attrs = { classes("pick") }) {
-            Owner.entries.forEach { o -> Choice(o.label, null, s.owner == o) { assign(o) } }
-        }
-        Foot {
-            Ghost("← Back") { go(Step.LIST) }
-            Primary("Preview changes →", s.canPreview, preview)
-            if (!s.canPreview) Hint("Pick whose collection this goes to.")
-        }
-    }
-}
-
-@Composable
 private fun ReviewStep(s: MassEntry, go: (Step) -> Unit, apply: () -> Unit) {
     val p = s.preview
-    Panel("Preview — nothing written yet", note = s.owner?.slug) {
+    Panel("Preview — nothing written yet", note = "${s.tally.cards} cards on the list") {
         if (p == null) {
             Text("No preview yet.")
         } else {
             Outcome(p)
         }
         Foot {
-            Ghost("← Back") { go(Step.WHO) }
+            Ghost("← Back") { go(Step.LIST) }
             Primary(
                 if (s.canApply) "${s.direction!!.verb} ${p!!.changes.size} printings" else "Nothing to apply",
                 s.canApply,
@@ -239,7 +227,7 @@ private fun ReviewStep(s: MassEntry, go: (Step) -> Unit, apply: () -> Unit) {
 private fun DoneStep(s: MassEntry, again: () -> Unit) {
     val r = s.result!!
     val moved = r.applied && r.changes.isNotEmpty()
-    Panel(if (moved) "Applied" else "Nothing applied", note = s.owner?.slug) {
+    Panel(if (moved) "Applied" else "Nothing applied") {
         Outcome(r)
         Foot { Primary("Enter more", true, again) }
     }

@@ -98,7 +98,7 @@ private fun populated(): AppState = AppState(
     admin = Admin("t"),
     library = Library(filters = Filters(q = "bolt"), rows = emptyList(), total = 12),
     decks = fiveCardDeck(),
-    stats = StatsState(scope = StatsScope(Owner.MATT)),
+    stats = StatsState(scope = StatsScope("matt")),
     console = ConsoleState(sql = "select 1"),
     logs = LogsState(onlyErrors = true),
     entry = MassEntry(list = "1 Sol Ring", direction = Direction.ADD),
@@ -295,7 +295,7 @@ class NavigateResetsTest {
     @Test
     fun itLeavesTheStatsScopeAlone() {
         View.entries.forEach {
-            assertEquals(Owner.MATT, populated().navigate(it).stats.scope.owner, it.slug)
+            assertEquals("matt", populated().navigate(it).stats.scope.owner, it.slug)
         }
     }
 
@@ -2165,13 +2165,23 @@ class LoadNeedsTest {
 
     @Test
     fun theStatsScopeComesOutOfTheRoute() {
-        Owner.entries.forEach { assertEquals(it, Load.scopeFrom(it.slug).owner, it.slug) }
+        // A slug now, not one of two names. An old `#/stats/matt`
+        // bookmark still names a collection; there is simply no list
+        // of the collections there could be.
+        listOf("matt", "kayla").forEach { assertEquals(it, Load.scopeFrom(it).owner, it) }
     }
 
     @Test
-    fun andAnythingElseIsEverybody() {
-        listOf("", " ", "Matt", "MATT", "nonsense", "matt/kayla", "matt ").forEach {
+    fun onlyAnEmptyRestIsEverybody() {
+        // There is no list of collections to check a slug against, so
+        // a rest that says something is taken at its word and the
+        // numbers come back empty if nobody owns that. Blank is the
+        // one case that means every collection at once.
+        listOf("", " ", "\t").forEach {
             assertNull(Load.scopeFrom(it).owner, "[$it]")
+        }
+        listOf("Matt", "nonsense", "matt/kayla").forEach {
+            assertEquals(it, Load.scopeFrom(it).owner, "[$it]")
         }
     }
 
@@ -2206,8 +2216,8 @@ class LoadNeedsTest {
 
     @Test
     fun theStatsQueryFollowsTheScope() {
-        Owner.entries.forEach {
-            assertEquals(StatsQueries.totals(StatsScope(it)), Load.stats(StatsScope(it)), it.slug)
+        listOf("matt", "kayla").forEach {
+            assertEquals(StatsQueries.totals(StatsScope(it)), Load.stats(StatsScope(it)), it)
         }
         assertEquals(StatsQueries.totals(StatsScope()), Load.stats(StatsScope()))
     }
@@ -2237,7 +2247,8 @@ class WithShareTest {
         val s = AppState(admin = Admin("t")).withShare(csv)
         assertEquals(MassEntry.fromShare(csv), s.entry)
         assertNull(s.entry.direction, "it decided whether this was an add or a remove")
-        assertNull(s.entry.owner, "it decided whose collection this lands in")
+        // The wizard no longer decides whose collection this lands in:
+        // an account owns one, and the server refuses a write to any other.
         assertEquals(Step.WHICH, s.entry.step)
         assertNull(s.entry.preview)
         assertNull(s.entry.result)
@@ -2275,7 +2286,7 @@ class WithShareTest {
         assertEquals("bolt", s.library.filters.q)
         assertEquals(1, s.history.entries.size)
         assertTrue(s.admin.unlocked)
-        assertEquals(Owner.MATT, s.stats.scope.owner)
+        assertEquals("matt", s.stats.scope.owner)
     }
 
     @Test
@@ -2321,7 +2332,6 @@ class RecordEntryTest {
 
     private val done = MassEntry(
         direction = Direction.ADD,
-        owner = Owner.MATT,
         list = "1 Sol Ring\n2 Mana Crypt",
         result = Applied(applied = true, resolved = 3),
         step = Step.DONE,
@@ -2332,7 +2342,7 @@ class RecordEntryTest {
         listOf(
             MassEntry(),
             MassEntry(list = "1 Sol Ring"),
-            MassEntry(list = "1 Sol Ring", direction = Direction.ADD, owner = Owner.MATT),
+            MassEntry(list = "1 Sol Ring", direction = Direction.ADD),
             MassEntry(list = "1 Sol Ring", preview = Applied(dryRun = true)),
         ).forEach {
             val s = AppState(entry = it)
@@ -2342,7 +2352,7 @@ class RecordEntryTest {
 
     @Test
     fun aFinishedEntryBecomesARow() {
-        val s = AppState(entry = done).recordEntry("2026-01-01T00:00:00Z")
+        val s = AppState(entry = done).browsing("matt").recordEntry("2026-01-01T00:00:00Z")
         assertEquals(1, s.history.entries.size)
         val row = s.history.entries.first()
         assertEquals("2026-01-01T00:00:00Z", row.at)
@@ -2356,7 +2366,8 @@ class RecordEntryTest {
 
     @Test
     fun aRemovalIsRecordedAsOne() {
-        val s = AppState(entry = done.copy(direction = Direction.REMOVE, owner = Owner.KAYLA))
+        val s = AppState(entry = done.copy(direction = Direction.REMOVE))
+            .browsing("kayla")
             .recordEntry("now")
         assertEquals("remove", s.history.entries.first().direction)
         assertEquals("kayla", s.history.entries.first().owner)
@@ -2364,10 +2375,11 @@ class RecordEntryTest {
     }
 
     @Test
-    fun everyDirectionAndOwnerSurvivesTheRoundTrip() {
+    fun everyDirectionAndCollectionSurvivesTheRoundTrip() {
         Direction.entries.forEach { d ->
-            Owner.entries.forEach { o ->
-                val row = AppState(entry = done.copy(direction = d, owner = o))
+            listOf("matt", "kayla").forEach { o ->
+                val row = AppState(entry = done.copy(direction = d))
+                    .browsing(o)
                     .recordEntry("now").history.entries.first()
                 assertEquals(d, row.asDirection(), "$d/$o")
                 assertEquals(o, row.asOwner(), "$d/$o")
@@ -2430,7 +2442,8 @@ class RecordEntryTest {
         val again = s.history.reuse(s.history.entries.first())
         assertEquals("1 Sol Ring\n2 Mana Crypt", again.list)
         assertEquals(Direction.ADD, again.direction)
-        assertNull(again.owner, "whose collection this lands in was answered for them")
+        // The wizard no longer decides whose collection this lands in:
+        // an account owns one, and the server refuses a write to any other.
         assertEquals(Step.LIST, again.step)
     }
 }

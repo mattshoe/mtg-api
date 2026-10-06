@@ -24,12 +24,21 @@ data class Totals(
 )
 
 /** Whose numbers. Null is everyone, and is not the same as a person. */
-data class StatsScope(val owner: Owner? = null) {
-    val label: String get() = owner?.label ?: "Both"
+/**
+ * Which collection the numbers are about.
+ *
+ * A slug, and null for every collection at once. It was one of two
+ * names and a "Both" that nobody owns, chosen from a switch on the
+ * page — a real question when there were two collections and a
+ * password that could write to either, and a meaningless one now
+ * that the page is somebody's collection.
+ */
+data class StatsScope(val owner: String? = null) {
+    val label: String get() = owner ?: "Everything"
 
     /** `1=1` rather than an empty string, so it always slots into a WHERE. */
     internal val where: String get() = if (owner == null) "1=1" else "owner = ?"
-    internal val params: List<Any?> get() = owner?.let { listOf(it.slug) } ?: emptyList()
+    internal val params: List<Any?> get() = owner?.let { listOf(it) } ?: emptyList()
 }
 
 object StatsQueries {
@@ -102,7 +111,7 @@ data class StatsState(
     val busy: Boolean = false,
     val error: String? = null,
 ) {
-    fun scopedTo(owner: Owner?) = copy(scope = StatsScope(owner), error = null)
+    fun scopedTo(owner: String?) = copy(scope = StatsScope(owner), error = null)
     fun loading() = copy(busy = true, error = null)
     fun loaded(t: Totals) = copy(totals = t, busy = false, error = null)
     fun failed(message: String) = copy(busy = false, error = message)

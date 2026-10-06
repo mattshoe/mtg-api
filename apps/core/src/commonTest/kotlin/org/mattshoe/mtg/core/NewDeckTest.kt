@@ -33,32 +33,34 @@ class NewDeckTest {
 
     @Test
     fun aCommanderFormatWillNotPassTheCommanderStepEmpty() {
-        val s = NewDeck().pick(Format.COMMANDER).assign(Owner.MATT).rename("Alela")
+        val s = NewDeck().pick(Format.COMMANDER).rename("Alela")
         assertFalse(s.canLeaveCommander)
         assertTrue(s.setCommander("Alela, Artful Provocateur").canLeaveCommander)
     }
 
     @Test
     fun aFormatWithoutACommanderSkipsStraightPastIt() {
-        val s = NewDeck().pick(Format.STANDARD).assign(Owner.MATT).rename("Mono Red")
+        val s = NewDeck().pick(Format.STANDARD).rename("Mono Red")
         assertTrue(s.canLeaveCommander, "Standard must not demand a commander")
     }
 
     @Test
-    fun neitherOwnerIsAssumed() {
-        assertFalse(NewDeck().pick(Format.COMMANDER).canLeaveOwner)
+    fun aDeckNeedsANameBeforeItGoesAnywhere() {
+        // It used to need an owner first, which is the step that
+        // went: a deck belongs to the collection you are in.
+        assertFalse(NewDeck().pick(Format.COMMANDER).canLeaveName)
     }
 
     @Test
     fun anUnnamedDeckGoesNoFurther() {
-        val s = NewDeck().pick(Format.COMMANDER).assign(Owner.MATT)
+        val s = NewDeck().pick(Format.COMMANDER)
         assertFalse(s.canLeaveName)
         assertFalse(s.rename("   ").canLeaveName)
         assertTrue(s.rename("Alela").canLeaveName)
     }
 
     private fun ready() = NewDeck()
-        .pick(Format.COMMANDER).assign(Owner.MATT).rename("Alela")
+        .pick(Format.COMMANDER).rename("Alela")
         .setCommander("Alela, Artful Provocateur").type(threeCards)
 
     @Test
@@ -146,7 +148,7 @@ class NewDeckTest {
     @Test
     fun jumpingAheadLandsOnTheLastStepActuallyAnswered() {
         val s = NewDeck().pick(Format.COMMANDER)
-        assertEquals(DeckStep.OWNER, s.goTo(DeckStep.REVIEW).step)
+        assertEquals(DeckStep.NAME, s.goTo(DeckStep.REVIEW).step)
     }
 
     @Test
@@ -240,14 +242,14 @@ class NewDeckTest {
         // (cardCount > 0): a commander-less format must still refuse
         // an empty list, not wave it through because the commander
         // gate was the only one it remembers to check.
-        val noCards = NewDeck().pick(Format.STANDARD).assign(Owner.MATT).rename("Mono Red")
+        val noCards = NewDeck().pick(Format.STANDARD).rename("Mono Red")
         assertFalse(noCards.canLeaveCards, "an empty list was treated as a complete deck")
         assertTrue(noCards.type("1 Sol Ring").canLeaveCards)
     }
 
     @Test
     fun cardsCannotBeLeftWithoutACommanderEvenWithCardsTyped() {
-        val noCommander = NewDeck().pick(Format.COMMANDER).assign(Owner.MATT).rename("Alela").type("1 Sol Ring")
+        val noCommander = NewDeck().pick(Format.COMMANDER).rename("Alela").type("1 Sol Ring")
         assertFalse(noCommander.canLeaveCards, "cards were reachable before the commander step passed")
     }
 
@@ -292,7 +294,6 @@ class CreateInFlightTest {
     private fun ready(): NewDeck {
         val s = NewDeck()
             .pick(Format.COMMANDER)
-            .assign(Owner.MATT)
             .rename("Test Deck")
             .setCommander("Alela, Cunning Conqueror")
             .type("1 Sol Ring")
@@ -395,7 +396,7 @@ class ReachableAndGoToTest {
 
     @Test
     fun theDoneStepIsOnlyReachableOnceTheDeckExists() {
-        val s = NewDeck().pick(Format.COMMANDER).assign(Owner.MATT).rename("Alela")
+        val s = NewDeck().pick(Format.COMMANDER).rename("Alela")
             .setCommander("Alela, Artful Provocateur").type("1 Sol Ring")
             .validated(Validation(checked = 1, unknown = 0, ok = true))
         assertFalse(s.reachable(DeckStep.DONE), "done was reachable before anything was created")
@@ -422,7 +423,7 @@ class ReachableAndGoToTest {
         // Worth pinning down: it means `goTo` alone will not stop a
         // caller from landing on a step this format does not have —
         // only reading from `steps` does.
-        val s = NewDeck().pick(Format.STANDARD).assign(Owner.MATT).rename("Mono Red")
+        val s = NewDeck().pick(Format.STANDARD).rename("Mono Red")
         assertTrue(s.reachable(DeckStep.COMMANDER))
         assertEquals(DeckStep.COMMANDER, s.goTo(DeckStep.COMMANDER).step)
     }
@@ -447,7 +448,7 @@ class ReachableAndGoToTest {
     @Test
     fun goingToAStepThatIsActuallyReachableLandsExactlyThere() {
         val s = NewDeck().pick(Format.COMMANDER)
-        assertEquals(DeckStep.OWNER, s.goTo(DeckStep.OWNER).step)
+        assertEquals(DeckStep.NAME, s.goTo(DeckStep.NAME).step)
     }
 
     @Test
@@ -460,6 +461,6 @@ class ReachableAndGoToTest {
     }
 
     private fun ready() = NewDeck()
-        .pick(Format.COMMANDER).assign(Owner.MATT).rename("Alela")
+        .pick(Format.COMMANDER).rename("Alela")
         .setCommander("Alela, Artful Provocateur").type("1 Sol Ring")
 }

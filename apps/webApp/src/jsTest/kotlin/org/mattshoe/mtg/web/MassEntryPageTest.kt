@@ -133,7 +133,10 @@ class MassEntryPageTest {
     }
 
     @Test
-    fun theWizardWalksToTheOwnerStep() = runTest {
+    fun theWizardWalksToTheListAndAsksForNothingElse() = runTest {
+        // There was a third step after this one, "Whose collection?",
+        // and the dry run was asked for from there. The list is the
+        // last thing anybody has to say.
         val root = mount(MassEntry.fromShare("Name,Quantity\nSol Ring,1\nLightning Bolt,2"))
         settle()
         // Three cards on two lines: the quantity column counts.
@@ -144,11 +147,11 @@ class MassEntryPageTest {
         root.button("Continue →").click()
         settle()
         assertTrue(root.textContent!!.contains("What are you adding?"), root.textContent!!)
-
-        root.button("Continue →").click()
-        settle()
-        assertTrue(root.textContent!!.contains("Whose collection?"), root.textContent!!)
-        assertTrue(root.button("Preview changes →").disabled, "an owner was assumed")
+        assertTrue(!root.textContent!!.contains("Whose collection?"), root.textContent!!)
+        assertFalse(
+            root.button("Preview changes →").disabled,
+            "a list that is a list cannot ask for a dry run",
+        )
     }
 
     /** The rule the whole wizard exists for. */
@@ -158,8 +161,6 @@ class MassEntryPageTest {
         settle()
         root.button("Remove from the collection").click(); settle()
         root.button("Continue →").click(); settle()
-        root.button("Continue →").click(); settle()
-        root.button("Matt").click(); settle()
 
         val labels = root.labels().map { it.first }
         assertTrue(labels.any { it.startsWith("Preview changes") }, labels.toString())
@@ -284,7 +285,6 @@ class MassEntryPageTest {
         }
         return MassEntry(direction = org.mattshoe.mtg.core.Direction.ADD)
             .type((1..n).joinToString("\n") { "1 A Card With Quite A Long Name Number $it" })
-            .assign(org.mattshoe.mtg.core.Owner.MATT)
             .previewed(org.mattshoe.mtg.core.Applied(resolved = n, changes = changes))
             .goTo(org.mattshoe.mtg.core.Step.REVIEW)
     }
@@ -360,7 +360,6 @@ class MassEntryPageTest {
         val root = mount(
             MassEntry(direction = org.mattshoe.mtg.core.Direction.ADD)
                 .type("1 Sol Ring")
-                .assign(org.mattshoe.mtg.core.Owner.MATT)
                 .previewed(org.mattshoe.mtg.core.Applied(resolved = 1, changes = listOf(one))),
             width = PHONE,
         )

@@ -29,7 +29,6 @@ import org.mattshoe.mtg.core.HistoryEntry
 import org.mattshoe.mtg.core.Overlay
 import org.mattshoe.mtg.core.PeekCard
 import org.mattshoe.mtg.core.ShareWhat
-import org.mattshoe.mtg.core.Owner
 import org.mattshoe.mtg.core.Route
 import org.mattshoe.mtg.core.View
 import org.w3c.files.File
@@ -156,9 +155,7 @@ fun AppShell(
             onTweak = onTweak,
         )
 
-        View.STATS -> StatsPage(state.stats) { owner: Owner? ->
-            onState(state.copy(stats = state.stats.scopedTo(owner).loading()))
-        }
+        View.STATS -> StatsPage(state.stats)
 
         View.LOGS -> LogsPage(state.logs) { onState(state.copy(logs = it)) }
 
