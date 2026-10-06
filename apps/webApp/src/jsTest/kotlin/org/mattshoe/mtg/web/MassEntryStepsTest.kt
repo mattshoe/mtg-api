@@ -354,7 +354,7 @@ class MassEntryStepsTest {
         assertNull(current.preview, "the old dry run is still in the state")
         assertEquals(Step.WHICH, current.step, "it did not go back to the start of the wizard")
         // Still the wizard, not somewhere else.
-        assertEquals("Adding or removing?", root.title())
+        assertEquals("What are you doing?", root.title())
         assertFalse(root.words().contains("Applied"), "the receipt is still on the screen")
         assertTrue(root.all("div.chg").isEmpty(), "the old rows are still listed")
     }

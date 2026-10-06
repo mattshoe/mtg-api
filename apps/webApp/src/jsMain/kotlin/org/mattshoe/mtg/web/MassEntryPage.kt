@@ -46,6 +46,8 @@ fun MassEntryPage(
     onFiles: (List<File>) -> Unit = {},
     onReuse: (HistoryEntry) -> Unit = {},
     onClearHistory: () -> Unit = {},
+    /** The first question's third answer. See `WhichStep`. */
+    onNewDeck: () -> Unit = {},
 ) {
     // State is hoisted, the same as every other screen and the same as
     // the Android sibling. The shell owns it, so a share can put a list
@@ -57,7 +59,11 @@ fun MassEntryPage(
             Span(attrs = { classes("sub") }) {
                 Text(
                     when (s.direction) {
-                        null -> "Cards in or cards out, from a list or a file."
+                        null -> if (s.startingADeck) {
+                            "A deck, built from a list and checked before anything moves."
+                        } else {
+                            "Cards in or cards out, or a whole new deck."
+                        }
                         Direction.ADD -> "Resolved against Scryfall, then written to the collection."
                         Direction.REMOVE -> "Matched against printings you already own."
                     },
@@ -69,7 +75,12 @@ fun MassEntryPage(
 
         when {
             s.busy != null -> Panel("Working") { Text(s.busy!!) }
-            s.step == Step.WHICH -> WhichStep(s, { onState(s.choose(it)) }, { onState(s.goTo(Step.LIST)) })
+            s.step == Step.WHICH -> WhichStep(
+                s,
+                pick = { onState(s.choose(it)) },
+                startADeck = { onState(s.startADeck()) },
+                next = { if (s.startingADeck) onNewDeck() else onState(s.goTo(Step.LIST)) },
+            )
             s.step == Step.LIST -> {
                 ListStep(s, { onState(s.type(it)) }, { onState(s.goTo(it)) }, onFiles)
                 // The history table puts an old list back in the box, so
@@ -107,9 +118,14 @@ private fun Stepper(s: MassEntry, go: (Step) -> Unit) {
 }
 
 @Composable
-private fun WhichStep(s: MassEntry, pick: (Direction) -> Unit, next: () -> Unit) {
+private fun WhichStep(
+    s: MassEntry,
+    pick: (Direction) -> Unit,
+    startADeck: () -> Unit,
+    next: () -> Unit,
+) {
     Panel(
-        "Adding or removing?",
+        "What are you doing?",
         note = if (s.tally.cards > 0) "${s.tally.cards} cards already in the box" else null,
     ) {
         Div(attrs = { classes("pick") }) {
@@ -123,10 +139,23 @@ private fun WhichStep(s: MassEntry, pick: (Direction) -> Unit, next: () -> Unit)
                 "Cards you sold, traded away or lost.",
                 s.direction == Direction.REMOVE,
             ) { pick(Direction.REMOVE) }
+            // The third answer, which used to be a button on the
+            // decks page — the one page you are already on when you
+            // have the decks. Matt asked for it here and for that
+            // button to go.
+            Choice(
+                "New deck",
+                "Build one from a list, checked against the collection.",
+                s.startingADeck,
+            ) { startADeck() }
         }
         Foot {
-            Primary("Continue →", s.canLeaveWhich, next)
-            if (!s.canLeaveWhich) Hint("Nothing is preselected on purpose.")
+            // Where it goes is the answer's business, not the
+            // button's: `canContinue` is any answer at all,
+            // `canLeaveWhich` is still only a direction, because the
+            // list path reads `direction!!`.
+            Primary("Continue →", s.canContinue, next)
+            if (!s.canContinue) Hint("Nothing is preselected on purpose.")
         }
     }
 }

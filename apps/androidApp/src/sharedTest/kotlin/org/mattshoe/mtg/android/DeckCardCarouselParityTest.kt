@@ -10,13 +10,17 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTouchInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mattshoe.mtg.android.Parity.shoot
 import org.mattshoe.mtg.core.Admin
+import org.mattshoe.mtg.core.CardRef
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.Deck
 import org.mattshoe.mtg.core.DeckCard
@@ -103,6 +107,12 @@ class DeckCardCarouselParityTest {
                         onPreviewEntry = {},
                         onApplyEntry = {},
                         onTweak = { c, t -> tweaked = c to t },
+                        // Wired the way `MainActivity` wires it: the
+                        // carousel closes and then the card opens.
+                        onOpenPeeked = { c ->
+                            held.value = held.value.closing(Overlay.CARD_PEEK)
+                                .openCard(CardRef(c.nameNorm), c.name)
+                        },
                     )
                 }
             }
@@ -123,6 +133,19 @@ class DeckCardCarouselParityTest {
         val node = rule.onNodeWithText(text)
         runCatching { node.performScrollTo() }
         node.performClick()
+        rule.waitForIdle()
+    }
+
+    /**
+     * A press on bare scrim, in the corner.
+     *
+     * Not `performClick` on the carousel: that lands in the middle,
+     * where the pager is, and the pager eats it — so the first
+     * version of this test was green against a scrim that did
+     * dismiss, because the press never reached it.
+     */
+    private fun pressTheScrim() {
+        rule.onNodeWithTag("card-carousel").performTouchInput { click(Offset(4f, 4f)) }
         rule.waitForIdle()
     }
 
@@ -249,6 +272,30 @@ class DeckCardCarouselParityTest {
     }
 
     // ------------------------------------------------------- getting out
+
+    @Test
+    fun pressingTheBackgroundDoesNotCloseIt() {
+        // Matt: "i don't want click throughs to dismiss the
+        // carousel. Only the back button." A card you are reading is
+        // not a menu you dismiss by looking away, and the scrim is
+        // most of the screen.
+        peeking()
+        pressTheScrim()
+        assertTrue(
+            Overlay.CARD_PEEK in held.value.overlays,
+            "a press on the background closed the carousel",
+        )
+    }
+
+    @Test
+    fun pressingTheBackgroundDoesNotReachTheDeckUnderIt() {
+        // The other half of "click throughs": the press has to stop
+        // at the scrim. Falling through to the deck would open a
+        // different card under the one you are looking at.
+        peeking()
+        pressTheScrim()
+        assertEquals("Cultivate", held.value.peeked?.name, "the press reached a row behind it")
+    }
 
     @Test
     fun backTakesTheCarouselOffAndLeavesTheDeck() {

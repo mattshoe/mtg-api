@@ -6,7 +6,9 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
@@ -95,6 +97,15 @@ class ScrollPositionSurvivesACardTest {
                             held.value = held.value.openCard(CardRef(norm), name)
                             state = held.value
                         },
+                        // The third way into a card: the carousel's
+                        // own "Full details", wired the way
+                        // `MainActivity` wires it.
+                        onOpenPeeked = { c ->
+                            held.value = held.value
+                                .closing(org.mattshoe.mtg.core.Overlay.CARD_PEEK)
+                                .openCard(CardRef(c.nameNorm), c.name)
+                            state = held.value
+                        },
                     )
                 }
             }
@@ -179,8 +190,12 @@ class ScrollPositionSurvivesACardTest {
         rule.onNodeWithTag("card-carousel").assertExists()
         rule.onNodeWithTag("deck-detail").assertExists()
 
-        rule.onNodeWithTag("card-carousel").performClick()
+        // Back, not a press on the scrim: the scrim swallows presses
+        // rather than dismissing, so a card you are reading cannot be
+        // closed by a thumb landing beside it.
+        rule.onNodeWithTag("card-carousel")
+            .performTouchInput { click(androidx.compose.ui.geometry.Offset(4f, 4f)) }
         rule.waitForIdle()
-        rule.onAllNodesWithText("Card 39").onFirst().assertIsDisplayed()
+        rule.onNodeWithTag("card-carousel").assertExists()
     }
 }

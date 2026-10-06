@@ -154,7 +154,22 @@ class DeckPeekTest {
 
     @Test
     fun fullDetailsOpensTheCardsOwnPageAndClosesTheCarousel() {
-        val s = threeCards().peekAt(1).openPeeked()
+        // Two steps and in this order, which is what both shells do.
+        //
+        // It was one — an `openPeeked()` on `AppState` — and then the
+        // same rule moved into `openCard` so no shell could forget
+        // it. Both were wrong for the same reason: the website keeps
+        // a history entry per open overlay, so closing the carousel
+        // in the same update that changes the route made the router
+        // pop the navigation back off again. The card page appeared
+        // and vanished, and the address bar still said the deck.
+        //
+        // Closing first is its own update, the history entry comes
+        // off, and the card page is pushed on top of nothing.
+        val peeking = threeCards().peekAt(1)
+        val card = peeking.peeked!!
+        val s = peeking.closing(Overlay.CARD_PEEK)
+            .openCard(CardRef(card.nameNorm), card.name)
         assertEquals(View.CARD, s.view)
         assertEquals("Cultivate", s.card?.name)
         assertFalse(Overlay.CARD_PEEK in s.overlays, "the carousel is still over the card page")

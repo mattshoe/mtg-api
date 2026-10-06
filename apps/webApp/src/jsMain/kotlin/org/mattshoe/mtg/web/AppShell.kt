@@ -56,6 +56,8 @@ fun AppShell(
     onOpenFound: (Found) -> Unit = {},
     /** A card tapped in a deck list. Carries its own `name_norm`. */
     onOpenNamed: (String, String, String) -> Unit = { _, _, _ -> },
+    /** "Full details" on the carousel's sheet. See `onDetails` below. */
+    onOpenPeeked: (DeckCard) -> Unit = {},
     /** Copy a link to whatever is on screen. */
     onShare: () -> Unit = {},
     /** The deck has four ways to hand itself over rather than one. */
@@ -140,11 +142,13 @@ fun AppShell(
             onOpen = { onOpenDeck(it.slug) },
             onClose = { onState(state.copy(decks = state.decks.close())) },
             admin = state.admin.unlocked,
-            onNew = { onState(state.opening(Overlay.NEW_DECK)) },
             onEdit = { onEditDeck(it.slug) },
             onRename = { onAskRename(it.slug) },
             onDisassemble = { onAskDisassemble(it.slug) },
-            onOpenCard = { card, owner -> onOpenNamed(card.name, card.nameNorm, owner) },
+            // The carousel, not the card's page. The page is a
+            // button inside it. Same rule as the phone, and the rule
+            // itself is `AppState.peekCard` in the shared core.
+            onOpenCard = { card, _ -> onState(state.peekCard(card)) },
             onShare = onShareDeck,
             onAddCard = onAddCard,
             onTweak = onTweak,
@@ -175,6 +179,7 @@ fun AppShell(
             onFiles = onFiles,
             onReuse = onReuse,
             onClearHistory = onClearHistory,
+            onNewDeck = { onState(state.opening(Overlay.NEW_DECK)) },
         )
     }
 
@@ -246,6 +251,25 @@ fun AppShell(
             state = d,
             onGo = onDisassemble,
             onClose = { onState(state.closing(Overlay.DISASSEMBLE)) },
+        )
+    }
+
+    if (Overlay.CARD_PEEK in state.overlays) {
+        CardCarousel(
+            cards = state.decks.pageOrder,
+            at = state.peek.at,
+            place = state.peekPlace,
+            admin = state.admin.unlocked,
+            onSwipe = { onState(state.peekTo(it)) },
+            // Through `onOpenNamed`, the same way every other card is
+            // opened — `openPeeked` only moves the state, and a card
+            // page whose detail was never fetched spins forever.
+            // One callback, because leaving the carousel for the
+            // card's page costs different things on the two
+            // platforms — the website has a history entry per open
+            // overlay to account for, and the phone does not.
+            onDetails = { state.peeked?.let(onOpenPeeked) },
+            onTweak = { card, how -> onTweak(card, how) },
         )
     }
 

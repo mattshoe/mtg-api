@@ -282,7 +282,12 @@ class AppDriverTest {
         val view = mount("#/decks/alela")
         settle()
         waitFor("the deck") { view.textContent.orEmpty().contains("Sol Ring") }
+        // Through the carousel, which is what a row opens now. The
+        // card's own page is a button on its sheet.
         view.all("div.deck-line, a.deck-line").first { it.textContent.orEmpty().contains("Sol Ring") }.click()
+        waitFor("the carousel") { document.querySelector(".peek-scrim") != null }
+        pressOnThePage("Full details")
+        settle()
         waitFor("the card page") { cardPages() == 1 }
         assertEquals("#/card/sol+ring", hash(), "the link to the card carried the deck")
 
@@ -439,6 +444,24 @@ class AppDriverTest {
         b.click()
     }
 
+    /**
+     * The same, anywhere on the page rather than inside the modal.
+     *
+     * `press` looks in `div.palette`, which is right for the wizards
+     * and wrong for everything that is a page: the entry wizard's
+     * first question and the carousel's sheet are both on the page
+     * itself, so pressing their buttons through `press` found
+     * nothing and said "saw []".
+     */
+    private fun pressOnThePage(label: String) {
+        val all = document.querySelectorAll("button").let { n ->
+            (0 until n.length).mapNotNull { n[it] as? HTMLButtonElement }
+        }
+        val b = all.firstOrNull { it.says() == label }
+            ?: error("no button '$label' on the page; saw ${all.map { it.says() }}")
+        b.click()
+    }
+
     private fun typeInto(placeholder: String, text: String) {
         val box = palette()?.querySelector("[placeholder='$placeholder']") as? HTMLElement
             ?: error("no box '$placeholder'")
@@ -457,9 +480,13 @@ class AppDriverTest {
         // whatever `app` holds when it comes back, and the finished
         // state was handed to it as an argument it ignored — so the
         // toast appeared, the deck appeared, and the box never moved.
-        val view = mount("#/decks", token = "t")
-        waitFor("the deck list") { view.all("div.deck-card").isNotEmpty() }
-        view.button("New deck").click()
+        // The decks page has no New deck button any more; a deck is
+        // started from the entry wizard's first question.
+        val view = mount("#/entry", token = "t")
+        waitFor("the entry wizard") { view.textContent.orEmpty().contains("What are you doing?") }
+        view.all("button.opt").first { it.textContent.orEmpty().contains("New deck") }.click()
+        settle()
+        pressOnThePage("Continue →")
         waitFor("the wizard") { palette() != null }
 
         // A step at a time. Each wait keys off something only the
@@ -802,6 +829,8 @@ class AppDriverTest {
         val view = mount("#/decks/alela")
         waitFor("the deck") { view.all(".deck-line").isNotEmpty() }
         view.all(".deck-line").first().click()
+        waitFor("the carousel") { document.querySelector(".peek-scrim") != null }
+        pressOnThePage("Full details")
         waitFor("the card page") { cardPages() == 1 }
         settle()
 

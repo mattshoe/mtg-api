@@ -276,6 +276,7 @@ object MtgApp {
                 onOpenCard = { row -> openCard(row) },
                 onOpenFound = { found -> openFound(found) },
                 onOpenNamed = { name, norm, owner -> openNamed(name, norm, owner) },
+                onOpenPeeked = { card -> openFromCarousel(card) },
                 onTypedName = { c -> nameTyped(c) },
                 onDismissNames = { app = app.copy(complete = app.complete.closed()) },
                 onCommanderTyped = { c -> commanderTyped(c) },
@@ -707,6 +708,27 @@ object MtgApp {
         // card: the page shows every owner's copies.
         app = app.openCard(CardRef(nameNorm), name)
         work { loadCard(nameNorm, name) }
+    }
+
+    /**
+     * "Full details" on the carousel's sheet.
+     *
+     * The carousel's history entry is **forgotten** rather than
+     * popped. `OverlayHistory` closes an overlay by calling
+     * `history.back()`, which is asynchronous — so closing the
+     * carousel and opening the card in the same gesture queued a pop
+     * that landed after the card's own address had been pushed and
+     * took it straight back off. The card page appeared and vanished
+     * and the address bar still said the deck.
+     *
+     * The card's address supersedes the entry instead: `forget`
+     * brings the depth down without asking the browser for anything,
+     * and the push that follows is what the back gesture lands on.
+     */
+    private fun openFromCarousel(card: DeckCard) {
+        OverlayHistory.forget(1)
+        app = app.closing(Overlay.CARD_PEEK)
+        openNamed(card.name, card.nameNorm, app.decks.open?.owner.orEmpty())
     }
 
     private fun openFound(found: Found) {
@@ -1205,6 +1227,17 @@ private class BrowserStore : Store {
 private object OverlayHistory {
     private var depth = 0
     private var pending = 0
+
+    /**
+     * Give up an entry without popping it.
+     *
+     * For an overlay whose entry is about to be superseded by a real
+     * navigation — see `openFromCarousel`. Popping it would undo the
+     * navigation that replaced it.
+     */
+    fun forget(n: Int) {
+        depth = (depth - n).coerceAtLeast(0)
+    }
 
     fun sync(want: Int) {
         while (depth < want) {

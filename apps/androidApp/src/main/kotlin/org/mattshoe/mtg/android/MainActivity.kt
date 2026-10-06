@@ -18,6 +18,7 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.yield
 import org.mattshoe.mtg.core.Admin
 import org.mattshoe.mtg.core.AdminToken
 import org.mattshoe.mtg.core.ApiFailure
@@ -72,7 +73,7 @@ class MainActivity : ComponentActivity() {
     // where the fake worker is already listening on a loopback port
     // by the time the system builds this activity. See [Wiring].
     private var api = MtgApi(Wiring.apiBase ?: MtgApi.DEFAULT_BASE)
-    private val scryfall = Scryfall()
+    private var scryfall = Scryfall()
     private val prefs by lazy { getSharedPreferences("mtg", Context.MODE_PRIVATE) }
     private val store: Store by lazy { PrefsStore(prefs) }
     private var downloads: Downloads = MediaStoreDownloads(this)
@@ -127,6 +128,11 @@ class MainActivity : ComponentActivity() {
      */
     internal fun useForTesting(api: MtgApi) {
         this.api = api
+    }
+
+    /** The same seam for Scryfall, which the deck's tokens come from. */
+    internal fun useScryfallForTesting(scryfall: Scryfall) {
+        this.scryfall = scryfall
     }
 
     /**
@@ -199,6 +205,12 @@ class MainActivity : ComponentActivity() {
 
     /** A second load, the way a config change or a re-entry would ask for one. */
     internal fun loadFacetsForTesting() = loadFacets()
+
+    /** The opening fetch for whatever the route names. */
+    internal fun loadForTesting() = loadFor(app)
+
+    /** The token load, so a test can wait for it instead of sleeping. */
+    internal val tokensJob: Job? get() = model.tokensJob
 
     /**
      * Everything, because a narrow list greys out the file you actually
@@ -298,6 +310,14 @@ class MainActivity : ComponentActivity() {
                         onOpenCard = { row -> openCard(row) },
                         onOpenFound = { found -> openFound(found) },
                         onOpenNamed = { name, norm, owner -> openNamed(name, norm, owner) },
+                        // "Full details" on the carousel's sheet.
+                        // Nothing to account for here — the phone has
+                        // no history entry per overlay — so it is the
+                        // close and the open, in that order.
+                        onOpenPeeked = { card ->
+                            app = app.closing(Overlay.CARD_PEEK)
+                            openNamed(card.name, card.nameNorm, app.decks.open?.owner.orEmpty())
+                        },
                         onFind = { term -> find(term) },
                         onLookup = { term -> lookup(term) },
                         onPickFile = { pickFiles.launch(arrayOf("*/*")) },
@@ -547,7 +567,64 @@ class MainActivity : ComponentActivity() {
     private suspend fun openDeck(slug: String): AppState {
         val all = if (app.decks.decks.isEmpty()) loadDecks() else app
         val r = api.query(DeckQueries.cards(slug))
-        return all.copy(decks = all.decks.opened(slug, DeckQueries.decodeCards(r.cols, r.rows)))
+        val opened = all.copy(decks = all.decks.opened(slug, DeckQueries.decodeCards(r.cols, r.rows)))
+        // Started here and not awaited, the same as the website: a
+        // deck that shows its cards and fills in its tokens a moment
+        // later is right; one that waits on a second service to show
+        // anything is not.
+        loadTokens(slug, opened.decks.scryfallIds)
+        return opened
+    }
+
+    /**
+     * What the deck's cards make, from Scryfall's `all_parts`.
+     *
+     * Android has never asked. `TokenList` has been at the bottom of
+     * the deck page since the port and the list it draws has been
+     * empty every time, because `withTokens` was called in exactly
+     * one place in the repository and that place was the website.
+     * An empty list draws nothing, so the section read as one that
+     * had been taken away. Matt: "what the fuck happened to the
+     * tokens section at the bottom??"
+     *
+     * The ids are passed in rather than read off `app`, because this
+     * is started from inside `openDeck` — before the state it just
+     * built has been assigned — and reading `app` there would ask
+     * about the deck you were on a moment ago.
+     */
+    private fun loadTokens(slug: String, ids: List<String>) {
+        model.tokensJob = scope.launch {
+            // Let the deck land first.
+            //
+            // This is launched from inside `openDeck`, before the
+            // state it just built has been assigned, and
+            // `viewModelScope` dispatches on `Main.immediate` — so a
+            // launched coroutine runs *synchronously* up to its first
+            // real suspension. Against a fake network that never
+            // suspends, the whole token load finished before
+            // `app = opened` executed, and the assignment then
+            // overwrote the tokens it had just written. CI found it;
+            // the same test had been passing locally on the ordering
+            // going the other way.
+            //
+            // `yield` puts this behind the assignment whatever the
+            // engine does.
+            yield()
+            // Swallowed on purpose, the way the website swallows it.
+            // Scryfall being down is not a reason for a deck to show
+            // an error; it is a reason for the deck to have no token
+            // list, which is also what a deck with no tokens looks
+            // like.
+            val found = runCatching { scryfall.tokens(ids) }.getOrDefault(emptyList())
+            // Still the same deck? Opening another one while this was
+            // in flight must not hang the first deck's tokens on it.
+            // Asked of the route rather than the loaded deck, because
+            // the route names the deck from the moment you navigate
+            // and the loaded one only once its cards are back.
+            if (app.route.rest == slug && app.view == View.DECKS) {
+                app = app.copy(decks = app.decks.withTokens(found))
+            }
+        }
     }
 
     private suspend fun loadStats(): AppState {

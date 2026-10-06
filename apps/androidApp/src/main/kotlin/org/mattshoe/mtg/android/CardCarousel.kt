@@ -63,7 +63,6 @@ fun CardCarousel(
     place: String?,
     admin: Boolean,
     onSwipe: (Int) -> Unit,
-    onClose: () -> Unit,
     onDetails: () -> Unit,
     onTweak: (DeckCard, Tweak) -> Unit,
 ) {
@@ -76,12 +75,21 @@ fun CardCarousel(
             .testTag("card-carousel")
             // A scrim rather than a page: the deck is still there
             // behind it, which is what makes this an overlay and not
-            // a navigation. `detectTapGestures` and not `clickable`,
-            // because a full-screen `clickable` sets
+            // a navigation.
+            .background(Color.Black.copy(alpha = 0.72f))
+            // Swallows the press and does nothing with it. Matt: "i
+            // don't want click throughs to dismiss the carousel. Only
+            // the back button." A card you are reading is not a menu
+            // you dismiss by looking away, and the scrim is most of
+            // the screen — but the press still has to stop here, or
+            // it reaches a row behind and opens a different card
+            // under the one you are looking at.
+            //
+            // `detectTapGestures` and not `clickable`, because a
+            // full-screen `clickable` sets
             // `shouldMergeDescendantSemantics` and folds everything
             // under it into one node.
-            .background(Color.Black.copy(alpha = 0.72f))
-            .pointerInput(Unit) { detectTapGestures { onClose() } },
+            .pointerInput(Unit) { detectTapGestures { } },
     ) {
         val pager = rememberPagerState(initialPage = index) { cards.size }
         // Two directions, both one-way at a time. The flow reports
