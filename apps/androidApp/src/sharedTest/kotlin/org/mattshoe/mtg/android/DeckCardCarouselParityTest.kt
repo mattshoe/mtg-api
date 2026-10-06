@@ -4,6 +4,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -12,7 +13,9 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTouchInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
@@ -21,6 +24,7 @@ import org.junit.runner.RunWith
 import org.mattshoe.mtg.android.Parity.shoot
 import org.mattshoe.mtg.core.Admin
 import org.mattshoe.mtg.core.CardRef
+import org.mattshoe.mtg.core.CardRow
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.Deck
 import org.mattshoe.mtg.core.DeckCard
@@ -111,7 +115,7 @@ class DeckCardCarouselParityTest {
                         // carousel closes and then the card opens.
                         onOpenPeeked = { c ->
                             held.value = held.value.closing(Overlay.CARD_PEEK)
-                                .openCard(CardRef(c.nameNorm), c.name)
+                                .openCard(CardRef(c.nameNorm), c.title)
                         },
                     )
                 }
@@ -177,7 +181,7 @@ class DeckCardCarouselParityTest {
     @Test
     fun theCarouselOpensOnTheCardYouTapped() {
         peeking()
-        assertEquals("Cultivate", held.value.peeked?.name)
+        assertEquals("Cultivate", held.value.peeked?.title)
         assertTrue(says("Cultivate"), "the sheet does not name the card")
     }
 
@@ -263,12 +267,86 @@ class DeckCardCarouselParityTest {
     // ------------------------------------------------------- the picture
 
     @Test
+    fun theLibrarysCarouselIsPhotographed() {
+        Parity.needsRealRendering()
+        shell(inTheLibrary())
+        rule.onNodeWithTag("library").performScrollToNode(hasTestTag("card-tile"))
+        rule.onAllNodes(hasTestTag("card-tile")).onFirst().performClick()
+        rule.waitForIdle()
+        rule.onRoot().shoot("library-carousel")
+    }
+
+    @Test
     fun theCarouselIsPhotographed() {
         // Evidence, not an assertion. Everything above already says
         // what the carousel does; this is so a person can look at it.
         Parity.needsRealRendering()
         peeking()
         rule.onRoot().shoot("deck-carousel")
+    }
+
+    // ------------------------------------------------- and in the Library
+
+    private fun row(name: String, qty: Int = 2, free: Int? = 1) = CardRow(
+        id = 1,
+        owner = "matt",
+        name = name,
+        nameNorm = name.lowercase(),
+        face2 = null,
+        layout = null,
+        scryfallId = "abcdef12-3456",
+        manaCost = "{1}",
+        cmc = 1.0,
+        typeLine = "Artifact",
+        colorIdentity = null,
+        rarity = "uncommon",
+        setCode = "m3c",
+        setName = "Modern Horizons 3 Commander",
+        collectorNumber = "409",
+        edhrecRank = null,
+        releasedAt = null,
+        finish = "nonfoil",
+        power = null,
+        toughness = null,
+        artist = null,
+        qty = qty,
+        printings = 1,
+        free = free,
+        price = 1.75,
+        value = 3.5,
+    )
+
+    private fun inTheLibrary(): AppState {
+        val rows = listOf(row("Sol Ring"), row("Counterspell"))
+        return AppState(admin = Admin(token = "t").unlock("t")).navigate(View.LIBRARY)
+            .let { it.copy(library = it.library.loaded(rows, rows.size)) }
+    }
+
+    @Test
+    fun tappingACardInTheLibraryOpensTheSameCarousel() {
+        // Matt: "let's use the same carousel for the library page."
+        shell(inTheLibrary())
+        rule.onNodeWithTag("library").performScrollToNode(hasTestTag("card-tile"))
+        rule.onAllNodes(hasTestTag("card-tile")).onFirst().performClick()
+        rule.waitForIdle()
+        assertTrue(Overlay.CARD_PEEK in held.value.overlays, "the tile did not open a carousel")
+        rule.onNodeWithTag("card-carousel").assertExists()
+        assertEquals(View.LIBRARY, held.value.view, "it navigated away from the Library")
+    }
+
+    @Test
+    fun theLibrarysSheetCountsTheCollectionAndOffersNothingToEdit() {
+        shell(inTheLibrary())
+        rule.onNodeWithTag("library").performScrollToNode(hasTestTag("card-tile"))
+        rule.onAllNodes(hasTestTag("card-tile")).onFirst().performClick()
+        rule.waitForIdle()
+        assertTrue(says("2 owned"), "the sheet does not say how many you own")
+        assertTrue(says("1 free"), "the sheet does not say how many are spare")
+        assertTrue(says("Full details"), "no way through to the card's own page")
+        // Admin is on and there is still no deck to change.
+        listOf("Count", "Swap", "Remove").forEach {
+            assertTrue(!says(it), "the Library's sheet offers \"$it\"")
+        }
     }
 
     // ------------------------------------------------------- getting out
@@ -294,7 +372,7 @@ class DeckCardCarouselParityTest {
         // different card under the one you are looking at.
         peeking()
         pressTheScrim()
-        assertEquals("Cultivate", held.value.peeked?.name, "the press reached a row behind it")
+        assertEquals("Cultivate", held.value.peeked?.title, "the press reached a row behind it")
     }
 
     @Test

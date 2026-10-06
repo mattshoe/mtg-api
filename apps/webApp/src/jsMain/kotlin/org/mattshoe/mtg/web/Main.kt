@@ -41,6 +41,7 @@ import org.mattshoe.mtg.core.HistoryEntry
 import org.mattshoe.mtg.core.Load
 import org.mattshoe.mtg.core.MtgApi
 import org.mattshoe.mtg.core.Overlay
+import org.mattshoe.mtg.core.PeekCard
 import org.mattshoe.mtg.core.PaletteQueries
 import org.mattshoe.mtg.core.RenameState
 import org.mattshoe.mtg.core.Route
@@ -725,10 +726,10 @@ object MtgApp {
      * brings the depth down without asking the browser for anything,
      * and the push that follows is what the back gesture lands on.
      */
-    private fun openFromCarousel(card: DeckCard) {
+    private fun openFromCarousel(card: PeekCard) {
         OverlayHistory.forget(1)
         app = app.closing(Overlay.CARD_PEEK)
-        openNamed(card.name, card.nameNorm, app.decks.open?.owner.orEmpty())
+        openNamed(card.title, card.nameNorm, app.decks.open?.owner.orEmpty())
     }
 
     private fun openFound(found: Found) {

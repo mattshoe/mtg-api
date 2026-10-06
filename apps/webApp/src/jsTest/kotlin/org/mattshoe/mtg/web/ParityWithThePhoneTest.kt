@@ -9,6 +9,7 @@ import org.jetbrains.compose.web.renderComposable
 import org.mattshoe.mtg.core.Admin
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.Deck
+import org.mattshoe.mtg.core.CardRow
 import org.mattshoe.mtg.core.DeckCard
 import org.mattshoe.mtg.core.DecksState
 import org.mattshoe.mtg.core.Overlay
@@ -183,7 +184,7 @@ class ParityWithThePhoneTest {
         peek()
         assertTrue(Overlay.CARD_PEEK in held.value.overlays, "the row did not open a carousel")
         assertEquals(View.DECKS, held.value.view, "it navigated away from the deck")
-        assertEquals("Cultivate", held.value.peeked?.name)
+        assertEquals("Cultivate", held.value.peeked?.title)
     }
 
     @Test
@@ -218,6 +219,72 @@ class ParityWithThePhoneTest {
         assertEquals("Cultivate", tweaked?.first?.name)
     }
 
+    // --------------------------------------------- and over the Library
+
+    private fun row(name: String, qty: Int = 2, free: Int? = 1) = CardRow(
+        id = 1,
+        owner = "matt",
+        name = name,
+        nameNorm = name.lowercase(),
+        face2 = null,
+        layout = null,
+        scryfallId = "abcdef12-3456",
+        manaCost = "{1}",
+        cmc = 1.0,
+        typeLine = "Artifact",
+        colorIdentity = null,
+        rarity = "uncommon",
+        setCode = "m3c",
+        setName = "Modern Horizons 3 Commander",
+        collectorNumber = "409",
+        edhrecRank = null,
+        releasedAt = null,
+        finish = "nonfoil",
+        power = null,
+        toughness = null,
+        artist = null,
+        qty = qty,
+        printings = 1,
+        free = free,
+        price = 1.75,
+        value = 3.5,
+    )
+
+    private fun inTheLibrary(): AppState {
+        val rows = listOf(row("Sol Ring"), row("Counterspell"))
+        return AppState(admin = Admin(token = "t").unlock("t")).navigate(View.LIBRARY)
+            .let { it.copy(library = it.library.loaded(rows, rows.size)) }
+    }
+
+    @Test
+    fun tappingACardInTheLibraryOpensTheSameCarousel() = runTest {
+        shell(inTheLibrary())
+        settle()
+        val tile = document.querySelectorAll("div.card").let { l ->
+            (0 until l.length).map { l[it] as HTMLElement }
+        }.first()
+        tile.click()
+        settle()
+        assertTrue(Overlay.CARD_PEEK in held.value.overlays, "the tile did not open a carousel")
+        assertEquals(View.LIBRARY, held.value.view, "it navigated away from the Library")
+        assertNotNull(document.querySelector(".peek-scrim"))
+    }
+
+    @Test
+    fun theLibrarysSheetCountsTheCollectionAndOffersNothingToEdit() = runTest {
+        shell(inTheLibrary())
+        settle()
+        (document.querySelectorAll("div.card")[0] as HTMLElement).click()
+        settle()
+        assertTrue(says("2 owned"), "the sheet does not say how many you own")
+        assertTrue(says("1 free"), "the sheet does not say how many are spare")
+        assertNotNull(button("Full details"), "no way through to the card's own page")
+        // Admin is on and there is still no deck to change.
+        listOf("Count", "Swap", "Remove").forEach {
+            assertEquals(null, button(it), "the Library's sheet offers \"$it\"")
+        }
+    }
+
     @Test
     fun aPressOnTheBackgroundNeitherClosesItNorReachesTheDeck() = runTest {
         peek()
@@ -227,6 +294,6 @@ class ParityWithThePhoneTest {
             Overlay.CARD_PEEK in held.value.overlays,
             "a press on the background closed the carousel",
         )
-        assertEquals("Cultivate", held.value.peeked?.name, "the press reached a row behind it")
+        assertEquals("Cultivate", held.value.peeked?.title, "the press reached a row behind it")
     }
 }

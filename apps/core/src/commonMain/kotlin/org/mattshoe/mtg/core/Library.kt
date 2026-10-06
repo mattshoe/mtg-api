@@ -55,6 +55,14 @@ data class CardRow(
      * adventure from split and this does not care which it is: if
      * the name already says both, it is already both.
      */
+    /** "M3C · 409", the way a collector writes a printing down. */
+    val printing: String?
+        get() {
+            val set = setCode?.takeIf { it.isNotBlank() }?.uppercase() ?: return null
+            val number = collectorNumber?.takeIf { it.isNotBlank() } ?: return set
+            return "$set · $number"
+        }
+
     val fullName: String
         get() = when {
             face2.isNullOrBlank() -> name

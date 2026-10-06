@@ -12,6 +12,7 @@ import org.jetbrains.compose.web.dom.Span
 import org.jetbrains.compose.web.dom.Text
 import org.mattshoe.mtg.core.CardQueries
 import org.mattshoe.mtg.core.DeckCard
+import org.mattshoe.mtg.core.PeekCard
 import org.mattshoe.mtg.core.Prices
 import org.mattshoe.mtg.core.Tweak
 import org.w3c.dom.HTMLElement
@@ -33,7 +34,7 @@ import org.w3c.dom.events.Event
  */
 @Composable
 fun CardCarousel(
-    cards: List<DeckCard>,
+    cards: List<PeekCard>,
     at: Int,
     place: String?,
     admin: Boolean,
@@ -101,16 +102,16 @@ fun CardCarousel(
 
 /** One card, as big as the rail allows. */
 @Composable
-private fun CardFace(card: DeckCard) {
+private fun CardFace(card: PeekCard) {
     Div(attrs = { classes("peek-card") }) {
         val url = CardQueries.art(card.scryfallId, "normal")
         if (url != null) {
-            Img(src = url, alt = card.shown)
+            Img(src = url, alt = card.title)
         } else {
             // A card the deck wants that nobody owns has no printing
             // and so no picture. Its name, rather than a grey
             // rectangle that reads as a failure to load.
-            Div(attrs = { classes("peek-blank") }) { Text(card.shown) }
+            Div(attrs = { classes("peek-blank") }) { Text(card.title) }
         }
     }
 }
@@ -124,7 +125,7 @@ private fun CardFace(card: DeckCard) {
  */
 @Composable
 private fun Sheet(
-    card: DeckCard,
+    card: PeekCard,
     place: String?,
     admin: Boolean,
     index: Int,
@@ -136,7 +137,7 @@ private fun Sheet(
     Div(attrs = { classes("peek-sheet") }) {
         Div(attrs = { classes("peek-head") }) {
             Div(attrs = { classes("peek-titles") }) {
-                Div(attrs = { classes("peek-name") }) { Text(card.shown) }
+                Div(attrs = { classes("peek-name") }) { Text(card.title) }
                 // The printing and what it is worth, on one line.
                 // `printing` is null for a card nobody owns, which is
                 // also the card with no price, so the line collapses
@@ -144,16 +145,19 @@ private fun Sheet(
                 listOfNotNull(card.printing, card.price?.let { Prices.money(it) })
                     .takeIf { it.isNotEmpty() }
                     ?.let { Div(attrs = { classes("peek-sub") }) { Text(it.joinToString(" · ")) } }
-                card.knownTypeLine?.takeIf { it.isNotBlank() }
+                card.typeLine?.takeIf { it.isNotBlank() }
                     ?.let { Div(attrs = { classes("peek-type") }) { Text(it) } }
             }
             place?.let { Span(attrs = { classes("peek-place") }) { Text(it) } }
         }
 
+        // Already worded by `:core`: what a run can state about a
+        // card differs — a deck knows how many it wants, the Library
+        // knows how many are spare — and that is a fact about the run
+        // rather than a rendering decision.
         Div(attrs = { classes("peek-tags") }) {
-            Span(attrs = { classes("tag") }) { Text("${card.qty}× in deck") }
-            Span(attrs = { classes("tag"); if (card.short > 0) classes("bad") }) {
-                Text("${card.owned} owned")
+            card.tags.forEach { tag ->
+                Span(attrs = { classes("tag"); if (tag.bad) classes("bad") }) { Text(tag.text) }
             }
         }
 
@@ -176,14 +180,17 @@ private fun Sheet(
                 classes("btn", "sm", "primary")
                 onClick { onDetails() }
             }) { Text("Full details") }
-            if (admin) {
-                Button(attrs = { classes("btn", "sm"); onClick { onTweak(card, Tweak.QUANTITY) } }) {
+            // On the deck row rather than on `admin`: being admin in
+            // the Library still leaves nothing to count, swap or
+            // remove, because there is no deck.
+            card.inDeck?.takeIf { admin }?.let { row ->
+                Button(attrs = { classes("btn", "sm"); onClick { onTweak(row, Tweak.QUANTITY) } }) {
                     Text("Count")
                 }
-                Button(attrs = { classes("btn", "sm"); onClick { onTweak(card, Tweak.SWAP) } }) {
+                Button(attrs = { classes("btn", "sm"); onClick { onTweak(row, Tweak.SWAP) } }) {
                     Text("Swap")
                 }
-                Button(attrs = { classes("btn", "sm", "danger"); onClick { onTweak(card, Tweak.REMOVE) } }) {
+                Button(attrs = { classes("btn", "sm", "danger"); onClick { onTweak(row, Tweak.REMOVE) } }) {
                     Text("Remove")
                 }
             }

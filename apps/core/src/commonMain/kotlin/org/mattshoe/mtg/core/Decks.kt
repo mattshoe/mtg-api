@@ -80,14 +80,46 @@ data class Deck(
     }
 }
 
+/** Which list the carousel is over. */
+enum class PeekOf { DECK, LIBRARY }
+
 /**
- * Which card of a deck the carousel is showing, or none.
+ * Which card of a run the carousel is showing, or none.
  *
- * A position rather than a card: see `AppState.peekAt`.
+ * A position rather than a card: see `AppState.peekAt`. And the run
+ * it is a position *in*, because the carousel is over the Library as
+ * well as over a deck and a deck left loaded from an earlier visit
+ * would otherwise be what the Library's carousel showed.
  */
-data class Peek(val at: Int = -1) {
+data class Peek(val at: Int = -1, val of: PeekOf = PeekOf.DECK) {
     val open: Boolean get() = at >= 0
 }
+
+/** One fact the carousel's sheet states, and whether it is a bad one. */
+data class PeekTag(val text: String, val bad: Boolean = false)
+
+/**
+ * One card, as the carousel's sheet needs it.
+ *
+ * Both runs flatten to this so the sheet asks one shape its
+ * questions rather than asking two and having to agree with itself.
+ *
+ * `inDeck` is the row when the carousel is over a deck and null when
+ * it is over the Library — and it is what the Count, Swap and Remove
+ * buttons hang off, rather than an `admin` flag, because being admin
+ * in the Library still leaves nothing to count.
+ */
+data class PeekCard(
+    val title: String,
+    val nameNorm: String,
+    val scryfallId: String?,
+    val typeLine: String?,
+    /** "M3C · 409", or null for a card with no printing to name. */
+    val printing: String?,
+    val price: Double?,
+    val tags: List<PeekTag>,
+    val inDeck: DeckCard? = null,
+)
 
 data class DeckCard(
     val name: String,
