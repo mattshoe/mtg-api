@@ -30,6 +30,18 @@ data class AppState(
     val rename: RenameState? = null,
     /** Where the card carousel is over an open deck. See [peekAt]. */
     val peek: Peek = Peek(),
+    /**
+     * Whose collection is on screen, as an **owner slug**.
+     *
+     * Not the key. `Route.collection` is the key, which is what an
+     * address carries and what somebody pastes into a chat; this is
+     * what `cards.owner` holds, and the two are joined by a lookup —
+     * `GET /c/:key`. Keeping them apart is what stops an address
+     * from ever being mistaken for permission.
+     *
+     * Empty means nobody named a collection — see [viewing].
+     */
+    val resolvedCollection: String = "",
     /** What is on top, and therefore what back closes. */
     val overlays: Overlays = Overlays(),
     /** Set when a share arrived and has not been used yet. */
@@ -142,6 +154,58 @@ data class AppState(
 
     val previousCard: DeckCard? get() = cardAt.takeIf { it > 0 }?.let { deckRun[it - 1] }
     val nextCard: DeckCard? get() = cardAt.takeIf { it in 0 until deckRun.size - 1 }?.let { deckRun[it + 1] }
+
+    // ------------------------------------------------ whose collection
+
+    /**
+     * The collection on screen.
+     *
+     * The address wins, because a public collection having an address
+     * is the whole point of it. Otherwise it is your own — which is
+     * the bit that was missing, and why somebody signed in was being
+     * shown everybody's decks at once.
+     *
+     * Empty for a visitor who has named nobody: every collection, the
+     * way it has always been for somebody who has not said who they
+     * are.
+     */
+    val viewing: String
+        get() = resolvedCollection.ifEmpty { admin.account?.slug.orEmpty() }
+
+    /**
+     * Where to send somebody who arrived without naming a collection.
+     *
+     * Their own, with its key in the address, so the link in the bar
+     * is one they can copy and hand to somebody else. Null when there
+     * is nothing to do: nobody signed in, or an address that already
+     * names a collection — being bounced off a shared link onto your
+     * own is exactly what makes a shared link worthless.
+     */
+    fun homeRoute(): Route? {
+        if (route.collection.isNotEmpty()) return null
+        val key = admin.account?.key?.takeIf { it.isNotEmpty() } ?: return null
+        return route.copy(collection = key)
+    }
+
+    /** Look at somebody's collection. Theirs or anybody's. */
+    fun browsing(slug: String): AppState = copy(resolvedCollection = slug)
+
+    /**
+     * May you change what is on screen?
+     *
+     * About *this* collection and no other. It used to ask
+     * `admin.unlocked` — "are you unlocked" — which a stored password
+     * answered yes for everybody's cards, so the edit buttons were on
+     * Kayla's decks too. The server never allowed the write; the app
+     * was offering it.
+     */
+    val canEdit: Boolean get() = admin.account?.owns(viewing) == true
+
+    /** The Library, scoped to the collection being looked at. */
+    fun scopedLibrary(): Library =
+        viewing.takeIf { it.isNotEmpty() }
+            ?.let { library.copy(filters = library.filters.copy(owner = it)) }
+            ?: library
 
     // --------------------------------------------------- the carousel
 
@@ -534,6 +598,9 @@ object Load {
     fun library(s: Library): Pair<Sql, Sql> = s.queries()
 
     fun decks(): Sql = DeckQueries.all()
+
+    /** The decks of one collection. */
+    fun decks(owner: String): Sql = DeckQueries.all(owner)
 
     fun deck(slug: String): Sql = DeckQueries.cards(slug)
 

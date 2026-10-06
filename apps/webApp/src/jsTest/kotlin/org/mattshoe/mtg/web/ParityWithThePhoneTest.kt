@@ -6,6 +6,7 @@ import kotlinx.browser.window
 import kotlinx.coroutines.await
 import kotlinx.coroutines.test.runTest
 import org.jetbrains.compose.web.renderComposable
+import org.mattshoe.mtg.core.Account
 import org.mattshoe.mtg.core.Admin
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.Deck
@@ -84,7 +85,10 @@ class ParityWithThePhoneTest {
     /** In page order: grouped by type, sorted by name inside a group. */
     private val run = listOf(card("Counterspell"), card("Cultivate"), card("Sol Ring", qty = 2))
 
-    private fun onADeck() = AppState(admin = Admin(token = "t").unlock("t"))
+    // Signed in as the owner of this deck: Count, Swap and Remove ask
+    // whether you own *this* collection now, not whether you hold a
+    // password.
+    private fun onADeck() = AppState(admin = Admin().signIn(Account("matt"), "t"))
         .navigate(Route(View.DECKS, "alela"))
         .let {
             it.copy(
@@ -252,7 +256,7 @@ class ParityWithThePhoneTest {
 
     private fun inTheLibrary(): AppState {
         val rows = listOf(row("Sol Ring"), row("Counterspell"))
-        return AppState(admin = Admin(token = "t").unlock("t")).navigate(View.LIBRARY)
+        return AppState(admin = Admin().signIn(Account("matt"), "t")).navigate(View.LIBRARY)
             .let { it.copy(library = it.library.loaded(rows, rows.size)) }
     }
 

@@ -164,7 +164,12 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(incoming)
         // So `intent` is the new one for anything that reads it later.
         setIntent(incoming)
-        if (followLink(incoming)) loadFor(app)
+        if (followLink(incoming)) {
+            // The link may name somebody's collection, and which
+            // collection decides what every query asks for.
+            resolveCollection()
+            loadFor(app)
+        }
     }
 
     /**
@@ -253,6 +258,32 @@ class MainActivity : ComponentActivity() {
      * token if it does not, and nothing at all if it has lapsed —
      * and only the server can tell those apart.
      */
+    /**
+     * The key in a link, turned into whose collection it is.
+     *
+     * A shared address carries a key and `cards.owner` holds a slug,
+     * and only the server knows which is which — which is the point:
+     * an address names a collection and says nothing about who may
+     * edit it. Without this, a link somebody sent opened the reader's
+     * own collection, which is the thing a link is for not doing.
+     */
+    private fun resolveCollection() {
+        val key = app.route.collection
+        if (key.isEmpty()) {
+            app = app.browsing("")
+            return
+        }
+        scope.launch {
+            val found = runCatching { api.collection(key) }.getOrNull()
+            if (found == null) {
+                app = app.say("no collection at that address", failed = true)
+                return@launch
+            }
+            app = app.browsing(found.slug)
+            loadFor(app)
+        }
+    }
+
     private fun restoreAccount() {
         val held = app.admin.token
         if (held.isNullOrBlank()) return
@@ -299,6 +330,7 @@ class MainActivity : ComponentActivity() {
             // alongside the first fetch rather than in front of it —
             // the app is useful to somebody who is not signed in.
             restoreAccount()
+            resolveCollection()
             // A link that started the app decides where it opens,
             // before the first fetch, so nothing is read for the
             // Library and then thrown away for the deck.
@@ -618,7 +650,10 @@ class MainActivity : ComponentActivity() {
     }
 
     private suspend fun search(): AppState {
-        val (page, count) = Load.library(app.library)
+        // Scoped to the collection on screen, which is your own
+        // unless the address names somebody else's. Unscoped, a
+        // search returned every collection's cards at once.
+        val (page, count) = Load.library(app.scopedLibrary())
         val rows = api.query(page)
         val total = api.query(count)
         return app.copy(
@@ -627,7 +662,8 @@ class MainActivity : ComponentActivity() {
     }
 
     private suspend fun loadDecks(): AppState {
-        val r = api.query(DeckQueries.all())
+        // One collection's decks, not every deck in the database.
+        val r = api.query(DeckQueries.all(app.viewing))
         return app.copy(decks = app.decks.loaded(DeckQueries.decode(r.cols, r.rows)))
     }
 

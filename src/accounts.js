@@ -15,6 +15,44 @@
 
 const enc = new TextEncoder();
 
+/**
+ * Crockford's alphabet, less the letters people mistype.
+ *
+ * No i, l, o or u: the first three read as 1, 1 and 0 off a screen,
+ * and leaving out u means a random key cannot spell anything
+ * unfortunate. Eight characters of this is 32^8 — a thousand billion
+ * — which is not a thing anybody enumerates.
+ */
+const KEY_ALPHABET = '0123456789abcdefghjkmnpqrstvwxyz';
+const KEY_LENGTH = 8;
+
+/**
+ * The public identifier a collection is shared by.
+ *
+ * In the address, so a link somebody pastes into a chat opens *their*
+ * collection rather than whatever the reader's own happens to be.
+ * Not derived from the name: two people called Matt would collide,
+ * and a guessable address is a poor thing to hand out.
+ *
+ * It identifies and never authorises. Nothing anywhere asks whether a
+ * request carries the right key — editing asks who the session says
+ * you are, which an address cannot say.
+ */
+function newKey() {
+  const bytes = crypto.getRandomValues(new Uint8Array(KEY_LENGTH));
+  return [...bytes].map((b) => KEY_ALPHABET[b % KEY_ALPHABET.length]).join('');
+}
+
+/** A key nobody is using yet. */
+async function freeKey(db) {
+  for (let tries = 0; tries < 10; tries += 1) {
+    const key = newKey();
+    const taken = await db.prepare('SELECT 1 FROM users WHERE key = ?1').bind(key).first();
+    if (!taken) return key;
+  }
+  throw new Error('could not find a free collection key');
+}
+
 /** How long a session lasts without being used again. */
 const SESSION_DAYS = 90;
 
@@ -107,10 +145,10 @@ export async function signIn(db, { provider, subject, email = null, name = null,
 
   const slug = await freeSlug(db, name || email || 'player');
   const user = await db.prepare(
-    `INSERT INTO users (slug, display_name, email, avatar_url, role, created_at)
-     VALUES (?1, ?2, ?3, ?4, 'user', datetime('now'))
+    `INSERT INTO users (key, slug, display_name, email, avatar_url, role, created_at)
+     VALUES (?1, ?2, ?3, ?4, ?5, 'user', datetime('now'))
      RETURNING *`,
-  ).bind(slug, name, email, avatar).first();
+  ).bind(await freeKey(db), slug, name, email, avatar).first();
   await db.prepare(
     'INSERT INTO identities (provider, subject, user_id, created_at) VALUES (?1, ?2, ?3, datetime(\'now\'))',
   ).bind(provider, String(subject), user.id).run();
@@ -206,10 +244,31 @@ export function canEdit(who, ownerSlug) {
   return Boolean(ownerSlug) && who?.user?.slug === ownerSlug;
 }
 
+/**
+ * What anybody is allowed to know about a collection they found the
+ * address of. A public address is not an inbox: no email.
+ */
+export async function collectionByKey(db, key) {
+  if (!key) return null;
+  const row = await db.prepare(
+    'SELECT key, slug, display_name, avatar_url FROM users WHERE key = ?1',
+  ).bind(String(key)).first();
+  if (!row) return null;
+  return {
+    key: row.key,
+    slug: row.slug,
+    name: row.display_name,
+    avatar: row.avatar_url,
+  };
+}
+
 /** What a caller is allowed to know about themselves. */
 export function profileOf(user) {
-  if (!user) return { slug: null, name: null, email: null, avatar: null, role: null };
+  if (!user) {
+    return { key: null, slug: null, name: null, email: null, avatar: null, role: null };
+  }
   return {
+    key: user.key,
     slug: user.slug,
     name: user.display_name,
     email: user.email,

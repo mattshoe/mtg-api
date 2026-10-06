@@ -644,7 +644,9 @@ object MtgApp {
     }
 
     private suspend fun search(s: AppState): AppState {
-        val (page, count) = Load.library(s.library)
+        // Scoped to the collection on screen, which is your own
+        // unless the address names somebody else's.
+        val (page, count) = Load.library(s.scopedLibrary())
         val rows = api.query(page)
         val total = api.query(count)
         return app.copy(
@@ -664,7 +666,8 @@ object MtgApp {
      * watch it.
      */
     private suspend fun loadDecks(): AppState {
-        val r = api.query(DeckQueries.all())
+        // One collection's decks, not every deck in the database.
+        val r = api.query(DeckQueries.all(app.viewing))
         return app.copy(decks = app.decks.loaded(DeckQueries.decode(r.cols, r.rows)))
     }
 
@@ -752,7 +755,47 @@ object MtgApp {
     private fun loadAccount() {
         scope.launch {
             val who = runCatching { fetchAccount() }.getOrNull()
-            app = app.copy(admin = if (who == null) app.admin else app.admin.signIn(who))
+            if (who != null) app = app.copy(admin = app.admin.signIn(who))
+            // Arrived without naming a collection? Go to your own, and
+            // put its key in the address — so the link in the bar is
+            // one that can be copied and handed to somebody else.
+            // Replaced rather than pushed: it is where you already
+            // are, not somewhere you went, so Back must not come back
+            // to the address you are being moved off.
+            app.homeRoute()?.let { home ->
+                window.history.replaceState(null, "", home.toHash())
+                app = app.copy(route = home)
+            }
+            resolveCollection()
+        }
+    }
+
+    /**
+     * The key in the address, turned into whose collection it is.
+     *
+     * `cards.owner` holds a slug and an address holds a key, and only
+     * the server knows which is which — which is the point: an
+     * address names a collection and says nothing at all about who
+     * may edit it.
+     */
+    private fun resolveCollection() {
+        val key = app.route.collection
+        if (key.isEmpty()) {
+            app = app.browsing("")
+            return
+        }
+        scope.launch {
+            val res = runCatching {
+                window.fetch("${MtgApi.DEFAULT_BASE}/c/$key").await()
+            }.getOrNull()
+            if (res == null || !res.ok) {
+                app = app.say("no collection at that address", failed = true)
+                return@launch
+            }
+            val body = res.json().await().asDynamic()
+            val slug = body.slug as? String ?: return@launch
+            app = app.browsing(slug)
+            loadFor(app)
         }
     }
 

@@ -22,6 +22,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mattshoe.mtg.android.Parity.shoot
+import org.mattshoe.mtg.core.Account
 import org.mattshoe.mtg.core.Admin
 import org.mattshoe.mtg.core.CardRef
 import org.mattshoe.mtg.core.CardRow
@@ -85,7 +86,9 @@ class DeckCardCarouselParityTest {
     private val run = listOf(card("Counterspell"), card("Cultivate"), card("Sol Ring", qty = 2))
 
     private fun onADeck(admin: Boolean = true): AppState {
-        val base = AppState(admin = if (admin) Admin(token = "t").unlock("t") else Admin())
+        // Signed in as the deck's own owner: the sheet's Count, Swap
+        // and Remove ask whether you own this collection.
+        val base = AppState(admin = if (admin) Admin().signIn(Account("matt"), "t") else Admin())
         return base.navigate(Route(View.DECKS, "alela")).let {
             it.copy(
                 decks = it.decks
@@ -318,7 +321,7 @@ class DeckCardCarouselParityTest {
 
     private fun inTheLibrary(): AppState {
         val rows = listOf(row("Sol Ring"), row("Counterspell"))
-        return AppState(admin = Admin(token = "t").unlock("t")).navigate(View.LIBRARY)
+        return AppState(admin = Admin().signIn(Account("matt"), "t")).navigate(View.LIBRARY)
             .let { it.copy(library = it.library.loaded(rows, rows.size)) }
     }
 

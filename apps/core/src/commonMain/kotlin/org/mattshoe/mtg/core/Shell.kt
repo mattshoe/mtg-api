@@ -66,7 +66,21 @@ enum class View(
 }
 
 /** A parsed route: which view, what after it, and any query string. */
-data class Route(val view: View, val rest: String = "", val query: String = "") {
+data class Route(
+    val view: View,
+    val rest: String = "",
+    val query: String = "",
+    /**
+     * Whose collection this address names, by its public key.
+     *
+     * Empty for every link that existed before keys did, which still
+     * work and still mean "whatever collection the reader is looking
+     * at". A link worth sharing is not one of those — Matt: "if i
+     * copy the url then they'll just go to their own fucking
+     * collection" — which is what this segment is for.
+     */
+    val collection: String = "",
+) {
 
     /** `#/decks/alela` rather than `#/decks`. */
     val namesADeck: Boolean get() = view == View.DECKS && rest.isNotEmpty()
@@ -75,7 +89,9 @@ data class Route(val view: View, val rest: String = "", val query: String = "") 
     val namesACard: Boolean get() = view == View.CARD && rest.isNotEmpty()
 
     fun toHash(): String = buildString {
-        append("#/").append(view.slug)
+        append("#/")
+        if (collection.isNotEmpty()) append("c/").append(collection).append('/')
+        append(view.slug)
         if (rest.isNotEmpty()) append('/').append(rest)
         if (query.isNotEmpty()) append('?').append(query)
     }
@@ -91,10 +107,16 @@ data class Route(val view: View, val rest: String = "", val query: String = "") 
             val raw = hash.orEmpty().removePrefix("#").removePrefix("/")
             val path = raw.substringBefore('?')
             val query = raw.substringAfter('?', "")
-            val parts = path.split('/').filter { it.isNotEmpty() }
+            val all = path.split('/').filter { it.isNotEmpty() }
+            // `c/<key>` in front, when there is one. Everything after
+            // it is the address it has always been, so a collection
+            // can be put in front of any link without touching what
+            // the link means.
+            val collection = if (all.firstOrNull() == "c") all.getOrNull(1).orEmpty() else ""
+            val parts = if (collection.isEmpty()) all else all.drop(2)
             val head = parts.firstOrNull()
             val view = View.of(head) ?: View.MOVED[head] ?: View.DEFAULT
-            return Route(view, parts.drop(1).joinToString("/"), query)
+            return Route(view, parts.drop(1).joinToString("/"), query, collection)
         }
     }
 }
@@ -124,6 +146,12 @@ data class Account(
     val name: String? = null,
     val avatar: String? = null,
     val role: String = "user",
+    /**
+     * The public identifier the collection is shared by, which is
+     * what goes in an address. Never what decides whether anybody may
+     * edit it: that is the session's business.
+     */
+    val key: String = "",
 ) {
     val isOperator: Boolean get() = role == "admin"
 

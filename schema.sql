@@ -298,6 +298,11 @@ WHERE cu.in_decks > cu.owned;
 -- role at all, and 'admin' is for the log and the maintenance job.
 CREATE TABLE users (
   id            INTEGER PRIMARY KEY,
+  -- The public identifier a collection is shared by, in the address.
+  -- Random rather than derived from the name: two people called Matt
+  -- would collide, and a guessable address is a poor thing to hand
+  -- out. It identifies and never authorises.
+  key           TEXT NOT NULL UNIQUE,
   slug          TEXT NOT NULL UNIQUE,
   display_name  TEXT,
   email         TEXT,
