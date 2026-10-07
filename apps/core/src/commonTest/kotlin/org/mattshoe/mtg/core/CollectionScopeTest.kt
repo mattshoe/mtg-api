@@ -59,20 +59,22 @@ class CollectionScopeTest {
     }
 
     @Test
-    fun thePasswordDoesNotMakeKaylasCollectionYours() {
-        // The actual complaint. A held password answered "unlocked"
-        // for every collection there is, and the buttons asked
-        // nothing else.
-        val withPassword = AppState(admin = Admin(token = "pw").unlock("pw"))
-        assertTrue(withPassword.admin.unlocked, "the fixture is not holding a password")
-        assertFalse(withPassword.browsing("kayla").canEdit)
-        assertFalse(withPassword.browsing("matt").canEdit)
+    fun aRoleDoesNotMakeKaylasCollectionYours() {
+        // The actual complaint, and it outlived the password that
+        // caused it: being "unlocked" used to answer for every
+        // collection there is, and the buttons asked nothing else.
+        val operator = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "s"))
+        assertTrue(operator.admin.unlocked, "the fixture is not signed in")
+        assertFalse(operator.browsing("kayla").canEdit, "a role handed out somebody else's cards")
+        assertTrue(operator.browsing("matt").canEdit, "it cannot edit its own")
     }
 
     @Test
-    fun theServerRoleCanEditAnything() {
+    fun theServerRoleEditsNoCollectionButItsOwn() {
+        // The role unlocks the server log, not other people's cards.
         val ops = AppState(admin = Admin().signIn(matt.copy(role = "admin"), session = "s"))
-        assertTrue(ops.browsing("kayla").canEdit)
+        assertFalse(ops.browsing("kayla").canEdit)
+        assertTrue(ops.browsing(matt.slug).canEdit)
     }
 
     @Test

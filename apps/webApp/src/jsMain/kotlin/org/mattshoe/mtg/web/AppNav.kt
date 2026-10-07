@@ -13,7 +13,6 @@ import org.jetbrains.compose.web.dom.Nav
 import org.jetbrains.compose.web.dom.Span
 import org.jetbrains.compose.web.dom.Text
 import org.mattshoe.mtg.core.AppState
-import org.mattshoe.mtg.core.Overlay
 
 /**
  * The menu, in the header.
@@ -154,15 +153,9 @@ fun AppNav(
                 state.admin.account?.avatar?.takeIf { it.isNotBlank() }
                     ?.let { Img(src = it, alt = "", attrs = { classes("app-avatar") }) }
                 Div {
-                    Text(
-                        state.admin.shownName
-                            ?: if (state.admin.unlocked) "Admin" else "Not signed in",
-                    )
+                    Text(state.admin.shownName ?: "Not signed in")
                     Span(attrs = { classes("app-who-slug") }) {
-                        Text(
-                            state.admin.account?.let { "/c/${it.slug}" }
-                                ?: if (state.admin.unlocked) "Everything is editable" else "Read only",
-                        )
+                        Text(state.admin.account?.let { "/c/${it.slug}" } ?: "Read only")
                     }
                 }
             }
@@ -181,9 +174,12 @@ fun AppNav(
                 }) { Text(view.label) }
             }
 
-            // "Log out", not "Sign out": the phone says "Log out" and
-            // the row above says "Not signed in", so one word for one
-            // thing across both. Matt: "Change lock to log out".
+            // One button, because there is one way in. There was a
+            // second beneath it for the operator's password — a shared
+            // secret that could write to anybody's cards — and an app
+            // offering both was offering two ways to be somebody, one
+            // of which was a way to be everybody. Matt: "Why the FUCK
+            // would you have log in AND sign in with Google?!"
             Button(attrs = {
                 classes("app-tab", "app-lock")
                 onClick {
@@ -191,23 +187,6 @@ fun AppNav(
                     if (state.admin.signedIn) onSignOut() else onSignIn()
                 }
             }) { Text(if (state.admin.signedIn) "Log out" else "Sign in with Google") }
-
-            // The operator's own way in, and only while nobody is
-            // signed in: a password is not an account and offering
-            // both at once reads as two ways to be the same thing.
-            if (!state.admin.signedIn) {
-                Button(attrs = {
-                    classes("app-tab", "app-lock")
-                    onClick {
-                        shown = null
-                        if (state.admin.unlocked) {
-                            onState(state.copy(admin = state.admin.lock()).navigate(state.route))
-                        } else {
-                            onState(state.opening(Overlay.UNLOCK))
-                        }
-                    }
-                }) { Text(if (state.admin.unlocked) "Log out" else "Log in") }
-            }
         }
     }
 }

@@ -66,53 +66,66 @@ class ShellTest {
     }
 
     @Test
-    fun unlockedShowsThemAll() {
-        val open = Admin().unlock("0.abc")
-        assertTrue(open.unlocked)
-        assertEquals(5, open.visible.size)
-        assertTrue(open.reachable(View.LOGS))
+    fun signedInShowsTheFour() {
+        // Four, not five: the log needs a role, and a fresh account
+        // has none. Matt hands those out.
+        val me = Admin().signIn(Account(slug = "matt"), "s")
+        assertTrue(me.unlocked)
+        assertEquals(4, me.visible.size)
+        assertFalse(me.reachable(View.LOGS))
+        assertTrue(me.reachable(View.ENTRY))
+    }
+
+    @Test
+    fun andAnOperatorSeesTheLogAsWell() {
+        val op = Admin().signIn(Account(slug = "matt", role = "admin"), "s")
+        assertEquals(5, op.visible.size)
+        assertTrue(op.reachable(View.LOGS))
     }
 
     /** A bookmark to a gated view while locked must not render a dead shell. */
     @Test
     fun aGatedRouteBouncesWhileLocked() {
-        assertEquals(View.LIBRARY, Admin().land(Route.parse("#/entry")).view)
-        assertEquals(View.ENTRY, Admin().unlock("t").land(Route.parse("#/entry")).view)
+        assertEquals(View.LIBRARY, Admin().settle().land(Route.parse("#/entry")).view)
+        assertEquals(View.ENTRY, Admin().signIn(Account(slug = "matt"), "s").land(Route.parse("#/entry")).view)
     }
 
     @Test
     fun bouncingKeepsTheQueryStringSoNothingTypedIsLost() {
-        assertEquals("q=bolt", Admin().land(Route.parse("#/entry?q=bolt")).query)
+        assertEquals("q=bolt", Admin().settle().land(Route.parse("#/entry?q=bolt")).query)
     }
 
     @Test
-    fun anEmptyTokenIsNotUnlocked() {
+    fun aTokenWithNoAccountBehindItIsNotUnlocked() {
+        // It used to be the whole of being unlocked: a shared password
+        // that could write to anybody's cards. Only `signIn` sets a
+        // token now, so one arriving any other way proves nothing.
         assertFalse(Admin("").unlocked)
-        assertFalse(Admin("   ").unlocked)
+        assertFalse(Admin("0.abc").unlocked)
     }
 
     @Test
-    fun lockingForgetsTheToken() {
-        assertFalse(Admin().unlock("0.abc").lock().unlocked)
+    fun signingOutForgetsTheSession() {
+        assertFalse(Admin().signIn(Account(slug = "matt"), "s").signOut().unlocked)
     }
 
     /**
-     * `Admin.lock()` only ever cleared the copy in memory — reload the
-     * page or restart the app and the token in `localStorage` or
+     * Signing out only ever cleared the copy in memory — reload the
+     * page or restart the app and the session in `localStorage` or
      * `SharedPreferences` brought you right back in. Both platforms now
      * route every write through `AdminToken.sync`, so this is the test
      * that the *persisted* copy is gone, not just the flag in memory.
      */
     @Test
-    fun lockingClearsWhatWasStoredNotJustTheFlag() {
+    fun signingOutClearsWhatWasStoredNotJustTheFlag() {
         val store = Store.inMemory()
         val anon = Admin()
-        val unlocked = anon.unlock("0.abc")
-        AdminToken.sync(store, anon, unlocked)
-        assertEquals("0.abc", store.get(AdminToken.KEY), "unlocking should have written the token")
+        val signedIn = anon.signIn(Account(slug = "matt"), "0.abc")
+        AdminToken.sync(store, anon, signedIn)
+        assertEquals("0.abc", store.get(AdminToken.KEY), "signing in should have written the session")
 
-        val locked = unlocked.lock()
-        AdminToken.sync(store, unlocked, locked)
+        val out = signedIn.signOut()
+        AdminToken.sync(store, signedIn, out)
         assertEquals(
             null,
             store.get(AdminToken.KEY),
@@ -131,33 +144,14 @@ class ShellTest {
         // update that leaves the token alone — opening a dialog,
         // navigating — must not disturb what is already stored.
         val store = Store.inMemory()
-        val unlocked = Admin().unlock("0.abc")
-        AdminToken.sync(store, Admin(), unlocked)
-        AdminToken.sync(store, unlocked, unlocked.tries())
+        val signedIn = Admin().signIn(Account(slug = "matt"), "0.abc")
+        AdminToken.sync(store, Admin(), signedIn)
+        AdminToken.sync(store, signedIn, signedIn.copy(settled = true))
         assertEquals("0.abc", store.get(AdminToken.KEY))
     }
 }
 
-/** The password goes to the server once per press, not once per frame. */
-class UnlockInFlightTest {
-
-    @Test
-    fun aLockedAdminWillTryAPassword() {
-        assertTrue(Admin().canTry, "it refused to try at all")
-    }
-
-    @Test
-    fun butNotASecondTimeWhileTheFirstIsOut() {
-        assertFalse(Admin().tries().canTry, "it offered to send the password again")
-    }
-
-    @Test
-    fun aTokenBackEndsTheAttempt() {
-        assertFalse(Admin().tries().unlock("t").trying, "it is still saying it is trying")
-    }
-
-    @Test
-    fun soDoesABadPassword() {
-        assertTrue(Admin().tries().gaveUp().canTry, "a wrong password locked the button out for good")
-    }
-}
+// `UnlockInFlightTest` was here — four tests over "the password is in
+// flight, do not send it again". There is no password to send: you
+// sign in with Google, and the one button that starts it leaves the
+// page.

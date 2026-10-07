@@ -21,6 +21,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mattshoe.mtg.core.Account
 import org.mattshoe.mtg.core.Admin
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.Deck
@@ -91,7 +92,7 @@ class TweakSheetIsADialogTest {
     /** A deck, open, read the way the app reads one. */
     private fun opened() = AppState(
         route = Route(View.DECKS, "alela"),
-        admin = Admin(token = "t"),
+        admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"),
         decks = DecksState().loaded(listOf(deck())).opened(
             "alela",
             listOf(card("Alela, Artful Provocateur", "commander"), card("Sol Ring")),
@@ -166,7 +167,6 @@ class TweakSheetIsADialogTest {
                     AppShell(
                         state = live,
                         onState = { held.value = it; state = it },
-                        onUnlock = {},
                         onSearch = {},
                         onOpenDeck = {},
                         onPreviewEntry = {},

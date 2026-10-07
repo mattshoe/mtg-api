@@ -15,6 +15,7 @@ import kotlinx.serialization.json.Json
 import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mattshoe.mtg.core.Account
 import org.mattshoe.mtg.core.Admin
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.Filters
@@ -159,7 +160,7 @@ class ConfigChangeKeepsStateTest {
     fun theUnlockSurvivesARotation() {
         val built = launch()
         built.get().setStateForTesting(
-            built.get().stateForTesting().copy(admin = Admin(token = "t").unlock("t")),
+            built.get().stateForTesting().copy(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")),
         )
         settle()
 

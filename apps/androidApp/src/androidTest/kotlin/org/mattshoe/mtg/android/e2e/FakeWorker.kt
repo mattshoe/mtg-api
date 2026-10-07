@@ -46,8 +46,19 @@ internal class FakeWorker private constructor(
     /** Every statement the app has sent, in order, for assertions about load. */
     val statements = mutableListOf<String>()
 
-    /** The password `/admin` accepts. Anything else is a 401. */
-    var password: String = "open-sesame"
+    /**
+     * The session `/auth/me` recognises. Anything else is a 401.
+     *
+     * There was a password here and an `/admin` route that traded it
+     * for a token. The apps have no password: you sign in with
+     * Google, which an emulator cannot do, and what the phone
+     * actually does on launch is present a stored session and ask who
+     * it belongs to. That is the part a journey can drive honestly.
+     */
+    var session: String = "s-matt"
+
+    /** Who that session is, as the server would answer. */
+    var whoAmI: String = "matt"
 
     /** The token it hands back. */
     var token: String = "e2e-token"
@@ -71,7 +82,7 @@ internal class FakeWorker private constructor(
         val body = request.body.readUtf8()
         return when (path) {
             "/query" -> query(body)
-            "/admin" -> admin(body)
+            "/auth/me" -> me(request.headers["Authorization"])
             // Not served, and loudly rather than quietly: a journey
             // that reaches one of these is a journey this harness
             // cannot honestly run yet, and a silent empty answer
@@ -80,10 +91,21 @@ internal class FakeWorker private constructor(
         }
     }
 
-    private fun admin(body: String): MockResponse {
-        val said = runCatching { JSONObject(body).optString("password") }.getOrDefault("")
-        if (said != password) return fail(401, "wrong password")
-        return ok(JSONObject().put("token", token))
+    /**
+     * Who the session is. The phone asks this on every launch, and
+     * until it answers the gated screens are held rather than
+     * bounced.
+     */
+    private fun me(authorization: String?): MockResponse {
+        val held = authorization.orEmpty().removePrefix("Bearer ").trim()
+        if (held != session) return fail(401, "no session")
+        return ok(
+            JSONObject()
+                .put("slug", whoAmI)
+                .put("name", whoAmI.replaceFirstChar(Char::uppercase))
+                .put("role", "user")
+                .put("key", "e7de0cb1"),
+        )
     }
 
     private fun query(body: String): MockResponse {

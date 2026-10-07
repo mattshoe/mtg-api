@@ -42,13 +42,10 @@ class AccountTest {
         assertEquals("matt", s.account?.slug)
     }
 
-    @Test
-    fun theOperatorsPasswordStillUnlocksWithoutAnAccount() {
-        // The phone has no sign-in yet and the scripts never will.
-        val s = Admin(token = "t").unlock("t")
-        assertTrue(s.unlocked)
-        assertFalse(s.signedIn, "a password is not an account")
-    }
+    // `theOperatorsPasswordStillUnlocksWithoutAnAccount` was here.
+    // There is no password in the apps any more: one shared secret
+    // that could write to anybody's cards is the thing accounts
+    // replaced. `OneWayInTest` is where that is nailed down.
 
     @Test
     fun theSessionIsTheBearerEveryWriteAlreadySends() {
@@ -70,7 +67,7 @@ class AccountTest {
 
     @Test
     fun signingOutTakesBothAway() {
-        val s = Admin(token = "t").unlock("t").signIn(me).signOut()
+        val s = Admin().signIn(me, "t").signOut()
         assertFalse(s.signedIn)
         assertFalse(s.unlocked)
         assertEquals(null, s.account)
@@ -115,8 +112,14 @@ class AccountTest {
     }
 
     @Test
-    fun theOperatorOwnsEverybodys() {
+    fun theOperatorOwnsNoMoreThanAnybodyElse() {
+        // It used to own everybody's. The role is for running the
+        // server — the log, the nightly job — and Matt: "NOBODY GETS
+        // FUCKING ADMIN PERMISSIONS!!!!!! YOU JUST GET TO MODIFY YOUR
+        // OWN FUCKING CARDS BY DEFAULT!!!!!"
         val ops = me.copy(role = "admin")
-        assertTrue(ops.owns("kayla"), "the server role is what the log and the nightly job need")
+        assertTrue(ops.isOperator, "the role itself is gone")
+        assertTrue(ops.owns(me.slug))
+        assertFalse(ops.owns("kayla"), "a role handed out somebody else's cards")
     }
 }

@@ -15,7 +15,9 @@ enum class Overlay {
     DECK_EDIT,
     DECK_TWEAK,
     DISASSEMBLE,
-    UNLOCK,
+    // UNLOCK was here: a password box, for a shared secret that could
+    // write to anybody's cards. Accounts replaced it and it had no
+    // business outliving them.
     NEW_DECK,
     RENAME,
 

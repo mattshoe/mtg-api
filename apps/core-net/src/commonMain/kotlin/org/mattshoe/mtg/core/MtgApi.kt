@@ -173,16 +173,12 @@ class MtgApi internal constructor(
         val role: String? = null,
     )
 
-    /** Password in, token out. The password is never kept. */
-    suspend fun unlock(password: String): String {
-        val res = http.post("$base/admin") {
-            contentType(ContentType.Application.Json)
-            setBody(UnlockRequest(password))
-        }
-        val body: Unlocked = res.decode()
-        if (body.token.isEmpty()) throw ApiFailure("the server sent back no token")
-        return body.token
-    }
+    // `unlock(password)` was here: one shared secret exchanged for a
+    // token that could write to anybody's cards. Neither app has a
+    // password box any more — you sign in with Google — and the
+    // nightly scripts talk to the Worker over plain HTTP in Python,
+    // so nothing in Kotlin needed it.
+
 
     /**
      * Add or remove, previewed or committed.

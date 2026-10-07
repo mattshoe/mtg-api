@@ -30,6 +30,8 @@ enum class View(
      * leaving it to whoever adds the next one.
      */
     val bar: Boolean = true,
+    /** Whether it needs a role and not merely an account. */
+    val operator: Boolean = false,
 ) {
     LIBRARY("search", "Library"),
     DECKS("decks", "Decks"),
@@ -37,7 +39,16 @@ enum class View(
     // "Mass Entry" wrapped onto two lines under an icon. The screen
     // is unchanged; only what the bar calls it.
     ENTRY("entry", "Entry", gated = true),
-    LOGS("logs", "Server Logs", gated = true, bar = false),
+    /**
+     * Running the server, not owning cards.
+     *
+     * `operator = true` is the difference between the two gates: Entry
+     * needs an account, this needs a role, and nobody has a role
+     * unless Matt hands them one. "NOBODY GETS FUCKING ADMIN
+     * PERMISSIONS!!!!!! YOU JUST GET TO MODIFY YOUR OWN FUCKING CARDS
+     * BY DEFAULT!!!!!"
+     */
+    LOGS("logs", "Server Logs", gated = true, bar = false, operator = true),
 
     /**
      * One card, as its own destination.
@@ -169,15 +180,30 @@ data class Account(
     /** What to call them. A Google account can arrive with no name on it. */
     val shownName: String get() = name?.takeIf { it.isNotBlank() } ?: slug
 
-    /** Whether this account may edit that collection. */
+    /**
+     * Whether this account may edit that collection. Its own, and no
+     * other.
+     *
+     * A role used to be enough for anybody's — `isOperator ||` — while
+     * the comment on [role] said a role is about running the server
+     * and not about owning cards. The comment was right: an operator
+     * with edit buttons on Kayla's deck is the thing Matt has already
+     * been angry about once, with one extra step in front of it.
+     */
     fun owns(collection: String): Boolean =
-        isOperator || (collection.isNotEmpty() && collection == slug)
+        collection.isNotEmpty() && collection == slug
 }
 
 data class Admin(
+    /**
+     * The session, and only ever a session.
+     *
+     * It used to be either a session or the operator's password, and
+     * the password could write to anybody's cards — the thing
+     * accounts replaced. Only [signIn] sets this now, so a token
+     * arriving from anywhere else proves nothing and unlocks nothing.
+     */
     val token: String? = null,
-    /** A password already gone to the server and not yet answered. */
-    val trying: Boolean = false,
     /** Who is signed in, if anybody. */
     val account: Account? = null,
     /**
@@ -206,20 +232,24 @@ data class Admin(
     /**
      * Whether this app may offer to change anything.
      *
-     * An account, or the operator's password — the nightly job holds
-     * one of those and the phone has nothing else yet.
+     * Being signed in, and nothing else. There was a shared password
+     * beside it — one secret that could write to anybody's cards —
+     * and an app offering both was offering two ways to be somebody,
+     * one of which was a way to be everybody.
      *
      * Only an affordance. "Only the collection's owner may edit that
      * collection" is the server's rule and the server keeps it; what
-     * this decides is whether to draw the button.
+     * this decides is whether to draw the button. `AppState.canEdit`
+     * is the one that knows *whose* collection is on screen.
      */
-    val unlocked: Boolean get() = signedIn || !token.isNullOrBlank()
-
-    /** Offered once, until the server has said something back. */
-    val canTry: Boolean get() = !trying
+    val unlocked: Boolean get() = signedIn
 
     /** Which views are reachable right now. */
-    fun reachable(view: View): Boolean = !view.gated || unlocked
+    fun reachable(view: View): Boolean = when {
+        view.operator -> account?.isOperator == true
+        view.gated -> signedIn
+        else -> true
+    }
 
     val visible: List<View> get() = View.entries.filter { it.inNav && reachable(it) }
 
@@ -234,24 +264,31 @@ data class Admin(
     /**
      * Everywhere the profile offers, which today is the server log.
      *
-     * Empty while locked, because there is nothing behind the
-     * profile but admin and the things admin unlocks.
+     * Empty for almost everybody: the log is the one screen that
+     * needs a role, and a role is Matt's to hand out.
      */
     val behindProfile: List<View> get() = visible.filter { !it.bar }
 
     /**
      * Where a route actually lands.
      *
-     * A bookmark or a back button can still point at a gated view while
-     * locked. It bounces to the default rather than rendering a shell
-     * that cannot do anything.
+     * A bookmark or a back button can still point at a gated view
+     * while nobody is signed in. It bounces to the default rather
+     * than rendering a shell that cannot do anything.
+     *
+     * Not until the server has answered, though. Asking who this
+     * session is takes a round trip, and bouncing on the way to the
+     * answer put you on the Library every time you opened a bookmark
+     * to `#/entry` — the same mistake as fetching before the answer:
+     * an unanswered question is not a "no". The shells re-land once
+     * [settled] turns true, so a route that really is out of reach
+     * still bounces, a moment later.
      */
-    fun land(route: Route): Route =
-        if (reachable(route.view)) route else Route(View.DEFAULT, query = route.query)
-
-    fun tries() = copy(trying = true)
-    fun unlock(token: String) = copy(token = token, trying = false)
-    fun gaveUp() = copy(trying = false)
+    fun land(route: Route): Route = when {
+        !settled -> route
+        reachable(route.view) -> route
+        else -> Route(View.DEFAULT, query = route.query)
+    }
 
     /**
      * Signed in, and carrying the session that proves it.
@@ -262,7 +299,7 @@ data class Admin(
      * kept and presented by the code that was doing both anyway.
      */
     fun signIn(account: Account, session: String? = null) =
-        copy(account = account, token = session ?: token, trying = false, settled = true)
+        copy(account = account, token = session ?: token, settled = true)
 
     /**
      * The server answered, and the answer was nobody.
@@ -273,9 +310,8 @@ data class Admin(
      */
     fun settle() = copy(settled = true)
 
-    /** Out of both: the account and whatever password was held. */
+    /** Out: the account and the session that proved it. */
     fun signOut() = Admin(settled = true)
-    fun lock() = copy(token = null, trying = false)
 }
 
 /**

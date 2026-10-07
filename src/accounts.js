@@ -239,8 +239,15 @@ export function cookieValue(header, name) {
  * server-wide `role` that will replace it.
  */
 export function canEdit(who, ownerSlug) {
+  // The operator's password, which is a machine: `scripts/backup.py`,
+  // `refresh_prices.py` and `backfill.py` have no account to sign
+  // into. A machine credential is not a login.
   if (who?.operator) return true;
-  if (who?.user?.role === 'admin') return true;
+  // `role` used to be here too, and it granted everybody's cards. It
+  // is about running the server — the log, `/admin/sql`, the
+  // maintenance job — and not about owning cards. Matt: "NOBODY GETS
+  // FUCKING ADMIN PERMISSIONS!!!!!! YOU JUST GET TO MODIFY YOUR OWN
+  // FUCKING CARDS BY DEFAULT!!!!!"
   return Boolean(ownerSlug) && who?.user?.slug === ownerSlug;
 }
 

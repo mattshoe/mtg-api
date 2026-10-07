@@ -105,7 +105,7 @@ import kotlin.math.roundToInt
 fun AppShell(
     state: AppState,
     onState: (AppState) -> Unit,
-    onUnlock: (String) -> Unit,
+
     onSearch: () -> Unit,
     onOpenDeck: (String) -> Unit,
     onPreviewEntry: () -> Unit,
@@ -557,40 +557,9 @@ fun AppShell(
         )
     }
 
-    if (Overlay.UNLOCK in state.overlays) {
-        var password by remember { mutableStateOf("") }
-        AlertDialog(
-            onDismissRequest = { onState(state.closing(Overlay.UNLOCK)) },
-            title = { Text("Admin mode") },
-            text = {
-                Column {
-                    Text(
-                        "The password, once. It is exchanged for a token that does not " +
-                            "expire, and the password itself is never stored.",
-                        fontSize = 13.sp,
-                    )
-                    OutlinedTextField(
-                        value = password,
-                        onValueChange = { password = it },
-                        visualTransformation = PasswordVisualTransformation(),
-                        label = { Text("Password") },
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = password.isNotBlank() && state.admin.canTry,
-                    onClick = {
-                        onState(state.closing(Overlay.UNLOCK))
-                        onUnlock(password)
-                    },
-                ) { Text(if (state.admin.trying) "Unlocking…" else "Unlock") }
-            },
-            dismissButton = {
-                TextButton(onClick = { onState(state.closing(Overlay.UNLOCK)) }) { Text("Cancel") }
-            },
-        )
-    }
+    // The password dialog was here. There is no password: you sign
+    // in with Google, which leaves the app rather than opening a box
+    // over it.
 
     // Not an overlay: `AppState` has nothing open to track this
     // against, because there is nothing left open by the time back
@@ -828,19 +797,17 @@ private fun NavMenu(
                 horizontalArrangement = Arrangement.spacedBy(9.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Avatar(state.admin.account?.avatar, state.admin.unlocked, size = 26.dp)
+                Avatar(state.admin.account?.avatar, state.admin.signedIn, size = 26.dp)
                 Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                     Line(
-                        state.admin.shownName
-                            ?: if (state.admin.unlocked) "Admin" else "Not signed in",
-                        if (state.admin.unlocked) Accent2 else Ink,
+                        state.admin.shownName ?: "Not signed in",
+                        if (state.admin.signedIn) Accent2 else Ink,
                         Design.SMALL,
                         FontWeight.SemiBold,
                         Modifier.testTag("profile-status"),
                     )
                     Line(
-                        state.admin.account?.let { "/c/${it.slug}" }
-                            ?: if (state.admin.unlocked) "Everything is editable" else "Read only",
+                        state.admin.account?.let { "/c/${it.slug}" } ?: "Read only",
                         Ink3,
                         Design.MINI,
                     )
@@ -863,27 +830,15 @@ private fun NavMenu(
                 MenuTab(view.label, state.view == view) { onPick(state.navigate(view)) }
             }
 
-            // "Log out" and "Log in", not "Lock" and "Unlock". The
-            // row above it says "Admin" or "Not signed in", and a
-            // menu that offers to lock something it just called a
-            // sign-in is two metaphors for one thing. Matt: "Change
-            // lock to log out".
-            // The account's own way in and out. Google is the way in
-            // now; the password beneath it stays while the server role
-            // that will replace it is unassigned.
+            // One row, because there is one way in. There was a second
+            // beneath it for the operator's password — a shared secret
+            // that could write to anybody's cards — and a menu
+            // offering both was offering two ways to be somebody, one
+            // of which was a way to be everybody. Matt: "Why the FUCK
+            // would you have log in AND sign in with Google?!"
             MenuTab(if (state.admin.signedIn) "Log out" else "Sign in with Google", on = false) {
-                onPick(state.closing(Overlay.UNLOCK))
+                onPick(state)
                 if (state.admin.signedIn) onSignOut() else onSignIn()
-            }
-
-            if (!state.admin.signedIn) MenuTab(if (state.admin.unlocked) "Log out" else "Log in", on = false) {
-                onPick(
-                    if (state.admin.unlocked) {
-                        state.copy(admin = state.admin.lock()).navigate(state.route)
-                    } else {
-                        state.opening(Overlay.UNLOCK)
-                    },
-                )
             }
         }
     }

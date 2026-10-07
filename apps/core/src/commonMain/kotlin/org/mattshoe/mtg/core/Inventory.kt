@@ -78,7 +78,7 @@ object Inventory {
         // and wrong for a thumb. The shared half is which views exist
         // and where each belongs, which `NavShapeTest` owns; the
         // per-platform halves are the chrome that reads it.
-        Feature(Area.SHELL, "Nav tabs, with the admin group hidden until unlocked", "app.js, index.html", logic = true, done = true,
+        Feature(Area.SHELL, "Nav tabs, with the gated ones hidden until you sign in", "app.js, index.html", logic = true, done = true,
             tests = listOf(
                 "lockedHidesTheAdminViewsEntirely", "unlockedShowsThemAll", "noViewIsLostBetweenTheNavAndTheRouter",
                 "lockedShowsFourTabsAndNoAdminOnes", "theCurrentTabIsMarked", "gatedTabsAreAbsentWhileLocked",
@@ -86,7 +86,7 @@ object Inventory {
                 "theNavDoesNotBorrowTheClassTheHeadersOwnScriptOpens",
                 "itIsOneHamburgerAndNothingElse", "theHamburgerOpensAndClosesTheMenu",
                 "aPressAnywhereElseClosesIt", "pickingTheTabYouAreAlreadyOnStillClosesTheMenu",
-                "bothWaysInSitUnderTheNameBehindTheProfile",
+                "theOneWayInSitsUnderTheNameBehindTheProfile",
                 "theHamburgerIsPlacesAndTheProfileIsWhoYouAre",
                 // The website's profile avatar, which the phone has
                 // had since accounts landed.
@@ -109,7 +109,9 @@ object Inventory {
                 "everyTabIsAnIconAboveAWord", "theBarIsAtTheBottom", "tappingATabGoesThere",
                 "theTabYouAreOnIsMarkedWithoutRelyingOnHue", "thereIsNoHamburger",
                 "thereIsAProfileInTheTopRight", "theProfileSaysWhetherYouAreAdmin",
-                "theProfileSaysSoWhenYouAreAdmin", "theProfileIsTheWayInAndTheWayOut",
+                "theProfileSaysWhoYouAreRatherThanThatYouAreAdmin",
+                "theProfileIsTheWayInAndTheWayOutAndThereIsOnlyOneOfEach",
+                "andOneWayOutOnceYouAreSomebody",
                 "theProfileOffersLockWhileUnlocked", "theServerLogIsBehindTheProfile",
                 "theProfileOffersNoLogWhileLocked", "soIsEveryTabInTheBottomBar",
                 // Which views exist and where each one is offered.
@@ -238,7 +240,7 @@ object Inventory {
                 "everythingIsFoldedAwayToStart", "eachGroupFoldsOnItsOwn", "aClosedGroupDoesNotRenderItsControls",
                 "aGroupWithSomethingSetSaysHowMany", "aGroupWithNothingSetHasNoBadge",
                 "everyFieldIsCountedByExactlyOneGroup", "everyFilterGroupOpensAndClosesOnItsOwn",
-                "theSortIsOnTheLeftAndExportOnTheRight", "theUnlockDialogHasPaddingRoundItsWords",
+                "theSortIsOnTheLeftAndExportOnTheRight", 
                 "theFilterGroupsAreAlwaysOnThePage", "andTheyAllStartFoldedAway",
                 "aGroupHoldingAFilterOpensItselfSoTheFilterCanBeSeen",
                 "thePanelHasEveryGroupTheOldPageHad",
@@ -518,8 +520,9 @@ object Inventory {
                 "aDoubleTappedApplyOnlyWritesOnce", "aListWithAPlanIsOfferedForReal",
                 "butNotWhileOneIsAlreadyOnItsWay", "andNotASecondDryRunEither",
                 "whatComesBackOpensItAgain", "aFinishedWizardOffersToCreate",
-                "butNotWhileItIsAlreadyCreating", "aLockedAdminWillTryAPassword",
-                "butNotASecondTimeWhileTheFirstIsOut", "aTokenBackEndsTheAttempt", "soDoesABadPassword",
+                "butNotWhileItIsAlreadyCreating",
+                // The password's four — one attempt at a time — went
+                // with the password.
             )),
         Feature(Area.SHELL, "A toast goes away, by hand or on its own, and never covers a button", "app.js", logic = true, done = true,
             tests = listOf(
@@ -698,12 +701,24 @@ object Inventory {
             )),
 
         // ---------------------------------------------------------- admin
-        Feature(Area.ADMIN, "Password unlock, token kept until locked", "admin.js", logic = true, done = true,
+        // "Password unlock, token kept until locked" was here. There is
+        // no password in the apps: one shared secret that could write
+        // to anybody's cards is the thing accounts replaced, and
+        // leaving it beside the sign-in offered two ways to be
+        // somebody — one of them a way to be everybody. Matt: "There
+        // is no more fucking admin login!!!! You just log into your
+        // FUCKING ACCOUNT!!!" `ADMIN_PASSWORD` stays on the Worker for
+        // the nightly scripts, which have no account to sign into.
+        Feature(Area.ADMIN, "One way in: your account", "accounts.js", logic = true, done = true,
             tests = listOf(
-                "anEmptyTokenIsNotUnlocked", "lockingForgetsTheToken", "unlockSendsThePasswordAndNoToken",
-                "aTokenlessServerReplyIsARefusalNotASilentSuccess", "aWrongPasswordSurfacesTheServersOwnWords",
-                "anExpiredTokenIsReportedNotSwallowed", "theUnlockDialogAsksAndHandsThePasswordBack",
-                "lLocksAndUnlocks",
+                "aFreshAccountIsNobodySpecial", "andThatIsEnoughToEditYourOwnCollection",
+                "andARoleDoesNotBuyYouAnybodyElses", "beingSignedInIsTheOnlyWayToBeAbleToChangeAnything",
+                "aSessionIsNotAPassword", "entryNeedsAnAccountAndNothingMore",
+                "theServerLogNeedsARoleMattHandedOut", "soTheProfileOffersTheLogOnlyToAnOperator",
+                "signingOutTakesTheSessionWithIt", "thereIsNoUnlockOverlayLeftToOpen",
+                "theOperatorOwnsNoMoreThanAnybodyElse", "theServerRoleEditsNoCollectionButItsOwn",
+                "aTokenWithNoAccountBehindItIsNotUnlocked", "signingOutForgetsTheSession",
+                "lDoesNothingBecauseThereIsNoLock",
             )),
         Feature(Area.ADMIN, "Gated views unreachable and invisible while locked", "app.js, admin.js", logic = true, done = true,
             tests = listOf(

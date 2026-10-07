@@ -84,7 +84,6 @@ class ScrollPositionSurvivesACardTest {
                     AppShell(
                         state = live,
                         onState = { held.value = it; state = it },
-                        onUnlock = {},
                         onSearch = {},
                         onOpenDeck = {},
                         onPreviewEntry = {},

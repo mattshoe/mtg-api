@@ -21,8 +21,8 @@ class AppTest {
 
     @Test
     fun navigatingToAGatedViewWhileLockedLandsSomewhereUsable() {
-        assertEquals(View.LIBRARY, AppState().navigate(View.ENTRY).view)
-        assertEquals(View.ENTRY, AppState(admin = Admin("t")).navigate(View.ENTRY).view)
+        assertEquals(View.LIBRARY, AppState(admin = Admin().settle()).navigate(View.ENTRY).view)
+        assertEquals(View.ENTRY, AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")).navigate(View.ENTRY).view)
     }
 
     @Test
@@ -33,7 +33,7 @@ class AppTest {
     /** A share opens the wizard with the list in, and nothing else decided. */
     @Test
     fun aShareOpensTheWizardWithTheListAlreadyInIt() {
-        val s = AppState(admin = Admin("t")).withShare("Name,Quantity\nSol Ring,1")
+        val s = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")).withShare("Name,Quantity\nSol Ring,1")
         assertEquals(View.ENTRY, s.view)
         assertEquals(1, s.entry.cardCount, "the header row is not a card")
         assertNull(s.entry.direction)
@@ -44,7 +44,7 @@ class AppTest {
 
     @Test
     fun aShareWhileLockedStillHoldsTheListRatherThanLosingIt() {
-        val s = AppState().withShare("1 Sol Ring")
+        val s = AppState(admin = Admin().settle()).withShare("1 Sol Ring")
         assertEquals(View.LIBRARY, s.view, "the wizard is gated")
         assertEquals("1 Sol Ring", s.sharedList, "but the list must survive the bounce")
         assertEquals(1, s.entry.cardCount)
@@ -86,21 +86,24 @@ class AppTest {
 
     @Test
     fun lockingWhileOnAGatedViewIsCaughtByLandingAgain() {
-        val open = AppState(admin = Admin("t")).navigate(View.LOGS)
+        val open = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")).navigate(View.LOGS)
         assertEquals(View.LOGS, open.view)
-        val locked = open.copy(admin = open.admin.lock())
+        val locked = open.copy(admin = open.admin.signOut())
         assertEquals(View.LIBRARY, locked.navigate(locked.route).view)
     }
 
     @Test
     fun everyViewIsReachableUnlocked() {
-        val s = AppState(admin = Admin("t"))
+        val s = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"))
         View.entries.forEach { assertEquals(it, s.navigate(it).view) }
     }
 
     @Test
     fun noViewIsLostBetweenTheNavAndTheRouter() {
-        assertEquals(View.entries.count { it.inNav }, Admin("t").visible.size)
+        assertEquals(
+            View.entries.count { it.inNav },
+            Admin().signIn(Account(slug = "matt", role = "admin"), "t").visible.size,
+        )
         assertFalse(Admin().visible.any { it.gated })
     }
 }

@@ -19,6 +19,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mattshoe.mtg.core.Account
 import org.mattshoe.mtg.core.Admin
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.Completion
@@ -74,7 +75,7 @@ class AutocompleteDismissTest {
         .typed("sol")
         .suggested(names.toList())
 
-    private fun onADeck() = AppState(admin = Admin(token = "t"))
+    private fun onADeck() = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"))
         .navigate(Route(View.DECKS, "alela"))
         .let { it.copy(decks = it.decks.loaded(listOf(deck())).opened("alela", emptyList())) }
 
@@ -90,7 +91,6 @@ class AutocompleteDismissTest {
                     AppShell(
                         state = held.value,
                         onState = { held.value = it; state = it },
-                        onUnlock = {},
                         onSearch = {},
                         onOpenDeck = {},
                         onPreviewEntry = {},

@@ -51,7 +51,6 @@ class ToastLookTest {
             AppShell(
                 state = state,
                 onState = {},
-                onUnlock = {},
                 onSearch = {}, onOpenDeck = {},
                 onPreviewEntry = {}, onApplyEntry = {},
             )

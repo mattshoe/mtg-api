@@ -62,7 +62,6 @@ class BottomNavParityTest {
                     AppShell(
                         state = held.value,
                         onState = { held.value = it },
-                        onUnlock = {},
                         onSearch = {},
                         onOpenDeck = {},
                         onPreviewEntry = {},
@@ -74,7 +73,7 @@ class BottomNavParityTest {
         rule.waitForIdle()
     }
 
-    private fun unlocked() = AppState(admin = Admin(token = "t").unlock("t"))
+    private fun unlocked() = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"))
 
     private fun tabs() =
         rule.onAllNodes(hasTestTag("nav-item"), useUnmergedTree = true).fetchSemanticsNodes()
@@ -320,24 +319,58 @@ class BottomNavParityTest {
     }
 
     @Test
-    fun theProfileSaysSoWhenYouAreAdmin() {
+    fun theProfileSaysWhoYouAreRatherThanThatYouAreAdmin() {
+        // It said "Admin" for whoever held the shared password. There
+        // is no password: the profile says the account's own name,
+        // and nobody is "Admin" — a role is about running the server,
+        // not about who you are.
         shell(unlocked())
         rule.onNodeWithContentDescription("Profile").performClick()
         rule.waitForIdle()
         assertTrue(
-            rule.onAllNodes(hasText("Admin", substring = true)).fetchSemanticsNodes().isNotEmpty(),
-            "the profile does not say you are admin",
+            rule.onAllNodes(hasText("matt", substring = true)).fetchSemanticsNodes().isNotEmpty(),
+            "the profile does not say who is signed in",
+        )
+        assertTrue(
+            rule.onAllNodes(hasText("Admin", substring = true)).fetchSemanticsNodes().isEmpty(),
+            "the profile still calls somebody Admin",
         )
     }
 
     @Test
-    fun theProfileIsTheWayInAndTheWayOut() {
+    fun theProfileIsTheWayInAndTheWayOutAndThereIsOnlyOneOfEach() {
+        // Two rows lived here: an account and the operator's shared
+        // password. Matt: "Why the FUCK would you have log in AND
+        // sign in with Google?!"
         shell()
         rule.onNodeWithContentDescription("Profile").performClick()
         rule.waitForIdle()
         assertTrue(
-            rule.onAllNodes(hasText("Log in")).fetchSemanticsNodes().isNotEmpty(),
-            "no way to sign in from the profile",
+            rule.onAllNodes(hasText("Sign in with Google")).fetchSemanticsNodes().size == 1,
+            "signed out, there is not exactly one way in",
+        )
+        assertTrue(
+            rule.onAllNodes(hasText("Log in")).fetchSemanticsNodes().isEmpty(),
+            "the shared password is back",
+        )
+        assertTrue(
+            rule.onAllNodes(hasText("Log out")).fetchSemanticsNodes().isEmpty(),
+            "it offered a way out of being nobody",
+        )
+    }
+
+    @Test
+    fun andOneWayOutOnceYouAreSomebody() {
+        shell(unlocked())
+        rule.onNodeWithContentDescription("Profile").performClick()
+        rule.waitForIdle()
+        assertTrue(
+            rule.onAllNodes(hasText("Log out")).fetchSemanticsNodes().size == 1,
+            "signed in, there is not exactly one way out",
+        )
+        assertTrue(
+            rule.onAllNodes(hasText("Sign in with Google")).fetchSemanticsNodes().isEmpty(),
+            "it offered to sign in to somebody already signed in",
         )
     }
 

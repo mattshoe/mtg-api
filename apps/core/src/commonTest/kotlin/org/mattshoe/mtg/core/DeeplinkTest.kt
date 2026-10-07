@@ -136,7 +136,7 @@ class DeeplinkTest {
     fun aLandingLeavesStateItDoesNotOwnAlone() {
         // Arriving from a link must not sign you out or bin an
         // unsaved list.
-        val before = AppState(admin = Admin(token = "t").unlock("t"))
+        val before = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"))
             .let { it.copy(entry = it.entry.type("4 Lightning Bolt")) }
         val after = Deeplink.landing(before, "https://mtg.mattshoe.org/#/decks/alela")
         assertTrue(after.admin.unlocked, "a deep link locked the app")

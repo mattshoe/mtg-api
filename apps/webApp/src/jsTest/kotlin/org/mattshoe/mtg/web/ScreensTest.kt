@@ -5,6 +5,7 @@ import kotlinx.browser.document
 import kotlinx.coroutines.await
 import kotlinx.coroutines.test.runTest
 import org.jetbrains.compose.web.renderComposable
+import org.mattshoe.mtg.core.Account
 import org.mattshoe.mtg.core.Admin
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.CardDetail
@@ -119,15 +120,14 @@ class ScreensTest {
         assertTrue(root.hasButton("Decks"))
         assertFalse(root.hasButton("Entry"), "a gated tab while locked")
         assertFalse(root.hasButton("Server Logs"))
-        // "Log in", behind the profile: the operator's password is not
-        // a place to go, and "Lock" was a second metaphor for the one
-        // thing a sign-out already is.
-        assertTrue(root.hasButton("Log in"))
+        // One way in, behind the profile.
+        assertFalse(root.hasButton("Log in"), "the password is back")
+        assertTrue(root.hasButton("Sign in with Google"))
     }
 
     @Test
     fun unlockingBringsTheGatedTabsBack() = runTest {
-        val root = shell(AppState(admin = Admin(token = "t")))
+        val root = shell(AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")))
         settle()
         assertTrue(root.hasButton("Entry"))
         assertTrue(root.hasButton("Server Logs"))
@@ -713,11 +713,12 @@ class NavTest {
         (root.querySelector(".topbar-title") as? org.w3c.dom.HTMLElement)?.textContent?.trim()
 
     @Test
-    fun bothWaysInSitUnderTheNameBehindTheProfile() = runTest {
-        // It was an "Admin" group inside the one menu, under a rule.
-        // The group is gone with the menu it divided: the profile
-        // menu's own head is who you are, and everything under its
-        // rule follows from that.
+    fun theOneWayInSitsUnderTheNameBehindTheProfile() = runTest {
+        // It was an "Admin" group inside the one menu, under a rule,
+        // and then two buttons: an account and a shared password.
+        // There is one way in — Matt: "Why the FUCK would you have log
+        // in AND sign in with Google?!" — under the profile's own
+        // head, which says who you are.
         val root = mount(AppState())
         settle()
         assertEquals(1, root.querySelectorAll(".profile-menu .app-menu-sep").length, "no rule under the name")
@@ -733,9 +734,14 @@ class NavTest {
         // offering both at once reads as two ways to be the same
         // thing.
         assertEquals(
-            2,
+            1,
             root.querySelectorAll(".profile-menu button.app-lock").length,
-            "the ways in are not behind the profile",
+            "there is more than one way in",
+        )
+        assertEquals(
+            "Sign in with Google",
+            (root.querySelector(".profile-menu button.app-lock") as org.w3c.dom.HTMLElement)
+                .textContent?.trim(),
         )
     }
 
@@ -746,7 +752,7 @@ class NavTest {
         // that shit still in the hamburger menu!!!!!" — so the
         // division is which menu a thing is in, and the rule sits
         // under the name at the head of the profile.
-        val root = mount(AppState(admin = org.mattshoe.mtg.core.Admin("t")))
+        val root = mount(AppState(admin = org.mattshoe.mtg.core.Admin().signIn(Account(slug = "matt", role = "admin"), "t")))
         settle()
         fun labels(css: String) = root.querySelectorAll(css).let { n ->
             (0 until n.length).mapNotNull { (n[it] as? org.w3c.dom.HTMLElement)?.textContent?.trim() }
@@ -755,11 +761,9 @@ class NavTest {
         assertEquals(0, root.querySelectorAll(".app-menu .app-menu-sep").length, "a rule with nothing to divide")
 
         val behind = labels(".profile-menu button")
-        assertTrue(behind.contains("Server Logs"), behind.toString())
-        // Unlocked by a password, so the password's own row offers the
-        // way out of it. "Log in" is what it says while locked.
-        assertTrue(behind.contains("Log out"), behind.toString())
-        assertTrue(behind.contains("Sign in with Google"), behind.toString())
+        // The fixture is an operator, so the log is there, and one way
+        // out because somebody is signed in.
+        assertEquals(listOf("Server Logs", "Log out"), behind)
         assertFalse(behind.contains("Library"), behind.toString())
         assertEquals(1, root.querySelectorAll(".profile-menu .app-menu-sep").length, "no rule under the name")
     }

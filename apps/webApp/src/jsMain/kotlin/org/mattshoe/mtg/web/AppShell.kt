@@ -46,7 +46,7 @@ import org.w3c.files.File
 fun AppShell(
     state: AppState,
     onState: (AppState) -> Unit,
-    onUnlock: (String) -> Unit,
+
     onSearch: () -> Unit,
     onOpenDeck: (String) -> Unit,
     onPreviewEntry: () -> Unit,
@@ -293,91 +293,9 @@ fun AppShell(
         )
     }
 
-    if (Overlay.UNLOCK in state.overlays) {
-        // The typed password belongs to the dialog, not to the shell.
-        // Hung off `AppShell` it outlived every way out that did not
-        // clear it by hand — Escape through the window's own key
-        // handler, the back gesture, a route change — and the next
-        // person to open the dialog found the last one's password
-        // still sitting in the box. Remembered here it cannot: the
-        // box is forgotten along with the dialog, whoever closed it.
-        var password by remember { mutableStateOf("") }
-
-        val close = { onState(state.closing(Overlay.UNLOCK)) }
-
-        // Blank passwords were offered to the server, and a second
-        // press while the first was still out sent it again. One
-        // rule, so the button, the Enter key and the label cannot
-        // disagree about what is allowed.
-        val ready = password.isNotBlank() && state.admin.canTry
-        val submit = {
-            if (ready) {
-                onState(state.closing(Overlay.UNLOCK))
-                onUnlock(password)
-            }
-        }
-
-        Div(attrs = {
-            classes("palette-scrim")
-            onClick { close() }
-            // Escape closes it here as well as through the window's
-            // own handler, and stops there: left to bubble it would
-            // pop a second overlay out from underneath this one.
-            onKeyDown {
-                if (it.key == "Escape") {
-                    it.stopPropagation()
-                    close()
-                }
-            }
-        }) {
-            // `panel-head` and `panel-body`, the same as every other
-            // dialog. Loose children of `.palette` get no padding at
-            // all, which is why this one had its text against the edge.
-            Div(attrs = {
-                classes("palette")
-                onClick { it.stopPropagation() }
-            }) {
-                Div(attrs = { classes("panel-head") }) { H2 { Text("Admin mode") } }
-                Div(attrs = { classes("panel-body", "stack") }) {
-                    Div(attrs = { classes("muted", "small") }) {
-                        Text(
-                            "The password, once. It is exchanged for a token that does not " +
-                                "expire, and the password itself is never stored.",
-                        )
-                    }
-                    Input(type = InputType.Password) {
-                        classes("field")
-                        placeholder("Password")
-                        // A property, never an attribute. Anything on
-                        // the page can read the DOM, and a password
-                        // has no business being in it twice.
-                        value(password)
-                        onInput { password = it.value }
-                        // A one-field form answers to Enter. Typing a
-                        // password and having nothing happen is how
-                        // you end up typing it a second time.
-                        onKeyDown {
-                            if (it.key == "Enter") {
-                                it.preventDefault()
-                                submit()
-                            }
-                        }
-                    }
-                    Div(attrs = { classes("flex-wrap") }) {
-                        Button(attrs = {
-                            classes("btn", "primary")
-                            if (!ready) disabled()
-                            onClick { submit() }
-                        }) { Text(if (state.admin.trying) "Unlocking…" else "Unlock") }
-                        Button(attrs = {
-                            classes("btn", "ghost")
-                            onClick { close() }
-                        }) { Text("Cancel") }
-                    }
-                }
-            }
-        }
-    }
+    // The password dialog was here. There is no password: you sign
+    // in with Google, and that leaves the page rather than opening a
+    // box over it.
 }
 
 /** Where a deck tap goes, as a route rather than a special case. */

@@ -19,6 +19,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mattshoe.mtg.core.Account
 import org.mattshoe.mtg.core.Admin
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.Deck
@@ -80,7 +81,7 @@ class DialogErrorBoxParityTest {
 
     private fun onDeck() = AppState(
         route = Route(View.DECKS, "alela"),
-        admin = Admin(token = "t"),
+        admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"),
         decks = DecksState().loaded(listOf(deck())).opened("alela", listOf(card("Sol Ring"))),
     )
 
@@ -102,7 +103,7 @@ class DialogErrorBoxParityTest {
     // On the Entry tab: the deck wizard is a page there now rather
     // than a dialog floating over whatever was behind it.
     private fun newDeckFailed() = AppState(
-        admin = Admin(token = "t").unlock("t"),
+        admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"),
         route = Route(View.ENTRY),
         newDeck = NewDeck(format = Format.COMMANDER, error = said),
     ).opening(Overlay.NEW_DECK)
@@ -121,7 +122,6 @@ class DialogErrorBoxParityTest {
                 AppShell(
                     state = held.value,
                     onState = { held.value = it },
-                    onUnlock = {},
                     onSearch = {},
                     onOpenDeck = {},
                     onPreviewEntry = {},

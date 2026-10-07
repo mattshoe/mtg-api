@@ -24,6 +24,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mattshoe.mtg.core.Account
 import org.mattshoe.mtg.core.Admin
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.CardDetail
@@ -129,12 +130,17 @@ class ScreensTest {
         rule.onAllNodesWithTextOrNothing("Entry")
         openTheProfile()
         rule.onAllNodesWithTextOrNothing("Server Logs")
-        rule.onNodeWithText("Log in").assertExists()
+        // One way in. There was a second row here for the operator's
+        // password — a shared secret that could write to anybody's
+        // cards — and offering both was offering two ways to be
+        // somebody, one of which was a way to be everybody.
+        rule.onNodeWithText("Sign in with Google").assertExists()
+        rule.onAllNodesWithTextOrNothing("Log in")
     }
 
     @Test
     fun unlockingBringsTheGatedTabsBack() {
-        var state = AppState(admin = Admin(token = "t").unlock("t"))
+        var state = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"))
         content { AppShell(state, { state = it }, {}, {}, {}, {}, {}) }
         // Entry joins the bar; the log and the lock are behind the
         // profile, which is the split Matt asked for.

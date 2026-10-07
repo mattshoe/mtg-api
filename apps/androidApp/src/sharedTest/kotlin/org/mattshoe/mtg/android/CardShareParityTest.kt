@@ -13,6 +13,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mattshoe.mtg.core.Account
 import org.mattshoe.mtg.core.Admin
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.CardDetail
@@ -75,12 +76,12 @@ class CardShareParityTest {
 
     /** A card open, reached from a deck, the way the app reaches one. */
     private fun fromTheDeck(): AppState = AppState(
-        admin = Admin(token = "t"),
+        admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"),
         decks = DecksState().loaded(listOf(deck())).opened("alela", listOf(deckCard("Sol Ring"))),
     ).openCard(CardRef("sol ring")).copy(card = detail())
 
     private fun fromTheLibrary(): AppState =
-        AppState(admin = Admin(token = "t")).openCard(CardRef("sol ring")).copy(card = detail())
+        AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")).openCard(CardRef("sol ring")).copy(card = detail())
 
     private fun shell(start: AppState) {
         rule.setContent {
@@ -92,7 +93,6 @@ class CardShareParityTest {
                     AppShell(
                         state = held.value,
                         onState = { held.value = it },
-                        onUnlock = {},
                         onSearch = {},
                         onOpenDeck = {},
                         onPreviewEntry = {},

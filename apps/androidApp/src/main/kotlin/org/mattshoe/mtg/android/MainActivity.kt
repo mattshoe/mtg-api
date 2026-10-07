@@ -301,7 +301,12 @@ class MainActivity : ComponentActivity() {
             app = app.copy(
                 admin = if (who != null) app.admin.signIn(who, held) else app.admin.settle(),
             )
-            // The page that was waiting for an answer can go now.
+            // A gated route was held rather than bounced while the
+            // answer was out — a share or a deep link to the wizard
+            // must not land on the Library every time — so land it
+            // again now that there is an answer to land it against.
+            app = app.navigate(app.route)
+            // The screen that was waiting for an answer can go now.
             // Without this the screen stayed empty until something
             // else navigated.
             loadFor(app)
@@ -363,19 +368,6 @@ class MainActivity : ComponentActivity() {
                             val was = app
                             app = next
                             if (next.view != was.view || next.route.rest != was.route.rest) loadFor(next)
-                        },
-                        onUnlock = { password ->
-                            claim(app.admin.canTry, { app.copy(admin = app.admin.tries()) }) {
-                                try {
-                                    val t = api.unlock(password)
-                                    // Persisted by the `app` setter, which
-                                    // diffs the token on every write.
-                                    app.copy(admin = app.admin.unlock(t)).say("Admin mode on")
-                                } catch (e: Exception) {
-                                    app = app.copy(admin = app.admin.gaveUp())
-                                    throw e
-                                }
-                            }
                         },
                         onSearch = { work { search() } },
                         // Through the address, the way every other

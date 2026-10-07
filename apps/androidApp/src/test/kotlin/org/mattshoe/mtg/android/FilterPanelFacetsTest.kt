@@ -106,7 +106,6 @@ class FilterPanelFacetsTest {
                     AppShell(
                         state = loaded,
                         onState = {},
-                        onUnlock = {},
                         onSearch = {},
                         onOpenDeck = {},
                         onPreviewEntry = {},

@@ -16,6 +16,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mattshoe.mtg.core.Account
 import org.mattshoe.mtg.core.Admin
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.CardDetail
@@ -82,7 +83,7 @@ class SmallCosmeticsWordsParityTest {
     /** A deck, open, the way the app opens one. */
     private fun opened(cards: List<DeckCard> = listOf(card("Sol Ring"))) = AppState(
         route = Route(View.DECKS, "alela"),
-        admin = Admin(token = "t"),
+        admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"),
         decks = DecksState().loaded(listOf(deck())).opened("alela", cards),
     )
 
@@ -100,7 +101,6 @@ class SmallCosmeticsWordsParityTest {
                     AppShell(
                         state = held.value,
                         onState = { held.value = it },
-                        onUnlock = {},
                         onSearch = {},
                         onOpenDeck = {},
                         onPreviewEntry = {},
