@@ -35,10 +35,21 @@ red in the commit message — the actual failure text, not "tests
 added". A test that passes before the fix is testing nothing, and this
 repository has shipped six of those.
 
-**Parity is mandatory.** A change to the website is a change to the
-phone, in the same PR. The shared logic lives in `:core` and belongs
-there rather than twice in two shells. If something genuinely cannot
-exist on one platform, say so in the PR body and say why.
+**Parity is the paramount rule, above everything else here.** A change
+to the website is a change to the phone, **in the same PR**. Not
+eventually, not as follow-up work, not "almost". Two separate requests
+have been shipped web-only by an agent that then reported them finished,
+and both times Matt found it before any test did.
+
+The shared logic lives in `:core` and both shells read it; the screen
+files are paired on purpose and the skill has the table. Before you open
+the PR, walk the four-step parity check in the skill — the diff contains
+both a `webApp/` and an `androidApp/` file, there is a test on each side,
+both suites went green off their BUILD line, and the PR body says what
+the change looks like on each platform.
+
+If something genuinely cannot exist on one platform, say so in the PR
+body and say why. Silence is not an exception.
 
 **Read the BUILD line, never the exit code.** `npm run test:screens`
 has exited 0 over `BUILD FAILED` more than once. Grep for
@@ -58,7 +69,8 @@ green. If you deliberately removed tests, lower the floor in
 1. Read your request file. If it is gone, stop — it was withdrawn.
 2. Re-read the parts of the codebase it names. The plan in the file is
    a starting point, not gospel; if it is wrong, say so in the PR.
-3. Build it, test-first, every platform the file lists.
+3. Build it, test-first, **on every platform it touches at once** —
+   `:core` first, then both shells, not one shell and a note.
 4. Run every suite that could possibly be affected:
    - `npm test` — the Worker
    - `npm run test:core` *and* `./gradlew :core:jsNodeTest :core-net:jvmTest
@@ -66,13 +78,15 @@ green. If you deliberately removed tests, lower the floor in
      what CI's `shared` job runs, and that gap has shipped a red build
    - `npm run test:web`
    - `npm run test:screens`
-5. Commit, push, open a PR. The body says what changed, what went red
-   first, and anything you are unsure about.
-6. Watch CI. `gh run watch <id> --exit-status`. The emulator job takes
+5. Walk the parity check from the skill. If the diff is one-sided and
+   you cannot justify it in the PR body, you are not finished.
+6. Commit, push, open a PR. The body says what changed **on each
+   platform**, what went red first, and anything you are unsure about.
+7. Watch CI. `gh run watch <id> --exit-status`. The emulator job takes
    about seventeen minutes; wait for it.
-7. If CI is red, fix it and push again. Keep going until it is green
+8. If CI is red, fix it and push again. Keep going until it is green
    or until you are genuinely stuck.
-8. Move the request file to `requests/done/` with the PR number added
+9. Move the request file to `requests/done/` with the PR number added
    at the top, and commit that on the same branch.
 
 ## Merging

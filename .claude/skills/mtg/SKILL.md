@@ -1,12 +1,17 @@
 ---
 name: mtg
-description: Everything an agent needs to change Matt's MTG collection app without breaking it — the architecture, where each kind of code lives, the hard requirements like TDD and platform parity, how to run and read the suites, how to deploy, and the specific mistakes this repo has already shipped. Load this before touching any code in mtg-api.
+description: Everything an agent needs to change Matt's MTG collection app without breaking it. Platform parity is the paramount rule — web and Android ship the same change in the same pull request, always. Also the architecture, where each kind of code lives, TDD with a watched red, how to run and read each suite, how to deploy, and the mistakes this repo has already shipped. Load this before touching any code in mtg-api.
 ---
 
 # Working in mtg-api
 
-One collection of Magic cards, three front ends over one API. If you
-change behaviour you change it in one place and both platforms get it.
+One collection of Magic cards, three front ends over one API.
+
+**The paramount rule: the website and the phone ship the same change, in
+the same pull request.** Not eventually, not in a follow-up, not "almost".
+Everything else in this document is detail; that one is the job. It has
+its own section below and it is first because it is the thing most often
+broken and the thing Matt is angriest about.
 
 Read `CLAUDE.md` as well — it is the law and this is the map. Where they
 disagree, `CLAUDE.md` wins.
@@ -75,7 +80,75 @@ to each other, so change both or the test goes red.
 These are not style. Each one is here because breaking it shipped
 something broken.
 
-### 1. Test first, and watch it fail
+### 1. Parity. This is the one that matters most
+
+**A change to the website is a change to the phone, in the same pull
+request.** There is no version of "done" that covers one platform.
+
+Matt has said this more times and more loudly than anything else:
+
+> "WHY THE FUCK IS THE ANDROID APP LINK IN THE FUCKING HEADER STILL!!!!
+> I FUCKING SAID PARITY!!! NOT 'ALMOST PARITY'!!!!!"
+
+> "You didn't fucking add admin settings to the Android app?!?!?! I TOLD
+> YOU A THOUSAND FUCKING TIMES THAT YOU NEED TO KEEP FUCKING PARITY!!!!!"
+
+Both of those were shipped by an agent that did the web half, tested it,
+deployed it, and reported the work finished. Do not be the next one.
+
+#### How to actually get it
+
+**Put the behaviour in `:core` and have both shells read it.** That is
+the whole technique. If the same `if` is written twice, once in
+`LibraryPage.kt` and once in `LibraryScreen.kt`, they will drift, and the
+drift will be invisible until Matt finds it.
+
+The screen files are deliberately paired, and the pairing is the
+checklist:
+
+| `:core` | web | Android |
+|---|---|---|
+| `Library.kt`, `CardFilters.kt` | `LibraryPage.kt` | `LibraryScreen.kt` |
+| `Decks.kt`, `DeckStats.kt` | `DecksPage.kt`, `DeckStatsPanel.kt` | `DecksScreen.kt` |
+| `CardDetail.kt` | `CardPage.kt` | `CardSheet.kt` |
+| `Roles.kt` | `AdminPage.kt` | `AdminScreen.kt` |
+| `MassEntry.kt` | `MassEntryPage.kt` | `MassEntryScreen.kt` |
+| `NewDeck.kt` | `NewDeckPage.kt` | `NewDeckScreen.kt` |
+| `Stats.kt` | `StatsPage.kt` | `StatsScreen.kt` |
+| `DeckTweak.kt` | `DeckTweakSheet.kt` | `DeckTweakSheet.kt` |
+| `Facets.kt` | `FilterPanel.kt` | `FilterSheet.kt` |
+| `Shell.kt` | `AppShell.kt`, `AppNav.kt` | `AppShell.kt` |
+| `Overlay.kt` | `Overlays.kt` | `Overlays.kt` |
+| `Design.kt` | `frontend/css/app.css` | `Theme.kt` |
+
+`Shell.kt` is why there is one answer to "which screens exist and which
+are gated" rather than two. Add a view there, not in a nav bar.
+
+#### Before you open the pull request
+
+Walk this, every time. It is four commands and it is the difference
+between finished and the two quotes above.
+
+1. `git diff --stat origin/main` — does the list contain **both** a
+   `webApp/` file and an `androidApp/` file? If only one, justify it in
+   the next step or go and do the other half.
+2. Is there a test for the new behaviour on **both** sides?
+   `apps/webApp/src/jsTest/` for the browser,
+   `apps/androidApp/src/sharedTest/` for the phone. A `:core` test alone
+   does not prove either shell renders it.
+3. Did **both** suites run green — `npm run test:web` *and*
+   `npm run test:screens` — read off the `BUILD SUCCESSFUL` line?
+4. Does the PR body say, in words, what the change looks like on each
+   platform?
+
+#### The only acceptable exception
+
+A thing that genuinely cannot exist on one platform — a browser
+download, an Android share sheet. Then say so **in the PR body**, say
+why, and say what the other platform does instead. Silence is not an
+exception, and "I will do Android next" is not one either.
+
+### 2. Test first, and watch it fail
 
 Write the test. **Run it against the unfixed code and read the
 failure.** Check the message names the actual cause. Then the smallest
@@ -95,19 +168,6 @@ creature face has a stat box expected:<1> but was:<0>"
 
 If some of your new tests pass against the unfixed code, say so and say
 why. A regression guard is worth having; calling it proof is not.
-
-### 2. Parity is not optional
-
-A change to the website is a change to the phone, **in the same pull
-request**. Matt has said this more times than anything else, in capital
-letters. "Almost parity" is a failure.
-
-The way to get it for free is to put the behaviour in `:core` and have
-both shells read it. The way to get caught is to ship a web screen and
-file the Android one as follow-up work.
-
-If something genuinely cannot exist on one platform, say so in the PR
-body and say why.
 
 ### 3. Read the BUILD line, never the exit code
 
@@ -158,6 +218,8 @@ Separate things by lightness, never by hue alone. Measure it, do not
 eyeball it.
 
 ### 7. Done means deployed, on both platforms
+
+This is requirement 1 again, at the other end of the pipeline.
 
 Not "PR open". Not "CI green". Not "merged". Deployed and verified live
 on the website **and** in the shipped APK. Do not send a progress table

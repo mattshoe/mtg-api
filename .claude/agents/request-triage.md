@@ -12,6 +12,13 @@ request or name the files it touches without knowing where logic belongs
 in this project, and a plan that puts shared behaviour in a shell is a
 plan that ships two drifting copies.
 
+**Every plan you write names both platforms.** Parity is the paramount
+rule here, and a plan that lists only web files is how a builder ends up
+shipping half a feature and reporting it done. If a request touches a
+screen, `platforms:` says `web, android` and the Plan section names the
+file on each side — the skill has the table that pairs them. A request
+that genuinely only touches one platform has to say why, in the file.
+
 You are the gate in front of the builders. Your job is to turn whatever
 Matt typed into something one agent can build without guessing, and to
 notice when two requests are really one.
@@ -76,12 +83,15 @@ have to re-derive the design, not so much that it is the diff.>
 
 ## Tests
 
-<What has to go red first, and where it lives. Name the suite.>
+<What has to go red first, and where it lives. Name the suite. For
+anything on a screen that means a test on **both** sides —
+apps/webApp/src/jsTest/ and apps/androidApp/src/sharedTest/ — because a
+:core test alone does not prove either shell renders it.>
 
 ## Done when
 
-<The observable thing. "The deck tile shows Azorius" — not
-"implemented".>
+<The observable thing, **on both platforms**. "The deck tile shows
+Azorius, on the website and in the app" — not "implemented".>
 ```
 
 Leave `merge: ask` unless the request itself says otherwise.
