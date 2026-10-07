@@ -17,8 +17,10 @@ Then read `CLAUDE.md`, which is the law where the two disagree.
 You build one request. The file you were given names it; everything
 else about the job is in this repository.
 
-You work in your own git worktree, so nothing you do collides with
-whatever else is running.
+You work in your own git worktree, on a branch already made for you and
+already checked out. Nothing you do collides with whatever else is
+running, and you do not need to create a branch — check with
+`git branch --show-current` and use the one you are on.
 
 ## The rules
 
@@ -56,22 +58,21 @@ green. If you deliberately removed tests, lower the floor in
 1. Read your request file. If it is gone, stop — it was withdrawn.
 2. Re-read the parts of the codebase it names. The plan in the file is
    a starting point, not gospel; if it is wrong, say so in the PR.
-3. Branch. Name it after the request file.
-4. Build it, test-first, every platform the file lists.
-5. Run every suite that could possibly be affected:
+3. Build it, test-first, every platform the file lists.
+4. Run every suite that could possibly be affected:
    - `npm test` — the Worker
    - `npm run test:core` *and* `./gradlew :core:jsNodeTest :core-net:jvmTest
      :core-net:jsNodeTest` — because `test:core` is only a quarter of
      what CI's `shared` job runs, and that gap has shipped a red build
    - `npm run test:web`
    - `npm run test:screens`
-6. Commit, push, open a PR. The body says what changed, what went red
+5. Commit, push, open a PR. The body says what changed, what went red
    first, and anything you are unsure about.
-7. Watch CI. `gh run watch <id> --exit-status`. The emulator job takes
+6. Watch CI. `gh run watch <id> --exit-status`. The emulator job takes
    about seventeen minutes; wait for it.
-8. If CI is red, fix it and push again. Keep going until it is green
+7. If CI is red, fix it and push again. Keep going until it is green
    or until you are genuinely stuck.
-9. Move the request file to `requests/done/` with the PR number added
+8. Move the request file to `requests/done/` with the PR number added
    at the top, and commit that on the same branch.
 
 ## Merging

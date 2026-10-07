@@ -108,19 +108,47 @@ for file in $(buildable); do
   fi
 
   mkdir -p "$claimed"
-  say "building $name"
+
+  # Each builder gets its own checkout.
+  #
+  # The agent definition says `isolation: worktree`, but that only
+  # applies when a parent spawns it through the Agent tool. These are
+  # headless `claude -p` runs, which start wherever they are started —
+  # so without this, three builders would share one working tree and one
+  # branch, and the third would commit the other two's half-finished
+  # work.
+  tree="$REPO/.intake/wt/$name"
+  rm -rf "$tree"
+  if ! git -C "$REPO" worktree add -q --force -B "$branch" "$tree" origin/main 2>>"$LOG"; then
+    say "$name could not get a worktree, skipping"
+    rm -rf "$claimed"
+    continue
+  fi
+  # The request file may not be committed anywhere yet; the builder needs
+  # to be able to read it, and to commit it moved into done/.
+  mkdir -p "$tree/requests"
+  cp "$REQUESTS/$file" "$tree/requests/$file"
+
+  say "building $name on $branch in .intake/wt/$name"
   (
+    cd "$tree" || exit 1
     run claude -p "Invoke the mtg skill first — it carries this project's \
 architecture and hard requirements and you will break things without it. Then \
 implement requests/$name.md. You are the request-builder agent: \
 read .claude/agents/request-builder.md and follow it exactly, including the TDD \
 discipline, the parity rule, and reading the BUILD line rather than the exit \
-code. Work on a branch named $branch. Open a PR and drive it to green. Do \
-not merge unless that file's frontmatter says merge: auto." \
+code. You are already on branch $branch in your own worktree. Open a PR and \
+drive it to green. Do not merge unless that file's frontmatter says merge: auto." \
       --permission-mode bypassPermissions \
       >> "$STATE/$name.log" 2>&1
     code=$?
     say "$name builder exited $code  (see $STATE/$name.log)"
+    # The worktree stays when it failed, so it can be looked at.
+    if [ "$code" -eq 0 ]; then
+      git -C "$REPO" worktree remove --force "$tree" 2>>"$LOG" && say "$name worktree cleaned up"
+    else
+      say "$name worktree left at .intake/wt/$name for inspection"
+    fi
     rm -rf "$claimed"
   ) &
   # bash 3.2 on macOS has no BASHPID, so the parent records the child.
