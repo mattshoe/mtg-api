@@ -688,6 +688,67 @@ export async function renameDeck(db, body) {
   return { status: 200, body: { renamed: true, slug: next, name, was: deck.name, wasSlug: deck.slug } };
 }
 
+/**
+ * What colour a new deck is.
+ *
+ * It used to be `null`, and nothing ever filled it in — so the three
+ * decks made in the app were the only colourless ones in a database
+ * where every imported deck had the column set. Matt: "Why is milly
+ * moth deck showing as colorless???"
+ *
+ * The commander's own identity, for a format that has one: `cards`
+ * already stores it as the bare WUBRG letters that `Deck.identity`
+ * reads first. Otherwise the union of what the list is made of, which
+ * is the same question asked of sixty cards instead of one.
+ *
+ * Null when nothing is known rather than an empty string, because
+ * "colourless" and "nobody worked it out" are different facts and
+ * only one of them should draw no pips forever.
+ */
+async function paintDeck(db, slug, commander) {
+  const letters = (rows) => {
+    const seen = new Set();
+    rows.forEach((r) => String(r?.color_identity ?? '').toUpperCase()
+      .split('')
+      .filter((c) => 'WUBRG'.includes(c))
+      .forEach((c) => seen.add(c)));
+    // WUBRG order, which is how every other row in the table spells it.
+    const out = [...'WUBRG'].filter((c) => seen.has(c)).join('');
+    return out || null;
+  };
+
+  const named = String(commander || '').trim();
+  let colours = null;
+  if (named) {
+    const row = await db.prepare(
+      'SELECT color_identity FROM cards WHERE name_norm = ?1 LIMIT 1',
+    ).bind(normalize(named)).first();
+    // A commander nothing in the collection knows says nothing.
+    // Guessing from the other ninety-nine cards would call a Dimir
+    // deck five-colour because somebody put a Command Tower in it.
+    colours = row ? letters([row]) : null;
+  } else {
+    // Read the list back off the deck rather than out of the request:
+    // this runs after the write, so the cards it needed have been
+    // acquired and are in `cards` to be read. Asking beforehand got
+    // `null` for every deck whose cards were new, which is most of
+    // them.
+    const { results } = await db.prepare(
+      `SELECT DISTINCT c.color_identity
+         FROM deck_cards dc
+         JOIN decks d ON d.id = dc.deck_id
+         JOIN cards c ON c.name_norm = dc.name_norm
+        WHERE d.slug = ?1`,
+    ).bind(slug).all();
+    colours = letters(results || []);
+  }
+
+  if (colours) {
+    await db.prepare('UPDATE decks SET colors = ?2 WHERE slug = ?1').bind(slug, colours).run();
+  }
+  return colours;
+}
+
 export async function createDeck(db, body, fetchImpl) {
   const name = String(body?.name || '').trim();
   const format = String(body?.format || '').trim().toLowerCase();
@@ -731,10 +792,17 @@ export async function createDeck(db, body, fetchImpl) {
     bracket,
     is_proxy: body?.is_proxy ? 1 : 0,
     status: body?.status ? String(body.status).trim() : null,
+    // Filled in after the write: see `paintDeck`.
     colors: null,
   };
 
   const r = await planAndWrite(db, deck, { ...body, commander }, fetchImpl);
   if (r.status !== 200) return r;
-  return { status: r.body.applied ? 201 : 200, body: { ...r.body, created: r.body.applied, slug } };
+  // What colour the deck is, now that its cards exist to be asked.
+  // Matt: "Why is milly moth deck showing as colorless???"
+  const colors = r.body.applied ? await paintDeck(db, slug, commander) : null;
+  return {
+    status: r.body.applied ? 201 : 200,
+    body: { ...r.body, created: r.body.applied, slug, colors },
+  };
 }
