@@ -154,18 +154,51 @@ architecture and hard requirements and you will break things without it. Then \
 implement requests/$name.md. You are the request-builder agent: \
 read .claude/agents/request-builder.md and follow it exactly, including the TDD \
 discipline, the parity rule, and reading the BUILD line rather than the exit \
-code. You are already on branch $branch in your own worktree. Open a PR and \
-drive it to green. Do not merge unless that file's frontmatter says merge: auto." \
+code. You are already on branch $branch in your own worktree. \
+IMPORTANT: do not end your turn while a test run is still going. Run each \
+suite and WAIT for it, then read its BUILD line. A previous builder wrote \
+'Red runs for core and web are in progress' and stopped there, which threw \
+away its own work. You are not finished until the PR exists, CI is green, \
+you have merged it unless the request says merge: ask, and you have moved \
+the request file into requests/done/ and committed that." \
       --permission-mode bypassPermissions \
       >> "$STATE/$name.log" 2>&1
     code=$?
-    say "$name builder exited $code  (see $STATE/$name.log)"
-    # The worktree stays when it failed, so it can be looked at.
-    if [ "$code" -eq 0 ]; then
-      git -C "$REPO" worktree remove --force "$tree" 2>>"$LOG" && say "$name worktree cleaned up"
-    else
-      say "$name worktree left at .intake/wt/$name for inspection"
-    fi
+
+    # An exit code says nothing about whether it finished. `claude -p`
+    # ends when the model stops producing text, and one builder started
+    # the suites, wrote "Red runs for core and web are in progress", and
+    # ended its turn — exit 0, nothing committed, no PR. The dispatcher
+    # read 0 as success and deleted the worktree with the work in it.
+    pr="$(gh pr list --head "$branch" --state open --json number --jq '.[0].number' 2>/dev/null)"
+    [ -n "$pr" ] && open=true || open=false
+    [ -f "$tree/requests/done/$file" ] && filed=true || filed=false
+
+    verdict="$(cd "$REPO" && node -e '
+      import("./scripts/intake.mjs").then(m => {
+        const v = m.builderDone({
+          exitCode: Number(process.argv[1]),
+          prOpen: process.argv[2] === "true",
+          movedToDone: process.argv[3] === "true",
+        })
+        console.log(v.ok ? "ok" : "keep:" + v.why)
+      })
+    ' "$code" "$open" "$filed" 2>/dev/null)"
+
+    case "$verdict" in
+      ok)
+        say "$name done: PR #$pr, request filed  (log: $STATE/$name.log)"
+        git -C "$REPO" worktree remove --force "$tree" 2>>"$LOG" && say "$name worktree cleaned up"
+        ;;
+      keep:*)
+        say "$name NOT FINISHED — ${verdict#keep:}"
+        say "  worktree kept at .intake/wt/$name, branch $branch, log $STATE/$name.log"
+        say "  it needs re-dispatching; nothing was thrown away"
+        ;;
+      *)
+        say "$name could not be judged (node said nothing); keeping .intake/wt/$name"
+        ;;
+    esac
     rm -rf "$claimed"
   ) &
   # bash 3.2 on macOS has no BASHPID, so the parent records the child.
