@@ -49,6 +49,30 @@ export function branchFor(file) {
   return `request/${slug || 'unnamed'}`
 }
 
+/**
+ * Whether a worktree carries the instructions a builder needs.
+ *
+ * A builder works in a worktree branched off main, and for a while
+ * `.claude/` existed only on the branch that introduced it. Two builders
+ * started in worktrees with neither the skill nor their own definition,
+ * were told to invoke the `mtg` skill, found nothing, and built without
+ * the parity rule or the TDD discipline. Nothing failed — they worked
+ * blind and looked exactly like builders that had read everything.
+ *
+ * So the worktree is asked before anything runs in it.
+ */
+export function equipped(present) {
+  const have = new Set(present)
+  const missing = REQUIRED.filter((f) => !have.has(f))
+  return { ok: missing.length === 0, missing }
+}
+
+/** What a builder cannot work without. */
+export const REQUIRED = [
+  '.claude/skills/mtg/SKILL.md',
+  '.claude/agents/request-builder.md',
+]
+
 /** Whether a changed path is a request, for the PostToolUse hook. */
 export function hookFires(path) {
   if (!path) return false
@@ -88,6 +112,16 @@ if (process.argv[1] && process.argv[1].endsWith('intake.mjs')) {
     console.log(list().filter((f) => !buildable(read(dir, f))).join('\n'))
   } else if (cmd === 'branch') {
     console.log(branchFor(arg || ''))
+  } else if (cmd === 'equipped') {
+    // `arg` is the worktree. Exits 0 when equipped, 1 and names what is
+    // missing otherwise.
+    const root = arg || '.'
+    const present = REQUIRED.filter((f) => {
+      try { readFileSync(join(root, f), 'utf8'); return true } catch { return false }
+    })
+    const v = equipped(present)
+    if (!v.ok) console.error(`missing: ${v.missing.join(', ')}`)
+    process.exit(v.ok ? 0 : 1)
   } else if (cmd === 'fires') {
     process.exit(hookFires(arg) ? 0 : 1)
   } else {

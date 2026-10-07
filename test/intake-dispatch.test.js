@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  pending, triaged, waiting, buildable, branchFor, hookFires,
+  pending, triaged, waiting, buildable, branchFor, hookFires, equipped,
 } from '../scripts/intake.mjs'
 
 // What the request watcher decides.
@@ -123,5 +123,47 @@ describe('hookFires', () => {
   it('does not fire for nothing at all', () => {
     expect(hookFires('')).toBe(false)
     expect(hookFires(undefined)).toBe(false)
+  })
+})
+
+describe('equipped', () => {
+  // A builder gets a worktree branched off main. The skill and the agent
+  // definitions live in `.claude/`, and for a while `.claude/` was only
+  // on the branch that introduced it — so two builders started in
+  // worktrees with no skill and no instructions, were told to invoke the
+  // `mtg` skill, found nothing, and built without the parity rule or the
+  // TDD discipline. Nothing failed. They just quietly worked blind.
+  //
+  // So a worktree says whether it is equipped before anything runs in it.
+
+  const need = [
+    '.claude/skills/mtg/SKILL.md',
+    '.claude/agents/request-builder.md',
+  ]
+
+  it('is equipped when the skill and the builder definition are both there', () => {
+    expect(equipped(need).ok).toBe(true)
+  })
+
+  it('is not equipped with no skill, and says which file is missing', () => {
+    const v = equipped(['.claude/agents/request-builder.md'])
+    expect(v.ok).toBe(false)
+    expect(v.missing).toEqual(['.claude/skills/mtg/SKILL.md'])
+  })
+
+  it('is not equipped with no builder definition', () => {
+    const v = equipped(['.claude/skills/mtg/SKILL.md'])
+    expect(v.ok).toBe(false)
+    expect(v.missing).toEqual(['.claude/agents/request-builder.md'])
+  })
+
+  it('names both when a worktree has neither', () => {
+    const v = equipped([])
+    expect(v.ok).toBe(false)
+    expect(v.missing).toEqual(need)
+  })
+
+  it('does not mind other files being present', () => {
+    expect(equipped([...need, 'CLAUDE.md', 'src/index.js']).ok).toBe(true)
   })
 })

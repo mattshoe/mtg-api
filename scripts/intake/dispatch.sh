@@ -22,6 +22,9 @@ STATE="$REPO/.intake"
 LOG="$STATE/intake.log"
 LOCK="$STATE/dispatch.lock"
 DEBOUNCE="${INTAKE_DEBOUNCE:-15}"
+# What a builder's worktree is branched from. origin/main normally;
+# override it while the intake machinery itself is still on a branch.
+BASE="${INTAKE_BASE:-origin/main}"
 
 mkdir -p "$STATE"
 touch "$LOG"
@@ -55,6 +58,7 @@ ask() { ( cd "$REPO" && INTAKE_DIR="$REQUESTS" node scripts/intake.mjs "$@" ); }
 pending()   { ask pending | sed '/^$/d' | sort; }
 untriaged() { ask untriaged | sed '/^$/d' | sort; }
 buildable() { ask buildable | sed '/^$/d' | sort; }
+equipped()  { ( cd "$REPO" && node scripts/intake.mjs equipped "$1" >/dev/null 2>&1 ); }
 
 [ -z "$(pending)" ] && { say "nothing pending"; exit 0; }
 
@@ -119,7 +123,7 @@ for file in $(buildable); do
   # work.
   tree="$REPO/.intake/wt/$name"
   rm -rf "$tree"
-  if ! git -C "$REPO" worktree add -q --force -B "$branch" "$tree" origin/main 2>>"$LOG"; then
+  if ! git -C "$REPO" worktree add -q --force -B "$branch" "$tree" "$BASE" 2>>"$LOG"; then
     say "$name could not get a worktree, skipping"
     rm -rf "$claimed"
     continue
@@ -128,6 +132,19 @@ for file in $(buildable); do
   # to be able to read it, and to commit it moved into done/.
   mkdir -p "$tree/requests"
   cp "$REQUESTS/$file" "$tree/requests/$file"
+
+  # A worktree with no skill and no agent definition produces a builder
+  # that works blind. That happened twice: `.claude/` was only on the
+  # branch that introduced it, the builders were told to invoke the `mtg`
+  # skill, found nothing, and built without the parity rule. Nothing
+  # failed, which is what made it bad.
+  if ! equipped "$tree"; then
+    say "$name NOT STARTED: $tree is missing its instructions — $(ask equipped "$tree" 2>&1 >/dev/null)"
+    say "  the skill and the agent definitions have to be on $BASE first"
+    git -C "$REPO" worktree remove --force "$tree" 2>>"$LOG"
+    rm -rf "$claimed"
+    continue
+  fi
 
   say "building $name on $branch in .intake/wt/$name"
   (
