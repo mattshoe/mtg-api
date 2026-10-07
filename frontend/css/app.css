@@ -1686,13 +1686,33 @@ select.sort {
 .peek-tags { display: flex; gap: 8px; flex-wrap: wrap; }
 .peek-acts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 
+/* What the colours are called — Azorius, Jund, Mono-red — beside the
+   pips that say which they are. */
+.guild { color: var(--text-2); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.tag.guild { color: var(--accent-2); }
+.deck-meta .guild { flex: none; }
+
 /* One account on the Admin Settings screen: a picture, who they are,
    what they are, and the button that changes it. */
 .person-row {
-  display: flex; align-items: center; gap: 9px;
-  padding: 7px 0;
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 9px 4px; min-height: 48px;
+  background: transparent; border: 0; border-radius: 8px;
+  color: inherit; font: inherit; text-align: left; cursor: pointer;
 }
-.person-row + .person-row { border-top: 1px solid var(--line); }
+@media (hover: hover) {
+  .person-row:hover { background: var(--bg-3); }
+}
+.person-row + .person-row { border-top: 1px solid var(--line); border-radius: 0; }
+.person-row .chev { margin-left: 2px; font-size: 18px; }
+
+/* One account's own page: a big face, their name, their address. */
+.person-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.person-face {
+  width: 56px; height: 56px; border-radius: 50%;
+  border: 1px solid var(--line-2); object-fit: cover; flex: none;
+}
+.person-name { color: var(--text); font-size: 18px; font-weight: 650; }
 .person-who { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .person-who > span:first-child {
   color: var(--text); font-weight: 600;

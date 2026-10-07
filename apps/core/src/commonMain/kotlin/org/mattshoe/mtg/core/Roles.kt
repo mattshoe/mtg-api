@@ -49,6 +49,22 @@ data class Person(
 
     /** The one the button offers, which is the one they do not have. */
     val otherRole: String get() = if (isAdmin) Role.USER else Role.ADMIN
+
+    /**
+     * Where their collection actually lives.
+     *
+     * `/c/<key>`, because that is what an address carries. The screen
+     * showed `/c/<slug>` for a while, which is not a page anybody can
+     * open — Matt: "why is the fucking slug still not the GOD DAMN
+     * USER KEY LIKE YOU FUCKING SAID". The slug is what `cards.owner`
+     * holds; the key is the address.
+     */
+    val address: String? get() = key.takeIf { it.isNotBlank() }?.let { "/c/$it" }
+
+    /** Everything worth matching a search against. */
+    internal val haystack: String get() = listOf(slug, name.orEmpty(), key, role)
+        .joinToString(" ")
+        .lowercase()
 }
 
 /**
@@ -60,10 +76,33 @@ data class Person(
  */
 data class People(
     val rows: List<Person> = emptyList(),
+    /**
+     * What is typed in the search box.
+     *
+     * Matt: "YOU DON'T WANT ME TO BE ABLE TO FUCKING SEARCH?!?!" —
+     * fair, on a screen that will one day hold every account there
+     * is. It narrows what is drawn and nothing else: a role set while
+     * a search is on lands on the row it was set on, not on whatever
+     * happens to be visible.
+     */
+    val query: String = "",
     val busy: Boolean = false,
     val changing: String? = null,
     val error: String? = null,
 ) {
+
+    /** Who the list draws, which is everybody until somebody types. */
+    val shown: List<Person>
+        get() {
+            val term = query.trim().lowercase()
+            return if (term.isEmpty()) rows else rows.filter { term in it.haystack }
+        }
+
+    /** A search that found nobody, which is not the same as no accounts. */
+    val nothingMatched: Boolean get() = rows.isNotEmpty() && shown.isEmpty()
+
+    fun searching(term: String) = copy(query = term)
+
     fun loading() = copy(busy = true, error = null)
 
     fun loaded(found: List<Person>) = copy(rows = found, busy = false, changing = null, error = null)

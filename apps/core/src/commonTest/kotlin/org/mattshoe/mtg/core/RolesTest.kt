@@ -264,3 +264,133 @@ class RolesTest {
         }
     }
 }
+
+/**
+ * Admin Settings at more than two accounts.
+ *
+ * Matt, on a screen with two rows crammed side by side: "This looks
+ * like FUCKING SHIT dude [...] WHAT HAPPENS WHEN SET HAVE 20 DIFFERENT
+ * FUCKING ROLES?!?!?! YOU DON'T WANT ME TO BE ABLE TO FUCKING
+ * SEARCH?!?! [...] I need to be able to search users and then tapping
+ * one needs to open a user details page where i can assign roles!!!"
+ *
+ * So the list is a list — a search box and a row per person — and
+ * everything you can do to somebody lives on their own page, where
+ * there is room for it. A row with the controls jammed in beside the
+ * name does not survive a third role, let alone twenty.
+ *
+ * And the address it shows is the address: `/c/<key>`. It said
+ * `/c/<slug>`, which is not a page anybody can open — Matt: "why is
+ * the fucking slug still not the GOD DAMN USER KEY LIKE YOU FUCKING
+ * SAID".
+ */
+class PeopleSearchTest {
+
+    private val everybody = listOf(
+        Person("matt", "Matt Shoemaker", null, Role.ADMIN, "e7de0cb1"),
+        Person("matthew-shoemaker", "Matthew Shoemaker", null, Role.USER, "a1b2c3d4"),
+        Person("kayla", "Kayla", null, Role.USER, "99887766"),
+    )
+
+    private val loaded = People().loaded(everybody)
+
+    // ------------------------------------------------------- the address
+
+    @Test
+    fun aPersonIsShownAtTheAddressTheirCollectionActuallyHas() {
+        // `/c/e7de0cb1`, not `/c/matt`. The key is what an address
+        // carries; the slug is what `cards.owner` holds.
+        assertEquals("/c/e7de0cb1", everybody.first().address)
+        assertEquals("/c/a1b2c3d4", everybody[1].address)
+    }
+
+    @Test
+    fun andAnAccountWithNoKeyYetHasNoAddressToShow() {
+        assertNull(Person("ghost", "Ghost", null, Role.USER, "").address)
+    }
+
+    // -------------------------------------------------------- the search
+
+    @Test
+    fun nothingTypedIsEverybody() {
+        assertEquals(3, loaded.shown.size)
+        assertEquals("", loaded.query)
+    }
+
+    @Test
+    fun aNameNarrowsIt() {
+        assertEquals(listOf("kayla"), loaded.searching("kay").shown.map { it.slug })
+    }
+
+    @Test
+    fun andSoDoesASlugOrAKey() {
+        assertEquals(listOf("matthew-shoemaker"), loaded.searching("matthew-").shown.map { it.slug })
+        assertEquals(listOf("matt"), loaded.searching("e7de").shown.map { it.slug })
+    }
+
+    @Test
+    fun caseAndSpacingDoNotMatter() {
+        assertEquals(listOf("kayla"), loaded.searching("  KAYLA ").shown.map { it.slug })
+    }
+
+    @Test
+    fun aRoleIsSomethingYouCanSearchFor() {
+        // "who are the admins" is the question this screen exists for.
+        assertEquals(listOf("matt"), loaded.searching("admin").shown.map { it.slug })
+    }
+
+    @Test
+    fun andSomethingNobodyMatchesIsAnEmptyListRatherThanEverybody() {
+        assertEquals(emptyList(), loaded.searching("zzzz").shown)
+        assertTrue(loaded.searching("zzzz").nothingMatched)
+        assertFalse(loaded.nothingMatched, "an unsearched list is not an empty search")
+    }
+
+    @Test
+    fun theWholeListIsStillThereUnderneath() {
+        // Searching narrows what is shown and changes nothing else:
+        // a role set while a search is on must land on the row it was
+        // set on, not on whatever is visible.
+        val narrowed = loaded.searching("kay").changed("matt", Role.USER)
+        assertEquals(3, narrowed.rows.size)
+        assertEquals(Role.USER, narrowed.rows.first { it.slug == "matt" }.role)
+    }
+
+    // -------------------------------------------------------- one person
+
+    @Test
+    fun aPersonHasAPageOfTheirOwn() {
+        val r = Route(View.ADMIN, "e7de0cb1")
+        assertEquals(r, Route.parse(r.toHash()))
+        assertEquals("#/admin/e7de0cb1", r.toHash())
+    }
+
+    @Test
+    fun andTheAppFindsThemByTheKeyInTheAddress() {
+        val s = AppState(people = loaded).navigate(Route(View.ADMIN, "e7de0cb1"))
+        assertEquals("matt", s.person?.slug)
+    }
+
+    @Test
+    fun aKeyNobodyHasIsNobodyRatherThanTheFirstPerson() {
+        val s = AppState(people = loaded).navigate(Route(View.ADMIN, "nope"))
+        assertNull(s.person)
+    }
+
+    @Test
+    fun andTheListItselfIsTheAddressWithNobodyNamed() {
+        val s = AppState(people = loaded).navigate(Route(View.ADMIN))
+        assertNull(s.person, "the list page picked somebody")
+    }
+
+    @Test
+    fun everyRoleIsOfferedOnThePageRatherThanOneToggle() {
+        // Matt: "WHAT HAPPENS WHEN SET HAVE 20 DIFFERENT FUCKING
+        // ROLES?!?!" — the page lists the roles there are, so a third
+        // one needs no new control.
+        assertEquals(Role.all, Role.all)
+        val person = everybody.first()
+        assertEquals(listOf("user", "admin"), Role.all)
+        assertTrue(person.isAdmin)
+    }
+}

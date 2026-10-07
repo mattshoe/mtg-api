@@ -395,14 +395,21 @@ class BottomNavParityTest {
 
     @Test
     fun theProfileSaysWhoYouAreAndWhereYourCardsLive() {
-        val me = Account(slug = "matt", name = "Matt")
+        val me = Account(slug = "matt", name = "Matt", key = "e7de0cb1")
         shell(AppState(admin = Admin().signIn(me, session = "s")))
         rule.onNodeWithContentDescription("Profile").performClick()
         rule.waitForIdle()
         assertTrue(rule.onAllNodes(hasText("Matt")).fetchSemanticsNodes().isNotEmpty(), "no name")
+        // `/c/<key>`, which is the address the collection actually
+        // has. This asserted `/c/matt` — the slug — which is not a
+        // page anybody can open, so the test was pinning the bug.
         assertTrue(
-            rule.onAllNodes(hasText("/c/matt")).fetchSemanticsNodes().isNotEmpty(),
+            rule.onAllNodes(hasText("/c/e7de0cb1")).fetchSemanticsNodes().isNotEmpty(),
             "nothing says where the collection lives",
+        )
+        assertTrue(
+            rule.onAllNodes(hasText("/c/matt")).fetchSemanticsNodes().isEmpty(),
+            "the profile is showing the slug as if it were an address",
         )
         // The password's own way in is not offered beside it: a
         // password is not an account.

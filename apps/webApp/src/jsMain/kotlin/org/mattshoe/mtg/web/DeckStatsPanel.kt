@@ -20,9 +20,20 @@ import org.mattshoe.mtg.core.Prices
  * bundle and the page is not allowed to fetch one anyway.
  */
 @Composable
-fun DeckStatsPanel(s: DeckStats) {
+fun DeckStatsPanel(s: DeckStats, guild: String? = null) {
     Div(attrs = { classes("panel") }) {
-        Div(attrs = { classes("panel-head") }) { H2 { Text("The deck at a glance") } }
+        Div(attrs = { classes("panel-head") }) {
+            H2 { Text("The deck at a glance") }
+            // Azorius, Jund, Mono-red. A row of pips says which
+            // colours; it does not say what they are called, and the
+            // name is how people talk about a deck. Matt: "I want the
+            // 'deck at a glance' view to show which guild or whatever
+            // you call it."
+            guild?.let {
+                Span(attrs = { classes("spacer") }) {}
+                Span(attrs = { classes("tag", "guild") }) { Text(it) }
+            }
+        }
 
         Div(attrs = { classes("figures") }) {
             figure("${s.totalCards}", "cards")

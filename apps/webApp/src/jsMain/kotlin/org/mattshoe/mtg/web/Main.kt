@@ -232,16 +232,16 @@ object MtgApp {
                 // each call carries its own idempotency key, so two
                 // presses are two writes the server is happy to make.
 
-                onChangeRole = { person ->
+                onSetRole = { person, role ->
                     // One row at a time: the press greys out the row
                     // it was made on and leaves the rest live.
                     if (app.people.changing == null) {
                         app = app.copy(people = app.people.changing(person.slug))
                         scope.launch {
                             app = try {
-                                api.setRole(token(), person.slug, person.otherRole)
-                                app.copy(people = app.people.changed(person.slug, person.otherRole))
-                                    .say("${person.shownName} is now ${person.otherRole}")
+                                api.setRole(token(), person.slug, role)
+                                app.copy(people = app.people.changed(person.slug, role))
+                                    .say("${person.shownName} is now $role")
                             } catch (ex: ApiFailure) {
                                 app.copy(people = app.people.refused(ex.message ?: "that did not work"))
                                     .say(ex.message ?: "that did not work", failed = true)
