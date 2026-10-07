@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.matt.mtg.intake</string>
+
+  <!-- launchd watches the folder itself, so there is nothing to install
+       and no fswatch to keep alive. It fires on any change to the
+       directory, which includes a file being dropped in. -->
+  <key>WatchPaths</key>
+  <array>
+    <string>/Users/matthewshoemaker/repos/mtg-api/requests</string>
+  </array>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/matthewshoemaker/repos/mtg-api/scripts/intake/dispatch.sh</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/matthewshoemaker/repos/mtg-api</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/Users/matthewshoemaker/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+
+  <key>StandardOutPath</key>
+  <string>/Users/matthewshoemaker/repos/mtg-api/.intake/launchd.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/matthewshoemaker/repos/mtg-api/.intake/launchd.log</string>
+
+  <key>RunAtLoad</key>
+  <false/>
+  <key>ThrottleInterval</key>
+  <integer>30</integer>
+</dict>
+</plist>

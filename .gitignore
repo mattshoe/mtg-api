@@ -29,3 +29,4 @@ frontend/kmp/
 # of the same command can clean up anything a SIGKILL left behind.
 .test-guard/
 .vitest-results
+.intake/
