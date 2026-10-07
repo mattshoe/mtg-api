@@ -423,6 +423,12 @@ apart is what stops an address from being mistaken for permission. Four
 places had this wrong once and two tests were pinning the wrong value,
 which is why nothing caught it.
 
+**No account is ever deleted unless Matt asks for that account by
+name.** An empty collection is not a reason. Account id 2
+(`matthew.shoemaker.277@gmail.com`, slug `matthew-shoemaker`, key
+`t4pee71g`, role `user`) is Matt's test account and owns no cards and
+no decks by design. Leave it alone.
+
 `View.operator = true` means a view needs a role, not merely an account.
 `Admin.settled` means `/auth/me` has answered — an unanswered question
 is not a "no", and treating it as one showed Kayla's decks in Matt's

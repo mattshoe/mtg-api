@@ -1,5 +1,6 @@
 ---
-status: ready
+status: done
+pr: 38
 size: small
 platforms: none
 merge: ask
