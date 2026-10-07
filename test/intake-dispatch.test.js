@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   pending, triaged, waiting, buildable, branchFor, hookFires, equipped,
+  builderDone,
 } from '../scripts/intake.mjs'
 
 // What the request watcher decides.
@@ -165,5 +166,52 @@ describe('equipped', () => {
 
   it('does not mind other files being present', () => {
     expect(equipped([...need, 'CLAUDE.md', 'src/index.js']).ok).toBe(true)
+  })
+})
+
+describe('builderDone', () => {
+  // A builder's exit code says nothing about whether it finished.
+  //
+  // `claude -p` ends when the model stops producing text. One builder
+  // kicked off the core and web suites, wrote "Red runs for core and web
+  // are in progress", and ended its turn — exit 0, no commit, no PR. The
+  // dispatcher read 0 as success and deleted the worktree, which threw
+  // the work away.
+  //
+  // So "done" is the PR existing and the request filed under done/, and
+  // the exit code is the least interesting of the three.
+
+  it('is done with a PR open and the request filed', () => {
+    expect(builderDone({ exitCode: 0, prOpen: true, movedToDone: true }).ok).toBe(true)
+  })
+
+  it('is not done on exit 0 with no PR, and says so', () => {
+    const v = builderDone({ exitCode: 0, prOpen: false, movedToDone: false })
+    expect(v.ok).toBe(false)
+    expect(v.why).toContain('no pull request')
+  })
+
+  it('keeps the worktree when it is not done', () => {
+    expect(builderDone({ exitCode: 0, prOpen: false, movedToDone: false }).keep).toBe(true)
+    expect(builderDone({ exitCode: 0, prOpen: true, movedToDone: true }).keep).toBe(false)
+  })
+
+  it('is not done when a PR exists but the request was never filed', () => {
+    const v = builderDone({ exitCode: 0, prOpen: true, movedToDone: false })
+    expect(v.ok).toBe(false)
+    expect(v.why).toContain('requests/done')
+  })
+
+  it('is not done on a nonzero exit even with a PR', () => {
+    const v = builderDone({ exitCode: 1, prOpen: true, movedToDone: true })
+    expect(v.ok).toBe(false)
+    expect(v.why).toContain('exited 1')
+  })
+
+  it('says every reason at once rather than the first', () => {
+    const v = builderDone({ exitCode: 2, prOpen: false, movedToDone: false })
+    expect(v.why).toContain('exited 2')
+    expect(v.why).toContain('no pull request')
+    expect(v.why).toContain('requests/done')
   })
 })

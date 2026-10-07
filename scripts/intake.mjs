@@ -67,6 +67,28 @@ export function equipped(present) {
   return { ok: missing.length === 0, missing }
 }
 
+/**
+ * Whether a builder actually finished, which its exit code does not say.
+ *
+ * `claude -p` ends when the model stops producing text. One builder
+ * started the core and web suites, wrote "Red runs for core and web are
+ * in progress", and ended its turn — exit 0, nothing committed, no pull
+ * request. The dispatcher read 0 as success and removed the worktree,
+ * throwing the work away.
+ *
+ * Done is the pull request existing and the request filed under
+ * `requests/done/`. The exit code is the least interesting of the three,
+ * and a worktree is only ever removed when all of them agree.
+ */
+export function builderDone({ exitCode, prOpen, movedToDone }) {
+  const why = []
+  if (exitCode !== 0) why.push(`exited ${exitCode}`)
+  if (!prOpen) why.push('no pull request for its branch')
+  if (!movedToDone) why.push('request not filed under requests/done')
+  const ok = why.length === 0
+  return { ok, keep: !ok, why: why.join('; ') }
+}
+
 /** What a builder cannot work without. */
 export const REQUIRED = [
   '.claude/skills/mtg/SKILL.md',
