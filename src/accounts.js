@@ -109,12 +109,32 @@ async function taken(db, slug) {
   return results.length > 0;
 }
 
-/** The first free slug built off that name. */
+/** Four characters of the key alphabet, to tell two of a name apart. */
+function mark() {
+  const bytes = crypto.getRandomValues(new Uint8Array(4));
+  return [...bytes].map((b) => KEY_ALPHABET[b % KEY_ALPHABET.length]).join('');
+}
+
+/**
+ * A free slug built off that name.
+ *
+ * It used to count — `base-2`, `base-3`, up to `base-999` and then
+ * throw. That is a query per attempt on the sign-in path, a hard
+ * failure for the thousandth John Smith, and a number that invites
+ * guessing the next one. Four random characters cost one query and
+ * have no ceiling. Matt: "What slug when we have thousands of
+ * users??? How are we going to keep them distinct???"
+ *
+ * None of this is what keeps accounts apart. `users.key` is: eight
+ * characters of a 32-letter alphabet, a trillion of them, and the
+ * thing an address actually carries. A slug is the word in
+ * `cards.owner` and on the screen, and it only has to be unique.
+ */
 async function freeSlug(db, name) {
   const base = slugFor(name);
   if (!(await taken(db, base))) return base;
-  for (let n = 2; n < 1000; n += 1) {
-    const candidate = `${base}-${n}`;
+  for (let tries = 0; tries < 8; tries += 1) {
+    const candidate = `${base}-${mark()}`;
     if (!(await taken(db, candidate))) return candidate;
   }
   throw new Error(`no free slug for ${base}`);
@@ -143,12 +163,24 @@ export async function signIn(db, { provider, subject, email = null, name = null,
     return db.prepare('SELECT * FROM users WHERE id = ?1').bind(existing.id).first();
   }
 
-  const slug = await freeSlug(db, name || email || 'player');
-  const user = await db.prepare(
-    `INSERT INTO users (key, slug, display_name, email, avatar_url, role, created_at)
-     VALUES (?1, ?2, ?3, ?4, ?5, 'user', datetime('now'))
-     RETURNING *`,
-  ).bind(await freeKey(db), slug, name, email, avatar).first();
+  // Two people of one name signing in at the same moment both see
+  // the slug free, and `users.slug` is UNIQUE — so one INSERT loses.
+  // Losing it is ordinary; failing somebody's first sign-in over it
+  // is not, so the loser takes another slug and tries again.
+  let user = null;
+  for (let tries = 0; tries < 5 && !user; tries += 1) {
+    const slug = await freeSlug(db, name || email || 'player');
+    try {
+      user = await db.prepare(
+        `INSERT INTO users (key, slug, display_name, email, avatar_url, role, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, 'user', datetime('now'))
+         RETURNING *`,
+      ).bind(await freeKey(db), slug, name, email, avatar).first();
+    } catch (e) {
+      if (!/UNIQUE/i.test(String(e?.message ?? e))) throw e;
+    }
+  }
+  if (!user) throw new Error('could not create an account');
   await db.prepare(
     'INSERT INTO identities (provider, subject, user_id, created_at) VALUES (?1, ?2, ?3, datetime(\'now\'))',
   ).bind(provider, String(subject), user.id).run();
@@ -295,10 +327,10 @@ export async function allUsers(db) {
  * - a role that is not one of the two, because a typo that lands in
  *   the column is an account nobody can classify
  * - a slug nobody has
- * - the last admin demoting themselves, which leaves a database no
- *   browser can promote anybody from. Recoverable with
- *   `ADMIN_PASSWORD` and raw SQL, which is a bad afternoon rather
- *   than a feature.
+ *
+ * The last admin demoting themselves is allowed. It leaves a database
+ * no browser can promote anybody from — `ADMIN_PASSWORD` is the way
+ * back — but it is Matt's database and his decision to make.
  */
 export async function setRole(db, slug, role) {
   if (!ROLES.includes(role)) {
@@ -306,17 +338,12 @@ export async function setRole(db, slug, role) {
   }
   const row = await db.prepare('SELECT id, role FROM users WHERE slug = ?1').bind(String(slug)).first();
   if (!row) return { error: `there is no account at ${slug}`, status: 404 };
-  if (row.role === ADMIN && role === USER) {
-    const left = await db.prepare(
-      'SELECT COUNT(*) AS n FROM users WHERE role = ?1 AND id != ?2',
-    ).bind(ADMIN, row.id).first();
-    if (!left?.n) {
-      return {
-        error: 'that is the last admin, and nobody could hand the role out again',
-        status: 409,
-      };
-    }
-  }
+  // The last admin demoting themselves used to be a 409 here. Matt:
+  // "I want to be able to assign and remove roles at will!!!! I don't
+  // want to need you for it!!!" — and a refusal is the shape of
+  // needing somebody. It is still the one change nothing in a browser
+  // can undo, so the screen says so on the row; the decision is not
+  // taken away from the person making it.
   await db.prepare('UPDATE users SET role = ?2 WHERE id = ?1').bind(row.id, role).run();
   return { ok: true, slug: String(slug), role };
 }

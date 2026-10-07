@@ -1,0 +1,19 @@
+-- The first admin, so a database never needs a human with the
+-- server password to have one.
+--
+-- Matt: "I want to be able to assign and remove roles at will!!!! I
+-- don't want to need you for it!!!"
+--
+-- The role system is bootstrapped by somebody who already has the
+-- role, which on a fresh database is nobody — the live one sat with
+-- `role = 'user'` on every account and an Admin Settings screen that
+-- was invisible to its owner. The only way in was `ADMIN_PASSWORD`
+-- and a script, which is exactly the "needing somebody" this is here
+-- to end.
+--
+-- By slug rather than by "whoever signs in first": Matt said "Only
+-- SPECIFIC accounts that I DECIDE get the admin role", and a rule
+-- that hands the role to the first stranger through the door is not
+-- that. A no-op on a database where he has not signed in yet, and a
+-- no-op on the live one, where this already ran by hand.
+UPDATE users SET role = 'admin' WHERE slug = 'matt';

@@ -50,7 +50,7 @@ describe('accounts', () => {
     const one = await signIn(env.DB, { provider: 'google', subject: '1', name: 'Some One' });
     const two = await signIn(env.DB, { provider: 'google', subject: '2', name: 'Some One' });
     expect(one.slug).toBe('some-one');
-    expect(two.slug).toBe('some-one-2');
+    expect(two.slug).toMatch(/^some-one-[0-9a-hjkmnp-tv-z]{4}$/);
   });
 
   it('a slug is a path segment and nothing else', () => {
@@ -60,6 +60,55 @@ describe('accounts', () => {
     expect(slugFor('  Ünïcødé  Name ')).toBe('unicode-name');
     expect(slugFor('///')).toBe('player');
     expect(slugFor('')).toBe('player');
+  });
+
+  /**
+   * The slug stops counting at a collision.
+   *
+   * Matt: "What slug when we have thousands of users??? How are we
+   * going to keep them distinct???"
+   *
+   * It used to try `base-2`, `base-3` … up to `base-999` and then
+   * throw, which is a query per attempt on the sign-in path and a
+   * hard failure for the thousandth John Smith. Four random
+   * characters cost one query and have no ceiling.
+   *
+   * None of this is what keeps accounts apart: `users.key` is, and it
+   * is eight characters of a 32-letter alphabet — a trillion of them.
+   * The slug is the word in `cards.owner` and on the screen, and it
+   * only has to be unique, not meaningful.
+   */
+  it('a crowd of the same name all get their own slug', async () => {
+    const seen = new Set();
+    for (let n = 0; n < 25; n += 1) {
+      const u = await signIn(env.DB, { provider: 'google', subject: `crowd-${n}`, name: 'John Smith' });
+      expect(seen.has(u.slug), `${u.slug} was handed out twice`).toBe(false);
+      seen.add(u.slug);
+    }
+    expect(seen.size).toBe(25);
+    // The first one gets the clean name; the rest are marked.
+    expect(seen.has('john-smith')).toBe(true);
+    [...seen].filter((s) => s !== 'john-smith').forEach((s) => {
+      expect(s, `${s} is not the name plus a suffix`).toMatch(/^john-smith-[0-9a-hjkmnp-tv-z]{4}$/);
+    });
+  });
+
+  it('and none of them is a number anybody could guess the next of', async () => {
+    // `john-smith-2` tells you there is a `john-smith` and invites a
+    // `john-smith-3`. A random suffix says nothing.
+    await signIn(env.DB, { provider: 'google', subject: 'g1', name: 'Jane Doe' });
+    const second = await signIn(env.DB, { provider: 'google', subject: 'g2', name: 'Jane Doe' });
+    expect(second.slug).not.toBe('jane-doe-2');
+  });
+
+  it('the key is what is actually unique, and it is long', async () => {
+    const keys = new Set();
+    for (let n = 0; n < 10; n += 1) {
+      const u = await signIn(env.DB, { provider: 'google', subject: `k-${n}`, name: 'Same Name' });
+      expect(u.key).toMatch(/^[0-9a-hjkmnp-tv-z]{8}$/);
+      keys.add(u.key);
+    }
+    expect(keys.size).toBe(10);
   });
 
   it('a slug cannot collide with a collection that already exists', async () => {
@@ -161,7 +210,7 @@ describe('a collection key', () => {
     const b = await signIn(env.DB, { provider: 'google', subject: '2', name: 'Same Name' });
     expect(a.key).not.toBe(b.key);
     // And the names collided, which is the thing a key is for.
-    expect(b.slug).toBe('same-name-2');
+    expect(b.slug).toMatch(/^same-name-[0-9a-hjkmnp-tv-z]{4}$/);
   });
 
   it('it is not a name, so it gives nothing away', async () => {

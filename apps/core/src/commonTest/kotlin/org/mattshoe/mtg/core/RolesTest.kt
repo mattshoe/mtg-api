@@ -182,12 +182,36 @@ class RolesTest {
     }
 
     @Test
-    fun youCannotTakeYourOwnLastAdminAway() {
-        // The server refuses it, and the screen does not offer it —
-        // an offer the server will refuse is a button that only ever
-        // produces an error message.
+    fun everyRowCanBeChanged() {
+        // Matt: "I want to be able to assign and remove roles at
+        // will!!!! I don't want to need you for it!!! The admin
+        // screen should allow me to add and remove rules from any
+        // user!!!!"
+        //
+        // Including the last admin, including yourself. The screen
+        // used to withhold that one button, which is the shape of
+        // needing somebody.
         val alone = People().loaded(listOf(Person("matt", "Matt", null, Role.ADMIN, "m")))
-        assertFalse(alone.mayChange("matt", me = "matt"), "it offered to strand the database")
+        assertTrue(alone.mayChange("matt", me = "matt"))
+
+        val two = People().loaded(
+            listOf(
+                Person("matt", "Matt", null, Role.ADMIN, "m"),
+                Person("kayla", "Kayla", null, Role.USER, "k"),
+            ),
+        )
+        assertTrue(two.mayChange("matt", me = "matt"))
+        assertTrue(two.mayChange("kayla", me = "matt"))
+    }
+
+    @Test
+    fun butTheOneThatCannotBeUndoneSaysSo() {
+        // Taking your own last admin away leaves a database no
+        // browser can promote anybody from — `ADMIN_PASSWORD` is the
+        // way back. That is worth a word on the row, and not worth
+        // taking the decision away.
+        val alone = People().loaded(listOf(Person("matt", "Matt", null, Role.ADMIN, "m")))
+        assertTrue(alone.strands("matt", me = "matt"))
 
         val two = People().loaded(
             listOf(
@@ -195,17 +219,19 @@ class RolesTest {
                 Person("zoe", "Zoe", null, Role.ADMIN, "z"),
             ),
         )
-        assertTrue(two.mayChange("matt", me = "matt"))
+        assertFalse(two.strands("matt", me = "matt"), "with two admins nothing is stranded")
+        assertFalse(alone.strands("kayla", me = "matt"), "promoting somebody strands nothing")
     }
 
     @Test
-    fun andEverybodyElseIsAlwaysChangeable() {
+    fun andSomebodyElsesRowNeverWarns() {
         val s = People().loaded(
             listOf(
                 Person("matt", "Matt", null, Role.ADMIN, "m"),
                 Person("kayla", "Kayla", null, Role.USER, "k"),
             ),
         )
+        assertFalse(s.strands("kayla", me = "matt"))
         assertTrue(s.mayChange("kayla", me = "matt"))
     }
 

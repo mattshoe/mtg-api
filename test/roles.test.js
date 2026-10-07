@@ -144,21 +144,37 @@ describe('roles', () => {
   })
 
   /**
-   * The one refusal that is about the system rather than the caller.
+   * Even the last admin, even themselves.
    *
-   * Roles are handed out by somebody who has one. The last admin
-   * demoting themselves leaves a database nobody can promote anybody
-   * from — recoverable only by `ADMIN_PASSWORD` and raw SQL, which is
-   * a bad afternoon rather than a feature.
+   * There was a 409 here that refused it, on the grounds that it
+   * leaves a database nobody can promote anybody from. Matt: "I want
+   * to be able to assign and remove roles at will!!!! I don't want to
+   * need you for it!!! The admin screen should allow me to add and
+   * remove rules from any user!!!!"
+   *
+   * So the server does as it is told. The screen says what the
+   * consequence is — `ADMIN_PASSWORD` and a script are the only way
+   * back — rather than taking the decision away.
    */
-  it('the last admin cannot demote themselves', async () => {
+  it('the last admin can demote themselves, and is not stopped', async () => {
     const { user, token } = await account('Boss', { slug: 'boss', role: 'admin' })
     const r = await postAs('/admin/role', { slug: 'boss', role: 'user' }, token)
-    expect(r.status).toBe(409)
+    expect(r.status).toBe(200)
+    expect((await sql('SELECT role FROM users WHERE id = ?1', user.id))[0].role).toBe('user')
+  })
+
+  it('and once nobody is an admin, the password is the way back', async () => {
+    const { user, token } = await account('Boss', { slug: 'boss', role: 'admin' })
+    await postAs('/admin/role', { slug: 'boss', role: 'user' }, token)
+    // The session that was an admin is now an ordinary account.
+    expect((await postAs('/admin/role', { slug: 'boss', role: 'admin' }, token)).status).toBe(403)
+    // And the operator's door still opens.
+    const r = await post('/admin/role', { slug: 'boss', role: 'admin' })
+    expect(r.status).toBe(200)
     expect((await sql('SELECT role FROM users WHERE id = ?1', user.id))[0].role).toBe('admin')
   })
 
-  it('but one of two admins can', async () => {
+  it('and one of two admins can, obviously', async () => {
     const { user, token } = await account('Boss', { slug: 'boss', role: 'admin' })
     await account('Other', { slug: 'other', role: 'admin' })
     const r = await postAs('/admin/role', { slug: 'boss', role: 'user' }, token)

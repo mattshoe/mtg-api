@@ -96,16 +96,25 @@ data class People(
     /**
      * Whether the screen offers to change that person's role.
      *
-     * Everybody, except the last admin taking their own role away.
-     * The server refuses that — it would leave a database nobody can
-     * promote anybody from — and an offer the server will refuse is a
-     * button whose only output is an error message.
+     * Everybody, always. Matt: "I want to be able to assign and
+     * remove roles at will!!!! I don't want to need you for it!!!"
+     *
+     * This used to withhold the button from the last admin taking
+     * their own role away, which — on a database with one account —
+     * meant a screen with one row and nothing to press at all.
      */
-    fun mayChange(slug: String, me: String?): Boolean {
+    fun mayChange(slug: String, me: String?): Boolean = rows.any { it.slug == slug }
+
+    /**
+     * Whether that change is the one nothing here can undo.
+     *
+     * The last admin taking their own role away leaves a database no
+     * browser can promote anybody from; `ADMIN_PASSWORD` and a script
+     * are the way back. The row says so. It does not refuse.
+     */
+    fun strands(slug: String, me: String?): Boolean {
         val row = rows.firstOrNull { it.slug == slug } ?: return false
-        if (!row.isAdmin) return true
-        if (slug != me) return true
-        return admins > 1
+        return row.isAdmin && slug == me && admins <= 1
     }
 
     companion object {

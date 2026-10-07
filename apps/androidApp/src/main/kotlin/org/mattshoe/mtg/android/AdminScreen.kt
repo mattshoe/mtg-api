@@ -70,20 +70,20 @@ private fun PersonRow(state: People, person: Person, me: String?, onChange: (Per
         // What they are, in a word. The button beside it says what it
         // will do, which is the other thing.
         Tag(person.role)
-        if (state.mayChange(person.slug, me)) {
-            Ghost(
-                when {
-                    changing -> "Working…"
-                    person.isAdmin -> "Make user"
-                    else -> "Make admin"
-                },
-                enabled = !changing,
-            ) { onChange(person) }
-        } else {
-            // The last admin cannot take their own role away: the
-            // server refuses it, and a button whose only output is an
-            // error message is not a button.
+        // The one change nothing here can undo gets a word, not a
+        // locked button. Matt: "I want to be able to assign and
+        // remove roles at will!!!! I don't want to need you for
+        // it!!!"
+        if (state.strands(person.slug, me)) {
             Line("the only admin", Ink3, Design.MINI)
         }
+        Ghost(
+            when {
+                changing -> "Working…"
+                person.isAdmin -> "Make user"
+                else -> "Make admin"
+            },
+            enabled = !changing,
+        ) { onChange(person) }
     }
 }
