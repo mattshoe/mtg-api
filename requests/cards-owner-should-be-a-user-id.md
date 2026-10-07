@@ -122,7 +122,31 @@ Make the card's owner the account's id.
    renaming a deck updates its name and slug together stops applying,
    because there is no slug — renaming a deck changes its name and nothing
    else, and its link keeps working. That is strictly better.
-7. **Keep the id out of every response.** Check what `/auth/me`,
+7. **No column named `slug` is left anywhere.** Matt: "GET RID OF THE GOD
+   DAMN SLUG ALTOGETHER GOD FUCKING DAMMIT!!!" There are four, and after
+   this there are none:
+
+   - `users.slug` (`schema.sql:306`) — deleted, step 5
+   - `decks.slug` (`schema.sql:54`) — deleted, step 6, replaced by a key
+   - `tags.slug` (`schema.sql:94`) — **renamed to `tag`**
+   - `card_tags.tag_slug` (`schema.sql:92`) — **renamed to `tag`**, with
+     `idx_tags_slug` at `:192` renamed to match
+
+   The last two are not addresses and not ours. They hold Scryfall
+   Tagger's vocabulary — `card-draw`, `ramp` — which arrives from an
+   external bulk file, is unique because Scryfall says so, is never typed
+   by a person and never appears in a URL. So there is nothing to replace
+   them with: inventing our own ids for someone else's taxonomy would be
+   worse than the problem. What is wrong with them is the **word**, which
+   implies they are an address of ours. Rename the columns and the index,
+   change nothing about the values.
+
+   Grep for it afterwards. `/usr/bin/grep -rn 'slug' schema.sql
+   migrations/ src/ apps/*/src/` should find nothing but prose, and the
+   comment at `schema.sql:129` calling an event name a "route slug" should
+   say "route name".
+
+8. **Keep the id out of every response.** Check what `/auth/me`,
    `/admin/users`, `/c/:key` and the log return today, and make sure none
    of them leaks it. The web and Android shells must not hold an id at
    all — they hold a key and a session.
@@ -152,9 +176,12 @@ in one pull request.
 
 ## Done when
 
-No slug anywhere. A new account gets an empty collection because it owns
-no rows, and two accounts can each have a deck called Milly Moth without
-either of them knowing the other exists.
+`/usr/bin/grep -rn 'slug' schema.sql migrations/ src/ apps/*/src/` finds
+nothing but prose.
+
+A new account gets an empty collection because it owns no rows. Two
+accounts can each have a deck called Milly Moth without either of them
+knowing the other exists. Renaming anything never changes its address.
 
 A collection key opens a collection to read and can do nothing else. No
 response anywhere contains a user id.

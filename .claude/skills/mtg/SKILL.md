@@ -446,6 +446,13 @@ is a second person, and both slugs in this schema already do:
 
 **The rule: an address is a random opaque key, an identity is an id, and
 there is nothing in between.** A name is free text that anybody may reuse.
+Do not add a column called `slug`, and do not derive an identifier from
+anything a person typed.
+
+The two remaining ones, `tags.slug` and `card_tags.tag_slug`, hold
+Scryfall Tagger's vocabulary rather than an address of ours, and are being
+renamed to `tag` — the values are fine, the word is not.
+
 See `requests/cards-owner-should-be-a-user-id.md`.
 
 In the app, `Route.collection` is the **key** — what an address carries —
