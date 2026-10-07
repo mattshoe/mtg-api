@@ -15,7 +15,21 @@ for f in requests/*.md; do
   [ "$f" = "requests/README.md" ] && continue
   [ -f "$f" ] || continue
   n="$(basename "$f" .md)"
-  if [ -d "$STATE/$n.building" ]; then st="building"
+  # The builder's own process is the source of truth, not a lock
+  # directory — a lock directory can be deleted by hand, and then a
+  # running builder reads as stalled. Its command line names its request.
+  bpid="$(pgrep -f "requests/$n.md" 2>/dev/null | head -1)"
+
+  if [ -n "$bpid" ]; then
+    # How long, and whether it is getting anywhere. A builder with an
+    # empty log for an hour looks identical to a hung one otherwise.
+    age="$(ps -o etime= -p "$bpid" 2>/dev/null | tr -d ' ')"
+    wt="$STATE/wt/$n"
+    files="$(git -C "$wt" status --short 2>/dev/null | wc -l | tr -d ' ')"
+    commits="$(git -C "$wt" rev-list --count "@{upstream}..HEAD" 2>/dev/null || git -C "$wt" rev-list --count origin/main..HEAD 2>/dev/null || echo 0)"
+    # Any child at all means it is in a command rather than thinking.
+    busy="thinking"; [ -n "$(pgrep -P "$bpid" 2>/dev/null)" ] && busy="in a command"
+    st="building ${age:-?}  ${files} changed, ${commits} commits, $busy"
   elif ! /usr/bin/grep -qF '## Plan' "$f"; then st="untriaged"
   elif /usr/bin/grep -q '^status: needs-matt' "$f"; then st="NEEDS MATT"
   elif [ -d "$STATE/wt/$n" ]; then st="STALLED, worktree kept"

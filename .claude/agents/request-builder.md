@@ -83,6 +83,11 @@ green. If you deliberately removed tests, lower the floor in
 
 **Never claim something works that you have not watched work.**
 
+**Say what you are doing as you do it.** Your output is streamed to a log
+that is the only window into you. A single line before each long command —
+which suite, which part — is the difference between "working" and
+"apparently hung" to whoever is watching.
+
 ## What you do
 
 0. Invoke the `mtg` skill, then read `CLAUDE.md`.
@@ -91,6 +96,16 @@ green. If you deliberately removed tests, lower the floor in
    a starting point, not gospel; if it is wrong, say so in the PR.
 3. Build it, test-first, **on every platform it touches at once** —
    `:core` first, then both shells, not one shell and a note.
+
+   **Commit as soon as a part passes.** Do not save them all for the end.
+   A builder spent an hour and forty minutes on a five-part request with
+   thirty files changed and nothing committed, so a crash or a timeout
+   would have lost all of it. One commit per part, pushed, as you go —
+   then a pull request that stops halfway is visibly half rather than
+   gone.
+
+   **Push the branch early**, before the work is finished, so it exists
+   somewhere other than a worktree on one laptop.
 4. Run every suite that could possibly be affected:
    - `npm test` — the Worker
    - `npm run test:core` *and* `./gradlew :core:jsNodeTest :core-net:jvmTest

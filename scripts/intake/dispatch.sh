@@ -22,6 +22,10 @@ STATE="$REPO/.intake"
 LOG="$STATE/intake.log"
 LOCK="$STATE/dispatch.lock"
 DEBOUNCE="${INTAKE_DEBOUNCE:-15}"
+# A builder may not run unwatched forever. Four hours is generous for a
+# large request on both platforms — the Android screens suite alone is
+# three and a half minutes a run — and it is a cap, not a target.
+MAX_MINUTES="${INTAKE_MAX_MINUTES:-240}"
 # What a builder's worktree is branched from. origin/main normally;
 # override it while the intake machinery itself is still on a branch.
 BASE="${INTAKE_BASE:-origin/main}"
@@ -148,6 +152,13 @@ for file in $(buildable); do
 
   say "building $name on $branch in .intake/wt/$name"
   (
+    # Kill it if it runs past the cap, so a stuck builder is a logged
+    # fact rather than something found hours later.
+    ( sleep $((MAX_MINUTES * 60)); kill -0 $$ 2>/dev/null && {
+        say "$name KILLED after ${MAX_MINUTES}m — worktree and branch kept"
+        pkill -P $$ 2>/dev/null
+      } ) &
+    watchdog=$!
     cd "$tree" || exit 1
     run claude -p "Invoke the mtg skill first — it carries this project's \
 architecture and hard requirements and you will break things without it. Then \
@@ -162,8 +173,18 @@ away its own work. You are not finished until the PR exists, CI is green, \
 you have merged it unless the request says merge: ask, and you have moved \
 the request file into requests/done/ and committed that." \
       --permission-mode bypassPermissions \
-      >> "$STATE/$name.log" 2>&1
+      --output-format stream-json --verbose --include-partial-messages \
+      2>&1 | while IFS= read -r line; do
+        # One readable line per event instead of a 0-byte file until the
+        # end. `claude -p` with the default text format buffers everything,
+        # so a builder an hour in looked exactly like a hung one.
+        printf '%s\n' "$line" >> "$STATE/$name.jsonl"
+        printf '%s %s\n' "$(date '+%H:%M:%S')" "$line" \
+          | /usr/bin/sed -E 's/\{"type":"([a-z_]+)".*/[\1]/' \
+          | cut -c1-200 >> "$STATE/$name.log"
+      done
     code=$?
+    kill "$watchdog" 2>/dev/null
 
     # An exit code says nothing about whether it finished. `claude -p`
     # ends when the model stops producing text, and one builder started
