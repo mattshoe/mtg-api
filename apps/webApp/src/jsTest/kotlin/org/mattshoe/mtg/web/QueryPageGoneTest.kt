@@ -6,6 +6,7 @@ import kotlinx.browser.document
 import kotlinx.coroutines.await
 import kotlinx.coroutines.test.runTest
 import org.jetbrains.compose.web.renderComposable
+import org.mattshoe.mtg.core.Account
 import org.mattshoe.mtg.core.Admin
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.Route
@@ -54,7 +55,6 @@ class QueryPageGoneTest {
             AppShell(
                 state = s.value,
                 onState = { s.value = it },
-                onUnlock = {},
                 onSearch = {},
                 onOpenDeck = {},
                 onPreviewEntry = {},
@@ -86,7 +86,7 @@ class QueryPageGoneTest {
         all("button").mapNotNull { (it as? HTMLButtonElement)?.textContent?.trim() }
 
     private val locked = AppState()
-    private val unlocked = AppState(admin = Admin("0.abc"))
+    private val unlocked = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"))
 
     // --------------------------------------------- nothing offers it
 
@@ -170,7 +170,7 @@ class QueryPageGoneTest {
             "the unlocked menu changed shape",
         )
         assertEquals(
-            listOf("Server Logs", "Sign in with Google", "Log out"),
+            listOf("Server Logs", "Log out"),
             open.profileLabels(),
             "the profile menu changed shape",
         )

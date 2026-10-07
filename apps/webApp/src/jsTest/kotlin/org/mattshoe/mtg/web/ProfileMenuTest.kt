@@ -173,7 +173,7 @@ class ProfileMenuTest {
     fun theHamburgerIsPlacesToGoAndNothingElse() = runTest {
         // The whole complaint. Not the account, not the sign-out, not
         // the server log, not the operator's password.
-        val root = mount(AppState(admin = Admin("0.abc").signIn(me, "t")))
+        val root = mount(AppState(admin = Admin().signIn(me, "t")))
         settle()
         root.press("Menu")
         settle()
@@ -184,7 +184,9 @@ class ProfileMenuTest {
 
     @Test
     fun theProfileMenuIsWhoYouAreAndWhatFollowsFromIt() = runTest {
-        val root = mount(AppState(admin = Admin("0.abc").signIn(me, "t")))
+        // An operator, because the log is the one thing behind the
+        // profile and a role is what reaches it.
+        val root = mount(AppState(admin = Admin().signIn(me.copy(role = "admin"), "t")))
         settle()
         root.profile().click()
         settle()
@@ -207,8 +209,7 @@ class ProfileMenuTest {
         root.profile().click()
         settle()
         val tabs = root.buttons(".profile-menu")
-        assertTrue("Sign in with Google" in tabs, tabs.toString())
-        assertFalse("Log out" in tabs, "it offered a way out of being nobody: $tabs")
+        assertEquals(listOf("Sign in with Google"), tabs, "there is more than one way in")
         assertTrue(
             root.all(".profile-menu").first().textContent.orEmpty().contains("Not signed in"),
             "it does not say that nobody is signed in",

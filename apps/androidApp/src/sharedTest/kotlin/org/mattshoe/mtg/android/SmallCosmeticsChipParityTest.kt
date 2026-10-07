@@ -81,7 +81,6 @@ class SmallCosmeticsChipParityTest {
                     AppShell(
                         state = held.value,
                         onState = { held.value = it },
-                        onUnlock = {},
                         onSearch = {},
                         onOpenDeck = {},
                         onPreviewEntry = {},

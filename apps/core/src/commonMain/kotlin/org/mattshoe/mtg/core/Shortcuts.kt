@@ -10,7 +10,6 @@ package org.mattshoe.mtg.core
  */
 sealed interface Action {
     data class Go(val view: View) : Action
-    data object ToggleLock : Action
     data object OpenPalette : Action
     data object ShowHelp : Action
     data object Close : Action
@@ -42,7 +41,6 @@ object Shortcuts {
         if (typing) return null
         GO[key]?.let { return if (admin.reachable(it)) Action.Go(it) else null }
         return when (key) {
-            "l" -> Action.ToggleLock
             "/" -> Action.OpenPalette
             "?" -> Action.ShowHelp
             else -> null
@@ -53,13 +51,18 @@ object Shortcuts {
     fun ofChord(key: String, meta: Boolean, ctrl: Boolean): Action? =
         if (key.lowercase() == "k" && (meta || ctrl)) Action.OpenPalette else null
 
-    /** The `?` toast. It lists only what is actually reachable. */
+    /**
+     * The `?` toast. It lists only what is actually reachable.
+     *
+     * No `l` any more: it toggled the shared password, and signing in
+     * or out is a thing you do once through the profile rather than a
+     * key you can hit by accident.
+     */
     fun help(admin: Admin): String = buildString {
         append("s search · d decks")
-        if (admin.unlocked) append(" · e entry")
+        if (admin.signedIn) append(" · e entry")
         append(" · g stats")
-        if (admin.unlocked) append(" · v logs")
-        append(" · l ").append(if (admin.unlocked) "lock" else "unlock")
+        if (admin.account?.isOperator == true) append(" · v logs")
         append(" · / or ⌘K find · esc close")
     }
 }

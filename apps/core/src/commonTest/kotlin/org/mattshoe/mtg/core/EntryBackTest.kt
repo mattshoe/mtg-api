@@ -86,7 +86,7 @@ class EntryBackTest {
 
     @Test
     fun theBackGestureStepsTheWizardRatherThanLeavingIt() {
-        val s = AppState(admin = Admin(token = "t").unlock("t"))
+        val s = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"))
             .navigate(View.ENTRY)
             .let { it.copy(entry = it.entry.choose(Direction.ADD).goTo(Step.LIST)) }
         val back = s.back()
@@ -97,7 +97,7 @@ class EntryBackTest {
 
     @Test
     fun theBackGestureWalksAllTheWayOutOneStepAtATime() {
-        var s = AppState(admin = Admin(token = "t").unlock("t"))
+        var s = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"))
             .navigate(View.ENTRY)
             .let { it.copy(entry = it.entry.choose(Direction.ADD).type("4 Bolt").goTo(Step.LIST)) }
         s = assertNotNull(s.back()); assertEquals(Step.WHICH, s.entry.step)
@@ -107,7 +107,7 @@ class EntryBackTest {
 
     @Test
     fun theFirstStepIsNotATrap() {
-        val s = AppState(admin = Admin(token = "t").unlock("t")).navigate(View.ENTRY)
+        val s = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")).navigate(View.ENTRY)
         assertEquals(View.DEFAULT, assertNotNull(s.back()).view)
     }
 
@@ -116,7 +116,7 @@ class EntryBackTest {
         // DONE is an ending, not a step: going "back" into Review
         // from a receipt would offer to apply a list that has
         // already been applied.
-        val s = AppState(admin = Admin(token = "t").unlock("t"))
+        val s = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"))
             .navigate(View.ENTRY)
             .let { it.copy(entry = it.entry.choose(Direction.ADD).finished(Applied())) }
         assertEquals(View.DEFAULT, assertNotNull(s.back()).view)
@@ -124,7 +124,7 @@ class EntryBackTest {
 
     @Test
     fun anOverlayStillGoesFirst() {
-        val s = AppState(admin = Admin(token = "t").unlock("t"))
+        val s = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"))
             .navigate(View.ENTRY)
             .let { it.copy(entry = it.entry.choose(Direction.ADD).goTo(Step.LIST)) }
             .opening(Overlay.PALETTE)

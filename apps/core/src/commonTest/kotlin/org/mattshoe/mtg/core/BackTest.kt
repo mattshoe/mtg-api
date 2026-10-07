@@ -30,7 +30,7 @@ class BackTest {
         nameNorm = name.lowercase(), typeLine = "Artifact", scryfallId = "abcdef12-3456",
     )
 
-    private fun onADeck() = AppState(admin = Admin(token = "t"))
+    private fun onADeck() = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"))
         .navigate(Route(View.DECKS, "alela"))
         .let { it.copy(decks = it.decks.loaded(listOf(deck())).opened("alela", listOf(card("Sol Ring")))) }
 
@@ -187,7 +187,7 @@ class BackTest {
 
     @Test
     fun backFromAnotherViewGoesToTheDefaultOne() {
-        val once = AppState(admin = Admin(token = "t")).navigate(View.STATS).back()
+        val once = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")).navigate(View.STATS).back()
             ?: error("nothing to go back to")
         assertEquals(View.DEFAULT, once.view)
     }

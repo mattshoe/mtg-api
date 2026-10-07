@@ -14,6 +14,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mattshoe.mtg.core.Account
 import org.mattshoe.mtg.core.Admin
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.DeckStep
@@ -58,7 +59,6 @@ class NewDeckInEntryParityTest {
                     AppShell(
                         state = held.value,
                         onState = { held.value = it },
-                        onUnlock = {},
                         onSearch = {},
                         onOpenDeck = {},
                         onPreviewEntry = {},
@@ -70,7 +70,7 @@ class NewDeckInEntryParityTest {
         rule.waitForIdle()
     }
 
-    private fun unlocked() = AppState(admin = Admin(token = "t").unlock("t"))
+    private fun unlocked() = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"))
 
     private fun onEntry() = unlocked().navigate(View.ENTRY)
 

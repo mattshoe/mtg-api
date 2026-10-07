@@ -18,6 +18,8 @@ import org.mattshoe.mtg.core.Scryfall
 import org.w3c.dom.HTMLButtonElement
 import org.w3c.dom.HTMLElement
 import org.w3c.dom.get
+import org.w3c.fetch.Response
+import org.w3c.fetch.ResponseInit
 import kotlin.js.Promise
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -41,6 +43,9 @@ import kotlin.test.assertTrue
 class AppDriverTest {
 
     private val roots = mutableListOf<HTMLElement>()
+
+    /** The browser's own `fetch`, put back after each test. */
+    private var realFetch: dynamic = null
 
     /** Every write the app made, by path, so a second one is visible. */
     private val writes = mutableListOf<String>()
@@ -114,10 +119,39 @@ class AppDriverTest {
             install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true; isLenient = true }) }
         }
         MtgApp.useForTesting(MtgApi.withEngine("https://example.test", http), Scryfall.withEngine(http))
+        stubWhoAmI()
+    }
+
+    /**
+     * Who the session is, which the shell asks for with `window.fetch`
+     * rather than through the client.
+     *
+     * It is a cookie request — `credentials: "include"`, because the
+     * API is on another domain — and Ktor's JS engine has nowhere to
+     * say that, so it is the one call the `MockEngine` above cannot
+     * see. Signing in is what makes Entry reachable, so without this
+     * every journey that writes a card stops at a gated screen.
+     */
+    private fun stubWhoAmI() {
+        if (realFetch == null) realFetch = window.asDynamic().fetch
+        window.asDynamic().fetch = { url: dynamic, init: dynamic ->
+            if ("$url".contains("/auth/me")) {
+                Promise.resolve(
+                    Response(
+                        """{"slug":"matt","name":"Matt","role":"user","key":"e7de0cb1"}""",
+                        ResponseInit(status = 200, headers = js("({'Content-Type':'application/json'})")),
+                    ),
+                )
+            } else {
+                realFetch!!(url, init)
+            }
+        }
     }
 
     @AfterTest
     fun cleanUp() {
+        val back = realFetch
+        if (back != null) window.asDynamic().fetch = back
         // The two tests that need the real cascade pull it in
         // themselves. Left loaded it changes the height of the page
         // the scroll tests measure, which turns one of them red for a

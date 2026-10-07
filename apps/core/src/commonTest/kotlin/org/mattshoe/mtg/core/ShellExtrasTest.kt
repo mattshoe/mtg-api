@@ -74,7 +74,7 @@ class OverlayTest {
 class ShortcutsTest {
 
     private val locked = Admin()
-    private val open = Admin(token = "t")
+    private val open = Admin().signIn(Account(slug = "matt"), "t")
 
     @Test
     fun lettersGoToTheirView() {
@@ -88,7 +88,11 @@ class ShortcutsTest {
         assertNull(Shortcuts.of("e", false, locked, false))
         assertNull(Shortcuts.of("v", false, locked, false))
         assertEquals(Action.Go(View.ENTRY), Shortcuts.of("e", false, open, false))
-        assertEquals(Action.Go(View.LOGS), Shortcuts.of("v", false, open, false))
+        // The log needs the role, so an ordinary account's `v` is as
+        // dead as a stranger's.
+        assertNull(Shortcuts.of("v", false, open, false))
+        val op = Admin().signIn(Account(slug = "matt", role = "admin"), "t")
+        assertEquals(Action.Go(View.LOGS), Shortcuts.of("v", false, op, false))
     }
 
     @Test
@@ -120,12 +124,17 @@ class ShortcutsTest {
         val shut = Shortcuts.help(locked)
         assertFalse(shut.contains("entry"), shut)
         assertFalse(shut.contains("logs"), shut)
-        assertTrue(shut.contains("unlock"), shut)
+        // No `l`: it toggled the shared password, and there is none.
+        assertFalse(shut.contains("lock"), shut)
 
         val on = Shortcuts.help(open)
         assertTrue(on.contains("e entry"), on)
-        assertTrue(on.contains("v logs"), on)
-        assertTrue(on.contains("l lock"), on)
+        assertFalse(on.contains("v logs"), on)
+        assertFalse(on.contains("lock"), on)
+
+        // The log is the operator's, and the help says so only to one.
+        val op = Shortcuts.help(Admin().signIn(Account(slug = "matt", role = "admin"), "t"))
+        assertTrue(op.contains("v logs"), op)
     }
 }
 
@@ -154,14 +163,15 @@ class OnKeyTest {
     }
 
     @Test
-    fun lLocksAndUnlocks() {
-        val on = AppState(admin = Admin(token = "t")).onKey("l")
-        assertNotNull(on)
-        assertFalse(on.admin.unlocked)
-
-        val off = AppState().onKey("l")
-        assertNotNull(off)
-        assertEquals(Overlay.UNLOCK, off.overlays.top)
+    fun lDoesNothingBecauseThereIsNoLock() {
+        // It toggled the shared password. Signing in happens once,
+        // through the profile, and goes to Google — not something a
+        // stray keystroke should start.
+        assertNull(AppState().onKey("l"), "`l` still does something")
+        assertNull(
+            AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")).onKey("l"),
+            "`l` still does something while signed in",
+        )
     }
 
     @Test
@@ -170,12 +180,14 @@ class OnKeyTest {
     }
 
     @Test
-    fun lockingWhileOnAGatedViewMovesYouOff() {
-        val s = AppState(admin = Admin(token = "t")).navigate(View.LOGS)
+    fun signingOutWhileOnAGatedViewMovesYouOff() {
+        // It used to be the `l` key doing this. Signing out is a
+        // button in the profile now, and the landing rule is the
+        // same: a screen you can no longer reach bounces.
+        val s = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")).navigate(View.LOGS)
         assertEquals(View.LOGS, s.view)
-        val locked = s.onKey("l")
-        assertNotNull(locked)
-        assertEquals(View.LIBRARY, locked.view)
+        val out = s.copy(admin = s.admin.signOut())
+        assertEquals(View.LIBRARY, out.navigate(out.route).view)
     }
 }
 

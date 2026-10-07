@@ -12,6 +12,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mattshoe.mtg.core.Account
 import org.mattshoe.mtg.core.Admin
 import org.mattshoe.mtg.core.Applied
 import org.mattshoe.mtg.core.AppState
@@ -55,7 +56,6 @@ class ExitWarnsOnUnsavedEntryTest {
                     AppShell(
                         state = live,
                         onState = { held.value = it; state = it },
-                        onUnlock = {},
                         onSearch = {},
                         onOpenDeck = {},
                         onPreviewEntry = {},
@@ -142,7 +142,7 @@ class ExitWarnsOnUnsavedEntryTest {
         // keeps the state above the wizard alive, the same as the web,
         // so it is not the moment to warn about anything.
         var exited = 0
-        val start = AppState(admin = Admin(token = "t"), route = Route(View.ENTRY))
+        val start = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"), route = Route(View.ENTRY))
             .copy(entry = MassEntry().copy(list = "1 Sol Ring"))
         val read = shell(start) { exited++ }
 

@@ -6,6 +6,7 @@ import kotlinx.browser.document
 import kotlinx.coroutines.await
 import kotlinx.coroutines.test.runTest
 import org.jetbrains.compose.web.renderComposable
+import org.mattshoe.mtg.core.Account
 import org.mattshoe.mtg.core.Admin
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.View
@@ -50,7 +51,6 @@ class AppShellTest {
             AppShell(
                 state = s.value,
                 onState = { s.value = it },
-                onUnlock = { unlocked = it },
                 onSearch = {}, onOpenDeck = {},
                 onPreviewEntry = {}, onApplyEntry = {},
             )
@@ -88,17 +88,17 @@ class AppShellTest {
         assertFalse(tabs.contains("Query"), "the Query page is gone")
         assertFalse(tabs.contains("Entry"), "a gated tab must not be visible")
         assertFalse(tabs.contains("Server Logs"))
-        // Both ways in are behind the profile avatar, not in the
+        // The one way in is behind the profile avatar, not in the
         // hamburger, which is places to go and nothing else.
-        assertTrue(tabs.contains("Log in"))
+        assertFalse(tabs.contains("Log in"), "the shared password is back")
         assertTrue(tabs.contains("Sign in with Google"))
         assertEquals(3, root.querySelectorAll(".app-menu button").length, tabs.toString())
-        assertEquals(2, root.querySelectorAll(".profile-menu .app-lock").length, tabs.toString())
+        assertEquals(1, root.querySelectorAll(".profile-menu .app-lock").length, tabs.toString())
     }
 
     @Test
     fun unlockedShowsThemAll() = runTest {
-        val root = mount(AppState(admin = Admin("0.abc")))
+        val root = mount(AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")))
         settle()
         val tabs = root.tabs()
         assertTrue(tabs.contains("Entry"))
@@ -124,21 +124,13 @@ class AppShellTest {
         assertTrue(root.textContent!!.contains("Stats"))
     }
 
-    @Test
-    fun theUnlockDialogAsksAndHandsThePasswordBack() = runTest {
-        val root = mount(AppState())
-        settle()
-        root.buttons().first { it.textContent == "Log in" }.click()
-        settle()
-        assertTrue(root.textContent!!.contains("Admin mode"))
-        assertTrue(root.textContent!!.contains("never stored"))
-        assertEquals(1, root.querySelectorAll("input[type=password]").length)
-    }
+    // `theUnlockDialogAsksAndHandsThePasswordBack` was here, with the
+    // dialog it drove.
 
     @Test
     fun everyUnlockedTabRendersItsOwnScreen() = runTest {
         View.entries.forEach { view ->
-            val root = mount(AppState(admin = Admin("t")).navigate(view))
+            val root = mount(AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")).navigate(view))
             settle()
             assertTrue(
                 root.querySelectorAll("button").length > 0,

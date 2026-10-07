@@ -26,6 +26,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.mattshoe.mtg.android.Parity.Fact
 import org.mattshoe.mtg.android.Parity.shoot
+import org.mattshoe.mtg.core.Account
 import org.mattshoe.mtg.core.Admin
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.Deck
@@ -97,7 +98,7 @@ class TweakSheetParityTest {
     private fun sheet(start: DeckTweak) {
         live.value = AppState(
             route = Route(View.DECKS, "alela"),
-            admin = Admin(token = "t"),
+            admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"),
             decks = DecksState().loaded(listOf(deck)).opened(
                 "alela",
                 listOf(card("Sol Ring", 1)),
@@ -110,7 +111,6 @@ class TweakSheetParityTest {
                     AppShell(
                         state = live.value,
                         onState = { live.value = it },
-                        onUnlock = {},
                         onSearch = {},
                         onOpenDeck = {},
                         onPreviewEntry = {},

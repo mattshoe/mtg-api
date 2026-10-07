@@ -131,7 +131,6 @@ class LibraryDriverTest {
             AppShell(
                 state = s,
                 onState = { s = it; app.state = it },
-                onUnlock = {},
                 onSearch = { app.searches++ },
                 onOpenDeck = {},
                 onPreviewEntry = {},
@@ -469,7 +468,7 @@ class LibraryDriverTest {
         roots += root
         renderComposable(root = root) {
             var s by remember { mutableStateOf(AppState()) }
-            AppShell(s, { s = it }, {}, {}, {}, {}, {}, onExport = { asked += it })
+            AppShell(s, { s = it }, {}, {}, {}, {}, onExport = { asked += it })
         }
         settle()
         fun press(label: String) = (

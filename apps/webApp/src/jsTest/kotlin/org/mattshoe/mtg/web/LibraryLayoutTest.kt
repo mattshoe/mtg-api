@@ -250,28 +250,8 @@ class LibraryLayoutTest {
         assertTrue(edge - export.right < 4, "Export sits ${edge - export.right}px off the right edge")
     }
 
-    @Test
-    fun theUnlockDialogHasPaddingRoundItsWords() = runTest {
-        // It rendered its children straight into `.palette`, which has
-        // none, so the text sat against the edge of the box.
-        val frame = document.createElement("div") as HTMLElement
-        frame.style.width = "390px"
-        frame.style.position = "absolute"
-        document.body!!.appendChild(frame)
-        roots += frame
-        renderComposable(root = frame) {
-            AppShell(AppState().opening(org.mattshoe.mtg.core.Overlay.UNLOCK), {}, {}, {}, {}, {}, {})
-        }
-        settle()
-        if (!styled()) return@runTest
-
-        val panel = frame.all("div.palette").first().getBoundingClientRect()
-        val words = frame.all("div.palette h2").first().getBoundingClientRect()
-        assertTrue(words.left - panel.left >= 10, "only ${words.left - panel.left}px to the left of the words")
-        val box = frame.all("input[type=password]").first().getBoundingClientRect()
-        assertTrue(box.left - panel.left >= 10, "the password field runs to the edge of the dialog")
-        assertTrue(panel.right - box.right >= 10, "and off the other side")
-    }
+    // `theUnlockDialogHasPaddingRoundItsWords` was here. The dialog
+    // is gone with the password it asked for.
 
     @Test
     fun theMenuStaysOnScreenAtPhoneWidth() = runTest {

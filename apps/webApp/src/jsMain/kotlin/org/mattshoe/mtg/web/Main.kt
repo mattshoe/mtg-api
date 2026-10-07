@@ -231,22 +231,7 @@ object MtgApp {
                 // still live, and a frame is all a double tap needs —
                 // each call carries its own idempotency key, so two
                 // presses are two writes the server is happy to make.
-                onUnlock = { password ->
-                    if (app.admin.canTry) {
-                        app = app.copy(admin = app.admin.tries())
-                        work {
-                            try {
-                                val t = api.unlock(password)
-                                // Persisted by the `app` setter, which
-                                // diffs the token on every write.
-                                app.copy(admin = app.admin.unlock(t)).say("Admin mode on")
-                            } catch (e: Exception) {
-                                app = app.copy(admin = app.admin.gaveUp())
-                                throw e
-                            }
-                        }
-                    }
-                },
+
                 onSearch = { searchSoon() },
                 onOpenDeck = { slug -> work { openDeck(app, slug) } },
                 onPreviewEntry = {
@@ -786,6 +771,11 @@ object MtgApp {
                 window.history.replaceState(null, "", home.toHash())
                 app = app.copy(route = home)
             }
+            // A gated route was held rather than bounced while the
+            // answer was out — a bookmark to `#/entry` must not land
+            // on the Library every time — so land it again now that
+            // there is an answer to land it against.
+            app = app.navigate(app.route)
             resolveCollection()
             // Whatever was waiting on who this is can go now.
             if (app.route.collection.isEmpty()) loadFor(app)

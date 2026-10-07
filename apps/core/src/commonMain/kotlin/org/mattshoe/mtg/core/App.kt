@@ -545,7 +545,7 @@ data class AppState(
         Overlay.NEW_DECK -> copy(newDeck = NewDeck())
         Overlay.RENAME -> copy(rename = null)
         Overlay.CARD_PEEK -> copy(peek = Peek())
-        Overlay.CHEATSHEET, Overlay.UNLOCK -> this
+        Overlay.CHEATSHEET -> this
     }
 
     // ------------------------------------------------------- the name box
@@ -596,9 +596,6 @@ data class AppState(
             Action.OpenPalette -> opening(Overlay.PALETTE).copy(palette = palette.opened())
             Action.ShowHelp -> say(Shortcuts.help(admin))
             Action.Close -> dismissTop()
-            Action.ToggleLock ->
-                if (admin.unlocked) copy(admin = admin.lock()).navigate(route)
-                else opening(Overlay.UNLOCK)
         }
     }
 

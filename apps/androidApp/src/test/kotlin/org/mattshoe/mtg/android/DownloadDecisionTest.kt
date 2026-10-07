@@ -23,6 +23,7 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mattshoe.mtg.core.Account
 import org.mattshoe.mtg.core.Admin
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.Deck
@@ -126,7 +127,7 @@ class DownloadDecisionTest {
 
     private fun deckOpenState() = AppState(
         route = Route(View.DECKS, "alela"),
-        admin = Admin(token = "t"),
+        admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"),
         decks = DecksState().loaded(listOf(deck())).opened(
             "alela",
             listOf(card("Alela, Artful Provocateur", "commander"), card("Sol Ring")),

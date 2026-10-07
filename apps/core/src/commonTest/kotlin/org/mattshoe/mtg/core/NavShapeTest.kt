@@ -64,7 +64,7 @@ class NavShapeTest {
 
     @Test
     fun unlockingAddsEntryToTheBarAndNothingElse() {
-        val unlocked = Admin(token = "t").unlock("t")
+        val unlocked = Admin().signIn(Account(slug = "matt", role = "admin"), "t")
         assertEquals(
             listOf(View.LIBRARY, View.DECKS, View.STATS, View.ENTRY),
             unlocked.bar,
@@ -80,7 +80,7 @@ class NavShapeTest {
     @Test
     fun theServerLogLivesBehindTheProfileAndNotInTheBar() {
         assertFalse(View.LOGS.bar, "the server log is in the bottom bar")
-        val unlocked = Admin(token = "t").unlock("t")
+        val unlocked = Admin().signIn(Account(slug = "matt", role = "admin"), "t")
         assertEquals(listOf(View.LOGS), unlocked.behindProfile)
         assertEquals(emptyList(), Admin().behindProfile, "a locked app offers the log")
     }
@@ -88,7 +88,7 @@ class NavShapeTest {
     @Test
     fun aCardIsInNeitherBecauseItIsNotAPlaceYouGo() {
         assertFalse(View.CARD.bar)
-        assertTrue(View.CARD !in Admin(token = "t").unlock("t").behindProfile)
+        assertTrue(View.CARD !in Admin().signIn(Account(slug = "matt", role = "admin"), "t").behindProfile)
     }
 
     @Test
@@ -97,7 +97,7 @@ class NavShapeTest {
         // reachable and is a place you navigate to, some piece of
         // chrome has to offer it. Otherwise it is a screen with no
         // door.
-        listOf(Admin(), Admin(token = "t").unlock("t")).forEach { admin ->
+        listOf(Admin(), Admin().signIn(Account(slug = "matt", role = "admin"), "t")).forEach { admin ->
             val offered = (admin.bar + admin.behindProfile).toSet()
             admin.visible.forEach { view ->
                 assertTrue(
@@ -110,7 +110,7 @@ class NavShapeTest {
 
     @Test
     fun nothingIsOfferedTwice() {
-        listOf(Admin(), Admin(token = "t").unlock("t")).forEach { admin ->
+        listOf(Admin(), Admin().signIn(Account(slug = "matt", role = "admin"), "t")).forEach { admin ->
             val both = admin.bar.filter { it in admin.behindProfile }
             assertTrue(both.isEmpty(), "offered in two places at once: $both")
         }

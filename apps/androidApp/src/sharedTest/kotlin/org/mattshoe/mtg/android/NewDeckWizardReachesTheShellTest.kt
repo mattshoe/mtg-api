@@ -12,6 +12,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mattshoe.mtg.core.Account
 import org.mattshoe.mtg.core.Admin
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.Completion
@@ -51,7 +52,7 @@ class NewDeckWizardReachesTheShellTest {
     // the shell composes it in place of the entry wizard rather than
     // floating it over whatever tab you happened to be on.
     private fun opened(step: DeckStep) = AppState(
-        admin = Admin(token = "t").unlock("t"),
+        admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"),
         route = Route(View.ENTRY),
         newDeck = NewDeck(
             step = step,
@@ -75,7 +76,6 @@ class NewDeckWizardReachesTheShellTest {
                     AppShell(
                         state = held.value,
                         onState = { held.value = it },
-                        onUnlock = {},
                         onSearch = {},
                         onOpenDeck = {},
                         onPreviewEntry = {},
