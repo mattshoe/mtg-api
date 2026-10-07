@@ -652,6 +652,53 @@ describe('POST /decks/list — bulk', () => {
 describe('POST /decks/create', () => {
   const NEW = { name: 'Test Brew', format: 'commander', owner: 'matt', commander: 'Sol Ring' };
 
+  /**
+   * A new deck knows what colour it is.
+   *
+   * Matt: "Why is milly moth deck showing as colorless???"
+   *
+   * Because `createDeck` wrote `colors: null` and nothing ever filled
+   * it in. Every deck that came through the original import has the
+   * column set, so the three decks made in the app were the only
+   * colourless ones in the database — and `Deck.identity` reads an
+   * empty string as no pips at all.
+   *
+   * The commander's own colour identity is the answer, and `cards`
+   * already holds it as the bare letters the deck parser reads.
+   */
+  it('takes its colours from its commander', async () => {
+    const r = await post(
+      '/decks/create',
+      { ...NEW, commander: "Akroma's Will", list: '1 Lightning Bolt', dry_run: false },
+      stubScryfall(),
+    );
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    const row = (await sql('SELECT colors FROM decks WHERE slug = ?1', r.body.slug))[0];
+    expect(row.colors).toBe('W');
+  });
+
+  // A commander the collection has never heard of cannot be bought
+  // either, so the deck is refused long before anything asks what
+  // colour it is — there is no way through this endpoint to reach the
+  // "unknown commander" branch of `paintDeck`. The branch stays
+  // because a commander can be removed from the collection later, and
+  // a repaint then must not invent a colour from the other
+  // ninety-nine cards.
+
+  it('a format with no commander takes them from the cards instead', async () => {
+    const r = await post(
+      '/decks/create',
+      {
+        name: 'Modern Thing', format: 'modern', owner: 'matt',
+        list: '1 Lightning Bolt', dry_run: false,
+      },
+      stubScryfall(),
+    );
+    expect(r.status).toBe(201);
+    const row = (await sql('SELECT colors FROM decks WHERE slug = ?1', r.body.slug))[0];
+    expect(row.colors).toBe('R');
+  });
+
   it('refuses without a token', async () => {
     const snap = await snapshot();
     const r = await postAnon('/decks/create', { ...NEW, list: '1 Lightning Bolt' });
