@@ -56,10 +56,26 @@ the request file.
 
 4. **Rewrite the file** in the shape below.
 
-5. **Ask rather than invent.** If you genuinely cannot tell what is
-   wanted, write the question into the file under `## Open question`
-   and set `status: needs-matt`. Do not guess at scope. A wrong guess
-   costs a PR; a question costs a sentence.
+5. **Almost never ask.** `needs-matt` is for one thing only: a question
+   where every possible answer leads to materially different work and a
+   wrong guess wastes a whole pull request. Scope, data loss, who can
+   edit what.
+
+   **Never ask about how something looks or is formatted.** Matt, on
+   being asked whether release notes should be hand-written or generated:
+   "I DON'T FUCKING CARE WHAT THE RELEASE NOTES LOOK LIKE I JUST WANT TO
+   FUCKING SEE THEM IN THE ADMIN SETTINGS!!!!!" He wants the thing on
+   screen. Pick the sensible option, write down which you picked and why,
+   and let him change it when he sees it — a wrong guess about wording or
+   layout costs one follow-up request, while a question costs him his
+   time and stops the work dead.
+
+   The same goes for anything you can answer by reading the code. A
+   missing version number is something to work around and mention, not
+   something to stop for.
+
+   When you do set `needs-matt`, write the question under
+   `## Open question` and make it answerable in a word.
 
 ## The shape you leave behind
 

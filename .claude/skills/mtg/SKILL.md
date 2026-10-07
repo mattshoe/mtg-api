@@ -415,13 +415,35 @@ edit only its own cards. `admin` can do anything including handing out
 `admin`, and only accounts Matt decides get it. There is no shared admin
 password login any more — you sign into your own account.
 
-The distinction that matters: **`Route.collection` is the collection
-*key*, which is what an address carries and what somebody pastes into a
-chat. `AppState.resolvedCollection` is the owner slug, which is what
-`cards.owner` holds.** They are joined by `GET /c/:key`. Keeping them
-apart is what stops an address from being mistaken for permission. Four
-places had this wrong once and two tests were pinning the wrong value,
-which is why nothing caught it.
+### Three identifiers, and the lines between them
+
+Matt: "THE FUCKING USER ID NEEDS TO BE PRIVATE AND DIFFERENT FROM USER
+KEY!!!!! USER KEY IS NOT SUFFICIENT TO MUTATE DATA!!! ONLY USER ID!!"
+
+**`users.key`** — `bprh3d2s`, 8 random base32 characters. **Public.** It
+is what `/c/<key>` carries and what a shared link is made of. It names a
+collection to *look at*. It is **not a credential** and must never
+authorise a write.
+
+**`users.id`** — the integer primary key. **Private.** Never in a URL,
+never in a response body, never in a page, never logged. The only thing a
+mutation may be decided by, reached only by resolving the session cookie
+through `sessions` to a row in `users`. The shells never hold one.
+
+**`users.slug`** — a display value. It is what `cards.owner` holds today,
+which is the bug: ownership is currently two strings happening to match,
+and that is what emptied Kayla's collection. See
+`requests/cards-owner-should-be-a-user-id.md`.
+
+In the app, `Route.collection` is the **key** — what an address carries —
+and `AppState.resolvedCollection` is the slug, joined by `GET /c/:key`.
+Keeping them apart is what stops an address being mistaken for
+permission. Four places had this wrong once, and two tests were *pinning*
+the wrong value, which is why nothing caught it.
+
+**So: a key lets you read. Only a session that resolves to an id lets you
+write.** If you find a key or a slug reaching a permission decision, that
+is a security bug, not a style question.
 
 **No account is ever deleted unless Matt asks for that account by
 name.** An empty collection is not a reason. Account id 2
