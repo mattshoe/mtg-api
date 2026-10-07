@@ -430,13 +430,19 @@ never in a response body, never in a page, never logged. The only thing a
 mutation may be decided by, reached only by resolving the session cookie
 through `sessions` to a row in `users`. The shells never hold one.
 
-**`users.slug`** — a display value. It is what `cards.owner` holds today,
-which is the bug: ownership is currently two strings happening to match,
-and that is what emptied Kayla's collection. See
-`requests/cards-owner-should-be-a-user-id.md`.
+**`users.slug`** — being deleted. Matt: "FUCK THE SLUG!!! WHAT THE FUCK
+DO YOU NEED A SLUG FOR?!" Nothing: `key` is the address, `id` is the
+identity, `display_name` is what a person reads. It is what `cards.owner`
+holds today, which is the bug — ownership decided by two strings happening
+to match is what emptied Kayla's collection. Do not add a reader of it.
+See `requests/cards-owner-should-be-a-user-id.md`.
+
+**`decks.slug` is unrelated and stays.** A deck's slug is its address, it
+is in every deck link, and renaming a deck updates name and slug
+together.
 
 In the app, `Route.collection` is the **key** — what an address carries —
-and `AppState.resolvedCollection` is the slug, joined by `GET /c/:key`.
+and `AppState.resolvedCollection` is the owner, joined by `GET /c/:key`.
 Keeping them apart is what stops an address being mistaken for
 permission. Four places had this wrong once, and two tests were *pinning*
 the wrong value, which is why nothing caught it.

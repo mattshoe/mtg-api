@@ -5,7 +5,7 @@ platforms: worker, web, android
 merge: ask
 ---
 
-# cards.owner is a text slug, and it should be users.id
+# cards.owner should be users.id, and users.slug should not exist
 
 Matt: "THERE SHOULD NEVER FUCKING BE A COLLISON IN CARDS BY OWNER DUDE
 WHAT THE FUCK ARE JOKING?!?!?!?! / NEW ACCOUNTS DON'T HAVE FUCKING
@@ -77,8 +77,26 @@ Make the card's owner the account's id.
    address and the id becomes the identity. `CardFilters.conditions` keys
    on the id — keep the `WHERE 1=0` behaviour for an unknown scope,
    because an unknown scope is still never every scope.
-5. **Keep `slug`** on `users` as a display value if anything needs it,
-   but nothing may decide permission from it.
+5. **Delete `users.slug`.** It has no job left. Every reader of it today
+   wants one of the other two or wants `display_name`:
+
+   - `accounts.js:289` `canEdit` compares slugs — compares ids instead
+   - `accounts.js:133/172` `freeSlug` and its UNIQUE retry at `:167`
+     disappear entirely, and with them the whole "what slug does a new
+     account get" problem that started this
+   - `accounts.js:309-314` `allUsers` orders by slug and falls back to it
+     for a name — order by `display_name`, and a row with no display name
+     shows its email's local part, not an invented slug
+   - `accounts.js:358-363` and `:376` return it to the client — return
+     `key`, `display_name`, `avatar_url` and nothing else
+   - `index.js:58` puts it in a 403 message — use `display_name`
+
+   Dropping the column is a later migration, after nothing reads it. Do
+   not do both in one pull request.
+
+   **`decks.slug` is a different thing and stays.** A deck's slug is its
+   address, it is in every deck link, and renaming a deck updates its name
+   and slug together. Do not touch it.
 6. **Keep the id out of every response.** Check what `/auth/me`,
    `/admin/users`, `/c/:key` and the log return today, and make sure none
    of them leaks it. The web and Android shells must not hold an id at
@@ -94,18 +112,19 @@ in one pull request.
   one is the mistake.
 - A Worker test that a card written by account 3 is invisible to account
   1's edits and visible to its own, asserted on ids.
-- A Worker test that renaming an account's slug changes nothing about
-  what it owns. That is the whole point, and it is the test that would
-  have caught the Kayla bug.
+- A Worker test that an account's identity survives a display-name
+  change: rename the account, and what it owns and may edit is unchanged.
+  That is the test that would have caught the Kayla bug, and with the slug
+  gone there is nothing left to go wrong in the first place.
 - A `:core` test that an unknown scope still produces `1=0`.
 - Parity: both shells still show the right collection. `apps/webApp/src/jsTest/`
   and `apps/androidApp/src/sharedTest/`.
 
 ## Done when
 
-Renaming an account's slug cannot change which cards it owns, and a new
-account gets an empty collection because it has no rows, not because no
-string matched.
+Nothing reads `users.slug`. There is no "what slug does this account get"
+question, because there is no slug — a new account gets an empty
+collection because it owns no rows.
 
 A collection key opens a collection to read and can do nothing else. No
 response anywhere contains a user id.
