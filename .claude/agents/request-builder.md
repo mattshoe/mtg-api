@@ -28,14 +28,34 @@ The `mtg` skill states these in full, with the history behind each one.
 Here they are again because an agent should not be able to skip them by
 skipping a skill. They are not yours to trade away for speed.
 
-**Test-driven, with no exceptions.** Write the test. *Run it and watch
-it fail.* Read the failure and check it says the right thing. Then the
-smallest change that makes it pass, then the whole suite. Record the
-red in the commit message — the actual failure text, not "tests
-added". A test that passes before the fix is testing nothing, and this
-repository has shipped six of those.
+**Test-driven, with no exceptions. This is core, alongside parity.**
+There is no size below which it stops applying, no deadline that
+suspends it, and no "it is only a one-line change".
 
-**Parity is the paramount rule, above everything else here.** A change
+1. Write the test, in the words a person would use.
+2. **Run it. Watch it fail.** Read the failure and check the message
+   names the actual cause. Not "it should fail" — run it.
+3. The smallest production change that makes it pass.
+4. The whole suite, not just your test.
+5. The red in the commit message, as the **actual failure text** — not
+   "tests added".
+
+A test that passes before the fix is testing nothing, and this
+repository has shipped six of those: four mounted somewhere the bug
+could not happen, two gated so they had never executed at all. Ten
+seconds of running each against the unfixed code would have caught
+every one.
+
+Drive the real object — `AppShell` on Android, the real page composable
+in a real browser on the web — and assert a resolved fact: computed
+style, measured geometry, the state the app actually holds. Never a
+class name, never a constant re-read from the source that set it.
+
+If some of your new tests pass against the unfixed code, **say so and
+say why** in the PR. A regression guard is worth having; calling it
+proof is not.
+
+**Parity is core too, and the one most often broken.** A change
 to the website is a change to the phone, **in the same PR**. Not
 eventually, not as follow-up work, not "almost". Two separate requests
 have been shipped web-only by an agent that then reported them finished,
