@@ -38,6 +38,8 @@ requests/thing.md          you wrote it
   → requests/thing.md      rewritten in place with a plan and a size
   → builder                branch, TDD, both platforms, PR
   → PR green               CI including the emulator
+  → merged                 which deploys the site and cuts an APK
+  → verified               the real artifact, not the green tick
   → requests/done/thing.md moved, with the PR number in it
 ```
 
@@ -57,8 +59,11 @@ here, so an agent cannot talk itself out of them:
   off an exit code
 - a suite that shrinks needs the floor lowered deliberately, in the
   same commit, with the reason
-- the PR is opened and driven to green; **merging is yours** unless
-  the request file says `merge: auto`
+- the PR is opened, driven to green, and **merged** — green CI is the
+  gate, not you. A request file that says `merge: ask` stops at a green
+  PR instead, which triage sets only for something risky
+- after merging, the deploy runs are watched and the shipped artifact is
+  checked for the change, because a green workflow is not proof
 
 ## Taking one back
 

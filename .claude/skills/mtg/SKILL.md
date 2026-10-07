@@ -1,17 +1,24 @@
 ---
 name: mtg
-description: Everything an agent needs to change Matt's MTG collection app without breaking it. Platform parity is the paramount rule — web and Android ship the same change in the same pull request, always. Also the architecture, where each kind of code lives, TDD with a watched red, how to run and read each suite, how to deploy, and the mistakes this repo has already shipped. Load this before touching any code in mtg-api.
+description: Everything an agent needs to change Matt's MTG collection app without breaking it. Three core requirements, none negotiable: platform parity, so web and Android ship the same change in the same pull request, always; test-driven development with a red you actually watched fail; and green CI as the gate, so merge your own work, never ask permission for a green PR, then verify the deployed artifact. Also the architecture, where each kind of code lives, TDD with a watched red, how to run and read each suite, how to deploy, and the mistakes this repo has already shipped. Load this before touching any code in mtg-api.
 ---
 
 # Working in mtg-api
 
 One collection of Magic cards, three front ends over one API.
 
-**The paramount rule: the website and the phone ship the same change, in
-the same pull request.** Not eventually, not in a follow-up, not "almost".
-Everything else in this document is detail; that one is the job. It has
-its own section below and it is first because it is the thing most often
-broken and the thing Matt is angriest about.
+**Three things are core, and none of them is negotiable:**
+
+1. **Parity.** The website and the phone ship the same change, in the
+   same pull request. Not eventually, not in a follow-up, not "almost".
+2. **Test-driven, with a red you watched fail.** Write the test, run it,
+   read the failure, then fix it. Six tests here landed green and proved
+   nothing.
+3. **Green CI is the gate.** Merge your own work, do not ask permission
+   for a green pull request, then check the deployed artifact.
+
+Everything else in this document is detail. Those three are the job, and
+each has its own section below.
 
 Read `CLAUDE.md` as well — it is the law and this is the map. Where they
 disagree, `CLAUDE.md` wins.
@@ -153,28 +160,114 @@ download, an Android share sheet. Then say so **in the PR body**, say
 why, and say what the other platform does instead. Silence is not an
 exception, and "I will do Android next" is not one either.
 
-### 2. Test first, and watch it fail
+### 2. Green CI is the gate. Merge your own work
 
-Write the test. **Run it against the unfixed code and read the
-failure.** Check the message names the actual cause. Then the smallest
-change that makes it pass, then the whole suite.
+**Do not ask permission to merge a green pull request.** Matt, on being
+asked:
 
-Six tests in this repo were written, landed green, and proved nothing —
-mounted somewhere the bug could not happen, or asserting on a fixture
-the real app never produces, or gated so they had never executed at
-all. Ten seconds of watching one fail would have caught every one.
+> "WHAT THE FUCK ARE YOU ASKING MY PERMISSION FOR?!?! THAT'S WHAT
+> FUCKING CI IS FOR!!!!"
 
-**Record the red in the commit message**, with the real failure text:
+Every check green means:
+
+```
+gh pr merge <n> --squash --delete-branch
+```
+
+Green means **all** of them — `shared`, `web`, `android` (the emulator,
+about fifteen minutes), `tally`, and both worker `test` jobs. Never with
+a check pending or skipped. Never `--admin`. Never force anything past a
+failure: a red check is a thing to fix, not a thing to get around.
+
+Merging deploys — `pages.yml` publishes the website and `release.yml`
+cuts a signed APK. So merging is not the end either. Watch the deploy
+runs, then **check the shipped artifact carries the change**, with the
+curl and the dex grep under "Verifying a deploy for real". A green deploy
+workflow is not proof.
+
+The only thing that stops at a green PR is a request file whose
+frontmatter says `merge: ask`, which triage sets only for something
+genuinely risky — a schema change, or anything touching auth or who can
+edit whose collection.
+
+### 3. Test-driven, with no exceptions. This is core
+
+Along with parity, this is what the repo is. There is no size below which
+it stops applying, no deadline that suspends it, and no "it is only a
+one-line change".
+
+The cycle, in this order, every time:
+
+1. **Write the test.** It describes the behaviour you are about to add,
+   or the bug you are about to fix, in the words a person would use.
+2. **Run it. Watch it fail.** Not "it should fail" — run it, read the
+   failure, and check the message names the actual cause.
+3. **Write the smallest production change that makes it pass.**
+4. **Run the whole suite**, not just your test.
+5. **Record the red in the commit message**, with the real failure text.
+
+#### Why step 2 is the whole discipline
+
+Six tests in this repository were written, landed green, and were later
+found to prove nothing. Four were mounted somewhere the bug could not
+happen:
+
+- a share-menu test mounted the menu in an absolutely positioned frame,
+  so the off-screen bug it existed to catch could not occur
+- a Library test asserted on rows below a lazy grid's fold, which are
+  never composed
+- a tweak-sheet test hosted the sheet in a bare `Box`, which has no
+  screen to run off, nothing behind it to dim and no outside to tap
+- a filter-panel test fed a hand-built `Facets` the real app never
+  produces, while the real facet loader did not exist
+
+The other two were gated behind `needsRealRendering()` and had therefore
+never executed at all. Every one of the six would have been caught by ten
+seconds of running it against the unfixed code.
+
+#### What the test has to do
+
+- **Drive the real object.** On Android, through `AppShell` — not a
+  composable mounted alone, which is how four of the six happened. On the
+  web, the real page composable in a real browser.
+- **Assert a resolved fact**: the computed style, the measured geometry,
+  the `TextStyle` read back through semantics, the state the app actually
+  holds. Never a class name. Never a constant re-read from the source
+  that set it.
+- **Fail with a sentence that names the cause.** "the tenth hit already
+  fits, so this proves nothing about scrolling" cost one run.
+- **Live where both runners see it**, for Android screens:
+  `apps/androidApp/src/sharedTest/`.
+- **Exist on both platforms** when the change is on a screen — see
+  requirement 1. A `:core` test alone does not prove either shell renders
+  anything.
+
+#### The red goes in the commit message
+
+Nothing checks it and nothing can; a commit is a finished thing and the
+order its parts were written in leaves no trace. CI once policed a `Red:`
+trailer and Matt was right about what that was: you can satisfy a message
+format perfectly while doing the opposite of TDD.
+
+Write it anyway, with the actual failure:
 
 ```
 Red: 5 of 6 in CardFaceParityTest — "no type line", "only the
 creature face has a stat box expected:<1> but was:<0>"
 ```
 
-If some of your new tests pass against the unfixed code, say so and say
-why. A regression guard is worth having; calling it proof is not.
+**If some of your new tests pass against the unfixed code, say so and say
+why.** A regression guard is worth having; counting it as proof is not,
+and six shipped tests here were doing exactly that.
 
-### 3. Read the BUILD line, never the exit code
+#### Gated tests are not coverage
+
+A test behind `Parity.needsRealRendering()` is skipped on the JVM, which
+means it has never run. Prefer one that runs on the JVM. If a check
+genuinely needs pixels, run `npm run test:android` before believing it,
+and say plainly in the commit that it is otherwise unproven.
+
+### 4. Read the BUILD line, never the exit code
 
 `npm run test:screens` has exited 0 over `BUILD FAILED`. A killed Gradle
 test task leaves the **previous** run's XML on disk, so anything reading
@@ -188,7 +281,7 @@ with it.
   `apps/androidApp/build/test-order.log` has a START and an END per
   test and the one with no END is the one that hung
 
-### 4. No suite shrinks
+### 5. No suite shrinks
 
 `test/suite-floors.json` holds the committed counts and
 `scripts/check-suite-floor.mjs` enforces them in CI. A shrinking suite
@@ -204,7 +297,7 @@ It will not lower a floor whatever you pass it. If you genuinely removed
 a test, edit the JSON by hand and say why in the message. That is the
 point — it takes a deliberate, visible act.
 
-### 5. A schema change needs both files
+### 6. A schema change needs both files
 
 `schema.sql` is what a fresh database gets, including the one the suite
 builds. `migrations/` is what the live one gets. Editing only one has
@@ -217,23 +310,24 @@ the INSERT. The fix is always another file.
 `test/fixtures/migration-hashes.json` makes that checkable: a new name
 is ordinary work, a changed hash on an existing name is the mistake.
 
-### 6. Matt is colourblind
+### 7. Matt is colourblind
 
 Separate things by lightness, never by hue alone. Measure it, do not
 eyeball it.
 
-### 7. Done means deployed, on both platforms
+### 8. Done means deployed, on both platforms
 
-This is requirement 1 again, at the other end of the pipeline.
+Requirements 1 and 2 again, at the far end of the pipeline.
 
 Not "PR open". Not "CI green". Not "merged". Deployed and verified live
 on the website **and** in the shipped APK. Do not send a progress table
 of work that is not deployed; Matt has been explicit and furious about
 this twice.
 
-If you are a builder agent under `requests/`, you stop at a green PR and
-say exactly that — "PR #N green, waiting on you to merge" — which is not
-a claim that anything is done.
+A builder under `requests/` merges its own work on green and then
+verifies the deployed artifact. Reporting "PR green" is not reporting
+done; reporting "merged" is not either. Done is the string in the
+deployed `mtg.js` and in the shipped APK's dex.
 
 ## Running the suites
 
@@ -281,9 +375,7 @@ the suite grinds to a halt around test 200 without it. It was
   could, including a two-faced card's name printed twice everywhere.
 
 A test behind `Parity.needsRealRendering()` is skipped on the JVM, which
-means it has **never executed**. Prefer a test that runs on the JVM. If
-it genuinely needs pixels, run `npm run test:android` before believing
-it and say in the commit that it is otherwise unproven.
+means it has **never executed** — see requirement 3.
 
 ## CI and deploying
 
@@ -299,7 +391,11 @@ Merging to `main` deploys:
 - `worker.yml` → the API, on changes under `src/`, `migrations/` or
   `schema.sql`
 
-**Merging is Matt's call.** Open the PR, drive it to green, stop.
+**Merge on green.** Matt: "WHAT THE FUCK ARE YOU ASKING MY PERMISSION
+FOR?!?! THAT'S WHAT FUCKING CI IS FOR!!!!" Every check green means
+`gh pr merge <n> --squash --delete-branch`, not a question. Then watch
+the deploy and check the artifact below — a green deploy workflow is not
+proof the change is live.
 
 ### Verifying a deploy for real
 

@@ -68,7 +68,7 @@ the request file.
 status: ready | needs-matt
 size: small | medium | large
 platforms: web, android, worker
-merge: ask
+merge: auto
 ---
 
 # <the title, as a person would say it>
@@ -83,7 +83,9 @@ have to re-derive the design, not so much that it is the diff.>
 
 ## Tests
 
-<What has to go red first, and where it lives. Name the suite. For
+<What has to go red first, and where it lives — the builder has to be
+able to write that test before writing any production code, so be
+specific enough that it can. Name the suite. For
 anything on a screen that means a test on **both** sides —
 apps/webApp/src/jsTest/ and apps/androidApp/src/sharedTest/ — because a
 :core test alone does not prove either shell renders it.>
@@ -94,7 +96,10 @@ apps/webApp/src/jsTest/ and apps/androidApp/src/sharedTest/ — because a
 Azorius, on the website and in the app" — not "implemented".>
 ```
 
-Leave `merge: ask` unless the request itself says otherwise.
+Leave `merge: auto`, which is the default: green CI is the gate and the
+builder merges its own work. Set `merge: ask` only for something
+genuinely risky — a schema change, anything touching auth or who can edit
+whose collection — and say in the file why.
 
 ## Sizing
 

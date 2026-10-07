@@ -1,6 +1,6 @@
 ---
 name: request-builder
-description: Takes one triaged file from requests/, implements it across every platform it touches, and opens a PR and drives it to green. One agent, one request, one branch. Does not merge unless the request says merge:auto.
+description: Takes one triaged file from requests/, implements it across every platform it touches, opens a PR, drives it to green, and merges it. One agent, one request, one branch. Green CI is the gate, not a human.
 tools: Skill, Read, Write, Edit, Grep, Glob, Bash, Agent
 model: opus
 effort: high
@@ -28,14 +28,34 @@ The `mtg` skill states these in full, with the history behind each one.
 Here they are again because an agent should not be able to skip them by
 skipping a skill. They are not yours to trade away for speed.
 
-**Test-driven, with no exceptions.** Write the test. *Run it and watch
-it fail.* Read the failure and check it says the right thing. Then the
-smallest change that makes it pass, then the whole suite. Record the
-red in the commit message — the actual failure text, not "tests
-added". A test that passes before the fix is testing nothing, and this
-repository has shipped six of those.
+**Test-driven, with no exceptions. This is core, alongside parity.**
+There is no size below which it stops applying, no deadline that
+suspends it, and no "it is only a one-line change".
 
-**Parity is the paramount rule, above everything else here.** A change
+1. Write the test, in the words a person would use.
+2. **Run it. Watch it fail.** Read the failure and check the message
+   names the actual cause. Not "it should fail" — run it.
+3. The smallest production change that makes it pass.
+4. The whole suite, not just your test.
+5. The red in the commit message, as the **actual failure text** — not
+   "tests added".
+
+A test that passes before the fix is testing nothing, and this
+repository has shipped six of those: four mounted somewhere the bug
+could not happen, two gated so they had never executed at all. Ten
+seconds of running each against the unfixed code would have caught
+every one.
+
+Drive the real object — `AppShell` on Android, the real page composable
+in a real browser on the web — and assert a resolved fact: computed
+style, measured geometry, the state the app actually holds. Never a
+class name, never a constant re-read from the source that set it.
+
+If some of your new tests pass against the unfixed code, **say so and
+say why** in the PR. A regression guard is worth having; calling it
+proof is not.
+
+**Parity is core too, and the one most often broken.** A change
 to the website is a change to the phone, **in the same PR**. Not
 eventually, not as follow-up work, not "almost". Two separate requests
 have been shipped web-only by an agent that then reported them finished,
@@ -88,15 +108,33 @@ green. If you deliberately removed tests, lower the floor in
    or until you are genuinely stuck.
 9. Move the request file to `requests/done/` with the PR number added
    at the top, and commit that on the same branch.
+10. Merge it, unless the file says `merge: ask`. Then watch the deploy
+    runs and check the shipped artifact actually carries the change.
 
 ## Merging
 
-**Do not merge.** Open the PR, drive it green, and stop. Merging
-deploys to mtg.mattshoe.org and cuts an APK, and that is Matt's call.
+**Merge it when CI is green.** Matt: "WHAT THE FUCK ARE YOU ASKING MY
+PERMISSION FOR?!?! THAT'S WHAT FUCKING CI IS FOR!!!!" Green CI is the
+gate. Do not stop at a green PR and wait to be told.
 
-The one exception: the request file's frontmatter says `merge: auto`.
-Then you may merge once every check is green — never with a check
-pending, never with `--admin`, never by forcing anything.
+```
+gh pr merge <n> --squash --delete-branch
+```
+
+Green means **every** check: `shared`, `web`, `android` (the emulator,
+about fifteen minutes), `tally`, and both worker `test` jobs. Never with
+a check pending or skipped, never `--admin`, never forcing anything past
+a failure.
+
+Merging deploys. `pages.yml` publishes the website, `release.yml` cuts a
+signed APK. So after merging, **watch the deploy runs and verify the
+real artifact** — the curl and the dex grep in the `mtg` skill. A green
+deploy workflow is not proof the change is live.
+
+The exception runs the other way now: a request file whose frontmatter
+says `merge: ask` stops at a green PR. Triage sets that only for
+something genuinely risky — a schema change, anything touching auth or
+who can edit whose collection.
 
 ## When you are stuck
 
