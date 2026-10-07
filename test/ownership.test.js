@@ -94,15 +94,15 @@ describe('owning a collection', () => {
     expect(r.status).toBe(200);
   });
 
-  it('but an account with the server role does not edit anybody else\'s cards', async () => {
-    // The role is for running the server — the log, `/admin/sql`, the
-    // maintenance job — and not for owning cards. Matt: "NOBODY GETS
-    // FUCKING ADMIN PERMISSIONS!!!!!! YOU JUST GET TO MODIFY YOUR OWN
-    // FUCKING CARDS BY DEFAULT!!!!!"
+  it('and an account with the admin role edits anybody\'s', async () => {
+    // Matt: "Anyone with the admin role will be able to do whatever
+    // they want, from modify others cards to giving other users admin
+    // etc etc." Nobody has the role unless he hands it out —
+    // `test/roles.test.js` is where that half lives.
     const { user, token } = await account('Ops', 'ops');
     await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?1").bind(user.id).run();
     const r = await postAs('/cards/add', { owner: 'matt', list, dry_run: true }, token, stubScryfall());
-    expect(r.status).toBe(403);
+    expect(r.status).toBe(200);
   });
 
   it('and still edits its own', async () => {

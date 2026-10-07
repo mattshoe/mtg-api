@@ -243,12 +243,82 @@ export function canEdit(who, ownerSlug) {
   // `refresh_prices.py` and `backfill.py` have no account to sign
   // into. A machine credential is not a login.
   if (who?.operator) return true;
-  // `role` used to be here too, and it granted everybody's cards. It
-  // is about running the server — the log, `/admin/sql`, the
-  // maintenance job — and not about owning cards. Matt: "NOBODY GETS
+  // The admin role, which Matt hands out by name: "Anyone with the
+  // admin role will be able to do whatever they want, from modify
+  // others cards to giving other users admin etc etc."
+  //
+  // This line came out for an hour this morning, on "NOBODY GETS
   // FUCKING ADMIN PERMISSIONS!!!!!! YOU JUST GET TO MODIFY YOUR OWN
-  // FUCKING CARDS BY DEFAULT!!!!!"
+  // FUCKING CARDS BY DEFAULT!!!!!" — which is about the default, not
+  // about what the role means once it is granted. Both hold at once:
+  // every new account is a `user` and a `user` owns only its own
+  // cards, and nobody is an `admin` unless Matt says so.
+  if (who?.user?.role === ADMIN) return true;
   return Boolean(ownerSlug) && who?.user?.slug === ownerSlug;
+}
+
+/** The only two roles there are. `user` is the floor, `admin` the ceiling. */
+export const USER = 'user';
+export const ADMIN = 'admin';
+export const ROLES = [USER, ADMIN];
+
+/**
+ * Everybody, for the admin screen's list.
+ *
+ * No email. A role list is not a mailing list, and the page exists to
+ * answer "who is there and what are they" — a name, the slug their
+ * cards live under, the key their collection is shared by, and the
+ * role. `collectionByKey` already refuses to hand out an address's
+ * email for the same reason.
+ */
+export async function allUsers(db) {
+  const r = await db.prepare(
+    `SELECT key, slug, display_name, avatar_url, role, created_at
+       FROM users ORDER BY role DESC, slug`,
+  ).all();
+  return (r.results || []).map((u) => ({
+    key: u.key,
+    slug: u.slug,
+    name: u.display_name || u.slug,
+    avatar: u.avatar_url || null,
+    role: u.role,
+    since: u.created_at,
+  }));
+}
+
+/**
+ * Hand a role out, or take it back.
+ *
+ * Returns `{ ok }` or `{ error, status }` — the refusals are the
+ * interesting part:
+ *
+ * - a role that is not one of the two, because a typo that lands in
+ *   the column is an account nobody can classify
+ * - a slug nobody has
+ * - the last admin demoting themselves, which leaves a database no
+ *   browser can promote anybody from. Recoverable with
+ *   `ADMIN_PASSWORD` and raw SQL, which is a bad afternoon rather
+ *   than a feature.
+ */
+export async function setRole(db, slug, role) {
+  if (!ROLES.includes(role)) {
+    return { error: `a role is ${ROLES.join(' or ')}, not ${JSON.stringify(role)}`, status: 400 };
+  }
+  const row = await db.prepare('SELECT id, role FROM users WHERE slug = ?1').bind(String(slug)).first();
+  if (!row) return { error: `there is no account at ${slug}`, status: 404 };
+  if (row.role === ADMIN && role === USER) {
+    const left = await db.prepare(
+      'SELECT COUNT(*) AS n FROM users WHERE role = ?1 AND id != ?2',
+    ).bind(ADMIN, row.id).first();
+    if (!left?.n) {
+      return {
+        error: 'that is the last admin, and nobody could hand the role out again',
+        status: 409,
+      };
+    }
+  }
+  await db.prepare('UPDATE users SET role = ?2 WHERE id = ?1').bind(row.id, role).run();
+  return { ok: true, slug: String(slug), role };
 }
 
 /**

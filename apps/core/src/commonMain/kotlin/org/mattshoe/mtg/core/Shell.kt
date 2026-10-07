@@ -48,6 +48,17 @@ enum class View(
      * PERMISSIONS!!!!!! YOU JUST GET TO MODIFY YOUR OWN FUCKING CARDS
      * BY DEFAULT!!!!!"
      */
+    /**
+     * The knobs and levers, which today is who has which role.
+     *
+     * Matt: "under account avatar, we'll create a button 'Admin
+     * Settings' and in there will live all of the admin knobs and
+     * levers like assigning roles etc"
+     *
+     * Before the log, because handing out a role is a thing you come
+     * here to do and the log is a thing you come here to read.
+     */
+    ADMIN("admin", "Admin Settings", gated = true, bar = false, operator = true),
     LOGS("logs", "Server Logs", gated = true, bar = false, operator = true),
 
     /**
@@ -167,7 +178,7 @@ data class Account(
     val slug: String,
     val name: String? = null,
     val avatar: String? = null,
-    val role: String = "user",
+    val role: String = Role.USER,
     /**
      * The public identifier the collection is shared by, which is
      * what goes in an address. Never what decides whether anybody may
@@ -175,23 +186,30 @@ data class Account(
      */
     val key: String = "",
 ) {
-    val isOperator: Boolean get() = role == "admin"
+    val isOperator: Boolean get() = role == Role.ADMIN
 
     /** What to call them. A Google account can arrive with no name on it. */
     val shownName: String get() = name?.takeIf { it.isNotBlank() } ?: slug
 
     /**
-     * Whether this account may edit that collection. Its own, and no
-     * other.
+     * Whether this account may edit that collection.
      *
-     * A role used to be enough for anybody's — `isOperator ||` — while
-     * the comment on [role] said a role is about running the server
-     * and not about owning cards. The comment was right: an operator
-     * with edit buttons on Kayla's deck is the thing Matt has already
-     * been angry about once, with one extra step in front of it.
+     * Its own, always. Anybody's, with the admin role — Matt: "Anyone
+     * with the admin role will be able to do whatever they want, from
+     * modify others cards to giving other users admin etc etc."
+     *
+     * This line came out for an hour this morning on "NOBODY GETS
+     * FUCKING ADMIN PERMISSIONS!!!!!! YOU JUST GET TO MODIFY YOUR OWN
+     * FUCKING CARDS BY DEFAULT!!!!!", which is about the default and
+     * not about what the role means once granted. Both hold at once:
+     * every new account is a `user`, a `user` owns only its own
+     * cards, and nobody is an `admin` unless Matt says so.
+     *
+     * Only an affordance either way. The server keeps the same rule
+     * in `canEdit`, and it is the one that counts.
      */
     fun owns(collection: String): Boolean =
-        collection.isNotEmpty() && collection == slug
+        isOperator || (collection.isNotEmpty() && collection == slug)
 }
 
 data class Admin(

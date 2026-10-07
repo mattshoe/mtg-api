@@ -112,14 +112,14 @@ class AccountTest {
     }
 
     @Test
-    fun theOperatorOwnsNoMoreThanAnybodyElse() {
-        // It used to own everybody's. The role is for running the
-        // server — the log, the nightly job — and Matt: "NOBODY GETS
-        // FUCKING ADMIN PERMISSIONS!!!!!! YOU JUST GET TO MODIFY YOUR
-        // OWN FUCKING CARDS BY DEFAULT!!!!!"
-        val ops = me.copy(role = "admin")
-        assertTrue(ops.isOperator, "the role itself is gone")
+    fun theAdminRoleOwnsEverybodys() {
+        // Matt: "Anyone with the admin role will be able to do
+        // whatever they want, from modify others cards to giving
+        // other users admin etc etc." Nobody has the role unless he
+        // hands it out, which is `RolesTest`'s half.
+        val ops = me.copy(role = Role.ADMIN)
+        assertTrue(ops.isOperator)
         assertTrue(ops.owns(me.slug))
-        assertFalse(ops.owns("kayla"), "a role handed out somebody else's cards")
+        assertTrue(ops.owns("kayla"))
     }
 }

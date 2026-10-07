@@ -13,6 +13,8 @@
 //   GET  /decks/formats      the formats the wizard offers
 //   POST /prices      scryfall ids in, TCGplayer-derived prices out
 //   POST /admin       password in, admin token out
+//   GET  /admin/users every account and its role (admin)
+//   POST /admin/role  hand the admin role out, or take it back (admin)
 //   GET  /maintenance last run of the daily job
 //   POST /maintenance run it now (admin)
 //   GET  /logs        the request log (admin)
@@ -28,7 +30,7 @@ import { disassembleDeck, editDeckList, createDeck, renameDeck, FORMATS } from '
 import { mintToken, verifyToken, bearer } from './admin.js';
 import {
   whoAmI, canEdit, profileOf, endSession, signIn, newSession, cookieValue,
-  collectionByKey, SESSION_COOKIE,
+  collectionByKey, allUsers, setRole, SESSION_COOKIE,
 } from './accounts.js';
 import { startSignIn, finishSignIn, verifyIdToken } from './google.js';
 import { lookupPrices } from './prices.js';
@@ -224,6 +226,8 @@ const INDEX = {
     'POST /share': 'a share-target body in, what the server actually received back out',
     'POST /prices': '{"ids":["<scryfall id>",...]} -> {"prices":{id:{usd,foil,etched,eur,tix,tcg}}}',
     'POST /admin': '{"password":"..."} -> {"token":"...","expires_at":null}',
+    'GET /admin/users': 'every account, its role and the key its collection is shared by — admin only',
+    'POST /admin/role': '{"slug":"...","role":"user|admin"} — hands the admin role out or takes it back; admin only',
     'GET /logs': '?min=info&q=&event=&status=error&since=24&limit=100 — admin only',
     'POST /logs/client': '{"level":"info","message":"...","detail":{...}} — admin only',
     'GET /logs/stats': 'counts, slowest routes, retention — admin only',
@@ -631,6 +635,55 @@ async function route(request, env, ctx, entry) {
       };
       if (r.body?.failed) entry.level = 'warn';
       return send(r);
+    }
+
+    /**
+     * Who is there, and what are they.
+     *
+     * The admin screen's list. Admin only: it is every account in the
+     * database, which is not something an ordinary session has any
+     * business enumerating.
+     */
+    if (path === '/admin/users') {
+      if (method !== 'GET') return notAllowed('GET');
+      const who = await whoAmI(env, request, verifyToken);
+      if (!who.operator && who.user?.role !== 'admin') {
+        return who.user
+          ? json({ error: 'that needs the admin role' }, 403)
+          : denied('that needs the admin role');
+      }
+      entry.admin = true;
+      return json({ users: await allUsers(env.DB) });
+    }
+
+    /**
+     * Hand the admin role out, or take it back.
+     *
+     * Matt: "Only SPECIFIC accounts that I DECIDE get the admin
+     * role." So the only way in here is already having it — an
+     * account that could promote itself is not a role system — plus
+     * the operator's password, which is how a locked-out database
+     * gets fixed.
+     */
+    if (path === '/admin/role') {
+      if (method !== 'POST') return notAllowed('POST');
+      const who = await whoAmI(env, request, verifyToken);
+      if (!who.operator && who.user?.role !== 'admin') {
+        return who.user
+          ? json({ error: 'that needs the admin role' }, 403)
+          : denied('that needs the admin role');
+      }
+      const { body, error } = await readJson(request);
+      if (error) return json({ error }, 400);
+      const out = await setRole(env.DB, body.slug, body.role);
+      entry.admin = true;
+      entry.write = true;
+      entry.detail = `${body.slug} -> ${body.role}`;
+      if (out.error) {
+        entry.message = out.error;
+        return json({ error: out.error }, out.status);
+      }
+      return json(out);
     }
 
     if (path === '/admin/sql') {

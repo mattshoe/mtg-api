@@ -763,7 +763,7 @@ class NavTest {
         val behind = labels(".profile-menu button")
         // The fixture is an operator, so the log is there, and one way
         // out because somebody is signed in.
-        assertEquals(listOf("Server Logs", "Log out"), behind)
+        assertEquals(listOf("Admin Settings", "Server Logs", "Log out"), behind)
         assertFalse(behind.contains("Library"), behind.toString())
         assertEquals(1, root.querySelectorAll(".profile-menu .app-menu-sep").length, "no rule under the name")
     }

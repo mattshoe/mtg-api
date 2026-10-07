@@ -59,21 +59,22 @@ class CollectionScopeTest {
     }
 
     @Test
-    fun aRoleDoesNotMakeKaylasCollectionYours() {
-        // The actual complaint, and it outlived the password that
-        // caused it: being "unlocked" used to answer for every
-        // collection there is, and the buttons asked nothing else.
-        val operator = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "s"))
-        assertTrue(operator.admin.unlocked, "the fixture is not signed in")
-        assertFalse(operator.browsing("kayla").canEdit, "a role handed out somebody else's cards")
-        assertTrue(operator.browsing("matt").canEdit, "it cannot edit its own")
+    fun anOrdinaryAccountDoesNotGetKaylasCollection() {
+        // The actual complaint: being "unlocked" used to answer for
+        // every collection there is, and the buttons asked nothing
+        // else. A `user` is the default and owns one collection.
+        val user = AppState(admin = Admin().signIn(Account(slug = "matt"), "s"))
+        assertTrue(user.admin.unlocked, "the fixture is not signed in")
+        assertFalse(user.browsing("kayla").canEdit, "an ordinary account got somebody else's cards")
+        assertTrue(user.browsing("matt").canEdit, "it cannot edit its own")
     }
 
     @Test
-    fun theServerRoleEditsNoCollectionButItsOwn() {
-        // The role unlocks the server log, not other people's cards.
-        val ops = AppState(admin = Admin().signIn(matt.copy(role = "admin"), session = "s"))
-        assertFalse(ops.browsing("kayla").canEdit)
+    fun theAdminRoleEditsAnything() {
+        // Matt hands this role out by name, and it does what it
+        // likes: "modify others cards to giving other users admin".
+        val ops = AppState(admin = Admin().signIn(matt.copy(role = Role.ADMIN), session = "s"))
+        assertTrue(ops.browsing("kayla").canEdit)
         assertTrue(ops.browsing(matt.slug).canEdit)
     }
 

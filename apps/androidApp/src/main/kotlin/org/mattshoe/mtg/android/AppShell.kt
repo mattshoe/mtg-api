@@ -110,6 +110,8 @@ fun AppShell(
     onOpenDeck: (String) -> Unit,
     onPreviewEntry: () -> Unit,
     onApplyEntry: () -> Unit,
+    /** Hand that account the role it does not have, on Admin Settings. */
+    onChangeRole: (org.mattshoe.mtg.core.Person) -> Unit = {},
     /** The Library's filtered set, copied or downloaded. */
     onExport: (ExportTo) -> Unit = {},
     onOpenCard: (CardRow) -> Unit = {},
@@ -374,6 +376,12 @@ fun AppShell(
                     View.STATS -> StatsScreen(state.stats)
 
 
+                    View.ADMIN -> AdminScreen(
+                        state = state.people,
+                        me = state.admin.account?.slug,
+                        onChange = onChangeRole,
+                    )
+
                     View.LOGS -> LogsScreen(state.logs) { onState(state.copy(logs = it)) }
 
                     // A card is a destination here too, so the system back
@@ -623,9 +631,13 @@ private fun ProfileButton(open: Boolean, avatar: String?, onClick: () -> Unit) {
  * there is one. The glyph is what a visitor gets, and what somebody
  * whose Google account has no picture gets — Matt: "If they don't
  * have one then the existing image is fine."
+ *
+ * Shared rather than private: `AdminScreen` draws one per row in its
+ * list of accounts, and two of these drifting apart would be two
+ * different ideas of what an account looks like.
  */
 @Composable
-private fun Avatar(url: String?, on: Boolean, size: Dp) {
+fun Avatar(url: String?, on: Boolean, size: Dp) {
     if (url.isNullOrBlank()) {
         ProfileIcon(if (on) Accent2 else Ink2, size = size)
         return

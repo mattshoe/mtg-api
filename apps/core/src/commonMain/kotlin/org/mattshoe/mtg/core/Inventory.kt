@@ -117,7 +117,7 @@ object Inventory {
                 // Which views exist and where each one is offered.
                 "thereIsNoQueryPage", "theBarIsTheThreeAnybodyCanReach",
                 "unlockingAddsEntryToTheBarAndNothingElse", "massEntryIsOneWordInTheBar",
-                "theServerLogLivesBehindTheProfileAndNotInTheBar",
+                "theAdminHalfLivesBehindTheProfileAndNotInTheBar",
                 "everyItemInTheBarIsOneShortWord", "everythingReachableIsOfferedSomewhere",
             )),
         Feature(Area.ADMIN, "A retried write applies once, not twice",
@@ -701,6 +701,21 @@ object Inventory {
             )),
 
         // ---------------------------------------------------------- admin
+        Feature(Area.ADMIN, "Two roles, and a screen that hands one out", "accounts.js", logic = true, done = true,
+            tests = listOf(
+                "thereAreExactlyTwo", "anAccountIsAUserUnlessItSaysOtherwise",
+                "aUserOwnsItsOwnCollectionAndNoOther", "anAdminOwnsEverybodys",
+                "aRoleNobodyRecognisesIsNotAnAdmin", "adminSettingsIsItsOwnViewBehindTheProfile",
+                "andOnlyAnAdminIsOfferedIt", "aUserWhoTypesTheAddressBounces",
+                "itHasAnAddressOfItsOwnThatRoundTrips", "whatComesBackIsWhoIsThere",
+                "aFailureSaysWhatWentWrongAndKeepsNothingStale", "aPersonIsOfferedTheRoleTheyDoNotHave",
+                "oneRowAtATimeIsBusyAndNotTheWholeScreen", "aChangedRoleLandsOnThatRowAlone",
+                "aRefusalLeavesTheRowAsItWasAndSaysWhy", "youCannotTakeYourOwnLastAdminAway",
+                "andEverybodyElseIsAlwaysChangeable", "theListDecodesWhatTheServerSends",
+                "anUnknownRoleOnTheWireReadsAsAUserRatherThanThrowing",
+                "andRubbishOnTheWireIsAnEmptyListRatherThanACrash",
+            )),
+
         // "Password unlock, token kept until locked" was here. There is
         // no password in the apps: one shared secret that could write
         // to anybody's cards is the thing accounts replaced, and
@@ -712,11 +727,11 @@ object Inventory {
         Feature(Area.ADMIN, "One way in: your account", "accounts.js", logic = true, done = true,
             tests = listOf(
                 "aFreshAccountIsNobodySpecial", "andThatIsEnoughToEditYourOwnCollection",
-                "andARoleDoesNotBuyYouAnybodyElses", "beingSignedInIsTheOnlyWayToBeAbleToChangeAnything",
+                "andTheAdminRoleBuysYouEverybodyElses", "beingSignedInIsTheOnlyWayToBeAbleToChangeAnything",
                 "aSessionIsNotAPassword", "entryNeedsAnAccountAndNothingMore",
-                "theServerLogNeedsARoleMattHandedOut", "soTheProfileOffersTheLogOnlyToAnOperator",
+                "theServerLogNeedsARoleMattHandedOut", "soTheProfileOffersTheAdminHalfOnlyToAnOperator",
                 "signingOutTakesTheSessionWithIt", "thereIsNoUnlockOverlayLeftToOpen",
-                "theOperatorOwnsNoMoreThanAnybodyElse", "theServerRoleEditsNoCollectionButItsOwn",
+                "theAdminRoleOwnsEverybodys", "theAdminRoleEditsAnything",
                 "aTokenWithNoAccountBehindItIsNotUnlocked", "signingOutForgetsTheSession",
                 "lDoesNothingBecauseThereIsNoLock",
             )),

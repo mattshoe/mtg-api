@@ -369,6 +369,26 @@ class MainActivity : ComponentActivity() {
                             app = next
                             if (next.view != was.view || next.route.rest != was.route.rest) loadFor(next)
                         },
+                        onChangeRole = { person ->
+                            // One row at a time: the press greys out
+                            // the row it was made on and leaves the
+                            // rest live.
+                            if (app.people.changing == null) {
+                                app = app.copy(people = app.people.changing(person.slug))
+                                scope.launch {
+                                    app = try {
+                                        api.setRole(token(), person.slug, person.otherRole)
+                                        app.copy(
+                                            people = app.people.changed(person.slug, person.otherRole),
+                                        ).say("${person.shownName} is now ${person.otherRole}")
+                                    } catch (ex: ApiFailure) {
+                                        val why = ex.message ?: "that did not work"
+                                        app.copy(people = app.people.refused(why))
+                                            .say(why, failed = true)
+                                    }
+                                }
+                            }
+                        },
                         onSearch = { work { search() } },
                         // Through the address, the way every other
                         // screen is reached. Loading the deck without
@@ -577,6 +597,11 @@ class MainActivity : ComponentActivity() {
                 intoPage(View.STATS) { loadStats() }
             }
 
+            View.ADMIN -> {
+                app = app.fetching(View.ADMIN)
+                intoPage(View.ADMIN) { loadPeople() }
+            }
+
             else -> Unit
         }
     }
@@ -751,6 +776,19 @@ class MainActivity : ComponentActivity() {
                 app = app.copy(decks = app.decks.withTokens(found))
             }
         }
+    }
+
+    /**
+     * Who is there, for Admin Settings.
+     *
+     * The server refuses this to anybody without the role, so an
+     * ordinary account that reaches the address sees the refusal
+     * rather than an empty list that looks like an empty database.
+     */
+    private suspend fun loadPeople(): AppState = try {
+        app.copy(people = app.people.loaded(api.people(token())))
+    } catch (ex: ApiFailure) {
+        app.copy(people = app.people.failed(ex.message ?: "that did not work"))
     }
 
     private suspend fun loadStats(): AppState {

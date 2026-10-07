@@ -78,11 +78,12 @@ class NavShapeTest {
     }
 
     @Test
-    fun theServerLogLivesBehindTheProfileAndNotInTheBar() {
+    fun theAdminHalfLivesBehindTheProfileAndNotInTheBar() {
         assertFalse(View.LOGS.bar, "the server log is in the bottom bar")
-        val unlocked = Admin().signIn(Account(slug = "matt", role = "admin"), "t")
-        assertEquals(listOf(View.LOGS), unlocked.behindProfile)
-        assertEquals(emptyList(), Admin().behindProfile, "a locked app offers the log")
+        assertFalse(View.ADMIN.bar, "Admin Settings is in the bottom bar")
+        val unlocked = Admin().signIn(Account(slug = "matt", role = Role.ADMIN), "t")
+        assertEquals(listOf(View.ADMIN, View.LOGS), unlocked.behindProfile)
+        assertEquals(emptyList(), Admin().behindProfile, "a signed-out app offers the log")
     }
 
     @Test

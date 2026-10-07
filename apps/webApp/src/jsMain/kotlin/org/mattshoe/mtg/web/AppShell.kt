@@ -51,6 +51,8 @@ fun AppShell(
     onOpenDeck: (String) -> Unit,
     onPreviewEntry: () -> Unit,
     onApplyEntry: () -> Unit,
+    /** Hand that account the role it does not have, on Admin Settings. */
+    onChangeRole: (org.mattshoe.mtg.core.Person) -> Unit = {},
     onExport: (ExportTo) -> Unit = {},
     onOpenCard: (CardRow) -> Unit = {},
     onOpenFound: (Found) -> Unit = {},
@@ -156,6 +158,12 @@ fun AppShell(
         )
 
         View.STATS -> StatsPage(state.stats)
+
+        View.ADMIN -> AdminPage(
+            state = state.people,
+            me = state.admin.account?.slug,
+            onChange = onChangeRole,
+        )
 
         View.LOGS -> LogsPage(state.logs) { onState(state.copy(logs = it)) }
 

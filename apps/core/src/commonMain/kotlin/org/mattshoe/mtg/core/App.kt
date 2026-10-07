@@ -42,6 +42,8 @@ data class AppState(
      * Empty means nobody named a collection — see [viewing].
      */
     val resolvedCollection: String = "",
+    /** Who is there, for the Admin Settings screen. */
+    val people: People = People(),
     /** What is on top, and therefore what back closes. */
     val overlays: Overlays = Overlays(),
     /** Set when a share arrived and has not been used yet. */
@@ -407,6 +409,7 @@ data class AppState(
         View.DECKS -> copy(decks = decks.loading())
         View.STATS -> copy(stats = stats.loading())
         View.LOGS -> copy(logs = logs.loading())
+        View.ADMIN -> copy(people = people.loading())
         View.CARD -> copy(card = card?.loading())
         View.ENTRY -> this
     }
@@ -417,6 +420,7 @@ data class AppState(
         View.DECKS -> copy(decks = decks.failed(message))
         View.STATS -> copy(stats = stats.failed(message))
         View.LOGS -> copy(logs = logs.failed(message))
+        View.ADMIN -> copy(people = people.failed(message))
         View.CARD -> copy(card = card?.failed(message))
         View.ENTRY -> say(message, failed = true)
     }
@@ -696,6 +700,9 @@ object Load {
         }
         View.STATS -> if (collectionKnown) listOf("totals") else emptyList()
         View.LOGS -> listOf("logs")
+        // Not collection-scoped: it is every account there is, which
+        // is why only an admin can ask for it.
+        View.ADMIN -> listOf("people")
         View.CARD -> listOf("card")
         View.ENTRY -> emptyList()
     }

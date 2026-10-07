@@ -49,15 +49,11 @@ class OneWayInTest {
     }
 
     @Test
-    fun andARoleDoesNotBuyYouAnybodyElses() {
-        // `role` is about running the server — the log, the nightly
-        // job — and not about owning cards, which is what the comment
-        // on it has always said while `owns` said otherwise. An
-        // operator editing Kayla's deck is the complaint that started
-        // all of this, with one extra step.
+    fun andTheAdminRoleBuysYouEverybodyElses() {
+        // Which is what the role is for, once Matt hands it out —
+        // `RolesTest` is where the role system itself lives.
         assertTrue(operator.owns("matt"))
-        assertFalse(operator.owns("kayla"), "a role handed out somebody else's cards")
-        assertFalse(operator.owns(""), "a role handed out a collection that is not one")
+        assertTrue(operator.owns("kayla"))
     }
 
     @Test
@@ -90,9 +86,12 @@ class OneWayInTest {
     }
 
     @Test
-    fun soTheProfileOffersTheLogOnlyToAnOperator() {
+    fun soTheProfileOffersTheAdminHalfOnlyToAnOperator() {
         assertEquals(emptyList(), Admin().signIn(me, "s").behindProfile)
-        assertEquals(listOf(View.LOGS), Admin().signIn(operator, "s").behindProfile)
+        assertEquals(
+            listOf(View.ADMIN, View.LOGS),
+            Admin().signIn(operator, "s").behindProfile,
+        )
         assertEquals(emptyList(), Admin().behindProfile, "a stranger was offered the server log")
     }
 
