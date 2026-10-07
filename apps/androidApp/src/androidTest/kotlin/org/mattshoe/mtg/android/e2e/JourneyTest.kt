@@ -134,39 +134,45 @@ internal class JourneyTest : E2eTest() {
         compose.onNodeWithTag("deck-detail").assertIsDisplayed()
     }
 
+    /**
+     * Signed out, on a real device, there is one way in and it is
+     * Google.
+     *
+     * Two journeys stood here and drove the shared password: typing
+     * it into a dialog, and being refused for a wrong one. There is
+     * no password — Matt: "There is no more fucking admin login!!!!
+     * You just log into your FUCKING ACCOUNT!!!" — and the way in
+     * that replaced it cannot be driven from an emulator, because it
+     * is Credential Manager talking to Google.
+     *
+     * What a journey can still prove is everything up to that point,
+     * for real: the gate holds, the profile offers exactly one thing,
+     * and the thing it offers is the account. The rest of the sign-in
+     * is `GoogleSignIn.idToken`, and nothing here pretends to cover
+     * it.
+     */
     @Test
-    fun loggingInThroughTheProfileBringsTheEntryTab() {
+    fun signedOutThereIsOneWayInAndItIsGoogle() {
         settled()
-        // The real `/admin` round trip: the password goes to the
-        // server, a token comes back, and the bar grows a tab. Three
-        // separate things that have each been broken on their own.
         assertTrue(
             compose.onAllNodesWithText("Entry").fetchSemanticsNodes().isEmpty(),
-            "Entry is in the bar before anybody logged in",
+            "Entry is in the bar with nobody signed in",
         )
-        openTheProfile(andFind = "Log in")
-        compose.onNodeWithText("Log in").performClick()
-        compose.onNode(hasText("Password")).performTextInput(fake.password)
-        compose.onNodeWithText("Unlock").performClick()
-        until("the unlock never came back") { state().admin.unlocked }
-        compose.onNodeWithContentDescription("Entry").assertIsDisplayed()
-    }
-
-    @Test
-    fun aWrongPasswordIsRefusedAndSaysSo() {
-        settled()
-        openTheProfile(andFind = "Log in")
-        compose.onNodeWithText("Log in").performClick()
-        compose.onNode(hasText("Password")).performTextInput("nope")
-        compose.onNodeWithText("Unlock").performClick()
-        until("the app never heard back about the wrong password") {
-            !state().admin.trying && state().toast != null
-        }
-        assertEquals(false, state().admin.unlocked, "a wrong password unlocked the app")
+        openTheProfile(andFind = "Sign in with Google")
+        assertEquals(
+            1,
+            compose.onAllNodesWithText("Sign in with Google").fetchSemanticsNodes().size,
+            "there is not exactly one way in",
+        )
         assertTrue(
-            state().toastFailed,
-            "a refused password was reported as if it had worked: ${state().toast}",
+            compose.onAllNodesWithText("Log in").fetchSemanticsNodes().isEmpty(),
+            "the shared password is back",
         )
+        assertTrue(
+            compose.onAllNodesWithText("Server Logs").fetchSemanticsNodes().isEmpty(),
+            "the server log is offered to somebody who is nobody",
+        )
+        assertEquals(false, state().admin.unlocked, "a signed-out app says it may edit")
     }
 
     @Test

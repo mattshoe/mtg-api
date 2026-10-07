@@ -51,29 +51,11 @@ class MtgApiTest {
         return content.bytes().decodeToString()
     }
 
-    @Test
-    fun unlockSendsThePasswordAndNoToken() = runTest {
-        val token = api(body = """{"ok":true,"token":"0.abc","expires_at":null}""").unlock("hunter2")
-        assertEquals("0.abc", token)
-
-        val req = seen.single()
-        assertEquals("/admin", req.url.encodedPath)
-        assertEquals("hunter2", Json.parseToJsonElement(req.bodyText()).jsonObject["password"]!!.jsonPrimitive.content)
-        assertNull(req.headers[HttpHeaders.Authorization], "the password call must not carry a token")
-    }
-
-    @Test
-    fun aTokenlessServerReplyIsARefusalNotASilentSuccess() = runTest {
-        assertFailsWith<ApiFailure> { api(body = """{"ok":true}""").unlock("x") }
-    }
-
-    @Test
-    fun aWrongPasswordSurfacesTheServersOwnWords() = runTest {
-        val e = assertFailsWith<ApiFailure> {
-            api(HttpStatusCode.Unauthorized, """{"error":"wrong password"}""").unlock("nope")
-        }
-        assertEquals("wrong password", e.message)
-    }
+    // Three tests over `unlock(password)` stood here: the password
+    // going up with no token on it, a tokenless reply being a refusal,
+    // and the server's own words surviving a wrong one. The client has
+    // no `unlock` — the apps have no password — and the nightly
+    // scripts talk to the Worker in Python.
 
     @Test
     fun aPreviewSaysDryRunAndCarriesTheToken() = runTest {
