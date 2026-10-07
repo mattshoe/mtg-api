@@ -52,9 +52,14 @@ writing the same `if` in `LibraryPage.kt` and `LibraryScreen.kt`, it
 belonged in `:core` and the two copies will drift.
 
 Examples already there: `Guild.kt` names a colour combination,
-`Edhrec.kt` builds a rank string and a URL, `CardFacts.kt` turns a card
-row into the list of rows both shells render, `ManaCost.kt` parses a
-mana cost, `Shell.kt` says which views exist and which are gated.
+`ManaCost.kt` parses a mana cost, `CardFilters.kt` builds the Library's
+SQL, `Shell.kt` says which views exist and which are gated, `Roles.kt`
+holds the two roles and the Admin Settings search.
+
+Check a file exists before you rely on it. An earlier draft of this
+document listed `Edhrec.kt` and `CardFacts.kt` here on the strength of
+#35's commit message, and neither has ever existed — which is the trap in
+the next section, committed by the person writing the warning about it.
 
 **The shells render and nothing else.** `apps/webApp/.../web/*.kt` and
 `apps/androidApp/.../android/*.kt` are the same screens twice — the file
