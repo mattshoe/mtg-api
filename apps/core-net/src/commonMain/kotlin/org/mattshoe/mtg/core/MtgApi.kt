@@ -79,6 +79,9 @@ class MtgApi internal constructor(
     private data class ValidateRequest(val list: String)
 
     @Serializable
+    private data class RoleRequest(val slug: String, val role: String)
+
+    @Serializable
     private data class ErrorBody(val error: String = "")
 
     /**
@@ -140,6 +143,30 @@ class MtgApi internal constructor(
         return body.slug?.let {
             Account(slug = it, name = body.name, avatar = body.avatar, role = body.role ?: "user")
         }
+    }
+
+    /**
+     * Every account and its role, for the Admin Settings screen.
+     *
+     * Admin only, server-side. The client asks and the server
+     * refuses: a screen the app declines to draw is an affordance,
+     * and the refusal is the rule.
+     */
+    suspend fun people(session: String): List<Person> {
+        val res = http.get("$base/admin/users") { header("Authorization", "Bearer $session") }
+        val text = res.bodyAsText()
+        if (!res.status.isSuccess()) throw ApiFailure(errorIn(text, res.status))
+        return People.decode(text)
+    }
+
+    /** Hand the admin role out, or take it back. */
+    suspend fun setRole(session: String, slug: String, role: String) {
+        val res = http.post("$base/admin/role") {
+            contentType(ContentType.Application.Json)
+            header("Authorization", "Bearer $session")
+            setBody(RoleRequest(slug, role))
+        }
+        if (!res.status.isSuccess()) throw ApiFailure(errorIn(res.bodyAsText(), res.status))
     }
 
     /** End it, server-side as well as locally. */
@@ -336,6 +363,22 @@ class MtgApi internal constructor(
             ""
         }
         throw ApiFailure(said.ifEmpty { "HTTP ${status.value}" })
+    }
+
+    /**
+     * The server's own words out of a failed reply.
+     *
+     * `decode` does this for the calls that have a body worth
+     * parsing; these two read the text themselves, so the refusal
+     * has to be unwrapped here rather than thrown away as a number.
+     */
+    private fun errorIn(text: String, status: HttpStatusCode): String {
+        val said = try {
+            Companion.json.decodeFromString<ErrorBody>(text).error
+        } catch (e: Exception) {
+            ""
+        }
+        return said.ifEmpty { "HTTP ${status.value}" }
     }
 
     private fun HttpStatusCode.isSuccess() = value in 200..299

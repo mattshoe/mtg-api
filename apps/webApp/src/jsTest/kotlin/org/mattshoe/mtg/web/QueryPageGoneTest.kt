@@ -170,7 +170,7 @@ class QueryPageGoneTest {
             "the unlocked menu changed shape",
         )
         assertEquals(
-            listOf("Server Logs", "Log out"),
+            listOf("Admin Settings", "Server Logs", "Log out"),
             open.profileLabels(),
             "the profile menu changed shape",
         )

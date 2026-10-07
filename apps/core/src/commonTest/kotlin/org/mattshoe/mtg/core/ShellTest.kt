@@ -16,9 +16,9 @@ class ShellTest {
 
     @Test
     fun theViewsAndWhichOfThemAreGated() {
-        assertEquals(6, View.entries.size)
+        assertEquals(7, View.entries.size)
         assertEquals(
-            listOf(View.ENTRY, View.LOGS),
+            listOf(View.ENTRY, View.ADMIN, View.LOGS),
             View.entries.filter { it.gated },
         )
         // A card is a destination, not a place the menu offers.
@@ -77,10 +77,11 @@ class ShellTest {
     }
 
     @Test
-    fun andAnOperatorSeesTheLogAsWell() {
-        val op = Admin().signIn(Account(slug = "matt", role = "admin"), "s")
-        assertEquals(5, op.visible.size)
+    fun andAnOperatorSeesTheAdminHalfAsWell() {
+        val op = Admin().signIn(Account(slug = "matt", role = Role.ADMIN), "s")
+        assertEquals(6, op.visible.size)
         assertTrue(op.reachable(View.LOGS))
+        assertTrue(op.reachable(View.ADMIN))
     }
 
     /** A bookmark to a gated view while locked must not render a dead shell. */

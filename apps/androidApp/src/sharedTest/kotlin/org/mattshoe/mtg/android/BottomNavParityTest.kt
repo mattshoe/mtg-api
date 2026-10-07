@@ -10,6 +10,7 @@ import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
@@ -331,9 +332,16 @@ class BottomNavParityTest {
             rule.onAllNodes(hasText("matt", substring = true)).fetchSemanticsNodes().isNotEmpty(),
             "the profile does not say who is signed in",
         )
+        // The status line, not the whole menu: "Admin Settings" is a
+        // place to go and belongs here. What must not come back is
+        // the password's old label, which called whoever held it
+        // "Admin" where a name goes.
         assertTrue(
-            rule.onAllNodes(hasText("Admin", substring = true)).fetchSemanticsNodes().isEmpty(),
-            "the profile still calls somebody Admin",
+            rule.onAllNodesWithTag("profile-status", useUnmergedTree = true)
+                .fetchSemanticsNodes()
+                .flatMap { it.config.getOrNull(SemanticsProperties.Text).orEmpty() }
+                .none { it.text == "Admin" },
+            "the profile still calls somebody Admin where their name goes",
         )
     }
 
