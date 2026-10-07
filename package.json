@@ -16,7 +16,8 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "lint": "eslint frontend/js frontend/sw.js",
-    "check:floor": "node scripts/check-suite-floor.mjs"
+    "check:floor": "node scripts/check-suite-floor.mjs",
+    "intake:status": "bash scripts/intake/status.sh"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.8.19",
