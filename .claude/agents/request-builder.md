@@ -1,6 +1,6 @@
 ---
 name: request-builder
-description: Takes one triaged file from requests/, implements it across every platform it touches, and opens a PR and drives it to green. One agent, one request, one branch. Does not merge unless the request says merge:auto.
+description: Takes one triaged file from requests/, implements it across every platform it touches, opens a PR, drives it to green, and merges it. One agent, one request, one branch. Green CI is the gate, not a human.
 tools: Skill, Read, Write, Edit, Grep, Glob, Bash, Agent
 model: opus
 effort: high
@@ -88,15 +88,33 @@ green. If you deliberately removed tests, lower the floor in
    or until you are genuinely stuck.
 9. Move the request file to `requests/done/` with the PR number added
    at the top, and commit that on the same branch.
+10. Merge it, unless the file says `merge: ask`. Then watch the deploy
+    runs and check the shipped artifact actually carries the change.
 
 ## Merging
 
-**Do not merge.** Open the PR, drive it green, and stop. Merging
-deploys to mtg.mattshoe.org and cuts an APK, and that is Matt's call.
+**Merge it when CI is green.** Matt: "WHAT THE FUCK ARE YOU ASKING MY
+PERMISSION FOR?!?! THAT'S WHAT FUCKING CI IS FOR!!!!" Green CI is the
+gate. Do not stop at a green PR and wait to be told.
 
-The one exception: the request file's frontmatter says `merge: auto`.
-Then you may merge once every check is green — never with a check
-pending, never with `--admin`, never by forcing anything.
+```
+gh pr merge <n> --squash --delete-branch
+```
+
+Green means **every** check: `shared`, `web`, `android` (the emulator,
+about fifteen minutes), `tally`, and both worker `test` jobs. Never with
+a check pending or skipped, never `--admin`, never forcing anything past
+a failure.
+
+Merging deploys. `pages.yml` publishes the website, `release.yml` cuts a
+signed APK. So after merging, **watch the deploy runs and verify the
+real artifact** — the curl and the dex grep in the `mtg` skill. A green
+deploy workflow is not proof the change is live.
+
+The exception runs the other way now: a request file whose frontmatter
+says `merge: ask` stops at a green PR. Triage sets that only for
+something genuinely risky — a schema change, anything touching auth or
+who can edit whose collection.
 
 ## When you are stuck
 

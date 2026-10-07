@@ -1,6 +1,6 @@
 ---
 name: mtg
-description: Everything an agent needs to change Matt's MTG collection app without breaking it. Platform parity is the paramount rule — web and Android ship the same change in the same pull request, always. Also the architecture, where each kind of code lives, TDD with a watched red, how to run and read each suite, how to deploy, and the mistakes this repo has already shipped. Load this before touching any code in mtg-api.
+description: Everything an agent needs to change Matt's MTG collection app without breaking it. Platform parity is the paramount rule — web and Android ship the same change in the same pull request, always. Green CI is the gate: merge your own work, never ask permission for a green PR, then verify the deployed artifact. Also the architecture, where each kind of code lives, TDD with a watched red, how to run and read each suite, how to deploy, and the mistakes this repo has already shipped. Load this before touching any code in mtg-api.
 ---
 
 # Working in mtg-api
@@ -153,7 +153,37 @@ download, an Android share sheet. Then say so **in the PR body**, say
 why, and say what the other platform does instead. Silence is not an
 exception, and "I will do Android next" is not one either.
 
-### 2. Test first, and watch it fail
+### 2. Green CI is the gate. Merge your own work
+
+**Do not ask permission to merge a green pull request.** Matt, on being
+asked:
+
+> "WHAT THE FUCK ARE YOU ASKING MY PERMISSION FOR?!?! THAT'S WHAT
+> FUCKING CI IS FOR!!!!"
+
+Every check green means:
+
+```
+gh pr merge <n> --squash --delete-branch
+```
+
+Green means **all** of them — `shared`, `web`, `android` (the emulator,
+about fifteen minutes), `tally`, and both worker `test` jobs. Never with
+a check pending or skipped. Never `--admin`. Never force anything past a
+failure: a red check is a thing to fix, not a thing to get around.
+
+Merging deploys — `pages.yml` publishes the website and `release.yml`
+cuts a signed APK. So merging is not the end either. Watch the deploy
+runs, then **check the shipped artifact carries the change**, with the
+curl and the dex grep under "Verifying a deploy for real". A green deploy
+workflow is not proof.
+
+The only thing that stops at a green PR is a request file whose
+frontmatter says `merge: ask`, which triage sets only for something
+genuinely risky — a schema change, or anything touching auth or who can
+edit whose collection.
+
+### 3. Test first, and watch it fail
 
 Write the test. **Run it against the unfixed code and read the
 failure.** Check the message names the actual cause. Then the smallest
@@ -174,7 +204,7 @@ creature face has a stat box expected:<1> but was:<0>"
 If some of your new tests pass against the unfixed code, say so and say
 why. A regression guard is worth having; calling it proof is not.
 
-### 3. Read the BUILD line, never the exit code
+### 4. Read the BUILD line, never the exit code
 
 `npm run test:screens` has exited 0 over `BUILD FAILED`. A killed Gradle
 test task leaves the **previous** run's XML on disk, so anything reading
@@ -188,7 +218,7 @@ with it.
   `apps/androidApp/build/test-order.log` has a START and an END per
   test and the one with no END is the one that hung
 
-### 4. No suite shrinks
+### 5. No suite shrinks
 
 `test/suite-floors.json` holds the committed counts and
 `scripts/check-suite-floor.mjs` enforces them in CI. A shrinking suite
@@ -204,7 +234,7 @@ It will not lower a floor whatever you pass it. If you genuinely removed
 a test, edit the JSON by hand and say why in the message. That is the
 point — it takes a deliberate, visible act.
 
-### 5. A schema change needs both files
+### 6. A schema change needs both files
 
 `schema.sql` is what a fresh database gets, including the one the suite
 builds. `migrations/` is what the live one gets. Editing only one has
@@ -217,23 +247,24 @@ the INSERT. The fix is always another file.
 `test/fixtures/migration-hashes.json` makes that checkable: a new name
 is ordinary work, a changed hash on an existing name is the mistake.
 
-### 6. Matt is colourblind
+### 7. Matt is colourblind
 
 Separate things by lightness, never by hue alone. Measure it, do not
 eyeball it.
 
-### 7. Done means deployed, on both platforms
+### 8. Done means deployed, on both platforms
 
-This is requirement 1 again, at the other end of the pipeline.
+Requirements 1 and 2 again, at the far end of the pipeline.
 
 Not "PR open". Not "CI green". Not "merged". Deployed and verified live
 on the website **and** in the shipped APK. Do not send a progress table
 of work that is not deployed; Matt has been explicit and furious about
 this twice.
 
-If you are a builder agent under `requests/`, you stop at a green PR and
-say exactly that — "PR #N green, waiting on you to merge" — which is not
-a claim that anything is done.
+A builder under `requests/` merges its own work on green and then
+verifies the deployed artifact. Reporting "PR green" is not reporting
+done; reporting "merged" is not either. Done is the string in the
+deployed `mtg.js` and in the shipped APK's dex.
 
 ## Running the suites
 
@@ -299,7 +330,11 @@ Merging to `main` deploys:
 - `worker.yml` → the API, on changes under `src/`, `migrations/` or
   `schema.sql`
 
-**Merging is Matt's call.** Open the PR, drive it to green, stop.
+**Merge on green.** Matt: "WHAT THE FUCK ARE YOU ASKING MY PERMISSION
+FOR?!?! THAT'S WHAT FUCKING CI IS FOR!!!!" Every check green means
+`gh pr merge <n> --squash --delete-branch`, not a question. Then watch
+the deploy and check the artifact below — a green deploy workflow is not
+proof the change is live.
 
 ### Verifying a deploy for real
 
