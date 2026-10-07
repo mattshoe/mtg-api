@@ -5,7 +5,7 @@ platforms: worker, web, android
 merge: ask
 ---
 
-# cards.owner should be users.id, and users.slug should not exist
+# Ownership is an id, addresses are keys, and no slug survives
 
 Matt: "THERE SHOULD NEVER FUCKING BE A COLLISON IN CARDS BY OWNER DUDE
 WHAT THE FUCK ARE JOKING?!?!?!?! / NEW ACCOUNTS DON'T HAVE FUCKING
@@ -94,10 +94,35 @@ Make the card's owner the account's id.
    Dropping the column is a later migration, after nothing reads it. Do
    not do both in one pull request.
 
-   **`decks.slug` is a different thing and stays.** A deck's slug is its
-   address, it is in every deck link, and renaming a deck updates its name
-   and slug together. Do not touch it.
-6. **Keep the id out of every response.** Check what `/auth/me`,
+6. **`decks.slug` goes too.** Matt: "WHY THE FUCK WOULD KEEP THE
+   SLUG?!?!?!?! WE'RE GOING TO HAVE FUCKING COLLISIONS IN URLS ALL OVER
+   THE FUCKING PLACE". He is right, and an earlier version of this file
+   said to keep it, which was wrong.
+
+   `schema.sql:54` is `slug TEXT UNIQUE` — **globally** unique, across
+   every account. And every lookup in `src/decks.js` is
+   `WHERE slug = ?` with no owner in it, at `:44`, `:336` and elsewhere.
+   So two consequences, both bad:
+
+   - Matt has a deck called Milly Moth. Kayla creates one with the same
+     name and the INSERT violates the UNIQUE constraint. Two accounts
+     cannot own a deck with the same name, which is an absurd thing to
+     tell somebody.
+   - The slug is the global identifier, so a deck is addressed without
+     reference to who owns it. That is the same mistake as `cards.owner`,
+     one table over.
+
+   A deck gets the same two identifiers an account gets: a private
+   `id`, and a **public key** generated the way `users.key` is —
+   Crockford-ish base32, 8 characters, random, no modulo bias. The key is
+   what a deck URL carries. The name is free text that anybody may reuse
+   and may contain anything.
+
+   Deck addresses change shape, so say so in the PR. Matt's rule that
+   renaming a deck updates its name and slug together stops applying,
+   because there is no slug — renaming a deck changes its name and nothing
+   else, and its link keeps working. That is strictly better.
+7. **Keep the id out of every response.** Check what `/auth/me`,
    `/admin/users`, `/c/:key` and the log return today, and make sure none
    of them leaks it. The web and Android shells must not hold an id at
    all — they hold a key and a session.
@@ -117,14 +142,19 @@ in one pull request.
   That is the test that would have caught the Kayla bug, and with the slug
   gone there is nothing left to go wrong in the first place.
 - A `:core` test that an unknown scope still produces `1=0`.
-- Parity: both shells still show the right collection. `apps/webApp/src/jsTest/`
-  and `apps/androidApp/src/sharedTest/`.
+- **A Worker test that two accounts can each own a deck with the same
+  name.** Create "Milly Moth" for account 1 and for account 3; both
+  succeed, each gets its own key, and each account sees only its own.
+  This is impossible today and is the collision Matt is describing.
+- A Worker test that renaming a deck does not change its address.
+- Parity: both shells still show the right collection and open a deck by
+  key. `apps/webApp/src/jsTest/` and `apps/androidApp/src/sharedTest/`.
 
 ## Done when
 
-Nothing reads `users.slug`. There is no "what slug does this account get"
-question, because there is no slug — a new account gets an empty
-collection because it owns no rows.
+No slug anywhere. A new account gets an empty collection because it owns
+no rows, and two accounts can each have a deck called Milly Moth without
+either of them knowing the other exists.
 
 A collection key opens a collection to read and can do nothing else. No
 response anywhere contains a user id.

@@ -430,16 +430,23 @@ never in a response body, never in a page, never logged. The only thing a
 mutation may be decided by, reached only by resolving the session cookie
 through `sessions` to a row in `users`. The shells never hold one.
 
-**`users.slug`** — being deleted. Matt: "FUCK THE SLUG!!! WHAT THE FUCK
-DO YOU NEED A SLUG FOR?!" Nothing: `key` is the address, `id` is the
-identity, `display_name` is what a person reads. It is what `cards.owner`
-holds today, which is the bug — ownership decided by two strings happening
-to match is what emptied Kayla's collection. Do not add a reader of it.
-See `requests/cards-owner-should-be-a-user-id.md`.
+**Slugs** — every one of them is being deleted, and you must not add
+another. Matt: "FUCK THE SLUG!!! WHAT THE FUCK DO YOU NEED A SLUG FOR?!"
+and "WE'RE GOING TO HAVE FUCKING COLLISIONS IN URLS ALL OVER THE FUCKING
+PLACE".
 
-**`decks.slug` is unrelated and stays.** A deck's slug is its address, it
-is in every deck link, and renaming a deck updates name and slug
-together.
+An identifier derived from text a person typed collides as soon as there
+is a second person, and both slugs in this schema already do:
+
+- `users.slug` is what `cards.owner` holds, so ownership is two strings
+  happening to match — which is what emptied Kayla's collection
+- `decks.slug` is `UNIQUE` **globally** (`schema.sql:54`) and every lookup
+  is `WHERE slug = ?` with no owner, so two accounts cannot own a deck
+  with the same name
+
+**The rule: an address is a random opaque key, an identity is an id, and
+there is nothing in between.** A name is free text that anybody may reuse.
+See `requests/cards-owner-should-be-a-user-id.md`.
 
 In the app, `Route.collection` is the **key** — what an address carries —
 and `AppState.resolvedCollection` is the owner, joined by `GET /c/:key`.
