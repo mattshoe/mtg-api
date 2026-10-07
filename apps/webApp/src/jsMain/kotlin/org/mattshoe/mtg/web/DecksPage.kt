@@ -97,7 +97,7 @@ fun DecksPage(
             Banner(open, state)
 
             Div(attrs = { classes("stack") }) {
-                DeckStatsPanel(DeckAnalysis.of(state.cards))
+                DeckStatsPanel(DeckAnalysis.of(state.cards), open.guild)
                 // By type, in the order every deck list is written in,
                 // alphabetical inside each section. The grouping is in
                 // the core so the phone cannot sort it differently.
@@ -169,6 +169,9 @@ private fun Tile(deck: Deck, onOpen: (Deck) -> Unit) {
             }
             Div(attrs = { classes("deck-meta") }) {
                 Identity(deck.identity)
+                // What the pips are called. Matt: "Having that
+                // somewhere on the deck card too would be nice."
+                deck.guild?.let { Span(attrs = { classes("guild") }) { Text(it) } }
                 Span(attrs = { classes("cmdr") }) { Text(deck.commanderName ?: "—") }
             }
         }
@@ -196,7 +199,7 @@ private fun Banner(deck: Deck, state: DecksState) {
                 Text(
                     listOfNotNull(
                         deck.bracket?.let { "Bracket $it" },
-                        deck.colorPips.takeIf { it.isNotEmpty() }?.joinToString(""),
+                        deck.guild,
                         "${state.totalCards} cards",
                     ).joinToString(" · "),
                 )

@@ -352,3 +352,92 @@ class StatsTest {
         assertNull(s.error)
     }
 }
+
+/**
+ * What the colours are called.
+ *
+ * Matt: "I want the 'deck at a glance' view to show which guild or
+ * whatever you call it. Having that somewhere on the deck card too
+ * would be nice."
+ *
+ * A row of pips says which colours; it does not say that UB is Dimir.
+ * Magic has a name for every combination — ten guilds, ten shards and
+ * wedges, five mono colours, the four-colour names and WUBRG — and
+ * those names are how people actually talk about decks.
+ */
+class GuildNameTest {
+
+    @Test
+    fun theTenGuildsAreTheTenGuilds() {
+        mapOf(
+            "WU" to "Azorius", "UB" to "Dimir", "BR" to "Rakdos", "RG" to "Gruul",
+            "WG" to "Selesnya", "WB" to "Orzhov", "UR" to "Izzet", "BG" to "Golgari",
+            "WR" to "Boros", "UG" to "Simic",
+        ).forEach { (letters, name) ->
+            assertEquals(name, Guild.of(letters), letters)
+        }
+    }
+
+    @Test
+    fun andTheOrderOfTheLettersDoesNotMatter() {
+        assertEquals("Dimir", Guild.of("BU"))
+        assertEquals("Azorius", Guild.of("UW"))
+    }
+
+    @Test
+    fun theShardsAndWedgesToo() {
+        mapOf(
+            "WUB" to "Esper", "UBR" to "Grixis", "BRG" to "Jund",
+            "WRG" to "Naya", "WUG" to "Bant",
+            "WBG" to "Abzan", "WUR" to "Jeskai", "UBG" to "Sultai",
+            "WBR" to "Mardu", "URG" to "Temur",
+        ).forEach { (letters, name) -> assertEquals(name, Guild.of(letters), letters) }
+    }
+
+    @Test
+    fun oneColourIsCalledWhatThatColourIsCalled() {
+        mapOf("W" to "Mono-white", "U" to "Mono-blue", "B" to "Mono-black",
+            "R" to "Mono-red", "G" to "Mono-green",
+        ).forEach { (letters, name) -> assertEquals(name, Guild.of(letters), letters) }
+    }
+
+    @Test
+    fun fourColoursAreNamedForWhatTheyAreMissing() {
+        // The nicknames nobody agrees on get the plain version: what
+        // is left out is the only thing everybody says out loud.
+        assertEquals("Four-colour, no green", Guild.of("WUBR"))
+        assertEquals("Four-colour, no white", Guild.of("UBRG"))
+    }
+
+    @Test
+    fun fiveIsFiveAndNoneIsColourless() {
+        assertEquals("Five-colour", Guild.of("WUBRG"))
+        assertEquals("Colourless", Guild.of(""))
+        assertEquals("Colourless", Guild.of(null))
+    }
+
+    @Test
+    fun rubbishIsNotAGuild() {
+        assertNull(Guild.of("ZZZ"))
+        assertNull(Guild.of("WUBRGX"))
+    }
+
+    @Test
+    fun aDeckKnowsWhatItIsCalled() {
+        val dimir = Deck("x", "X", "matt", null, "{U}{B}", null, null)
+        assertEquals("Dimir", dimir.guild)
+        // Whatever shape the free text is in, the identity is what is
+        // read — these rows say "Simic (Green/Blue)" and worse.
+        assertEquals("Simic", Deck("x", "X", "matt", null, "Simic (Green/Blue)", null, null).guild)
+        assertEquals("Five-colour", Deck("x", "X", "matt", null, "Five-color (WUBRG)", null, null).guild)
+    }
+
+    @Test
+    fun andADeckWithNoColoursAtAllSaysNothingRatherThanColourless() {
+        // A deck whose colours were never worked out is not a
+        // colourless deck, and a tile that says "Colourless" about
+        // one is stating something nobody established.
+        assertNull(Deck("x", "X", "matt", null, null, null, null).guild)
+        assertNull(Deck("x", "X", "matt", null, "", null, null).guild)
+    }
+}

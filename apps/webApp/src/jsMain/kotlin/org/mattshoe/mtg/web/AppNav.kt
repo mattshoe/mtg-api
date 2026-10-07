@@ -155,7 +155,7 @@ fun AppNav(
                 Div {
                     Text(state.admin.shownName ?: "Not signed in")
                     Span(attrs = { classes("app-who-slug") }) {
-                        Text(state.admin.account?.let { "/c/${it.slug}" } ?: "Read only")
+                        Text(state.admin.account?.let { "/c/${it.key}" } ?: "Read only")
                     }
                 }
             }

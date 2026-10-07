@@ -1,10 +1,14 @@
 package org.mattshoe.mtg.web
 
 import androidx.compose.runtime.Composable
+import org.jetbrains.compose.web.attributes.InputType
+import org.jetbrains.compose.web.attributes.placeholder
 import org.jetbrains.compose.web.dom.Button
 import org.jetbrains.compose.web.dom.Div
 import org.jetbrains.compose.web.dom.H2
+import org.jetbrains.compose.web.dom.H3
 import org.jetbrains.compose.web.dom.Img
+import org.jetbrains.compose.web.dom.Input
 import org.jetbrains.compose.web.dom.Span
 import org.jetbrains.compose.web.dom.Text
 import org.mattshoe.mtg.core.People
@@ -14,73 +18,170 @@ import org.mattshoe.mtg.core.Role
 /**
  * Admin Settings, on the web. Sibling of `AdminScreen`.
  *
- * Matt: "under account avatar, we'll create a button 'Admin Settings'
- * and in there will live all of the admin knobs and levers like
- * assigning roles etc"
+ * Two pages: who is here, and one person. Matt: "I need to be able to
+ * search users and then tapping one needs to open a user details page
+ * where i can assign roles!!!"
  *
- * Today the only lever is who has which role, so the page is that
- * list and says as much — a page with one section and no heading
- * reads as a page that is missing something.
+ * The list is a search box and a row per account, and a row says who
+ * somebody is and nothing else. Everything you can *do* to them is on
+ * their own page, where there is room for it — the first version
+ * jammed a chip, a warning and a button in beside the name, which was
+ * unreadable at two accounts and would not survive a third role.
  */
 @Composable
-fun AdminPage(state: People, me: String?, onChange: (Person) -> Unit) {
+fun AdminPage(
+    state: People,
+    me: String?,
+    person: Person?,
+    onSearch: (String) -> Unit = {},
+    onOpen: (Person) -> Unit = {},
+    onSetRole: (Person, String) -> Unit = { _, _ -> },
+    onBack: () -> Unit = {},
+) {
     Div(attrs = { classes("wrap") }) {
-        Div(attrs = { classes("panel") }) {
-            Div(attrs = { classes("panel-head") }) {
-                H2 { Text("Who is here") }
-                Span(attrs = { classes("spacer") }) {}
-                Span(attrs = { classes("muted", "small") }) {
-                    Text("${state.rows.size} " + if (state.rows.size == 1) "account" else "accounts")
-                }
-            }
-            Div(attrs = { classes("panel-body") }) {
-                when {
-                    state.busy -> Div(attrs = { classes("empty") }) { Text("Loading…") }
-                    state.error != null ->
-                        Div(attrs = { classes("err") }) { Text("Could not load accounts: ${state.error}") }
-                    state.rows.isEmpty() -> Div(attrs = { classes("empty") }) { Text("No accounts yet.") }
-                    else -> state.rows.forEach { person -> PersonRow(state, person, me, onChange) }
-                }
-            }
+        if (person != null) {
+            PersonPage(state, person, me, onSetRole, onBack)
+        } else {
+            Everybody(state, onSearch, onOpen)
         }
     }
 }
 
 @Composable
-private fun PersonRow(state: People, person: Person, me: String?, onChange: (Person) -> Unit) {
-    val changing = state.isChanging(person.slug)
-    Div(attrs = { classes("person-row") }) {
+private fun Everybody(state: People, onSearch: (String) -> Unit, onOpen: (Person) -> Unit) {
+    Div(attrs = { classes("panel") }) {
+        Div(attrs = { classes("panel-head") }) {
+            H2 { Text("Who is here") }
+            Span(attrs = { classes("spacer") }) {}
+            Span(attrs = { classes("muted", "small") }) {
+                Text("${state.rows.size} " + if (state.rows.size == 1) "account" else "accounts")
+            }
+        }
+        Div(attrs = { classes("panel-body") }) {
+            Input(InputType.Text, attrs = {
+                classes("field")
+                placeholder("Search by name, address or role")
+                attr("aria-label", "Search accounts")
+                value(state.query)
+                onInput { onSearch(it.value) }
+            })
+
+            when {
+                state.busy -> Div(attrs = { classes("empty") }) { Text("Loading…") }
+                state.error != null ->
+                    Div(attrs = { classes("err") }) { Text("Could not load accounts: ${state.error}") }
+                state.rows.isEmpty() -> Div(attrs = { classes("empty") }) { Text("No accounts yet.") }
+                state.nothingMatched ->
+                    Div(attrs = { classes("empty") }) { Text("Nobody matches that.") }
+                else -> state.shown.forEach { p -> PersonRow(p, onOpen) }
+            }
+        }
+    }
+}
+
+/** One account: who they are, and a way in. Nothing to press by mistake. */
+@Composable
+private fun PersonRow(person: Person, onOpen: (Person) -> Unit) {
+    Button(attrs = {
+        classes("person-row")
+        onClick { onOpen(person) }
+    }) {
         person.avatar?.takeIf { it.isNotBlank() }
             ?.let { Img(src = it, alt = "", attrs = { classes("app-avatar") }) }
         Div(attrs = { classes("person-who") }) {
             Span { Text(person.shownName) }
-            Span(attrs = { classes("app-who-slug") }) { Text("/c/${person.slug}") }
+            person.address?.let { Span(attrs = { classes("app-who-slug") }) { Text(it) } }
         }
         Span(attrs = { classes("spacer") }) {}
-        // What they are, said in a word rather than by the state of
-        // the button beside it — a button's label is what it will do,
-        // not what is already true.
-        Span(attrs = { classes("tag") }) { Text(person.role) }
-        // The one change nothing here can undo gets a word, not a
-        // locked button. Matt: "I want to be able to assign and
-        // remove roles at will!!!! I don't want to need you for
-        // it!!!"
-        if (state.strands(person.slug, me)) {
-            Span(attrs = { classes("muted", "small") }) { Text("the only admin") }
-        }
+        Span(attrs = { classes("tag", "mini") }) { Text(person.role) }
+        Span(attrs = { classes("muted", "chev") }) { Text("›") }
+    }
+}
+
+/**
+ * One account's page: the facts, then the role.
+ *
+ * The roles come from `Role.all` rather than a toggle between the two
+ * there are today, so a third needs no new control — Matt: "WHAT
+ * HAPPENS WHEN SET HAVE 20 DIFFERENT FUCKING ROLES?!?!"
+ */
+@Composable
+private fun PersonPage(
+    state: People,
+    person: Person,
+    me: String?,
+    onSetRole: (Person, String) -> Unit,
+    onBack: () -> Unit,
+) {
+    Div(attrs = { classes("page-head") }) {
         Button(attrs = {
-            classes("btn", "sm")
-            if (person.isAdmin) classes("ghost")
-            if (changing) attr("disabled", "")
-            onClick { onChange(person) }
-        }) {
+            classes("btn", "sm", "ghost")
+            onClick { onBack() }
+        }) { Text("← Everybody") }
+    }
+
+    Div(attrs = { classes("panel") }) {
+        Div(attrs = { classes("panel-body") }) {
+            Div(attrs = { classes("person-head") }) {
+                person.avatar?.takeIf { it.isNotBlank() }
+                    ?.let { Img(src = it, alt = "", attrs = { classes("person-face") }) }
+                Div(attrs = { classes("person-who") }) {
+                    Span(attrs = { classes("person-name") }) { Text(person.shownName) }
+                    person.address?.let { Span(attrs = { classes("app-who-slug") }) { Text(it) } }
+                }
+            }
+
+            Div(attrs = { classes("facts") }) {
+                Fact("Role", person.role)
+                Fact("Collection", person.slug)
+                Fact("Key", person.key)
+            }
+        }
+    }
+
+    H3 { Text("Role") }
+    state.error?.let { Div(attrs = { classes("err") }) { Text(it) } }
+    Div(attrs = { classes("pick") }) {
+        Role.all.forEach { role ->
+            val on = person.role == role
+            val busy = state.isChanging(person.slug)
+            Button(attrs = {
+                classes("opt")
+                if (on) classes("on")
+                attr("aria-pressed", on.toString())
+                if (busy || on) attr("disabled", "")
+                onClick { onSetRole(person, role) }
+            }) {
+                Span(attrs = { classes("opt-mark") }) { if (on) Text("✓") }
+                Span(attrs = { classes("opt-text") }) {
+                    Span(attrs = { classes("opt-label") }) { Text(role) }
+                    Span(attrs = { classes("opt-help") }) { Text(describe(role)) }
+                }
+            }
+        }
+    }
+    if (state.strands(person.slug, me)) {
+        // The one change nothing here can undo: `ADMIN_PASSWORD` and a
+        // script are the way back. Said, not refused — Matt: "I want to
+        // be able to assign and remove roles at will!!!!"
+        Div(attrs = { classes("muted", "small") }) {
             Text(
-                when {
-                    changing -> "Working…"
-                    person.isAdmin -> "Make user"
-                    else -> "Make admin"
-                },
+                "You are the only admin. Taking your own role away leaves nobody who can "
+                    + "hand it out, and only the server password could undo it.",
             )
         }
     }
+}
+
+@Composable
+private fun Fact(label: String, value: String) {
+    Div(attrs = { classes("fact") }) {
+        Span(attrs = { classes("fact-k") }) { Text(label) }
+        Span(attrs = { classes("fact-v") }) { Text(value) }
+    }
+}
+
+private fun describe(role: String): String = when (role) {
+    Role.ADMIN -> "Everything: anybody's cards, and handing out roles"
+    else -> "Their own collection, and nothing else"
 }

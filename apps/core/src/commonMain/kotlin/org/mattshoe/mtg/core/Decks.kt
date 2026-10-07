@@ -52,6 +52,16 @@ data class Deck(
 
     val colorPips: List<String> get() = identity.map { it.toString() }
 
+    /**
+     * Azorius, Jund, Mono-red — what the colours are called.
+     *
+     * Null when the deck's colours were never worked out, which is a
+     * different fact from a deck that has none: a tile saying
+     * "Colourless" about a deck nobody has classified states
+     * something that was never established.
+     */
+    val guild: String? get() = colors?.takeIf { it.isNotBlank() }?.let { Guild.of(identity) }
+
     /** "Explorers of the Deep — ... Precon" is a tile-width name plus prose. */
     val title: String
         get() = name.split(DASH).firstOrNull()?.trim()?.ifEmpty { null } ?: name

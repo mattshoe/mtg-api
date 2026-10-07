@@ -189,6 +189,17 @@ data class AppState(
         return route.copy(collection = key)
     }
 
+    /**
+     * The person whose page is open, when the address names one.
+     *
+     * `#/admin` is the list and `#/admin/<key>` is one account, the
+     * same shape the decks page has. Matt: "tapping one needs to open
+     * a user details page where i can assign roles".
+     */
+    val person: Person?
+        get() = if (view != View.ADMIN || route.rest.isBlank()) null
+        else people.rows.firstOrNull { it.key == route.rest }
+
     /** Look at somebody's collection. Theirs or anybody's. */
     fun browsing(slug: String): AppState = copy(resolvedCollection = slug)
 

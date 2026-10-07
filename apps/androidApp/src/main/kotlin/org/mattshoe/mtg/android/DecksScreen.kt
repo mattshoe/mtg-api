@@ -295,7 +295,7 @@ internal fun DeckDetailScreen(
                 Btn("Disassemble", danger = true) { onDisassemble(open) }
             }
         }
-        DeckStatsPanel(DeckAnalysis.of(state.cards))
+        DeckStatsPanel(DeckAnalysis.of(state.cards), state.open?.guild)
         if (admin) {
             Panel { Primary("+ Add a card", onClick = onAddCard) }
         }
@@ -355,7 +355,10 @@ private fun DeckTile(deck: Deck, onOpen: (Deck) -> Unit) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Identity(deck.identity)
-                Line(deck.commanderName ?: "—", Ink2, Design.MINI)
+                // What the pips are called. Matt: "Having that
+                // somewhere on the deck card too would be nice."
+                deck.guild?.let { Line(it, Ink2, Design.MINI, FontWeight.SemiBold) }
+                Line(deck.commanderName ?: "—", Ink2, Design.MINI, modifier = Modifier.weight(1f, false))
             }
         }
     }
@@ -699,16 +702,27 @@ private fun ShareMenu(
  * either platform is allowed.
  */
 @Composable
-internal fun DeckStatsPanel(s: org.mattshoe.mtg.core.DeckStats) {
+internal fun DeckStatsPanel(s: org.mattshoe.mtg.core.DeckStats, guild: String? = null) {
     Panel {
-        Line(
-            // `.panel-head h2 { text-transform: uppercase }` on the web.
-            "The deck at a glance".uppercase(),
-            Ink,
-            Design.H3,
-            FontWeight.SemiBold,
-            Modifier.semantics { heading() },
-        )
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Line(
+                // `.panel-head h2 { text-transform: uppercase }` on the web.
+                "The deck at a glance".uppercase(),
+                Ink,
+                Design.H3,
+                FontWeight.SemiBold,
+                Modifier.weight(1f).semantics { heading() },
+            )
+            // Azorius, Jund, Mono-red. The pips say which colours; the
+            // name is how people talk about the deck. Matt: "I want
+            // the 'deck at a glance' view to show which guild or
+            // whatever you call it."
+            guild?.let { Tag(it) }
+        }
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),

@@ -195,7 +195,13 @@ class ProfileMenuTest {
             "the profile button opened nothing",
         )
         assertTrue(menu.textContent.orEmpty().contains("Matt Shoemaker"), menu.textContent.orEmpty())
-        assertTrue(menu.textContent.orEmpty().contains("/c/matt"), "it does not say where the collection lives")
+        // `/c/<key>`, which is the address the collection actually
+        // has. This asserted `/c/matt` — the slug — which is not a
+        // page anybody can open, so the test was pinning the bug.
+        assertTrue(
+            menu.textContent.orEmpty().contains("/c/${me.key}"),
+            "it does not say where the collection lives: ${menu.textContent}",
+        )
         val tabs = root.buttons(".profile-menu")
         assertTrue("Server Logs" in tabs, "the log is not behind the profile: $tabs")
         assertTrue("Log out" in tabs, "no way out: $tabs")

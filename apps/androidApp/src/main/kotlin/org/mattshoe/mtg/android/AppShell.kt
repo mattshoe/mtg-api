@@ -110,10 +110,10 @@ fun AppShell(
     onOpenDeck: (String) -> Unit,
     onPreviewEntry: () -> Unit,
     onApplyEntry: () -> Unit,
-    /** Hand that account the role it does not have, on Admin Settings. */
-    onChangeRole: (org.mattshoe.mtg.core.Person) -> Unit = {},
     /** The Library's filtered set, copied or downloaded. */
     onExport: (ExportTo) -> Unit = {},
+    /** Give that account that role, on Admin Settings. */
+    onSetRole: (org.mattshoe.mtg.core.Person, String) -> Unit = { _, _ -> },
     onOpenCard: (CardRow) -> Unit = {},
     onOpenFound: (Found) -> Unit = {},
     /** A card tapped in a deck list. Carries its own `name_norm`. */
@@ -379,7 +379,11 @@ fun AppShell(
                     View.ADMIN -> AdminScreen(
                         state = state.people,
                         me = state.admin.account?.slug,
-                        onChange = onChangeRole,
+                        person = state.person,
+                        onSearch = { onState(state.copy(people = state.people.searching(it))) },
+                        onOpen = { onState(state.navigate(Route(View.ADMIN, it.key))) },
+                        onSetRole = onSetRole,
+                        onBack = { onState(state.navigate(Route(View.ADMIN))) },
                     )
 
                     View.LOGS -> LogsScreen(state.logs) { onState(state.copy(logs = it)) }
@@ -819,7 +823,7 @@ private fun NavMenu(
                         Modifier.testTag("profile-status"),
                     )
                     Line(
-                        state.admin.account?.let { "/c/${it.slug}" } ?: "Read only",
+                        state.admin.account?.let { "/c/${it.key}" } ?: "Read only",
                         Ink3,
                         Design.MINI,
                     )
