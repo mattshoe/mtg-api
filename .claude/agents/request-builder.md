@@ -106,13 +106,27 @@ which suite, which part — is the difference between "working" and
 
    **Push the branch early**, before the work is finished, so it exists
    somewhere other than a worktree on one laptop.
-4. Run every suite that could possibly be affected:
+4. **While building: run only the suite you are working in.** One
+   `:core` test is `./gradlew -p apps :core:jvmTest --tests 'YourTest'`
+   and takes seconds. Running all four suites after every part is how a
+   simple request took two hours: four suites is about seven minutes,
+   TDD needs a red run and a green run, and a five-part plan then spends
+   over an hour waiting before anybody thinks about anything.
+
+   **Then once, before the PR, run the full set:**
    - `npm test` — the Worker
-   - `npm run test:core` *and* `./gradlew :core:jsNodeTest :core-net:jvmTest
-     :core-net:jsNodeTest` — because `test:core` is only a quarter of
-     what CI's `shared` job runs, and that gap has shipped a red build
+   - `npm run test:core` *and* `cd apps && ./gradlew :core:jsNodeTest
+     :core-net:jvmTest :core-net:jsNodeTest` — because `test:core` is
+     only a quarter of what CI's `shared` job runs, and that gap has
+     shipped a red build
    - `npm run test:web`
    - `npm run test:screens`
+
+   Skip a suite nothing in your diff can reach. A `:core`-only change
+   does not need `npm test`; a Worker-only change does not need the
+   Android screens suite. **CI runs all of them on the PR regardless** —
+   that is what CI is for, and duplicating it locally five times over
+   buys nothing.
 5. Walk the parity check from the skill. If the diff is one-sided and
    you cannot justify it in the PR body, you are not finished.
 6. Commit, push, open a PR. The body says what changed **on each

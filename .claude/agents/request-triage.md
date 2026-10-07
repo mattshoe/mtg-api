@@ -123,6 +123,13 @@ whose collection — and say in the file why.
 - **medium**: both platforms, a new query or a new piece of state
 - **large**: a new screen, a schema change, or anything touching auth
 
+**A plan is not a work breakdown.** Say what to change and where; do not
+invent five sequential parts with a commit each, because a builder then
+runs the suites five times and an afternoon disappears. One request
+merging two asks is still one piece of work. If something genuinely has
+to ship in stages, split it into separate files instead — then they
+build in parallel.
+
 If something sizes **large**, say in the file what the risky part is.
 
 ## What you must not do
