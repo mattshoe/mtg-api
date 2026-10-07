@@ -4,50 +4,117 @@ import { post, sql, stubScryfall } from './helpers.js';
 import { signIn } from '../src/accounts.js';
 
 /**
- * Every column an intake path writes, and whether it actually writes it.
+ * Every column an intake path writes: that it is written, and that
+ * what lands in it is the right shape.
  *
  * Matt: "Audit EVERY SINGLE fucking property set at intake time and
- * WRITE FUCKING TESTS AROUND THEM!!! This is such a fucking stupid and
- * avoidable problem you should've easily caught!!!"
+ * WRITE FUCKING TESTS AROUND THEM!!!" and then, when the first version
+ * only checked for emptiness: "THEN FUCKING WRITE TESTS THAT ASSERT
+ * THE PROPER FUCKING FORMAT FOR ALL FUCKING FIELDS!!!!"
  *
- * He is right, and the bug that prompted it was exactly this shape:
- * `createDeck` wrote `colors: null` and nothing ever filled it in, so
- * three decks made in the app were the only colourless ones in a
- * database where every imported deck had the column set. Nothing
- * failed. Nothing was red. The deck just quietly had no colour for as
- * long as nobody looked.
+ * Both right. The bug that started this was `createDeck` writing
+ * `colors: null` forever — but an emptiness check would have been just
+ * as happy with `colors: 'ZZZ'`, and a deck whose colours are "ZZZ"
+ * draws no pips for exactly the same reason a null one does.
  *
- * So this is not a test of one column. It reads the table definition
- * out of the database, creates the row the way the app creates it, and
- * demands that every column is either **filled in** or **named here
- * with a reason**. A column added to a table tomorrow fails this until
- * somebody decides which it is — which is the only way an omission
- * gets noticed at the time rather than months later.
+ * So every column is declared here with the shape it must hold. The
+ * row is created the way the app creates it, the table's own column
+ * list is read back with `PRAGMA table_info`, and three things have to
+ * be true:
+ *
+ *   1. every column is either declared or excused, with a reason
+ *   2. every declared column's value matches its shape
+ *   3. nothing excused for being empty is actually full
+ *
+ * A column added tomorrow fails this until somebody says what belongs
+ * in it. That is the whole point: the omission gets noticed at the
+ * time rather than months later when a deck looks colourless.
  */
-describe('what intake actually fills in', () => {
-  /** Every column of a table, as the database itself describes it. */
-  async function columnsOf(table) {
-    const rows = await sql(`PRAGMA table_info(${table})`);
-    return rows.map((r) => r.name);
-  }
+describe('what intake writes, and what shape it is', () => {
+  // ------------------------------------------------------------ shapes
+
+  const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+  const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+  const DATE = /^\d{4}-\d{2}-\d{2}$/;
+  const STAMP = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}/;
+  const KEY = /^[0-9a-hjkmnp-tv-z]{8}$/;
+
+  /** WUBRG letters, in WUBRG order, each at most once. */
+  const colourString = (value) => {
+    if (!/^[WUBRG]*$/.test(value)) return `"${value}" is not WUBRG letters`;
+    const order = [...'WUBRG'];
+    const seen = [...value].map((c) => order.indexOf(c));
+    if (new Set(seen).size !== seen.length) return `"${value}" repeats a colour`;
+    if (seen.some((n, i) => i > 0 && n <= seen[i - 1])) return `"${value}" is not in WUBRG order`;
+    return null;
+  };
+
+  const oneOf = (...allowed) => (value) => (
+    allowed.includes(value) ? null : `"${value}" is not one of ${allowed.join(', ')}`
+  );
+
+  const matching = (re) => (value) => (re.test(String(value)) ? null : `"${value}" does not match ${re}`);
+
+  const wholeNumber = (min = 0) => (value) => {
+    if (!Number.isInteger(value)) return `${JSON.stringify(value)} is not a whole number`;
+    return value >= min ? null : `${value} is below ${min}`;
+  };
+
+  const flag = (value) => (value === 0 || value === 1 ? null : `${JSON.stringify(value)} is not 0 or 1`);
+
+  const text = (value) => {
+    if (typeof value !== 'string') return `${JSON.stringify(value)} is not text`;
+    if (value !== value.trim()) return `"${value}" has space around it`;
+    return value.length ? null : 'is empty';
+  };
+
+  /** A comma-separated list of words, with no stray spaces. */
+  const wordList = (value) => {
+    if (typeof value !== 'string') return `${JSON.stringify(value)} is not text`;
+    const parts = value.split(',');
+    const bad = parts.find((p) => p !== p.trim() || p === '');
+    return bad === undefined ? null : `"${value}" has a blank or padded entry`;
+  };
+
+  const number = (min = 0) => (value) => {
+    if (typeof value !== 'number' || Number.isNaN(value)) return `${JSON.stringify(value)} is not a number`;
+    return value >= min ? null : `${value} is below ${min}`;
+  };
 
   /**
-   * Hold a row to its table: every column is filled in, or listed
-   * here with the reason it is not.
+   * Hold a row to its declaration: shape for what is there, a stated
+   * reason for what is not, and nothing unaccounted for either way.
    */
-  function audit(table, row, emptyOnPurpose) {
+  function audit(table, row, declared, emptyOnPurpose) {
+    const wrong = [];
     const unexplained = [];
     const pointless = [];
+
     Object.entries(row).forEach(([column, value]) => {
       const blank = value === null || value === '';
       const excused = Object.prototype.hasOwnProperty.call(emptyOnPurpose, column);
-      if (blank && !excused) unexplained.push(column);
-      if (!blank && excused) pointless.push(column);
+      if (blank) {
+        if (!excused) unexplained.push(column);
+        return;
+      }
+      if (excused) pointless.push(column);
+      const shape = declared[column];
+      if (!shape) {
+        unexplained.push(`${column} (no shape declared)`);
+        return;
+      }
+      const complaint = shape(value, row);
+      if (complaint) wrong.push(`${column}: ${complaint}`);
     });
+
     expect(
       unexplained,
-      `${table}: these columns came out empty and nothing here says why.\n`
-      + 'Either fill them in at intake or add them to the list with a reason.',
+      `${table}: these columns are empty or undeclared and nothing here says why.\n`
+      + 'Either fill them in at intake, or declare the shape, or excuse them with a reason.',
+    ).toEqual([]);
+    expect(
+      wrong,
+      `${table}: these columns hold something of the wrong shape.`,
     ).toEqual([]);
     expect(
       pointless,
@@ -55,12 +122,17 @@ describe('what intake actually fills in', () => {
     ).toEqual([]);
   }
 
-  /** The table has not grown a column nobody classified. */
-  async function noNewColumns(table, known) {
+  async function columnsOf(table) {
+    return (await sql(`PRAGMA table_info(${table})`)).map((r) => r.name);
+  }
+
+  /** No column exists that this audit has never heard of. */
+  async function everyColumnIsAccountedFor(table, declared, excused) {
+    const known = [...Object.keys(declared), ...Object.keys(excused)];
     expect(
       (await columnsOf(table)).filter((c) => !known.includes(c)),
       `${table} has a column this audit has never heard of. `
-      + 'Decide whether intake fills it in, then add it here.',
+      + 'Say what shape belongs in it, or why it is empty.',
     ).toEqual([]);
   }
 
@@ -77,77 +149,157 @@ describe('what intake actually fills in', () => {
       theme: 'audit',
     };
 
+    const SHAPES = {
+      id: wholeNumber(1),
+      slug: matching(SLUG),
+      name: text,
+      owner: matching(SLUG),
+      format: oneOf('commander', 'standard', 'modern', 'legacy', 'vintage', 'pauper', 'pioneer', 'brawl', 'historic', 'oathbreaker', 'other'),
+      recorded_date: matching(DATE),
+      colors: colourString,
+      commander: text,
+      theme: text,
+      bracket: matching(/^[1-5]$/),
+      is_proxy: flag,
+      card_count: wholeNumber(1),
+      // Never more owned than the deck asks for: that would be a
+      // count of something other than this deck.
+      owned_count: (value, row) => wholeNumber(0)(value)
+        ?? (value <= row.card_count ? null : `${value} owned of ${row.card_count} wanted`),
+    };
+
+    const EMPTY = {
+      source_file: 'typed into the app, not imported from a file',
+      source_md: 'likewise: there is no markdown to keep',
+      status: 'free prose on the imported decks; the wizard does not ask and must not guess',
+    };
+
     async function made(body = NEW) {
       const r = await post('/decks/create', { ...body, dry_run: false }, stubScryfall());
       expect(r.status, JSON.stringify(r.body)).toBe(201);
       return (await sql('SELECT * FROM decks WHERE slug = ?1', r.body.slug))[0];
     }
 
-    it('fills in every column it can, and the rest are named here', async () => {
-      audit('decks', await made(), {
-        // There is no file. The deck was typed into the app, which is
-        // the whole point of the wizard, and inventing a filename
-        // would make a provenance trail that is not true.
-        source_file: 'typed into the app, not imported from a file',
-        source_md: 'likewise: there is no markdown to keep',
-        // Free prose on the imported decks — "Stock precon,
-        // unmodified", "Custom build, physically assembled". The
-        // wizard does not ask and must not guess.
-        status: 'a note the wizard does not ask for',
-      });
+    it('every column is the shape it should be', async () => {
+      audit('decks', await made(), SHAPES, EMPTY);
     });
 
-    it('and the table has not grown a column nobody thought about', async () => {
-      await noNewColumns('decks', [
-        'id', 'slug', 'name', 'owner', 'format', 'source_file', 'recorded_date',
-        'status', 'colors', 'commander', 'theme', 'bracket', 'is_proxy',
-        'card_count', 'owned_count', 'source_md',
-      ]);
+    it('and the table has not grown a column nobody declared', async () => {
+      await everyColumnIsAccountedFor('decks', SHAPES, EMPTY);
     });
 
     /**
-     * The one that started this.
-     *
-     * `colors` is what draws the pips on a deck tile, and an empty
-     * one is not "colourless" — it is "nobody worked it out", which
-     * looks identical and is a different fact.
+     * The one that started this, now checked for value rather than
+     * for presence. `colors` draws the pips, and "ZZZ" draws none of
+     * them just as surely as null does.
      */
-    it('knows its colours, which is what the tile draws', async () => {
+    it('takes its colours from its commander, in WUBRG order', async () => {
       expect((await made()).colors).toBe('W');
     });
 
-    it('counts its cards and how many are owned', async () => {
-      const deck = await made();
-      expect(deck.card_count).toBeGreaterThan(0);
-      expect(deck.owned_count).toBeGreaterThan(0);
-    });
-
-    it('records when it was made', async () => {
-      expect((await made()).recorded_date).toMatch(/^\d{4}-\d{2}-\d{2}/);
-    });
-
-    it('keeps what the wizard was told, rather than dropping it on the floor', async () => {
-      const deck = await made();
-      expect(deck.name).toBe('Audit Brew');
-      expect(deck.format).toBe('commander');
-      expect(deck.owner).toBe('matt');
-      expect(deck.commander).toBe("Akroma's Will");
-      expect(deck.bracket).toBe('3');
-      expect(deck.theme).toBe('audit');
-      expect(deck.is_proxy).toBe(0);
-    });
-
-    it('a deck with no commander still gets its colours from the list', async () => {
+    it('a deck with no commander takes them from the list', async () => {
       const deck = await made({
         name: 'Audit Modern', format: 'modern', owner: 'matt', list: '1 Lightning Bolt',
       });
       expect(deck.colors).toBe('R');
+    });
+
+    it('keeps what the wizard was told, exactly as it was told', async () => {
+      const deck = await made();
+      expect(deck).toMatchObject({
+        name: 'Audit Brew',
+        format: 'commander',
+        owner: 'matt',
+        commander: "Akroma's Will",
+        bracket: '3',
+        theme: 'audit',
+        is_proxy: 0,
+      });
+      expect(deck.slug).toBe('audit-brew');
     });
   });
 
   // ------------------------------------------------------------- cards
 
   describe('a card added in the app', () => {
+    const SHAPES = {
+      id: wholeNumber(1),
+      owner: matching(SLUG),
+      qty: wholeNumber(1),
+      finish: oneOf('nonfoil', 'foil', 'etched', 'glossy'),
+      scryfall_id: matching(UUID),
+      oracle_id: matching(UUID),
+      name: text,
+      // The join key every other table uses. Lower case, trimmed, and
+      // nothing a `LIKE` would have to escape.
+      name_norm: (value) => (value === String(value).toLowerCase().trim()
+        ? null
+        : `"${value}" is not a normalised name`),
+      mana_cost: matching(/^(?:\{[^}]+\})*$/),
+      cmc: number(0),
+      oracle_text: text,
+      type_line: text,
+      types: wordList,
+      colors: colourString,
+      color_identity: colourString,
+      // The column exists so a five-colour filter does not have to
+      // count letters; if it disagrees with the letters it is worse
+      // than useless.
+      color_identity_count: (value, row) => wholeNumber(0)(value)
+        ?? (value === String(row.color_identity ?? '').length
+          ? null
+          : `${value} against identity "${row.color_identity}"`),
+      rarity: oneOf('common', 'uncommon', 'rare', 'mythic', 'special', 'bonus'),
+      setcode: matching(/^[a-z0-9]{3,6}$/),
+      set_name: text,
+      set_type: matching(/^[a-z_]+$/),
+      released_at: matching(DATE),
+      collector_number: matching(/^[A-Za-z0-9★†\-+]+$/),
+      artist: text,
+      layout: matching(/^[a-z_]+$/),
+      frame: matching(/^(?:1993|1997|2003|2015|future)$/),
+      border_color: oneOf('black', 'white', 'borderless', 'silver', 'gold', 'yellow'),
+      edhrec_rank: wholeNumber(1),
+      reserved: flag,
+      game_changer: flag,
+      full_art: flag,
+      textless: flag,
+      promo: flag,
+      reprint: flag,
+      variation: flag,
+      oversized: flag,
+      story_spotlight: flag,
+      booster: flag,
+      // Only the cards that have them, but the shape still holds.
+      face1: text,
+      face2: text,
+      flavor_text: text,
+      supertypes: wordList,
+      subtypes: wordList,
+      produced_mana: colourString,
+      power: text,
+      toughness: text,
+      loyalty: text,
+      defense: text,
+      watermark: matching(/^[a-z0-9_]+$/),
+      security_stamp: oneOf('oval', 'triangle', 'acorn', 'circle', 'arena', 'heart'),
+      foil_flag: text,
+    };
+
+    const EMPTY = {
+      face2: 'only a double-faced card has a back',
+      supertypes: 'a Bolt is not Legendary or Basic',
+      subtypes: 'an Instant has no creature type',
+      produced_mana: 'it makes no mana',
+      watermark: 'no watermark on this printing',
+      security_stamp: 'no stamp on this printing',
+      power: 'not a creature',
+      toughness: 'not a creature',
+      loyalty: 'not a planeswalker',
+      defense: 'not a battle',
+      foil_flag: "the finish column says it; this is the old import's word for the same thing",
+    };
+
     async function added() {
       const r = await post(
         '/cards/add',
@@ -160,99 +312,106 @@ describe('what intake actually fills in', () => {
       ))[0];
     }
 
-    it('fills in every column it can, and the rest are named here', async () => {
-      audit('cards', await added(), {
-        // Scryfall sends these only for the cards that have them, and
-        // most cards have none: a Lightning Bolt is not legendary, has
-        // no subtype, makes no mana and carries no watermark.
-        face2: 'only a double-faced card has a back',
-        supertypes: 'a Bolt is not Legendary or Basic',
-        subtypes: 'an Instant has no creature type',
-        produced_mana: 'it makes no mana',
-        watermark: 'no watermark on this printing',
-        security_stamp: 'no stamp on this printing',
-        power: 'not a creature',
-        toughness: 'not a creature',
-        loyalty: 'not a planeswalker',
-        defense: 'not a battle',
-        foil_flag: 'the finish column says it; this is the old import\'s word for the same thing',
-        // Zero is a real answer for a flag, not an empty one — the
-        // audit treats 0 as filled in, so none of the ten appear here.
+    it('every column is the shape it should be', async () => {
+      audit('cards', await added(), SHAPES, EMPTY);
+    });
+
+    it('and the table has not grown a column nobody declared', async () => {
+      await everyColumnIsAccountedFor('cards', SHAPES, EMPTY);
+    });
+
+    it('the card is the card it was asked for', async () => {
+      const card = await added();
+      expect(card.name).toBe('Lightning Bolt');
+      expect(card.name_norm).toBe('lightning bolt');
+      expect(card.setcode).toBe('2x2');
+      expect(card.collector_number).toBe('117');
+      expect(card.colors).toBe('R');
+      expect(card.color_identity).toBe('R');
+      expect(card.type_line).toContain('Instant');
+    });
+
+    it('and its child rows say the same thing the columns do', async () => {
+      const card = await added();
+      const colours = await sql('SELECT color, kind FROM card_colors WHERE card_id = ?1', card.id);
+      expect(colours.length).toBeGreaterThan(0);
+      colours.forEach((r) => {
+        expect('WUBRG', `card_colors.color "${r.color}"`).toContain(r.color);
+        // The vocabulary the table actually uses, read off the live
+        // database rather than guessed: color, identity, produced.
+        expect(['color', 'identity', 'produced'], `kind "${r.kind}"`).toContain(r.kind);
+      });
+
+      const types = await sql('SELECT type, kind FROM card_types WHERE card_id = ?1', card.id);
+      expect(types.length).toBeGreaterThan(0);
+      types.forEach((r) => {
+        expect(r.type, 'a blank type').toBeTruthy();
+        expect(r.type).toBe(String(r.type).trim());
+        expect(['type', 'subtype', 'supertype'], `kind "${r.kind}"`).toContain(r.kind);
+      });
+
+      const finishes = await sql('SELECT finish FROM card_finishes WHERE card_id = ?1', card.id);
+      expect(finishes.length).toBeGreaterThan(0);
+      finishes.forEach((r) => {
+        expect(['nonfoil', 'foil', 'etched', 'glossy'], `finish "${r.finish}"`).toContain(r.finish);
+      });
+
+      const games = await sql('SELECT game FROM card_games WHERE card_id = ?1', card.id);
+      expect(games.length).toBeGreaterThan(0);
+      games.forEach((r) => {
+        expect(['paper', 'arena', 'mtgo', 'astral', 'sega'], `game "${r.game}"`).toContain(r.game);
       });
     });
 
-    it('and the table has not grown a column nobody thought about', async () => {
-      await noNewColumns('cards', [
-        'id', 'owner', 'qty', 'finish', 'foil_flag', 'scryfall_id', 'oracle_id',
-        'name', 'name_norm', 'face1', 'face2', 'mana_cost', 'cmc', 'oracle_text',
-        'flavor_text', 'power', 'toughness', 'loyalty', 'defense', 'type_line',
-        'supertypes', 'types', 'subtypes', 'colors', 'color_identity',
-        'color_identity_count', 'produced_mana', 'rarity', 'setcode', 'set_name',
-        'set_type', 'released_at', 'collector_number', 'artist', 'layout', 'frame',
-        'border_color', 'reserved', 'game_changer', 'full_art', 'textless', 'promo',
-        'reprint', 'variation', 'oversized', 'story_spotlight', 'booster',
-        'edhrec_rank', 'watermark', 'security_stamp',
-      ]);
-    });
-
-    it('the things a card page reads are all there', async () => {
-      // Every one of these was missing from the page itself, which is
-      // a different bug — but the column being empty would make that
-      // one unfixable.
-      const card = await added();
-      ['artist', 'layout', 'frame', 'border_color', 'released_at', 'set_type',
-        'rarity', 'collector_number', 'edhrec_rank', 'color_identity',
-      ].forEach((c) => {
-        expect(card[c], `cards.${c} is empty on a card the app just added`).not.toBe(null);
-      });
-    });
-
-    it('and its child rows are written too', async () => {
-      const card = await added();
-      const kinds = await Promise.all([
-        sql('SELECT COUNT(*) AS n FROM card_colors WHERE card_id = ?1', card.id),
-        sql('SELECT COUNT(*) AS n FROM card_types WHERE card_id = ?1', card.id),
-        sql('SELECT COUNT(*) AS n FROM card_finishes WHERE card_id = ?1', card.id),
-        sql('SELECT COUNT(*) AS n FROM card_games WHERE card_id = ?1', card.id),
-      ]);
-      const [colors, types, finishes, games] = kinds.map((r) => r[0].n);
-      expect(colors, 'card_colors').toBeGreaterThan(0);
-      expect(types, 'card_types').toBeGreaterThan(0);
-      expect(finishes, 'card_finishes').toBeGreaterThan(0);
-      expect(games, 'card_games').toBeGreaterThan(0);
+    it('a second copy adds to the quantity rather than making a second row', async () => {
+      const first = await added();
+      const again = await added();
+      expect(again.id).toBe(first.id);
+      expect(again.qty).toBe(first.qty + 1);
     });
   });
 
   // ------------------------------------------------------------- users
 
   describe('an account made by signing in', () => {
-    async function joined() {
+    const SHAPES = {
+      id: wholeNumber(1),
+      key: matching(KEY),
+      slug: matching(SLUG),
+      display_name: text,
+      email: matching(/^[^@\s]+@[^@\s]+\.[^@\s]+$/),
+      avatar_url: matching(/^https:\/\/\S+$/),
+      role: oneOf('user', 'admin'),
+      created_at: matching(STAMP),
+    };
+
+    async function joined(over = {}) {
       const user = await signIn(env.DB, {
         provider: 'google',
         subject: 'audit-1',
         name: 'Audit Person',
         email: 'audit@example.com',
         avatar: 'https://example.test/a.png',
+        ...over,
       });
       return (await sql('SELECT * FROM users WHERE id = ?1', user.id))[0];
     }
 
-    it('fills in every column it can, and the rest are named here', async () => {
-      audit('users', await joined(), {});
+    it('every column is the shape it should be', async () => {
+      audit('users', await joined(), SHAPES, {});
     });
 
-    it('and the table has not grown a column nobody thought about', async () => {
-      await noNewColumns('users', [
-        'id', 'key', 'slug', 'display_name', 'email', 'avatar_url', 'role', 'created_at',
-      ]);
+    it('and the table has not grown a column nobody declared', async () => {
+      await everyColumnIsAccountedFor('users', SHAPES, {});
     });
 
-    it('starts as a user, with a key and a slug of its own', async () => {
-      const u = await joined();
-      expect(u.role).toBe('user');
-      expect(u.key).toMatch(/^[0-9a-hjkmnp-tv-z]{8}$/);
-      expect(u.slug).toBe('audit-person');
-      expect(u.created_at).toMatch(/^\d{4}-\d{2}-\d{2}/);
+    it('starts as a user, never as an admin', async () => {
+      expect((await joined()).role).toBe('user');
+    });
+
+    it('and a name that is all punctuation still makes a usable slug', async () => {
+      const u = await joined({ subject: 'audit-2', name: '!!!' });
+      expect(u.slug).toMatch(SLUG);
     });
   });
 });
