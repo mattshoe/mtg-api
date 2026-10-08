@@ -1390,9 +1390,11 @@ describe('every terminal outcome', () => {
     run('dispatch.sh')
     const after = box.log().split('\n').filter((l) => l.startsWith('claude ')).length
     expect(after).toBe(before)
-    logged('is held')
-    // Held, not lost: the file and the branch are both still there.
-    expect(existsSync(box.path('requests/a-thing.md'))).toBe(true)
+    // Held, not lost. It leaves the live folder at give-up, which the
+    // README promises happens on every outcome, and the hold file plus the
+    // branch are what keep it recoverable.
+    expect(existsSync(box.path('requests/done/a-thing.md'))).toBe(true)
+    expect(readFileSync(box.path('requests/done/a-thing.md'), 'utf8')).toContain('Held after')
   })
 })
 
@@ -2023,5 +2025,258 @@ case " $got " in *" $exact "*) echo MATCHED_EXACT ;; esac
     expect(r.stdout).toContain('MATCHED_EXACT')
     expect(r.stdout).not.toContain('MATCHED_DEEP')
     expect(r.stdout).not.toContain('MATCHED_OLD')
+  })
+})
+
+describe('a request whose CI is red', () => {
+  // The `fix` outcome left the request live and buildable, so every later
+  // dispatch launched a FULL re-implementation builder on the open PR
+  // branch before it re-judged CI. `FIX_GIVE_UP` bounded only the
+  // fix-only builders and `bump_attempt` was never reached on this path.
+  // Measured three ways: 3 full + 2 fix launches over three dispatches; a
+  // full→fixonly→full→fixonly sequence, four opus runs for one red PR, two
+  // of them told to follow TDD on a tree that already has the feature; and
+  // a branch grown to five commits of repeated work.
+  //
+  // The existing test passed anyway, because it only counted the fix-only
+  // launches.
+
+  const RED_GH = `
+case "$1 $2" in
+  "pr list") printf '7 OPEN\\n' ;;
+  "run list") printf '101\\n' ;;
+  "run watch") exit 0 ;;
+  "run view") printf 'FAILED: the thing that broke\\n' ;;
+  "pr checks") printf 'shared\\tpass\\t1m\\tu\\ntally\\tfail\\t1m\\tu\\n'; exit 1 ;;
+  "pr merge") exit 0 ;;
+esac
+exit 0
+`
+
+  beforeEach(() => {
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    box.stub('gh', RED_GH)
+    box.stub('claude', `
+branch="$(git rev-parse --abbrev-ref HEAD)"
+echo x >> built.txt
+git add -A
+git -c user.name=b -c user.email=b@b commit -qm "build: $branch"
+git push -q origin "HEAD:refs/heads/$branch" 2>/dev/null || true
+exit 0
+`)
+  })
+
+  const launches = () => {
+    const all = box.log().split('\n').filter((l) => l.startsWith('claude '))
+    return {
+      full: all.filter((l) => l.includes('request-builder.md') && !l.includes('FIX-ONLY')).length,
+      fix: all.filter((l) => l.includes('FIX-ONLY')).length,
+    }
+  }
+
+  it('never gets a second full builder, only fix-only ones', () => {
+    run('dispatch.sh', { timeout: 120_000 })
+    run('dispatch.sh', { timeout: 120_000 })
+    run('dispatch.sh', { timeout: 120_000 })
+    const n = launches()
+    expect(n.full, 'a full re-implementation builder ran more than once').toBe(1)
+    expect(n.fix).toBeGreaterThan(0)
+  })
+
+  it('does not grow the branch with repeated work', () => {
+    run('dispatch.sh', { timeout: 120_000 })
+    run('dispatch.sh', { timeout: 120_000 })
+    const n = spawnSync('git',
+      ['-C', join(box.root, '.cache/mtg-intake/wt/slot1'), 'rev-list', '--count', 'origin/main..HEAD'],
+      { encoding: 'utf8' }).stdout.trim()
+    // One build plus at most FIX_GIVE_UP fixes. It was growing without
+    // bound before, because each dispatch added a full re-implementation
+    // on top of the fixes.
+    expect(Number(n)).toBeLessThanOrEqual(3)
+  })
+
+  it('is held once the fix bound is spent, and filed', () => {
+    run('dispatch.sh', { env: { INTAKE_FIX_GIVE_UP: '1' }, timeout: 120_000 })
+    run('dispatch.sh', { env: { INTAKE_FIX_GIVE_UP: '1' }, timeout: 120_000 })
+    run('dispatch.sh', { env: { INTAKE_FIX_GIVE_UP: '1' }, timeout: 120_000 })
+    logged('still red')
+    expect(existsSync(box.path('requests/done/a-thing.md'))).toBe(true)
+  })
+})
+
+describe('an outcome nobody counted', () => {
+  // Five non-terminal exits from `build_one` bumped no counter and set no
+  // hold, so a request was rebuilt forever, once per launchd event. `gh`
+  // failing only on `pr merge` produced four dispatches, four full
+  // builders and a branch at four commits, with the request still live.
+
+  it('counts a merge that would not go through', () => {
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    box.stub('claude', BUILDER)
+    box.stub('gh', `
+case "$1 $2" in
+  "pr list") printf '7 OPEN\\n' ;;
+  "run list") printf '101\\n' ;;
+  "run watch") exit 0 ;;
+  "pr checks") printf 'shared\\tpass\\t1m\\tu\\n'; exit 0 ;;
+  "pr merge") exit 9 ;;
+esac
+exit 0
+`)
+    for (let i = 0; i < 4; i += 1) run('dispatch.sh', { timeout: 120_000 })
+    logged('GIVING UP on a-thing')
+    const full = box.log().split('\n')
+      .filter((l) => l.startsWith('claude ') && l.includes('request-builder.md')).length
+    expect(full).toBeLessThanOrEqual(3)
+  })
+
+  it('counts a gh that will not answer about the pull request', () => {
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    box.stub('claude', BUILDER)
+    box.stub('gh', 'case "$1 $2" in "pr list") exit 4 ;; esac\nexit 0')
+    for (let i = 0; i < 4; i += 1) run('dispatch.sh', { timeout: 120_000 })
+    logged('GIVING UP on a-thing')
+  })
+
+  it('counts a slot that could not be saved, instead of failing silently forever', () => {
+    // R10 made the machine safe and silently inert: `prepare_slot` refused
+    // to reset an unsaved slot, and then nothing counted it, nothing was
+    // held, and nothing was notified. With MAX_BUILDERS=1 every request
+    // failed identically forever, the only record a line in a log nobody
+    // reads. A fix that moves the failure rather than removing it does not
+    // count.
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    box.stub('gh', ghStub({ state: 'NONE' }))
+    box.stub('claude', BUILDER_STALLS)
+    run('dispatch.sh')
+    box.git('remote', 'set-url', 'origin', join(box.root, 'gone.git'))
+    for (let i = 0; i < 3; i += 1) run('dispatch.sh')
+    logged('REFUSING to reset')
+    expect(box.log()).toContain('osascript')
+    logged('GIVING UP on a-thing')
+  })
+})
+
+describe('a held request', () => {
+  // A hold was invisible: notified once, then `list_buildable` skipped it
+  // with a log line only, `intake.mjs held` knew nothing about the hold
+  // file, the end-of-run "needs you" loop said nothing, and `status.sh`
+  // printed it as `ready`. Measured: 0 claude invocations, 0
+  // notifications, dashboard said ready.
+
+  function holdIt() {
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    box.stub('gh', ghStub({ state: 'NONE' }))
+    box.stub('claude', BUILDER_STALLS)
+    for (let i = 0; i < 3; i += 1) run('dispatch.sh')
+  }
+
+  it('says so on the dashboard rather than reading as ready', () => {
+    holdIt()
+    const out = spawnSync('bash', [box.path('scripts/intake/status.sh')], {
+      encoding: 'utf8', cwd: box.repo, timeout: 60_000,
+      env: { ...process.env, PATH: `${box.bin}:${process.env.PATH}`, HOME: box.root },
+    }).stdout
+    expect(out).toContain('held')
+    expect(out).not.toMatch(/a-thing\s+ready/)
+  })
+
+  it('is named in the needs-you list on every later dispatch, not just once', () => {
+    holdIt()
+    const before = box.log().split('\n').filter((l) => l.startsWith('osascript')).length
+    run('dispatch.sh')
+    const after = box.log().split('\n').filter((l) => l.startsWith('osascript')).length
+    expect(after).toBeGreaterThan(before)
+    logged('held: ')
+  })
+
+  it('leaves the live folder at give-up, which the README promises', () => {
+    holdIt()
+    expect(existsSync(box.path('requests/done/a-thing.md'))).toBe(true)
+    expect(existsSync(box.path('requests/a-thing.md'))).toBe(false)
+  })
+
+  it('comes back when the same request is dropped in again', () => {
+    holdIt()
+    // Matt re-drops it. The hold must not be dead on arrival.
+    writeFileSync(box.path('requests/a-thing.md'), READY('A thing, again'))
+    box.stub('claude', BUILDER)
+    box.stub('gh', ghStub())
+    run('dispatch.sh', { timeout: 120_000 })
+    expect(box.log()).toContain('claude -p')
+  })
+})
+
+describe('resetting a slot', () => {
+  // The third round running with the same data-loss shape, and the general
+  // version of the mistake is: a decision computed from a snapshot of
+  // state that a LATER step in the same function then changes.
+  //
+  // `prepare_slot` chose its start ref before `salvage` pushed. So the
+  // commit salvage had just made and pushed was reset away and
+  // force-pushed over on the next dispatch, while the log said "nothing
+  // was thrown away". Measured: `salvaged … as 50a4923 (2 commits, 1 file
+  // swept up)`, then `checkout -B` with `start` still `$BASE` dropped it,
+  // and `git ls-tree -r origin.git <branch>` contained neither file —
+  // reachable only from the reflog.
+
+  it('keeps the commit prepare_slot salvage just pushed', () => {
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    box.stub('gh', ghStub({ state: 'NONE' }))
+    box.stub('claude', 'echo "work nobody committed" > wip.txt\nexit 0')
+
+    // Run 1 with a broken origin, so the branch never reaches it and
+    // `build_one`'s salvage can only tag locally.
+    const realOrigin = box.origin
+    box.git('remote', 'set-url', 'origin', join(box.root, 'gone.git'))
+    run('dispatch.sh')
+    logged('COULD NOT PUSH')
+
+    // The commit that only exists locally, which is the thing that must
+    // survive. Asserting on the FILE is not enough — the builder stub
+    // recreates it, so the file reappears while the commit is gone.
+    const slot = join(box.root, '.cache/mtg-intake/wt/slot1')
+    const saved = spawnSync('git', ['-C', slot, 'rev-parse', 'HEAD'],
+      { encoding: 'utf8' }).stdout.trim()
+    expect(saved.length).toBe(40)
+
+    // Origin comes back. Now the FIRST push of this branch is the one
+    // `prepare_slot` does, which is the case where `start` was computed
+    // before it and stayed at BASE.
+    box.git('remote', 'set-url', 'origin', realOrigin)
+    run('dispatch.sh', { timeout: 120_000 })
+
+    const branch = spawnSync('node', ['scripts/intake.mjs', 'branch', 'a-thing.md'],
+      { encoding: 'utf8', cwd: box.repo }).stdout.trim()
+    const reachable = spawnSync('git',
+      ['-C', realOrigin, 'merge-base', '--is-ancestor', saved, branch])
+    expect(reachable.status,
+      `${saved.slice(0, 8)} was salvaged and then reset away; it is not on ${branch}`).toBe(0)
+  })
+
+  it('refuses outright rather than resetting over work it cannot account for', () => {
+    // The general guard: before any `checkout -B`, HEAD has to be an
+    // ancestor of where the branch is going. This is the assertion that
+    // catches the whole class, not the one instance of it.
+    build()
+    const slot = join(box.root, 'wt', 'slot1')
+    mkdirSync(join(box.root, 'wt'), { recursive: true })
+    box.git('worktree', 'add', '-q', '-b', 'request/orphan-0000000', slot, 'main')
+    writeFileSync(join(slot, 'only-here.txt'), 'unreachable\n')
+    spawnSync('git', ['-C', slot, 'add', '-A'], { encoding: 'utf8' })
+    spawnSync('git', ['-C', slot, '-c', 'user.name=t', '-c', 'user.email=t@t',
+      'commit', '-qm', 'work that exists nowhere else'], { encoding: 'utf8' })
+    const head = spawnSync('git', ['-C', slot, 'rev-parse', 'HEAD'],
+      { encoding: 'utf8' }).stdout.trim()
+
+    const r = spawnSync('bash', ['-c', `
+REPO=${JSON.stringify(box.repo)}
+LOG=/dev/stdout
+BASE=origin/main
+eval "$(sed -n '/^would_lose()/,/^}/p' ${JSON.stringify(box.path('scripts/intake/dispatch.sh'))})"
+if would_lose ${JSON.stringify(slot)} "$BASE"; then echo WOULD_LOSE; else echo SAFE; fi
+`], { encoding: 'utf8' })
+    expect(r.stdout).toContain('WOULD_LOSE')
+    expect(head.length).toBe(40)
   })
 })

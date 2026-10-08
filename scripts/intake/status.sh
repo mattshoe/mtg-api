@@ -161,6 +161,15 @@ for f in requests/*.md; do
   # The predicate, from the one implementation of it.
   want="$(printf '%s\n' "$states" | awk -F'\t' -v k="$n.md" '$1==k {print $2}')"
   [ -n "$want" ] || want="not listed"
+  # A hold lives in a file, not in the frontmatter, so `intake.mjs` cannot
+  # know about it — and a held request used to print as `ready` while the
+  # dispatcher skipped it silently. This is the one line that has to be
+  # true for the dashboard to mean anything.
+  if [ -f "$STATE/$n.held" ]; then
+    want="HELD: $(cat "$STATE/$n.held" 2>/dev/null)"
+  elif [ -f "$STATE/$n.fix-pending" ]; then
+    want="CI red on #$(cat "$STATE/$n.fixme" 2>/dev/null), waiting on a fix"
+  fi
 
   if [ -n "$bpid" ]; then
     age="$(ps -o etime= -p "$bpid" 2>/dev/null | tr -d ' ')"

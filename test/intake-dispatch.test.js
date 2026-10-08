@@ -459,6 +459,27 @@ describe('builderDone', () => {
     expect(v.state).toBe('merged')
   })
 
+  it('does not judge a builder on a commit count it could not read', () => {
+    // `commits_on` deliberately returns '' on git failure so a transient
+    // does not kill a healthy builder — and then `Number(commits || 0)`
+    // turned that into 0 and the verdict became "nothing committed on its
+    // branch". Verified against the CLI:
+    //   node scripts/intake.mjs done-verdict 0 true false '' true
+    //   → keep:nothing committed on its branch
+    // So three transient git failures held the request.
+    const v = builderDone({ exitCode: 0, prOpen: true, commits: null, pushed: true })
+    expect(v.ok).toBe(false)
+    expect(v.state).toBe('unknown')
+    expect(v.why).toContain('could not be read')
+    expect(v.why).not.toContain('nothing committed')
+  })
+
+  it('treats an unreadable count as unknown, not as unpushed either', () => {
+    const v = builderDone({ exitCode: 0, prOpen: true, commits: NaN, pushed: false })
+    expect(v.state).toBe('unknown')
+    expect(v.why).not.toContain('not pushed')
+  })
+
   it('is done when merged even though BASE..HEAD is now empty', () => {
     // Once the work is in the base, `rev-list --count BASE..HEAD` is
     // legitimately 0 and `ls-remote` no longer matches the branch tip —

@@ -242,10 +242,32 @@ export function builderDone({
   if (prMerged) {
     return { ok: true, keep: false, why: '', state: 'merged' }
   }
+
+  // An unreadable commit count is UNKNOWN, not zero.
+  //
+  // `commits_on` returns empty on git failure on purpose, so an index
+  // lock or a concurrent checkout does not kill a healthy builder — and
+  // then `Number(commits || 0)` turned that straight back into 0 and the
+  // verdict became "nothing committed on its branch". Verified:
+  // `done-verdict 0 true false '' true` → `keep:nothing committed`. So no
+  // merge, a salvage instead, an attempt counted, and three transients
+  // holding the request. Unknown keeps the slot and judges nothing, the
+  // same way the gh-failure paths already do.
+  const known = commits !== null && commits !== undefined
+    && commits !== '' && Number.isFinite(Number(commits))
+  if (!known) {
+    return {
+      ok: false,
+      keep: true,
+      why: 'its commit count could not be read, so nothing is being concluded from it',
+      state: 'unknown',
+    }
+  }
+
   const why = []
   if (exitCode !== 0) why.push(`exited ${exitCode}`)
   if (!prOpen) why.push('no pull request for its branch')
-  if (!commits) why.push('nothing committed on its branch')
+  if (!Number(commits)) why.push('nothing committed on its branch')
   else if (!pushed) why.push('its commits are not pushed')
   const ok = why.length === 0
   return {
@@ -345,10 +367,11 @@ if (process.argv[1] && process.argv[1].endsWith('intake.mjs')) {
       exitCode: Number(arg),
       prOpen: prOpen === 'true',
       prMerged: prMerged === 'true',
-      commits: Number(commits || 0),
+      // Passed through as given. Coercing '' to 0 here was the bug.
+      commits,
       pushed: pushed === 'true',
     })
-    console.log(v.ok ? v.state : `keep:${v.why}`)
+    console.log(v.ok ? v.state : (v.state === 'unknown' ? 'unknown' : `keep:${v.why}`))
   } else if (cmd === 'after-ci') {
     // after-ci <green> <mergeMode>
     console.log(afterCi({ green: arg === 'true', merge: rest[0] }).action)
