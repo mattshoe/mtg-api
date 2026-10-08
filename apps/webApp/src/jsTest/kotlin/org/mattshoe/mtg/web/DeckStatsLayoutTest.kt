@@ -262,6 +262,18 @@ class DeckStatsLayoutTest {
     }
 
     @Test
+    fun theThreeRingsSitSideBySide() = runTest {
+        // Android lays them in one row; the web must not wrap the
+        // third onto a row of its own.
+        assertTrue(styled(), "app.css never loaded, so the layout proves nothing")
+        val frame = render(900)
+        settle()
+        val tops = frame.all("div.pie").map { it.getBoundingClientRect().top }
+        assertEquals(3, tops.size, "expected three rings")
+        assertTrue(tops.max() - tops.min() < 1, "the rings are not in one row, tops: $tops")
+    }
+
+    @Test
     fun aDualLandIsItsOwnSliceInTheExactlyRing() = runTest {
         // Matt: "a UR slice would ONLY account for cards that produce
         // EXACTLY UR". Five Mountains, three Islands, two Steam Vents:
