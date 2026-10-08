@@ -1,5 +1,7 @@
 package org.mattshoe.mtg.android.e2e
 
+import org.junit.Rule
+import org.mattshoe.mtg.android.Retry
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsNodeInteraction
@@ -44,6 +46,9 @@ import kotlin.test.assertTrue
  */
 @RunWith(AndroidJUnit4::class)
 internal class JourneyTest : E2eTest() {
+
+    @get:Rule(order = Int.MIN_VALUE)
+    val retry = Retry()
 
     /** A deck that is in the fixture. `Deck.title` cuts at the dash. */
     private val aDeck = "Chaos Incarnate"

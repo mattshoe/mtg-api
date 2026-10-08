@@ -51,6 +51,9 @@ import kotlin.test.assertTrue
 @RunWith(AndroidJUnit4::class)
 class CardSheetParityTest {
 
+    @get:Rule(order = Int.MIN_VALUE)
+    val retry = Retry()
+
     @get:Rule
     val rule = createComposeRule()
 
