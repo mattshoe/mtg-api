@@ -482,4 +482,81 @@ class DeckStatsTest {
         val needs = DeckAnalysis.of(deck).pips.associate { it.label to it.value }
         assertEquals(1, needs["Red"], "a red cost is still a red cost")
     }
+
+    // ------------------------------- what it makes, by exact combination
+
+    private fun exactly(cards: List<DeckCard>) =
+        DeckAnalysis.of(cards).combos.associate { it.label to it.value }
+
+    @Test
+    fun aDualIsItsOwnSliceAndNotOneOfEachColour() {
+        // Matt: "a R slice would ONLY account for cards that produce
+        // ONLY red mana, while a UR slice would ONLY account for cards
+        // that produce EXACTLY UR".
+        val deck = listOf(
+            card("Mountain", type = "Basic Land — Mountain", cost = null, cmc = 0.0, qty = 5, produces = "R", ci = "R"),
+            card("Island", type = "Basic Land — Island", cost = null, cmc = 0.0, qty = 3, produces = "U", ci = "U"),
+            card("Steam Vents", type = "Land", cost = null, cmc = 0.0, qty = 2, produces = "UR", ci = "UR"),
+            card("Izzet Signet", type = "Artifact", cost = "{2}", cmc = 2.0, produces = "RU", ci = "UR"),
+        )
+        assertEquals(mapOf("U" to 3, "R" to 5, "UR" to 3), exactly(deck))
+    }
+
+    @Test
+    fun theCombinationsComeInWubrgOrderSinglesFirst() {
+        val deck = listOf(
+            card("Temple", type = "Land", cost = null, cmc = 0.0, produces = "GW", ci = "WG"),
+            card("Triome", type = "Land", cost = null, cmc = 0.0, produces = "RWU", ci = "WUR"),
+            card("Wastes", type = "Basic Land — Wastes", cost = null, cmc = 0.0, produces = "C", ci = ""),
+            card("Forest", type = "Basic Land — Forest", cost = null, cmc = 0.0, produces = "G", ci = "G"),
+            card("Plains", type = "Basic Land — Plains", cost = null, cmc = 0.0, produces = "W", ci = "W"),
+        )
+        val combos = DeckAnalysis.of(deck).combos
+        assertEquals(listOf("W", "G", "WG", "WUR", "C"), combos.map { it.label })
+        assertEquals("Selesnya", combos.first { it.label == "WG" }.note)
+    }
+
+    @Test
+    fun colourlessBesideAColourDoesNotMakeANewCombination() {
+        // A painland makes {C} as well as its two colours. It is still
+        // a UR land, and only a card that makes nothing coloured is a
+        // colourless slice.
+        val deck = listOf(
+            card("Shivan Reef", type = "Land", cost = null, cmc = 0.0, produces = "CUR", ci = "UR"),
+            card("Sol Ring", type = "Artifact", cost = "{1}", cmc = 1.0, produces = "C", ci = ""),
+        )
+        assertEquals(mapOf("UR" to 1, "C" to 1), exactly(deck))
+    }
+
+    @Test
+    fun aColourOutsideTheCommandersIdentityIsFoldedFirst() {
+        // The same fold the makes ring does: in mono-black, a land
+        // making B and R makes black and generic, so it is a black
+        // source and nothing else.
+        val deck = listOf(
+            card("Tinybones", type = "Legendary Creature", role = "commander", ci = "B"),
+            card("Sulfurous Springs", type = "Land", cost = null, cmc = 0.0, produces = "BR", ci = "BR"),
+            card("Pool", type = "Land", cost = null, cmc = 0.0, produces = "WURG", ci = ""),
+        )
+        assertEquals(mapOf("B" to 1, "C" to 1), exactly(deck))
+    }
+
+    @Test
+    fun theSlicesAddUpToTheCardsThatMakeManaAndNoMore() {
+        val deck = listOf(
+            card("Steam Vents", type = "Land", cost = null, cmc = 0.0, qty = 2, produces = "UR", ci = "UR"),
+            card("Counterspell", type = "Instant", cost = "{U}{U}", cmc = 2.0, ci = "U"),
+        )
+        val s = DeckAnalysis.of(deck)
+        assertEquals(2, s.combos.sumOf { it.value })
+        assertEquals(4, s.sources.sumOf { it.value }, "the makes ring still counts each colour")
+    }
+
+    @Test
+    fun aSliceKnowsWhichColoursToDrawItIn() {
+        assertEquals(listOf("U", "R"), Bar("UR", 1).letters)
+        assertEquals(listOf("R"), Bar("Red", 1).letters)
+        assertEquals(listOf("C"), Bar("Colourless", 1).letters)
+        assertEquals(listOf("C"), Bar("C", 1).letters)
+    }
 }
