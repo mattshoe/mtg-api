@@ -154,7 +154,7 @@ export async function repairSearch(db) {
     INSERT INTO card_search (rowid, name, type_line, oracle_text, flavor_text, keywords, tags)
     SELECT c.id, c.name, c.type_line, c.oracle_text, c.flavor_text,
            (SELECT GROUP_CONCAT(keyword,' ') FROM card_keywords k WHERE k.card_id = c.id),
-           (SELECT GROUP_CONCAT(tag_slug,' ') FROM card_tags t WHERE t.card_id = c.id)
+           (SELECT GROUP_CONCAT(tag,' ') FROM card_tags t WHERE t.card_id = c.id)
       FROM cards c
      WHERE NOT EXISTS (SELECT 1 FROM card_search s WHERE s.rowid = c.id)`).run();
   return { reindexed: missing.n };

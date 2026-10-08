@@ -8,10 +8,11 @@
 // the same treatment a password would: the browser keeps the token,
 // the database keeps only its SHA-256.
 //
-// `cards.owner` and `decks.owner` already hold a slug, so `users.slug`
-// is the join between an account and its collection and nothing in
-// the collection has to move. An account whose slug is `matt` owns
-// every row that already says `matt`.
+// An account owns the rows whose `owner_id` is its `users.id`. The id
+// is private: it is never in a URL, a response body or a log, and it
+// is only ever reached by resolving a session. `users.key` is the
+// public address of a collection, which lets you read it and nothing
+// else.
 
 const enc = new TextEncoder();
 
@@ -38,7 +39,7 @@ const KEY_LENGTH = 8;
  * request carries the right key — editing asks who the session says
  * you are, which an address cannot say.
  */
-function newKey() {
+export function newKey() {
   const bytes = crypto.getRandomValues(new Uint8Array(KEY_LENGTH));
   return [...bytes].map((b) => KEY_ALPHABET[b % KEY_ALPHABET.length]).join('');
 }
@@ -64,82 +65,6 @@ export async function hashToken(token) {
   return b64url(await crypto.subtle.digest('SHA-256', enc.encode(String(token))));
 }
 
-const FOLD = {
-  // The Latin letters NFD cannot take apart, because each is a letter
-  // in its own right rather than a letter with a mark on it. Without
-  // these, "Ünïcødé" comes out "unic-de" — the ø silently becoming a
-  // word break rather than an o.
-  'ø': 'o', 'æ': 'ae', 'œ': 'oe', 'ð': 'd', 'þ': 'th', 'ł': 'l', 'đ': 'd', 'ß': 'ss',
-};
-
-/**
- * A display name, as a path segment.
- *
- * It goes in a URL — `#/c/<slug>` — so anything that would need
- * escaping there has no business in one. Accents are folded rather
- * than dropped, because "Ünïcødé" losing four letters is worse than
- * it losing its diacritics.
- */
-export function slugFor(name) {
-  const flat = String(name ?? '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[øæœðþłđß]/g, (c) => FOLD[c])
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-  return flat || 'player';
-}
-
-/**
- * Whether that slug is already spoken for.
- *
- * By an account, or by a collection that predates accounts. The
- * second half matters today: `cards.owner` has held `matt` and
- * `kayla` since long before anybody could sign in, and without this
- * the first Matt through the door would be handed Matt's cards.
- */
-async function taken(db, slug) {
-  const { results } = await db.prepare(
-    `SELECT 1 AS n FROM users WHERE slug = ?1
-      UNION ALL SELECT 1 FROM cards WHERE owner = ?1
-      UNION ALL SELECT 1 FROM decks WHERE owner = ?1
-      LIMIT 1`,
-  ).bind(slug).all();
-  return results.length > 0;
-}
-
-/** Four characters of the key alphabet, to tell two of a name apart. */
-function mark() {
-  const bytes = crypto.getRandomValues(new Uint8Array(4));
-  return [...bytes].map((b) => KEY_ALPHABET[b % KEY_ALPHABET.length]).join('');
-}
-
-/**
- * A free slug built off that name.
- *
- * It used to count — `base-2`, `base-3`, up to `base-999` and then
- * throw. That is a query per attempt on the sign-in path, a hard
- * failure for the thousandth John Smith, and a number that invites
- * guessing the next one. Four random characters cost one query and
- * have no ceiling. Matt: "What slug when we have thousands of
- * users??? How are we going to keep them distinct???"
- *
- * None of this is what keeps accounts apart. `users.key` is: eight
- * characters of a 32-letter alphabet, a trillion of them, and the
- * thing an address actually carries. A slug is the word in
- * `cards.owner` and on the screen, and it only has to be unique.
- */
-async function freeSlug(db, name) {
-  const base = slugFor(name);
-  if (!(await taken(db, base))) return base;
-  for (let tries = 0; tries < 8; tries += 1) {
-    const candidate = `${base}-${mark()}`;
-    if (!(await taken(db, candidate))) return candidate;
-  }
-  throw new Error(`no free slug for ${base}`);
-}
-
 /**
  * Who signed in, creating the account the first time.
  *
@@ -155,27 +80,26 @@ export async function signIn(db, { provider, subject, email = null, name = null,
   ).bind(provider, String(subject)).first();
   if (existing) {
     // The profile travels with the identity, so a changed name or
-    // picture follows you in. The slug does not: it is an address
-    // somebody may have bookmarked.
+    // picture follows you in. Nothing it owns hangs off the name.
     await db.prepare(
       'UPDATE users SET display_name = ?2, email = ?3, avatar_url = ?4 WHERE id = ?1',
     ).bind(existing.id, name ?? existing.display_name, email, avatar).run();
     return db.prepare('SELECT * FROM users WHERE id = ?1').bind(existing.id).first();
   }
 
-  // Two people of one name signing in at the same moment both see
-  // the slug free, and `users.slug` is UNIQUE — so one INSERT loses.
-  // Losing it is ordinary; failing somebody's first sign-in over it
-  // is not, so the loser takes another slug and tries again.
+  // `slug` is retired and read by nothing, but the live column is
+  // NOT NULL UNIQUE until a later migration drops it, so it is given
+  // the key, which is both. A clash on the key is the only UNIQUE
+  // this can lose, and the loser simply draws another.
   let user = null;
   for (let tries = 0; tries < 5 && !user; tries += 1) {
-    const slug = await freeSlug(db, name || email || 'player');
+    const key = await freeKey(db);
     try {
       user = await db.prepare(
         `INSERT INTO users (key, slug, display_name, email, avatar_url, role, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, 'user', datetime('now'))
+         VALUES (?1, ?1, ?2, ?3, ?4, 'user', datetime('now'))
          RETURNING *`,
-      ).bind(await freeKey(db), slug, name, email, avatar).first();
+      ).bind(key, name, email, avatar).first();
     } catch (e) {
       if (!/UNIQUE/i.test(String(e?.message ?? e))) throw e;
     }
@@ -270,7 +194,7 @@ export function cookieValue(header, name) {
  * owning a collection: the password the scripts hold, and the
  * server-wide `role` that will replace it.
  */
-export function canEdit(who, ownerSlug) {
+export function canEdit(who, ownerId) {
   // The operator's password, which is a machine: `scripts/backup.py`,
   // `refresh_prices.py` and `backfill.py` have no account to sign
   // into. A machine credential is not a login.
@@ -286,7 +210,20 @@ export function canEdit(who, ownerSlug) {
   // every new account is a `user` and a `user` owns only its own
   // cards, and nobody is an `admin` unless Matt says so.
   if (who?.user?.role === ADMIN) return true;
-  return Boolean(ownerSlug) && who?.user?.slug === ownerSlug;
+  // Ids, both of them: the owner's from the row, and the caller's from
+  // the session. Nothing in the request body can reach this line.
+  return Number.isInteger(ownerId) && Number.isInteger(who?.user?.id) && who.user.id === ownerId;
+}
+
+/**
+ * The account a public key names, as the private id a write is
+ * checked against. Null for a key nobody has. Never handed to a
+ * client: it goes straight into `canEdit` and an INSERT.
+ */
+export async function ownerOfKey(db, key) {
+  if (!key) return null;
+  const row = await db.prepare('SELECT id FROM users WHERE key = ?1').bind(String(key)).first();
+  return row?.id ?? null;
 }
 
 /** The only two roles there are. `user` is the floor, `admin` the ceiling. */
@@ -297,21 +234,19 @@ export const ROLES = [USER, ADMIN];
 /**
  * Everybody, for the admin screen's list.
  *
- * No email. A role list is not a mailing list, and the page exists to
- * answer "who is there and what are they" — a name, the slug their
- * cards live under, the key their collection is shared by, and the
- * role. `collectionByKey` already refuses to hand out an address's
- * email for the same reason.
+ * No email and no id. A role list is not a mailing list, and the page
+ * exists to answer "who is there and what are they": a name, the key
+ * their collection is shared by, and the role. A row with no display
+ * name shows its email's local part rather than something invented.
  */
 export async function allUsers(db) {
   const r = await db.prepare(
-    `SELECT key, slug, display_name, avatar_url, role, created_at
-       FROM users ORDER BY role DESC, slug`,
+    `SELECT key, display_name, email, avatar_url, role, created_at
+       FROM users ORDER BY role DESC, COALESCE(display_name, email, key) COLLATE NOCASE`,
   ).all();
   return (r.results || []).map((u) => ({
     key: u.key,
-    slug: u.slug,
-    name: u.display_name || u.slug,
+    name: u.display_name || String(u.email || '').split('@')[0] || null,
     avatar: u.avatar_url || null,
     role: u.role,
     since: u.created_at,
@@ -326,18 +261,18 @@ export async function allUsers(db) {
  *
  * - a role that is not one of the two, because a typo that lands in
  *   the column is an account nobody can classify
- * - a slug nobody has
+ * - a key nobody has
  *
  * The last admin demoting themselves is allowed. It leaves a database
  * no browser can promote anybody from — `ADMIN_PASSWORD` is the way
  * back — but it is Matt's database and his decision to make.
  */
-export async function setRole(db, slug, role) {
+export async function setRole(db, key, role) {
   if (!ROLES.includes(role)) {
     return { error: `a role is ${ROLES.join(' or ')}, not ${JSON.stringify(role)}`, status: 400 };
   }
-  const row = await db.prepare('SELECT id, role FROM users WHERE slug = ?1').bind(String(slug)).first();
-  if (!row) return { error: `there is no account at ${slug}`, status: 404 };
+  const row = await db.prepare('SELECT id, role FROM users WHERE key = ?1').bind(String(key ?? '')).first();
+  if (!row) return { error: `there is no account at ${key}`, status: 404 };
   // The last admin demoting themselves used to be a 409 here. Matt:
   // "I want to be able to assign and remove roles at will!!!! I don't
   // want to need you for it!!!" — and a refusal is the shape of
@@ -345,7 +280,7 @@ export async function setRole(db, slug, role) {
   // can undo, so the screen says so on the row; the decision is not
   // taken away from the person making it.
   await db.prepare('UPDATE users SET role = ?2 WHERE id = ?1').bind(row.id, role).run();
-  return { ok: true, slug: String(slug), role };
+  return { ok: true, key: String(key), role };
 }
 
 /**
@@ -355,12 +290,11 @@ export async function setRole(db, slug, role) {
 export async function collectionByKey(db, key) {
   if (!key) return null;
   const row = await db.prepare(
-    'SELECT key, slug, display_name, avatar_url FROM users WHERE key = ?1',
+    'SELECT key, display_name, avatar_url FROM users WHERE key = ?1',
   ).bind(String(key)).first();
   if (!row) return null;
   return {
     key: row.key,
-    slug: row.slug,
     name: row.display_name,
     avatar: row.avatar_url,
   };
@@ -369,11 +303,10 @@ export async function collectionByKey(db, key) {
 /** What a caller is allowed to know about themselves. */
 export function profileOf(user) {
   if (!user) {
-    return { key: null, slug: null, name: null, email: null, avatar: null, role: null };
+    return { key: null, name: null, email: null, avatar: null, role: null };
   }
   return {
     key: user.key,
-    slug: user.slug,
     name: user.display_name,
     email: user.email,
     avatar: user.avatar_url,

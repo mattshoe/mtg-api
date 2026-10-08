@@ -50,7 +50,7 @@ function withFaceFallbacks(card) {
 
 /** Column order for `cards`, minus the autoincrement id. */
 export const CARD_COLUMNS = [
-  'owner', 'qty', 'finish', 'foil_flag', 'scryfall_id', 'oracle_id',
+  'owner_id', 'qty', 'finish', 'foil_flag', 'scryfall_id', 'oracle_id',
   'name', 'name_norm', 'face1', 'face2', 'mana_cost', 'cmc',
   'oracle_text', 'flavor_text', 'power', 'toughness', 'loyalty', 'defense',
   'type_line', 'supertypes', 'types', 'subtypes',
@@ -65,9 +65,9 @@ export const CARD_COLUMNS = [
 /**
  * Everything a card contributes to the database, ready to bind.
  * @param {object} raw   a Scryfall card object
- * @param {object} opts  { owner, qty, finish, flag }
+ * @param {object} opts  { ownerId, qty, finish, flag }
  */
-export function cardRows(raw, { owner, qty, finish, flag }) {
+export function cardRows(raw, { ownerId, qty, finish, flag }) {
   const s = withFaceFallbacks(raw);
   const faces = s.card_faces || [];
   const [supers, types, subs] = splitTypeLine(s.type_line || '');
@@ -77,7 +77,7 @@ export function cardRows(raw, { owner, qty, finish, flag }) {
     ?? (faces.length ? faces.map((f) => f.oracle_text || '').join('\n//\n') : null);
 
   const card = [
-    owner, qty, finish, flag,
+    ownerId, qty, finish, flag,
     s.id, s.oracle_id ?? null,
     s.name, normalize(s.name),
     faces.length ? faces[0].name : s.name,

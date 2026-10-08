@@ -6,11 +6,11 @@
 // not guessable from the names.
 
 const NOTES = [
-  'One row in `cards` per (owner, printing, finish). `qty` is how many of that stack are owned.',
+  'One row in `cards` per (owner_id, printing, finish). `qty` is how many of that stack are owned.',
   'Join keys: cards.name_norm = lower(trim(name)); deck_cards.name_norm and totals.name_norm match it. cards.id <- card_*.card_id. cards.oracle_id <- legalities/rulings/oracle-level joins.',
-  "owner is 'matt' or 'kayla' and the two collections are never merged - filter on it.",
+  'owner_id is the owning account; collections are never merged - filter on it. A collection is named publicly by users.key: owner_id = (SELECT id FROM users WHERE key = ?). The owner and slug columns are retired and read by nothing.',
   'totals, card_usage, bulk_cards are views over cards; bulk_cards is the unassigned pool (free > 0).',
-  'card_tags.card_id joins cards.id; tag_slug is a Scryfall Tagger slug. Freshly added cards may have no tags until the nightly backfill.',
+  'card_tags.card_id joins cards.id; tag is a Scryfall Tagger tag name. Freshly added cards may have no tags until the nightly backfill.',
   'card_search is FTS5 over (name, type_line, oracle_text, flavor_text, keywords, tags), porter-stemmed. Its rowid is cards.id.',
   'legalities only stores statuses other than not_legal; an absent row means not legal.',
 ];

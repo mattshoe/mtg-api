@@ -185,7 +185,7 @@ def main():
             "SELECT c.id, c.name, c.type_line, c.oracle_text, c.flavor_text,\n"
             "       (SELECT GROUP_CONCAT(keyword,' ') FROM card_keywords k"
             " WHERE k.card_id = c.id),\n"
-            "       (SELECT GROUP_CONCAT(tag_slug,' ') FROM card_tags t"
+            "       (SELECT GROUP_CONCAT(tag,' ') FROM card_tags t"
             " WHERE t.card_id = c.id)\n"
             "FROM cards c;\n\n"
         )

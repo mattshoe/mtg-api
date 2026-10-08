@@ -102,7 +102,7 @@ def main():
     print(f"tags: {len(rows)} card rows with no tags")
 
     # slug -> label/description, so a new slug arrives with its metadata.
-    known = {r[0] for r in query(args.api, "SELECT slug FROM tags")["rows"]}
+    known = {r[0] for r in query(args.api, "SELECT tag FROM tags")["rows"]}
 
     tag_values = []
     new_tags = {}
@@ -131,14 +131,14 @@ def main():
 
     for slug, (kind, label, desc) in new_tags.items():
         query(args.api,
-              "INSERT INTO tags (slug, kind, label, description) VALUES (?,?,?,?)",
+              "INSERT INTO tags (tag, kind, label, description) VALUES (?,?,?,?)",
               [slug, kind, label, desc])
 
     written = 0
     for i in range(0, len(tag_values), BATCH):
         chunk = tag_values[i:i + BATCH]
         query(args.api,
-              "INSERT OR IGNORE INTO card_tags (card_id, tag_slug, kind) VALUES "
+              "INSERT OR IGNORE INTO card_tags (card_id, tag, kind) VALUES "
               + ",".join(chunk))
         written += len(chunk)
         print(f"  {written}/{len(tag_values)}", end="\r", flush=True)
@@ -158,7 +158,7 @@ def main():
             SELECT c.id, c.name, c.type_line, c.oracle_text, c.flavor_text,
                    (SELECT GROUP_CONCAT(keyword,' ') FROM card_keywords k
                      WHERE k.card_id = c.id),
-                   (SELECT GROUP_CONCAT(tag_slug,' ') FROM card_tags t
+                   (SELECT GROUP_CONCAT(tag,' ') FROM card_tags t
                      WHERE t.card_id = c.id)
               FROM cards c WHERE c.id IN ({inlist})""")
     print(f"search: reindexed {len(ids)} cards")

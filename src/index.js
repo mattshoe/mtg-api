@@ -30,7 +30,7 @@ import { disassembleDeck, editDeckList, createDeck, renameDeck, FORMATS } from '
 import { mintToken, verifyToken, bearer } from './admin.js';
 import {
   whoAmI, canEdit, profileOf, endSession, signIn, newSession, cookieValue,
-  collectionByKey, allUsers, setRole, SESSION_COOKIE,
+  collectionByKey, allUsers, setRole, ownerOfKey, SESSION_COOKIE,
 } from './accounts.js';
 import { startSignIn, finishSignIn, verifyIdToken } from './google.js';
 import { lookupPrices } from './prices.js';
@@ -42,20 +42,26 @@ import { keyFrom, claim, remember, release } from './idempotency.js';
  * May this caller change that collection, and if not, why not.
  *
  * One place, because "only the collection's owner may edit that
- * collection" is one rule and six endpoints enforce it.
+ * collection" is one rule and six endpoints enforce it. `ownerId` is
+ * the owning account's id, read off the row or resolved from a key;
+ * the caller's comes from the session. Nothing a request body says
+ * reaches the comparison.
  */
-async function mayEdit(env, request, ownerSlug) {
-  const who = await whoAmI(env, request, verifyToken);
-  if (canEdit(who, ownerSlug)) return { ok: true, who };
+async function mayEdit(env, request, ownerId, known = null) {
+  const who = known ?? await whoAmI(env, request, verifyToken);
+  if (canEdit(who, ownerId)) return { ok: true, who };
 
   // Signed in, but it is not your collection. The only case that is
   // genuinely a 403: the credentials are good and the answer is
   // still no.
   if (who.user) {
+    const owner = ownerId == null ? null
+      : await env.DB.prepare('SELECT display_name FROM users WHERE id = ?1').bind(ownerId).first();
+    const yours = who.user.display_name || 'somebody else';
     return {
       ok: false,
       response: json({
-        error: `that is ${ownerSlug || 'somebody else'}'s collection, and you are signed in as ${who.user.slug}`,
+        error: `that is ${owner?.display_name || 'somebody else'}'s collection, and you are signed in as ${yours}`,
       }, 403),
     };
   }
@@ -70,11 +76,51 @@ async function mayEdit(env, request, ownerSlug) {
   return { ok: false, response: denied('sign in to change a collection') };
 }
 
-/** Whose deck that is. Null for a deck that does not exist. */
-async function deckOwner(db, slug) {
-  if (!slug) return null;
-  const row = await db.prepare('SELECT owner FROM decks WHERE slug = ?1').bind(String(slug)).first();
-  return row?.owner ?? null;
+/**
+ * Which collection a card or deck write goes to, and whether this
+ * caller may write there.
+ *
+ * Your own, unless `collection` names another by its public key — and
+ * naming one is only a way to say *which*, never a reason to be let
+ * in: the key is turned into the id it belongs to and that id is
+ * checked against the session like any other. The operator's password
+ * names no account, so it has to say.
+ *
+ * An `owner` in the body is refused rather than ignored. It used to be
+ * a name compared to a name, and a caller still sending one should be
+ * told so rather than quietly writing to their own collection.
+ */
+async function writeTarget(env, request, body) {
+  if (body && Object.hasOwn(body, 'owner')) {
+    return {
+      ok: false,
+      response: json({
+        error: '`owner` is gone: name a collection by its key in `collection`, or leave it out for your own',
+      }, 400),
+    };
+  }
+  const who = await whoAmI(env, request, verifyToken);
+  let ownerId = null;
+  if (body?.collection) {
+    ownerId = await ownerOfKey(env.DB, body.collection);
+    if (ownerId == null) return { ok: false, response: json({ error: 'no collection with that key' }, 404) };
+  } else if (who.user) {
+    ownerId = who.user.id;
+  } else if (who.operator) {
+    return {
+      ok: false,
+      response: json({ error: 'the operator has no collection of its own: name one by its key in `collection`' }, 400),
+    };
+  }
+  const gate = await mayEdit(env, request, ownerId, who);
+  return gate.ok ? { ...gate, ownerId } : gate;
+}
+
+/** Whose deck that is, as an account id. Null for a deck that does not exist. */
+async function deckOwner(db, key) {
+  if (!key) return null;
+  const row = await db.prepare('SELECT owner_id FROM decks WHERE key = ?1').bind(String(key)).first();
+  return row?.owner_id ?? null;
 }
 
 /**
@@ -215,19 +261,19 @@ const INDEX = {
     'GET /c/:key': 'whose collection that address names',
     'GET /auth/me': 'the signed-in account, or nulls',
     'POST /auth/logout': 'end this session',
-    'POST /cards/add': '{"owner":"matt","list":"4 Lightning Bolt (2X2) 117","dry_run":false}',
-    'POST /cards/remove': '{"owner":"matt","list":"1 Sol Ring","dry_run":false}',
-    'POST /decks/disassemble': '{"slug":"...","dry_run":false} — deletes the deck, its cards go back to bulk; needs admin',
+    'POST /cards/add': '{"list":"4 Lightning Bolt (2X2) 117","dry_run":false} — into your own collection; "collection":"<key>" names another you may edit',
+    'POST /cards/remove': '{"list":"1 Sol Ring","dry_run":false} — "collection" as for add',
+    'POST /decks/disassemble': '{"key":"...","dry_run":false} — deletes the deck, its cards go back to bulk; needs admin',
     'POST /cards/validate': '{"list":"1 Sol Ring\\n..."} or {"names":[...]} -> which names are real, with suggestions',
     'GET /decks/formats': 'the deck formats the wizard offers',
-    'POST /decks/create': '{"name":"...","format":"commander","owner":"matt","commander":"...","list":"..."} — needs admin',
-    'POST /decks/rename': '{"slug":"...","name":"New name"} — renames the deck, the slug moves with it; needs admin',
-    'POST /decks/list': '{"slug":"...","list":"1 Sol Ring\\n...","dry_run":false} — replaces the deck list; needs admin',
+    'POST /decks/create': '{"name":"...","format":"commander","commander":"...","list":"..."} — in your own collection, or "collection":"<key>"; answers with the new deck\'s key',
+    'POST /decks/rename': '{"key":"...","name":"New name"} — renames the deck; its key, and so its address, never changes',
+    'POST /decks/list': '{"key":"...","list":"1 Sol Ring\\n...","dry_run":false} — replaces the deck list',
     'POST /share': 'a share-target body in, what the server actually received back out',
     'POST /prices': '{"ids":["<scryfall id>",...]} -> {"prices":{id:{usd,foil,etched,eur,tix,tcg}}}',
     'POST /admin': '{"password":"..."} -> {"token":"...","expires_at":null}',
     'GET /admin/users': 'every account, its role and the key its collection is shared by — admin only',
-    'POST /admin/role': '{"slug":"...","role":"user|admin"} — hands the admin role out or takes it back; admin only',
+    'POST /admin/role': '{"key":"...","role":"user|admin"} — hands the admin role out or takes it back; admin only',
     'GET /logs': '?min=info&q=&event=&status=error&since=24&limit=100 — admin only',
     'POST /logs/client': '{"level":"info","message":"...","detail":{...}} — admin only',
     'GET /logs/stats': 'counts, slowest routes, retention — admin only',
@@ -617,15 +663,15 @@ async function route(request, env, ctx, entry) {
       // one rule is easier to trust than a carve-out.
       const { body, error } = await readJson(request);
       if (error) return json({ error }, 400);
-      const gate = await mayEdit(env, request, body.owner || 'matt');
+      const gate = await writeTarget(env, request, body);
       if (!gate.ok) return gate.response;
       entry.admin = true;
       entry.write = true;
       const r = path === '/cards/add'
-        ? await addCards(env.DB, body, env.SCRYFALL_FETCH || fetch)
-        : await removeCards(env.DB, body);
+        ? await addCards(env.DB, gate.ownerId, body, env.SCRYFALL_FETCH || fetch)
+        : await removeCards(env.DB, gate.ownerId, body);
       entry.detail = {
-        owner: body.owner || 'matt',
+        collection: body.collection || null,
         dry_run: Boolean(body.dry_run),
         lines: String(body.list || '').split('\n').filter((l) => l.trim()).length,
         applied: r.body?.applied,
@@ -675,10 +721,10 @@ async function route(request, env, ctx, entry) {
       }
       const { body, error } = await readJson(request);
       if (error) return json({ error }, 400);
-      const out = await setRole(env.DB, body.slug, body.role);
+      const out = await setRole(env.DB, body.key, body.role);
       entry.admin = true;
       entry.write = true;
-      entry.detail = `${body.slug} -> ${body.role}`;
+      entry.detail = `${body.key} -> ${body.role}`;
       if (out.error) {
         entry.message = out.error;
         return json({ error: out.error }, out.status);
@@ -755,7 +801,7 @@ async function route(request, env, ctx, entry) {
       }
       const user = await signIn(env.DB, identity);
       const token = await newSession(env.DB, user.id);
-      entry.detail = { slug: user.slug };
+      entry.detail = { key: user.key };
       const site = env.SITE_URL || 'https://mtg.mattshoe.org';
       const back = pending.where && pending.where.startsWith('/') ? pending.where : '';
       return new Response(null, {
@@ -799,7 +845,7 @@ async function route(request, env, ctx, entry) {
       }
       const user = await signIn(env.DB, identity);
       const token = await newSession(env.DB, user.id);
-      entry.detail = { slug: user.slug };
+      entry.detail = { key: user.key };
       return json({ token, ...profileOf(user) });
     }
 
@@ -847,15 +893,15 @@ async function route(request, env, ctx, entry) {
       if (method !== 'POST') return notAllowed('POST');
       const { body, error } = await readJson(request);
       if (error) return json({ error }, 400);
-      const gate = await mayEdit(env, request, body?.owner || 'matt');
+      const gate = await writeTarget(env, request, body);
       if (!gate.ok) return gate.response;
       entry.admin = true;
       entry.write = true;
-      const r = await createDeck(env.DB, body, env.SCRYFALL_FETCH || fetch);
+      const r = await createDeck(env.DB, gate.ownerId, body, env.SCRYFALL_FETCH || fetch);
       entry.detail = {
-        slug: r.body?.slug || null,
+        key: r.body?.key || null,
         format: body?.format || null,
-        owner: body?.owner || null,
+        collection: body?.collection || null,
         dry_run: Boolean(body?.dry_run),
         created: r.body?.created,
         rows: r.body?.rows,
@@ -869,16 +915,16 @@ async function route(request, env, ctx, entry) {
       if (method !== 'POST') return notAllowed('POST');
       const { body, error } = await readJson(request);
       if (error) return json({ error }, 400);
-      const gate = await mayEdit(env, request, await deckOwner(env.DB, body?.slug));
+      const gate = await mayEdit(env, request, await deckOwner(env.DB, body?.key));
       if (!gate.ok) return gate.response;
       entry.admin = true;
       entry.write = true;
       const r = await renameDeck(env.DB, body);
       entry.detail = {
-        slug: body?.slug || null,
+        key: body?.key || null,
         dry_run: Boolean(body?.dry_run),
         renamed: r.body?.renamed,
-        to: r.body?.slug || null,
+        to: r.body?.name || null,
       };
       return json(r.body, r.status);
     }
@@ -887,13 +933,13 @@ async function route(request, env, ctx, entry) {
       if (method !== 'POST') return notAllowed('POST');
       const { body, error } = await readJson(request);
       if (error) return json({ error }, 400);
-      const gate = await mayEdit(env, request, await deckOwner(env.DB, body?.slug));
+      const gate = await mayEdit(env, request, await deckOwner(env.DB, body?.key));
       if (!gate.ok) return gate.response;
       entry.admin = true;
       entry.write = true;
       const r = await editDeckList(env.DB, body, env.SCRYFALL_FETCH || fetch);
       entry.detail = {
-        slug: body?.slug || null,
+        key: body?.key || null,
         dry_run: Boolean(body?.dry_run),
         applied: r.body?.applied,
         rows: r.body?.rows,
@@ -911,13 +957,13 @@ async function route(request, env, ctx, entry) {
       // Gated whole, dry runs included, the same as add and remove.
       const { body, error } = await readJson(request);
       if (error) return json({ error }, 400);
-      const gate = await mayEdit(env, request, await deckOwner(env.DB, body?.slug));
+      const gate = await mayEdit(env, request, await deckOwner(env.DB, body?.key));
       if (!gate.ok) return gate.response;
       entry.admin = true;
       entry.write = true;
       const r = await disassembleDeck(env.DB, body);
       entry.detail = {
-        slug: body?.slug || null,
+        key: body?.key || null,
         dry_run: Boolean(body?.dry_run),
         applied: r.body?.applied,
         freed: r.body?.freed,
