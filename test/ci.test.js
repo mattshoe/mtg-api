@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { parse } from 'yaml';
 import appsYml from '../.github/workflows/apps.yml?raw';
+import releaseYml from '../.github/workflows/release.yml?raw';
 import gradleProperties from '../apps/gradle.properties?raw';
 import androidBuild from '../apps/androidApp/build.gradle.kts?raw';
 import floors from './suite-floors.json';
@@ -101,5 +102,18 @@ describe('the Gradle build', () => {
     expect(androidBuild).toMatch(/setForkEvery\(1\)/);
     expect(androidBuild, 'maxParallelForks is unset, so 42 classes run one after another')
       .toMatch(/maxParallelForks\s*=/);
+  });
+});
+
+describe('the release workflow', () => {
+  const release = parse(releaseYml).jobs.release;
+  const version = steps(release).find((s) => s.id === 'v');
+
+  it('names the build by the semver scripts/next-version.mjs works out, not a number someone forgot to edit', () => {
+    expect(version, 'no step works out the version').toBeDefined();
+    expect(version.run, 'the version name is not taken from scripts/next-version.mjs')
+      .toMatch(/name=\$\(node scripts\/next-version\.mjs\)/);
+    expect(version.run, 'the version name is still read out of build.gradle.kts')
+      .not.toMatch(/build\.gradle\.kts/);
   });
 });

@@ -624,5 +624,8 @@ about a missing secret. It does not fall back to a debug key: an APK
 nobody can install over the top is worse than no APK.
 
 `versionCode` is the commit count on `main` plus 100, so it only ever
-goes up. `versionName` is still edited by hand in
-`apps/androidApp/build.gradle.kts`.
+goes up. `versionName` is semver, worked out by
+`scripts/next-version.mjs`: the newest `android-v` tag, bumped by the
+`bump:` line in the release note the merge added (a patch when it says
+nothing). See `release-notes/README.md`. The `2.1.0` in
+`apps/androidApp/build.gradle.kts` is only what a local build calls itself.

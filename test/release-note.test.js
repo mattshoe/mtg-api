@@ -27,6 +27,12 @@ describe('releaseBody', () => {
     )
   })
 
+  it('leaves the bump line out, which is for the version and not for Matt', () => {
+    expect(releaseBody(['---\nbump: minor\n---\nA new page.\n'], 'abc')).toBe(
+      'A new page.\n\nBuilt from abc. Install over the top; same signing key.',
+    )
+  })
+
   it('is only the build line when nobody wrote a note', () => {
     expect(releaseBody([], 'abc')).toBe('Built from abc. Install over the top; same signing key.')
     expect(releaseBody(['  \n'], 'abc')).toBe('Built from abc. Install over the top; same signing key.')
