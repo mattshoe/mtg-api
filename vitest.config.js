@@ -49,7 +49,8 @@ export default defineWorkersConfig({
     // `vitest.shell.config.js` instead.
     exclude: [
       '**/node_modules/**', '.claude/**', '**/.wrangler/**',
-      'test/intake-shell.test.js',
+      // Same reason: drives a real script against a throwaway git repo.
+      'test/intake-shell.test.js', 'test/release-note.test.js',
     ],
     setupFiles: ['./test/setup.js'],
     // A stuck test fails; it does not hang the run. Without these a

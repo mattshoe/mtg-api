@@ -202,15 +202,18 @@ which suite, which part — is the difference between "working" and
    screens suite. Read the BUILD line on every one of them, never the exit
    code, and `rm -rf` the results directory first for any run you intend
    to trust.
-5. Walk the parity check from the skill. If the diff is one-sided and
+5. Write `release-notes/<name>.md`: a line or a few, by hand, saying
+   what shipped in words Matt would use. It becomes the release's body
+   and Admin Settings lists it. See `release-notes/README.md`.
+6. Walk the parity check from the skill. If the diff is one-sided and
    you cannot justify it in the PR body, you are not finished.
-6. Move `requests/<name>.md` into `requests/done/` in a commit of its
+7. Move `requests/<name>.md` into `requests/done/` in a commit of its
    own, and push. It rides the pull request — see "Filing the request"
    below.
-7. Open the pull request. The body says what you decided the request
+8. Open the pull request. The body says what you decided the request
    meant, what changed **on each platform**, what went red first, and
    anything you are unsure about.
-8. Drive CI to green and merge it yourself, below.
+9. Drive CI to green and merge it yourself, below.
 
 ## Where your turn ends
 
