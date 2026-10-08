@@ -961,10 +961,13 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
 /* Needs and makes as a share of the whole, beside the bars that say
    how many. A bar answers "how much white"; a pie answers "how much
    of this deck is white", and those are different questions. */
-/* Two rings on one row. Sized so both fit the narrowest column the
-   grid can give them rather than stacking into a tower. */
-.pies { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; }
+/* Needs and makes on one row, sized so both fit the narrowest column
+   the grid can give them. Exactly gets the next line to itself and is
+   bigger, because it has the most slices to tell apart. */
+.pies { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 14px; }
 .pie-set { display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0; }
+.pie-set.wide { grid-column: 1 / -1; }
+.pie-set.wide .pie { width: 120px; height: 120px; }
 .pie {
   width: 76px; height: 76px; border-radius: 50%; flex: none;
   border: 1px solid var(--line-2);
