@@ -1224,11 +1224,13 @@ string to $marker (one line, no quotes), replacing what is there." \
 #
 # What it does now:
 #   - resolves the real merge commit from `gh pr view --json mergeCommit`
-#   - watches only `pages` and `release` for THAT sha, with a deadline
+#   - watches only the `pages` and `release` runs for THAT sha, by name,
+#     with a deadline
 #   - greps the shipped web bundle for a marker the builder wrote, so
 #     "served" and "carries the change" stop being the same question
 #   - greps the released APK's dex for the same marker, when there is a
-#     release to download
+#     release to download — and reports `apk: unavailable` rather than
+#     passing when there is not
 #   - and says plainly that it verified nothing when there is no marker,
 #     rather than reporting success
 #

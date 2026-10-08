@@ -2,8 +2,9 @@
 
 One file per thing you want. Drop it in and walk away.
 
-A watcher notices the file, triage reads it, and a builder agent picks
-it up, implements it, opens a PR and drives that PR to green. You do
+A watcher notices the file, triage reads it, and a builder agent picks it
+up, implements it and opens a pull request. The dispatcher then waits on
+CI, merges on green, and checks that the change actually shipped. You do
 not have to be here, and neither do I.
 
 ## Writing one
@@ -41,15 +42,21 @@ requests/thing.md          you wrote it
   → merged                 `merge: auto`, which deploys the site and cuts
                            an APK. `merge: ask` stops at a green PR and
                            you get a notification instead
-  → verified               the deploy runs watched and the shipped bundle
-                           fetched — a green workflow is not proof
-  → requests/done/thing.md moved and committed here, with the PR number
+  → verified               the pages and release runs watched for the
+                           squash commit, then the deployed mtg.js and the
+                           released APK's dex grepped for a marker string
+                           the builder wrote. No marker means it says it
+                           verified nothing, rather than passing
+  → requests/done/thing.md moved and committed here, with the outcome in it
 ```
 
 A red pull request gets a **fix-only** builder: the dispatcher pulls the
-failing job's log with `gh run view --log-failed`, hands it over, and tells
-it to make CI green without re-implementing anything. Twice, and then it
-gives up and tells you.
+failing job's log with `gh run view --log-failed`, hands it and the request
+over, and tells it to make CI green without re-implementing anything. Twice,
+and then the request is held and you are told. While that is happening the
+request is NOT buildable, so there is no second full builder — there used to
+be one per dispatch, which is how a branch grew five commits of repeated
+work.
 
 The builder stops at an open pull request on purpose. The `apps` job takes
 thirteen to seventeen minutes and three of four builders ended their turn
@@ -82,14 +89,17 @@ here, so an agent cannot talk itself out of them:
   dispatcher's, in the real repo, so a finished request actually leaves
   this folder — two requests were built hours apart and stayed buildable
   because the builder moved its own copy inside its worktree
-- a request leaves this folder on **every** outcome, not only a merge. A
-  green `merge: ask` is filed with a note saying it is waiting for you; a
-  pull request still red after two fix attempts is filed saying so. It
-  stopped being true for a while and the consequence was a second builder
-  force-pushing over the first one's commit
-- after a merge, the deploy runs are watched and the shipped bundle is
-  fetched and checked. "Done means deployed" is the rule and a green
-  workflow has shipped nothing before
+- a request leaves this folder on **every** terminal outcome, not only a
+  merge: merged, green-and-waiting-for-you, red after two fixes, or given
+  up after three failed builds. It stopped being true for a while and the
+  consequence was a second builder force-pushing over the first one's
+  commit. A request that is mid-flight — waiting on CI or on a fix — stays
+  here, which is not the same thing
+- after a merge the `pages` and `release` runs are watched and both
+  artifacts are grepped for the builder's marker. "Done means deployed" is
+  the rule, a green workflow has shipped nothing before, and when there is
+  no marker or no APK to download the dispatcher says what it could not
+  check instead of claiming it passed
 
 ## Taking one back
 

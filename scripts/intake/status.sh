@@ -125,8 +125,13 @@ tree_shape() {
 }
 
 # One call, and the names looked up in the result.
+# The EXIT STATUS, not whether the output happened to be empty. An empty
+# live queue is the healthy idle state, and `ls requests/*.md` always
+# matches README.md — so the one line that tells the user the dashboard is
+# lying fired every time nothing was pending, which is how people learn to
+# ignore it.
 states="$(INTAKE_DIR="$REPO/requests" node scripts/intake.mjs state 2>/dev/null)"
-if [ -z "$states" ] && [ -n "$(ls requests/*.md 2>/dev/null)" ]; then
+if [ $? -ne 0 ]; then
   echo "REQUESTS (intake.mjs unavailable — this listing cannot be trusted)"
 else
   echo "REQUESTS"

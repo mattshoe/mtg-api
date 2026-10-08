@@ -194,9 +194,11 @@ coming back. Read `.claude/agents/request-builder.md`.
 
 Working by hand, all of it is yours, including the artifact check. The
 dispatcher's version is `verify_shipped` in `scripts/intake/dispatch.sh`:
-it watches the deploy runs for the merged sha and fetches
-`https://mtg.mattshoe.org/kmp/mtg.js`, and it notifies rather than failing
-silently when either one does not answer.
+it resolves the squash commit from `gh pr view --json mergeCommit`, watches
+only the `pages` and `release` runs for that sha with a deadline, and then
+greps the deployed `mtg.js` and the released APK's dex for a marker string
+the builder wrote. Without a marker it says it verified nothing rather
+than reporting success, and the outcome goes into the filed request.
 
 Merging deploys — `pages.yml` publishes the website and `release.yml`
 cuts a signed APK. So merging is not the end either. Watch the deploy
@@ -371,10 +373,16 @@ on the website **and** in the shipped APK. Do not send a progress table
 of work that is not deployed; Matt has been explicit and furious about
 this twice.
 
-A builder under `requests/` merges its own work on green and then
-verifies the deployed artifact. Reporting "PR green" is not reporting
-done; reporting "merged" is not either. Done is the string in the
-deployed `mtg.js` and in the shipped APK's dex.
+A builder under `requests/` does NOT merge its own work and does not
+verify the deploy — `scripts/intake/dispatch.sh` does both, and §2 above
+says so. This paragraph said the opposite for a whole round, in the skill
+the builder is ordered to load first.
+
+What does not change is what "done" means. Reporting "PR green" is not
+reporting done; reporting "merged" is not either. Done is the string in
+the deployed `mtg.js` and in the shipped APK's dex — which is why the
+dispatcher asks the builder for a greppable marker and then looks for it
+in both.
 
 ## Running the suites
 

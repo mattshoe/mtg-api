@@ -211,11 +211,12 @@ BUILD line.
 
 **The dispatcher then** blocks on `gh run watch` for your commit, checks
 every check with `gh pr checks`, squash-merges a `merge: auto` request,
-watches the deploy runs and fetches the shipped bundle, notifies Matt and
-leaves the pull request open for a `merge: ask` one, and dispatches a
-fix-only builder if CI is red. It files the request under `requests/done/`
-in the real repo on every one of those outcomes — which is why you must
-**never move or commit the request file yourself**. Your request is handed
+watches the `pages` and `release` runs for the squash commit and greps both
+shipped artifacts for your marker, notifies Matt and leaves the pull request
+open for a `merge: ask` one, and dispatches a fix-only builder if CI is red.
+It files the request under `requests/done/` on every TERMINAL outcome —
+merged, green-and-waiting, red after two fixes, or given up — which is why
+you must **never move or commit the request file yourself**. Your request is handed
 to you at a path outside `requests/`; committing a copy of it onto your
 branch put finished requests on `main` permanently and seeded every later
 worktree with them.
