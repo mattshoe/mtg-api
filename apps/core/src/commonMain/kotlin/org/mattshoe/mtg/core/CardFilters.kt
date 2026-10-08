@@ -473,7 +473,7 @@ fun conditions(s: Filters): Sql {
     s.keywords.forEach {
         c.add("EXISTS (SELECT 1 FROM card_keywords k WHERE k.card_id = c.id AND lower(k.keyword) = ?)", it.lowercase())
     }
-    s.tags.forEach { c.add(TAGGED, it, it) }
+    s.tags.map { it.trim().lowercase() }.forEach { c.add(TAGGED, it, it) }
 
     c.inList("c.rarity", s.rarities)
     c.inList("lower(c.setcode)", s.sets.map { it.lowercase() })
