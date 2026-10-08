@@ -1575,52 +1575,145 @@ exit 0
 })
 
 describe('after a merge', () => {
-  // Post-merge deploy and shipped-artifact verification belonged to the
-  // builder's old step 10. When the builder stopped merging it was
-  // reassigned to the dispatcher in SKILL.md — and implemented nowhere,
-  // so "done means deployed on both platforms" lost its only
-  // enforcement, and requests/README.md lost its "verified the real
-  // artifact, not the green tick" line in the same diff.
+  // `verify_shipped` verified nothing. It was a 1000-byte floor on a URL
+  // that was already serving the previous build, so a 404 page and the
+  // prior build passed identically. It keyed on the PR head sha, which a
+  // squash merge never produces, so it matched the pull request's own CI
+  // runs — already watched — while `pages.yml` and `release.yml` run
+  // against the new squash commit and never matched. The `--branch main`
+  // fallback could not fire because the first query was never empty, and
+  // when it did it watched arbitrary recent runs of any workflow. Its
+  // return value was discarded, `file_as_done` had already run, and the
+  // user got two contradictory notifications back to back.
+  //
+  // Measured: a curl stub returning 1000 bytes of zeroes produced
+  // "deploys for #7 were green and the site answered".
+
+  const MERGE_SHA = 'abc1234abc1234abc1234abc1234abc1234abc12'
+
+  function ghDeploys({ pagesOk = true, marker = 'MARKER-xyz' } = {}) {
+    return `
+case "$1 $2" in
+  "pr list") printf '7 OPEN\\n' ;;
+  "pr view") printf '%s\\n' "${MERGE_SHA}" ;;
+  "run list")
+    case "$*" in
+      *${MERGE_SHA}*) printf 'pages 901\\nrelease 902\\n' ;;
+      *) printf '101\\n' ;;
+    esac ;;
+  "run watch")
+    case "$3" in
+      901) ${pagesOk ? 'exit 0' : 'exit 1'} ;;
+      *) exit 0 ;;
+    esac ;;
+  "run view") printf 'pages failure\\n' ;;
+  "pr checks") printf 'shared\\tpass\\t1m\\tu\\n'; exit 0 ;;
+  "pr merge") exit 0 ;;
+  "release download") exit 0 ;;
+esac
+exit 0
+`
+  }
+
+  /** A builder that leaves a marker, which is what makes a check possible. */
+  function markerBuilder(marker) {
+    return `
+branch="$(git rev-parse --abbrev-ref HEAD)"
+echo x >> built.txt
+git add -A
+git -c user.name=b -c user.email=b@b commit -qm "build: $branch"
+git push -q origin "HEAD:refs/heads/$branch"
+m="$(printf '%s' "$*" | sed -nE 's#.*string to ([^ ]*\\.marker).*#\\1#p' | head -1)"
+[ -n "$m" ] && printf '%s\\n' ${JSON.stringify(marker)} > "$m"
+exit 0
+`
+  }
 
   beforeEach(() => {
     build({ requests: { 'a-thing.md': READY('A thing') } })
-    box.stub('claude', BUILDER)
+  })
+
+  it('watches the runs for the MERGE commit, not the pull request head', () => {
+    box.stub('claude', markerBuilder('MARKER-xyz'))
+    box.stub('gh', ghDeploys())
+    box.stub('curl', 'printf "stuff MARKER-xyz stuff"')
+    run('dispatch.sh', { env: { INTAKE_SITE_JS: 'https://example.invalid/mtg.js' } })
+    logged(`deploy runs for ${MERGE_SHA.slice(0, 8)}`)
+    expect(box.log()).toContain('run watch 901')
+    expect(box.log()).toContain('run watch 902')
+  })
+
+  it('looks for the builder marker in the shipped bundle, not a byte count', () => {
+    box.stub('claude', markerBuilder('MARKER-xyz'))
+    box.stub('gh', ghDeploys())
+    box.stub('curl', 'printf "stuff MARKER-xyz stuff"')
+    run('dispatch.sh', { env: { INTAKE_SITE_JS: 'https://example.invalid/mtg.js' } })
+    logged('MARKER-xyz is in the shipped web bundle')
+  })
+
+  it('fails when the bundle is served but does not carry the change', () => {
+    // The state a byte count cannot tell apart: the site is up, it is
+    // serving the PREVIOUS build, and nothing shipped.
+    box.stub('claude', markerBuilder('MARKER-xyz'))
+    box.stub('gh', ghDeploys())
     box.stub('curl', 'printf "%01000d" 0')
-  })
-
-  it('watches the deploy runs and checks the shipped bundle', () => {
-    box.stub('gh', ghStub())
     run('dispatch.sh', { env: { INTAKE_SITE_JS: 'https://example.invalid/mtg.js' } })
-    logged('done: MERGED')
-    logged('shipped web bundle is')
-    logged('deploys for #7 were green')
-  })
-
-  it('says so loudly when the shipped bundle cannot be read', () => {
-    // A green deploy workflow is not proof the change is live, and this
-    // is the state where it is provably not.
-    box.stub('gh', ghStub())
-    box.stub('curl', 'exit 7')
-    run('dispatch.sh', { env: { INTAKE_SITE_JS: 'https://example.invalid/mtg.js' } })
-    logged('SHIPPED ARTIFACT CHECK FAILED')
+    logged('NOT in the shipped web bundle')
     expect(box.log()).toContain('osascript')
   })
 
-  it('says so when a deploy run itself was not green', () => {
+  it('says plainly that it verified nothing when the builder left no marker', () => {
+    box.stub('claude', BUILDER)
+    box.stub('gh', ghDeploys())
+    box.stub('curl', 'printf "anything"')
+    run('dispatch.sh', { env: { INTAKE_SITE_JS: 'https://example.invalid/mtg.js' } })
+    logged('no marker')
+    expect(box.intakeLog()).not.toContain('is in the shipped web bundle')
+  })
+
+  it('files the request AFTER the check, with the outcome in the note', () => {
+    box.stub('claude', markerBuilder('MARKER-xyz'))
+    box.stub('gh', ghDeploys({ pagesOk: false }))
+    box.stub('curl', 'printf "stuff MARKER-xyz stuff"')
+    run('dispatch.sh', { env: { INTAKE_SITE_JS: 'https://example.invalid/mtg.js' } })
+    const note = readFileSync(box.path('requests/done/a-thing.md'), 'utf8')
+    expect(note).toContain('#7')
+    expect(note).toMatch(/deploy|shipped/i)
+  })
+
+  it('sends one notification, not two that contradict each other', () => {
+    box.stub('claude', markerBuilder('MARKER-xyz'))
+    box.stub('gh', ghDeploys({ pagesOk: false }))
+    box.stub('curl', 'printf "stuff MARKER-xyz stuff"')
+    run('dispatch.sh', { env: { INTAKE_SITE_JS: 'https://example.invalid/mtg.js' } })
+    const notes = box.log().split('\n')
+      .filter((l) => l.startsWith('osascript') && l.includes('a-thing'))
+    expect(notes.length).toBe(1)
+    expect(notes[0]).not.toMatch(/merged as #7$/)
+  })
+
+  it('gives the deploy watch a deadline, like the CI watch has', () => {
+    box.stub('claude', markerBuilder('MARKER-xyz'))
     box.stub('gh', `
 case "$1 $2" in
   "pr list") printf '7 OPEN\\n' ;;
-  "run list") printf '101\\n' ;;
-  "run watch") [ "$3" = "101" ] && exit 1 ; exit 0 ;;
-  "run view") printf 'pages failure\\n' ;;
+  "pr view") printf '${MERGE_SHA}\\n' ;;
+  "run list") case "$*" in *${MERGE_SHA}*) printf 'pages 901\\n' ;; *) printf '101\\n' ;; esac ;;
+  "run watch") case "$3" in 901) sleep 300 ;; *) exit 0 ;; esac ;;
   "pr checks") printf 'shared\\tpass\\t1m\\tu\\n'; exit 0 ;;
   "pr merge") exit 0 ;;
 esac
 exit 0
 `)
-    run('dispatch.sh', { env: { INTAKE_SITE_JS: 'https://example.invalid/mtg.js' } })
-    logged('ended badly')
-    expect(box.intakeLog()).toContain('was not green')
+    box.stub('curl', 'printf "stuff MARKER-xyz stuff"')
+    const started = Date.now()
+    const r = run('dispatch.sh', {
+      env: { INTAKE_SITE_JS: 'https://example.invalid/mtg.js', INTAKE_CI_WATCH_SECONDS: '4' },
+      timeout: 120_000,
+    })
+    expect(r.status).toBe(0)
+    expect(Date.now() - started).toBeLessThan(60_000)
+    logged('gave up watching')
   })
 })
 

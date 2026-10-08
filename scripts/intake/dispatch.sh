@@ -706,16 +706,15 @@ wait_for_ci() {
     # which is what made a live builder's claims age out and get stolen
     # with the builder behaving perfectly. A killed watch is transport
     # trouble, not a verdict.
-    if watch_with_deadline "$id"; then
-      watched=$((watched + 1))
-    else
-      case $? in
-        2) say "  gave up watching run $id after ${CI_WATCH_SECONDS}s"
-           return 1 ;;
-        *) say "  run $id finished red"
-           watched=$((watched + 1)) ;;
-      esac
-    fi
+    local wrc=0
+    watch_with_deadline "$id" || wrc=$?
+    case "$wrc" in
+      0) watched=$((watched + 1)) ;;
+      2) say "  gave up watching run $id after ${CI_WATCH_SECONDS}s"
+         return 1 ;;
+      *) say "  run $id finished red"
+         watched=$((watched + 1)) ;;
+    esac
   done <<EOF
 $ids
 EOF
@@ -858,7 +857,7 @@ file_as_done() {
 # ---------------------------------------------------------------------
 
 builder_prompt() {
-  local name="$1" branch="$2" handed="$3"
+  local name="$1" branch="$2" handed="$3" marker="$4"
   cat <<PROMPT
 Invoke the mtg skill first — it carries this project's architecture and hard
 requirements and you will break things without it. Then read CLAUDE.md, which
@@ -883,6 +882,19 @@ through it — and in headless mode there is no next turn to come back on.
 
 Commit as soon as a part passes and push as you go, so a pull request that
 stops halfway is visibly half rather than gone.
+
+ONE MORE THING, and it is the only way anybody can tell your change actually
+shipped. Write a single short string to $marker — one line, no quotes — that
+appears VERBATIM in your own diff and will therefore appear in the built web
+bundle and, if you touched Android, in the APK. A string literal you added, a
+new test id, a new semantics tag: something a \`grep -F\` would find in the
+shipped artifact and would not have found before your change.
+
+The dispatcher greps the deployed bundle and the released APK for it after
+merging. Without it the only check available is "the site responded", which
+cannot tell a successful deploy from the previous build still being served —
+and that is exactly what it was doing for two rounds. If your change genuinely
+adds no greppable string, write nothing and say why in the pull request.
 PROMPT
 }
 
@@ -1063,7 +1075,14 @@ bump_attempt() {
 # exist is worse than none.
 dispatch_fix() {
   local name="$1" file="$2" branch="$3" where="$4" pr="$5" sha="$6"
-  local n logfile runid
+  local n logfile runid handed marker
+  # The request itself, so a fix builder can tell a missing platform half
+  # from a test that needs correcting — it used to get the failure and
+  # nothing else, and was told it could "correct the test", so a parity
+  # miss became a weakened assertion instead of the missing Android half.
+  handed="$STATE/handed/$file"
+  [ -f "$handed" ] || { mkdir -p "$STATE/handed"; cp "$REQUESTS/$file" "$handed" 2>/dev/null; }
+  marker="$STATE/$name.marker"
 
   n="$(cat "$STATE/$name.fix-attempts" 2>/dev/null || echo 0)"
   n=$(( ${n:-0} + 1 ))
@@ -1133,7 +1152,16 @@ ONE test narrowly to watch it go red then green, commit, and push to $branch.
 
 Do not open another pull request. Do not merge. Do not touch the request file.
 Do not rewrite anything the log does not implicate. If the failure is a flake,
-say so plainly rather than changing code to hide it." \
+say so plainly rather than changing code to hide it.
+
+The request this pull request implements is at $handed. Read it: the plan and
+the Tests section are the contract. PARITY IS NOT NEGOTIABLE — if the failure
+is a missing Android or web half, add the missing half. Do NOT weaken or delete
+an assertion the plan requires in order to go green; that is the one way to
+make this worse than leaving it red.
+
+If your fix changes what the shipped artifact contains, write the new greppable
+string to $marker (one line, no quotes), replacing what is there." \
       --model opus \
       --permission-mode bypassPermissions \
       --output-format stream-json --verbose --include-partial-messages \
@@ -1152,50 +1180,126 @@ say so plainly rather than changing code to hide it." \
 
 # A green deploy workflow is not proof the change is live.
 #
-# This belonged to the builder's old step 10 and was reassigned to the
-# dispatcher when the builder stopped merging — and then implemented
-# nowhere, so "done means deployed on both platforms" lost its only
-# enforcement. `pages.yml` publishes the website and `release.yml` cuts a
-# signed APK; both are watched here, and the shipped web bundle is fetched
-# and checked for real rather than trusted.
+# The first version of this verified nothing at all. It was a 1000-byte
+# floor on a URL that was already serving the PREVIOUS build, so a 404
+# page and the prior build passed identically. It keyed on the pull
+# request's head sha — which a squash merge never produces — so it matched
+# the pull request's own CI runs, already watched by `wait_for_ci`, while
+# `pages.yml` and `release.yml` run against the new squash commit and
+# never matched at all. Its return value was discarded, the request had
+# already been filed, and Matt got two contradictory notifications in a
+# row. Measured: a curl returning a thousand zeroes produced "deploys for
+# #7 were green and the site answered".
+#
+# What it does now:
+#   - resolves the real merge commit from `gh pr view --json mergeCommit`
+#   - watches only `pages` and `release` for THAT sha, with a deadline
+#   - greps the shipped web bundle for a marker the builder wrote, so
+#     "served" and "carries the change" stop being the same question
+#   - greps the released APK's dex for the same marker, when there is a
+#     release to download
+#   - and says plainly that it verified nothing when there is no marker,
+#     rather than reporting success
+#
+# Sets SHIPPED_NOTE, which goes into the filed request. Returns 0 only
+# when something was actually checked and passed.
 verify_shipped() {
-  local name="$1" pr="$2" sha="$3" id conc bad=0
+  local name="$1" pr="$2" marker="$3"
+  local mergesha ids line wf id bad=0 checked=0
+  SHIPPED_NOTE=""
 
-  local ids
-  ids="$(ghx run list --limit 30 --json databaseId,name,headSha,event \
-          --jq "[.[] | select(.headSha==\"$sha\")] | .[].databaseId")"
-  if [ -z "$(printf '%s' "$ids" | sed '/^$/d')" ]; then
-    # The deploy runs are triggered by the merge commit, not this sha.
-    ids="$(ghx run list --branch "${BASE#origin/}" --limit 10 \
-            --json databaseId --jq '.[].databaseId')"
+  mergesha="$(ghx pr view "$pr" --json mergeCommit --jq '.mergeCommit.oid')"
+  if [ -z "$mergesha" ] || [ "$mergesha" = "null" ]; then
+    say "  could not resolve the merge commit for #$pr; not claiming anything about the deploy"
+    SHIPPED_NOTE="Merged as #$pr. The merge commit could not be resolved, so the deploy was not verified."
+    return 1
   fi
-  while IFS= read -r id; do
-    [ -n "$id" ] || continue
-    gh run watch "$id" --exit-status >>"$LOG" 2>&1 || {
-      conc="$(gh run view "$id" --json name,conclusion --jq '"\(.name) \(.conclusion)"' 2>/dev/null)"
-      say "  deploy run $id ended badly: $conc"
-      bad=1
-    }
+  say "  watching deploy runs for ${mergesha:0:8}"
+
+  # Only the two workflows that actually deploy. The old fallback watched
+  # arbitrary recent runs of anything.
+  ids="$(ghx run list --commit "$mergesha" --limit 30 \
+          --json databaseId,name --jq '.[] | "\(.name) \(.databaseId)"')"
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    wf="${line%% *}"; id="${line##* }"
+    case "$wf" in
+      pages|release) : ;;
+      *) continue ;;
+    esac
+    say "  gh run watch $id ($wf)"
+    checked=$((checked + 1))
+    # The status is captured, not read after a `!`. `if ! cmd; then case $?`
+    # reads the NEGATION's status, which is 0 when cmd failed — so neither
+    # arm matched and a watch that had been killed on its deadline was
+    # recorded as a clean green. It cost one red test to notice.
+    local wrc=0
+    watch_with_deadline "$id" || wrc=$?
+    case "$wrc" in
+      0) : ;;
+      2) say "  gave up watching $wf run $id after ${CI_WATCH_SECONDS}s"; bad=1 ;;
+      *) say "  $wf run $id ended badly: $(gh run view "$id" --json conclusion --jq .conclusion 2>/dev/null)"
+         bad=1 ;;
+    esac
   done <<EOF
 $ids
 EOF
+  [ "$checked" -eq 0 ] && say "  no pages or release run for ${mergesha:0:8}"
 
-  # The artifact itself. A green workflow has shipped nothing before.
-  local live
-  live="$(curl -s --compressed --max-time 60 "$SITE_JS" 2>/dev/null | wc -c | tr -d ' ')"
-  if [ "${live:-0}" -lt 1000 ]; then
-    say "  SHIPPED ARTIFACT CHECK FAILED: $SITE_JS returned ${live:-0} bytes"
-    tell "$name merged as #$pr but the shipped web bundle could not be read"
+  # The artifact itself.
+  if [ -z "$marker" ]; then
+    say "  no marker was recorded for $name, so NOTHING about the shipped artifact was checked"
+    SHIPPED_NOTE="Merged as #$pr. The builder left no marker, so the shipped artifact was NOT verified."
+    tell "$name merged as #$pr, but it left no marker so nothing shipped was verified"
     return 1
   fi
-  say "  shipped web bundle is ${live} bytes"
 
-  if [ "$bad" -ne 0 ]; then
-    tell "$name merged as #$pr but a deploy run was not green — check the artifact"
-    return 1
+  local body web=unknown
+  body="$(curl -s --compressed --max-time 60 "$SITE_JS" 2>/dev/null)"
+  if printf '%s' "$body" | /usr/bin/grep -qF -- "$marker"; then
+    say "  $marker is in the shipped web bundle"
+    web=yes
+  else
+    say "  $marker is NOT in the shipped web bundle ($SITE_JS, $(printf '%s' "$body" | wc -c | tr -d ' ') bytes)"
+    web=no
+    bad=1
   fi
-  say "  deploys for #$pr were green and the site answered"
-  return 0
+
+  # And the phone. "Done means deployed on BOTH platforms" is a hard rule
+  # in the skill, and for two rounds this function only ever looked at the
+  # web — so the rule had no enforcement for the half that ships an APK.
+  local apk=skipped tmp
+  if command -v unzip >/dev/null 2>&1; then
+    tmp="$STATE/apk.$$"
+    rm -rf "$tmp"; mkdir -p "$tmp"
+    if ghx release download --repo "$REPO_SLUG" --dir "$tmp" --pattern '*.apk' >/dev/null 2>&1 \
+       && [ -n "$(ls "$tmp"/*.apk 2>/dev/null)" ]; then
+      ( cd "$tmp" && unzip -qo ./*.apk 'classes*.dex' ) >>"$LOG" 2>&1
+      if /usr/bin/grep -a -qF -- "$marker" "$tmp"/classes*.dex 2>/dev/null; then
+        say "  $marker is in the released APK's dex"
+        apk=yes
+      else
+        say "  $marker is NOT in the released APK's dex"
+        apk=no
+        bad=1
+      fi
+    else
+      say "  no APK could be downloaded for the release; the phone half is unchecked"
+      apk=unavailable
+    fi
+    rm -rf "$tmp"
+  else
+    say "  no unzip on this machine; the phone half is unchecked"
+    apk=unavailable
+  fi
+
+  if [ "$bad" -eq 0 ]; then
+    SHIPPED_NOTE="Merged as #$pr. Deploys green; $marker found in the web bundle and the APK dex."
+    say "  deploys for #$pr are green and both artifacts carry $marker"
+    return 0
+  fi
+  SHIPPED_NOTE="Merged as #$pr. DEPLOY NOT VERIFIED — web: $web, apk: $apk. See .intake/intake.log."
+  return 1
 }
 
 # One request, from launch to merged-or-explained. Runs in a subshell.
@@ -1227,7 +1331,7 @@ build_one() {
   # thing that is writing to the branch.
   (
     cd "$where" || exit 1
-    run no_creds claude -p "$(builder_prompt "$name" "$branch" "$handed")" \
+    run no_creds claude -p "$(builder_prompt "$name" "$branch" "$handed" "$STATE/$name.marker")" \
       --model opus \
       --permission-mode bypassPermissions \
       --output-format stream-json --verbose --include-partial-messages
@@ -1380,9 +1484,18 @@ build_one() {
           rm -f "$STATE/$name.fix-pending"
           if ghx pr merge "$pr" --squash >/dev/null; then
             say "$name done: MERGED #$pr"
-            file_as_done "$file" "Merged as #$pr."
-            verify_shipped "$name" "$pr" "$head"
-            tell "$name merged as #$pr"
+            # Verified BEFORE it is filed, and the outcome goes into the
+            # note. It used to file first, discard this function's return
+            # value, and send an unconditional "merged" notification right
+            # after whatever this said — two contradictory messages in a
+            # row.
+            if verify_shipped "$name" "$pr" "$(cat "$STATE/$name.marker" 2>/dev/null)"; then
+              tell "$name merged as #$pr and the shipped artifacts carry it"
+            else
+              tell "$name merged as #$pr but the deploy was NOT verified"
+            fi
+            file_as_done "$file" "$SHIPPED_NOTE"
+            rm -f "$STATE/$name.marker"
           else
             say "$name NOT FINISHED — #$pr is green but would not merge"
             bump_attempt "$name" "#$pr is green but would not merge"
@@ -1673,8 +1786,13 @@ fix_wave() {
         ask after-ci true "$mode"; action="$ASK_OUT"
         if [ "$action" = merge ] && ghx pr merge "$pr" --squash >/dev/null; then
           say "$name done: MERGED #$pr"
-          file_as_done "$file" "Merged as #$pr."
-          tell "$name merged as #$pr"
+          if verify_shipped "$name" "$pr" "$(cat "$STATE/$name.marker" 2>/dev/null)"; then
+            tell "$name merged as #$pr and the shipped artifacts carry it"
+          else
+            tell "$name merged as #$pr but the deploy was NOT verified"
+          fi
+          file_as_done "$file" "$SHIPPED_NOTE"
+          rm -f "$STATE/$name.marker"
         else
           say "$name green and left for you (merge: $mode), #$pr"
           file_as_done "$file" "Green and waiting for you as #$pr (merge: $mode). Not merged."
@@ -1986,6 +2104,8 @@ main() {
   LOGGER_GRACE="${INTAKE_LOGGER_GRACE:-10}"
   # What the shipped website serves, for the post-merge artifact check.
   SITE_JS="${INTAKE_SITE_JS:-https://mtg.mattshoe.org/kmp/mtg.js}"
+  REPO_SLUG="${INTAKE_REPO_SLUG:-mattshoe/mtg-api}"
+  SHIPPED_NOTE=""
   TRIED="$STATE/tried.$$"
 
   mkdir -p "$STATE" "$WT_ROOT"
