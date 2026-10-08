@@ -50,7 +50,7 @@ export default defineWorkersConfig({
     exclude: [
       '**/node_modules/**', '.claude/**', '**/.wrangler/**',
       // Same reason: drives a real script against a throwaway git repo.
-      'test/intake-shell.test.js', 'test/release-note.test.js',
+      'test/intake-shell.test.js', 'test/release-note.test.js', 'test/tags-script.test.js',
     ],
     setupFiles: ['./test/setup.js'],
     // A stuck test fails; it does not hang the run. Without these a

@@ -10,7 +10,7 @@ const NOTES = [
   'Join keys: cards.name_norm = lower(trim(name)); deck_cards.name_norm and totals.name_norm match it. cards.id <- card_*.card_id. cards.oracle_id <- legalities/rulings/oracle-level joins.',
   'owner_id is the owning account; collections are never merged - filter on it. A collection is named publicly by users.key: owner_id = (SELECT id FROM users WHERE key = ?). The owner and slug columns are retired and read by nothing.',
   'totals, card_usage, bulk_cards are views over cards; bulk_cards is the unassigned pool (free > 0).',
-  'card_tags.card_id joins cards.id; tag is a Scryfall Tagger tag name. Freshly added cards may have no tags until the nightly backfill.',
+  'card_tags.card_id joins cards.id; tag is a Scryfall Tagger tag name. A new printing of a card already here copies its tags; a card new to the database waits for the nightly scripts/tags.mjs.',
   'card_search is FTS5 over (name, type_line, oracle_text, flavor_text, keywords, tags), porter-stemmed. Its rowid is cards.id.',
   'legalities only stores statuses other than not_legal; an absent row means not legal.',
 ];
