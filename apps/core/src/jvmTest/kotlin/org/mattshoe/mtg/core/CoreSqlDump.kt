@@ -96,6 +96,14 @@ class CoreSqlDump {
             "library with a query-box expression",
             Load.library(Library(Filters(adv = "owner:matt cmc<=2 t:creature"))).first,
         )
+        // Oracle tags as Scryfall searches them. `test/oracle-tags.test.js`
+        // asserts on the rows these return, not merely that they run.
+        case("otag: a tag only its children carry", Load.library(Library(Filters(adv = "otag:removal"))).first)
+        case("otag: an alias", Load.library(Library(Filters(adv = "otag:acceleration"))).first)
+        case("otag: excluded", Load.library(Library(Filters(adv = "-otag:removal"))).first)
+        case("tag filter: a tag only its children carry", Load.library(Library(Filters(tags = listOf("removal")))).first)
+        // A phone keyboard capitalises the first letter of what is typed.
+        case("tag filter: typed with a capital", Load.library(Library(Filters(tags = listOf(" Removal")))).first)
     }
 
     @Test

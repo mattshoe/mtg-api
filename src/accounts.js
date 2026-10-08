@@ -196,7 +196,7 @@ export function cookieValue(header, name) {
  */
 export function canEdit(who, ownerId) {
   // The operator's password, which is a machine: `scripts/backup.py`,
-  // `refresh_prices.py` and `backfill.py` have no account to sign
+  // `refresh_prices.py` and `tags.mjs` have no account to sign
   // into. A machine credential is not a login.
   if (who?.operator) return true;
   // The admin role, which Matt hands out by name: "Anyone with the

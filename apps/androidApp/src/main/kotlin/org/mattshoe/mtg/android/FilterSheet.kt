@@ -331,8 +331,8 @@ private fun TagsGroup(
             onChange(f.copy(keywords = it))
         }
     }
-    FRow("Scryfall tags") {
-        Tokens("tags", f.tags, "mana-rock, spot-removal…", draft("tags"), { setDraft("tags", it) }) {
+    FRow("Oracle tags") {
+        Tokens("tags", f.tags, "blink, removal, mana-rock…", draft("tags"), { setDraft("tags", it) }) {
             onChange(f.copy(tags = it))
         }
     }

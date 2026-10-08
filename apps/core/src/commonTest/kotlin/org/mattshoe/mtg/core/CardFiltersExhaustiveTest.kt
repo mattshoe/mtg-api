@@ -338,11 +338,16 @@ class FilterFieldAloneTest {
     }
 
     @Test
-    fun aTagIsMatchedOnItsSlugExactly() {
+    fun aTagIsMatchedExactlyOrThroughTheTagsBeneathIt() {
+        // What the rows are is test/oracle-tags.test.js, against a real
+        // database. This only holds the binding: the tag goes in once.
+        val f = Filters(tags = listOf("mana-rock"))
         assertEquals(
-            "EXISTS (SELECT 1 FROM card_tags ct WHERE ct.card_id = c.id AND ct.tag = ?)",
-            where(Filters(tags = listOf("mana-rock"))),
+            "EXISTS (SELECT 1 FROM (SELECT ? AS w) q, card_tags ct WHERE ct.card_id = c.id AND " +
+                "(ct.tag = q.w OR ct.tag IN (SELECT tn.tag FROM tag_names tn WHERE tn.name = q.w)))",
+            where(f),
         )
+        assertEquals(listOf<Any?>("mana-rock"), params(f))
     }
 
     @Test
@@ -1054,8 +1059,8 @@ class FilterListEdgeTest {
     }
 
     @Test
-    fun tagsKeepTheirCaseBecauseASlugIsAlreadyFolded() {
-        assertEquals(listOf<Any?>("Ramp"), params(Filters(tags = listOf("Ramp"))))
+    fun aTagIsFoldedAndTrimmedTheWayItIsStored() {
+        assertEquals(listOf<Any?>("ramp"), params(Filters(tags = listOf(" Ramp"))))
     }
 
     @Test
