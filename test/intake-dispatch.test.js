@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  pending, triaged, buildable, branchFor, hookFires, equipped,
+  pending, buildable, branchFor, hookFires, equipped,
   statusOf, mergeMode, REQUIRED,
 } from '../scripts/intake.mjs'
 import { raise } from '../scripts/suite-floor.mjs'
@@ -9,13 +9,12 @@ import { raise } from '../scripts/suite-floor.mjs'
 //
 // The dispatcher is a shell script because launchd runs it, but every
 // decision it makes lives here, where it can be tested. The first draft
-// made them with grep and two of them were wrong: `grep -L` with no
-// file arguments reads stdin and hangs forever, and a file triage had
-// never touched went to a builder with no plan in it.
+// made them with grep and got one wrong in ten minutes: `grep -L` with
+// no file arguments reads stdin and hangs forever.
 //
-// The expensive failure mode is not a crash. It is a builder spun up on
-// a request nobody triaged, or two builders on one file, or a request
-// silently never picked up at all.
+// The expensive failure mode is not a crash. It is two builders on one
+// file, a request silently never picked up at all, or a file somebody is
+// still typing handed to a builder.
 
 describe('pending', () => {
   it('is the top-level request files', () => {
@@ -55,59 +54,6 @@ describe('pending', () => {
 
   it('does not mind done/ being missing entirely', () => {
     expect(pending(['a.md'])).toEqual(['a.md'])
-  })
-})
-
-describe('triaged', () => {
-  it('is true once a file has the sections triage promises', () => {
-    expect(triaged('# Thing\n\n## Plan\n\nedit X\n\n## Tests\n\nt\n\n## Done when\n\nd\n'))
-      .toBe(true)
-  })
-
-  it('is false for something Matt just typed', () => {
-    expect(triaged('# Thing\n\nmake the tiles smaller\n')).toBe(false)
-  })
-
-  it('is not fooled by the word plan in prose', () => {
-    expect(triaged('# Thing\n\nI plan to use this later\n')).toBe(false)
-  })
-
-  // Triage promises three sections. Testing only for `## Plan` let it
-  // write a complete-looking file that was still "untriaged", so it got
-  // a full opus triage run on every dispatch forever while being
-  // reported as ready at the same time.
-  // `requests/release-notes-in-admin-settings.md` was the live instance.
-  it('needs every section triage promises, not just a plan', () => {
-    expect(triaged('## Plan\n\nx\n')).toBe(false)
-    expect(triaged('## Plan\n\nx\n\n## Tests\n\ny\n')).toBe(false)
-    expect(triaged('## Plan\n\nx\n\n## Tests\n\ny\n\n## Done when\n\nz\n')).toBe(true)
-  })
-
-  it('does not count a heading that only appears inside a code fence', () => {
-    const fenced = [
-      '# Thing', '',
-      'The shape triage leaves behind:', '',
-      '```markdown',
-      '## Plan', '', 'x', '',
-      '## Tests', '', 'y', '',
-      '## Done when', '', 'z',
-      '```', '',
-    ].join('\n')
-    expect(triaged(fenced)).toBe(false)
-  })
-
-  it('still sees real sections in a file that also has a code fence', () => {
-    const text = [
-      '## Plan', '', '```sh', '## Tests', '```', '',
-      '## Tests', '', 'y', '',
-      '## Done when', '', 'z', '',
-    ].join('\n')
-    expect(triaged(text)).toBe(true)
-  })
-
-  it('reads a file a Windows editor saved', () => {
-    const crlf = '## Plan\r\n\r\nx\r\n\r\n## Tests\r\n\r\ny\r\n\r\n## Done when\r\n\r\nz\r\n'
-    expect(triaged(crlf)).toBe(true)
   })
 })
 
@@ -153,15 +99,29 @@ describe('statusOf', () => {
 })
 
 describe('buildable', () => {
+  // `status: ready` and nothing else. There used to be a separate triage
+  // agent that had to write a `## Plan` first, and a request without one
+  // was held — but the agent that builds a request can plan it perfectly
+  // well itself, so prose plus `status: ready` is buildable by design.
   const ready = '---\nstatus: ready\n---\n\n# T\n\n## Plan\n\nx\n'
     + '\n## Tests\n\ny\n\n## Done when\n\nz\n'
 
-  it('is a triaged, ready request', () => {
+  it('is a ready request', () => {
     expect(buildable(ready)).toBe(true)
   })
 
-  it('is not a request with no plan, because a builder would guess', () => {
+  it('is a ready request that is nothing but prose, because planning is the builder\'s job', () => {
+    expect(buildable('---\nstatus: ready\n---\n\n# T\n\nmake the tiles smaller\n'))
+      .toBe(true)
+  })
+
+  it('is not a half-written file with no frontmatter at all', () => {
+    // The coordinator writes a request complete, in one Write. A file
+    // with no frontmatter is one nobody finished — and before the gate
+    // was `status: ready` alone, anything the frontmatter did not say
+    // exactly was treated as ready to build.
     expect(buildable('# T\n\nmake it faster\n')).toBe(false)
+    expect(buildable('')).toBe(false)
   })
 
   it('is not a request waiting on Matt, even with a plan', () => {
@@ -189,10 +149,10 @@ describe('buildable', () => {
 })
 
 describe('mergeMode', () => {
-  // Whether a green pull request gets merged is now the dispatcher's
-  // decision, and it is read from the file rather than left to the
-  // model. Four of five live requests said `merge: ask`, so a green
-  // pull request and silence was the normal outcome.
+  // Whether a green pull request gets merged is what the builder's
+  // prompt means by `merge: ask`: read from the file and tested here,
+  // never decided by the model. Four of five live requests said
+  // `merge: ask`, so a green pull request and silence is a real outcome.
 
   it('is auto when the file says so', () => {
     expect(mergeMode('---\nmerge: auto\n---\n')).toBe('auto')
@@ -205,8 +165,8 @@ describe('mergeMode', () => {
   it('is ask when the file does not say, because a person wrote that file', () => {
     // This pinned the opposite, and the opposite was wrong: a
     // hand-written `status: ready` request with no `merge:` line was
-    // squash-merged unattended. Triage always writes `merge: auto`
-    // explicitly, so a file without it did not come from triage.
+    // squash-merged unattended. A file written for the queue says
+    // `merge: auto` explicitly, so a file without it was typed by hand.
     expect(mergeMode('---\nstatus: ready\n---\n')).toBe('ask')
     expect(mergeMode('# no frontmatter at all\n')).toBe('ask')
   })
@@ -258,11 +218,11 @@ describe('branchFor', () => {
     }
   })
 
-  // `build_one` names the branch once and then asks GitHub about it with
-  // `gh pr list --head "$branch"`. An unstable name would ask about a
-  // branch no builder ever pushed, and every outcome would read as "no
-  // pull request at all".
-  it('is stable, because the dispatcher asks GitHub about it by name', () => {
+  // The dispatcher names the branch once, makes the worktree on it and
+  // tells the builder nothing else about it; the builder finds it with
+  // `git branch --show-current`. An unstable name would put two requests
+  // on one ref, with neither builder blocking the other.
+  it('is stable, because one request means one ref', () => {
     expect(branchFor('deck-page.md')).toBe(branchFor('deck-page.md'))
     expect(branchFor('/r/requests/deck-page.md')).toBe(branchFor('deck-page.md'))
   })
