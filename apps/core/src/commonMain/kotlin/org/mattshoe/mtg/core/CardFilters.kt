@@ -286,11 +286,12 @@ internal fun ftsClause(raw: String, c: Clauses) {
  * names. `otag:blink` is an alias of `flicker`, and `flicker` is mostly
  * carried by `flicker-creature` and its siblings. `tag_names` holds that
  * tree, written by `scripts/tags.mjs`; the bare `ct.tag = ?` keeps an
- * exact tag working while that table is empty. Binds the tag twice.
+ * exact tag working while that table is empty. Binds the tag once: D1
+ * takes at most 100, and a busy panel with ten tags went over at two.
  */
 internal const val TAGGED =
-    "EXISTS (SELECT 1 FROM card_tags ct WHERE ct.card_id = c.id AND " +
-        "(ct.tag = ? OR ct.tag IN (SELECT tn.tag FROM tag_names tn WHERE tn.name = ?)))"
+    "EXISTS (SELECT 1 FROM (SELECT ? AS w) q, card_tags ct WHERE ct.card_id = c.id AND " +
+        "(ct.tag = q.w OR ct.tag IN (SELECT tn.tag FROM tag_names tn WHERE tn.name = q.w)))"
 
 internal class Clauses {
     val where = mutableListOf<String>()
@@ -473,7 +474,7 @@ fun conditions(s: Filters): Sql {
     s.keywords.forEach {
         c.add("EXISTS (SELECT 1 FROM card_keywords k WHERE k.card_id = c.id AND lower(k.keyword) = ?)", it.lowercase())
     }
-    s.tags.map { it.trim().lowercase() }.forEach { c.add(TAGGED, it, it) }
+    s.tags.forEach { c.add(TAGGED, it.trim().lowercase()) }
 
     c.inList("c.rarity", s.rarities)
     c.inList("lower(c.setcode)", s.sets.map { it.lowercase() })

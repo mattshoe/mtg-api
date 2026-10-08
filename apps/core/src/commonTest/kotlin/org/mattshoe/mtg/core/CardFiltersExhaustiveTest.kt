@@ -1059,8 +1059,8 @@ class FilterListEdgeTest {
     }
 
     @Test
-    fun tagsKeepTheirCaseBecauseASlugIsAlreadyFolded() {
-        assertEquals(listOf<Any?>("Ramp"), params(Filters(tags = listOf("Ramp"))))
+    fun aTagIsFoldedAndTrimmedTheWayItIsStored() {
+        assertEquals(listOf<Any?>("ramp"), params(Filters(tags = listOf(" Ramp"))))
     }
 
     @Test
