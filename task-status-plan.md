@@ -1,4 +1,8 @@
-# Plan: see the status of ongoing tasks in the app (revision 4)
+# Plan: see the status of ongoing tasks in the app (revision 5)
+
+Reviews: revision 4 came back GREEN from two independent reviewers.
+Revision 5 takes their minor points: no rename, done-filed refs with no
+PR are hidden, slug match strips the digest and applies the 84-char cut.
 
 ## Up front, for the PR's first line
 
@@ -41,7 +45,8 @@ Three unauthenticated GET calls, all CORS-open:
    most recently updated, its ref alone would read `building` forever.
    A ref whose slug matches a `requests/done/<name>.md` (slug by the
    `branchFor` rule in `scripts/intake.mjs`: lowercase, runs of non-alnum
-   → `-`, trimmed) is finished and is not shown as `building`. This keeps
+   → `-`, trimmed) is finished: with no PR left in the list it is hidden, not shown as
+   `building`. This keeps
    the fix inside the app: no repo setting, no builder workflow change, no
    deleting anybody's branches.
 
@@ -102,8 +107,8 @@ loads GitHub data on open. No new view, route or nav entry.
   state (`rows`, `busy`, `error`, `showDone`, `active`, `done`,
   `toggleDone()`, `loading/loaded/failed`), and a pure decoder
   `Tasks.decode(pulls: String, refs: String, done: String)`. `AppState.tasks`.
-- `:core-net`: `GitHubReleases` renamed `GitHub` (mechanical; it now
-  answers two questions) with a `tasks()` method beside `releases()`
+- `:core-net`: a `tasks()` method on `GitHubReleases` beside `releases()`
+  (no rename: churn the feature does not need)
   (the three GETs, throws with GitHub's message on refusal). Both
   shells already inject that class for tests (`useGitHubForTesting`, the
   web driver), so no new seam or field.
