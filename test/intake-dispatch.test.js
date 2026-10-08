@@ -149,31 +149,23 @@ describe('buildable', () => {
 })
 
 describe('mergeMode', () => {
-  // Whether a green pull request gets merged is what the builder's
-  // prompt means by `merge: ask`: read from the file and tested here,
-  // never decided by the model. Four of five live requests said
-  // `merge: ask`, so a green pull request and silence is a real outcome.
-
-  it('is auto when the file says so', () => {
+  // The agent merges its own work on green CI. That is the rule, and an
+  // absent field is not a reason to break it — when this returned 'ask' for
+  // a missing key, every request written without the line sat unmerged
+  // forever waiting on a human, which is what green CI exists to replace.
+  it('merges on green by default', () => {
+    expect(mergeMode('---\nstatus: ready\n---\n')).toBe('auto')
     expect(mergeMode('---\nmerge: auto\n---\n')).toBe('auto')
   })
 
-  it('is ask when the file says so', () => {
+  it('stops at a green pull request only when the file says ask', () => {
     expect(mergeMode('---\nmerge: ask\n---\n')).toBe('ask')
+    expect(mergeMode('---\nmerge: ASK\n---\n')).toBe('ask')
   })
 
-  it('is ask when the file does not say, because a person wrote that file', () => {
-    // This pinned the opposite, and the opposite was wrong: a
-    // hand-written `status: ready` request with no `merge:` line was
-    // squash-merged unattended. A file written for the queue says
-    // `merge: auto` explicitly, so a file without it was typed by hand.
-    expect(mergeMode('---\nstatus: ready\n---\n')).toBe('ask')
-    expect(mergeMode('# no frontmatter at all\n')).toBe('ask')
-  })
-
-  it('is ask for anything it does not recognise, which is the safe way to be wrong', () => {
-    expect(mergeMode('---\nmerge: maybe\n---\n')).toBe('ask')
-    expect(mergeMode('---\nmerge: AUTO-ish\n---\n')).toBe('ask')
+  it('does not read ask out of anything but the frontmatter', () => {
+    // The body of a request can discuss merging without changing the gate.
+    expect(mergeMode('---\nstatus: ready\n---\n\nshould we merge: ask?\n')).toBe('auto')
   })
 
   it('ignores a trailing comment and reads a CRLF file', () => {

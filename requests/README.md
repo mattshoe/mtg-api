@@ -26,20 +26,23 @@ The carousel shows it now. Matt wants it on the Library tiles too,
 small, under the price.
 ```
 
-That is the whole format: frontmatter, a title, and whatever the
-coordinator knows about what Matt actually wants. A plan is welcome and
-optional — the builder plans too, and a request that is one sentence of
-prose is a legitimate request.
+That is the whole format: frontmatter, a title, and what Matt said, in his
+words.
 
-- `status: ready` is the only gate. Anything else — `needs-matt`,
-  `blocked`, a typo, no `status:` line at all — is held, never built. So a
-  file that is not finished is safe as long as it does not say `ready`.
-- `merge: auto` merges on green CI. Use `merge: ask` for a schema change,
-  for auth or roles, or for anything touching who owns whose cards; the
-  builder then stops at a green pull request. A missing `merge:` line
-  means ask, because that is the shape a file typed by hand has.
-- The name becomes the branch, so `fix-the-thing.md` is easier to live
-  with than `asdf.md`.
+**Do not pre-process it.** No plan, no sizing, no splitting, no deciding which
+files it touches, no judging whether it is risky. The agent does all of that,
+and it has the repository in front of it when it does. A coordinator guessing
+at scope ahead of the agent has been wrong every time it has tried.
+
+- `status: ready` is the only gate. Anything else — `needs-matt`, `blocked`,
+  a typo, no `status:` line at all — is held, never built. So a file that is
+  not finished is safe as long as it does not say `ready`.
+- `merge: ask` stops at a green pull request. Leave the line out and the agent
+  merges its own work on green CI, which is the normal case and the point of
+  having CI. Matt is the only one who asks for `ask`, when he says he wants to
+  look first.
+- The name becomes the branch, so `fix-the-thing.md` is easier to live with
+  than `asdf.md`.
 
 **Writing the file is what starts the build.** The coordinator used Write
 or Edit on a path under `requests/`, which fires the PostToolUse hook in

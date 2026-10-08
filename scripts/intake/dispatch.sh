@@ -37,6 +37,19 @@ mkdir -p "$STATE"
 mkdir "$STATE/lock" 2>/dev/null || exit 0
 trap 'rm -rf "$STATE/lock"' EXIT
 
+# Agents authenticate as their own service account, `intake-agent`, which has
+# the admin role and its own long-lived session token. They never see the
+# operator password: that one unlocks /admin/sql on any database and is the
+# way back in when every account has lost admin, so it stays out of reach.
+#
+# Revoking an agent is one row: delete its session from the sessions table.
+# Matt can see what it did, because every write it makes is that account.
+AGENT_TOKEN=""
+if [ -f "$HOME/.mtg-agent.env" ]; then
+  AGENT_TOKEN="$(/usr/bin/grep -m1 "^MTG_AGENT_TOKEN=" "$HOME/.mtg-agent.env" | cut -d= -f2-)"
+fi
+[ -n "$AGENT_TOKEN" ] || say "no ~/.mtg-agent.env; the agent cannot act on the API as admin"
+
 git -C "$REPO" fetch -q origin main 2>>"$LOG" || say "could not fetch; base may be stale"
 
 cd "$REPO" && node scripts/intake.mjs buildable > "$STATE/queue.$$" || { say "intake.mjs failed"; rm -f "$STATE/queue.$$"; exit 1; }
@@ -81,6 +94,7 @@ env \
   -u CLOUDFLARE_EMAIL -u CF_API_TOKEN -u CF_ACCOUNT_ID -u CF_EMAIL \
   -u CLOUDFLARE_API_USER_SERVICE_KEY -u WRANGLER_CF_AUTHORIZATION_TOKEN \
   CLOUDFLARE_AUTH_USE_KEYRING=false XDG_CONFIG_HOME="$STATE/void" \
+  MTG_API_TOKEN="$AGENT_TOKEN" \
   INTAKE_BUILDER=1 \
   GH_CONFIG_DIR="${GH_CONFIG_DIR:-$HOME/.config/gh}" \
   claude -p "You are the request-builder agent. Read .claude/agents/request-builder.md and follow it exactly, then build requests/$name.md.

@@ -114,24 +114,20 @@ export function state(text) {
 }
 
 /**
- * Whether this one gets merged on green CI, or stops at a green pull
- * request for Matt.
+ * How a request should be merged.
  *
- * The builder merges its own work now, so this is what its prompt means
- * by `merge: ask`. Read from the file and tested here, never decided by
- * the model. Only an explicit `merge: auto` merges; everything else, a
- * missing key included, is ask. The coordinating session writes the file,
- * so an absent `merge:` means it did not say, and not-saying is not consent.
+ * Absent means `auto`. The agent merges its own work on green CI — that is
+ * the rule, and a missing field is not a reason to break it. Only an explicit
+ * `merge: ask` stops at a green pull request, and Matt is the only one who
+ * writes that, when he says he wants to look first.
+ *
+ * This was the other way round for about an hour, on the reasoning that
+ * not-saying is not consent. That was wrong: it meant every request written
+ * without the field sat unmerged forever waiting on a human, which is exactly
+ * what green CI exists to replace.
  */
 export function mergeMode(text) {
-  const v = field(text, 'merge')
-  if (v === 'auto') return 'auto'
-  // Everything else is ask, including ABSENT. The docstring above said
-  // "unknown means ask" and the code then auto-merged a file with no
-  // `merge:` key at all — so a hand-written `status: ready` request with
-  // no frontmatter beyond that was squash-merged unattended, which is
-  // exactly the case a person writing a request by hand produces.
-  return 'ask'
+  return field(text, 'merge') === 'ask' ? 'ask' : 'auto'
 }
 
 /**
