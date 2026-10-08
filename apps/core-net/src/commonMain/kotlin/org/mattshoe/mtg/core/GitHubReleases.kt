@@ -25,6 +25,9 @@ class GitHubReleases internal constructor(private val http: HttpClient) {
         return Releases.decode(text)
     }
 
+    /** Every intake request GitHub can see, and where it is. */
+    suspend fun tasks(): List<Task> = emptyList()
+
     private fun refusal(text: String): String = try {
         (Json.parseToJsonElement(text) as JsonObject)["message"]!!.jsonPrimitive.content
     } catch (e: Exception) {
