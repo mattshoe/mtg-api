@@ -930,27 +930,17 @@ private fun Colours(s: org.mattshoe.mtg.core.DeckStats) {
     ) {
         Ring("Needs", s.pips, Modifier.weight(1f))
         Ring("Makes", s.sources, Modifier.weight(1f))
-        // Makes again, with a dual as its own slice rather than a
-        // point in each colour's total.
-        Ring("Exactly", s.combos, Modifier.weight(1f))
     }
-    // One caption, the web's `.sub`, and the splash warning is the last
-    // sentence of it rather than a line of its own in amber. The web
-    // appends it to the same text node; amber on the phone made it a
-    // second thing to read and said "wrong" in the one channel this
-    // collection's owner cannot see anyway — the sentence itself is
-    // what carries it.
-    Line(
-        "Pips the deck asks for, against cards that can produce them. " +
-            "Hybrid pips count for both halves." +
-            if (s.unsupported.isNotEmpty()) {
-                " No source for ${s.unsupported.joinToString(", ")}."
-            } else {
-                ""
-            },
-        Ink3,
-        Design.MINI,
-    )
+    // Makes again, with a dual as its own slice rather than a point in
+    // each colour's total. On a line of its own and bigger, because it
+    // has the most slices to tell apart. The web's `.pie-set.wide`.
+    Ring("Exactly", s.combos, Modifier.fillMaxWidth().padding(top = 10.dp), ring = 120.dp)
+    // The web's `.sub`, in the caption grey rather than amber: amber
+    // said "wrong" in the one channel this collection's owner cannot
+    // see anyway, and the sentence itself is what carries it.
+    if (s.unsupported.isNotEmpty()) {
+        Line("No source for ${s.unsupported.joinToString(", ")}.", Ink3, Design.MINI)
+    }
 }
 
 /**
@@ -963,7 +953,12 @@ private fun Colours(s: org.mattshoe.mtg.core.DeckStats) {
  * a colour only as a hue says nothing to half its readers.
  */
 @Composable
-private fun Ring(caption: String, bars: List<Bar>, modifier: Modifier = Modifier) {
+private fun Ring(
+    caption: String,
+    bars: List<Bar>,
+    modifier: Modifier = Modifier,
+    ring: androidx.compose.ui.unit.Dp = 76.dp,
+) {
     val total = bars.sumOf { it.value }
     // Nothing to split: a colourless deck has no colour chart.
     if (total <= 0) {
@@ -978,7 +973,7 @@ private fun Ring(caption: String, bars: List<Bar>, modifier: Modifier = Modifier
         verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
         Canvas(
-            Modifier.size(76.dp)
+            Modifier.size(ring)
                 .semantics { contentDescription = "$caption · $total — $told" },
         ) {
             var at = -90f

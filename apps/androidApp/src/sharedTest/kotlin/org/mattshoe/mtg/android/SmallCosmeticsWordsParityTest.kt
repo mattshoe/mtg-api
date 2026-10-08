@@ -178,21 +178,18 @@ class SmallCosmeticsWordsParityTest {
                 ),
             ),
         )
-        // The website writes it into the same `.sub` div as the rest
-        // of the caption, so it is one sentence more and not a second
-        // thing on the page to notice.
+        // The website writes it into the colour panel's `.sub` div in
+        // the caption's grey. The caption about pips is gone, so the
+        // warning is the whole of that line now.
         val caption = holding("No source for Blue.")
         caption.assertExists()
         val said = wordsOf(caption)
         assertNotNull(said, "nothing on the deck page says a colour has no source")
-        assertTrue(
-            said.startsWith("Pips the deck asks for"),
-            "the splash warning is its own line rather than the end of the caption: \"$said\"",
-        )
+        assertEquals("No source for Blue.", said.trim(), "the splash warning carries more than itself")
         assertEquals(
             Ink3,
             caption.colour(),
-            "the caption's last sentence is a different colour from the caption",
+            "the splash warning is not in the caption's grey",
         )
     }
 

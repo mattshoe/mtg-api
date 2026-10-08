@@ -160,14 +160,13 @@ private fun Colours(s: DeckStats) {
         Pie("Needs", s.pips)
         Pie("Makes", s.sources)
         // Makes again, with a dual as its own slice rather than a
-        // point in each colour's total.
-        Pie("Exactly", s.combos)
+        // point in each colour's total. On a line of its own and
+        // bigger, because it has the most slices to tell apart.
+        Pie("Exactly", s.combos, wide = true)
     }
-    Div(attrs = { classes("sub") }) {
-        Text("Pips the deck asks for, against cards that can produce them. ")
-        Text("Hybrid pips count for both halves.")
-        if (s.unsupported.isNotEmpty()) {
-            Text(" No source for ${s.unsupported.joinToString(", ")}.")
+    if (s.unsupported.isNotEmpty()) {
+        Div(attrs = { classes("sub") }) {
+            Text("No source for ${s.unsupported.joinToString(", ")}.")
         }
     }
 }
@@ -215,7 +214,7 @@ private fun Bars(bars: List<Bar>, total: Int) {
  * `conic-gradient`, so the chart is one CSS property and no script.
  */
 @Composable
-private fun Pie(caption: String, bars: List<Bar>) {
+private fun Pie(caption: String, bars: List<Bar>, wide: Boolean = false) {
     val total = bars.sumOf { it.value }
     if (total <= 0) return
     var at = 0.0
@@ -228,7 +227,10 @@ private fun Pie(caption: String, bars: List<Bar>) {
             "var(--${letter.lowercase()}) ${from}% ${at}%"
         }
     }.joinToString(", ")
-    Div(attrs = { classes("pie-set") }) {
+    Div(attrs = {
+        classes("pie-set")
+        if (wide) classes("wide")
+    }) {
         Div(attrs = {
             classes("pie")
             style { property("background", "conic-gradient($stops)") }
