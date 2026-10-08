@@ -48,6 +48,7 @@ import org.mattshoe.mtg.core.RenameState
 import org.mattshoe.mtg.core.Route
 import org.mattshoe.mtg.core.Rows
 import org.mattshoe.mtg.core.Scryfall
+import org.mattshoe.mtg.core.GitHubReleases
 import org.mattshoe.mtg.core.Share
 import org.mattshoe.mtg.core.ShareWhat
 import org.mattshoe.mtg.core.StatsQueries
@@ -75,6 +76,7 @@ class MainActivity : ComponentActivity() {
     // by the time the system builds this activity. See [Wiring].
     private var api = MtgApi(Wiring.apiBase ?: MtgApi.DEFAULT_BASE)
     private var scryfall = Scryfall()
+    private var github = GitHubReleases()
     private val prefs by lazy { getSharedPreferences("mtg", Context.MODE_PRIVATE) }
     private val store: Store by lazy { PrefsStore(prefs) }
     private var downloads: Downloads = MediaStoreDownloads(this)
@@ -134,6 +136,11 @@ class MainActivity : ComponentActivity() {
     /** The same seam for Scryfall, which the deck's tokens come from. */
     internal fun useScryfallForTesting(scryfall: Scryfall) {
         this.scryfall = scryfall
+    }
+
+    /** And for GitHub, which the release notes come from. */
+    internal fun useGitHubForTesting(github: GitHubReleases) {
+        this.github = github
     }
 
     /**
@@ -321,6 +328,7 @@ class MainActivity : ComponentActivity() {
 
     /** The token load, so a test can wait for it instead of sleeping. */
     internal val tokensJob: Job? get() = model.tokensJob
+    internal val releasesJob: Job? get() = model.releasesJob
 
     /**
      * Everything, because a narrow list greys out the file you actually
@@ -600,6 +608,7 @@ class MainActivity : ComponentActivity() {
             View.ADMIN -> {
                 app = app.fetching(View.ADMIN)
                 intoPage(View.ADMIN) { loadPeople() }
+                loadReleases()
             }
 
             else -> Unit
@@ -774,6 +783,28 @@ class MainActivity : ComponentActivity() {
             // and the loaded one only once its cards are back.
             if (app.route.rest == slug && app.view == View.DECKS) {
                 app = app.copy(decks = app.decks.withTokens(found))
+            }
+        }
+    }
+
+    /**
+     * The builds that shipped, for the release notes on Admin Settings.
+     *
+     * Beside the people rather than after them: one is GitHub and the
+     * other is the Worker, and neither should wait on the other. Once
+     * per visit to the list; a person's page reuses what is there.
+     * Sibling of the website's `loadReleases`.
+     */
+    private fun loadReleases() {
+        if (app.releases.busy || app.releases.rows.isNotEmpty()) return
+        app = app.copy(releases = app.releases.loading())
+        model.releasesJob = scope.launch {
+            app = try {
+                app.copy(releases = app.releases.loaded(github.releases()))
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                app.copy(releases = app.releases.failed(e.message ?: "that did not work"))
             }
         }
     }
