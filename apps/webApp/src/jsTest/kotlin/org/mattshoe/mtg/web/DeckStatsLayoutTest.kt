@@ -10,6 +10,7 @@ import org.mattshoe.mtg.core.DeckCard
 import org.w3c.dom.HTMLElement
 import org.w3c.dom.get
 import kotlin.js.Promise
+import kotlin.math.abs
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -261,16 +262,59 @@ class DeckStatsLayoutTest {
         assertTrue(caps.any { it.startsWith("Exactly") }, caps.toString())
     }
 
+    /** The ring whose caption starts with this, measured. */
+    private fun HTMLElement.ring(caption: String) = all("div.pie-set")
+        .firstOrNull { it.querySelector(".pie-cap")?.textContent.orEmpty().startsWith(caption) }
+        ?.querySelector(".pie")?.unsafeCast<HTMLElement>()
+        ?.getBoundingClientRect()
+
     @Test
-    fun theThreeRingsSitSideBySide() = runTest {
-        // Android lays them in one row; the web must not wrap the
-        // third onto a row of its own.
+    fun needsAndMakesShareARowAndExactlyHasALineOfItsOwnBelowThem() = runTest {
+        // Matt: "I want the 'exact' chart to be on its own line and
+        // bigger than the others".
         assertTrue(styled(), "app.css never loaded, so the layout proves nothing")
         val frame = render(900)
         settle()
-        val tops = frame.all("div.pie").map { it.getBoundingClientRect().top }
-        assertEquals(3, tops.size, "expected three rings")
-        assertTrue(tops.max() - tops.min() < 1, "the rings are not in one row, tops: $tops")
+        val needs = frame.ring("Needs")
+        val makes = frame.ring("Makes")
+        val exactly = frame.ring("Exactly")
+        assertTrue(needs != null && makes != null && exactly != null, "expected three rings")
+        assertTrue(abs(needs.top - makes.top) < 1, "needs and makes are not in one row: ${needs.top} vs ${makes.top}")
+        assertTrue(
+            exactly.top >= needs.bottom,
+            "the Exactly ring starts at ${exactly.top}, beside needs and makes rather than below them (they end at ${needs.bottom})",
+        )
+        // Nothing else on its line: it is the only ring between its own
+        // top and bottom.
+        val beside = frame.all("div.pie").filter {
+            val r = it.getBoundingClientRect()
+            r.top < exactly.bottom && r.bottom > exactly.top
+        }
+        assertEquals(1, beside.size, "the Exactly ring shares its line with another ring")
+    }
+
+    @Test
+    fun theExactlyRingIsBiggerThanTheOtherTwo() = runTest {
+        assertTrue(styled(), "app.css never loaded, so the layout proves nothing")
+        val frame = render(900)
+        settle()
+        val needs = frame.ring("Needs")
+        val exactly = frame.ring("Exactly")
+        assertTrue(needs != null && exactly != null, "expected the needs and exactly rings")
+        assertTrue(
+            exactly.width > needs.width * 1.25,
+            "the Exactly ring is ${exactly.width}px across and needs is ${needs.width}px, so it is not bigger",
+        )
+    }
+
+    @Test
+    fun theColourPanelHasNoCaptionUnderTheRings() = runTest {
+        // Matt: "Get rid of this text under the charts".
+        val frame = render(900)
+        settle()
+        val text = frame.textContent.orEmpty()
+        assertTrue(!text.contains("Pips the deck asks for"), "the caption about pips is still under the rings")
+        assertTrue(!text.contains("Hybrid pips count for both halves"), "the hybrid sentence is still under the rings")
     }
 
     @Test
