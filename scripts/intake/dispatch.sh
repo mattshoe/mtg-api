@@ -17,6 +17,7 @@ set -uo pipefail
 REPO="$(cd "$(dirname "$0")/../.." && pwd -P)"
 STATE="$REPO/.intake"
 LOG="$STATE/intake.log"
+REQUESTS="$REPO/requests"
 BASE="${INTAKE_BASE:-origin/main}"
 
 say() { printf '%s  %s\n' "$(date '+%H:%M:%S')" "$1" >>"$LOG"; }
@@ -81,6 +82,21 @@ claim() {
   rm -f "$STATE/queue.$$"
   [ -n "$file" ] || return 2
 
+  # node_modules, shared rather than installed. A cold worktree costs `npm ci`
+  # — measured at 5 minutes, and one agent spent exactly that before it could
+  # run a single test. A symlink makes it free. An agent that genuinely needs a
+  # new dependency edits package.json and lets CI install it.
+  [ -d "$REPO/node_modules" ] && [ ! -e "$tree/node_modules" ] \
+    && ln -s "$REPO/node_modules" "$tree/node_modules"
+
+  # Hand over the LIVE request file, not the one the worktree was cut from.
+  # Without this the agent reads main's copy: four requests sat at `status:
+  # hold` on main while the live files said `ready`, so every agent correctly
+  # refused to build and stopped. The file Matt is looking at is the file the
+  # agent must read.
+  cp "$REQUESTS/$file" "$tree/requests/$file" 2>>"$LOG" \
+    || say "could not hand over $file; the agent will read the committed copy"
+
   printf '%s\t%s\t%s\n' "$file" "$branch" "$tree"
 }
 
@@ -139,6 +155,12 @@ env \
   claude -p "You are the request-builder agent. Read .claude/agents/request-builder.md and follow it exactly, then build requests/$name.md.
 
 It is yours end to end: build it test-first, open the pull request, wait for CI with \`gh pr checks <n> --watch --fail-fast\` (it blocks — do not use ScheduleWakeup or Monitor, you get no second turn), merge it on green unless the request says 'merge: ask', and move requests/$name.md into requests/done/ in your own commit.
+
+Run tests the way .claude/agents/request-builder.md says: one unit test at a time during the cycle, named, red then green. The functional suites — test:screens, test:web, test:android, npm test — run ONCE at the end, on what your diff reaches. Never in the cycle.
+
+Never background a command and poll its output, and never background a suite. One agent spent 55% of its run inside polling loops and another spent twelve minutes reading its own background task files. Run it in the foreground and let it finish.
+
+node_modules is already there, symlinked. Do not run npm ci.
 
 Commit and push each part as it passes. Nothing you leave uncommitted is safe." \
   --permission-mode bypassPermissions --model opus \

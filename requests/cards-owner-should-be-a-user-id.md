@@ -1,8 +1,7 @@
 ---
-status: hold
+status: ready
 size: large
 platforms: worker, web, android
-merge: ask
 ---
 
 # Ownership is an id, addresses are keys, and no slug survives

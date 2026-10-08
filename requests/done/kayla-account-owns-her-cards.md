@@ -1,8 +1,7 @@
 ---
-status: hold
+status: ready
 size: small
 platforms: worker
-merge: ask
 ---
 
 # Kayla's account has to own Kayla's cards, in a migration
