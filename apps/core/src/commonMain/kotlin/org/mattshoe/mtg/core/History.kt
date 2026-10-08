@@ -28,7 +28,7 @@ data class HistoryEntry(
 
     fun asDirection(): Direction? = Direction.entries.firstOrNull { it.slug == direction }
     /**
-     * Which collection it went to, as the slug it was recorded with.
+     * Which collection it went to, as it was recorded.
      *
      * It used to resolve to one of two names. There is no list of
      * collections to resolve against any more, and a row is a record

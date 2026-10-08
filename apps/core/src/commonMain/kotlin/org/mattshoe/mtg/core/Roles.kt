@@ -32,20 +32,18 @@ object Role {
  *
  * No email. A role list is not a mailing list — the server does not
  * send one and this has nowhere to put it. What identifies somebody
- * here is their name, the slug their cards live under, and the key
- * their collection is shared by.
+ * here is their name and the key their collection is shared by.
  */
 data class Person(
-    val slug: String,
+    val key: String,
     val name: String? = null,
     val avatar: String? = null,
     val role: String = Role.USER,
-    val key: String = "",
 ) {
     val isAdmin: Boolean get() = role == Role.ADMIN
 
     /** What to call them. An account can arrive with no name on it. */
-    val shownName: String get() = name?.takeIf { it.isNotBlank() } ?: slug
+    val shownName: String get() = name?.takeIf { it.isNotBlank() } ?: key
 
     /** The one the button offers, which is the one they do not have. */
     val otherRole: String get() = if (isAdmin) Role.USER else Role.ADMIN
@@ -56,13 +54,12 @@ data class Person(
      * `/c/<key>`, because that is what an address carries. The screen
      * showed `/c/<slug>` for a while, which is not a page anybody can
      * open — Matt: "why is the fucking slug still not the GOD DAMN
-     * USER KEY LIKE YOU FUCKING SAID". The slug is what `cards.owner`
-     * holds; the key is the address.
+     * USER KEY LIKE YOU FUCKING SAID". There is no slug any more.
      */
     val address: String? get() = key.takeIf { it.isNotBlank() }?.let { "/c/$it" }
 
     /** Everything worth matching a search against. */
-    internal val haystack: String get() = listOf(slug, name.orEmpty(), key, role)
+    internal val haystack: String get() = listOf(name.orEmpty(), key, role)
         .joinToString(" ")
         .lowercase()
 }
@@ -70,7 +67,7 @@ data class Person(
 /**
  * Who is there, on the Admin Settings screen.
  *
- * `changing` is one slug rather than a flag, so a press greys out the
+ * `changing` is one key rather than a flag, so a press greys out the
  * row it was made on and leaves every other row live. A list that
  * goes dead all over on one press reads as broken.
  */
@@ -116,13 +113,13 @@ data class People(
      */
     fun failed(message: String) = copy(rows = emptyList(), busy = false, changing = null, error = message)
 
-    fun changing(slug: String) = copy(changing = slug, error = null)
+    fun changing(key: String) = copy(changing = key, error = null)
 
-    fun isChanging(slug: String) = changing == slug
+    fun isChanging(key: String) = changing == key
 
     /** It came back: that row, and only that row, has the new role. */
-    fun changed(slug: String, role: String) = copy(
-        rows = rows.map { if (it.slug == slug) it.copy(role = Role.of(role)) else it },
+    fun changed(key: String, role: String) = copy(
+        rows = rows.map { if (it.key == key) it.copy(role = Role.of(role)) else it },
         changing = null,
         error = null,
     )
@@ -142,7 +139,7 @@ data class People(
      * their own role away, which — on a database with one account —
      * meant a screen with one row and nothing to press at all.
      */
-    fun mayChange(slug: String, me: String?): Boolean = rows.any { it.slug == slug }
+    fun mayChange(key: String, me: String?): Boolean = rows.any { it.key == key }
 
     /**
      * Whether that change is the one nothing here can undo.
@@ -151,9 +148,9 @@ data class People(
      * browser can promote anybody from; `ADMIN_PASSWORD` and a script
      * are the way back. The row says so. It does not refuse.
      */
-    fun strands(slug: String, me: String?): Boolean {
-        val row = rows.firstOrNull { it.slug == slug } ?: return false
-        return row.isAdmin && slug == me && admins <= 1
+    fun strands(key: String, me: String?): Boolean {
+        val row = rows.firstOrNull { it.key == key } ?: return false
+        return row.isAdmin && key == me && admins <= 1
     }
 
     companion object {
@@ -170,11 +167,10 @@ data class People(
                 val o = row.jsonObject
                 fun str(k: String) = o[k]?.jsonPrimitive?.contentOrNull
                 Person(
-                    slug = str("slug").orEmpty(),
+                    key = str("key").orEmpty(),
                     name = str("name"),
                     avatar = str("avatar"),
                     role = Role.of(str("role")),
-                    key = str("key").orEmpty(),
                 )
             }
         } catch (e: Exception) {

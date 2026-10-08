@@ -20,7 +20,7 @@ data class Printing(
     val finish: String,
     val qty: Int,
     val scryfallId: String?,
-    /** Whose copy this is. A card is not one person's. */
+    /** Whose copy this is, as the owner's public key. A card is not one person's. */
     val owner: String = "",
     /**
      * Both faces, as the card is actually named. Last and defaulted
@@ -36,15 +36,18 @@ data class Printing(
     val price: Double? = null,
     /** Where to buy this printing. Already in the database. */
     val tcgplayer: String? = null,
+    /** What to call the owner. */
+    val ownerName: String = "",
 )
 
 data class DeckUse(
-    val slug: String,
+    val key: String,
     val name: String,
     val owner: String,
     val qty: Int,
     val role: String?,
     val isProxy: Boolean,
+    val ownerName: String = "",
 )
 
 /**
@@ -155,7 +158,7 @@ data class Ruling(val date: String, val text: String) {
  * two different addresses. The card is the card; who owns how many is
  * something it says, not something it is.
  */
-data class Holding(val owner: String, val owned: Int, val committed: Int) {
+data class Holding(val owner: String, val owned: Int, val committed: Int, val ownerName: String = owner) {
     /** Copies no deck of theirs has claimed. Never negative. */
     val free: Int get() = (owned - committed).coerceAtLeast(0)
 
@@ -279,13 +282,17 @@ data class CardDetail(
             val owners = (printings.map { it.owner } + usedIn.map { it.owner })
                 .filter { it.isNotBlank() }
                 .distinct()
+            val names = (printings.map { it.owner to it.ownerName } + usedIn.map { it.owner to it.ownerName })
+                .filter { it.second.isNotBlank() }
+                .toMap()
             return owners.map { who ->
                 Holding(
                     owner = who,
+                    ownerName = names[who] ?: who,
                     owned = printings.filter { it.owner == who }.sumOf { it.qty },
                     committed = usedIn.filter { it.owner == who && !it.isProxy }.sumOf { it.qty },
                 )
-            }.sortedWith(compareByDescending<Holding> { it.owned }.thenBy { it.owner })
+            }.sortedWith(compareByDescending<Holding> { it.owned }.thenBy { it.ownerName })
         }
 
     /**
@@ -414,13 +421,15 @@ object CardQueries {
      * is in, and it carries the shop link.
      */
     fun printings(nameNorm: String) = Sql(
-        """SELECT c.id, c.name, c.face2, c.owner, c.setcode, c.set_name, c.collector_number,
+        """SELECT c.id, c.name, c.face2, ${Owners.keyOf("c.owner_id")} AS owner,
+                  ${Owners.nameOf("c.owner_id")} AS owner_name,
+                  c.setcode, c.set_name, c.collector_number,
                   c.finish, c.qty, c.scryfall_id,
                   cp.price, cp.tcg_url
              FROM cards c
              LEFT JOIN card_prices cp ON cp.card_id = c.id
             WHERE c.name_norm = ?
-            ORDER BY c.owner, c.released_at DESC, c.setcode, c.collector_number""",
+            ORDER BY c.owner_id, c.released_at DESC, c.setcode, c.collector_number""",
         listOf(nameNorm),
     )
 
@@ -487,11 +496,12 @@ object CardQueries {
 
     /** Every deck that wants it, whoever built it. */
     fun usedIn(nameNorm: String) = Sql(
-        """SELECT d.slug, d.name, d.owner, d.is_proxy, dc.qty, dc.role
+        """SELECT d.key, d.name, ${Owners.keyOf("d.owner_id")} AS owner,
+                  ${Owners.nameOf("d.owner_id")} AS owner_name, d.is_proxy, dc.qty, dc.role
              FROM deck_cards dc
              JOIN decks d ON d.id = dc.deck_id
             WHERE dc.name_norm = ?
-            ORDER BY d.owner, d.name""",
+            ORDER BY d.owner_id, d.name""",
         listOf(nameNorm),
     )
 
@@ -523,6 +533,7 @@ object CardQueries {
                 qty = row.at(at, "qty")?.toIntOrNull() ?: 0,
                 scryfallId = row.at(at, "scryfall_id"),
                 owner = row.at(at, "owner").orEmpty(),
+                ownerName = row.at(at, "owner_name").orEmpty(),
                 price = row.at(at, "price")?.toDoubleOrNull(),
                 tcgplayer = row.at(at, "tcg_url"),
             )
@@ -533,9 +544,10 @@ object CardQueries {
         val at = cols.withIndex().associate { (i, n) -> n to i }
         return rows.map {
             DeckUse(
-                slug = it.at(at, "slug").orEmpty(),
+                key = it.at(at, "key").orEmpty(),
                 name = it.at(at, "name").orEmpty(),
                 owner = it.at(at, "owner").orEmpty(),
+                ownerName = it.at(at, "owner_name").orEmpty(),
                 qty = it.at(at, "qty")?.toIntOrNull() ?: 0,
                 role = it.at(at, "role"),
                 // SQLite has no booleans; 1 and 0 arrive as numbers.

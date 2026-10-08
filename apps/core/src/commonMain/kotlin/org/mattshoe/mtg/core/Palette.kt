@@ -112,12 +112,13 @@ object PaletteQueries {
         // characters somebody typed rather than LIKE's own wildcards.
         val like = Clauses().like(term.trim())
         return Sql(
-            """SELECT MIN(id) AS id, name, scryfall_id, type_line, SUM(qty) AS qty, owner
+            """SELECT MIN(id) AS id, name, scryfall_id, type_line, SUM(qty) AS qty,
+                      ${Owners.nameOf("owner_id")} AS owner
                  FROM cards
                 WHERE name_norm LIKE ? ESCAPE '\'
                    OR lower(face1) LIKE ? ESCAPE '\'
                    OR lower(face2) LIKE ? ESCAPE '\'
-                GROUP BY owner, name_norm
+                GROUP BY owner_id, name_norm
                 ORDER BY length(name), name
                 LIMIT ${PaletteState.LIMIT}""",
             listOf(like, like, like),

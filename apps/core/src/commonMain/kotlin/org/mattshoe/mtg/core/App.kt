@@ -31,13 +31,13 @@ data class AppState(
     /** Where the card carousel is over an open deck. See [peekAt]. */
     val peek: Peek = Peek(),
     /**
-     * Whose collection is on screen, as an **owner slug**.
+     * Whose collection is on screen, as the owner's public key, once
+     * `GET /c/:key` has said that key belongs to somebody.
      *
-     * Not the key. `Route.collection` is the key, which is what an
-     * address carries and what somebody pastes into a chat; this is
-     * what `cards.owner` holds, and the two are joined by a lookup —
-     * `GET /c/:key`. Keeping them apart is what stops an address
-     * from ever being mistaken for permission.
+     * `Route.collection` is what the address says; this is the same
+     * key after the server confirmed it. Neither is permission: the
+     * account behind it is an id the app never holds, and a write is
+     * decided by the session alone.
      *
      * Empty means nobody named a collection — see [viewing].
      */
@@ -145,8 +145,8 @@ data class AppState(
      */
     val deckRun: List<DeckCard>
         get() {
-            val slug = from?.takeIf { it.view == View.DECKS }?.rest ?: return emptyList()
-            if (slug.isEmpty() || slug != decks.openSlug) return emptyList()
+            val key = from?.takeIf { it.view == View.DECKS }?.rest ?: return emptyList()
+            if (key.isEmpty() || key != decks.openKey) return emptyList()
             return decks.pageOrder
         }
 
@@ -172,7 +172,7 @@ data class AppState(
      * are.
      */
     val viewing: String
-        get() = resolvedCollection.ifEmpty { admin.account?.slug.orEmpty() }
+        get() = resolvedCollection.ifEmpty { admin.account?.key.orEmpty() }
 
     /**
      * Where to send somebody who arrived without naming a collection.
@@ -201,7 +201,7 @@ data class AppState(
         else people.rows.firstOrNull { it.key == route.rest }
 
     /** Look at somebody's collection. Theirs or anybody's. */
-    fun browsing(slug: String): AppState = copy(resolvedCollection = slug)
+    fun browsing(key: String): AppState = copy(resolvedCollection = key)
 
     /**
      * Whether it is yet known whose collection this is.
@@ -213,7 +213,7 @@ data class AppState(
      *
      * The answer was not that the app asked the wrong question, it is
      * that it asked before there was an answer. An unanswered
-     * `/auth/me` and "nobody is signed in" are the same empty slug,
+     * `/auth/me` and "nobody is signed in" are the same empty owner,
      * every scoped query read an empty owner as "no WHERE clause",
      * and so the first load of the decks page was every deck in the
      * database — Kayla's included. On a slow answer that unscoped
@@ -516,7 +516,7 @@ data class AppState(
         // opened from it know where it came from — so closing it has
         // to put the address back too, or the screen says list and
         // the address still says deck.
-        decks.openSlug != null -> navigate(Route(View.DECKS))
+        decks.openKey != null -> navigate(Route(View.DECKS))
         // Inside the entry wizard, Back is a step and not an exit.
         // It had never heard of the wizard, so the gesture went
         // straight from step four to the Library and whatever was
@@ -659,7 +659,7 @@ object Load {
     /** The decks of one collection. */
     fun decks(owner: String): Sql = DeckQueries.all(owner)
 
-    fun deck(slug: String): Sql = DeckQueries.cards(slug)
+    fun deck(key: String): Sql = DeckQueries.cards(key)
 
     fun stats(scope: StatsScope): Sql = StatsQueries.totals(scope)
 
