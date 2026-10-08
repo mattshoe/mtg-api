@@ -54,7 +54,7 @@ jobs:
       - name: Core and network, JVM and JS
         working-directory: apps
         run: >-
-          ./gradlew --no-daemon
+          ./gradlew
           :core:jvmTest :core:jsNodeTest
           :core-net:jvmTest :core-net:jsNodeTest
 
@@ -63,7 +63,7 @@ jobs:
       # results Kover reads.
       - name: Line coverage floor
         working-directory: apps
-        run: ./gradlew --no-daemon :core:koverVerify
+        run: ./gradlew :core:koverVerify
 
       # A suite that shrinks is worse than one that fails, because it
       # goes green. `test/suite-floors.json` is the committed number
@@ -105,11 +105,11 @@ jobs:
 
       - name: Browser tests
         working-directory: apps
-        run: ./gradlew --no-daemon :webApp:jsBrowserTest
+        run: ./gradlew :webApp:jsBrowserTest
 
       - name: It still builds
         working-directory: apps
-        run: ./gradlew --no-daemon :webApp:jsBrowserDistribution
+        run: ./gradlew :webApp:jsBrowserDistribution
 
       - name: The suite did not shrink
         run: >-
@@ -122,10 +122,14 @@ jobs:
           name: web-test-results
           path: apps/webApp/build/test-results/**/*.xml
 
-  # The app, on an actual Android. Slow, so it runs last and on its own.
-  android:
+  # The app's screens, on the JVM. They are one source run two ways, and
+  # this way takes minutes against the emulator's ten — so a broken
+  # screen fails here first. It used to run in the same job as the
+  # emulator, in front of it, which put the two end to end: eighteen
+  # minutes for a pull request. Now they run side by side.
+  screens:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
     steps:
       # Full history, so `check-suite-floor.mjs` can compare the
       # committed floors against main's. On a shallow checkout
@@ -147,18 +151,11 @@ jobs:
 
       - name: It compiles
         working-directory: apps
-        run: ./gradlew --no-daemon :androidApp:assembleDebug :app:assembleDebug
+        run: ./gradlew :androidApp:assembleDebug :app:assembleDebug
 
-      # The same 339 screen tests, on the JVM, before an emulator is
-      # even started. They are one source run two ways, and this way
-      # takes about ninety seconds against the emulator's fourteen
-      # minutes — so a broken screen fails the build long before the
-      # device job has finished booting. The device run below still
-      # happens, for the 26 that need real pixels and for the
-      # screenshots.
       - name: Screens, on the JVM
         working-directory: apps
-        run: ./gradlew --no-daemon :androidApp:testDebugUnitTest
+        run: ./gradlew :androidApp:testDebugUnitTest
 
       # A suite that quietly shrinks is worse than one that fails.
       # Kotlin's incremental compiler has already dropped three whole
@@ -180,6 +177,40 @@ jobs:
           name: screens-test-results
           path: apps/androidApp/build/test-results/testDebugUnitTest/*.xml
 
+  # The app, on an actual Android, split across three emulators.
+  #
+  # One emulator spent 6:34 running 469 tests, and before that it
+  # downloaded a system image and cold-booted. Now each shard runs a
+  # third of them — `numShards` and `shardIndex` are AndroidJUnitRunner's
+  # own, so the split is by test and the runner decides it — and the
+  # system image and a booted snapshot come out of a cache that
+  # `emulator-cache.yml` fills from main.
+  #
+  # A shard on its own cannot be held to the device floor; `android`
+  # below adds them back up.
+  device:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      # One shard failing must not cancel the others: each one is a
+      # third of what `android` counts.
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Built before the emulator starts, so a compile error fails in a
+      # minute rather than after a boot.
+      - name: The app and its tests, built
+        working-directory: apps
+        run: ./gradlew :androidApp:assembleDebug :androidApp:assembleDebugAndroidTest
+
       # KVM, so the emulator is not software-rendered and the job
       # finishes this century.
       - name: Enable KVM
@@ -189,41 +220,80 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
+      # Restore only. A pull request's cache is visible to that pull
+      # request alone, so saving here would help nobody else;
+      # `emulator-cache.yml` saves from main, where every branch can
+      # read it. A miss is a cold boot, which is slower and no less
+      # correct.
+      - name: Emulator, from the cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+            /usr/local/lib/android/sdk/system-images/android-34/google_apis/x86_64
+          key: avd-34-google_apis-x86_64-v1
+
       - name: Instrumentation tests
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
           target: google_apis
           arch: x86_64
+          force-avd-creation: false
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           working-directory: apps
           # :app's LiveApiTest needs a token it is not given here, so
           # it skips itself. Nothing in CI touches the real database.
-          script: ./gradlew --no-daemon :androidApp:connectedDebugAndroidTest
-
-      - name: Every test that exists actually ran on the device too
-        if: always()
-        run: >-
-          node scripts/check-test-count.mjs
-          apps/androidApp/src/sharedTest
-          apps/androidApp/build/outputs/androidTest-results
-
-      - name: The device suite did not shrink
-        if: always()
-        run: >-
-          node scripts/check-suite-floor.mjs
-          device=apps/androidApp/build/outputs/androidTest-results
+          script: >-
+            ./gradlew :androidApp:connectedDebugAndroidTest
+            -Pandroid.testInstrumentationRunnerArguments.numShards=${{ strategy.job-total }}
+            -Pandroid.testInstrumentationRunnerArguments.shardIndex=${{ strategy.job-index }}
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: android-test-results
+          name: android-test-results-shard-${{ matrix.shard }}
           path: apps/androidApp/build/outputs/androidTest-results/**/*.xml
 
-  # One number, so a pull request says how much was actually run.
+  # Both shards, added back up. Each is checked as part of the whole:
+  # a shard that ran nothing would otherwise go green on its own.
+  android:
+    runs-on: ubuntu-latest
+    needs: [device]
+    steps:
+      # Full history, so `check-suite-floor.mjs` can compare the
+      # committed floors against main's. On a shallow checkout
+      # `git show origin/main:test/suite-floors.json` fails, the guard
+      # catches it and sets the reference to undefined, and a floor
+      # lowered by a merge resolution passes silently — in the only place
+      # that conflict ever lands.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: android-test-results-shard-*
+          path: device-results
+
+      - name: Every test that exists actually ran on the device too
+        run: >-
+          node scripts/check-test-count.mjs
+          apps/androidApp/src/sharedTest
+          device-results
+
+      - name: The device suite did not shrink
+        run: >-
+          node scripts/check-suite-floor.mjs
+          device=device-results
+
   tally:
     runs-on: ubuntu-latest
-    needs: [shared, web, android]
+    needs: [shared, web, screens, android]
     if: always()
     steps:
       # Full history, so `check-suite-floor.mjs` can compare the
@@ -238,7 +308,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: results
-      # Reports, does not judge — `shared`, `web` and `android` above
+      # Reports, does not judge — `shared`, `web`, `screens` and `android`
       # already fail on a red test, and a second X for the same cause
       # is noise.
       - name: Count them
