@@ -50,6 +50,7 @@ import org.mattshoe.mtg.core.RenameState
 import org.mattshoe.mtg.core.Route
 import org.mattshoe.mtg.core.Rows
 import org.mattshoe.mtg.core.Scryfall
+import org.mattshoe.mtg.core.GitHubReleases
 import org.mattshoe.mtg.core.Share
 import org.mattshoe.mtg.core.ShareWhat
 import org.mattshoe.mtg.core.StatsQueries
@@ -91,10 +92,12 @@ object MtgApp {
      */
     private var api = MtgApi()
     private var scryfall = Scryfall()
+    private var github = GitHubReleases()
 
-    internal fun useForTesting(api: MtgApi, scryfall: Scryfall) {
+    internal fun useForTesting(api: MtgApi, scryfall: Scryfall, github: GitHubReleases = GitHubReleases()) {
         this.api = api
         this.scryfall = scryfall
+        this.github = github
     }
 
     private val scope = CoroutineScope(Dispatchers.Main)
@@ -582,6 +585,7 @@ object MtgApp {
             View.ADMIN -> {
                 app = app.fetching(View.ADMIN)
                 intoPage(View.ADMIN) { loadPeople() }
+                loadReleases()
             }
 
             // A card reached by its own address — a link somebody
@@ -734,6 +738,27 @@ object MtgApp {
         app.copy(people = app.people.loaded(api.people(token())))
     } catch (ex: ApiFailure) {
         app.copy(people = app.people.failed(ex.message ?: "that did not work"))
+    }
+
+    /**
+     * The builds that shipped, for the release notes on Admin Settings.
+     *
+     * Beside the people rather than after them: one is GitHub and the
+     * other is the Worker, and neither should wait on the other. Once
+     * per visit to the list; a person's page reuses what is there.
+     */
+    private fun loadReleases() {
+        if (app.releases.busy || app.releases.rows.isNotEmpty()) return
+        app = app.copy(releases = app.releases.loading())
+        scope.launch {
+            app = try {
+                app.copy(releases = app.releases.loaded(github.releases()))
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                app.copy(releases = app.releases.failed(e.message ?: "that did not work"))
+            }
+        }
     }
 
     private suspend fun loadStats(s: AppState): AppState {

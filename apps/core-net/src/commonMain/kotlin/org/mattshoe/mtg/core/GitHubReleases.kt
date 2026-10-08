@@ -31,8 +31,11 @@ class GitHubReleases internal constructor(private val http: HttpClient) {
         "GitHub did not answer with a list of releases"
     }
 
-    private companion object {
-        const val URL = "https://api.github.com/repos/mattshoe/mtg-api/releases?per_page=50"
-        const val USER_AGENT = "mtg-collection (mattshoe/mtg-api)"
+    companion object {
+        /** Over a caller-supplied engine, for the shells' own tests. */
+        fun withEngine(http: HttpClient): GitHubReleases = GitHubReleases(http)
+
+        private const val URL = "https://api.github.com/repos/mattshoe/mtg-api/releases?per_page=50"
+        private const val USER_AGENT = "mtg-collection (mattshoe/mtg-api)"
     }
 }
