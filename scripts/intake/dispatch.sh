@@ -39,16 +39,34 @@ trap 'rm -rf "$STATE/lock"' EXIT
 
 git -C "$REPO" fetch -q origin main 2>>"$LOG" || say "could not fetch; base may be stale"
 
-file="$(cd "$REPO" && node scripts/intake.mjs buildable | head -1)" || { say "intake.mjs failed"; exit 1; }
-[ -n "$file" ] || exit 0
+cd "$REPO" && node scripts/intake.mjs buildable > "$STATE/queue.$$" || { say "intake.mjs failed"; rm -f "$STATE/queue.$$"; exit 1; }
+[ -s "$STATE/queue.$$" ] || { rm -f "$STATE/queue.$$"; exit 0; }
+
+# The first request that has no worktree yet. Not simply the first: a worktree
+# is never touched once it exists, so one left behind by a stopped agent would
+# otherwise sit at the head of the queue and block everything behind it, on
+# every dispatch, forever.
+#
+# `while IFS= read -r`, never `for f in $all` — a request filename with a space
+# in it word-splits into several bogus requests, and there is a test for that.
+# Driven from a file rather than a pipe so `break` and `file` belong to this
+# shell.
+file=''
+while IFS= read -r f; do
+  [ -n "$f" ] || continue
+  wt="$STATE/wt/${f%.md}"
+  if [ ! -e "$wt" ]; then file="$f"; break; fi
+  # It is still there, so something stopped mid-build. Say what it holds: the
+  # only way past it is a human deleting it, and that needs a number in front
+  # of it. I deleted one of these without looking and lost 31 files.
+  say "skipping ${f%.md}: $wt is still there ($(git -C "$wt" status --porcelain 2>/dev/null | wc -l | tr -d ' ') uncommitted, $(git -C "$wt" rev-list --count "$BASE"..HEAD 2>/dev/null || echo 0) commits) — delete it to retry"
+done < "$STATE/queue.$$"
+rm -f "$STATE/queue.$$"
+[ -n "$file" ] || { say "everything buildable already has a worktree"; exit 0; }
 
 name="${file%.md}"
 branch="$(cd "$REPO" && node scripts/intake.mjs branch "$file")" || { say "intake.mjs failed"; exit 1; }
 tree="$STATE/wt/$name"
-
-# Never touch a worktree that is already there: it may hold work that was
-# never committed, and nothing here is going to be the thing that deletes it.
-[ -e "$tree" ] && { say "$name already has $tree — look at it, then remove it to retry"; exit 0; }
 
 git -C "$REPO" worktree add -q -b "$branch" "$tree" "$BASE" 2>>"$LOG" \
   || { say "$name could not get a worktree on $branch"; exit 0; }
