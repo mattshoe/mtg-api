@@ -464,7 +464,7 @@ class TheRestOfTheClaimsTest {
     @Test
     fun theDrawerAsksForLegalitiesAndRulings() {
         val queries = Load.card("sol ring")
-        assertEquals(5, queries.size, "face, printings, decks, legalities, rulings")
+        assertEquals(6, queries.size, "face, printings, decks, legalities, rulings, facts")
         assertTrue(queries[3].sql.contains("FROM legalities"), queries[3].sql)
         assertTrue(queries[4].sql.contains("FROM rulings"), queries[4].sql)
         // Both key on the oracle id, which is what a ruling belongs
