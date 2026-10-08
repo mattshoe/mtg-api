@@ -87,6 +87,10 @@ platforms: web, android, worker
 merge: auto
 ---
 
+<!-- `status:` must be exactly `ready` or exactly `needs-matt`. Anything
+     else — `blocked`, `done`, a capital letter, a trailing comment — is
+     HELD and never built. There is no third value and no implicit one. -->
+
 # <the title, as a person would say it>
 
 <Matt's words, kept verbatim. Never paraphrase what he asked for —
@@ -112,10 +116,30 @@ apps/webApp/src/jsTest/ and apps/androidApp/src/sharedTest/ — because a
 Azorius, on the website and in the app" — not "implemented".>
 ```
 
-Leave `merge: auto`, which is the default: green CI is the gate and the
-builder merges its own work. Set `merge: ask` only for something
-genuinely risky — a schema change, anything touching auth or who can edit
-whose collection — and say in the file why.
+Leave `merge: auto`. That is the default and it is almost always right:
+green CI is the gate and the dispatcher merges on green.
+
+`merge: ask` is for **three things and nothing else**:
+
+- a schema change
+- auth, roles, or who can edit whose collection
+- data ownership — anything that could attribute a card to the wrong
+  account
+
+Nothing else qualifies. Not "this one is large", not "this touches a lot
+of files", not "I am not sure about the design". Four of five live
+requests said `merge: ask` and the outcome of `merge: ask` is a green pull
+request and a notification sitting there until Matt has time — so setting
+it on anything that does not genuinely need him is the same as not
+building the request. If you set it, say in the file which of the three it
+is.
+
+The builder no longer merges anything, either way. It stops at an open
+pull request; the dispatcher waits on CI, verifies every check and decides
+from this field. So this field is the whole decision, and it is parsed by
+`scripts/intake.mjs` rather than read by a model — anything it does not
+recognise is treated as `ask`, which means a typo here holds the request
+rather than merging it.
 
 ## Sizing
 

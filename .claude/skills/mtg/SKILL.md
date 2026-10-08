@@ -171,13 +171,26 @@ asked:
 Every check green means:
 
 ```
-gh pr merge <n> --squash --delete-branch
+gh pr merge <n> --squash
 ```
 
 Green means **all** of them — `shared`, `web`, `android` (the emulator,
 about fifteen minutes), `tally`, and both worker `test` jobs. Never with
 a check pending or skipped. Never `--admin`. Never force anything past a
 failure: a red check is a thing to fix, not a thing to get around.
+`--admin` and a push to `main` are both refused by the PreToolUse hook in
+`.claude/settings.json`, so trying produces a blocked tool call.
+
+Not `--delete-branch`, though. It makes `gh` check out the base branch in
+the worktree you are standing in, and the stale tree that leaves behind
+made a fully merged request read as unfinished. Leave the branch.
+
+**If you are a request-builder, none of this is yours.** You stop at an
+open pull request and `scripts/intake/dispatch.sh` does the waiting, the
+check verification and the merge. The `apps` job is 13-17 minutes and
+three of four builders ended their turn rather than sit through it, which
+in a headless run means never coming back. Read
+`.claude/agents/request-builder.md`.
 
 Merging deploys — `pages.yml` publishes the website and `release.yml`
 cuts a signed APK. So merging is not the end either. Watch the deploy
@@ -200,11 +213,34 @@ The cycle, in this order, every time:
 
 1. **Write the test.** It describes the behaviour you are about to add,
    or the bug you are about to fix, in the words a person would use.
-2. **Run it. Watch it fail.** Not "it should fail" — run it, read the
-   failure, and check the message names the actual cause.
+2. **Run YOUR test. Watch it fail.** Not "it should fail" — run it, read
+   the failure, and check the message names the actual cause.
 3. **Write the smallest production change that makes it pass.**
-4. **Run the whole suite**, not just your test.
+4. **Run YOUR test again and watch it pass.**
 5. **Record the red in the commit message**, with the real failure text.
+
+**The cycle is narrow. Keep it narrow.** One test, or at most the one file
+it lives in:
+
+```
+npx vitest run test/decks.test.js -t 'the name a deck is renamed to'
+./apps/gradlew -p apps :core:jvmTest --tests 'DeckStatsTest'
+npm run test:screen -- 'LibraryGridTest'
+```
+
+Seconds, not minutes. Step 4 used to read "run the whole suite, not just
+your test", and that line cost real hours: four suites is about seven
+minutes, a cycle needs a red run and a green run, and a five-part change
+then spends over an hour waiting before anybody thinks about anything.
+Running thousands of other people's tests after every edit is not
+thoroughness — it tells you nothing about the line you just changed, and
+it is the single most expensive habit an agent can pick up here.
+
+**Then once, when the work is finished and before the pull request, run
+the full set.** That is where a whole-suite run belongs, and everything
+below about reading the BUILD line and not letting a floor drop applies
+to it. CI runs all of it on the pull request as well, which is what CI is
+for.
 
 #### Why step 2 is the whole discipline
 
@@ -393,9 +429,10 @@ Merging to `main` deploys:
 
 **Merge on green.** Matt: "WHAT THE FUCK ARE YOU ASKING MY PERMISSION
 FOR?!?! THAT'S WHAT FUCKING CI IS FOR!!!!" Every check green means
-`gh pr merge <n> --squash --delete-branch`, not a question. Then watch
-the deploy and check the artifact below — a green deploy workflow is not
-proof the change is live.
+`gh pr merge <n> --squash`, not a question. Then watch the deploy and
+check the artifact below — a green deploy workflow is not proof the change
+is live. (A request-builder does not do this at all: it stops at an open
+pull request and the dispatcher merges. See above.)
 
 ### Verifying a deploy for real
 
