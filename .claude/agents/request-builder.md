@@ -204,7 +204,9 @@ which suite, which part — is the difference between "working" and
    to trust.
 5. Write `release-notes/<name>.md`: a line or a few, by hand, saying
    what shipped in words Matt would use. It becomes the release's body
-   and Admin Settings lists it. See `release-notes/README.md`.
+   and Admin Settings lists it. Its `bump:` frontmatter sets the
+   version: `minor` for something new, `major` for something taken
+   away, nothing for a patch. See `release-notes/README.md`.
 6. Walk the parity check from the skill. If the diff is one-sided and
    you cannot justify it in the PR body, you are not finished.
 7. Move `requests/<name>.md` into `requests/done/` in a commit of its
