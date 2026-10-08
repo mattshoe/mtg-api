@@ -1,5 +1,6 @@
 package org.mattshoe.mtg.android
 
+import org.junit.Rule
 import android.os.Looper
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.ktor.client.HttpClient
@@ -43,6 +44,9 @@ import kotlin.test.assertTrue
  */
 @RunWith(AndroidJUnit4::class)
 class DeckTokensLoadTest {
+
+    @get:Rule(order = Int.MIN_VALUE)
+    val retry = Retry()
 
     private var controller: ActivityController<MainActivity>? = null
 

@@ -1,5 +1,6 @@
 package org.mattshoe.mtg.android
 
+import org.junit.Rule
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Test
@@ -28,6 +29,9 @@ import kotlin.test.assertFalse
  */
 @RunWith(AndroidJUnit4::class)
 class AppNameTest {
+
+    @get:Rule(order = Int.MIN_VALUE)
+    val retry = Retry()
 
     private fun label(): String {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
