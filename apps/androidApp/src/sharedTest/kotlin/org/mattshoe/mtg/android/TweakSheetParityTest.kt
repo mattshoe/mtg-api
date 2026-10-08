@@ -98,7 +98,7 @@ class TweakSheetParityTest {
     private fun sheet(start: DeckTweak) {
         live.value = AppState(
             route = Route(View.DECKS, "alela"),
-            admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"),
+            admin = Admin().signIn(Account(key = "matt", role = "admin"), "t"),
             decks = DecksState().loaded(listOf(deck)).opened(
                 "alela",
                 listOf(card("Sol Ring", 1)),

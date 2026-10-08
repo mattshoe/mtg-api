@@ -74,7 +74,7 @@ class BottomNavParityTest {
         rule.waitForIdle()
     }
 
-    private fun unlocked() = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"))
+    private fun unlocked() = AppState(admin = Admin().signIn(Account(key = "matt", role = "admin"), "t"))
 
     private fun tabs() =
         rule.onAllNodes(hasTestTag("nav-item"), useUnmergedTree = true).fetchSemanticsNodes()
@@ -395,7 +395,7 @@ class BottomNavParityTest {
 
     @Test
     fun theProfileSaysWhoYouAreAndWhereYourCardsLive() {
-        val me = Account(slug = "matt", name = "Matt", key = "e7de0cb1")
+        val me = Account(key = "e7de0cb1", name = "Matt")
         shell(AppState(admin = Admin().signIn(me, session = "s")))
         rule.onNodeWithContentDescription("Profile").performClick()
         rule.waitForIdle()

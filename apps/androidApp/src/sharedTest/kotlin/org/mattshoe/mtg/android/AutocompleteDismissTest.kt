@@ -75,7 +75,7 @@ class AutocompleteDismissTest {
         .typed("sol")
         .suggested(names.toList())
 
-    private fun onADeck() = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"))
+    private fun onADeck() = AppState(admin = Admin().signIn(Account(key = "matt", role = "admin"), "t"))
         .navigate(Route(View.DECKS, "alela"))
         .let { it.copy(decks = it.decks.loaded(listOf(deck())).opened("alela", emptyList())) }
 
@@ -267,7 +267,7 @@ class AutocompleteDismissTest {
         assertFalse(read().complete.open, "Back left the suggestions on screen")
         assertEquals(
             "alela",
-            read().decks.openSlug,
+            read().decks.openKey,
             "Back closed the open deck underneath instead of the list over it",
         )
         assertEquals(View.DECKS, read().view, "Back navigated instead of closing the list")
@@ -283,7 +283,7 @@ class AutocompleteDismissTest {
 
         pressBack()
 
-        assertNull(read().decks.openSlug, "Back no longer comes out of an open deck")
+        assertNull(read().decks.openKey, "Back no longer comes out of an open deck")
         assertEquals("", read().route.rest, "coming out of the deck left its slug in the address")
     }
 

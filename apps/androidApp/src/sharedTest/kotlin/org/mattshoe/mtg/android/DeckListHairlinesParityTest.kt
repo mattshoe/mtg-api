@@ -39,7 +39,7 @@ class DeckListHairlinesParityTest {
     @get:Rule
     val rule = createComposeRule()
 
-    private fun deck(slug: String, owner: String, name: String = slug) =
+    private fun deck(key: String, owner: String, name: String = key) =
         Deck(slug, name, owner, "Alela, Artful Provocateur (ELD) 324", "UW", 3, null)
 
     /** One collection's shelf: the only kind the page shows now. */

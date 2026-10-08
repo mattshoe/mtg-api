@@ -58,7 +58,7 @@ class DecksParityTest {
     // ------------------------------------------------------- the fixtures
 
     /** The web suite's deck, down to the set annotation on the commander. */
-    private fun deck(slug: String, owner: String, name: String = slug) =
+    private fun deck(key: String, owner: String, name: String = key) =
         Deck(slug, name, owner, "Alela, Artful Provocateur (ELD) 324", "UW", 3, null)
 
     /** One collection's shelf: the only kind the page shows now. */
@@ -246,7 +246,7 @@ class DecksParityTest {
         var opened: Deck? = null
         content { DecksScreen(shelf(), { opened = it }, {}) }
         rule.onNodeWithText("Bello").performScrollTo().performClick()
-        rule.runOnIdle { assertEquals("a", opened?.slug) }
+        rule.runOnIdle { assertEquals("a", opened?.key) }
     }
 
     // ------------------------------------------------------ one deck, opened
@@ -401,7 +401,7 @@ class DecksParityTest {
         }
         rule.onNodeWithText("Edit list").assertExists()
         rule.onNodeWithText("Rename").performScrollTo().performClick()
-        rule.runOnIdle { assertEquals("a", renamed?.slug) }
+        rule.runOnIdle { assertEquals("a", renamed?.key) }
         assertNull(edited, "Rename pressed the edit button")
     }
 

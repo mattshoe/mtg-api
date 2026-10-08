@@ -52,7 +52,7 @@ class NewDeckWizardReachesTheShellTest {
     // the shell composes it in place of the entry wizard rather than
     // floating it over whatever tab you happened to be on.
     private fun opened(step: DeckStep) = AppState(
-        admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"),
+        admin = Admin().signIn(Account(key = "matt", role = "admin"), "t"),
         route = Route(View.ENTRY),
         newDeck = NewDeck(
             step = step,

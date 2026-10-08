@@ -56,10 +56,9 @@ class ProfileMenuTest {
     }
 
     private val me = Account(
-        slug = "matt",
+        key = "e7de0cb1",
         name = "Matt Shoemaker",
         avatar = "https://lh3.googleusercontent.com/a/portrait",
-        key = "e7de0cb1",
     )
 
     private fun mount(initial: AppState): HTMLElement {

@@ -86,7 +86,7 @@ class QueryPageGoneTest {
         all("button").mapNotNull { (it as? HTMLButtonElement)?.textContent?.trim() }
 
     private val locked = AppState()
-    private val unlocked = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"))
+    private val unlocked = AppState(admin = Admin().signIn(Account(key = "matt", role = "admin"), "t"))
 
     // --------------------------------------------- nothing offers it
 

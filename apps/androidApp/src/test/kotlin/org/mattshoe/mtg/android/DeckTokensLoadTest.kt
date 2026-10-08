@@ -67,7 +67,7 @@ class DeckTokensLoadTest {
     }
 
     private val deckRow = """
-        {"cols":["slug","name","owner","commander","colors","bracket","art_id"],
+        {"cols":["key","name","owner","commander","colors","bracket","art_id"],
          "rows":[["alela","Alela","matt",null,"UW",3,null]],"n":1}
     """.trimIndent()
 
@@ -151,7 +151,7 @@ class DeckTokensLoadTest {
     fun theFixtureActuallyOpensADeck() {
         // Asked first, so "no tokens" cannot mean "no deck".
         val s = openTheDeck().stateForTesting()
-        assertEquals("alela", s.decks.openSlug, "the deck never opened")
+        assertEquals("alela", s.decks.openKey, "the deck never opened")
         assertTrue(s.decks.cards.isNotEmpty(), "the deck opened with no cards")
         assertTrue(s.decks.scryfallIds.isNotEmpty(), "the cards carry no scryfall ids")
     }

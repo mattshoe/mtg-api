@@ -141,7 +141,7 @@ class MainActivityFacetsTest {
         ],"n":8}
     """.trimIndent()
 
-    private val decksBody = """{"cols":["slug","name","owner"],"rows":[["alela","Alela","matt"]],"n":1}"""
+    private val decksBody = """{"cols":["key","name","owner"],"rows":[["alela","Alela","matt"]],"n":1}"""
 
     private val emptyBody = """{"cols":[],"rows":[],"n":0}"""
 

@@ -76,12 +76,12 @@ class CardShareParityTest {
 
     /** A card open, reached from a deck, the way the app reaches one. */
     private fun fromTheDeck(): AppState = AppState(
-        admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"),
+        admin = Admin().signIn(Account(key = "matt", role = "admin"), "t"),
         decks = DecksState().loaded(listOf(deck())).opened("alela", listOf(deckCard("Sol Ring"))),
     ).openCard(CardRef("sol ring")).copy(card = detail())
 
     private fun fromTheLibrary(): AppState =
-        AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")).openCard(CardRef("sol ring")).copy(card = detail())
+        AppState(admin = Admin().signIn(Account(key = "matt", role = "admin"), "t")).openCard(CardRef("sol ring")).copy(card = detail())
 
     private fun shell(start: AppState) {
         rule.setContent {

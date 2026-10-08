@@ -81,7 +81,7 @@ class DialogErrorBoxParityTest {
 
     private fun onDeck() = AppState(
         route = Route(View.DECKS, "alela"),
-        admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"),
+        admin = Admin().signIn(Account(key = "matt", role = "admin"), "t"),
         decks = DecksState().loaded(listOf(deck())).opened("alela", listOf(card("Sol Ring"))),
     )
 
@@ -89,13 +89,13 @@ class DialogErrorBoxParityTest {
     private val said = "Deck not found"
 
     private fun renameFailed() = onDeck()
-        .copy(rename = RenameState(slug = "alela", was = "Alela", error = said))
+        .copy(rename = RenameState(key = "alela", was = "Alela", error = said))
         .opening(Overlay.RENAME)
 
     private fun disassembleFailed() = onDeck()
         .copy(
             disassemble = DisassembleState(
-                slug = "alela", deckName = "Alela", owner = "matt", error = said,
+                key = "alela", deckName = "Alela", owner = "matt", error = said,
             ),
         )
         .opening(Overlay.DISASSEMBLE)
@@ -103,7 +103,7 @@ class DialogErrorBoxParityTest {
     // On the Entry tab: the deck wizard is a page there now rather
     // than a dialog floating over whatever was behind it.
     private fun newDeckFailed() = AppState(
-        admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"),
+        admin = Admin().signIn(Account(key = "matt", role = "admin"), "t"),
         route = Route(View.ENTRY),
         newDeck = NewDeck(format = Format.COMMANDER, error = said),
     ).opening(Overlay.NEW_DECK)

@@ -143,8 +143,8 @@ class TapTargetsParityTest {
      */
     @Test
     fun soIsEveryTabInTheBottomBar() {
-        shell(AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")))
-        Admin().signIn(Account(slug = "matt", role = "admin"), "t").bar.forEach { view ->
+        shell(AppState(admin = Admin().signIn(Account(key = "matt", role = "admin"), "t")))
+        Admin().signIn(Account(key = "matt", role = "admin"), "t").bar.forEach { view ->
             assertBigEnough("the ${view.label} tab", rule.onNodeWithContentDescription(view.label))
         }
     }
@@ -157,8 +157,8 @@ class TapTargetsParityTest {
      */
     @Test
     fun noTwoNavControlsClaimTheSameTouchArea() {
-        shell(AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")))
-        val tabs = Admin().signIn(Account(slug = "matt", role = "admin"), "t").bar.map { it.label }
+        shell(AppState(admin = Admin().signIn(Account(key = "matt", role = "admin"), "t")))
+        val tabs = Admin().signIn(Account(key = "matt", role = "admin"), "t").bar.map { it.label }
         val boxes = barControls().map { (what, node) -> what to node.touch() } +
             tabs.map { it to rule.onNodeWithContentDescription(it).touch() }
         boxes.forEachIndexed { i, (a, ra) ->

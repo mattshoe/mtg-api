@@ -131,7 +131,7 @@ class SmallCosmeticsLayoutParityTest {
         shell(
             AppState(
                 route = Route(View.DECKS, "alela"),
-                admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"),
+                admin = Admin().signIn(Account(key = "matt", role = "admin"), "t"),
                 decks = DecksState().loaded(listOf(deck())).opened(
                     "alela",
                     listOf(spell("One", 1.0), spell("Two", 2.0), spell("Three", 3.0)),

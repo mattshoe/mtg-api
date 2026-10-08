@@ -67,7 +67,7 @@ class DeckHeroParityTest {
     /** Three cards at two copies each: six, which no other number here is. */
     private fun opened() = AppState(
         route = Route(View.DECKS, "alela"),
-        admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"),
+        admin = Admin().signIn(Account(key = "matt", role = "admin"), "t"),
         decks = DecksState().loaded(listOf(deck())).opened(
             "alela",
             listOf(

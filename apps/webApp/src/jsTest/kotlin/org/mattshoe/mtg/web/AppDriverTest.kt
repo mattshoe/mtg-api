@@ -53,10 +53,14 @@ class AppDriverTest {
     /** How many times the library asked the database for a page. */
     private var searches = 0
 
+    /** Every request body the app sent, in order, so a test can read what it asked. */
+    private val sent = mutableListOf<String>()
+
     @BeforeTest
     fun stubTheNetwork() {
         writes.clear()
         searches = 0
+        sent.clear()
         val engine = MockEngine { request ->
             if (request.method.value == "POST" && """"dry_run":false""" in
                 (request.body as? io.ktor.http.content.TextContent)?.text.orEmpty()
@@ -71,6 +75,7 @@ class AppDriverTest {
             // not the payload — which quietly gave every query the
             // same answer and made a deck list of one nameless deck.
             val body = (request.body as? io.ktor.http.content.TextContent)?.text.orEmpty()
+            sent += body
             if ("MIN(c.id) AS id" in body) searches++
             val json = when {
                 // The library page, answered according to what was
@@ -80,15 +85,15 @@ class AppDriverTest {
                 // stopped running passed a test suite.
                 "MIN(c.id) AS id" in body -> {
                     val cols = """"cols":["id","owner","name","name_norm","qty","printings"]"""
-                    val bolt = """[1,"matt","Lightning Bolt","lightning bolt",1,1]"""
-                    val ring = """[2,"matt","Sol Ring","sol ring",1,1]"""
+                    val bolt = """[1,"e7de0cb1","Lightning Bolt","lightning bolt",1,1]"""
+                    val ring = """[2,"e7de0cb1","Sol Ring","sol ring",1,1]"""
                     if ("%bolt%" in body) """{$cols,"rows":[$bolt],"n":1}"""
                     else """{$cols,"rows":[$ring,$bolt],"n":2}"""
                 }
 
                 body.contains("FROM decks d") && body.contains("art_id") ->
-                    """{"cols":["slug","name","owner","commander","colors","bracket","art_id"],""" +
-                        """"rows":[["alela","Fairy Deck","matt","Alela","UB",3,"abcdef12-3456"]],"n":1}"""
+                    """{"cols":["key","name","owner","owner_name","commander","colors","bracket","art_id"],""" +
+                        """"rows":[["alela","Fairy Deck","e7de0cb1","Matt","Alela","UB",3,"abcdef12-3456"]],"n":1}"""
 
                 body.contains("FROM deck_cards dc") ->
                     """{"cols":["name","name_norm","qty","role","owned","type_line","scryfall_id"],""" +
@@ -105,13 +110,13 @@ class AppDriverTest {
                     """{"checked":1,"unknown":0,"ok":true,"cards":[],"bad":[],"suggestions":{}}"""
 
                 request.url.encodedPath == "/decks/create" ->
-                    """{"created":true,"applied":true,"slug":"new-deck","card_count":100,"rows":100,""" +
-                        """"deck":{"slug":"new-deck","name":"New Deck","owner":"matt"},"added":[],"removed":[],""" +
+                    """{"created":true,"applied":true,"key":"q8ytka9m","card_count":100,"rows":100,""" +
+                        """"deck":{"key":"q8ytka9m","name":"New Deck"},"added":[],"removed":[],""" +
                         """"changed":[],"acquired":[],"returned":[],"errors":[]}"""
 
                 else ->
                     """{"cols":["id","owner","name","name_norm","qty","printings"],""" +
-                        """"rows":[[1,"matt","Sol Ring","sol ring",1,1]],"n":1}"""
+                        """"rows":[[1,"e7de0cb1","Sol Ring","sol ring",1,1]],"n":1}"""
             }
             respond(json, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
         }
@@ -138,7 +143,7 @@ class AppDriverTest {
             if ("$url".contains("/auth/me")) {
                 Promise.resolve(
                     Response(
-                        """{"slug":"matt","name":"Matt","role":"user","key":"e7de0cb1"}""",
+                        """{"key":"e7de0cb1","name":"Matt","role":"user"}""",
                         ResponseInit(status = 200, headers = js("({'Content-Type':'application/json'})")),
                     ),
                 )
@@ -576,6 +581,39 @@ class AppDriverTest {
         val text = palette()?.textContent.orEmpty()
         assertTrue("Creating" !in text, "the panel is still saying it is creating: $text")
         assertTrue("Created" in text, "the panel never said it was done: $text")
+        assertTrue(
+            "#/decks/q8ytka9m" in text,
+            "the new deck's address is not the key the server gave it: $text",
+        )
+    }
+
+    // ------------------------------------------- whose, by key and id
+
+    @Test
+    fun aDeckIsOpenedByItsKey() = runTest {
+        // Matt: "WE'RE GOING TO HAVE FUCKING COLLISIONS IN URLS ALL
+        // OVER THE FUCKING PLACE". The address is the deck's key, and
+        // the key is what the app asks the database for.
+        val view = mount("#/decks/alela")
+        settle()
+        waitFor("the deck") { view.textContent.orEmpty().contains("Sol Ring") }
+        val asked = sent.firstOrNull { "FROM deck_cards dc" in it } ?: error("the deck's cards were never asked for")
+        assertTrue("d.key = ?" in asked, "the deck was looked up by something other than its key: $asked")
+        assertTrue("\"alela\"" in asked, "the key in the address was not what was bound: $asked")
+    }
+
+    @Test
+    fun yourCollectionIsAskedForByYourKeyAndNeverAnId() = runTest {
+        val view = mount("#/search", token = "t")
+        settle()
+        waitFor("the grid") { view.all("div.card").isNotEmpty() }
+        waitFor("a scoped search") { sent.any { "MIN(c.id) AS id" in it && "e7de0cb1" in it } }
+        val page = sent.last { "MIN(c.id) AS id" in it && "e7de0cb1" in it }
+        assertTrue(
+            "c.owner_id = (SELECT id FROM users WHERE key = ?)" in page,
+            "the Library did not resolve the key to an owner in the database: $page",
+        )
+        assertTrue("c.owner = ?" !in page, "the retired owner column is still read: $page")
     }
 
     @Test

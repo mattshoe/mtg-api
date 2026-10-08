@@ -173,16 +173,16 @@ class DeckActionsReachTheShellTest {
     fun theRenameDialogIsDrawnWhenItsOverlayIsOpen() {
         val saved = mutableListOf<Unit>()
         val start = opened()
-            .copy(rename = RenameState(slug = "alela", was = "Alela"))
+            .copy(rename = RenameState(key = "alela", was = "Alela"))
             .opening(Overlay.RENAME)
         shell(start = start, onSaveRename = { saved += Unit })
 
         rule.onNodeWithText("Rename deck").assertExists()
-        // The address moves with the name, and the dialog says so
-        // before anything is written.
+        // The address does not move with the name, and the dialog
+        // says so before anything is written.
         rule.onNodeWithText("Deck name").performTextReplacement("Alela Reborn")
         rule.waitForIdle()
-        rule.onNodeWithText("It will live at #/decks/alela-reborn").assertExists()
+        rule.onNodeWithText("Only the name changes. The deck stays at #/decks/alela").assertExists()
 
         rule.onNodeWithTag("rename-save").performClick()
         rule.waitForIdle()
@@ -193,7 +193,7 @@ class DeckActionsReachTheShellTest {
     fun theRenameDialogWillNotSaveANameThatHasNotChanged() {
         val saved = mutableListOf<Unit>()
         val start = opened()
-            .copy(rename = RenameState(slug = "alela", was = "Alela"))
+            .copy(rename = RenameState(key = "alela", was = "Alela"))
             .opening(Overlay.RENAME)
         shell(start = start, onSaveRename = { saved += Unit })
 

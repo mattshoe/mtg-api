@@ -65,7 +65,7 @@ class FilterPanelFacetsTest {
         ],"n":8}
     """.trimIndent()
 
-    private val decksBody = """{"cols":["slug","name","owner"],"rows":[["alela","Alela","matt"]],"n":1}"""
+    private val decksBody = """{"cols":["key","name","owner"],"rows":[["alela","Alela","matt"]],"n":1}"""
 
     /**
      * The same facets, decoded the way the server's answer is decoded,
@@ -89,7 +89,7 @@ class FilterPanelFacetsTest {
         return org.mattshoe.mtg.core.FacetQueries.decodeEverything(
             listOf(listOf("kind", "value") to rows),
             org.mattshoe.mtg.core.FacetQueries.decodeDecks(
-                listOf("slug", "name", "owner"),
+                listOf("key", "name", "owner"),
                 decks,
             ),
         )

@@ -83,7 +83,7 @@ class SmallCosmeticsWordsParityTest {
     /** A deck, open, the way the app opens one. */
     private fun opened(cards: List<DeckCard> = listOf(card("Sol Ring"))) = AppState(
         route = Route(View.DECKS, "alela"),
-        admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"),
+        admin = Admin().signIn(Account(key = "matt", role = "admin"), "t"),
         decks = DecksState().loaded(listOf(deck())).opened("alela", cards),
     )
 
@@ -223,7 +223,7 @@ class SmallCosmeticsWordsParityTest {
             opened()
                 .copy(
                     deckEdit = DeckEditState(
-                        slug = "alela", deckName = "Alela", list = "1 Sol Ring",
+                        key = "alela", deckName = "Alela", list = "1 Sol Ring",
                     ),
                 )
                 .opening(Overlay.DECK_EDIT),
@@ -238,7 +238,7 @@ class SmallCosmeticsWordsParityTest {
             opened()
                 .copy(
                     deckEdit = DeckEditState(
-                        slug = "alela", deckName = "Alela", list = "1 Sol Ring\n1 Arcane Signet",
+                        key = "alela", deckName = "Alela", list = "1 Sol Ring\n1 Arcane Signet",
                     ),
                 )
                 .opening(Overlay.DECK_EDIT),

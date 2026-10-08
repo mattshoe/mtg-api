@@ -127,7 +127,7 @@ class ScreensTest {
 
     @Test
     fun unlockingBringsTheGatedTabsBack() = runTest {
-        val root = shell(AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")))
+        val root = shell(AppState(admin = Admin().signIn(Account(key = "matt", role = "admin"), "t")))
         settle()
         assertTrue(root.hasButton("Entry"))
         assertTrue(root.hasButton("Server Logs"))
@@ -294,7 +294,7 @@ class ScreensTest {
 
     @Test
     fun theAdminActionsAreHiddenWhileLocked() = runTest {
-        val decks = DecksState(decks = listOf(deck()), openSlug = "alela", cards = listOf(deckCard()))
+        val decks = DecksState(decks = listOf(deck()), openKey = "alela", cards = listOf(deckCard()))
         val root = mount { DecksPage(decks, {}, {}, admin = false) }
         settle()
         assertFalse(root.hasButton("Edit list"))
@@ -304,12 +304,12 @@ class ScreensTest {
     @Test
     fun theAdminActionsAppearWhenUnlocked() = runTest {
         var edited: Deck? = null
-        val decks = DecksState(decks = listOf(deck()), openSlug = "alela", cards = listOf(deckCard()))
+        val decks = DecksState(decks = listOf(deck()), openKey = "alela", cards = listOf(deckCard()))
         val root = mount { DecksPage(decks, {}, {}, admin = true, onEdit = { edited = it }) }
         settle()
         root.button("Edit list").click()
         settle()
-        assertEquals("alela", edited?.slug)
+        assertEquals("alela", edited?.key)
     }
 
     @Test
@@ -752,7 +752,7 @@ class NavTest {
         // that shit still in the hamburger menu!!!!!" — so the
         // division is which menu a thing is in, and the rule sits
         // under the name at the head of the profile.
-        val root = mount(AppState(admin = org.mattshoe.mtg.core.Admin().signIn(Account(slug = "matt", role = "admin"), "t")))
+        val root = mount(AppState(admin = org.mattshoe.mtg.core.Admin().signIn(Account(key = "matt", role = "admin"), "t")))
         settle()
         fun labels(css: String) = root.querySelectorAll(css).let { n ->
             (0 until n.length).mapNotNull { (n[it] as? org.w3c.dom.HTMLElement)?.textContent?.trim() }
