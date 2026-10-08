@@ -415,11 +415,16 @@ class LibraryDriverTest {
     }
 
     @Test
-    fun theScryfallTagBoxTakesAWordAndKeepsIt() = runTest {
+    fun theOracleTagBoxTakesAnAliasAndKeepsIt() = runTest {
+        // Matt: "I don't know what 'scryfall tags' are". Scryfall's own
+        // search calls them oracle tags, `otag:`, and `blink` is the one
+        // he typed.
         val app = mount()
         settle()
-        app.token("tags", "mana-rock, spot-removal…", "mana-rock")
-        assertEquals(listOf("mana-rock"), app.state.library.filters.tags)
+        app.token("tags", "blink, removal, mana-rock…", "blink")
+        assertTrue(app.text().contains("Oracle tags"), "the row is not called Oracle tags: ${app.text()}")
+        assertTrue(!app.text().contains("Scryfall tags"), "the row still says Scryfall tags")
+        assertEquals(listOf("blink"), app.state.library.filters.tags)
     }
 
     @Test

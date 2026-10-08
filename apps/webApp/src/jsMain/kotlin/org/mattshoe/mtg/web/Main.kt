@@ -586,6 +586,7 @@ object MtgApp {
                 app = app.fetching(View.ADMIN)
                 intoPage(View.ADMIN) { loadPeople() }
                 loadReleases()
+                if (s.route.rest.isEmpty()) loadTasks()
             }
 
             // A card reached by its own address — a link somebody
@@ -765,6 +766,28 @@ object MtgApp {
                 throw e
             } catch (e: Exception) {
                 app.copy(releases = app.releases.failed(e.message ?: "that did not work"))
+            }
+        }
+    }
+
+    /**
+     * The intake requests and where each one is, for Admin Settings.
+     *
+     * Every visit to the list, unlike the release notes: a task's
+     * status changes minute to minute. Opening one person is the same
+     * view and does not ask again. Sibling of Android's `loadTasks`.
+     */
+    private fun loadTasks() {
+        if (app.tasks.busy) return
+        app = app.copy(tasks = app.tasks.loading())
+        scope.launch {
+            app = try {
+                val found = github.tasks()
+                app.copy(tasks = app.tasks.loaded(found))
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                app.copy(tasks = app.tasks.failed(e.message ?: "that did not work"))
             }
         }
     }

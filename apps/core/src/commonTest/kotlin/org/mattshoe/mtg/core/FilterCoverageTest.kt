@@ -169,7 +169,7 @@ class FilterCoverageTest {
     @Test
     fun tagsMatchTheSlugExactly() {
         val f = Filters(tags = listOf("mana-rock"))
-        assertTrue(where(f).contains("ct.tag = ?"))
+        assertTrue(where(f).contains("ct.tag = q.w"))
         assertEquals(listOf("mana-rock"), params(f))
     }
 

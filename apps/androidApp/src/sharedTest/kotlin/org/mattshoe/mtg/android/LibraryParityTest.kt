@@ -499,6 +499,24 @@ class LibraryParityTest {
         assertEquals(listOf("mana-rock"), f().tags)
     }
 
+    @Test
+    fun theOracleTagBoxIsCalledWhatScryfallCallsItAndTakesAnAlias() {
+        // Matt: "I don't know what 'scryfall tags' are". Scryfall's own
+        // search calls them oracle tags, `otag:`, and `blink` is the one
+        // he typed.
+        panel()
+        fold(Facet.TAGS)
+        Parity.check(
+            Fact("the row is called Oracle tags") { said("Oracle tags") },
+            Fact("and no longer Scryfall tags") { !said("Scryfall tags") },
+            Fact("the hint offers an alias to type") { said("blink, removal, mana-rock…") },
+        )
+        type("token-tags", "blink")
+        rule.onNodeWithTag("token-tags").performImeAction()
+        rule.waitForIdle()
+        assertEquals(listOf("blink"), f().tags)
+    }
+
     // ------------------------------------------------- flags and legality
 
     @Test

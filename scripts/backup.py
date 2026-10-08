@@ -41,7 +41,7 @@ TABLES = [
     "cards", "card_faces", "card_colors", "card_types", "card_keywords",
     "card_finishes", "card_games", "card_promo_types", "card_frame_effects",
     "aliases", "decks", "deck_cards", "deck_notes",
-    "card_tags", "tags", "legalities", "rulings",
+    "card_tags", "tags", "tag_names", "legalities", "rulings",
     "prices", "maintenance_log", "logs",
 ]
 

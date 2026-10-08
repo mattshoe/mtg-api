@@ -43,7 +43,7 @@ mkdir -p "$BACKUPS"
 exec >> "$LOG" 2>&1
 echo "=== $(date '+%Y-%m-%d %H:%M:%S') ==="
 
-# backfill.py writes, so it needs the admin password. backup.py is
+# refresh_prices.py and tags.mjs write, so they need the admin password. backup.py is
 # read-only and does not.
 if [ -f "$HOME/.mtg-api.env" ]; then
   set -a; . "$HOME/.mtg-api.env"; set +a
@@ -55,23 +55,26 @@ OUT="$BACKUPS/mtg-$STAMP.sql.gz"
 # backup.py restores its own output into a temporary SQLite file and checks
 # the row counts before returning, so a non-zero exit means the dump is not
 # trustworthy and should not replace yesterday's.
+#
+# A failed backup does not stop the steps after it. It used to `exit 1`
+# here, and from 30 September every backup failed verification, so prices
+# went stale and no card added since was tagged. The failure is the exit
+# status at the end instead.
+backup_ok=1
 echo "-- backing up"
 if ! python3 "$REPO/scripts/backup.py" --api "$API" --out "$OUT"; then
   echo "FAIL: backup did not verify"
   rm -f "$OUT"
-  exit 1
-fi
-
-if [ ! -s "$OUT" ]; then
+  backup_ok=0
+elif [ ! -s "$OUT" ]; then
   echo "FAIL: backup produced an empty file"
   rm -f "$OUT"
-  exit 1
+  backup_ok=0
+else
+  echo "-- saved $(ls -lh "$OUT" | awk '{print $5}') to $OUT"
+  find "$BACKUPS" -name 'mtg-*.sql.gz' -mtime "+$KEEP_DAYS" -delete
+  echo "-- $(find "$BACKUPS" -name 'mtg-*.sql.gz' | wc -l | tr -d ' ') backups retained"
 fi
-
-echo "-- saved $(ls -lh "$OUT" | awk '{print $5}') to $OUT"
-
-find "$BACKUPS" -name 'mtg-*.sql.gz' -mtime "+$KEEP_DAYS" -delete
-echo "-- $(find "$BACKUPS" -name 'mtg-*.sql.gz' | wc -l | tr -d ' ') backups retained"
 
 # Prices come from the Scryfall bulk file prefetch_scryfall.py already
 # keeps on disk — no API calls, and the Worker cannot do it because
@@ -79,7 +82,10 @@ echo "-- $(find "$BACKUPS" -name 'mtg-*.sql.gz' | wc -l | tr -d ' ') backups ret
 echo "-- refreshing prices"
 python3 "$REPO/scripts/refresh_prices.py" --api "$API" || echo "WARN: price refresh failed"
 
-echo "-- backfilling tags"
-python3 "$REPO/scripts/backfill.py" --api "$API" || echo "WARN: backfill failed"
+# Tags, the tag tree `otag:` searches, and the cards nobody has tagged
+# yet. See tags.mjs.
+echo "-- tagging"
+node "$REPO/scripts/tags.mjs" --api "$API" || echo "WARN: tagging failed"
 
 echo "-- done"
+[ "$backup_ok" = 1 ] || exit 1

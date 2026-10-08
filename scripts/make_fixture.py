@@ -146,6 +146,10 @@ def main():
     if slugs:
         tagrows = rows_in("SELECT * FROM tags WHERE tag IN ({ph})", slugs)
         dump("tags", tagrows, ["tag", "kind", "label", "description"])
+        # Only the rows that end on a tag the fixture's cards carry: they
+        # are what `otag:removal` and `otag:acceleration` resolve through.
+        names = rows_in("SELECT * FROM tag_names WHERE tag IN ({ph})", slugs)
+        dump("tag_names", names, ["name", "tag"])
 
     oids = sorted({r["oracle_id"] for r in picked if r["oracle_id"]})
     if oids:

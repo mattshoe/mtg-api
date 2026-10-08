@@ -22,7 +22,7 @@ import kotlin.test.assertTrue
  * apps.
  *
  * It is not gone from the Worker: `scripts/backup.py`,
- * `refresh_prices.py` and `backfill.py` are machines with no account
+ * `refresh_prices.py` and `tags.mjs` are machines with no account
  * to sign into, and `ADMIN_PASSWORD` is how they get in. A machine
  * credential is not a login screen.
  *

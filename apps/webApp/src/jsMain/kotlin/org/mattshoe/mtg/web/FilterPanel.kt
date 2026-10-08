@@ -288,8 +288,8 @@ private fun Tags(
             onChange(f.copy(keywords = it))
         }
     }
-    Row("Scryfall tags") {
-        Tokens(f.tags, "mana-rock, spot-removal…", draft("tags"), { setDraft("tags", it) }) {
+    Row("Oracle tags") {
+        Tokens(f.tags, "blink, removal, mana-rock…", draft("tags"), { setDraft("tags", it) }) {
             onChange(f.copy(tags = it))
         }
     }

@@ -99,6 +99,12 @@ CREATE TABLE deck_notes (
 CREATE TABLE card_tags (card_id INT, tag TEXT, kind TEXT,
                         UNIQUE(card_id, tag, kind));
 CREATE TABLE tags       (tag TEXT, kind TEXT, label TEXT, description TEXT);
+-- What an `otag:` search word finds: a row says searching for `name`
+-- finds cards tagged `tag`, for the tag itself, each of its aliases and
+-- every tag beneath it in Tagger's tree. `otag:blink` is an alias of
+-- `flicker`, which is mostly carried by its children. Written whole by
+-- scripts/tags.mjs; see migrations/0008_tag_names.sql.
+CREATE TABLE tag_names  (name TEXT NOT NULL, tag TEXT NOT NULL, UNIQUE(name, tag));
 CREATE TABLE legalities (oracle_id TEXT, format TEXT, status TEXT);
 CREATE TABLE rulings    (oracle_id TEXT, published_at TEXT, source TEXT,
                          comment TEXT);
@@ -200,6 +206,7 @@ CREATE INDEX idx_faces_card      ON card_faces(card_id);
 CREATE INDEX idx_aliases_norm    ON aliases(alias_norm);
 CREATE INDEX idx_tags_card       ON card_tags(card_id);
 CREATE INDEX idx_card_tags_tag   ON card_tags(tag);
+CREATE INDEX idx_tag_names_name  ON tag_names(name);
 CREATE INDEX idx_legal_oracle    ON legalities(oracle_id);
 CREATE INDEX idx_rulings_oracle  ON rulings(oracle_id);
 CREATE INDEX idx_prices_usd      ON prices(usd);
