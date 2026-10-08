@@ -62,6 +62,23 @@ describe('POST /cards/add — a new card', () => {
     expect(await count('legalities', 'oracle_id = ?', card.oracle_id)).toBe(before);
   });
 
+  it('tags a new card at once when another printing of it is already tagged', async () => {
+    // Tags come from a bulk file the Worker cannot read, so a card nobody
+    // has owned before waits for the nightly script. One whose oracle card
+    // is already here has nothing to wait for.
+    await post('/cards/add', { list: BOLT }, stubScryfall());
+    const [nonfoil] = await stack('Lightning Bolt');
+    await exec("INSERT INTO card_tags (card_id, tag, kind) VALUES (?, 'burn', 'oracle')", nonfoil.id);
+
+    await post('/cards/add', { list: '1 Lightning Bolt (2X2) 117 *F*' }, stubScryfall());
+    const [foil] = await stack('Lightning Bolt', 'foil');
+
+    const tags = await sql('SELECT tag, kind FROM card_tags WHERE card_id = ?', foil.id);
+    expect(tags, 'the foil stack arrived with no tags').toEqual([{ tag: 'burn', kind: 'oracle' }]);
+    const [indexed] = await sql('SELECT tags FROM card_search WHERE rowid = ?', foil.id);
+    expect(indexed.tags, 'the search index does not know the foil is tagged').toBe('burn');
+  });
+
   it('stores no not_legal rows', async () => {
     await post('/cards/add', { list: BOLT }, stubScryfall());
     expect(await count('legalities', "status = 'not_legal'")).toBe(0);
