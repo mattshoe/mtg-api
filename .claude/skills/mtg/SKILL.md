@@ -407,8 +407,6 @@ and the dex grep under "Verifying a deploy for real".
 | web, real browser | `npm run test:web` | ~2m30s |
 | Android screens, JVM | `npm run test:screens` | ~3m30s |
 | Android screens, device | `npm run test:android` | ~23m |
-| all but the device | `npm run test:all` | ~8m |
-
 **`npm run test:core` is not what CI runs.** It is only
 `:core:jvmTest`. CI's `shared` job runs four tasks plus coverage, and
 the gap has shipped a red build:
