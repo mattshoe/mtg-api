@@ -1,5 +1,7 @@
 package org.mattshoe.mtg.core
 
+import kotlinx.serialization.json.JsonArray
+
 /**
  * The whole app's state, and the one object that knows how to fill it.
  *
@@ -682,6 +684,31 @@ object Load {
         CardQueries.legalities(nameNorm),
         CardQueries.rulings(nameNorm),
     )
+
+    /**
+     * The answers to [card], handed back in its order, as the page.
+     *
+     * Here rather than in each shell: the website and the phone each
+     * picked the five answers apart themselves, and only the website
+     * remembered to take the card's real name off its printings.
+     */
+    fun cardDetail(
+        nameNorm: String,
+        label: String,
+        answers: List<Pair<List<String>, List<JsonArray>>>,
+    ): CardDetail {
+        val (f, p, u, l, r) = answers
+        val owned = CardQueries.decodePrintings(p.first, p.second)
+        return CardDetail(
+            name = label,
+            nameNorm = nameNorm,
+            printings = owned,
+            usedIn = CardQueries.decodeUses(u.first, u.second),
+            legalities = CardQueries.decodeLegalities(l.first, l.second),
+            rulings = CardQueries.decodeRulings(r.first, r.second),
+            faces = CardQueries.decodeFaces(f.first, f.second),
+        ).named(owned)
+    }
 
     fun find(term: String): Sql = PaletteQueries.find(term)
 

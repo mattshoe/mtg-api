@@ -4,6 +4,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -71,6 +72,7 @@ class DeckCardCarouselParityTest {
         price: Double? = 1.75,
         set: String? = "m3c",
         number: String? = "409",
+        rank: Long? = 412,
     ) = DeckCard(
         name = name,
         qty = qty,
@@ -83,6 +85,7 @@ class DeckCardCarouselParityTest {
         setCode = set,
         setName = "Modern Horizons 3 Commander",
         collectorNumber = number,
+        edhrecRank = rank,
     )
 
     /** In `pageOrder`, which groups by type and sorts by name inside a group. */
@@ -203,6 +206,19 @@ class DeckCardCarouselParityTest {
         assertTrue(!says("Legality"), "the sheet is trying to be the card page")
     }
 
+    /** Text on the sheet under the carousel, and only there. */
+    private fun onTheSheet(text: String) = rule.onAllNodes(
+        hasText(text) and hasAnyAncestor(hasTestTag("carousel-sheet")),
+    ).fetchSemanticsNodes().isNotEmpty()
+
+    @Test
+    fun theSheetSaysHowMuchTheCardIsPlayed() {
+        // Matt: "I asked to have the edhrec rank of every card on its
+        // 'bottom sheet' thingy on the carousel. It's still missing."
+        peeking()
+        assertTrue(onTheSheet("EDHREC #412"), "the deck's sheet has no EDHREC rank")
+    }
+
     @Test
     fun theSheetSaysWhereYouAreInTheDeck() {
         peeking()
@@ -292,7 +308,7 @@ class DeckCardCarouselParityTest {
 
     // ------------------------------------------------- and in the Library
 
-    private fun row(name: String, qty: Int = 2, free: Int? = 1) = CardRow(
+    private fun row(name: String, qty: Int = 2, free: Int? = 1, rank: Long? = 1234) = CardRow(
         id = 1,
         owner = "matt",
         name = name,
@@ -308,7 +324,7 @@ class DeckCardCarouselParityTest {
         setCode = "m3c",
         setName = "Modern Horizons 3 Commander",
         collectorNumber = "409",
-        edhrecRank = null,
+        edhrecRank = rank,
         releasedAt = null,
         finish = "nonfoil",
         power = null,
@@ -352,6 +368,15 @@ class DeckCardCarouselParityTest {
         listOf("Count", "Swap", "Remove").forEach {
             assertTrue(!says(it), "the Library's sheet offers \"$it\"")
         }
+    }
+
+    @Test
+    fun theLibrarysSheetSaysHowMuchTheCardIsPlayedToo() {
+        shell(inTheLibrary())
+        rule.onNodeWithTag("library").performScrollToNode(hasTestTag("card-tile"))
+        rule.onAllNodes(hasTestTag("card-tile")).onFirst().performClick()
+        rule.waitForIdle()
+        assertTrue(onTheSheet("EDHREC #1,234"), "the Library's sheet has no EDHREC rank")
     }
 
     // ------------------------------------------------------- getting out

@@ -219,6 +219,95 @@ data class Face(
             oracleText.isBlank() && flavorText.isBlank() && stats == null
 }
 
+/** One line of the card page's Details: a label and what it says. */
+data class Fact(val label: String, val value: String)
+
+/**
+ * Everything else `cards` knows about a card, as the page says it.
+ *
+ * Matt: "the card details page still has a ton of missing fields from
+ * the database". The rank, the rarity, the artist, the frame, the
+ * flags — all in `cards` since the first import, none of them
+ * selected. Held as the row the query returned, by column name, so
+ * the wording is decided here once and both shells only draw [lines].
+ *
+ * Nothing about who owns it: Matt does not want ownership on this
+ * page. Printing-level columns come off the newest printing, the same
+ * one [CardQueries.face] reads the flavour text off.
+ */
+data class CardFacts(val raw: Map<String, String> = emptyMap()) {
+
+    private fun text(col: String): String? = raw[col]?.trim()?.takeIf { it.isNotEmpty() }
+
+    private fun word(col: String): String? =
+        text(col)?.replace('_', ' ')?.replaceFirstChar { it.uppercase() }
+
+    private fun set(col: String): Boolean = text(col)?.let { it == "1" || it.equals("true", true) } ?: false
+
+    /** Letters as colour names, in WUBRG order. Nothing is colourless. */
+    private fun colours(col: String): String {
+        val letters = text(col).orEmpty().uppercase()
+        val named = COLOURS.filter { (letter, _) -> letter in letters }.map { it.second }
+        return named.ifEmpty { listOf("Colorless") }.joinToString(", ")
+    }
+
+    val lines: List<Fact>
+        get() {
+            if (raw.isEmpty()) return emptyList()
+            val out = mutableListOf<Fact>()
+            fun add(label: String, value: String?) {
+                if (!value.isNullOrBlank()) out += Fact(label, value)
+            }
+            add("EDHREC rank", text("edhrec_rank")?.toDoubleOrNull()?.toLong()?.let { "#$it" })
+            add("Mana value", text("cmc")?.toDoubleOrNull()?.let {
+                if (it == kotlin.math.floor(it)) it.toLong().toString() else it.toString()
+            })
+            add("Colors", colours("colors"))
+            add("Color identity", colours("color_identity"))
+            // Only for a card that taps for something: "Colorless"
+            // here would claim it makes colourless mana.
+            add("Produces", text("produced_mana")?.uppercase()?.let { p ->
+                (COLOURS.filter { it.first in p }.map { it.second } +
+                    listOfNotNull("Colorless".takeIf { 'C' in p })).joinToString(", ")
+            })
+            add("Rarity", word("rarity"))
+            add("Set", text("set_name")?.let { name ->
+                text("setcode")?.let { "$name (${it.uppercase()})" } ?: name
+            } ?: text("setcode")?.uppercase())
+            add("Set type", word("set_type"))
+            add("Released", text("released_at"))
+            add("Collector number", text("collector_number"))
+            add("Artist", text("artist"))
+            add("Layout", word("layout"))
+            add("Frame", word("frame"))
+            add("Border", word("border_color"))
+            add("Watermark", word("watermark"))
+            add("Security stamp", word("security_stamp"))
+            add("Keywords", text("keywords"))
+            add("Finishes", text("finishes"))
+            add("Games", text("games"))
+            add("Promo types", text("promo_types"))
+            add("Frame effects", text("frame_effects"))
+            add("Flags", FLAGS.filter { (col, _) -> set(col) }.joinToString(", ") { it.second })
+            add("Tags", text("tags"))
+            return out
+        }
+
+    companion object {
+        private val COLOURS = listOf(
+            'W' to "White", 'U' to "Blue", 'B' to "Black", 'R' to "Red", 'G' to "Green",
+        )
+
+        /** The yes-or-no columns, said only when they are yes. */
+        private val FLAGS = listOf(
+            "reserved" to "Reserved list", "game_changer" to "Game changer",
+            "full_art" to "Full art", "textless" to "Textless", "promo" to "Promo",
+            "reprint" to "Reprint", "variation" to "Variation", "oversized" to "Oversized",
+            "story_spotlight" to "Story spotlight", "booster" to "In boosters",
+        )
+    }
+}
+
 data class CardDetail(
     val name: String = "",
     /**
@@ -238,11 +327,23 @@ data class CardDetail(
      * card has two.
      */
     val faces: List<Face> = emptyList(),
+    /** Everything else `cards` knows about it. Empty until its query answers. */
+    val facts: CardFacts = CardFacts(),
     val busy: Boolean = false,
     val error: String? = null,
 ) {
     /** The front, which is the one a single-faced card is. */
     val face: Face? get() = faces.firstOrNull()
+
+    /**
+     * Each printing once, with nobody's name on it.
+     *
+     * Matt does not want ownership on this page, and without the owner
+     * and the count, his M3C and Kayla's M3C are the same line twice.
+     * A printing is a set, a number and a finish.
+     */
+    val printingsShown: List<Printing>
+        get() = printings.distinctBy { Triple(it.setCode.lowercase(), it.collectorNumber, it.finish) }
     val owned: Int get() = printings.sumOf { it.qty }
 
     /** Copies no deck has claimed. Proxies do not consume a real card. */
@@ -492,6 +593,51 @@ object CardQueries {
                 defense = row.at(at, "defense"),
             )
         }.filterNot { it.blank }
+    }
+
+    /**
+     * Everything else `cards` has on it, for the page's Details.
+     *
+     * Off the newest printing, by the same `pick` as [face], so the
+     * set, the artist and the frame all describe one real card. The
+     * lists hung off a card id — keywords, finishes and the rest — are
+     * that printing's, joined into one string each so the whole thing
+     * is one row.
+     */
+    fun facts(nameNorm: String) = Sql(
+        """WITH pick AS (
+                SELECT * FROM cards WHERE name_norm = ?
+                 ORDER BY released_at DESC LIMIT 1)
+           SELECT pick.edhrec_rank, pick.cmc, pick.colors, pick.color_identity,
+                  pick.produced_mana, pick.rarity, pick.setcode, pick.set_name,
+                  pick.set_type, pick.released_at, pick.collector_number, pick.artist,
+                  pick.layout, pick.frame, pick.border_color, pick.watermark,
+                  pick.security_stamp, pick.reserved, pick.game_changer, pick.full_art,
+                  pick.textless, pick.promo, pick.reprint, pick.variation, pick.oversized,
+                  pick.story_spotlight, pick.booster,
+                  (SELECT GROUP_CONCAT(keyword, ', ') FROM card_keywords
+                    WHERE card_id = pick.id) AS keywords,
+                  (SELECT GROUP_CONCAT(finish, ', ') FROM card_finishes
+                    WHERE card_id = pick.id) AS finishes,
+                  (SELECT GROUP_CONCAT(game, ', ') FROM card_games
+                    WHERE card_id = pick.id) AS games,
+                  (SELECT GROUP_CONCAT(promo_type, ', ') FROM card_promo_types
+                    WHERE card_id = pick.id) AS promo_types,
+                  (SELECT GROUP_CONCAT(frame_effect, ', ') FROM card_frame_effects
+                    WHERE card_id = pick.id) AS frame_effects,
+                  (SELECT GROUP_CONCAT(name, ', ') FROM (
+                      SELECT DISTINCT COALESCE(
+                                 (SELECT t.label FROM tags t WHERE t.tag = ct.tag LIMIT 1),
+                                 ct.tag) AS name
+                        FROM card_tags ct WHERE ct.card_id = pick.id)) AS tags
+             FROM pick""",
+        listOf(nameNorm),
+    )
+
+    fun decodeFacts(cols: List<String>, rows: List<JsonArray>): CardFacts {
+        val row = rows.firstOrNull() ?: return CardFacts()
+        val at = cols.withIndex().associate { (i, n) -> n to i }
+        return CardFacts(cols.mapNotNull { c -> row.at(at, c)?.let { c to it } }.toMap())
     }
 
     /** Every deck that wants it, whoever built it. */
