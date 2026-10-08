@@ -1999,7 +1999,38 @@ describe('a claim held by something that is alive', () => {
     // No second builder, and nothing reset under the first one.
     expect(box.log()).not.toContain('claude -p')
     expect(box.intakeLog()).not.toContain('had a builder that died')
-    logged('is alive')
+    // A claim is stamped with the DISPATCHER's pid during worktree setup,
+    // so a dispatcher doing a long job holds old-looking claims. Killing
+    // on the cap there would have one dispatcher kill another and take
+    // every healthy builder with it.
+    logged('bounds its own builders')
+  })
+
+  it('still stops a stalled BUILDER that is past the cap', () => {
+    // The cap is not pointless, it is just not evidence of death. A
+    // `claude` past it is exactly what it is for.
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    box.stub('claude', BUILDER)
+    box.stub('gh', ghStub())
+    const bld = spawn('bash', ['-c', 'exec -a "claude -p pretending to build" sleep 90'],
+      { detached: true, stdio: 'ignore' })
+    bld.unref()
+    const cmd = spawnSync('ps', ['-o', 'command=', '-p', String(bld.pid)],
+      { encoding: 'utf8' }).stdout.trim()
+    const branch = spawnSync('node', ['scripts/intake.mjs', 'branch', 'a-thing.md'],
+      { encoding: 'utf8', cwd: box.repo }).stdout.trim()
+    claim(`.intake/${branch.replace(/\//g, '_')}.building`, bld.pid, cmd, 1)
+
+    run('dispatch.sh', { env: { INTAKE_MAX_MINUTES: '0' } })
+    logged('live builder past the cap')
+    logged('is gone; the claim is free')
+    // Not `kill -0`: this process was spawned detached and nothing here
+    // reaps it, so a killed child answers `kill -0` as a zombie. Its
+    // process STATE is the honest question.
+    const state = spawnSync('ps', ['-o', 'state=', '-p', String(bld.pid)],
+      { encoding: 'utf8' }).stdout.trim()
+    expect(['', 'Z', 'Z+'], `the stalled builder is still ${state}`).toContain(state)
+    try { process.kill(bld.pid, 'SIGKILL') } catch { /* already gone */ }
   })
 
   it('is broken once its process is actually gone', () => {

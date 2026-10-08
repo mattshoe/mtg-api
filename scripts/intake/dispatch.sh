@@ -175,6 +175,22 @@ ghx() {
 
 lock_pid() { cat "$1/pid" 2>/dev/null; }
 
+# Whether a pid is a process that can still do anything.
+#
+# `kill -0` is not that question. A killed child whose parent has not
+# reaped it is a ZOMBIE, and `kill -0` on a zombie succeeds — so after a
+# SIGKILL the dispatcher concluded "SURVIVED SIGKILL" and left the claim
+# wedged, about a process that was already dead. Its state is the honest
+# question: `Z` is dead, and no row at all is dead.
+still_running() {
+  local st
+  [ -n "${1:-}" ] || return 1
+  st="$(ps -o state= -p "$1" 2>/dev/null | tr -d ' ')"
+  [ -n "$st" ] || return 1
+  case "$st" in Z*) return 1 ;; esac
+  return 0
+}
+
 # `stat -f %m` is BSD and `stat -c %Y` is GNU, and neither fails usefully
 # on the other: GNU's `-f` asks about the FILESYSTEM and exits 0 having
 # printed something that is not a timestamp. So the VALUE is checked.
@@ -222,7 +238,7 @@ claim_alive() {
     return 0
   fi
 
-  kill -0 "$pid" 2>/dev/null || { say "  $(basename "$dir") pid $pid is gone"; return 1; }
+  still_running "$pid" || { say "  $(basename "$dir") pid $pid is gone"; return 1; }
 
   # Is it the process it says it is? The reused-pid check used to compare
   # against `*dispatch.sh*|*claude*`, which any `claude` process satisfies
@@ -285,7 +301,7 @@ claim_alive() {
         sleep 5
         kill_tree "$pid" KILL
         sleep 1
-        if kill -0 "$pid" 2>/dev/null; then
+        if still_running "$pid"; then
           say "  pid $pid SURVIVED SIGKILL — leaving the claim alone rather than racing it"
           tell "$(basename "$dir") is past the cap and its process will not die"
           return 0
