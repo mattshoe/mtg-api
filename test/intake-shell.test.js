@@ -135,6 +135,8 @@ function build({ requests = {}, done = {} } = {}) {
   git('fetch', '-q', 'origin')
 
   mkdirSync(join(repo, '.intake'), { recursive: true })
+  // install.sh writes this; the dispatcher is opt-in without it.
+  writeFileSync(join(repo, '.intake', 'enabled'), '')
 
   const calls = join(root, 'calls.log')
   writeFileSync(calls, '')
@@ -603,7 +605,7 @@ describe('a worktree that is already there', () => {
     const tree = withExistingWorktree()
     run('dispatch.sh')
     expect(box.log()).not.toContain('claude')
-    logged('already has a worktree')
+    logged('has a worktree already')
     expect(box.log()).toContain('osascript')
     expect(readFileSync(join(tree, 'half.txt'), 'utf8')).toBe('half a change\n')
   })

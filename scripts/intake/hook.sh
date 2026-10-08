@@ -12,6 +12,12 @@ set -uo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 STATE="$REPO/.intake"
 
+# Opt-in, and then an off switch. `.intake/` is gitignored, so an absent
+# `disabled` file meant a fresh clone was armed the first time any Claude
+# session edited a request file — no install, no launchctl, no consent.
+# install.sh writes `enabled`.
+[ -f "$STATE/enabled" ] || exit 0
+
 # The off switch. This hook is committed, so `launchctl unload` does not
 # stop it: an edit to any requests/*.md from any Claude session in the repo
 # still spawned a bypassPermissions builder that would open and merge a

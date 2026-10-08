@@ -60,9 +60,10 @@ if /usr/bin/grep -q '@[A-Z]*@' "$PLIST"; then
   exit 1
 fi
 
-# `.intake/disabled` is the off switch, and installing is the one moment
+# `.intake/enabled` is what arms the machine, and installing is the one moment
 # it should go away.
 rm -f "$REPO/.intake/disabled"
+touch "$REPO/.intake/enabled"
 
 launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
 launchctl load "$PLIST"
