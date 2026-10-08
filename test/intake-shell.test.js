@@ -880,3 +880,120 @@ describe('installing the watcher', () => {
     expect(existsSync(box.path('.intake/disabled'))).toBe(false)
   })
 })
+
+describe('status.sh', () => {
+  // It used to re-implement the `triaged` and `needs-matt` predicates with
+  // grep, and the two implementations DISAGREED: `grep -qF '## Plan'` is an
+  // unanchored substring, and `grep -q '^status: needs-matt'` matches the
+  // body outside the frontmatter. So status said "ready" for files the
+  // dispatcher held, and the other way round.
+
+  function status(env = {}) {
+    return spawnSync('bash', [box.path('scripts/intake/status.sh')], {
+      encoding: 'utf8',
+      cwd: box.repo,
+      timeout: 60_000,
+      env: {
+        ...process.env,
+        PATH: `${box.bin}:${process.env.PATH}`,
+        HOME: box.root,
+        INTAKE_BASE: 'origin/main',
+        ...env,
+      },
+    })
+  }
+
+  it('agrees with intake.mjs instead of guessing with grep', () => {
+    build({
+      requests: {
+        // A plan in prose and a needs-matt in the BODY. The old greps
+        // called the first ready and the second waiting; both are wrong.
+        'prose.md': '# T\n\nMy ## Plan is to wait\n',
+        'body.md': `${READY('Body')}\nstatus: needs-matt\n`,
+        'asked.md': READY('Asked').replace('status: ready', 'status: needs-matt'),
+      },
+    })
+    const out = status().stdout
+    expect(out).toMatch(/prose\s+untriaged/)
+    expect(out).toMatch(/body\s+ready/)
+    expect(out).toMatch(/asked\s+needs-matt/)
+  })
+
+  it('says plainly when intake.mjs could not answer', () => {
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    box.stub('node', 'exit 1')
+    expect(status().stdout).toContain('intake.mjs unavailable')
+  })
+
+  it('prints files, commits and pushed-ness for a STALLED slot, not a bare line', () => {
+    // The old version computed these only inside the `building` branch, so
+    // the stalled case printed "worktree kept" with no hint that
+    // thirty-two uncommitted files were sitting in it — which is exactly
+    // the state `.intake/wt/card-page-shows-everything` was found in.
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    const branch = spawnSync('node', ['scripts/intake.mjs', 'branch', 'a-thing.md'],
+      { encoding: 'utf8', cwd: box.repo }).stdout.trim()
+    const slot = join(box.root, 'wt', 'slot1')
+    box.git('worktree', 'add', '-q', '-b', branch, slot, 'main')
+    writeFileSync(join(slot, 'half.txt'), 'half a change\n')
+    const out = status({ INTAKE_WORKTREE_ROOT: join(box.root, 'wt') }).stdout
+    expect(out).toContain('STALLED')
+    expect(out).toMatch(/1 changed, 0 commits, never pushed/)
+  })
+
+  it('shows the lock and the claims, so a wedged queue is not an idle one', () => {
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    mkdirSync(box.path('.intake/dispatch.lock'))
+    writeFileSync(box.path('.intake/dispatch.lock/pid'), '999999')
+    mkdirSync(box.path('.intake/request_a-thing.building'))
+    writeFileSync(box.path('.intake/request_a-thing.building/pid'), '999999')
+    const out = status().stdout
+    expect(out).toContain('DISPATCHER')
+    expect(out).toContain('WHICH IS GONE')
+    expect(out).toContain('request_a-thing.building')
+    expect(out).toContain('GONE — stale')
+  })
+
+  it('treats a pidless lock as live here too', () => {
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    mkdirSync(box.path('.intake/dispatch.lock'))
+    expect(status().stdout).toContain('no pid yet')
+  })
+
+  it('lists request branches with ahead-of-base and pushed-ness', () => {
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    box.git('branch', 'request/not-pushed-abc1234', 'main')
+    const out = status().stdout
+    expect(out).toContain('BRANCHES')
+    expect(out).toMatch(/request\/not-pushed-abc1234\s+0 ahead of origin\/main, NOT ON ORIGIN/)
+  })
+
+  it('distinguishes a failing gh from a clean queue', () => {
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    box.stub('gh', 'exit 4')
+    expect(status().stdout).toContain('OPEN PRS (gh unavailable')
+  })
+
+  it('calls a pull request with no checks unverified rather than green', () => {
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    box.stub('gh', `printf '[{"number":7,"headRefName":"request/x","statusCheckRollup":[]}]\\n'`)
+    const out = status().stdout
+    expect(out).toContain('no checks')
+    expect(out).toContain('not green')
+  })
+
+  it('surfaces what a builder is waiting on, and flags an old Bash call', () => {
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    writeFileSync(box.path('.intake/a-thing.jsonl'),
+      `${JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Bash' }] } })}\n`)
+    const out = status({ INTAKE_STUCK_MINUTES: '0' }).stdout
+    expect(out).toContain('last event')
+    expect(out).toContain('STUCK?')
+  })
+
+  it('says when the whole machine is switched off', () => {
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    box.disable()
+    expect(status().stdout).toContain('OFF')
+  })
+})
