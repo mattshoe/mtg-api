@@ -17,7 +17,7 @@ set -uo pipefail
 # token and the admin password — and then writes to production with them.
 # So a builder running `bash scripts/nightly.sh` reaches the real database
 # whatever the deny list does about `wrangler`, and a reviewer did exactly
-# that. `scripts/intake/dispatch.sh:no_creds` sets INTAKE_BUILDER=1 on every
+# that. `scripts/intake/dispatch.sh:run_agent` sets INTAKE_BUILDER=1 on every
 # agent it launches, and this refuses to be one of the things they can run.
 if [ -n "${INTAKE_BUILDER:-}" ]; then
   echo "nightly.sh: refusing to run inside an intake builder (INTAKE_BUILDER is set)." >&2
