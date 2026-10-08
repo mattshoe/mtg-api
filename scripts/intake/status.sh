@@ -78,10 +78,13 @@ last_event() {
   line="$(tail -1 "$jsonl")"
   kind="$(printf '%s' "$line" | /usr/bin/sed -nE 's/.*"type":"([a-z_]+)".*/\1/p' | head -1)"
   [ -n "$kind" ] || kind="?"
-  # `stat -f %m` is BSD and `stat -c %Y` is GNU. This runs on Matt's laptop
-  # and on an ubuntu CI runner, and the GNU one silently returned nothing
-  # there — so the age, and the STUCK flag that depends on it, vanished.
-  when="$(stat -f %m "$jsonl" 2>/dev/null || stat -c %Y "$jsonl" 2>/dev/null || echo "")"
+  # `stat -f %m` is BSD and `stat -c %Y` is GNU, and neither fails usefully
+  # on the other: GNU's `-f` asks about the FILESYSTEM and exits 0 having
+  # printed something that is not a timestamp. So the value is checked, not
+  # the exit code — which is the lesson of this whole branch.
+  when="$(stat -c %Y "$jsonl" 2>/dev/null)"
+  case "$when" in ''|*[!0-9]*) when="$(stat -f %m "$jsonl" 2>/dev/null)" ;; esac
+  case "$when" in ''|*[!0-9]*) when="" ;; esac
   if [ -n "$when" ]; then
     now="$(date +%s)"
     age=$(( (now - when) / 60 ))
