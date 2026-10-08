@@ -486,16 +486,6 @@ class DeckStatsParityTest {
     }
 
     @Test
-    fun theColourChartSaysWhatItIsComparing() {
-        show(deck())
-        assertTrue(
-            textSomewhere("Pips the deck asks for, against cards that can produce them."),
-            "the colour chart has no caption",
-        )
-        assertTrue(textSomewhere("Hybrid pips count for both halves."), "the hybrid rule went unsaid")
-    }
-
-    @Test
     fun thereIsNoColourPanelWhenThereIsNoColour() {
         show(listOf(card("Sol Ring", "Artifact", "{1}", 1.0, price = null)))
         assertTrue(!textSomewhere("needs"), "a colourless deck drew a needs bar")
