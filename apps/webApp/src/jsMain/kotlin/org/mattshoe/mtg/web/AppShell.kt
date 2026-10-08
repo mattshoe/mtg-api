@@ -116,6 +116,8 @@ fun AppShell(
             // The carousel, the same as a deck's rows.
             onOpen = { row -> onState(state.peekRow(row)) },
             onExport = onExport,
+            art = { row -> state.artFor(row.scryfallId, row.nameNorm, row.layout) },
+            onFlip = { row -> onState(state.flip(row.nameNorm)) },
             complete = state.complete,
             // Whoever holds the live state decides what a change to
             // the name means. Deciding it here means deciding it
@@ -179,6 +181,8 @@ fun AppShell(
             next = state.nextCard,
             place = state.cardPlace,
             onStep = { c -> onOpenNamed(c.name, c.nameNorm, "") },
+            art = state.card?.let { state.artFor(it.scryfallId, it.nameNorm, it.layout) },
+            onFlip = { state.card?.let { onState(state.flip(it.nameNorm)) } },
         )
 
         View.ENTRY -> MassEntryPage(
@@ -281,6 +285,8 @@ fun AppShell(
             // overlay to account for, and the phone does not.
             onDetails = { state.peeked?.let(onOpenPeeked) },
             onTweak = { card, how -> onTweak(card, how) },
+            art = { c -> state.artFor(c.scryfallId, c.nameNorm, c.layout) },
+            onFlip = { c -> onState(state.flip(c.nameNorm)) },
         )
     }
 

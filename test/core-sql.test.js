@@ -43,3 +43,35 @@ describe('every statement the core emits', () => {
     expect(wrong).toEqual([]);
   });
 });
+
+describe('the card page\'s facts, against the seed', () => {
+  // `CardFacts.query` reads six child tables. Joined rather than
+  // subqueried, a card with two keywords and two finishes comes back
+  // as four rows and every list on the page doubles. Aetherblade Agent
+  // has two of each in the seed.
+  const c = cases.find((x) => x.name === 'card facts, a transform card with two keywords and two finishes');
+
+  it('is in the dump', () => {
+    expect(c, 'CoreSqlDump never wrote the facts case').toBeTruthy();
+  });
+
+  it('is one row, with every list said once', async () => {
+    const r = await env.DB.prepare(c.sql).bind(...c.params).all();
+    expect(r.results.length).toBe(1);
+    const row = r.results[0];
+    expect(row.keywords).toBe('Deathtouch, Transform');
+    expect(row.finishes).toBe('foil, nonfoil');
+    expect(row.games).toBe('arena, mtgo, paper');
+    expect(row.artist).toBe('Alexander Mokhov');
+    expect(row.layout).toBe('transform');
+    expect(row.edhrec_rank).toBe(20135);
+    expect(row.tags).toContain('draw engine');
+  });
+
+  it('carries every column of cards', async () => {
+    const r = await env.DB.prepare(c.sql).bind(...c.params).all();
+    const cols = (await env.DB.prepare('PRAGMA table_info(cards)').all()).results.map((x) => x.name);
+    const missing = cols.filter((n) => !(n in r.results[0]));
+    expect(missing).toEqual([]);
+  });
+});

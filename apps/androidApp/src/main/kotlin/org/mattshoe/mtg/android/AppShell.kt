@@ -295,6 +295,8 @@ fun AppShell(
                         // Matt: "let's use the same carousel for the
                         // library page."
                         onOpen = { row -> onState(state.peekRow(row)) },
+                        art = { row -> state.artFor(row.scryfallId, row.nameNorm, row.layout) },
+                        onFlip = { row -> onState(state.flip(row.nameNorm)) },
                         showFilters = showFilters,
                         onToggleFilters = { showFilters = !showFilters },
                         onExport = onExport,
@@ -393,6 +395,8 @@ fun AppShell(
                     View.CARD -> CardSheet(
                         card = state.card ?: org.mattshoe.mtg.core.CardDetail(name = state.route.rest).loading(),
                         onClose = { onState(state.leaveCard()) },
+                        art = state.card?.let { state.artFor(it.scryfallId, it.nameNorm, it.layout) },
+                        onFlip = { state.card?.let { onState(state.flip(it.nameNorm)) } },
                         // Reading a deck a card at a time, the same three
                         // controls the web page puts under the card.
                         previous = state.previousCard,
@@ -509,6 +513,8 @@ fun AppShell(
                 // overlay to account for, and the phone does not.
                 onDetails = { state.peeked?.let(onOpenPeeked) },
                 onTweak = { card, how -> onTweak(card, how) },
+                art = { c -> state.artFor(c.scryfallId, c.nameNorm, c.layout) },
+                onFlip = { c -> onState(state.flip(c.nameNorm)) },
             )
         }
     }

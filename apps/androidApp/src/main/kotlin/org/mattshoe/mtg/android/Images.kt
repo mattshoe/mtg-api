@@ -53,3 +53,15 @@ class Images : Application(), SingletonImageLoader.Factory {
 
 /** Who is asking, for Scryfall's benefit. */
 const val USER_AGENT = "mtg-collection/1.0 (+https://mtg.mattshoe.org)"
+
+/**
+ * The address a card's picture was drawn from, on the image's own
+ * semantics node.
+ *
+ * Coil keeps the model to itself, so without this a test can only
+ * ask the state which side of a card should be showing — not what
+ * was actually handed to the image. Turning a card over is a change
+ * of address from `/front/` to `/back/`, and this is where it shows.
+ */
+val CardPicture = androidx.compose.ui.semantics.SemanticsPropertyKey<String>("CardPicture")
+var androidx.compose.ui.semantics.SemanticsPropertyReceiver.cardPicture by CardPicture

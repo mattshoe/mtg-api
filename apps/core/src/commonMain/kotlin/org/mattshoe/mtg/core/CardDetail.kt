@@ -235,11 +235,34 @@ data class CardDetail(
      * card has two.
      */
     val faces: List<Face> = emptyList(),
+    /**
+     * Everything else the database holds about the printing on the
+     * page, for the Details section. Null until it arrives.
+     */
+    val facts: CardFacts? = null,
     val busy: Boolean = false,
     val error: String? = null,
 ) {
     /** The front, which is the one a single-faced card is. */
     val face: Face? get() = faces.firstOrNull()
+
+    /** The printing the page's picture is of: the first one listed. */
+    val scryfallId: String? get() = printings.firstOrNull()?.scryfallId
+
+    /** Its layout, once the facts have said. */
+    val layout: String? get() = facts?.layout
+
+    /** Whether it has a back to turn over to. */
+    val flips: Boolean get() = Flip.flips(layout)
+
+    /**
+     * The card's page on EDHREC, once the facts have arrived to say
+     * its real name and layout. A split card is filed under both
+     * halves there and everything else under its front face, so the
+     * layout is needed as much as the name.
+     */
+    val edhrecUrl: String?
+        get() = facts?.let { f -> Edhrec.url(f.value("name") ?: name, f.layout) }
     val owned: Int get() = printings.sumOf { it.qty }
 
     /** Copies no deck has claimed. Proxies do not consume a real card. */
@@ -335,13 +358,25 @@ data class CardDetail(
 
 object CardQueries {
 
-    /** Scryfall addresses art by the id already on the row. */
-    fun art(scryfallId: String?, size: String = "normal"): String? {
+    /**
+     * Scryfall addresses art by the id already on the row. The back of
+     * a double-faced card is the same address with `/back/` for
+     * `/front/`.
+     */
+    fun art(scryfallId: String?, size: String = "normal", back: Boolean = false): String? {
         if (scryfallId.isNullOrBlank() || scryfallId.length < 2) return null
         val a = scryfallId[0]
         val b = scryfallId[1]
-        return "https://cards.scryfall.io/$size/front/$a/$b/$scryfallId.jpg"
+        val side = if (back) "back" else "front"
+        return "https://cards.scryfall.io/$size/$side/$a/$b/$scryfallId.jpg"
     }
+
+    /**
+     * How `printings` is ordered, and so which printing is first: the
+     * one whose picture the page shows. `CardFacts.query` takes the
+     * same one.
+     */
+    const val PRINTING_ORDER = "c.owner, c.released_at DESC, c.setcode, c.collector_number"
 
     /**
      * A commander's art, cropped, for the band across a deck tile.
@@ -420,7 +455,7 @@ object CardQueries {
              FROM cards c
              LEFT JOIN card_prices cp ON cp.card_id = c.id
             WHERE c.name_norm = ?
-            ORDER BY c.owner, c.released_at DESC, c.setcode, c.collector_number""",
+            ORDER BY $PRINTING_ORDER""",
         listOf(nameNorm),
     )
 

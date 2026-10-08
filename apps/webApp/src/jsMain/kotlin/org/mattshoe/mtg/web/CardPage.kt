@@ -44,6 +44,13 @@ fun CardPage(
     /** "7 of 99", when the card is part of a deck. */
     place: String? = null,
     onStep: (DeckCard) -> Unit = {},
+    /**
+     * The picture, the side it is turned to. `AppState.artFor` works
+     * that out; null leaves the front.
+     */
+    art: String? = CardQueries.art(card.scryfallId),
+    /** Turn a double-faced card over. */
+    onFlip: () -> Unit = {},
 ) {
     Div(attrs = { classes("wrap") }) {
         Div(attrs = { classes("page-head") }) {
@@ -52,6 +59,17 @@ fun CardPage(
                 onClick { onBack() }
             }) { Text("← Back") }
             Span(attrs = { classes("spacer") }) {}
+            // Named rather than hinted at, near the top, because
+            // reading what the rest of Commander does with a card is
+            // most of why somebody opens it.
+            card.edhrecUrl?.let { url ->
+                A(href = url, attrs = {
+                    classes("btn", "sm", "ghost", "edhrec-link")
+                    target(ATarget.Blank)
+                    attr("rel", "noopener noreferrer")
+                    attr("title", "This card on EDHREC")
+                }) { Text("EDHREC ↗") }
+            }
             Button(attrs = {
                 classes("btn", "sm", "ghost", "icon-only")
                 attr("title", "Copy a link to this card")
@@ -89,7 +107,7 @@ fun CardPage(
             when {
                 card.busy -> Div(attrs = { classes("empty") }) { Text("Loading…") }
                 card.error != null -> Div(attrs = { classes("err") }) { Text(card.error!!) }
-                else -> Body(card)
+                else -> Body(card, art, onFlip)
             }
             if (place != null) Steps(previous, next, place, onStep)
         }
@@ -161,17 +179,22 @@ private fun FacePanel(face: Face, named: Boolean) {
 }
 
 @Composable
-private fun Body(card: CardDetail) {
-    CardQueries.art(card.printings.firstOrNull()?.scryfallId)?.let { url ->
-        // `card-scan`, not `card-art`. The latter is the grid tile's
-        // wrapper and sets no width at all, so Scryfall's 745px scan
-        // rendered at 745px and ran off the side of a phone.
-        Img(src = url, alt = card.name, attrs = { classes("card-scan") })
+private fun Body(card: CardDetail, art: String?, onFlip: () -> Unit) {
+    art?.let { url ->
+        Div(attrs = { classes("card-scan-frame") }) {
+            // `card-scan`, not `card-art`. The latter is the grid tile's
+            // wrapper and sets no width at all, so Scryfall's 745px scan
+            // rendered at 745px and ran off the side of a phone.
+            Img(src = url, alt = card.name, attrs = { classes("card-scan") })
+            if (card.flips) FlipToggle(onFlip)
+        }
     }
 
     // What the card actually says. Everything under it is about the
     // collection; this is the card.
     card.faces.forEach { FacePanel(it, card.faces.size > 1) }
+
+    Details(card)
 
     Div(attrs = { classes("flex-wrap", "small") }) {
         Span(attrs = { classes("tag", "mini") }) { Text("${card.owned} owned") }
@@ -233,6 +256,52 @@ private fun Body(card: CardDetail) {
     }
 
     Rulings(card)
+}
+
+/**
+ * Everything else the database knows about the printing on the page.
+ *
+ * `CardFacts.groups` decides what is said and in which words; this
+ * only lays it out. Absent until the facts arrive, the way the face
+ * panels are.
+ */
+@Composable
+private fun Details(card: CardDetail) {
+    val groups = card.facts?.groups.orEmpty()
+    if (groups.isEmpty()) return
+    H3 { Text("Details") }
+    Div(attrs = { classes("facts") }) {
+        groups.forEach { g ->
+            Div(attrs = { classes("facts-group") }) { Text(g.title) }
+            g.facts.forEach { f ->
+                Div(attrs = { classes("fact") }) {
+                    Span(attrs = { classes("fact-label") }) { Text(f.label) }
+                    Span(attrs = { classes("fact-value") }) { Text(f.value) }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The button over a double-faced card's picture that turns it over.
+ *
+ * Shared by the card page, the carousel and the Library's tiles. It
+ * stops the click where it is, because on a tile the click would
+ * otherwise carry on to the tile and open the carousel.
+ */
+@Composable
+fun FlipToggle(onFlip: () -> Unit) {
+    Button(attrs = {
+        classes("flip-toggle")
+        attr("type", "button")
+        attr("aria-label", "Flip card")
+        attr("title", "Turn the card over")
+        onClick {
+            it.stopPropagation()
+            onFlip()
+        }
+    }) { Text("↻") }
 }
 
 /**

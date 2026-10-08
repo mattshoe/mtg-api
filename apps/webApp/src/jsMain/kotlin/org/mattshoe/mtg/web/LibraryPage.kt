@@ -45,6 +45,10 @@ fun LibraryPage(
     /** Put the suggestion list away, touching nothing else. */
     onDismissNames: () -> Unit = {},
     facets: Facets = Facets(),
+    /** The picture for a tile, turned to whichever side `AppState` says. */
+    art: (CardRow) -> String? = { CardQueries.art(it.scryfallId, "normal") },
+    /** Turn a double-faced tile over, without opening anything. */
+    onFlip: (CardRow) -> Unit = {},
 ) {
     // One rule: anything that changes the filters asks the database
     // again. The page debounces, so typing does not fire per keystroke
@@ -121,7 +125,7 @@ fun LibraryPage(
                     // Dimmed rather than gone, so the page keeps its
                     // height and you keep your place in it.
                     if (state.busy) classes("stale")
-                }) { state.rows.forEach { Tile(it, onOpen) } }
+                }) { state.rows.forEach { Tile(it, onOpen, art(it)) { onFlip(it) } } }
                 Pager(state, ::apply)
             }
         }
@@ -165,7 +169,7 @@ private fun SortPicker(state: Library, apply: (Library) -> Unit) {
 }
 
 @Composable
-private fun Tile(card: CardRow, onOpen: (CardRow) -> Unit) {
+private fun Tile(card: CardRow, onOpen: (CardRow) -> Unit, art: String?, onFlip: () -> Unit) {
     // The same markup and the same class names the hand-written grid
     // used, so the picture and the price sit exactly where the
     // stylesheet already puts them.
@@ -176,7 +180,7 @@ private fun Tile(card: CardRow, onOpen: (CardRow) -> Unit) {
         Div(attrs = { classes("card-art") }) {
             // Scryfall addresses art by the id already on the row, so
             // this costs a URL rather than a lookup.
-            CardQueries.art(card.scryfallId, "normal")?.let { url ->
+            art?.let { url ->
                 Img(src = url, alt = card.fullName, attrs = {
                     classes("card-img")
                     attr("loading", "lazy")
@@ -187,6 +191,7 @@ private fun Tile(card: CardRow, onOpen: (CardRow) -> Unit) {
             // own page, where there is room to say whose it is and
             // which deck took it.
             Div(attrs = { classes("price-badge") }) { Text(Prices.money(card.price, dash = "")) }
+            if (card.flips) FlipToggle(onFlip)
         }
         // The name and how many, on one line. The mana cost was a
         // string of `{1}{G}` with no symbols behind it and the set

@@ -1,5 +1,7 @@
 package org.mattshoe.mtg.core
 
+import kotlinx.serialization.json.JsonArray
+
 /**
  * The whole app's state, and the one object that knows how to fill it.
  *
@@ -64,7 +66,31 @@ data class AppState(
      * because nothing ever told the DOM which one it was drawing.
      */
     val toastFailed: Boolean = false,
+    /**
+     * The double-faced cards turned over to their backs, by
+     * `name_norm`.
+     *
+     * Here rather than in either shell so a rotation keeps it (the
+     * phone's `ViewModel` holds this state) and so a card turned over
+     * on its tile is still turned over in the carousel and on its
+     * page — it is the same card.
+     */
+    val flipped: Set<String> = emptySet(),
 ) {
+    /** Turn a card over, or back again. */
+    fun flip(nameNorm: String): AppState =
+        copy(flipped = if (nameNorm in flipped) flipped - nameNorm else flipped + nameNorm)
+
+    fun showsBack(nameNorm: String): Boolean = nameNorm in flipped
+
+    /**
+     * The picture to draw for a card, on whichever side it is turned
+     * to. A card with no back is always its front, however it got
+     * into [flipped].
+     */
+    fun artFor(scryfallId: String?, nameNorm: String, layout: String?, size: String = "normal"): String? =
+        CardQueries.art(scryfallId, size, back = Flip.flips(layout) && showsBack(nameNorm))
+
     val view: View get() = route.view
 
     /** Where a route actually lands, given the lock. */
@@ -315,13 +341,16 @@ data class AppState(
                     typeLine = card.knownTypeLine,
                     printing = card.printing,
                     price = card.price,
-                    tags = listOf(
+                    tags = listOfNotNull(
                         PeekTag("${card.qty}× in deck"),
                         // The one bad fact a deck row can state: the
                         // deck wants more than the collection holds.
                         PeekTag("${card.owned} owned", bad = card.short > 0),
+                        Edhrec.rankText(card.edhrecRank)?.let { PeekTag(it) },
                     ),
                     inDeck = card,
+                    edhrecRank = card.edhrecRank,
+                    layout = card.layout,
                 )
             }
 
@@ -336,7 +365,10 @@ data class AppState(
                     tags = listOfNotNull(
                         PeekTag("${row.qty} owned"),
                         row.free?.let { PeekTag("$it free") },
+                        Edhrec.rankText(row.edhrecRank)?.let { PeekTag(it) },
                     ),
+                    edhrecRank = row.edhrecRank,
+                    layout = row.layout,
                 )
             }
         }
@@ -679,7 +711,36 @@ object Load {
         CardQueries.usedIn(nameNorm),
         CardQueries.legalities(nameNorm),
         CardQueries.rulings(nameNorm),
+        CardFacts.query(nameNorm),
     )
+
+    /**
+     * The card page, out of the answers to [card], in the same order.
+     *
+     * Both platforms did this decode themselves and had already
+     * drifted: the phone's copy never called `named`, so a card opened
+     * from a link kept its lowercase key as a title on Android only.
+     */
+    fun cardDetail(label: String, nameNorm: String, answers: List<Pair<List<String>, List<JsonArray>>>): CardDetail {
+        fun at(i: Int) = answers.getOrNull(i) ?: (emptyList<String>() to emptyList())
+        val face = at(0)
+        val printings = at(1)
+        val uses = at(2)
+        val legal = at(3)
+        val rules = at(4)
+        val facts = at(5)
+        val owned = CardQueries.decodePrintings(printings.first, printings.second)
+        return CardDetail(
+            name = label,
+            nameNorm = nameNorm,
+            printings = owned,
+            usedIn = CardQueries.decodeUses(uses.first, uses.second),
+            legalities = CardQueries.decodeLegalities(legal.first, legal.second),
+            rulings = CardQueries.decodeRulings(rules.first, rules.second),
+            faces = CardQueries.decodeFaces(face.first, face.second),
+            facts = CardFacts.decode(facts.first, facts.second),
+        ).named(owned)
+    }
 
     fun find(term: String): Sql = PaletteQueries.find(term)
 

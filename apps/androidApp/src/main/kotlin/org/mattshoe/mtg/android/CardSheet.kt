@@ -81,6 +81,13 @@ fun CardSheet(
      * obviously the point.
      */
     onShare: () -> Unit = {},
+    /**
+     * The picture, the side it is turned to. `AppState.artFor` works
+     * that out; the default is the front.
+     */
+    art: String? = CardQueries.art(card.scryfallId),
+    /** Turn a double-faced card over. */
+    onFlip: () -> Unit = {},
     // Last, so `CardSheet(card) {}` still means "and this is how you
     // leave it" — which is how every caller and every test writes it.
     onClose: () -> Unit,
@@ -96,6 +103,15 @@ fun CardSheet(
         ) {
             TextButton(onClick = onClose) { Text("← Back") }
             Spacer(Modifier.weight(1f))
+            // Named, near the top, the same as the web's. Opened by
+            // the system, which hands an https link to the browser.
+            card.edhrecUrl?.let { url ->
+                val open = androidx.compose.ui.platform.LocalUriHandler.current
+                TextButton(
+                    onClick = { runCatching { open.openUri(url) } },
+                    modifier = Modifier.testTag("edhrec-link"),
+                ) { Text("EDHREC ↗") }
+            }
             // The same header shape as the website's card page: back
             // on the left, the share on the right, nothing between.
             ShareCardButton(onShare)
@@ -106,7 +122,7 @@ fun CardSheet(
         when {
             card.busy -> Text("Loading…")
             card.error != null -> Text(card.error!!)
-            else -> Body(card)
+            else -> Body(card, art, onFlip)
         }
         // Outside the `when`, the same as the web: stepping along a
         // deck still works while the next card is loading, which is
@@ -142,25 +158,30 @@ private fun Steps(previous: DeckCard?, next: DeckCard?, place: String, onStep: (
 }
 
 @Composable
-private fun Body(card: CardDetail) {
+private fun Body(card: CardDetail, art: String?, onFlip: () -> Unit) {
     // The scan, the same picture the web page puts at the top. A card
     // page without the card on it is a list of numbers.
-    CardQueries.art(card.printings.firstOrNull()?.scryfallId)?.let { url ->
+    art?.let { url ->
         val frame = RoundedCornerShape(5)
         // `.card-scan` is 300px at the widest and centred in whatever
         // holds it. Filling the width instead was invisible on a phone
         // and absurd on anything else — a playing card the width of a
         // tablet.
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-            AsyncImage(
-                model = url,
-                contentDescription = card.name,
-                modifier = Modifier.widthIn(max = 300.dp).fillMaxWidth()
-                    .aspectRatio(Design.CARD_ASPECT)
-                    .background(Bg3, frame)
-                    .clip(frame),
-                contentScale = ContentScale.Fit,
-            )
+            Box(Modifier.widthIn(max = 300.dp).fillMaxWidth()) {
+                AsyncImage(
+                    model = url,
+                    contentDescription = card.name,
+                    modifier = Modifier.fillMaxWidth()
+                        .aspectRatio(Design.CARD_ASPECT)
+                        .background(Bg3, frame)
+                        .clip(frame)
+                        .testTag("card-scan")
+                        .semantics { cardPicture = url },
+                    contentScale = ContentScale.Fit,
+                )
+                if (card.flips) FlipToggle(onFlip, Modifier.align(Alignment.TopEnd))
+            }
         }
     }
 
@@ -169,6 +190,8 @@ private fun Body(card: CardDetail) {
     // owned, who has them, which decks want them. None of it is the
     // card, and until now none of the card was here either.
     card.faces.forEach { FacePanel(it, named = card.faces.size > 1) }
+
+    Details(card)
 
     // `.flex-wrap` of `.tag.mini`, the way the web states a figure:
     // boxed, so a number reads as a number and not as the start of a
@@ -362,6 +385,75 @@ private fun Body(card: CardDetail) {
         }
     }
 }
+
+/**
+ * Everything else the database knows about the printing on the page.
+ * Sibling of `Details` on the web; `CardFacts.groups` decides what is
+ * said, this only lays it out.
+ */
+@Composable
+private fun Details(card: CardDetail) {
+    val groups = card.facts?.groups.orEmpty()
+    if (groups.isEmpty()) return
+    Heading("Details")
+    groups.forEach { g ->
+        // `.facts-group`: small capitals over the rows.
+        Text(
+            g.title.uppercase(),
+            Modifier.padding(top = 6.dp),
+            color = Ink3,
+            fontSize = Design.TINY.sp,
+            letterSpacing = 0.5.sp,
+        )
+        g.facts.forEachIndexed { i, f ->
+            if (i > 0) RowRule()
+            Row(
+                Modifier.fillMaxWidth().padding(vertical = 3.dp).testTag("fact"),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(f.label, Modifier.widthIn(min = 112.dp, max = 112.dp), color = Ink3, fontSize = Design.MINI.sp)
+                Text(f.value, Modifier.weight(1f), color = Ink, fontSize = Design.MINI.sp)
+            }
+        }
+    }
+}
+
+/**
+ * The button over a double-faced card's picture that turns it over.
+ * Sibling of `FlipToggle` on the web, and used the same three places:
+ * the card page, the carousel and the Library's tiles.
+ *
+ * Told apart from the art by lightness rather than hue — a near-black
+ * disc with a white ring and a white mark — because Matt is
+ * colourblind and the art behind it can be any colour at all. Its own
+ * `clickable`, so on a tile the press turns the card over and does not
+ * go on to open the carousel.
+ */
+@Composable
+fun FlipToggle(onFlip: () -> Unit, modifier: Modifier = Modifier) {
+    Box(
+        modifier.size(TouchTarget)
+            .testTag("flip-toggle")
+            .semantics {
+                role = Role.Button
+                contentDescription = "Flip card"
+            }
+            .clickable(onClick = onFlip),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            Modifier.size(40.dp)
+                .background(FlipDisc, androidx.compose.foundation.shape.CircleShape)
+                .border(2.dp, Color.White, androidx.compose.foundation.shape.CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text("↻", color = Color.White, fontSize = 22.sp)
+        }
+    }
+}
+
+/** `.flip-toggle`'s background, `#0b0d10`. */
+val FlipDisc = Color(0xFF0B0D10)
 
 /** An `h3` on the web: the name of a section, present even when empty. */
 /**

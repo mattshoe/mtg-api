@@ -129,7 +129,12 @@ data class PeekCard(
     val price: Double?,
     val tags: List<PeekTag>,
     val inDeck: DeckCard? = null,
-)
+    val edhrecRank: Long? = null,
+    /** Which tells the carousel whether there is a back to turn over to. */
+    val layout: String? = null,
+) {
+    val flips: Boolean get() = Flip.flips(layout)
+}
 
 data class DeckCard(
     val name: String,
@@ -156,6 +161,10 @@ data class DeckCard(
     val setCode: String? = null,
     val setName: String? = null,
     val collectorNumber: String? = null,
+    // For the carousel: the rank it states, and whether the card has
+    // a back to turn over to.
+    val edhrecRank: Long? = null,
+    val layout: String? = null,
 ) {
     val isCommander: Boolean get() = role == "commander"
 
@@ -366,17 +375,20 @@ object DeckQueries {
                   -- which printing of the card the collection holds.
                   COALESCE(mine.setcode, alt.setcode)             AS setcode,
                   COALESCE(mine.set_name, alt.set_name)           AS set_name,
-                  COALESCE(mine.collector_number, alt.collector_number) AS collector_number
+                  COALESCE(mine.collector_number, alt.collector_number) AS collector_number,
+                  -- The carousel's rank, and whether it has a back.
+                  COALESCE(mine.edhrec_rank, alt.edhrec_rank)     AS edhrec_rank,
+                  COALESCE(mine.layout, alt.layout)               AS layout
              FROM deck_cards dc
              JOIN decks d ON d.id = dc.deck_id
              LEFT JOIN (SELECT owner, name_norm, MIN(id) AS id, scryfall_id, type_line,
                                mana_cost, cmc, produced_mana, oracle_text, color_identity, rarity,
-                               setcode, set_name, collector_number
+                               setcode, set_name, collector_number, edhrec_rank, layout
                           FROM cards GROUP BY owner, name_norm) mine
                ON mine.name_norm = dc.name_norm AND mine.owner = d.owner
              LEFT JOIN (SELECT name_norm, MIN(id) AS id, scryfall_id, type_line,
                                mana_cost, cmc, produced_mana, oracle_text, color_identity, rarity,
-                               setcode, set_name, collector_number
+                               setcode, set_name, collector_number, edhrec_rank, layout
                           FROM cards GROUP BY name_norm) alt
                ON alt.name_norm = dc.name_norm
              LEFT JOIN prices pm ON pm.scryfall_id = mine.scryfall_id
@@ -432,6 +444,8 @@ object DeckQueries {
                 setCode = it.str("setcode"),
                 setName = it.str("set_name"),
                 collectorNumber = it.str("collector_number"),
+                edhrecRank = it.str("edhrec_rank")?.toLongOrNull(),
+                layout = it.str("layout"),
             )
         }
     }

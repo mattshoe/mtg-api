@@ -65,7 +65,7 @@ private val ALIASES = mapOf(
 )
 
 private val IS_SHAPES = mapOf(
-    "dfc" to "c.layout IN ('transform','modal_dfc','reversible_card','double_faced_token')",
+    "dfc" to "c.layout IN (${Flip.LAYOUTS.joinToString(",") { "'$it'" }})",
     "transform" to "c.layout = 'transform'",
     "mdfc" to "c.layout = 'modal_dfc'",
     "split" to "c.layout = 'split'",

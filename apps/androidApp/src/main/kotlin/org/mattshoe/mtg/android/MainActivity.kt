@@ -826,23 +826,12 @@ class MainActivity : ComponentActivity() {
     }
 
     private suspend fun loadCard(nameNorm: String, label: String): AppState {
-        val (face, printings, uses, legal, rules) = Load.card(nameNorm)
-        val f = api.query(face)
-        val p = api.query(printings)
-        val u = api.query(uses)
-        val l = api.query(legal)
-        val r = api.query(rules)
-        return app.copy(
-            card = CardDetail(
-                name = label,
-                nameNorm = nameNorm,
-                printings = CardQueries.decodePrintings(p.cols, p.rows),
-                usedIn = CardQueries.decodeUses(u.cols, u.rows),
-                legalities = CardQueries.decodeLegalities(l.cols, l.rows),
-                rulings = CardQueries.decodeRulings(r.cols, r.rows),
-                faces = CardQueries.decodeFaces(f.cols, f.rows),
-            ),
-        )
+        // Run here, decoded in `:core`, so the phone and the browser
+        // build the same `CardDetail` out of the same answers. This
+        // copy used to skip `named`, so a card opened from a link kept
+        // its lowercase key as a title on the phone and not the web.
+        val answers = Load.card(nameNorm).map { api.query(it).let { r -> r.cols to r.rows } }
+        return app.copy(card = Load.cardDetail(label, nameNorm, answers))
     }
 
     // ---------------------------------------------------- find and hint

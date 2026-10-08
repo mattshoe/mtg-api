@@ -81,6 +81,9 @@ data class CardRow(
      * next to the number.
      */
     val valueIsPartial: Boolean get() = unpriced > 0 && value != null
+
+    /** Whether the tile has a back to turn over to. */
+    val flips: Boolean get() = Flip.flips(layout)
 }
 
 /**

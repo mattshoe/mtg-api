@@ -84,6 +84,12 @@ class CoreSqlDump {
         case("stats for everything", Load.stats(StatsScope()))
         case("stats per owner", StatsQueries.perOwner())
         Load.card("sol ring").forEachIndexed { i, s -> case("card detail $i", s) }
+        // Run for its result as well as its syntax: `core-sql.test.js`
+        // checks this one comes back as one row with each list once.
+        case(
+            "card facts, a transform card with two keywords and two finishes",
+            CardFacts.query("aetherblade agent // gitaxian mindstinger"),
+        )
         case("palette find", Load.find("sol"))
         FacetQueries.all.forEachIndexed { i, s -> case("facet $i", s) }
         FacetQueries.everything.forEachIndexed { i, s -> case("facet lists, batch $i", s) }

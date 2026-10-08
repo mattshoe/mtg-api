@@ -70,6 +70,10 @@ fun LibraryScreen(
     onState: (Library) -> Unit,
     onSearch: () -> Unit,
     onOpen: (CardRow) -> Unit,
+    /** The picture for a tile, turned to whichever side `AppState` says. */
+    art: (CardRow) -> String? = { CardQueries.art(it.scryfallId, "normal") },
+    /** Turn a double-faced tile over, without opening anything. */
+    onFlip: (CardRow) -> Unit = {},
     /**
      * Unused, and kept because the shell still holds the flag and
      * passes it. The filter groups are always on the page now, folded
@@ -138,7 +142,7 @@ fun LibraryScreen(
         }
 
         if (grid) {
-            items(state.rows, key = { "${it.owner}:${it.nameNorm}" }) { CardTile(it, state.busy, onOpen) }
+            items(state.rows, key = { "${it.owner}:${it.nameNorm}" }) { CardTile(it, state.busy, onOpen, art(it)) { onFlip(it) } }
 
             item(span = { GridItemSpan(maxLineSpan) }) { Pager(state, ::apply) }
         }
@@ -249,7 +253,7 @@ private fun SortPicker(state: Library, apply: (Library) -> Unit) {
  * card's own page, which has room to say whose it is).
  */
 @Composable
-private fun CardTile(card: CardRow, stale: Boolean, onOpen: (CardRow) -> Unit) {
+private fun CardTile(card: CardRow, stale: Boolean, onOpen: (CardRow) -> Unit, art: String?, onFlip: () -> Unit) {
     Column(
         Modifier.fillMaxWidth()
             // Addressable. `clickable` below sets
@@ -268,9 +272,10 @@ private fun CardTile(card: CardRow, stale: Boolean, onOpen: (CardRow) -> Unit) {
             // card frame by.
             val frame = RoundedCornerShape(5)
             AsyncImage(
-                model = CardQueries.art(card.scryfallId, "normal"),
+                model = art,
                 contentDescription = card.fullName,
-                modifier = Modifier.fillMaxSize().background(Bg3, frame).clip(frame),
+                modifier = Modifier.fillMaxSize().background(Bg3, frame).clip(frame)
+                    .semantics { art?.let { cardPicture = it } },
                 contentScale = ContentScale.Crop,
             )
             // Centred along the bottom, the same as the web's
@@ -280,6 +285,7 @@ private fun CardTile(card: CardRow, stale: Boolean, onOpen: (CardRow) -> Unit) {
             Prices.money(card.price, dash = "").takeIf { it.isNotEmpty() }?.let {
                 Badge(it, Accent2, Modifier.align(Alignment.BottomCenter).padding(bottom = 5.dp))
             }
+            if (card.flips) FlipToggle(onFlip, Modifier.align(Alignment.TopEnd))
         }
         // The name and how many, on one line. The name gives way so
         // the quantity is always readable.

@@ -41,6 +41,9 @@ fun CardCarousel(
     onSwipe: (Int) -> Unit,
     onDetails: () -> Unit,
     onTweak: (DeckCard, Tweak) -> Unit,
+    /** The picture, turned to whichever side `AppState` says. */
+    art: (PeekCard) -> String? = { CardQueries.art(it.scryfallId, "normal") },
+    onFlip: (PeekCard) -> Unit = {},
 ) {
     if (cards.isEmpty()) return
     val index = at.coerceIn(0, cards.size - 1)
@@ -82,7 +85,7 @@ fun CardCarousel(
                 }
             }
         }) {
-            cards.forEach { c -> CardFace(c) }
+            cards.forEach { c -> CardFace(c, art(c)) { onFlip(c) } }
         }
 
         // Put the rail where the state says, when something other
@@ -102,11 +105,11 @@ fun CardCarousel(
 
 /** One card, as big as the rail allows. */
 @Composable
-private fun CardFace(card: PeekCard) {
+private fun CardFace(card: PeekCard, url: String?, onFlip: () -> Unit) {
     Div(attrs = { classes("peek-card") }) {
-        val url = CardQueries.art(card.scryfallId, "normal")
         if (url != null) {
             Img(src = url, alt = card.title)
+            if (card.flips) FlipToggle(onFlip)
         } else {
             // A card the deck wants that nobody owns has no printing
             // and so no picture. Its name, rather than a grey

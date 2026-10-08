@@ -65,6 +65,9 @@ fun CardCarousel(
     onSwipe: (Int) -> Unit,
     onDetails: () -> Unit,
     onTweak: (org.mattshoe.mtg.core.DeckCard, Tweak) -> Unit,
+    /** The picture, turned to whichever side `AppState` says. */
+    art: (PeekCard) -> String? = { CardQueries.art(it.scryfallId, "normal") },
+    onFlip: (PeekCard) -> Unit = {},
 ) {
     if (cards.isEmpty()) return
     val index = at.coerceIn(0, cards.lastIndex)
@@ -122,7 +125,7 @@ fun CardCarousel(
                     contentPadding = PaddingValues(horizontal = 40.dp),
                     pageSpacing = 12.dp,
                 ) { page ->
-                    CardFace(cards[page])
+                    CardFace(cards[page], art(cards[page])) { onFlip(cards[page]) }
                 }
             }
 
@@ -139,8 +142,7 @@ fun CardCarousel(
 
 /** One card, as big as the width allows. */
 @Composable
-private fun CardFace(card: PeekCard) {
-    val url = CardQueries.art(card.scryfallId, "normal")
+private fun CardFace(card: PeekCard, url: String?, onFlip: () -> Unit) {
     Box(
         Modifier.fillMaxWidth()
             .aspectRatio(Design.CARD_ASPECT)
@@ -154,9 +156,10 @@ private fun CardFace(card: PeekCard) {
             AsyncImage(
                 model = url,
                 contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().semantics { cardPicture = url },
                 contentScale = ContentScale.Fit,
             )
+            if (card.flips) FlipToggle(onFlip, Modifier.align(Alignment.TopEnd))
         } else {
             // A card the deck wants that nobody owns has no printing
             // and so no picture. Its name, rather than a grey

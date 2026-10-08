@@ -578,6 +578,36 @@ td.mono { font-family: var(--mono); font-size: 12.5px; }
 .face-head { display: flex; align-items: center; gap: 8px; }
 .face-name { font-weight: 600; font-size: 14px; }
 .type-line { font-size: 12.5px; color: var(--text-2); }
+
+/* Details: everything else the database holds about the printing on
+   the page, a label and a value to a line. The value breaks anywhere
+   because a Scryfall id is one 36-character word, and a word that
+   long pushes a phone's whole page sideways. */
+.facts-group {
+  font-size: 11px; color: var(--text-3); text-transform: uppercase;
+  letter-spacing: .05em; margin: 10px 0 2px;
+}
+.fact { display: flex; gap: 10px; font-size: 12.5px; padding: 4px 0; }
+.fact + .fact { border-top: 1px solid var(--line); }
+.fact-label { flex: none; width: 9.5em; color: var(--text-3); }
+.fact-value { flex: 1; min-width: 0; color: var(--text); overflow-wrap: anywhere; }
+
+/* Turning a double-faced card over. Told apart from the art by
+   lightness, not hue: a near-black disc with a white ring and a white
+   mark reads against any picture, the light parts of a card and the
+   dark ones alike. */
+.card-scan-frame { position: relative; max-width: 300px; margin: 0 auto 8px; }
+.card-scan-frame .card-scan { margin: 0; }
+.flip-toggle {
+  position: absolute; top: 8px; right: 8px; z-index: 2;
+  width: 40px; height: 40px; padding: 0; border-radius: 50%;
+  display: grid; place-items: center;
+  background: #0b0d10; color: #ffffff; border: 2px solid #ffffff;
+  font-size: 22px; line-height: 1; cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0,0,0,.55);
+}
+.peek-card { position: relative; }
+.peek-card .flip-toggle { top: 24px; right: 36px; }
 /* Bottom-right, the way it is printed on the card, and in the mono
    face so a `3/4` and a `12/12` line up if two faces are stacked. */
 .ptbox {

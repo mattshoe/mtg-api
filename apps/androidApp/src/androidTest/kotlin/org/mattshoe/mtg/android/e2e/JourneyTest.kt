@@ -114,6 +114,49 @@ internal class JourneyTest : E2eTest() {
         )
     }
 
+    /**
+     * A double-faced card, all the way through: its rank on the
+     * carousel, turning it over, and a Details row that only
+     * `CardFacts.query` returns.
+     *
+     * The only check that the facts' SQL runs against the real schema
+     * on a phone. The first card the fixture lists is Aetherblade
+     * Agent, a transform card with two keywords and two finishes.
+     */
+    @Test
+    fun aDoubleFacedCardShowsItsRankTurnsOverAndListsEverything() {
+        settled()
+        val name = firstCardOnScreen()
+        val norm = state().library.rows.first { it.fullName == name }.nameNorm
+        assertTrue(
+            state().library.rows.first { it.fullName == name }.layout == "transform",
+            "the first card in the fixture is no longer double-faced, so this proves nothing: $name",
+        )
+        showCard(name).performClick()
+        until("tapping a card did not open the carousel") {
+            compose.onAllNodesWithTag("card-carousel").fetchSemanticsNodes().isNotEmpty()
+        }
+        assertTrue(
+            compose.onAllNodesWithText("EDHREC #", substring = true).fetchSemanticsNodes().isNotEmpty(),
+            "the carousel says nothing about the EDHREC rank",
+        )
+        compose.onAllNodes(hasTestTag("flip-toggle"), useUnmergedTree = true).let { all ->
+            all[all.fetchSemanticsNodes().size - 1].performClick()
+        }
+        until("the carousel's toggle did not turn the card over") { state().showsBack(norm) }
+
+        compose.onNodeWithText("Full details").performClick()
+        until("Full details did not open the card") { state().view == View.CARD }
+        until("the card page never got its facts") { state().card?.facts != null }
+        assertEquals("transform", state().card?.facts?.layout)
+        assertTrue(
+            state().card?.facts?.value("keywords").orEmpty().contains("Transform"),
+            "keywords came back as ${state().card?.facts?.value("keywords")}",
+        )
+        compose.onAllNodesWithText("Details").onFirst().assertExists()
+        compose.onAllNodesWithText("Alexander Mokhov").onFirst().assertExists()
+    }
+
     @Test
     fun theDecksTabListsWhatTheDatabaseHas() {
         settled()
