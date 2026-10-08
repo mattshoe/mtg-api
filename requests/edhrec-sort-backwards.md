@@ -1,8 +1,7 @@
 ---
-status: hold
+status: ready
 size: small
 platforms: web, android
-merge: ask
 ---
 
 # The EDHREC sort runs backwards

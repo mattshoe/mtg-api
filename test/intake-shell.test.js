@@ -556,6 +556,20 @@ describe('a worktree that is already there', () => {
     return tree
   }
 
+  it('hands over the live request file, not the committed one', () => {
+    // Four requests sat at `status: hold` on main while the live files said
+    // `ready`. Every agent read its worktree's copy, correctly refused to
+    // build, and stopped — so the queue looked broken when it was obeying.
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    writeFileSync(
+      join(box.repo, 'requests', 'a-thing.md'),
+      '---\nstatus: ready\n---\n\n# A thing\n\nEDITED AFTER THE COMMIT\n',
+    )
+    run('dispatch.sh')
+    const handed = join(box.repo, '.intake', 'wt', 'a-thing', 'requests', 'a-thing.md')
+    expect(readFileSync(handed, 'utf8')).toContain('EDITED AFTER THE COMMIT')
+  })
+
   it('is never overwritten — no agent starts on top of it', () => {
     const tree = withExistingWorktree()
     const r = run('dispatch.sh')
