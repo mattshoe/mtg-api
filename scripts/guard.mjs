@@ -34,7 +34,27 @@ if (split < 0 || !Number.isFinite(seconds) || seconds <= 0) {
   console.error('usage: node scripts/guard.mjs <seconds> -- <command> [args...]');
   process.exit(2);
 }
-const [cmd, ...args] = process.argv.slice(split + 1);
+let [cmd, ...args] = process.argv.slice(split + 1);
+
+// Gradle does not share a laptop. `--no-daemon` means a full JVM start every
+// time, `~/.gradle` is locked, and androidApp's `forkEvery(1)` spawns a JVM per
+// test class — three concurrent builds thrash rather than going three times
+// faster, and one afternoon measured them an order of magnitude slower.
+//
+// That is a reason to serialise the BUILD, not the agents. Agents spend most of
+// their wall clock reading, editing and waiting on CI, none of which contends;
+// only this step does. So a Gradle invocation waits its turn behind `lockf`,
+// which blocks in the kernel — not a polling loop, and it cannot orphan: the
+// lock dies with the process holding it.
+const GRADLE_LOCK = process.env.INTAKE_GRADLE_LOCK
+  || join(process.env.HOME || '/tmp', '.mtg-gradle.lock');
+const isGradle = /(^|\/)gradlew?$/.test(cmd) || args.some((a) => /(^|\/)gradlew?$/.test(a));
+if (isGradle && process.env.INTAKE_NO_GRADLE_LOCK !== '1') {
+  // -k keeps the lock file, -t waits this long for the turn and then fails
+  // loudly rather than running two builds at once.
+  args = ['-k', '-t', String(Math.max(seconds, 1800)), GRADLE_LOCK, cmd, ...args];
+  cmd = '/usr/bin/lockf';
+}
 
 // One file per command, not one for all of them. A single shared
 // pidfile would mean starting the web suite killed the core suite
