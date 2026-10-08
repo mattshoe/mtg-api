@@ -17,6 +17,7 @@ set -uo pipefail
 REPO="$(cd "$(dirname "$0")/../.." && pwd -P)"
 STATE="$REPO/.intake"
 LOG="$STATE/intake.log"
+REQUESTS="$REPO/requests"
 BASE="${INTAKE_BASE:-origin/main}"
 
 say() { printf '%s  %s\n' "$(date '+%H:%M:%S')" "$1" >>"$LOG"; }
@@ -80,6 +81,14 @@ claim() {
   done < "$STATE/queue.$$"
   rm -f "$STATE/queue.$$"
   [ -n "$file" ] || return 2
+
+  # Hand over the LIVE request file, not the one the worktree was cut from.
+  # Without this the agent reads main's copy: four requests sat at `status:
+  # hold` on main while the live files said `ready`, so every agent correctly
+  # refused to build and stopped. The file Matt is looking at is the file the
+  # agent must read.
+  cp "$REQUESTS/$file" "$tree/requests/$file" 2>>"$LOG" \
+    || say "could not hand over $file; the agent will read the committed copy"
 
   printf '%s\t%s\t%s\n' "$file" "$branch" "$tree"
 }
