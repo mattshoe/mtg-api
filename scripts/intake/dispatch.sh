@@ -197,12 +197,39 @@ claim_alive() {
 
   kill -0 "$pid" 2>/dev/null || { say "  $(basename "$dir") pid $pid is gone"; return 1; }
 
-  # The age cap applies to a BUILDER claim and to a slot, never to the
-  # dispatcher's own lock. Capping the lock stole it from a live
-  # dispatcher that was simply doing a long job — it was never signalled,
-  # its own `drop_lock` then no-opped because the pid no longer matched,
-  # and two dispatchers raced on the same pull request. That is the
-  # original double-dispatch critical, reachable again.
+  # Is it the process it says it is? The reused-pid check used to compare
+  # against `*dispatch.sh*|*claude*`, which any `claude` process satisfies
+  # — Matt's own session included — while the recorded command sat in
+  # `$dir/command` and was never read.
+  cmd="$(ps -o command= -p "$pid" 2>/dev/null)"
+  was="$(cat "$dir/command" 2>/dev/null)"
+  local itself=false
+  if [ -n "$was" ]; then
+    [ "$cmd" = "$was" ] && itself=true
+    if [ "$itself" != true ]; then
+      say "  $(basename "$dir") pid $pid runs '$cmd', not the '$was' it recorded"
+      return 1
+    fi
+  else
+    case "$cmd" in
+      *dispatch.sh*|*claude*) itself=true ;;
+      *) say "  $(basename "$dir") pid $pid is '$cmd', not ours — the kernel reused it"
+         return 1 ;;
+    esac
+  fi
+
+  # The age cap, which is NOT evidence of death.
+  #
+  # R5 stopped the lock being stolen from a live dispatcher. It left the
+  # slot claim and the `.building` claim still age-capped — and with the
+  # global lock no longer serialising dispatchers, a second one took both
+  # and ran `prepare_slot` (salvage, `checkout -B`, `git clean -qxdf`) in
+  # the worktree a live builder was writing to, then launched a second
+  # builder on the branch. Reachable with no builder misbehaving at all.
+  #
+  # So the cap is a reason to STOP the holder, never a reason to assume it
+  # already stopped. The lock is exempt entirely: a dispatcher holding it
+  # for a long time is doing a long job, and there is nothing to kill.
   if [ "$kind" != "lock" ]; then
     started="$(cat "$dir/started" 2>/dev/null)"
     case "$started" in ''|*[!0-9]*) started="" ;; esac
@@ -211,26 +238,24 @@ claim_alive() {
       age=$(( (now - started) / 60 ))
       if [ "$age" -ge "$MAX_MINUTES" ]; then
         say "  $(basename "$dir") has been held ${age}m, past the ${MAX_MINUTES}m cap"
+        say "  its pid $pid is alive and is the process it recorded — stopping it first"
+        kill_tree "$pid" TERM
+        sleep 5
+        kill_tree "$pid" KILL
+        sleep 1
+        if kill -0 "$pid" 2>/dev/null; then
+          say "  pid $pid SURVIVED SIGKILL — leaving the claim alone rather than racing it"
+          tell "$(basename "$dir") is past the cap and its process will not die"
+          return 0
+        fi
+        say "  pid $pid is gone; the claim is free"
         return 1
       fi
     fi
   fi
 
-  # The reused-pid check compared against `*dispatch.sh*|*claude*`, which
-  # any `claude` process satisfies — Matt's own session included — while
-  # the recorded command sat in `$dir/command` and was never read. Compare
-  # against what was actually recorded.
-  cmd="$(ps -o command= -p "$pid" 2>/dev/null)"
-  was="$(cat "$dir/command" 2>/dev/null)"
-  if [ -n "$was" ]; then
-    if [ "$cmd" = "$was" ]; then return 0; fi
-    say "  $(basename "$dir") pid $pid runs '$cmd', not the '$was' it recorded"
-    return 1
-  fi
-  case "$cmd" in
-    *dispatch.sh*) return 0 ;;
-    *) say "  $(basename "$dir") pid $pid is '$cmd', not ours — the kernel reused it"; return 1 ;;
-  esac
+  [ "$itself" = true ] && { say "  $(basename "$dir") pid $pid is alive and is itself"; return 0; }
+  return 1
 }
 
 # Fill a claim in before anything can read it as abandoned.
@@ -578,17 +603,46 @@ wait_for_ci() {
     waited=$((waited + CI_POLL_SECONDS))
   done
 
+  local watched=0
   while IFS= read -r id; do
     [ -n "$id" ] || continue
     say "  gh run watch $id (for $sha)"
-    # `timeout` is not on macOS by default, so the deadline is the
-    # watcher's own: gh exits when the run ends, and a run cannot outlive
-    # its own job timeout.
-    gh run watch "$id" --exit-status >>"$LOG" 2>&1 || say "  run $id finished red"
+    # With a deadline. "The deadline is the watcher's own" was wrong: a
+    # GitHub job's default timeout is 360 minutes, 120 PAST MAX_MINUTES,
+    # which is what made a live builder's claims age out and get stolen
+    # with the builder behaving perfectly. A killed watch is transport
+    # trouble, not a verdict.
+    if watch_with_deadline "$id"; then
+      watched=$((watched + 1))
+    else
+      case $? in
+        2) say "  gave up watching run $id after ${CI_WATCH_SECONDS}s"
+           return 1 ;;
+        *) say "  run $id finished red"
+           watched=$((watched + 1)) ;;
+      esac
+    fi
   done <<EOF
 $ids
 EOF
+  [ "$watched" -gt 0 ] || return 2
   return 0
+}
+
+# 0 green, 1 red, 2 killed on the deadline. `timeout` is not on macOS, so
+# the sidecar is a backgrounded sleep that kills the watcher.
+watch_with_deadline() {
+  local id="$1" pid reaper rc
+  gh run watch "$id" --exit-status >>"$LOG" 2>&1 &
+  pid=$!
+  ( sleep "$CI_WATCH_SECONDS"; kill -TERM "$pid" 2>/dev/null ) >/dev/null 2>&1 &
+  reaper=$!
+  wait "$pid"; rc=$?
+  kill_tree "$reaper" TERM
+  wait "$reaper" 2>/dev/null || true
+  # 143 is SIGTERM, which here only comes from the sidecar.
+  [ "$rc" -eq 143 ] && return 2
+  return "$rc"
 }
 
 # ---------------------------------------------------------------------
@@ -723,10 +777,14 @@ stop_builder() {
 
 # Every `claude` working on exactly this branch, and no branch that merely
 # starts with it.
+# The exclusion class `[!a-zA-Z0-9_-]` let `/` and `.` through, so one
+# branch still matched `request/foo/deep` and `request/foo.old`. The prompt
+# always has a space after the branch, so a space on both sides is the
+# whole rule and there is no class to get wrong.
 claude_pids() {
   pgrep -f "claude " 2>/dev/null | while IFS= read -r p; do
     case " $(ps -o command= -p "$p" 2>/dev/null) " in
-      *" $1 "*|*" $1"[!a-zA-Z0-9_-]*) printf '%s ' "$p" ;;
+      *" $1 "*) printf '%s ' "$p" ;;
     esac
   done
 }
@@ -767,7 +825,7 @@ watch_builder() {
       return 0
     fi
 
-    if [ "$mins" -ge "$MAX_MINUTES" ]; then
+    if [ "$waited" -ge "$MAX_SECONDS" ]; then
       say "$name KILLED after ${mins}m — past the cap"
       salvage "$where" "$name"
       stop_builder "$pid" "$branch"
@@ -880,7 +938,13 @@ dispatch_fix() {
   say "  dispatching a fix-only builder for $name (attempt $n of $FIX_GIVE_UP), log in $logfile"
   tell "$name: CI red on #$pr, sending a fix-only builder"
 
-  local code
+  # Watched exactly as a full builder is. It had no watchdog, no
+  # MAX_MINUTES and no kill, so a stalled fix builder ran unbounded, held
+  # its claims past the cap, and the claim break above then reset the
+  # worktree under it — two FIX-START pids were measured in one slot, with
+  # "salvaged whatever was in slot1 before" logged while the first was
+  # still writing.
+  local code fpid fdog
   (
     cd "$where" || exit 1
     run no_creds claude -p "Invoke the mtg skill first, then read CLAUDE.md.
@@ -901,8 +965,14 @@ say so plainly rather than changing code to hide it." \
       --permission-mode bypassPermissions \
       --output-format stream-json --verbose --include-partial-messages \
       >> "$STATE/$name.fix.jsonl" 2>>"$LOG"
-  ) </dev/null
-  code=$?
+  ) </dev/null >>"$LOG" 2>&1 &
+  fpid=$!
+  watch_builder "$fpid" "$name" "$where" "$branch" "$file" >>"$LOG" 2>&1 &
+  fdog=$!
+  wait "$fpid"; code=$?
+  kill_tree "$fdog" TERM
+  wait "$fdog" 2>/dev/null || true
+  kill_tree "$fpid" KILL
   say "  fix-only builder for $name exited $code; the next dispatch re-checks CI"
   return 0
 }
@@ -958,7 +1028,7 @@ EOF
 # One request, from launch to merged-or-explained. Runs in a subshell.
 build_one() {
   local file="$1" name="$2" branch="$3" where="$4" claim="$5" handed="$6"
-  local code pipe="" logger="" cpid watchdog
+  local code pipe="" logger="" cpid watchdog lreaper=""
 
   pipe="$STATE/$name.pipe"
   rm -f "$pipe"
@@ -999,7 +1069,26 @@ build_one() {
   # Reaped quietly: a non-interactive bash otherwise prints
   # "Terminated: 15 watch_builder ..." into the log on every single build.
   wait "$watchdog" 2>/dev/null || true
-  [ -n "$logger" ] && wait "$logger" 2>/dev/null
+
+  # An orphan grandchild holding the fifo open parked the dispatcher in
+  # `wait "$logger"` for the whole remaining run, with the slot and the
+  # claim held and the watchdog already gone — measured at the full 120
+  # seconds. `kill_tree` is what its own comment says it is for, and it was
+  # not applied here.
+  kill_tree "$cpid" KILL
+  if [ -n "$logger" ]; then
+    # Bounded, not open-ended. The obvious repair — open and close the
+    # write end so the reader sees EOF — is worse than the bug: opening a
+    # fifo for writing BLOCKS until a reader appears, so if the logger has
+    # already finished it hangs forever instead of for the rest of the run.
+    # Verified by driving it: the dispatcher sat there with the builder
+    # already committed and pushed. A deadline cannot do that.
+    ( sleep "$LOGGER_GRACE"; kill -TERM "$logger" 2>/dev/null ) >/dev/null 2>&1 &
+    lreaper=$!
+    wait "$logger" 2>/dev/null
+    kill_tree "$lreaper" TERM
+    wait "$lreaper" 2>/dev/null || true
+  fi
   [ -n "$pipe" ] && rm -f "$pipe"
 
   # An exit code says nothing about whether it finished. `claude -p` ends
@@ -1519,6 +1608,10 @@ main() {
   # A builder may not run unwatched forever. Four hours is a cap, not a
   # target.
   MAX_MINUTES="${INTAKE_MAX_MINUTES:-240}"
+  # The same cap in seconds, which is what the watchdog actually compares.
+  # A test that needs to watch the cap fire should not have to burn a real
+  # minute doing it.
+  MAX_SECONDS="${INTAKE_MAX_SECONDS:-$((MAX_MINUTES * 60))}"
   # And wall-clock alone is not a signal: the run that provoked this went
   # 108 minutes with zero commits. This threshold is the FIRST commit
   # only.
@@ -1549,6 +1642,12 @@ main() {
   # it, and how often to look.
   CI_WAIT_MINUTES="${INTAKE_CI_WAIT_MINUTES:-10}"
   CI_POLL_SECONDS="${INTAKE_CI_POLL_SECONDS:-20}"
+  # A cap on each `gh run watch`. A GitHub job can run for 360 minutes,
+  # which is 120 past MAX_MINUTES.
+  CI_WATCH_MINUTES="${INTAKE_CI_WATCH_MINUTES:-45}"
+  CI_WATCH_SECONDS="${INTAKE_CI_WATCH_SECONDS:-$((CI_WATCH_MINUTES * 60))}"
+  # How long to let the log reader drain after the builder is gone.
+  LOGGER_GRACE="${INTAKE_LOGGER_GRACE:-10}"
   # What the shipped website serves, for the post-merge artifact check.
   SITE_JS="${INTAKE_SITE_JS:-https://mtg.mattshoe.org/kmp/mtg.js}"
   TRIED="$STATE/tried.$$"

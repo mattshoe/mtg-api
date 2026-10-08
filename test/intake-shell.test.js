@@ -416,13 +416,21 @@ describe('the lock', () => {
     expect(box.log()).toContain('claude')
   })
 
-  it('clears a lock older than the cap even if its pid is alive', () => {
+  it('clears a lock whose pid is alive but is not the process it recorded', () => {
+    // This test used to be called "clears a lock older than the cap even
+    // if its pid is alive", which is the exact behaviour R5 was written to
+    // FORBID — its name documented the bug. It stayed green only by
+    // accident: `process.pid`'s real argv is the vitest node process, not
+    // the `bash dispatch.sh` written into `command`, so the recorded-command
+    // mismatch cleared the lock and the age cap never came into it. A
+    // revert of R5 would have left it green.
     mkdirSync(box.path('.intake/dispatch.lock'))
     writeFileSync(box.path('.intake/dispatch.lock/pid'), String(process.pid))
-    writeFileSync(box.path('.intake/dispatch.lock/started'), '1')
+    writeFileSync(box.path('.intake/dispatch.lock/started'), String(Math.floor(Date.now() / 1000)))
     writeFileSync(box.path('.intake/dispatch.lock/command'), 'bash scripts/intake/dispatch.sh')
 
     run('dispatch.sh')
+    logged('not the')
     expect(box.log()).toContain('claude')
   })
 
@@ -1816,5 +1824,204 @@ exit 0
       READY('A ghost'))
     run('dispatch.sh', { timeout: 120_000 })
     expect(existsSync(box.path('requests/ghost.md'))).toBe(false)
+  })
+})
+
+describe('a claim held by something that is alive', () => {
+  // R5 stopped the lock being stolen from a live dispatcher. It left the
+  // slot claim and the `.building` claim still age-capped — and since the
+  // global lock no longer serialises dispatchers, a second one takes both
+  // and runs `prepare_slot` (salvage, `checkout -B`, `git clean -qxdf`) in
+  // the worktree a live builder is writing to, then launches a second
+  // builder on the branch.
+  //
+  // Reachable with no builder misbehaving at all, because the CI watch
+  // loop and the fix builder were both unbounded.
+
+  function liveHolder() {
+    const stand = join(box.root, 'dispatch.sh')
+    writeFileSync(stand, '#!/bin/bash\nsleep 60\n')
+    chmodSync(stand, 0o755)
+    const held = spawn('bash', [stand], { detached: true, stdio: 'ignore' })
+    held.unref()
+    const cmd = spawnSync('ps', ['-o', 'command=', '-p', String(held.pid)],
+      { encoding: 'utf8' }).stdout.trim()
+    return { held, cmd }
+  }
+
+  function claim(dir, pid, cmd, started) {
+    mkdirSync(box.path(dir), { recursive: true })
+    writeFileSync(box.path(`${dir}/pid`), String(pid))
+    writeFileSync(box.path(`${dir}/started`), String(started))
+    writeFileSync(box.path(`${dir}/command`), cmd)
+  }
+
+  it('is not broken by the age cap when its process is provably alive', () => {
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    box.stub('claude', BUILDER)
+    box.stub('gh', ghStub())
+    const { held, cmd } = liveHolder()
+    const branch = spawnSync('node', ['scripts/intake.mjs', 'branch', 'a-thing.md'],
+      { encoding: 'utf8', cwd: box.repo }).stdout.trim()
+    const key = branch.replace(/\//g, '_')
+    claim(`.intake/${key}.building`, held.pid, cmd, 1)
+    claim('.intake/slot1.claim', held.pid, cmd, 1)
+
+    const r = run('dispatch.sh', { env: { INTAKE_MAX_MINUTES: '0' } })
+    held.kill('SIGKILL')
+    expect(r.status).toBe(0)
+    // No second builder, and nothing reset under the first one.
+    expect(box.log()).not.toContain('claude -p')
+    expect(box.intakeLog()).not.toContain('had a builder that died')
+    logged('is alive')
+  })
+
+  it('is broken once its process is actually gone', () => {
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    box.stub('claude', BUILDER)
+    box.stub('gh', ghStub())
+    const branch = spawnSync('node', ['scripts/intake.mjs', 'branch', 'a-thing.md'],
+      { encoding: 'utf8', cwd: box.repo }).stdout.trim()
+    claim(`.intake/${branch.replace(/\//g, '_')}.building`, 999999,
+      'bash scripts/intake/dispatch.sh', 1)
+    run('dispatch.sh')
+    expect(box.log()).toContain('claude -p')
+  })
+})
+
+describe('a fix builder that stalls', () => {
+  // `dispatch_fix` launched `claude -p` with no watchdog, no MAX_MINUTES
+  // and no kill — so a stalled fix builder ran unbounded, held its claims
+  // past the cap, and the claim-stealing above then reset the worktree
+  // under it. Two FIX-START pids were measured in one slot.
+
+  it('is watched the same way a full builder is', () => {
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    box.stub('gh', `
+case "$1 $2" in
+  "pr list") printf '7 OPEN\\n' ;;
+  "run list") printf '101\\n' ;;
+  "run watch") exit 0 ;;
+  "run view") printf 'FAILED: the thing that broke\\n' ;;
+  "pr checks") printf 'shared\\tpass\\t1m\\tu\\ntally\\tfail\\t1m\\tu\\n'; exit 1 ;;
+esac
+exit 0
+`)
+    // A builder that builds, then a fix builder that sits there forever.
+    box.stub('claude', `
+case "$*" in
+  *FIX-ONLY*)
+    sleep 300
+    ;;
+  *)
+    branch="$(git rev-parse --abbrev-ref HEAD)"
+    echo x >> built.txt
+    git add -A
+    git -c user.name=b -c user.email=b@b commit -qm "build: $branch"
+    git push -q origin "HEAD:refs/heads/$branch"
+    ;;
+esac
+exit 0
+`)
+    const r = run('dispatch.sh', {
+      env: { INTAKE_MAX_SECONDS: '4', INTAKE_WATCH_SECONDS: '2' },
+      timeout: 180_000,
+    })
+    expect(r.status).toBe(0)
+    logged('KILLED')
+  })
+})
+
+describe('waiting on CI', () => {
+  it('gives up on a watch that never returns, rather than parking forever', () => {
+    // The fourth of the four unsoundnesses R8 listed, and the one the
+    // round-2 comment conceded ("the deadline is the watcher's own"). A
+    // GitHub job's default timeout is 360 minutes, 120 past MAX_MINUTES,
+    // which is what made the claim steal reachable with no builder
+    // misbehaving.
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    box.stub('claude', BUILDER)
+    box.stub('gh', `
+case "$1 $2" in
+  "pr list") printf '7 OPEN\\n' ;;
+  "run list") printf '101\\n' ;;
+  "run watch") sleep 300 ;;
+  "pr checks") printf 'shared\\tpass\\t1m\\tu\\n'; exit 0 ;;
+  "pr merge") exit 0 ;;
+esac
+exit 0
+`)
+    const r = run('dispatch.sh', {
+      env: { INTAKE_CI_WATCH_SECONDS: '4' },
+      timeout: 180_000,
+    })
+    expect(r.status).toBe(0)
+    logged('gave up watching')
+    // A watch that was killed is transport trouble, not a green CI.
+    expect(box.log()).not.toContain('pr merge')
+  })
+
+  it('reports a red run as red rather than as a failure to ask', () => {
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    box.stub('claude', BUILDER)
+    box.stub('gh', `
+case "$1 $2" in
+  "pr list") printf '7 OPEN\\n' ;;
+  "run list") printf '101\\n' ;;
+  "run watch") exit 1 ;;
+  "run view") printf 'FAILED: a real failure\\n' ;;
+  "pr checks") printf 'shared\\tfail\\t1m\\tu\\n'; exit 1 ;;
+esac
+exit 0
+`)
+    run('dispatch.sh', { timeout: 120_000 })
+    logged('finished red')
+    expect(box.log()).not.toContain('pr merge')
+  })
+})
+
+describe('the log pipe', () => {
+  it('does not park the dispatcher when a grandchild holds the fifo open', () => {
+    // Measured at the full remaining 120 seconds, with the slot and claim
+    // held and `watch_builder` already exited. The `kill_tree` comment
+    // names this exact mechanism and the code did not apply it here.
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    box.stub('gh', ghStub({ state: 'NONE' }))
+    box.stub('claude', `
+( sleep 300 ) &
+exit 0
+`)
+    const started = Date.now()
+    const r = run('dispatch.sh', { timeout: 120_000 })
+    expect(r.status).toBe(0)
+    expect(Date.now() - started).toBeLessThan(60_000)
+  })
+})
+
+describe('matching a branch to its builder', () => {
+  it('does not match a branch that only shares a prefix', () => {
+    // `claude_pids`' exclusion class let `/` and `.` through, so one branch
+    // still matched `request/foo/deep` and `request/foo.old`. Latent only
+    // because branchFor emits [a-z0-9-] plus a digest.
+    build()
+    const r = spawnSync('bash', ['-c', `
+LOG=/dev/null
+eval "$(sed -n '/^claude_pids()/,/^}/p' ${JSON.stringify(box.path('scripts/intake/dispatch.sh'))})"
+( exec -a "claude -p work on request/foo/deep now" sleep 20 ) &
+deep=$!
+( exec -a "claude -p work on request/foo.old now" sleep 20 ) &
+old=$!
+( exec -a "claude -p work on request/foo now" sleep 20 ) &
+exact=$!
+sleep 0.5
+got="$(claude_pids 'request/foo')"
+kill $deep $old $exact 2>/dev/null
+case " $got " in *" $deep "*) echo MATCHED_DEEP ;; esac
+case " $got " in *" $old "*) echo MATCHED_OLD ;; esac
+case " $got " in *" $exact "*) echo MATCHED_EXACT ;; esac
+`], { encoding: 'utf8' })
+    expect(r.stdout).toContain('MATCHED_EXACT')
+    expect(r.stdout).not.toContain('MATCHED_DEEP')
+    expect(r.stdout).not.toContain('MATCHED_OLD')
   })
 })
