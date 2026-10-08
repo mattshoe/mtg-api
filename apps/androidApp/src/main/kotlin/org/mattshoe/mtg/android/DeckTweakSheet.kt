@@ -58,8 +58,8 @@ import org.mattshoe.mtg.core.Tweak
  * One card in, one card out, or one number changed. On Android.
  *
  * Sibling of `DeckTweakSheet.kt` on the web, down to the sentences:
- * "Takes the same number out as it puts in.", "not owned — would be
- * bought", "No card called “…”.". The phone had none of this at all,
+ * "Takes the same number out as it puts in.", "No card called “…”.".
+ * The phone had none of this at all,
  * so the only way to add a card to a deck from a phone was to rewrite
  * the whole list in the bulk editor.
  *
@@ -396,14 +396,6 @@ private fun Finder(state: DeckTweak, onState: (DeckTweak) -> Unit, onFind: (Stri
                 Text(chosen.name, fontSize = Design.SMALL.sp, color = Ink, fontWeight = FontWeight.Medium)
                 chosen.typeLine?.takeIf { it.isNotBlank() }?.let { Muted(it, size = Design.MINI) }
             }
-            if (chosen.qty > 0) {
-                Tag("${chosen.qty} owned · ${chosen.owner}")
-            } else {
-                // Nobody has one, so this is a purchase. The plan will
-                // say so; the sheet says it before the plan is asked
-                // for.
-                Tag("not owned — would be bought", Warn)
-            }
         }
     }
 
@@ -451,14 +443,10 @@ private fun Hit(ordinal: Int, f: Found, pick: () -> Unit) {
         ) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 Text(f.name, fontSize = Design.SMALL.sp, color = Ink)
-                // What the card is, which is what tells two hits of
-                // the same name apart when the owner does not.
                 f.typeLine?.takeIf { it.isNotBlank() }?.let { Muted(it, size = Design.MINI) }
             }
-            // Owned or not, in words. Hue is not a channel the person
-            // who owns this collection has, so a row that differed
-            // only by being redder said nothing at all.
-            if (f.qty > 0) Tag("${f.qty}× ${f.owner}") else Tag("not owned", Warn)
+            // The card and nothing about who holds it. Where the copy
+            // comes from is the plan's answer, after the pick.
         }
     }
 }
