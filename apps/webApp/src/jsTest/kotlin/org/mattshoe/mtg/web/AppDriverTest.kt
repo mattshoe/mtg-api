@@ -60,12 +60,16 @@ class AppDriverTest {
     /** What `/auth/me` says the session is. Admin Settings needs `admin`. */
     private var role = "user"
 
+    /** How many times the app asked GitHub for the request pull requests. */
+    private var tasksAsked = 0
+
     @BeforeTest
     fun stubTheNetwork() {
         writes.clear()
         searches = 0
         sent.clear()
         role = "user"
+        tasksAsked = 0
         val engine = MockEngine { request ->
             if (request.method.value == "POST" && """"dry_run":false""" in
                 (request.body as? io.ktor.http.content.TextContent)?.text.orEmpty()
@@ -114,6 +118,17 @@ class AppDriverTest {
                 request.url.encodedPath.endsWith("/repos/mattshoe/mtg-api/releases") ->
                     """[{"tag_name":"android-v2.1.0-297","published_at":"2026-10-09T10:00:00Z",""" +
                         """"body":"Release notes in Admin Settings.\n\nBuilt from abc."}]"""
+
+                request.url.encodedPath.endsWith("/repos/mattshoe/mtg-api/pulls") -> {
+                    tasksAsked++
+                    """[{"title":"Task status in the app","state":"open",""" +
+                        """"head":{"ref":"request/task-status-in-the-app-22facff"},"merged_at":null,"closed_at":null}]"""
+                }
+
+                request.url.encodedPath.contains("/git/matching-refs/heads/request") ->
+                    """[{"ref":"refs/heads/request/task-status-in-the-app-22facff"}]"""
+
+                request.url.encodedPath.endsWith("/contents/requests/done") -> "[]"
 
                 request.url.encodedPath == "/admin/users" -> """{"users":[]}"""
 
@@ -1004,5 +1019,32 @@ class AppDriverTest {
         }
         val text = root.all("[data-release]").first().textContent.orEmpty()
         assertTrue("2.1.0 (297)" in text && "Release notes in Admin Settings." in text, text)
+    }
+
+    // ------------------------------------------------------------ tasks
+
+    /**
+     * Admin Settings asks GitHub for the tasks on every visit to the
+     * list, and opening one person does not.
+     *
+     * `TasksPanelTest` hands the page a loaded `Tasks`; this is the part
+     * it cannot see. Sibling of Android's `TasksLoadTest`.
+     */
+    @Test
+    fun adminSettingsLoadsTheTasksOnEveryVisitToTheList() = runTest {
+        role = "admin"
+        val root = mount("#/admin")
+        waitFor("a task on Admin Settings") { root.all("[data-task]").isNotEmpty() }
+        val text = root.all("[data-task]").first().textContent.orEmpty()
+        assertTrue("Task status in the app" in text && "in review" in text, text)
+        assertEquals(1, tasksAsked, "the first visit should ask GitHub once")
+
+        window.location.hash = "#/admin/t4pee71g"
+        waitFor("one person's page") { window.location.hash.endsWith("/admin/t4pee71g") }
+        settle()
+        assertEquals(1, tasksAsked, "opening one person asked GitHub for the tasks again")
+
+        window.location.hash = "#/admin"
+        waitFor("the list to ask GitHub again") { tasksAsked == 2 }
     }
 }

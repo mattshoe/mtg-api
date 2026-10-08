@@ -1714,6 +1714,17 @@ select.sort {
 .release-version { color: var(--text); font-weight: 650; }
 .release-note { color: var(--text); white-space: pre-line; }
 
+/* Tasks on Admin Settings: the active ones, then done behind a toggle. */
+.task { display: flex; align-items: center; gap: 9px; padding: 9px 4px; }
+.task + .task { border-top: 1px solid var(--line); }
+.task-what { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.task-title { color: var(--text); }
+.tasks-toggle {
+  display: block; width: 100%; min-height: 40px; padding: 10px 4px;
+  background: transparent; border: 0; border-top: 1px solid var(--line);
+  color: var(--text-2); font: inherit; font-weight: 600; text-align: left; cursor: pointer;
+}
+
 /* One account's own page: a big face, their name, their address. */
 .person-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
 .person-face {
