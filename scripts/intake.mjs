@@ -150,12 +150,14 @@ export function state(text) {
 }
 
 /**
- * Whether the dispatcher merges this one when CI goes green.
+ * Whether this one gets merged on green CI, or stops at a green pull
+ * request for Matt.
  *
- * Read from the file and tested here, never decided by the model. Only
- * an explicit `merge: auto` merges; everything else, a missing key
- * included, is ask. Triage writes `merge: auto` deliberately, so a file
- * without it was not written by triage.
+ * The builder merges its own work now, so this is what its prompt means
+ * by `merge: ask`. Read from the file and tested here, never decided by
+ * the model. Only an explicit `merge: auto` merges; everything else, a
+ * missing key included, is ask. Triage writes `merge: auto` deliberately,
+ * so a file without it was not written by triage.
  */
 export function mergeMode(text) {
   const v = field(text, 'merge')
@@ -173,10 +175,10 @@ export function mergeMode(text) {
  *
  * The slug alone collapsed distinct filenames onto one branch —
  * `deck_page.md` and `deck-page.md` both gave `request/deck-page`, and
- * every all-non-ASCII name gave `request/unnamed`. The `.building`
- * claims are keyed on the branch, so two requests sharing a branch
- * meant two builders committing to one ref with neither blocking the
- * other. The digest is what makes the ref a function of the exact name.
+ * every all-non-ASCII name gave `request/unnamed`. Two requests sharing a
+ * branch meant two builders committing to one ref with neither blocking
+ * the other, and `gh pr list --head` then answered about the wrong pull
+ * request. The digest is what makes the ref a function of the exact name.
  */
 export function branchFor(file) {
   const name = basename(String(file ?? ''), '.md')
@@ -207,86 +209,6 @@ export function equipped(present) {
   const have = new Set(present)
   const missing = REQUIRED.filter((f) => !have.has(f))
   return { ok: missing.length === 0, missing }
-}
-
-/**
- * Whether a builder actually finished, which its exit code does not say.
- *
- * `claude -p` ends when the model stops producing text. One builder
- * started the core and web suites, wrote "Red runs for core and web are
- * in progress", and ended its turn — exit 0, nothing committed, no pull
- * request. The dispatcher read 0 as success and removed the worktree,
- * throwing the work away.
- *
- * What "done" means changed with the division of labour. The builder no
- * longer waits on CI and no longer merges: the `apps` job takes 13-17
- * minutes and three of four builders ended their turn rather than sit
- * through it — one called ScheduleWakeup and stopped, another's last
- * line was "I'll pick up from that notification", and in headless
- * `claude -p` there is no next turn. 154 minutes of agent wall-clock
- * across four builders produced zero merged pull requests.
- *
- * So done is: commits on the branch, the branch pushed, a pull request
- * that exists. `prMerged` is the fourth signal, because
- * `gh pr list --state open` cannot see a merged pull request — a builder
- * that did exactly what it was told was judged unfinished every time.
- */
-export function builderDone({
-  exitCode, prOpen, prMerged = false, commits = 0, pushed = false,
-}) {
-  // A merged pull request is done, and the other two questions stop
-  // meaning anything: once the work is in the base, `BASE..HEAD` is
-  // legitimately 0 commits and the branch tip no longer matches what
-  // `ls-remote` reports. Asking them anyway judged a request that had
-  // shipped as unfinished, and rebuilt it.
-  if (prMerged) {
-    return { ok: true, keep: false, why: '', state: 'merged' }
-  }
-
-  // An unreadable commit count is UNKNOWN, not zero.
-  //
-  // `commits_on` returns empty on git failure on purpose, so an index
-  // lock or a concurrent checkout does not kill a healthy builder — and
-  // then `Number(commits || 0)` turned that straight back into 0 and the
-  // verdict became "nothing committed on its branch". Verified:
-  // `done-verdict 0 true false '' true` → `keep:nothing committed`. So no
-  // merge, a salvage instead, an attempt counted, and three transients
-  // holding the request. Unknown keeps the slot and judges nothing, the
-  // same way the gh-failure paths already do.
-  const known = commits !== null && commits !== undefined
-    && commits !== '' && Number.isFinite(Number(commits))
-  if (!known) {
-    return {
-      ok: false,
-      keep: true,
-      why: 'its commit count could not be read, so nothing is being concluded from it',
-      state: 'unknown',
-    }
-  }
-
-  const why = []
-  if (exitCode !== 0) why.push(`exited ${exitCode}`)
-  if (!prOpen) why.push('no pull request for its branch')
-  if (!Number(commits)) why.push('nothing committed on its branch')
-  else if (!pushed) why.push('its commits are not pushed')
-  const ok = why.length === 0
-  return {
-    ok,
-    keep: !ok,
-    why: why.join('; '),
-    state: ok ? 'open' : 'unfinished',
-  }
-}
-
-/**
- * What the dispatcher does once CI has reported.
- *
- * Green CI is still the gate. It just stops being a thing an agent has
- * to sit through.
- */
-export function afterCi({ green, merge }) {
-  if (!green) return { action: 'fix' }
-  return { action: merge === 'auto' ? 'merge' : 'notify' }
 }
 
 /**
@@ -339,7 +261,7 @@ function listing(dir) {
 }
 
 if (process.argv[1] && process.argv[1].endsWith('intake.mjs')) {
-  const [cmd, arg, ...rest] = process.argv.slice(2)
+  const [cmd, arg] = process.argv.slice(2)
   const dir = process.env.INTAKE_DIR || 'requests'
   const list = () => pending(listing(dir), { done: listing(join(dir, 'done')) })
 
@@ -360,21 +282,6 @@ if (process.argv[1] && process.argv[1].endsWith('intake.mjs')) {
     console.log(branchFor(arg || ''))
   } else if (cmd === 'merge') {
     console.log(mergeMode(read(dir, arg || '')))
-  } else if (cmd === 'done-verdict') {
-    // done-verdict <exitCode> <prOpen> <prMerged> <commits> <pushed>
-    const [prOpen, prMerged, commits, pushed] = rest
-    const v = builderDone({
-      exitCode: Number(arg),
-      prOpen: prOpen === 'true',
-      prMerged: prMerged === 'true',
-      // Passed through as given. Coercing '' to 0 here was the bug.
-      commits,
-      pushed: pushed === 'true',
-    })
-    console.log(v.ok ? v.state : (v.state === 'unknown' ? 'unknown' : `keep:${v.why}`))
-  } else if (cmd === 'after-ci') {
-    // after-ci <green> <mergeMode>
-    console.log(afterCi({ green: arg === 'true', merge: rest[0] }).action)
   } else if (cmd === 'equipped') {
     // `arg` is the worktree. Exits 0 when equipped, 1 and names what is
     // missing otherwise.
@@ -389,9 +296,8 @@ if (process.argv[1] && process.argv[1].endsWith('intake.mjs')) {
     process.exit(hookFires(arg) ? 0 : 1)
   } else {
     console.error(
-      'usage: intake.mjs pending|untriaged|buildable|held|state [f]|branch <f>|'
-      + 'merge <f>|done-verdict <code> <open> <merged> <commits> <pushed>|'
-      + 'after-ci <green> <mode>|equipped <tree>|fires <path>',
+      'usage: intake.mjs pending|untriaged|buildable|held|state [f]|'
+      + 'branch <f>|merge <f>|equipped <tree>|fires <path>',
     )
     process.exit(2)
   }
