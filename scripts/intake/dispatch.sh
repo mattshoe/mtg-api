@@ -33,56 +33,95 @@ say() { printf '%s  %s\n' "$(date '+%H:%M:%S')" "$1" >>"$LOG"; }
 
 mkdir -p "$STATE"
 
-# One at a time, because Gradle does not share a laptop.
-mkdir "$STATE/lock" 2>/dev/null || exit 0
-trap 'rm -rf "$STATE/lock"' EXIT
-
-# Agents authenticate as their own service account, `intake-agent`, which has
-# the admin role and its own long-lived session token. They never see the
-# operator password: that one unlocks /admin/sql on any database and is the
-# way back in when every account has lost admin, so it stays out of reach.
+# Choosing a request and creating its worktree is the only part that needs
+# exclusivity, and it takes seconds. It runs behind `lockf`, so a dispatcher
+# that arrives at the same instant WAITS for its turn and then picks a
+# different request — rather than losing a `mkdir` race and giving up, which
+# made the whole queue serial no matter how many requests were ready.
 #
-# Revoking an agent is one row: delete its session from the sessions table.
-# Matt can see what it did, because every write it makes is that account.
+# `lockf` blocks in the kernel. It is not a polling loop and it cannot orphan:
+# the lock dies with the process holding it.
+#
+# The claim runs as this same script re-invoked with --claim, because the
+# chosen request has to come back out of the locked section on stdout.
+claim() {
+  local f b wt file branch tree
+  git -C "$REPO" worktree prune
+  git -C "$REPO" fetch -q origin main 2>>"$LOG" || say "could not fetch; base may be stale"
+
+  # 0 claimed something, 2 nothing to claim, 1 broken. An empty answer and a
+  # broken one must never look the same to the caller — that conflation is the
+  # oldest bug in this system and it came back when these node calls moved
+  # inside a child process.
+  cd "$REPO" && node scripts/intake.mjs buildable > "$STATE/queue.$$" || {
+    say "intake.mjs failed"; rm -f "$STATE/queue.$$"; return 1
+  }
+  # Try each candidate until one actually gets a worktree. Returning on the
+  # first failure would let a single request with a leftover branch — a
+  # worktree removed by hand, say — block everything behind it, which is the
+  # same wedge the skip above exists to prevent.
+  file=''
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    wt="$STATE/wt/${f%.md}"
+    # A worktree is the claim: nothing ever deletes one on its own, so its
+    # existence means some agent has this request, running or stopped.
+    if [ -e "$wt" ]; then
+      say "skipping ${f%.md}: $wt is still there ($(git -C "$wt" status --porcelain 2>/dev/null | wc -l | tr -d ' ') uncommitted, $(git -C "$wt" rev-list --count "$BASE"..HEAD 2>/dev/null || echo 0) commits) — delete it to retry"
+      continue
+    fi
+    b="$(cd "$REPO" && node scripts/intake.mjs branch "$f")" || {
+      say "intake.mjs failed naming a branch for $f"; return 1
+    }
+    if git -C "$REPO" worktree add -q -b "$b" "$wt" "$BASE" 2>>"$LOG"; then
+      file="$f"; branch="$b"; tree="$wt"; break
+    fi
+    say "skipping ${f%.md}: no worktree on $b (the branch may already exist)"
+  done < "$STATE/queue.$$"
+  rm -f "$STATE/queue.$$"
+  [ -n "$file" ] || return 2
+
+  printf '%s\t%s\t%s\n' "$file" "$branch" "$tree"
+}
+
+if [ "${1:-}" = "--claim" ]; then claim; exit $?; fi
+
+# `lockf` is BSD, so it is on macOS and not on the Linux runners CI uses;
+# `flock` is the other way round. Pick whichever is here. With neither, run
+# the claim unlocked and say so: two dispatchers would then have to collide
+# inside the same few seconds, and each still refuses a worktree that exists.
+if [ -x /usr/bin/lockf ]; then
+  got="$(/usr/bin/lockf -k -t 120 "$STATE/pick.lock" "$0" --claim)"; rc=$?
+elif command -v flock >/dev/null 2>&1; then
+  got="$(flock -w 120 "$STATE/pick.lock" "$0" --claim)"; rc=$?
+else
+  say "no lockf and no flock; claiming without a lock"
+  got="$("$0" --claim)"; rc=$?
+fi
+
+case "$rc" in
+  0) : ;;
+  2) exit 0 ;;                      # nothing to claim, which is normal
+  *) tell "intake stopped: it could not read the queue"; exit 1 ;;
+esac
+[ -n "$got" ] || exit 0
+[ -n "$got" ] || exit 0
+file="${got%%	*}"
+rest="${got#*	}"
+branch="${rest%%	*}"
+tree="${rest#*	}"
+name="${file%.md}"
+
+# Agents authenticate as their own service account, `intake-agent`, which
+# has the admin role and its own long-lived session token. They never see
+# the operator password: that one unlocks /admin/sql on any database and is
+# the way back in when every account has lost admin, so it stays out of
+# reach. Revoking an agent is one row out of `sessions`.
 AGENT_TOKEN=""
 if [ -f "$HOME/.mtg-agent.env" ]; then
   AGENT_TOKEN="$(/usr/bin/grep -m1 "^MTG_AGENT_TOKEN=" "$HOME/.mtg-agent.env" | cut -d= -f2-)"
 fi
 [ -n "$AGENT_TOKEN" ] || say "no ~/.mtg-agent.env; the agent cannot act on the API as admin"
-
-git -C "$REPO" fetch -q origin main 2>>"$LOG" || say "could not fetch; base may be stale"
-
-cd "$REPO" && node scripts/intake.mjs buildable > "$STATE/queue.$$" || { say "intake.mjs failed"; rm -f "$STATE/queue.$$"; exit 1; }
-[ -s "$STATE/queue.$$" ] || { rm -f "$STATE/queue.$$"; exit 0; }
-
-# The first request that has no worktree yet. Not simply the first: a worktree
-# is never touched once it exists, so one left behind by a stopped agent would
-# otherwise sit at the head of the queue and block everything behind it, on
-# every dispatch, forever.
-#
-# `while IFS= read -r`, never `for f in $all` — a request filename with a space
-# in it word-splits into several bogus requests, and there is a test for that.
-# Driven from a file rather than a pipe so `break` and `file` belong to this
-# shell.
-file=''
-while IFS= read -r f; do
-  [ -n "$f" ] || continue
-  wt="$STATE/wt/${f%.md}"
-  if [ ! -e "$wt" ]; then file="$f"; break; fi
-  # It is still there, so something stopped mid-build. Say what it holds: the
-  # only way past it is a human deleting it, and that needs a number in front
-  # of it. I deleted one of these without looking and lost 31 files.
-  say "skipping ${f%.md}: $wt is still there ($(git -C "$wt" status --porcelain 2>/dev/null | wc -l | tr -d ' ') uncommitted, $(git -C "$wt" rev-list --count "$BASE"..HEAD 2>/dev/null || echo 0) commits) — delete it to retry"
-done < "$STATE/queue.$$"
-rm -f "$STATE/queue.$$"
-[ -n "$file" ] || { say "everything buildable already has a worktree"; exit 0; }
-
-name="${file%.md}"
-branch="$(cd "$REPO" && node scripts/intake.mjs branch "$file")" || { say "intake.mjs failed"; exit 1; }
-tree="$STATE/wt/$name"
-
-git -C "$REPO" worktree add -q -b "$branch" "$tree" "$BASE" 2>>"$LOG" \
-  || { say "$name could not get a worktree on $branch"; exit 0; }
 
 say "building $name on $branch"
 # Not `exec`: that replaces this shell and the EXIT trap never runs, so the

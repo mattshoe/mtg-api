@@ -366,16 +366,16 @@ describe('the lock', () => {
     expect(existsSync(box.path('.intake/lock'))).toBe(false)
   })
 
-  it('and it is the EXIT trap that releases it', () => {
-    // The pair for the two above. A lock left behind wedges the queue
-    // permanently and silently — nothing clears a stale one — so the trap
-    // is the whole safety of holding it for the length of a build.
+  it('is dropped before the agent starts, so the next dispatcher can claim', () => {
+    // The lock covers choosing a request and making its worktree, and nothing
+    // more. It used to be held for the WHOLE build, which made the queue
+    // serial however many requests were ready — and the reason for that,
+    // Gradle thrashing, is handled by a mutex around the build step instead.
     build({ requests: { 'a-thing.md': READY('A thing') } })
-    box.stub('claude', BUILDER)
-    box.breakDispatcher(`trap 'rm -rf "$STATE/lock"' EXIT`, 'true')
-    run('dispatch.sh')
-    logged('a-thing finished')
-    expect(existsSync(box.path('.intake/lock'))).toBe(true)
+    const r = run('dispatch.sh')
+    expect(r.status).toBe(0)
+    expect(box.intakeLog()).toContain('building a-thing')
+    expect(existsSync(box.path('.intake/lock'))).toBe(false)
   })
 })
 
