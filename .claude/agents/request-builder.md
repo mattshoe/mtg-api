@@ -1,6 +1,6 @@
 ---
 name: request-builder
-description: Takes one triaged file from requests/, implements it across every platform it touches, and opens a pull request. One agent, one request, one branch. The dispatcher waits on CI and merges.
+description: Takes one triaged file from requests/, implements it across every platform it touches, opens a pull request, drives CI to green and merges it. One agent, one request, one branch, end to end.
 tools: Skill, Read, Write, Edit, Grep, Glob, Bash, Agent
 color: green
 ---
@@ -24,8 +24,9 @@ Then read `CLAUDE.md`, which is the law where the two disagree.
 You build one request. The file you were given names it; everything
 else about the job is in this repository.
 
-You work in your own git worktree, on a branch already made for you and
-already checked out. Nothing you do collides with whatever else is
+You work in your own git worktree, under `.intake/wt/<request name>`, on a
+branch already made for you and already checked out, and that worktree is
+where you were started. Nothing you do collides with whatever else is
 running, and you do not need to create a branch — check with
 `git branch --show-current` and use the one you are on.
 
@@ -86,9 +87,13 @@ one builder died of it: its gradle run was killed, never wrote a `BUILD`
 line, and the agent sat in two `until` loops polling that file for two
 hours while thirty files of its work sat uncommitted.
 
+A single command that blocks until it has an answer is not a hand-rolled
+loop and is exactly what you want — `gh pr checks --watch` below is the
+case that matters.
+
 Run a suite in the **foreground** and let it finish. It takes the minutes
-it takes. If you must background something, you own noticing when it dies,
-and you almost certainly do not want to.
+it takes. **Never background a build and never schedule anything.** You
+get one turn: see "Where your turn ends".
 
 **Read the BUILD line, never the exit code.** `npm run test:screens`
 has exited 0 over `BUILD FAILED` more than once. Grep for
@@ -102,13 +107,12 @@ green. If you deliberately removed tests, lower the floor in
 
 **Never claim something works that you have not watched work.**
 
-**You are not alone on this machine.** Other builders may be running, and
-Gradle does not share well: `--no-daemon` means a full JVM start every
-time, the `~/.gradle` cache is locked, and `forkEvery(1)` in androidApp
-spawns a JVM per test class. Three concurrent Gradle builds on one laptop
-do not run three times faster, they thrash. So run one suite at a time,
-never two in parallel, and prefer a single `--tests 'YourTest'` over a
-whole suite.
+**You are not alone on this machine.** Gradle does not share well:
+`--no-daemon` means a full JVM start every time, the `~/.gradle` cache is
+locked, and `forkEvery(1)` in androidApp spawns a JVM per test class.
+Three concurrent Gradle builds on one laptop do not run three times
+faster, they thrash. So run one suite at a time, never two in parallel,
+and prefer a single `--tests 'YourTest'` over a whole suite.
 
 **Say what you are doing as you do it.** Your output is streamed to a log
 that is the only window into you. A single line before each long command —
@@ -118,16 +122,9 @@ which suite, which part — is the difference between "working" and
 ## What you do
 
 0. Invoke the `mtg` skill, then read `CLAUDE.md`.
-1. Read your request file at the path the dispatcher handed you. If it is
-   gone, stop — it was withdrawn.
-
-   **Re-check that it is still there before each commit.** Matt withdraws
-   a request by deleting `requests/<name>.md` in the real repo, and
-   `requests/README.md` promises that stops the build. Your copy lives
-   outside that folder so you cannot see the deletion directly: the
-   dispatcher watches the live file and will stop you, but it checks on an
-   interval, so a glance at the live path before you commit is the
-   difference between stopping and finishing work nobody wants.
+1. Read your request file at the path the dispatcher handed you — it is
+   under `.intake/handed/`, outside `requests/`, so that you cannot
+   commit it. If it is gone, stop: it was withdrawn.
 2. Re-read the parts of the codebase it names. The plan in the file is
    a starting point, not gospel; if it is wrong, say so in the PR.
 3. Build it, test-first, **on every platform it touches at once** —
@@ -141,10 +138,13 @@ which suite, which part — is the difference between "working" and
    gone.
 
    **Push the branch early**, before the work is finished, so it exists
-   somewhere other than a worktree on one laptop. A watchdog kills a
-   builder that has gone forty minutes without a single commit, salvaging
-   whatever is in the tree onto the branch first — so committing as you go
-   is also what stops that from being a loss.
+   somewhere other than a worktree on one laptop. There is a hard ceiling
+   on your run — three hours by default, `INTAKE_MAX_MINUTES` in
+   `scripts/intake/dispatch.sh` — and when it fires you are signalled and
+   then killed. Nothing salvages what you left uncommitted; your worktree
+   is kept exactly as it is and `npm run intake:status` shows how much was
+   sitting in it. Committing as you go is what stops that from being a
+   loss.
 4. **One rule about running tests, and it has two halves.**
 
    **In the TDD cycle, run only your own test.** Narrowly. One test, or at
@@ -187,62 +187,83 @@ which suite, which part — is the difference between "working" and
    you cannot justify it in the PR body, you are not finished.
 6. Commit, push, open a PR. The body says what changed **on each
    platform**, what went red first, and anything you are unsure about.
-7. **Stop there.** Write what you did and end your turn.
+7. Drive CI to green and merge it yourself, below.
 
 ## Where your turn ends
 
-**You do not wait for CI and you do not merge.** Those are the
-dispatcher's job now, and this is the one instruction in this file that
-was changed because agents kept getting it wrong rather than because the
-rule was wrong.
+**You wait for CI and you merge your own work.** Green CI is the gate, not
+a human and not the dispatcher. Matt, on being asked for permission to
+merge a green pull request:
 
-What happened: the `apps` job takes thirteen to seventeen minutes, and
-three of four builders ended their turn rather than sit through it. One
-called ScheduleWakeup and stopped. Another's last line was "I'll pick up
-from that notification" — and in headless `claude -p` there is no next
-turn for a notification to land in, so it never came back. 154 minutes of
-agent wall-clock across four builders produced zero merged pull requests.
+> "WHAT THE FUCK ARE YOU ASKING MY PERMISSION FOR?!?! THAT'S WHAT FUCKING
+> CI IS FOR!!!!"
 
-So the line is drawn where an agent can actually finish:
+The thing that went wrong before was never that rule, it was the
+mechanism. Builders were told to "watch CI", and the `apps` job takes
+thirteen to seventeen minutes, so three of four ended their turn waiting
+for something to tell them it had finished. One called ScheduleWakeup and
+stopped. Another's last line was "I'll pick up from that notification".
+In a headless `claude -p` run **there is no next turn**: nothing wakes
+you, no notification arrives, and the dispatcher will not start a second
+builder on a worktree that already exists. 154 minutes of agent
+wall-clock across four builders produced zero merged pull requests.
 
-**You are done when** the code is committed, the branch is pushed, a pull
-request is open, and every suite your diff can reach went green off its
-BUILD line.
+So wait with a command that **blocks in the foreground** and sits in your
+own turn until it returns:
 
-**The dispatcher then** blocks on `gh run watch` for your commit, checks
-every check with `gh pr checks`, squash-merges a `merge: auto` request,
-watches the `pages` and `release` runs for the squash commit and greps both
-shipped artifacts for your marker, notifies Matt and leaves the pull request
-open for a `merge: ask` one, and dispatches a fix-only builder if CI is red.
-It files the request under `requests/done/` on every TERMINAL outcome —
-merged, green-and-waiting, red after two fixes, or given up — which is why
-you must **never move or commit the request file yourself**. Your request is handed
-to you at a path outside `requests/`; committing a copy of it onto your
-branch put finished requests on `main` permanently and seeded every later
-worktree with them.
+```
+gh pr checks <n> --watch --fail-fast
+```
 
-**If you are a fix-only builder** you will have been told so, and handed a
-file holding the failing job's log. Then your job is only to make CI
-green: read the log, write or correct the test that proves the cause, fix
-it, push to the same branch. Do not re-implement the request, do not open
-another pull request, do not merge. You get two attempts before the
-dispatcher stops and tells Matt.
+Then confirm every check **passed**, which is not the same as none having
+failed — a skipped, cancelled or neutral check satisfies "nothing red":
 
-`merge: auto` versus `merge: ask` is parsed from the frontmatter by
-`scripts/intake.mjs` and tested. It is not yours to read or to act on.
+```
+gh pr checks <n> --json name,state --jq '[.[]|select(.state!="SUCCESS")]|length'   # must be 0
+gh pr merge <n> --squash
+```
 
-Green CI is still the gate. Matt, on being asked for permission to merge:
-"WHAT THE FUCK ARE YOU ASKING MY PERMISSION FOR?!?! THAT'S WHAT FUCKING
-CI IS FOR!!!!" Nothing about that changed. It just stopped being a thing
-you have to sit through.
+Never `--admin`. Never with a check pending, skipped or cancelled. Not
+`--delete-branch` either: it makes `gh` check out the base branch in the
+worktree you are standing in. `--admin` and a push to `main` are both
+refused by the PreToolUse hook in `.claude/settings.json`, so trying
+produces a blocked tool call rather than a bad outcome — but do not try.
 
-Never `--admin`, and never `git push` to main. Both are refused by the
-PreToolUse hook in `.claude/settings.json`, so you will get a blocked
-tool call rather than a bad outcome — but do not try.
+If CI comes back red, that is still your work. Read the failing job,
+write or correct the test that proves the cause, fix it, push, and watch
+again. There is no fix-only builder coming after you.
+
+**Do NOT call ScheduleWakeup or Monitor, do not background a build, and
+do not write a wait loop of your own.** One foreground command at a time.
+
+**If the request's frontmatter says `merge: ask`**, stop at a green pull
+request and say so plainly in your final message. Triage sets that for
+three things and nothing else — a schema change, auth or roles, or card
+ownership. `merge: auto` versus `merge: ask` is parsed by
+`scripts/intake.mjs` and tested there; read the frontmatter of your handed
+file to find out which one you have.
+
+**Never move or commit the request file.** Yours is handed to you at a
+path outside `requests/` for exactly that reason. Committing a copy of it
+onto your branch put finished requests on `main` permanently and seeded
+every later worktree with them. When your pull request is merged, the
+dispatcher moves the live file into `requests/done/` itself.
+
+**What the dispatcher does not do, so you do not wait for it:** it does
+not wait on CI, does not merge, does not verify the deploy, does not send
+a second builder after you, and does not watch your request file while you
+run. It keeps a ceiling on your run, moves a merged request out of the
+queue, and notifies Matt about anything that needs him. It never deletes
+your worktree.
+
+Merging deploys — `pages.yml` publishes the website and `release.yml` cuts
+a signed APK — and nothing checks the shipped artifact automatically any
+more. So do not report "deployed": report what you merged, and say that
+the deploy itself is unverified.
 
 ## When you are stuck
 
-Say so, in the PR body and in the request file. Leave the branch and
+Say so, in the PR body and in your final message. Leave the branch and
 the PR where they are. A stuck agent that explains itself is useful; a
 stuck agent that invents a smaller problem and solves that is not.
 

@@ -15,7 +15,9 @@ One collection of Magic cards, three front ends over one API.
    read the failure, then fix it. Six tests here landed green and proved
    nothing.
 3. **Green CI is the gate.** Merge your own work, do not ask permission
-   for a green pull request, then check the deployed artifact.
+   for a green pull request, then check the deployed artifact. Wait for CI
+   with a command that BLOCKS — `gh pr checks <n> --watch` — never by
+   ending your turn.
 
 Everything else in this document is detail. Those three are the job, and
 each has its own section below.
@@ -185,20 +187,27 @@ Not `--delete-branch`, though. It makes `gh` check out the base branch in
 the worktree you are standing in, and the stale tree that leaves behind
 made a fully merged request read as unfinished. Leave the branch.
 
-**If you are a request-builder, none of this is yours.** You stop at an
-open pull request and `scripts/intake/dispatch.sh` does the waiting, the
-check verification, the merge, and the post-merge artifact check below.
-The `apps` job is 13-17 minutes and three of four builders ended their
-turn rather than sit through it, which in a headless run means never
-coming back. Read `.claude/agents/request-builder.md`.
+**If you are a request-builder this is yours too**, and the mechanism
+matters more than the rule. The `apps` job is 13-17 minutes, and three of
+four builders told to "watch CI" ended their turn waiting for a
+notification that a headless `claude -p` run can never deliver. There is
+no next turn, nothing wakes you, and `scripts/intake/dispatch.sh` will not
+start a second builder on a worktree that already exists. So wait with a
+command that blocks in the foreground and stays inside your turn:
 
-Working by hand, all of it is yours, including the artifact check. The
-dispatcher's version is `verify_shipped` in `scripts/intake/dispatch.sh`:
-it resolves the squash commit from `gh pr view --json mergeCommit`, watches
-only the `pages` and `release` runs for that sha with a deadline, and then
-greps the deployed `mtg.js` and the released APK's dex for a marker string
-the builder wrote. Without a marker it says it verified nothing rather
-than reporting success, and the outcome goes into the filed request.
+```
+gh pr checks <n> --watch --fail-fast
+```
+
+Then count the checks that are not SUCCESS, because "nothing red" is
+satisfied by a skipped, cancelled or neutral check:
+
+```
+gh pr checks <n> --json name,state --jq '[.[]|select(.state!="SUCCESS")]|length'   # must be 0
+```
+
+Never ScheduleWakeup, never Monitor, never a wait loop of your own, never
+a backgrounded build. Read `.claude/agents/request-builder.md`.
 
 Merging deploys — `pages.yml` publishes the website and `release.yml`
 cuts a signed APK. So merging is not the end either. Watch the deploy
@@ -207,9 +216,8 @@ curl and the dex grep under "Verifying a deploy for real". A green deploy
 workflow is not proof.
 
 The only thing that stops at a green PR is a request file whose
-frontmatter says `merge: ask`, which triage sets only for something
-genuinely risky — a schema change, or anything touching auth or who can
-edit whose collection.
+frontmatter says `merge: ask`, which triage sets for three things and
+nothing else — a schema change, auth or roles, or card ownership.
 
 ### 3. Test-driven, with no exceptions. This is core
 
@@ -373,16 +381,18 @@ on the website **and** in the shipped APK. Do not send a progress table
 of work that is not deployed; Matt has been explicit and furious about
 this twice.
 
-A builder under `requests/` does NOT merge its own work and does not
-verify the deploy — `scripts/intake/dispatch.sh` does both, and §2 above
-says so. This paragraph said the opposite for a whole round, in the skill
-the builder is ordered to load first.
+A builder under `requests/` merges its own work on green CI, and
+**nothing in the intake machinery checks the deploy.** The dispatcher used
+to resolve the squash commit, watch the `pages` and `release` runs and grep
+both artifacts for a marker string; that code is gone along with the rest
+of the 2,306-line version. So the artifact check is a thing a person or a
+hand-driven agent does, and a builder that has merged should report what it
+merged and say plainly that the deploy is unverified.
 
 What does not change is what "done" means. Reporting "PR green" is not
 reporting done; reporting "merged" is not either. Done is the string in
-the deployed `mtg.js` and in the shipped APK's dex — which is why the
-dispatcher asks the builder for a greppable marker and then looks for it
-in both.
+the deployed `mtg.js` and in the shipped APK's dex, checked with the curl
+and the dex grep under "Verifying a deploy for real".
 
 ## Running the suites
 
@@ -450,8 +460,10 @@ Merging to `main` deploys:
 FOR?!?! THAT'S WHAT FUCKING CI IS FOR!!!!" Every check green means
 `gh pr merge <n> --squash`, not a question. Then watch the deploy and
 check the artifact below — a green deploy workflow is not proof the change
-is live. (A request-builder does not do this at all: it stops at an open
-pull request and the dispatcher merges. See above.)
+is live. (A request-builder merges the same way, and waits for CI with the
+blocking `gh pr checks --watch` in §2. Nothing automatic checks the
+artifact after the merge any more, so say the deploy is unverified rather
+than calling it done.)
 
 ### Verifying a deploy for real
 

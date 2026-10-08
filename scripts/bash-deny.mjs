@@ -171,8 +171,9 @@ const DENIALS = [
     hit: (p) => /\bwrangler\b/.test(p) && !wranglerAllowed(p),
   },
   {
-    why: 'deploying. A builder\'s turn ends at an open pull request; '
-      + 'merging is what deploys, and that is the dispatcher\'s decision.',
+    why: 'deploying. Merging is what deploys, through `pages.yml`, '
+      + '`release.yml` and `worker.yml`, and a builder has no Cloudflare '
+      + 'credentials to deploy with anyway.',
     hit: (p) => /\b(npm|yarn|pnpm|npx)\b/.test(p)
       && /(^|\s)(run\s+)?deploy(\s|$)/.test(p),
   },

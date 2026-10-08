@@ -2,10 +2,9 @@
 
 One file per thing you want. Drop it in and walk away.
 
-A watcher notices the file, triage reads it, and a builder agent picks it
-up, implements it and opens a pull request. The dispatcher then waits on
-CI, merges on green, and checks that the change actually shipped. You do
-not have to be here, and neither do I.
+A watcher notices the file, triage reads it and writes a plan into it, and
+a builder agent picks it up, implements it, opens a pull request, waits for
+CI and merges it on green. You do not have to be here, and neither do I.
 
 ## Writing one
 
@@ -34,40 +33,65 @@ Name the file whatever you like; the name becomes the branch, so
 
 ```
 requests/thing.md          you wrote it
-  → triage                 reads it, merges duplicates, splits anything
-                           that is secretly three jobs, sizes it
-  → requests/thing.md      rewritten in place with a plan, committed
-  → builder                branch, TDD, both platforms, PR — then it stops
-  → dispatcher             blocks on CI, checks every check
-  → merged                 `merge: auto`, which deploys the site and cuts
-                           an APK. `merge: ask` stops at a green PR and
-                           you get a notification instead
-  → verified               the pages and release runs watched for the
-                           squash commit, then the deployed mtg.js and the
-                           released APK's dex grepped for a marker string
-                           the builder wrote. No marker means it says it
-                           verified nothing, rather than passing
-  → requests/done/thing.md moved and committed here, with the outcome in it
+  → triage                 reads it and sizes it, IN PLACE. It does not
+                           split one request into several or fold two into
+                           one — the copy-back out of its worktree could
+                           only ever return the files it was handed, so
+                           anything it created was silently thrown away
+  → requests/thing.md      rewritten with a plan, tests and a done-when
+  → builder                one worktree under `.intake/wt/thing`, TDD, both
+                           platforms, a pull request, then CI, then merge
+  → merged                 by the builder itself, on all-green. That
+                           deploys the site and cuts an APK
+  → requests/done/thing.md moved here by the dispatcher
 ```
 
-A red pull request gets a **fix-only** builder: the dispatcher pulls the
-failing job's log with `gh run view --log-failed`, hands it and the request
-over, and tells it to make CI green without re-implementing anything. Twice,
-and then the request is held and you are told. While that is happening the
-request is NOT buildable, so there is no second full builder — there used to
-be one per dispatch, which is how a branch grew five commits of repeated
-work.
+The builder owns the whole of that, CI and the merge included. It waits
+with `gh pr checks <n> --watch --fail-fast`, which blocks in the
+foreground, then checks that every check says SUCCESS rather than merely
+that none failed, then squash-merges. Green CI is the gate — not you, and
+not the dispatcher.
 
-The builder stops at an open pull request on purpose. The `apps` job takes
-thirteen to seventeen minutes and three of four builders ended their turn
-rather than sit through it — one scheduled a wakeup that could never
-arrive, because a headless run has no next turn. So the dispatcher owns
-the waiting and the merging, and green CI is still the gate.
+That division was the other way round for a while and it was the wrong fix
+for a real problem. Builders were told to "watch CI", the `apps` job takes
+thirteen to seventeen minutes, and three of four ended their turn waiting
+for a notification that a headless run can never receive. Moving the wait
+into the dispatcher fixed the symptom and cost 2,000 lines of bash that
+three audit rounds found seven criticals in, four of them in that
+machinery. Naming a command that blocks fixed the cause.
 
-Triage can also **combine**: two requests that touch the same screen
-become one file with both asks in it, and the originals are folded in
-rather than built twice over the same code. It says so in the file it
-leaves behind.
+`merge: ask` is the one exception: the builder stops at a green pull
+request and says so, and you get a notification. Triage sets it for three
+things and nothing else — a schema change, auth or roles, or card
+ownership.
+
+If CI comes back red, the same builder fixes it and watches again. Nothing
+re-dispatches a second builder at a request, and no builder ever starts on
+a worktree that already exists.
+
+## What the dispatcher does, and what it does not
+
+`scripts/intake/dispatch.sh` is 276 lines and does four things: it triages
+anything with no plan, starts **one** builder in a fresh worktree with a
+time ceiling on it (three hours; `INTAKE_MAX_MINUTES`), moves a merged
+request into `requests/done/`, and notifies you about anything that needs
+you.
+
+It does not wait on CI, does not merge, does not verify the deploy, does
+not send a fix-only builder after a red one, does not watch your request
+file while a builder runs, and does not hold or retry a request that keeps
+failing. All of that existed and all of it is gone.
+
+**A worktree is never deleted automatically.** If a builder dies, its tree
+stays on disk under `.intake/wt/` with whatever it had, and
+`npm run intake:status` shows the files, the commits and whether they were
+pushed. That rule was learned by losing about thirty-two modified files to
+a dispatcher that tidied up.
+
+**A request leaves this folder only when its pull request merged.** Every
+other outcome leaves the file exactly where it is, which is why a dead
+builder's request is still listed as ready — and why an existing worktree
+stops the next dispatch instead of starting a second builder over it.
 
 ## The rules the builder works under
 
@@ -80,39 +104,32 @@ here, so an agent cannot talk itself out of them:
   off an exit code
 - a suite that shrinks needs the floor lowered deliberately, in the
   same commit, with the reason
-- the PR is opened and the builder stops. The dispatcher waits on CI and
-  merges on green — green CI is the gate, not you. A request file that
-  says `merge: ask` stops at a green PR and you get a notification
-  instead, which triage sets only for a schema change or something
-  touching auth or who can edit whose collection
-- the builder never moves the request file and never merges. Both are the
-  dispatcher's, in the real repo, so a finished request actually leaves
-  this folder — two requests were built hours apart and stayed buildable
-  because the builder moved its own copy inside its worktree
-- a request leaves this folder on **every** terminal outcome, not only a
-  merge: merged, green-and-waiting-for-you, red after two fixes, or given
-  up after three failed builds. It stopped being true for a while and the
-  consequence was a second builder force-pushing over the first one's
-  commit. A request that is mid-flight — waiting on CI or on a fix — stays
-  here, which is not the same thing
-- after a merge the `pages` and `release` runs are watched and both
-  artifacts are grepped for the builder's marker. "Done means deployed" is
-  the rule, a green workflow has shipped nothing before, and when there is
-  no marker or no APK to download the dispatcher says what it could not
-  check instead of claiming it passed
+- the builder never moves the request file and never commits it. Its copy
+  is handed to it at a path outside `requests/` for that reason: a builder
+  that committed the live file put finished requests on `main` permanently
+  and seeded every later worktree with them
+- it never calls ScheduleWakeup or Monitor, never backgrounds a build and
+  never writes its own wait loop. One foreground command at a time,
+  because a headless run gets no second turn
+
+Merging deploys — `pages.yml` publishes the website and `release.yml` cuts
+a signed APK — and **nothing checks the shipped artifact automatically**.
+A green deploy workflow has shipped nothing before, so "done means
+deployed" is still the standard, and right now it is a standard somebody
+has to apply by hand.
 
 ## Taking one back
 
-Delete the file. The dispatcher watches it while a builder is running and
-stops that builder when it disappears, and nothing picks it up afterwards.
+Delete the file. Nothing picks it up afterwards, and if triage is mid-run
+its plan is thrown away rather than written back over the deletion.
 
-This used to be false in both directions and it is worth saying how: the
-builder was handed a private copy of the file, so deleting the original
-changed nothing it could see, and nothing was watching. A withdrawn
-request got built anyway. The check runs on an interval now, so a builder
-may get a minute or so further before it stops.
+It does **not** stop a builder that is already running — the dispatcher
+used to watch the live file on an interval and kill the builder, and that
+went with the rest of the machinery. A build already under way finishes,
+opens its pull request and may merge it. Close the pull request yourself if
+you do not want it.
 
-Moving it to `requests/done/` yourself works too.
+Moving the file to `requests/done/` yourself works too.
 
 ## Turning the whole thing off
 
@@ -138,7 +155,7 @@ rm .intake/disabled && bash scripts/intake/install.sh
 npm run intake:status
 ```
 
-One screen: the dispatcher's lock and claims, every request with its
-state, how many files and commits a builder's slot holds and whether they
-are pushed, the last event from each builder and its age, the request
-branches, and the open pull requests with their check counts.
+One screen: the dispatcher's lock and whether its process is alive, every
+request with the state `scripts/intake.mjs` gives for it, every worktree
+under `.intake/wt` with how many files and commits it holds and whether
+they are pushed, and the open pull requests with their check counts.

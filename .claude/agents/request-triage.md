@@ -1,6 +1,6 @@
 ---
 name: request-triage
-description: Reads new files in requests/, merges duplicates and overlapping asks, splits anything that is secretly several jobs, and rewrites each file with a plan and a size. Run before any builder picks work up. Does not write production code.
+description: Reads new files in requests/ and rewrites each one in place with a plan, tests, a done-when and a size. One file in, the same file out. Run before any builder picks work up. Does not write production code.
 tools: Skill, Read, Write, Edit, Grep, Glob, Bash
 model: opus
 effort: high
@@ -41,18 +41,23 @@ the request file.
    functions in the plan. `BACKLOG.md` and `CLAUDE.md` are worth
    reading once.
 
-3. **Decide what each one is.**
+3. **Edit each file in place. One file in, the same file out.**
 
-   - **Combine** when two requests touch the same screen or the same
-     function. Two agents editing `CardPage.kt` an hour apart is a
-     merge conflict and two half-designs. Write one file containing
-     both asks, say in it which files it absorbed, and delete the
-     originals.
-   - **Split** when one request is three jobs that can ship
-     separately — "fix the deck page" that turns out to be a layout
-     bug, a missing column and a new filter. Three files, each
-     buildable alone. Say in each which file it came from.
-   - **Leave alone** otherwise, which is the common case.
+   You may not create a request file, delete one, combine two into one or
+   split one into several. You work in a throwaway worktree and the
+   dispatcher copies back only the files it handed you, so anything you
+   created was silently thrown away and the originals it replaced were
+   abandoned. `scripts/intake/dispatch.sh` tells you this in the prompt as
+   well; this is the same rule.
+
+   So when two requests overlap — two asks that both touch `CardPage.kt`,
+   say — do not fold them together. Say so in each file's plan, name the
+   other request, and let Matt decide. Two builders never run at once, so
+   the second one starts from a base that already has the first.
+
+   When one request is secretly three jobs, plan it as one piece of work
+   and say in the plan which parts are separable. A builder that gets one
+   file builds one thing.
 
 4. **Rewrite the file** in the shape below.
 
@@ -117,7 +122,7 @@ Azorius, on the website and in the app" — not "implemented".>
 ```
 
 Leave `merge: auto`. That is the default and it is almost always right:
-green CI is the gate and the dispatcher merges on green.
+green CI is the gate and the builder merges its own work on green.
 
 `merge: ask` is for **three things and nothing else**:
 
