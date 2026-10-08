@@ -1026,15 +1026,46 @@ run() {
 # The local suite does not need any of this: it runs the Worker in
 # workerd against a local D1 through miniflare.
 no_creds() {
-  local void="$STATE/no-cloudflare-auth"
+  local void="$STATE/no-cloudflare-auth" k unsets
   mkdir -p "$void"
-  env \
-    -u CLOUDFLARE_API_TOKEN -u CLOUDFLARE_ACCOUNT_ID \
-    -u CLOUDFLARE_EMAIL -u CLOUDFLARE_API_KEY \
-    -u CF_API_TOKEN -u CF_ACCOUNT_ID -u CF_API_KEY \
-    -u WRANGLER_API_TOKEN -u WRANGLER_CLIENT_ID \
-    WRANGLER_HOME="$void" \
+
+  # By PATTERN, not by name. A fixed `-u` list meant tracking wrangler's
+  # releases, and it was already missing `CF_EMAIL`,
+  # `CLOUDFLARE_API_USER_SERVICE_KEY`, `WRANGLER_CF_AUTHORIZATION_TOKEN`,
+  # `CLOUDFLARE_ACCESS_CLIENT_*`, `CLOUDFLARE_CONFIG_FILE` and
+  # `CLOUDFLARE_API_BASE_URL`. Anything that looks like a Cloudflare or
+  # wrangler credential goes, whatever it is called.
+  #
+  # `WRANGLER_HOME` was in that list and is not a variable wrangler 4.141
+  # reads at all; the real config path comes from `XDG_CONFIG_HOME` or
+  # `~/Library/Preferences/.wrangler`, plus a Keychain backend. So
+  # `XDG_CONFIG_HOME` and `XDG_CACHE_HOME` are pointed at an empty
+  # directory and the Keychain backend is turned off.
+  unsets=""
+  while IFS='=' read -r k _; do
+    case "$k" in
+      CLOUDFLARE*|CF_*|WRANGLER*|XDG_CONFIG_HOME|XDG_CACHE_HOME)
+        unsets="$unsets -u $k" ;;
+    esac
+  done <<ENVLIST
+$(env)
+ENVLIST
+
+  # Not `env -i` with an allowlist. That is what the review asked for and
+  # it is the more thorough answer, but an allowlist that is missing one
+  # variable produces a builder that cannot run `gh`, `git` or `claude` at
+  # all — and there is no way to verify the real list without a real
+  # builder. A pattern-based unset achieves the stated purpose, which was
+  # to stop tracking wrangler's variable names, with no way to break the
+  # builder by omission. The residual risk is named in the pull request
+  # body.
+  #
+  # shellcheck disable=SC2086
+  env $unsets \
+    XDG_CONFIG_HOME="$void" XDG_CACHE_HOME="$void" \
+    CLOUDFLARE_AUTH_USE_KEYRING=false \
     CLOUDFLARE_API_TOKEN= CLOUDFLARE_ACCOUNT_ID= \
+    INTAKE_BUILDER=1 \
     "$@"
 }
 

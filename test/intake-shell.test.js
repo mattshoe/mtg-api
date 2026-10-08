@@ -1159,8 +1159,7 @@ describe('what a builder is launched with', () => {
     box.stub('gh', ghStub())
     // A builder that reports its own environment back.
     box.stub('claude', `
-printenv | grep -E '^(CLOUDFLARE|CF_|WRANGLER)' > ${JSON.stringify(join(box.root, 'builder-env.txt'))} || true
-printenv WRANGLER_HOME >> ${JSON.stringify(join(box.root, 'builder-env.txt'))} || true
+printenv | grep -E '^(CLOUDFLARE|CF_|WRANGLER|XDG_|INTAKE_BUILDER)' > ${JSON.stringify(join(box.root, 'builder-env.txt'))} || true
 branch="$(git rev-parse --abbrev-ref HEAD)"
 echo x >> built.txt
 git add -A
@@ -1186,11 +1185,43 @@ exit 0
     expect(env).not.toContain('another')
   })
 
-  it('has WRANGLER_HOME pointed somewhere with no stored login in it', () => {
-    // Wrangler finds credentials in exactly two places: the environment,
-    // and its own config under WRANGLER_HOME. Both are taken away.
+  it('has the config path pointed somewhere with no stored login in it', () => {
+    // This test used to assert `WRANGLER_HOME`, which is not a variable
+    // wrangler 4.141 reads at all — so the thing it was checking did
+    // nothing. The real config path comes from `XDG_CONFIG_HOME` or
+    // `~/Library/Preferences/.wrangler`, plus a Keychain backend.
     run('dispatch.sh')
-    expect(builderEnv()).toContain('no-cloudflare-auth')
+    const env = builderEnv()
+    expect(env).toContain('XDG_CONFIG_HOME')
+    expect(env).toContain('no-cloudflare-auth')
+    expect(env).toContain('CLOUDFLARE_AUTH_USE_KEYRING=false')
+  })
+
+  it('unsets credentials by pattern, so a new variable name needs no change here', () => {
+    // A fixed `-u` list meant tracking wrangler's releases, and it was
+    // already missing CF_EMAIL, CLOUDFLARE_API_USER_SERVICE_KEY,
+    // WRANGLER_CF_AUTHORIZATION_TOKEN and four more.
+    run('dispatch.sh', {
+      env: {
+        CF_EMAIL: 'planted-a',
+        CLOUDFLARE_API_USER_SERVICE_KEY: 'planted-b',
+        WRANGLER_CF_AUTHORIZATION_TOKEN: 'planted-c',
+        CLOUDFLARE_SOMETHING_INVENTED_LATER: 'planted-d',
+      },
+    })
+    const env = builderEnv()
+    for (const planted of ['planted-a', 'planted-b', 'planted-c', 'planted-d']) {
+      expect(env, `${planted} reached the builder`).not.toContain(planted)
+    }
+  })
+
+  it('marks the builder so scripts holding production credentials can refuse', () => {
+    // `scripts/nightly.sh` sources ~/.mtg-api.env itself and writes to
+    // production with the admin password, so `bash scripts/nightly.sh`
+    // reached the real database whatever the deny list said about
+    // wrangler. INTAKE_BUILDER is how it can tell.
+    run('dispatch.sh')
+    expect(builderEnv()).toContain('INTAKE_BUILDER=1')
   })
 
   it('still gets everything it legitimately needs', () => {
