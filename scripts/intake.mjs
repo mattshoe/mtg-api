@@ -47,43 +47,6 @@ export function pending(entries, { done = [] } = {}) {
 }
 
 /** The sections triage promises to leave behind. */
-export const SECTIONS = ['## Plan', '## Tests', '## Done when']
-
-/**
- * The text with fenced code blocks taken out.
- *
- * `request-triage.md` documents the shape it writes by showing it inside
- * a ```markdown fence, and triage has copied that fence into a request
- * file. A `## Plan` inside a code block is an example, not a plan.
- */
-function withoutFences(text) {
-  const out = []
-  let fence = null
-  for (const line of normalise(text).split('\n')) {
-    const m = /^\s{0,3}(```+|~~~+)/.exec(line)
-    if (m) {
-      if (fence === null) { fence = m[1][0]; continue }
-      if (m[1][0] === fence) { fence = null; continue }
-    }
-    if (fence === null) out.push(line)
-  }
-  return out.join('\n')
-}
-
-/**
- * Triage rewrites every file it handles with a plan, tests and a
- * done-when.
- *
- * Testing only for `## Plan` let triage write a complete-looking file
- * that was still "untriaged", so it got a full opus triage run on every
- * dispatch forever while being reported as ready at the same time.
- * `requests/release-notes-in-admin-settings.md` was the live instance.
- */
-export function triaged(text) {
-  const body = withoutFences(text)
-  return SECTIONS.every((h) => new RegExp(`^${h}\\s*$`, 'm').test(body))
-}
-
 /** The frontmatter block, or '' when there is none. */
 function frontmatter(text) {
   const t = normalise(text)
@@ -117,14 +80,17 @@ export function statusOf(text) {
 }
 
 /**
- * Whether a builder may be spun up on this.
+ * Whether an agent may be spun up on this.
  *
- * No plan means triage never got to it, and a builder with no plan
- * invents a smaller problem and solves that. Anything but exactly
- * `ready` is held, never built.
+ * `status: ready` and nothing else. There used to be a separate triage
+ * agent that had to write a `## Plan` first, and a request without one
+ * was held — but triage was invented, not asked for, and the agent that
+ * builds the request can plan it perfectly well itself. Matt writing
+ * `ready` is the whole gate; anything else is held, never built, so a
+ * request he is still typing is safe.
  */
 export function buildable(text) {
-  return triaged(text) && statusOf(text) === 'ready'
+  return statusOf(text) === 'ready'
 }
 
 /**
@@ -137,7 +103,6 @@ export function buildable(text) {
  * dispatcher held, and the other way round.
  */
 export function state(text) {
-  if (!triaged(text)) return 'untriaged'
   const s = statusOf(text)
   if (s === 'ready') return 'ready'
   // There was a `waiting()` export beside this that did nothing but
@@ -225,7 +190,6 @@ export function equipped(present) {
 export const REQUIRED = [
   '.claude/skills/mtg/SKILL.md',
   '.claude/agents/request-builder.md',
-  '.claude/agents/request-triage.md',
   'CLAUDE.md',
   'scripts/guard.mjs',
   'scripts/check-test-count.mjs',
@@ -267,8 +231,6 @@ if (process.argv[1] && process.argv[1].endsWith('intake.mjs')) {
 
   if (cmd === 'pending') {
     console.log(list().join('\n'))
-  } else if (cmd === 'untriaged') {
-    console.log(list().filter((f) => !triaged(read(dir, f))).join('\n'))
   } else if (cmd === 'buildable') {
     console.log(list().filter((f) => buildable(read(dir, f))).join('\n'))
   } else if (cmd === 'held') {
@@ -296,7 +258,7 @@ if (process.argv[1] && process.argv[1].endsWith('intake.mjs')) {
     process.exit(hookFires(arg) ? 0 : 1)
   } else {
     console.error(
-      'usage: intake.mjs pending|untriaged|buildable|held|state [f]|'
+      'usage: intake.mjs pending|buildable|held|state [f]|'
       + 'branch <f>|merge <f>|equipped <tree>|fires <path>',
     )
     process.exit(2)
