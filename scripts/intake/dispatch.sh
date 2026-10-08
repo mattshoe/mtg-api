@@ -37,6 +37,11 @@ MAX_BUILDERS="${INTAKE_MAX_BUILDERS:-1}"
 # override it while the intake machinery itself is still on a branch.
 BASE="${INTAKE_BASE:-origin/main}"
 
+# The off switch, before anything else happens. `.intake/disabled` stops
+# both this and the PostToolUse hook without editing a committed file —
+# which was previously the only way to stop the machine at all.
+[ -f "$STATE/disabled" ] && exit 0
+
 mkdir -p "$STATE"
 touch "$LOG"
 
