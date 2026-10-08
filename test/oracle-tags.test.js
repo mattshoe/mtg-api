@@ -46,4 +46,10 @@ describe('otag:', () => {
     const found = await names('tag filter: a tag only its children carry');
     for (const n of await named(97, 168, 274)) expect(found).toContain(n);
   });
+
+  it('the filter panel tag does not care how the phone capitalised it', async () => {
+    const found = await names('tag filter: typed with a capital');
+    expect(found, '" Removal" found nothing, so the tag is matched as typed').not.toEqual([]);
+    for (const n of await named(97, 168, 274)) expect(found).toContain(n);
+  });
 });

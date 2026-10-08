@@ -102,6 +102,8 @@ class CoreSqlDump {
         case("otag: an alias", Load.library(Library(Filters(adv = "otag:acceleration"))).first)
         case("otag: excluded", Load.library(Library(Filters(adv = "-otag:removal"))).first)
         case("tag filter: a tag only its children carry", Load.library(Library(Filters(tags = listOf("removal")))).first)
+        // A phone keyboard capitalises the first letter of what is typed.
+        case("tag filter: typed with a capital", Load.library(Library(Filters(tags = listOf(" Removal")))).first)
     }
 
     @Test
