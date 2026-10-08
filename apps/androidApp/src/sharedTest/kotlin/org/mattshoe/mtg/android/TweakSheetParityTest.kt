@@ -550,24 +550,22 @@ class TweakSheetParityTest {
     }
 
     @Test
-    fun whetherACardIsOwnedIsSaidInWordsNotOnlyInColour() {
-        // Red-on-grey is not a difference to the person looking at this.
+    fun aHitNamesTheCardAndNotWhoOwnsIt() {
+        // The finder is every card in the world. Whether a copy is
+        // bought, pulled from bulk or taken from a deck is the plan's
+        // answer, after the card is chosen.
         sheet(adding())
         type("lig")
         push(state().searched(listOf(bolt), listOf("Lightning Helix")))
         val rows = hitRows()
         Parity.check(
-            fact("the owned hit says how many") { rows[0].contains("4×") },
-            fact("the owned hit says whose it is") { rows[0].contains("matt") },
-            fact("the unowned hit says so in words") { rows[1].contains("not owned") },
+            fact("the owned hit says how many are owned: $rows") { !rows[0].contains("×") },
+            fact("the unowned hit says it is not owned: $rows") { !rows[1].contains("owned") },
         )
     }
 
     @Test
-    fun aHitSaysEnoughToTellTwoOfTheSameNameApart() {
-        // The collection groups by owner, so the same card can come
-        // back twice. If the two rows read identically, picking is a
-        // coin toss.
+    fun twoOwnersOfOneCardIsOneHit() {
         val mine = found("Sol Ring", qty = 2, owner = "matt", type = "Artifact", id = 7)
         val hers = found("Sol Ring", qty = 1, owner = "kayla", type = "Artifact", id = 8)
         sheet(adding())
@@ -575,9 +573,9 @@ class TweakSheetParityTest {
         push(state().searched(listOf(mine, hers)))
         val rows = hitRows()
         Parity.check(
-            fact("two owners of one card did not collapse into one hit") { rows.size == 2 },
-            fact("the two hits do not read exactly the same") { rows[0] != rows[1] },
-            fact("both hits say what the card is") { rows.all { it.contains("Artifact") } },
+            fact("one card is listed once: $rows") { rows.size == 1 },
+            fact("the hit says what the card is") { rows.all { it.contains("Artifact") } },
+            fact("the hit still counts copies across owners: $rows") { rows.none { it.contains("×") } },
         )
     }
 
@@ -652,14 +650,15 @@ class TweakSheetParityTest {
                 wordsUnder("tweak-pick").contains("Lightning Bolt")
             },
             fact("the box holds the card that was picked") { state().term == "Lightning Bolt" },
-            fact("the pick says how many are owned and whose") {
-                wordsUnder("tweak-pick").contains("4 owned · matt")
+            fact("the pick says how many are owned: " + wordsUnder("tweak-pick")) {
+                !wordsUnder("tweak-pick").contains("owned")
             },
         )
     }
 
     @Test
-    fun aCardNobodyOwnsIsPickableAndSaysItWouldBeBought() {
+    fun aCardNobodyOwnsIsPickable() {
+        // Buying it is the plan's "to buy" line, not the finder's.
         sheet(adding())
         type("lig")
         push(state().searched(emptyList(), listOf("Lightning Helix")))
@@ -667,9 +666,6 @@ class TweakSheetParityTest {
         rule.waitForIdle()
         Parity.check(
             fact("an unowned card could be picked") { state().pick?.name == "Lightning Helix" },
-            fact("the sheet warns that the card has to be bought") {
-                says("not owned — would be bought")
-            },
             fact("an unowned card is good enough to preview") { state().ready },
             fact("and the Preview button is live") { pressableText("Preview →") },
         )

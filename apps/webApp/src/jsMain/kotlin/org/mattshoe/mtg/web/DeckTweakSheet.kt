@@ -186,11 +186,6 @@ private fun Finder(state: DeckTweak, onState: (DeckTweak) -> Unit, onFind: (Stri
         Div(attrs = { classes("tweak-pick") }) {
             Span(attrs = { classes("t-name") }) { Text(chosen.name) }
             chosen.typeLine?.let { Span(attrs = { classes("line-type") }) { Text(it) } }
-            if (chosen.qty > 0) {
-                Span(attrs = { classes("tag", "mini") }) { Text("${chosen.qty} owned · ${chosen.owner}") }
-            } else {
-                Span(attrs = { classes("tag", "mini", "warn") }) { Text("not owned — would be bought") }
-            }
         }
     }
 
@@ -222,14 +217,9 @@ private fun Hit(f: Found, pick: () -> Unit) {
         onClick { pick() }
     }) {
         Span(attrs = { classes("t-name") }) { Text(f.name) }
+        // The card and nothing about who holds it. Where the copy
+        // comes from is the plan's answer, after the pick.
         f.typeLine?.let { Span(attrs = { classes("line-type") }) { Text(it) } }
-        // Nobody owns it, so putting it in a deck means buying it.
-        // The plan will say so; the row says it first.
-        if (f.qty > 0) {
-            Span(attrs = { classes("tag", "mini") }) { Text("${f.qty}× ${f.owner}") }
-        } else {
-            Span(attrs = { classes("tag", "mini", "warn") }) { Text("not owned") }
-        }
     }
 }
 

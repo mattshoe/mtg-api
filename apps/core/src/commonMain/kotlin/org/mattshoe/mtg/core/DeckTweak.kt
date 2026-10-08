@@ -188,14 +188,18 @@ data class DeckTweak(
      * A deck can want a card nobody owns yet — that is what the plan
      * calls "to buy" — so a finder that only lists owned cards
      * cannot be used to add one. Owned first, because that is nearly
-     * always the answer, and the rest marked as not owned.
+     * always the answer.
+     *
+     * One hit per card, and no owner on it. The collection query
+     * groups by owner, so two people holding a card came back as two
+     * identical-looking rows. The finder names a card; whether the
+     * copy is bought, pulled from bulk or taken from another deck is
+     * the plan's business, after the card is chosen.
      */
     fun searched(results: List<Found>, alsoNamed: List<String> = emptyList()): DeckTweak {
-        // The collection groups by owner, so two people holding one
-        // card is two hits and the owner is what tells them apart.
-        // The same card from the same person twice is one hit shown
-        // twice, and the two rows read identically.
-        val mine = results.distinctBy { it.name.lowercase() to it.owner }
+        val mine = results
+            .groupBy { it.name.lowercase() }
+            .map { (_, same) -> same.first().copy(qty = same.sumOf { it.qty }, owner = "") }
         val have = mine.map { it.name.lowercase() }.toSet()
         val rest = alsoNamed
             .map { it.trim() }

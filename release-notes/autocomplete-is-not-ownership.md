@@ -1,0 +1,1 @@
+Adding or swapping a card on a deck: the card finder lists each card once, with no owner on it. Two people owning Sol Ring no longer means two Sol Rings in the list. Whether a copy gets bought or comes back from bulk is still shown on the preview, after you pick the card. Website and Android.

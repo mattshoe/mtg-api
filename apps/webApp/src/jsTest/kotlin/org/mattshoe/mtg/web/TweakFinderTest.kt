@@ -193,24 +193,22 @@ class TweakFinderTest {
     }
 
     @Test
-    fun whetherACardIsOwnedIsSaidInWordsNotOnlyInColour() = runTest {
-        // Red-on-grey is not a difference to everyone looking at this.
+    fun aHitNamesTheCardAndNotWhoOwnsIt() = runTest {
+        // The finder is every card in the world. Whether a copy is
+        // bought, pulled from bulk or taken from a deck is the plan's
+        // answer, after the card is chosen.
         val s = mount(adding())
         settle()
         s.type("lig")
         s.push(s.state().searched(listOf(bolt), listOf("Lightning Helix")))
         settle()
-        val rows = s.hits()
-        assertTrue(rows[0].textContent!!.contains("4×"), "the owned hit does not say how many")
-        assertTrue(rows[0].textContent!!.contains("matt"), "the owned hit does not say whose it is")
-        assertTrue(rows[1].textContent!!.contains("not owned"), "the unowned hit only differs by colour")
+        val text = s.hitText()
+        assertEquals("Lightning BoltInstant", text[0], "the owned hit says more than the card")
+        assertEquals("Lightning Helix", text[1], "the unowned hit says more than the card")
     }
 
     @Test
-    fun aHitSaysEnoughToTellTwoOfTheSameNameApart() = runTest {
-        // The collection groups by owner, so the same card can come
-        // back twice. If the two rows read identically, picking is a
-        // coin toss.
+    fun twoOwnersOfOneCardIsOneHit() = runTest {
         val mine = found("Sol Ring", qty = 2, owner = "matt", type = "Artifact", id = 7)
         val hers = found("Sol Ring", qty = 1, owner = "kayla", type = "Artifact", id = 8)
         val s = mount(adding())
@@ -218,12 +216,19 @@ class TweakFinderTest {
         s.type("sol")
         s.push(s.state().searched(listOf(mine, hers)))
         settle()
-        val text = s.hitText()
-        assertEquals(2, text.size, "two owners of one card collapsed into one hit")
-        assertTrue(text[0] != text[1], "the two hits read exactly the same")
-        text.forEach {
-            assertTrue(it.contains("Artifact"), "a hit does not say what the card is")
-        }
+        assertEquals(listOf("Sol RingArtifact"), s.hitText(), "one card was listed once per owner")
+    }
+
+    @Test
+    fun thePickedCardDoesNotSayWhoOwnsIt() = runTest {
+        val s = mount(adding())
+        settle()
+        s.type("lig")
+        s.push(s.state().searched(listOf(bolt)))
+        settle()
+        s.hits().first().click()
+        settle()
+        assertEquals("Lightning BoltInstant", s.picked()?.textContent?.trim(), "the pick still names ownership")
     }
 
     @Test
@@ -290,7 +295,8 @@ class TweakFinderTest {
     }
 
     @Test
-    fun aCardNobodyOwnsIsPickableAndSaysItWouldBeBought() = runTest {
+    fun aCardNobodyOwnsIsPickable() = runTest {
+        // Buying it is the plan's "to buy" line, not the finder's.
         val s = mount(adding())
         settle()
         s.type("lig")
@@ -299,10 +305,6 @@ class TweakFinderTest {
         s.hits().first().click()
         settle()
         assertEquals("Lightning Helix", s.state().pick?.name, "an unowned card could not be picked")
-        assertTrue(
-            s.picked()!!.textContent!!.contains("would be bought"),
-            "the sheet did not warn that the card has to be bought",
-        )
         assertTrue(s.state().ready, "an unowned card is not good enough to preview")
     }
 

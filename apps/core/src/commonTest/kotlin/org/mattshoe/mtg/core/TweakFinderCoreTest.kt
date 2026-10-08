@@ -70,12 +70,12 @@ class TweakFinderCoreTest {
     }
 
     @Test
-    fun butTwoPeopleOwningItIsTwoHits() {
-        // Which copy goes in is a real choice, and the owner is the
-        // only thing telling the two rows apart.
+    fun twoPeopleOwningACardIsStillOneCard() {
+        // The finder names a card, any card in the world. Where the
+        // copy comes from is the plan's question, not the list's.
         val t = adding().searched(listOf(bolt, bolt.copy(id = 2, owner = "kayla", qty = 1)))
-        assertEquals(2, t.found.size, "a second owner's copy disappeared")
-        assertEquals(listOf("matt", "kayla"), t.found.map { it.owner })
+        assertEquals(listOf("Lightning Bolt"), t.found.map { it.name }, "one card was offered once per owner")
+        assertEquals(listOf(""), t.found.map { it.owner }, "the finder is still naming an owner")
     }
 
     @Test
