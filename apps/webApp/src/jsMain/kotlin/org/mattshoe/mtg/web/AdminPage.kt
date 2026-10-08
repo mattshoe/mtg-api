@@ -15,6 +15,8 @@ import org.mattshoe.mtg.core.People
 import org.mattshoe.mtg.core.Person
 import org.mattshoe.mtg.core.Releases
 import org.mattshoe.mtg.core.Role
+import org.mattshoe.mtg.core.Task
+import org.mattshoe.mtg.core.Tasks
 
 /**
  * Admin Settings, on the web. Sibling of `AdminScreen`.
@@ -35,6 +37,8 @@ fun AdminPage(
     me: String?,
     person: Person?,
     releases: Releases = Releases(),
+    tasks: Tasks = Tasks(),
+    onToggleDone: () -> Unit = {},
     onSearch: (String) -> Unit = {},
     onOpen: (Person) -> Unit = {},
     onSetRole: (Person, String) -> Unit = { _, _ -> },
@@ -45,6 +49,7 @@ fun AdminPage(
             PersonPage(state, person, me, onSetRole, onBack)
         } else {
             Everybody(state, onSearch, onOpen)
+            TaskList(tasks, onToggleDone)
             ReleaseNotes(releases)
         }
     }
@@ -79,6 +84,58 @@ private fun Everybody(state: People, onSearch: (String) -> Unit, onOpen: (Person
                 else -> state.shown.forEach { p -> PersonRow(p, onOpen) }
             }
         }
+    }
+}
+
+/**
+ * Intake requests and where each one is: the active ones, then the
+ * finished ones folded behind a toggle, newest first.
+ *
+ * Matt: "I want the done ones minimized by default but still
+ * browsable, ordered by the time which they completed, most recent
+ * first". Sibling of Android's `TaskList`.
+ */
+@Composable
+private fun TaskList(tasks: Tasks, onToggleDone: () -> Unit) {
+    Div(attrs = { classes("panel") }) {
+        Div(attrs = { classes("panel-head") }) {
+            H2 { Text("Tasks") }
+        }
+        Div(attrs = { classes("panel-body") }) {
+            when {
+                tasks.busy -> Div(attrs = { classes("empty") }) { Text("Loading…") }
+                tasks.error != null ->
+                    Div(attrs = { classes("err") }) { Text("Could not load tasks: ${tasks.error}") }
+                tasks.rows.isEmpty() -> Div(attrs = { classes("empty") }) { Text("No tasks yet.") }
+                else -> {
+                    if (tasks.active.isEmpty()) Div(attrs = { classes("empty") }) { Text("Nothing in progress.") }
+                    tasks.active.forEach { TaskRow(it, "data-task") }
+                    Button(attrs = {
+                        classes("tasks-toggle")
+                        attr("data-tasks-toggle", "")
+                        attr("aria-expanded", tasks.showDone.toString())
+                        onClick { onToggleDone() }
+                    }) {
+                        Text((if (tasks.showDone) "▾ " else "▸ ") + "Done (${tasks.done.size})")
+                    }
+                    if (tasks.showDone) tasks.done.forEach { TaskRow(it, "data-task-done") }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TaskRow(task: Task, marker: String) {
+    Div(attrs = {
+        classes("task")
+        attr(marker, task.ref)
+    }) {
+        Div(attrs = { classes("task-what") }) {
+            Span(attrs = { classes("task-title") }) { Text(task.title) }
+            task.finished?.let { Span(attrs = { classes("muted", "small") }) { Text(it) } }
+        }
+        Span(attrs = { classes("tag", "mini") }) { Text(task.status.word) }
     }
 }
 
