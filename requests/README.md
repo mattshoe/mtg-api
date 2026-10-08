@@ -41,8 +41,15 @@ requests/thing.md          you wrote it
   → merged                 `merge: auto`, which deploys the site and cuts
                            an APK. `merge: ask` stops at a green PR and
                            you get a notification instead
+  → verified               the deploy runs watched and the shipped bundle
+                           fetched — a green workflow is not proof
   → requests/done/thing.md moved and committed here, with the PR number
 ```
+
+A red pull request gets a **fix-only** builder: the dispatcher pulls the
+failing job's log with `gh run view --log-failed`, hands it over, and tells
+it to make CI green without re-implementing anything. Twice, and then it
+gives up and tells you.
 
 The builder stops at an open pull request on purpose. The `apps` job takes
 thirteen to seventeen minutes and three of four builders ended their turn
@@ -75,6 +82,14 @@ here, so an agent cannot talk itself out of them:
   dispatcher's, in the real repo, so a finished request actually leaves
   this folder — two requests were built hours apart and stayed buildable
   because the builder moved its own copy inside its worktree
+- a request leaves this folder on **every** outcome, not only a merge. A
+  green `merge: ask` is filed with a note saying it is waiting for you; a
+  pull request still red after two fix attempts is filed saying so. It
+  stopped being true for a while and the consequence was a second builder
+  force-pushing over the first one's commit
+- after a merge, the deploy runs are watched and the shipped bundle is
+  fetched and checked. "Done means deployed" is the rule and a green
+  workflow has shipped nothing before
 
 ## Taking one back
 

@@ -20,7 +20,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { spawnSync, spawn } from 'node:child_process'
 import {
   mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync,
-  cpSync, chmodSync, appendFileSync,
+  cpSync, chmodSync, readdirSync, utimesSync,
 } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -39,10 +39,24 @@ const COPY = [
   'scripts/intake/com.matt.mtg.intake.plist',
   'scripts/guard.mjs',
   'scripts/check-test-count.mjs',
+  'scripts/suite-floor.mjs',
   'test/suite-floors.json',
   'CLAUDE.md',
   '.claude/skills/mtg/SKILL.md',
   '.claude/agents/request-builder.md',
+  // Everything `equipped` requires has to be here, or the guard passes in
+  // every test for the wrong reason. The Part D files were the ones
+  // missing: a worktree without them runs bypassPermissions with the deny
+  // hook silently absent, and no test noticed.
+  '.claude/agents/request-triage.md',
+  '.claude/settings.json',
+  'scripts/bash-deny.mjs',
+  'scripts/intake/deny-bash.mjs',
+  // Not required, but `prepare_slot`'s npm-stamp branch is dead code
+  // without them — which is why the stamp living inside the worktree,
+  // four lines after a `git clean` that deleted it, went unnoticed.
+  'package.json',
+  'package-lock.json',
 ]
 
 const READY = (title) => `---
@@ -162,6 +176,10 @@ function run(script, { env = {}, stdin = '', timeout = 60_000 } = {}) {
       PATH: `${box.bin}:${process.env.PATH}`,
       INTAKE_DEBOUNCE: '0',
       INTAKE_SETTLE: '0',
+      // The fake repo has a real package.json so the stamp logic is
+      // exercised, but `npm ci` in a temp dir with no network is not the
+      // thing under test.
+      INTAKE_SKIP_NPM: '1',
       HOME: box.root,
       ...env,
     },
@@ -312,7 +330,10 @@ describe('the lock', () => {
     mkdirSync(box.path('.intake/dispatch.lock'))
     writeFileSync(box.path('.intake/dispatch.lock/pid'), String(held.pid))
     writeFileSync(box.path('.intake/dispatch.lock/started'), String(Math.floor(Date.now() / 1000)))
-    writeFileSync(box.path('.intake/dispatch.lock/command'), 'bash scripts/intake/dispatch.sh')
+    // What `ps` will actually report, because the reused-pid check now
+    // compares against the recorded string rather than a loose glob.
+    writeFileSync(box.path('.intake/dispatch.lock/command'),
+      spawnSync('ps', ['-o', 'command=', '-p', String(held.pid)], { encoding: 'utf8' }).stdout.trim())
 
     const r = run('dispatch.sh')
     held.kill('SIGKILL')
@@ -335,14 +356,52 @@ describe('the lock', () => {
 
   it('clears a lock whose pid is gone, so a kill -9 does not wedge it forever', () => {
     mkdirSync(box.path('.intake/dispatch.lock'))
-    // A pid that cannot be running: pid 0 is the kernel and kill -0 on it
-    // from a user process fails.
     writeFileSync(box.path('.intake/dispatch.lock/pid'), '999999')
     writeFileSync(box.path('.intake/dispatch.lock/started'), String(Math.floor(Date.now() / 1000)))
     writeFileSync(box.path('.intake/dispatch.lock/command'), 'bash scripts/intake/dispatch.sh')
 
     run('dispatch.sh')
     expect(box.log()).toContain('claude')
+  })
+
+  it('does not let a pidless lock wedge intake forever', () => {
+    // The `[ -z "$pid" ]` branch returned LIVE before any age check, so a
+    // kill -9 inside the `mkdir`→`stamp_claim` window wedged the queue
+    // permanently and silently: five consecutive runs, zero builders, and
+    // `already running as , leaving it to that one` with an empty pid.
+    mkdirSync(box.path('.intake/dispatch.lock'))
+    // Backdate the directory so it is older than the window.
+    const old = new Date(Date.now() - 600_000)
+    utimesSync(box.path('.intake/dispatch.lock'), old, old)
+
+    run('dispatch.sh', { env: { INTAKE_PIDLESS_SECONDS: '5' } })
+    logged('has had no pid for')
+    expect(box.log()).toContain('claude')
+  })
+
+  it('never steals the lock from a dispatcher that is simply slow', () => {
+    // The age cap was applied to `$LOCK` as well as to claims, so at
+    // MAX_MINUTES a LIVE dispatcher's lock was taken — `kill -0`
+    // succeeding and `ps` matching did not save it, and it was never
+    // signalled, so its own `drop_lock` no-opped and it never found out.
+    // Two dispatchers then raced on the same pull request, which is the
+    // original double-dispatch critical.
+    const stand = join(box.root, 'dispatch.sh')
+    writeFileSync(stand, '#!/bin/bash\nsleep 45\n')
+    chmodSync(stand, 0o755)
+    const held = spawn('bash', [stand], { detached: true, stdio: 'ignore' })
+    held.unref()
+    mkdirSync(box.path('.intake/dispatch.lock'))
+    writeFileSync(box.path('.intake/dispatch.lock/pid'), String(held.pid))
+    writeFileSync(box.path('.intake/dispatch.lock/started'), '1')
+    writeFileSync(box.path('.intake/dispatch.lock/command'),
+      spawnSync('ps', ['-o', 'command=', '-p', String(held.pid)], { encoding: 'utf8' }).stdout.trim())
+
+    const r = run('dispatch.sh', { env: { INTAKE_MAX_MINUTES: '0' } })
+    held.kill('SIGKILL')
+    expect(r.status).toBe(0)
+    expect(box.log()).not.toContain('claude')
+    expect(existsSync(box.path('.intake/dispatch.lock'))).toBe(true)
   })
 
   it('clears a lock whose pid was reused by something that is not a dispatcher', () => {
@@ -367,9 +426,48 @@ describe('the lock', () => {
     expect(box.log()).toContain('claude')
   })
 
-  it('is released before the dispatcher stops, and only by its owner', () => {
-    run('dispatch.sh')
-    expect(existsSync(box.path('.intake/dispatch.lock'))).toBe(false)
+  it('is released before the wave waits, not after every builder is done', () => {
+    // The old test only checked the lock was gone AFTERWARDS, which the
+    // previous code also did via its EXIT trap — so it could not fail.
+    // What matters is WHEN: the dispatcher now owns the CI wait, so a
+    // wave is a builder plus 13-17 minutes of `apps`, and holding the
+    // lock through all of it left A15's dropped-event bug fully intact.
+    // A builder that blocks until a file appears lets us look mid-wave.
+    const gate = join(box.root, 'let-the-builder-finish')
+    box.stub('claude', `
+branch="$(git rev-parse --abbrev-ref HEAD)"
+echo x >> built.txt
+git add -A
+git -c user.name=b -c user.email=b@b commit -qm "build: $branch"
+git push -q origin "HEAD:refs/heads/$branch"
+while [ ! -f ${JSON.stringify(gate)} ]; do sleep 0.2; done
+exit 0
+`)
+    box.stub('gh', ghStub())
+    const opener = spawn('bash', ['-c',
+      `for i in $(seq 1 100); do [ -f ${JSON.stringify(box.path('.intake/intake.log'))} ] && grep -q 'lock released' ${JSON.stringify(box.path('.intake/intake.log'))} && break; sleep 0.3; done; touch ${JSON.stringify(gate)}`],
+      { detached: true, stdio: 'ignore' })
+    opener.unref()
+    const r = run('dispatch.sh', { timeout: 120_000 })
+    expect(r.status).toBe(0)
+    logged('lock released')
+  })
+
+  it('is only ever removed by the dispatcher that owns it', () => {
+    // `drop_lock` compares the pid before removing, so a dispatcher that
+    // released early cannot take a successor's lock. Asserted directly
+    // rather than inferred from the lock being absent at the end.
+    mkdirSync(box.path('.intake/dispatch.lock'))
+    writeFileSync(box.path('.intake/dispatch.lock/pid'), '999999')
+    writeFileSync(box.path('.intake/dispatch.lock/command'), 'bash scripts/intake/dispatch.sh')
+    const r = spawnSync('bash', ['-c',
+      `LOCK=${JSON.stringify(box.path('.intake/dispatch.lock'))}
+       LOG=/dev/null
+       . <(sed -n '/^lock_pid()/,/^}/p;/^drop_lock()/,/^}/p' ${JSON.stringify(box.path('scripts/intake/dispatch.sh'))})
+       drop_lock
+       [ -d "$LOCK" ] && echo KEPT || echo REMOVED`],
+      { encoding: 'utf8' })
+    expect(r.stdout).toContain('KEPT')
   })
 })
 
@@ -462,6 +560,10 @@ describe('asking intake.mjs', () => {
   })
 
   it('does not confuse an empty queue with a broken one', () => {
+    // A guard, not a fix: the previous code also logged "nothing
+    // pending" here. It is kept because the pair with the two tests above
+    // is what makes the distinction meaningful, and it would catch a
+    // future `ask` that failed loudly on an empty folder.
     rmSync(box.path('requests/a-thing.md'))
     const r = run('dispatch.sh')
     expect(r.status).toBe(0)
@@ -547,9 +649,20 @@ describe('a request that gets built', () => {
     expect(merge).not.toContain('--delete-branch')
   })
 
-  it('cleans the worktree up only once everything agreed', () => {
+  it('calls it done only when the pull request merged and the request was filed', () => {
+    // The old name promised worktree cleanup, asserted `logged('a-thing
+    // done')`, and the code never removes a slot worktree at all — so it
+    // was testing a different thing from the one it claimed. Slots are
+    // persistent now, on purpose; what has to be true is the verdict.
     run('dispatch.sh')
-    logged('a-thing done')
+    logged('done: MERGED')
+    expect(existsSync(box.path('requests/done/a-thing.md'))).toBe(true)
+    expect(existsSync(box.path('requests/a-thing.md'))).toBe(false)
+  })
+
+  it('keeps the slot rather than deleting it, which is what makes it reusable', () => {
+    run('dispatch.sh')
+    expect(existsSync(join(box.root, '.cache/mtg-intake/wt/slot1/.git'))).toBe(true)
   })
 })
 
@@ -646,17 +759,32 @@ describe('a builder that did not finish', () => {
 })
 
 describe('a pull request that was already merged', () => {
+  // `gh pr list --head <branch> --state open` cannot see a MERGED pull
+  // request, so a builder that did exactly what it was told — merge on
+  // green — was judged unfinished every single time, and the request was
+  // rebuilt from a base that already had the feature in it.
+  //
+  // But `--state all --limit 1` also surfaces an OLD merged pull request
+  // on the same branch, so the fix needs a second question: is this
+  // work actually in the base? Both halves are here.
+
   beforeEach(() => {
     build({ requests: { 'a-thing.md': READY('A thing') } })
-    box.stub('claude', BUILDER)
     box.stub('gh', ghStub({ state: 'MERGED' }))
+    // A builder whose work really did land on main, which is what a
+    // merged pull request means.
+    box.stub('claude', `
+branch="$(git rev-parse --abbrev-ref HEAD)"
+echo x >> built.txt
+git add -A
+git -c user.name=b -c user.email=b@b commit -qm "build: $branch"
+git push -q origin "HEAD:refs/heads/$branch"
+git push -q origin "HEAD:refs/heads/main"
+exit 0
+`)
   })
 
   it('is judged done, not unfinished', () => {
-    // `gh pr list --head <branch> --state open` cannot see a MERGED pull
-    // request, so a builder that did exactly what it was told — merge on
-    // green — was judged unfinished every single time, and the request
-    // was rebuilt from a base that already had the feature in it.
     run('dispatch.sh')
     expect(box.intakeLog()).not.toContain('NOT FINISHED')
     expect(existsSync(box.path('requests/done/a-thing.md'))).toBe(true)
@@ -665,6 +793,19 @@ describe('a pull request that was already merged', () => {
   it('does not try to merge it again', () => {
     run('dispatch.sh')
     expect(box.log()).not.toContain('pr merge')
+  })
+
+  it('is NOT judged done off an older merged PR whose work is not in main', () => {
+    // A builder that commits and pushes but opens no pull request used to
+    // be filed as done off whatever MERGED pull request the branch had
+    // previously had — committing "Merged as #7" while its own commits
+    // sat unmerged. The `--state all` fix is what opened this.
+    box.stub('claude', BUILDER)
+    run('dispatch.sh')
+    logged('that is an older pull request')
+    logged('NOT FINISHED')
+    expect(existsSync(box.path('requests/done/a-thing.md'))).toBe(false)
+    expect(existsSync(box.path('requests/a-thing.md'))).toBe(true)
   })
 })
 
@@ -938,7 +1079,7 @@ describe('status.sh', () => {
     writeFileSync(join(slot, 'half.txt'), 'half a change\n')
     const out = status({ INTAKE_WORKTREE_ROOT: join(box.root, 'wt') }).stdout
     expect(out).toContain('STALLED')
-    expect(out).toMatch(/1 changed, 0 commits, never pushed/)
+    expect(out).toMatch(/1 changed, 0 commits, not on origin/)
   })
 
   it('shows the lock and the claims, so a wedged queue is not an idle one', () => {
@@ -1049,5 +1190,489 @@ exit 0
     // The scrub is a named list, not a whitelist: it must not have
     // emptied the environment wholesale.
     expect(existsSync(box.path('requests/done/a-thing.md'))).toBe(true)
+  })
+})
+
+describe('a worktree that is missing its instructions', () => {
+  // The guard for "a builder that works blind" was unreachable code that
+  // killed the dispatcher instead. `ask()` calls `exit` on nonzero and
+  // `|| true` cannot catch an `exit`; `intake.mjs equipped` exits 1 BY
+  // DESIGN when files are missing, so the only branch that reached it
+  // always took the process down — dropping every request behind it in
+  // the wave and leaving the claim and the slot claim on disk.
+
+  beforeEach(() => {
+    build({
+      requests: {
+        'a-thing.md': READY('A thing'),
+        'b-thing.md': READY('B thing'),
+      },
+    })
+    box.stub('claude', BUILDER)
+    box.stub('gh', ghStub())
+  })
+
+  function stripInstructions() {
+    // Remove it from the base so every fresh slot lacks it.
+    box.git('rm', '-q', 'CLAUDE.md')
+    box.git('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'no CLAUDE.md')
+    box.git('push', '-q', 'origin', 'main')
+    box.git('fetch', '-q', 'origin')
+  }
+
+  it('is skipped, and does not take the dispatcher down with it', () => {
+    stripInstructions()
+    const r = run('dispatch.sh', { env: { INTAKE_MAX_BUILDERS: '2' } })
+    expect(r.status).toBe(0)
+    logged('NOT STARTED')
+    expect(box.log()).not.toContain('claude -p')
+  })
+
+  it('names what is missing, rather than only that something is', () => {
+    stripInstructions()
+    run('dispatch.sh')
+    logged('CLAUDE.md')
+  })
+
+  it('leaves no claim and no slot claim behind', () => {
+    stripInstructions()
+    run('dispatch.sh')
+    const left = readdirSync(box.path('.intake'))
+      .filter((f) => f.endsWith('.building') || f.endsWith('.claim'))
+    expect(left).toEqual([])
+  })
+
+  it('tells Matt, because a blind builder is the thing this exists to stop', () => {
+    stripInstructions()
+    run('dispatch.sh')
+    expect(box.log()).toContain('osascript')
+  })
+
+  it('needs the files that make the refusals real, not just the instructions', () => {
+    // `.claude/settings.json`, `bash-deny.mjs` and `deny-bash.mjs` are the
+    // Part D enforcement mechanism. A worktree without them runs
+    // bypassPermissions with the deny hook silently absent.
+    box.git('rm', '-q', '.claude/settings.json')
+    box.git('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'no settings')
+    box.git('push', '-q', 'origin', 'main')
+    box.git('fetch', '-q', 'origin')
+    const r = run('dispatch.sh')
+    expect(r.status).toBe(0)
+    logged('NOT STARTED')
+    logged('.claude/settings.json')
+  })
+
+  it('checks the triage worktree too', () => {
+    build({ requests: { 'raw-one.md': '# Raw\n\nmake it faster\n' } })
+    box.stub('claude', BUILDER)
+    box.stub('gh', ghStub({ state: 'NONE' }))
+    box.git('rm', '-q', '.claude/agents/request-triage.md')
+    box.git('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'no triage def')
+    box.git('push', '-q', 'origin', 'main')
+    box.git('fetch', '-q', 'origin')
+    const r = run('dispatch.sh')
+    expect(r.status).toBe(0)
+    logged('triage NOT STARTED')
+    // No triage agent was launched. The notification mentions the missing
+    // file, so the assertion has to be about the `claude` call.
+    const launched = box.log().split('\n').filter((l) => l.startsWith('claude '))
+    expect(launched.filter((l) => l.includes('request-triage'))).toEqual([])
+  })
+})
+
+describe('gh answering nothing', () => {
+  // Three consumers still conflated failure with an answer: a failing
+  // `pr list` produced "NOT FINISHED — no pull request for its branch"
+  // and a false notification about a builder that had done everything
+  // right; a failing `run list` produced zero `gh run watch` calls and
+  // the dispatcher judged CI anyway; and `all_checks_green` bypassed the
+  // checked wrapper entirely.
+
+  beforeEach(() => {
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    box.stub('claude', BUILDER)
+  })
+
+  it('is not a verdict when pr list fails', () => {
+    box.stub('gh', `
+case "$1 $2" in
+  "pr list") exit 4 ;;
+esac
+exit 0
+`)
+    run('dispatch.sh')
+    expect(box.intakeLog()).not.toContain('no pull request for its branch')
+    logged('could not ask GitHub')
+    // The slot is kept, so nothing is lost and it can be re-dispatched.
+    expect(existsSync(box.path('requests/a-thing.md'))).toBe(true)
+    expect(existsSync(box.path('requests/done/a-thing.md'))).toBe(false)
+  })
+
+  it('is not a green CI when run list fails', () => {
+    box.stub('gh', `
+case "$1 $2" in
+  "pr list") printf '7 OPEN\\n' ;;
+  "run list") exit 4 ;;
+  "pr checks") printf 'shared\\tpass\\t1m\\tu\\n'; exit 0 ;;
+esac
+exit 0
+`)
+    run('dispatch.sh')
+    expect(box.log()).not.toContain('pr merge')
+    logged('could not ask GitHub')
+  })
+
+  it('is not a green CI when pr checks fails to run at all', () => {
+    box.stub('gh', `
+case "$1 $2" in
+  "pr list") printf '7 OPEN\\n' ;;
+  "run list") printf '101\\n' ;;
+  "run watch") exit 0 ;;
+  "pr checks") exit 4 ;;
+esac
+exit 0
+`)
+    run('dispatch.sh')
+    expect(box.log()).not.toContain('pr merge')
+  })
+})
+
+describe('every terminal outcome', () => {
+  // A request left the live queue only when it MERGED. For `merge: ask`
+  // — which is four of five live requests — and for a red pull request,
+  // it stayed live and buildable, and the consequence was concrete: run 1
+  // leaves it there, run 2 launches a second builder on the same branch,
+  // `prepare_slot` resets the branch, and `salvage` force-pushes the
+  // duplicate OVER the first builder's commit, destroying the pull
+  // request Matt was asked to review.
+
+  it('files a green merge: ask request, so a second builder cannot overwrite it', () => {
+    build({ requests: { 'a-thing.md': READY('A thing').replace('merge: auto', 'merge: ask') } })
+    box.stub('claude', BUILDER)
+    box.stub('gh', ghStub())
+    run('dispatch.sh')
+    expect(box.log()).not.toContain('pr merge')
+    expect(existsSync(box.path('requests/a-thing.md'))).toBe(false)
+    expect(existsSync(box.path('requests/done/a-thing.md'))).toBe(true)
+    expect(readFileSync(box.path('requests/done/a-thing.md'), 'utf8'))
+      .toContain('waiting for you as #7')
+  })
+
+  it('does not relaunch a builder on the same branch on the next dispatch', () => {
+    build({ requests: { 'a-thing.md': READY('A thing').replace('merge: auto', 'merge: ask') } })
+    box.stub('claude', BUILDER)
+    box.stub('gh', ghStub())
+    run('dispatch.sh')
+    const first = box.log().split('\n').filter((l) => l.startsWith('claude ')).length
+    run('dispatch.sh')
+    const second = box.log().split('\n').filter((l) => l.startsWith('claude ')).length
+    expect(second).toBe(first)
+  })
+
+  it('holds a request that keeps failing, instead of retrying it forever', () => {
+    // `TRIED` is per-process (`tried.$$`), so it counted nothing across
+    // dispatches, and `TRIAGE_GIVE_UP` only ever applied to triage.
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    box.stub('claude', BUILDER_STALLS)
+    box.stub('gh', ghStub({ state: 'NONE' }))
+    for (let i = 0; i < 3; i += 1) run('dispatch.sh')
+    logged('GIVING UP on a-thing')
+    expect(existsSync(box.path('.intake/a-thing.held'))).toBe(true)
+    const before = box.log().split('\n').filter((l) => l.startsWith('claude ')).length
+    run('dispatch.sh')
+    const after = box.log().split('\n').filter((l) => l.startsWith('claude ')).length
+    expect(after).toBe(before)
+    logged('is held')
+    // Held, not lost: the file and the branch are both still there.
+    expect(existsSync(box.path('requests/a-thing.md'))).toBe(true)
+  })
+})
+
+describe('a red pull request', () => {
+  // The fix-only re-dispatch did not exist. `build_one` wrote
+  // `$STATE/<name>.fixme` and the only reader anywhere was `status.sh`,
+  // which printed it — while request-builder.md and requests/README.md
+  // both promised the feature and the PR body claimed it.
+
+  function redCi(extra = '') {
+    return `
+case "$1 $2" in
+  "pr list") printf '7 OPEN\\n' ;;
+  "run list") printf '101\\n' ;;
+  "run watch") exit 0 ;;
+  "run view") printf 'FAILED: the thing that broke\\n' ;;
+  "pr checks") printf 'shared\\tpass\\t1m\\tu\\ntally\\tfail\\t1m\\tu\\n'; exit 1 ;;
+  "pr merge") exit 0 ;;
+esac
+${extra}
+exit 0
+`
+  }
+
+  beforeEach(() => {
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    box.stub('gh', redCi())
+  })
+
+  it('sends a fix-only builder, with the failing log in its hands', () => {
+    box.stub('claude', BUILDER)
+    run('dispatch.sh', { timeout: 120_000 })
+    logged('dispatching a fix-only builder')
+    const launched = box.log().split('\n').filter((l) => l.startsWith('claude '))
+    const fix = launched.find((l) => l.includes('FIX-ONLY'))
+    expect(fix).toBeDefined()
+    expect(fix).toContain('.ci-failure.log')
+    expect(fix).toContain('#7')
+    expect(existsSync(box.path('.intake/a-thing.ci-failure.log'))).toBe(true)
+    expect(readFileSync(box.path('.intake/a-thing.ci-failure.log'), 'utf8'))
+      .toContain('the thing that broke')
+  })
+
+  it('tells the fix builder not to re-implement, merge, or open another PR', () => {
+    box.stub('claude', BUILDER)
+    run('dispatch.sh', { timeout: 120_000 })
+    const fix = box.log().split('\n').find((l) => l.includes('FIX-ONLY'))
+    expect(fix).toContain('not implementing the request again')
+    expect(fix).toContain('Do not open another pull request')
+    expect(fix).toContain('Do not merge')
+  })
+
+  it('gives up after a bounded number of fixes rather than looping', () => {
+    box.stub('claude', BUILDER)
+    run('dispatch.sh', { env: { INTAKE_FIX_GIVE_UP: '1' }, timeout: 120_000 })
+    run('dispatch.sh', { env: { INTAKE_FIX_GIVE_UP: '1' }, timeout: 120_000 })
+    logged('still red')
+    expect(existsSync(box.path('requests/done/a-thing.md'))).toBe(true)
+  })
+})
+
+describe('reusing a slot', () => {
+  // `npm ci` is 403 seconds and is the single thing slots exist to avoid.
+  // The stamp used to live INSIDE the worktree, four lines after a
+  // `git clean -qxdf` that deleted it, so the comparison always failed
+  // and it ran on every build. No test caught it, because the fake repo
+  // had no package.json and the whole block was dead code.
+
+  beforeEach(() => {
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    box.stub('claude', BUILDER)
+    box.stub('gh', ghStub())
+  })
+
+  it('does not re-run npm ci when the lockfile has not moved', () => {
+    run('dispatch.sh')
+    logged('lockfile moved')
+    // Second request, same slot, same lockfile.
+    writeFileSync(box.path('requests/b-thing.md'), READY('B thing'))
+    run('dispatch.sh')
+    const unchanged = box.intakeLog().split('\n')
+      .filter((l) => l.includes('lockfile unchanged'))
+    expect(unchanged.length).toBeGreaterThan(0)
+  })
+
+  it('keeps the stamp where git clean cannot reach it', () => {
+    run('dispatch.sh')
+    expect(existsSync(box.path('.intake/slot1.npm-lock'))).toBe(true)
+    expect(existsSync(join(box.root, '.cache/mtg-intake/wt/slot1/.intake-npm-lock'))).toBe(false)
+  })
+})
+
+describe('salvage that cannot push', () => {
+  // "Nothing is thrown away without being pushed first" was false when
+  // the push failed: salvage committed, logged COULD NOT PUSH, and
+  // `prepare_slot` reset the branch one line later — so
+  // `git branch -a --contains <sha>` came back empty and only the reflog
+  // held the work until the next `git gc`.
+
+  beforeEach(() => {
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    box.stub('gh', ghStub({ state: 'NONE' }))
+    box.stub('claude', BUILDER_STALLS)
+  })
+
+  function breakOrigin() {
+    // A remote that accepts nothing.
+    box.git('remote', 'set-url', 'origin', join(box.root, 'gone.git'))
+  }
+
+  it('tags the commit so it is reachable, and says so out loud', () => {
+    run('dispatch.sh')
+    breakOrigin()
+    writeFileSync(join(box.root, '.cache/mtg-intake/wt/slot1', 'more.txt'), 'more work\n')
+    writeFileSync(box.path('requests/b-thing.md'), READY('B thing'))
+    run('dispatch.sh')
+    logged('COULD NOT PUSH')
+    const tags = spawnSync('git',
+      ['-C', join(box.root, '.cache/mtg-intake/wt/slot1'), 'tag', '-l', 'intake-salvage/*'],
+      { encoding: 'utf8' })
+    expect(tags.stdout.trim().length).toBeGreaterThan(0)
+  })
+
+  it('tells Matt, rather than only writing it to a log', () => {
+    run('dispatch.sh')
+    breakOrigin()
+    writeFileSync(join(box.root, '.cache/mtg-intake/wt/slot1', 'more.txt'), 'more\n')
+    writeFileSync(box.path('requests/b-thing.md'), READY('B thing'))
+    run('dispatch.sh')
+    expect(box.log()).toContain('osascript')
+    expect(box.intakeLog()).toContain('could not be pushed')
+  })
+})
+
+describe('counting checks', () => {
+  it('does not lose one to a missing trailing newline', () => {
+    // `printf '%s'` emits no trailing newline, so `wc -l` returned N-1 and
+    // a pull request with exactly ONE check was refused as "no checks",
+    // notified as red, and given a .fixme. The three-check stub logged
+    // "every one of 2 checks reported pass".
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    box.stub('claude', BUILDER)
+    box.stub('gh', `
+case "$1 $2" in
+  "pr list") printf '7 OPEN\\n' ;;
+  "run list") printf '101\\n' ;;
+  "run watch") exit 0 ;;
+  "pr checks") printf 'only-one\\tpass\\t1m\\tu\\n'; exit 0 ;;
+  "pr merge") exit 0 ;;
+esac
+exit 0
+`)
+    run('dispatch.sh')
+    logged('every one of 1 checks reported pass')
+    expect(box.log()).toContain('pr merge')
+  })
+
+  it('does not merge on a skipped or neutral required check', () => {
+    // gh buckets NEUTRAL as `skipping`, and `skipping` counted as green —
+    // while the comment four lines above said "never with a check pending
+    // or skipped".
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    box.stub('claude', BUILDER)
+    box.stub('gh', `
+case "$1 $2" in
+  "pr list") printf '7 OPEN\\n' ;;
+  "run list") printf '101\\n' ;;
+  "run watch") exit 0 ;;
+  "pr checks") printf 'shared\\tpass\\t1m\\tu\\ntally\\tskipping\\t1m\\tu\\n'; exit 0 ;;
+  "pr merge") exit 0 ;;
+esac
+exit 0
+`)
+    run('dispatch.sh')
+    expect(box.log()).not.toContain('pr merge')
+    logged('tally=skipping')
+  })
+})
+
+describe('after a merge', () => {
+  // Post-merge deploy and shipped-artifact verification belonged to the
+  // builder's old step 10. When the builder stopped merging it was
+  // reassigned to the dispatcher in SKILL.md — and implemented nowhere,
+  // so "done means deployed on both platforms" lost its only
+  // enforcement, and requests/README.md lost its "verified the real
+  // artifact, not the green tick" line in the same diff.
+
+  beforeEach(() => {
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    box.stub('claude', BUILDER)
+    box.stub('curl', 'printf "%01000d" 0')
+  })
+
+  it('watches the deploy runs and checks the shipped bundle', () => {
+    box.stub('gh', ghStub())
+    run('dispatch.sh', { env: { INTAKE_SITE_JS: 'https://example.invalid/mtg.js' } })
+    logged('done: MERGED')
+    logged('shipped web bundle is')
+    logged('deploys for #7 were green')
+  })
+
+  it('says so loudly when the shipped bundle cannot be read', () => {
+    // A green deploy workflow is not proof the change is live, and this
+    // is the state where it is provably not.
+    box.stub('gh', ghStub())
+    box.stub('curl', 'exit 7')
+    run('dispatch.sh', { env: { INTAKE_SITE_JS: 'https://example.invalid/mtg.js' } })
+    logged('SHIPPED ARTIFACT CHECK FAILED')
+    expect(box.log()).toContain('osascript')
+  })
+
+  it('says so when a deploy run itself was not green', () => {
+    box.stub('gh', `
+case "$1 $2" in
+  "pr list") printf '7 OPEN\\n' ;;
+  "run list") printf '101\\n' ;;
+  "run watch") [ "$3" = "101" ] && exit 1 ; exit 0 ;;
+  "run view") printf 'pages failure\\n' ;;
+  "pr checks") printf 'shared\\tpass\\t1m\\tu\\n'; exit 0 ;;
+  "pr merge") exit 0 ;;
+esac
+exit 0
+`)
+    run('dispatch.sh', { env: { INTAKE_SITE_JS: 'https://example.invalid/mtg.js' } })
+    logged('ended badly')
+    expect(box.intakeLog()).toContain('was not green')
+  })
+})
+
+describe('killing a builder', () => {
+  // The old watchdog `pkill -P $$`d every sibling, and the replacement
+  // matched `claude .*$branch` — which also matches every branch that has
+  // this one as a PREFIX, so it killed healthy builders too. Latent only
+  // because MAX_BUILDERS is 1, and the code says that is the only line
+  // that has to change for N.
+
+  it('kills the whole tree, so a grandchild cannot outlive the log line', () => {
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    box.stub('gh', ghStub({ state: 'NONE' }))
+    // A builder that forks a grandchild writer and then sits there.
+    const spoor = join(box.root, 'grandchild-was-here')
+    box.stub('claude', `
+( while :; do echo tick >> ${JSON.stringify(spoor)}; sleep 0.2; done ) &
+sleep 120
+`)
+    const live = box.path('requests/a-thing.md')
+    const withdraw = spawn('bash', ['-c', `sleep 4; rm -f ${JSON.stringify(live)}`],
+      { detached: true, stdio: 'ignore' })
+    withdraw.unref()
+    const r = run('dispatch.sh', { env: { INTAKE_WATCH_SECONDS: '2' }, timeout: 120_000 })
+    expect(r.status).toBe(0)
+    logged('withdrawn')
+    // Nothing is still writing.
+    const a = existsSync(spoor) ? readFileSync(spoor, 'utf8').length : 0
+    const deadline = Date.now() + 2500
+    while (Date.now() < deadline) { /* let an orphan prove itself */ }
+    const b = existsSync(spoor) ? readFileSync(spoor, 'utf8').length : 0
+    expect(b).toBe(a)
+  })
+
+  it('matches the branch exactly, not every branch it is a prefix of', () => {
+    build()
+    const text = readFileSync(box.path('scripts/intake/dispatch.sh'), 'utf8')
+    // The unanchored form is the bug; it must not be in the file.
+    expect(text).not.toContain('pgrep -f "claude .*$branch"')
+    expect(text).toContain('claude_pids')
+  })
+})
+
+describe('a worktree that has to go', () => {
+  it('is removed through git, then pruned, never just deleted', () => {
+    // A deleted directory leaves `.git/worktrees/<n>` behind, and that
+    // stale admin entry is what makes the next `worktree add` for the
+    // same branch fail outright.
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    const slot = join(box.root, 'wt', 'slot1')
+    mkdirSync(join(box.root, 'wt'), { recursive: true })
+    box.git('worktree', 'add', '-q', '-b', 'request/leftover-0000000', slot, 'main')
+    const script = `
+REPO=${JSON.stringify(box.repo)}
+LOG=/dev/null
+eval "$(sed -n '/^remove_worktree()/,/^}/p' ${JSON.stringify(box.path('scripts/intake/dispatch.sh'))})"
+remove_worktree ${JSON.stringify(slot)}
+git -C "$REPO" worktree list --porcelain | grep -c slot1 || true
+`
+    const r = spawnSync('bash', ['-c', script], { encoding: 'utf8' })
+    expect(r.stderr).toBe('')
+    expect(existsSync(slot)).toBe(false)
+    expect(r.stdout.trim()).toBe('0')
   })
 })

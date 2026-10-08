@@ -8,7 +8,15 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
+      # Full history, so `check-suite-floor.mjs` can compare the
+      # committed floors against main's. On a shallow checkout
+      # `git show origin/main:test/suite-floors.json` fails, the guard
+      # catches it and sets the reference to undefined, and a floor
+      # lowered by a merge resolution passes silently — in the only place
+      # that conflict ever lands.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -26,3 +34,13 @@ jobs:
         run: |
           npx vitest run --reporter=junit --outputFile=.vitest-results/results.xml
           node scripts/check-suite-floor.mjs worker=.vitest-results
+
+      # The shell harness has its own config, so the junit run above
+      # cannot see it — and without this, deleting all sixty of its tests
+      # left CI green, in the repo whose floor mechanism exists precisely
+      # to stop that.
+      - name: The shell harness did not shrink either
+        run: |
+          npx vitest run --config vitest.shell.config.js \
+            --reporter=junit --outputFile=.vitest-shell-results/results.xml
+          node scripts/check-suite-floor.mjs shell=.vitest-shell-results

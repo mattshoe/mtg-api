@@ -224,8 +224,13 @@ describe('mergeMode', () => {
     expect(mergeMode('---\nmerge: ask\n---\n')).toBe('ask')
   })
 
-  it('is auto by default, because green CI is the gate', () => {
-    expect(mergeMode('---\nstatus: ready\n---\n')).toBe('auto')
+  it('is ask when the file does not say, because a person wrote that file', () => {
+    // This pinned the opposite, and the opposite was wrong: a
+    // hand-written `status: ready` request with no `merge:` line was
+    // squash-merged unattended. Triage always writes `merge: auto`
+    // explicitly, so a file without it did not come from triage.
+    expect(mergeMode('---\nstatus: ready\n---\n')).toBe('ask')
+    expect(mergeMode('# no frontmatter at all\n')).toBe('ask')
   })
 
   it('is ask for anything it does not recognise, which is the safe way to be wrong', () => {
@@ -454,6 +459,17 @@ describe('builderDone', () => {
     expect(v.state).toBe('merged')
   })
 
+  it('is done when merged even though BASE..HEAD is now empty', () => {
+    // Once the work is in the base, `rev-list --count BASE..HEAD` is
+    // legitimately 0 and `ls-remote` no longer matches the branch tip —
+    // so asking "did it commit anything" of a merged pull request answers
+    // no, and a request that shipped was judged unfinished and rebuilt.
+    const v = builderDone({ exitCode: 0, prOpen: false, prMerged: true, commits: 0, pushed: false })
+    expect(v.ok).toBe(true)
+    expect(v.state).toBe('merged')
+    expect(v.why).toBe('')
+  })
+
   it('calls a merged one merged, so it is not confused with a failure', () => {
     expect(builderDone({ exitCode: 0, prOpen: true, commits: 1, pushed: true }).state).toBe('open')
     expect(builderDone({ exitCode: 0, prOpen: false, prMerged: true, commits: 1, pushed: true }).state)
@@ -497,6 +513,14 @@ describe('raise', () => {
   it('takes the higher of what is on disk and what ran', () => {
     expect(raise({ core: 2310 }, { core: 2400 }, ['core'])).toEqual({ core: 2400 })
     expect(raise({ core: 2500 }, { core: 2400 }, ['core'])).toEqual({ core: 2500 })
+  })
+
+  it('ignores a result for a suite nobody named', () => {
+    // Every other `raise` test passes `named` undefined, which makes the
+    // `if (asked && ...)` branch dead — so this is the only one that can
+    // fail if the argument stops being honoured.
+    expect(raise({}, { web: 999 }, ['core'])).toEqual({})
+    expect(raise({ core: 1 }, { core: 2, web: 999 }, ['core'])).toEqual({ core: 2 })
   })
 
   it('writes only the suites named on the command line', () => {

@@ -209,15 +209,23 @@ So the line is drawn where an agent can actually finish:
 request is open, and every suite your diff can reach went green off its
 BUILD line.
 
-**The dispatcher then** blocks on `gh run watch`, checks every check with
-`gh pr checks`, squash-merges a `merge: auto` request, notifies Matt and
+**The dispatcher then** blocks on `gh run watch` for your commit, checks
+every check with `gh pr checks`, squash-merges a `merge: auto` request,
+watches the deploy runs and fetches the shipped bundle, notifies Matt and
 leaves the pull request open for a `merge: ask` one, and dispatches a
-fix-only builder if CI is red. It also files the request under
-`requests/done/` in the real repo — which is why you must **never move or
-commit the request file yourself**. Your request is handed to you at a
-path outside `requests/`; committing a copy of it onto your branch put
-finished requests on `main` permanently and seeded every later worktree
-with them.
+fix-only builder if CI is red. It files the request under `requests/done/`
+in the real repo on every one of those outcomes — which is why you must
+**never move or commit the request file yourself**. Your request is handed
+to you at a path outside `requests/`; committing a copy of it onto your
+branch put finished requests on `main` permanently and seeded every later
+worktree with them.
+
+**If you are a fix-only builder** you will have been told so, and handed a
+file holding the failing job's log. Then your job is only to make CI
+green: read the log, write or correct the test that proves the cause, fix
+it, push to the same branch. Do not re-implement the request, do not open
+another pull request, do not merge. You get two attempts before the
+dispatcher stops and tells Matt.
 
 `merge: auto` versus `merge: ask` is parsed from the frontmatter by
 `scripts/intake.mjs` and tested. It is not yours to read or to act on.

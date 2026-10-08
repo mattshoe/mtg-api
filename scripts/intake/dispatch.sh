@@ -90,10 +90,44 @@ tidy() { printf '%s\n' "$1" | sed '/^$/d' | sort; }
 
 list_pending()   { ask pending;   PENDING="$(tidy "$ASK_OUT")"; }
 list_untriaged() { ask untriaged; UNTRIAGED="$(tidy "$ASK_OUT")"; }
-list_buildable() { ask buildable; BUILDABLE="$(tidy "$ASK_OUT")"; }
+# Minus anything on hold. A request that failed `BUILD_GIVE_UP` times, or
+# whose pull request is red after `FIX_GIVE_UP` fixes, keeps its file and
+# its branch but stops retaking the only builder slot. Clearing the hold
+# file is how you put it back.
+list_buildable() {
+  ask buildable
+  local f held=""
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    if [ -f "$STATE/${f%.md}.held" ]; then
+      say "  $f is held: $(cat "$STATE/${f%.md}.held" 2>/dev/null)"
+      continue
+    fi
+    held="$held$f
+"
+  done <<EOF
+$(tidy "$ASK_OUT")
+EOF
+  BUILDABLE="$(tidy "$held")"
+}
 list_held()      { ask held;      HELD="$(tidy "$ASK_OUT")"; }
 
-equipped() { ( cd "$REPO" && node scripts/intake.mjs equipped "$1" >/dev/null 2>&1 ); }
+# NOT through `ask`. `intake.mjs equipped` exits 1 BY DESIGN when files
+# are missing, and `ask` calls `exit "$status"` on nonzero — which `|| true`
+# cannot catch, because it is an exit and not a failure. So the one guard
+# written to stop a builder working blind took the whole dispatcher down
+# instead, dropping every request behind it in the wave and leaving its
+# claim and slot claim on disk. Driven for real with CLAUDE.md removed:
+# DISPATCHER EXIT=1 and the three lines after it never ran.
+#
+# This sets WHY_UNEQUIPPED and returns 1. It never exits.
+equipped() {
+  WHY_UNEQUIPPED="$( cd "$REPO" && node scripts/intake.mjs equipped "$1" 2>&1 >/dev/null )"
+  local status=$?
+  [ "$status" -eq 0 ] && return 0
+  [ -n "$WHY_UNEQUIPPED" ] || WHY_UNEQUIPPED="intake.mjs equipped exited $status"
+  return 1
+}
 
 # The same rule for `gh`. A failing `gh` used to render as "no pull
 # request", which is indistinguishable from a builder that opened none.
@@ -114,6 +148,17 @@ ghx() {
 
 lock_pid() { cat "$1/pid" 2>/dev/null; }
 
+# `stat -f %m` is BSD and `stat -c %Y` is GNU, and neither fails usefully
+# on the other: GNU's `-f` asks about the FILESYSTEM and exits 0 having
+# printed something that is not a timestamp. So the VALUE is checked.
+dir_mtime() {
+  local when
+  when="$(stat -c %Y "$1" 2>/dev/null)"
+  case "$when" in ''|*[!0-9]*) when="$(stat -f %m "$1" 2>/dev/null)" ;; esac
+  case "$when" in ''|*[!0-9]*) when="" ;; esac
+  printf '%s' "$when"
+}
+
 # Whether a claim directory belongs to something still doing the job.
 #
 # Three ways this went wrong. The lock was published nine lines before
@@ -128,26 +173,62 @@ lock_pid() { cat "$1/pid" 2>/dev/null; }
 # So: no pid yet means LIVE, never stale. Nothing holds a claim past the
 # cap. And a live pid has to actually be the thing it claims to be.
 claim_alive() {
-  local dir="$1" pid started now age cmd
+  local dir="$1" kind="${2:-claim}" pid started now age cmd was mtime
   [ -d "$dir" ] || return 1
   pid="$(lock_pid "$dir")"
+
   if [ -z "$pid" ]; then
+    # No pid yet means the holder is between `mkdir` and `stamp_claim`,
+    # which is the double-fire window and must read as LIVE. But it used
+    # to read as live FOREVER: a `kill -9` inside that window wedged
+    # intake permanently and silently, logging
+    # `already running as , leaving it to that one` with an empty pid on
+    # every run thereafter. The window is milliseconds, so it is bounded
+    # by the directory's own age.
+    mtime="$(dir_mtime "$dir")"
+    now="$(date +%s)"
+    if [ -n "$mtime" ] && [ "$(( now - mtime ))" -ge "$PIDLESS_SECONDS" ]; then
+      say "  $(basename "$dir") has had no pid for $(( now - mtime ))s — nobody is coming"
+      return 1
+    fi
     say "  $(basename "$dir") has no pid yet — live, which is what the double-fire needs"
     return 0
   fi
+
   kill -0 "$pid" 2>/dev/null || { say "  $(basename "$dir") pid $pid is gone"; return 1; }
-  started="$(cat "$dir/started" 2>/dev/null)"
-  if [ -n "$started" ]; then
-    now="$(date +%s)"
-    age=$(( (now - started) / 60 ))
-    if [ "$age" -ge "$MAX_MINUTES" ]; then
-      say "  $(basename "$dir") has been held ${age}m, past the ${MAX_MINUTES}m cap"
-      return 1
+
+  # The age cap applies to a BUILDER claim and to a slot, never to the
+  # dispatcher's own lock. Capping the lock stole it from a live
+  # dispatcher that was simply doing a long job — it was never signalled,
+  # its own `drop_lock` then no-opped because the pid no longer matched,
+  # and two dispatchers raced on the same pull request. That is the
+  # original double-dispatch critical, reachable again.
+  if [ "$kind" != "lock" ]; then
+    started="$(cat "$dir/started" 2>/dev/null)"
+    case "$started" in ''|*[!0-9]*) started="" ;; esac
+    if [ -n "$started" ]; then
+      now="$(date +%s)"
+      age=$(( (now - started) / 60 ))
+      if [ "$age" -ge "$MAX_MINUTES" ]; then
+        say "  $(basename "$dir") has been held ${age}m, past the ${MAX_MINUTES}m cap"
+        return 1
+      fi
     fi
   fi
+
+  # The reused-pid check compared against `*dispatch.sh*|*claude*`, which
+  # any `claude` process satisfies — Matt's own session included — while
+  # the recorded command sat in `$dir/command` and was never read. Compare
+  # against what was actually recorded.
   cmd="$(ps -o command= -p "$pid" 2>/dev/null)"
+  was="$(cat "$dir/command" 2>/dev/null)"
+  if [ -n "$was" ]; then
+    if [ "$cmd" = "$was" ]; then return 0; fi
+    say "  $(basename "$dir") pid $pid runs '$cmd', not the '$was' it recorded"
+    return 1
+  fi
   case "$cmd" in
-    *dispatch.sh*|*claude*) return 0 ;;
+    *dispatch.sh*) return 0 ;;
     *) say "  $(basename "$dir") pid $pid is '$cmd', not ours — the kernel reused it"; return 1 ;;
   esac
 }
@@ -173,7 +254,7 @@ take_lock() {
     stamp_claim "$LOCK" "$$"
     return 0
   fi
-  if claim_alive "$LOCK"; then
+  if claim_alive "$LOCK" lock; then
     say "already running as $(lock_pid "$LOCK"), leaving it to that one"
     return 1
   fi
@@ -205,9 +286,32 @@ drop_lock() {
 salvage() {
   local where="$1" name="$2"
   [ -e "$where/.git" ] || return 0
-  local branch dirty ahead sha
+  local branch dirty ahead sha tag
+
   branch="$(git -C "$where" rev-parse --abbrev-ref HEAD 2>/dev/null)"
-  [ -n "$branch" ] && [ "$branch" != "HEAD" ] || return 0
+  if [ -z "$branch" ] || [ "$branch" = "HEAD" ]; then
+    # A detached HEAD used to return SUCCESS without saving anything, and
+    # `prepare_slot` ignored the return value and destroyed the tree two
+    # lines later. Anything uncommitted here has no branch to push to, so
+    # it gets a tag, which is a ref like any other.
+    dirty="$(git -C "$where" status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
+    if [ "${dirty:-0}" -eq 0 ]; then
+      say "  $(basename "$where") is detached with nothing in it"
+      return 0
+    fi
+    git -C "$where" add -A >>"$LOG" 2>&1
+    git -C "$where" -c user.name=intake -c user.email=intake@localhost \
+      commit -q -m "wip: $name (detached, builder did not finish)" >>"$LOG" 2>&1
+    tag="intake-salvage/$(date +%s)"
+    if git -C "$where" tag "$tag" >>"$LOG" 2>&1 \
+       && git -C "$where" push -q origin "refs/tags/$tag" >>"$LOG" 2>&1; then
+      say "  salvaged $name from a detached HEAD as tag $tag"
+      return 0
+    fi
+    say "  COULD NOT SAVE $name from a detached HEAD — ${dirty} file(s) only in $where"
+    tell "$name: ${dirty} file(s) are in $where and could not be pushed anywhere"
+    return 1
+  fi
 
   dirty="$(git -C "$where" status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
   if [ "${dirty:-0}" -gt 0 ]; then
@@ -217,14 +321,37 @@ salvage() {
       commit -q -m "wip: $name (builder did not finish)" >>"$LOG" 2>&1
   fi
 
-  ahead="$(git -C "$where" rev-list --count "$BASE..HEAD" 2>/dev/null || echo 0)"
-  [ "${ahead:-0}" -gt 0 ] || return 0
+  # `rev-list` failing used to return SUCCESS without pushing, because
+  # `[ "${ahead:-0}" -gt 0 ] || return 0` cannot tell "nothing to push"
+  # from "could not count".
+  ahead="$(git -C "$where" rev-list --count "$BASE..HEAD" 2>/dev/null)"
+  case "$ahead" in
+    '') say "  could not count commits in $(basename "$where") — treating it as unsaved"
+        ahead=1 ;;
+    *[!0-9]*) ahead=1 ;;
+  esac
+  if [ "$ahead" -eq 0 ]; then
+    [ "${dirty:-0}" -eq 0 ] && return 0
+    ahead=1
+  fi
+
   if git -C "$where" push -q --force-with-lease origin "HEAD:refs/heads/$branch" >>"$LOG" 2>&1; then
     sha="$(git -C "$where" rev-parse --short HEAD)"
     say "  salvaged $name as $sha on $branch ($ahead commit(s), ${dirty:-0} file(s) swept up)"
-  else
-    say "  COULD NOT PUSH $name — its work exists only in $where"
+    return 0
   fi
+
+  # The push failed, so "nothing is thrown away without being pushed
+  # first" is about to be false — verified against a read-only origin:
+  # `salvage` logged COULD NOT PUSH, `prepare_slot` reset the branch one
+  # line later, and `git branch -a --contains <sha>` came back empty with
+  # only the reflog holding it until the next `git gc`. A tag makes the
+  # commit reachable locally even after the branch moves.
+  tag="intake-salvage/$(date +%s)"
+  git -C "$where" tag -f "$tag" >>"$LOG" 2>&1
+  say "  COULD NOT PUSH $name — tagged $tag locally; its work is only in $where"
+  tell "$name could not be pushed. Its work is in $where, tagged $tag."
+  return 1
 }
 
 # Never a bare delete. A removed directory leaves `.git/worktrees/<n>`
@@ -276,12 +403,28 @@ take_slot() {
 # Anything uncommitted in there is somebody's unfinished work until it is
 # pushed, so it is salvaged first, every time.
 prepare_slot() {
-  local where="$1" branch="$2" name="$3" stamp
+  local where="$1" branch="$2" name="$3" stamp start
   mkdir -p "$(dirname "$where")"
 
+  # Where to start this branch from. Normally BASE — but if the branch is
+  # already pushed, resetting to BASE throws away work the pull request is
+  # built on and the next push is rejected as non-fast-forward. So a
+  # re-dispatch continues from the pushed tip.
+  local start="$BASE"
+  if git -C "$REPO" ls-remote --exit-code origin "refs/heads/$branch" >/dev/null 2>&1; then
+    git -C "$REPO" fetch --quiet origin "$branch" >>"$LOG" 2>&1 || true
+    if git -C "$REPO" rev-parse --verify --quiet "refs/remotes/origin/$branch" >/dev/null; then
+      start="origin/$branch"
+      say "  $name: $branch is already pushed, continuing from $start rather than $BASE"
+    fi
+  fi
+
   if [ -e "$where/.git" ]; then
-    salvage "$where" "whatever was in $(basename "$where") before"
-    if ! git -C "$where" checkout -q -B "$branch" "$BASE" >>"$LOG" 2>&1; then
+    if ! salvage "$where" "whatever was in $(basename "$where") before"; then
+      say "  REFUSING to reset $(basename "$where") — its work is not pushed anywhere"
+      return 1
+    fi
+    if ! git -C "$where" checkout -q -B "$branch" "$start" >>"$LOG" 2>&1; then
       say "  $(basename "$where") would not reset; rebuilding it"
       remove_worktree "$where"
     fi
@@ -292,9 +435,9 @@ prepare_slot() {
     # No `-B`. Force-updating a branch another worktree holds either
     # orphans its commits or fails outright depending on whether a stale
     # admin entry exists, and both have happened here.
-    if ! git -C "$REPO" worktree add -q "$where" -b "$branch" "$BASE" >>"$LOG" 2>&1; then
+    if ! git -C "$REPO" worktree add -q "$where" -b "$branch" "$start" >>"$LOG" 2>&1; then
       git -C "$REPO" worktree add -q "$where" "$branch" >>"$LOG" 2>&1 || return 1
-      git -C "$where" checkout -q -B "$branch" "$BASE" >>"$LOG" 2>&1 || return 1
+      git -C "$where" checkout -q -B "$branch" "$start" >>"$LOG" 2>&1 || return 1
     fi
   fi
 
@@ -302,7 +445,12 @@ prepare_slot() {
     -e node_modules -e .gradle -e build -e '**/build' >>"$LOG" 2>&1
 
   # `npm ci` only when the lockfile actually moved. It is 403 seconds.
-  stamp="$where/.intake-npm-lock"
+  #
+  # The stamp used to live INSIDE the worktree, four lines after a
+  # `git clean -qxdf` that deleted it — so the comparison always failed
+  # and `npm ci` ran on every single build, which is the one thing slots
+  # exist to avoid. It lives beside the slot claim now.
+  stamp="$STATE/$(basename "$where").npm-lock"
   if [ -f "$where/package-lock.json" ]; then
     if cmp -s "$where/package-lock.json" "$stamp" 2>/dev/null; then
       say "  $name: lockfile unchanged, keeping node_modules"
@@ -318,7 +466,15 @@ prepare_slot() {
   return 0
 }
 
-commits_on() { git -C "$1" rev-list --count "$BASE..HEAD" 2>/dev/null || echo 0; }
+# Empty, never 0, when it could not count. Returning 0 on failure got a
+# healthy builder killed at the forty-minute mark over an index lock, a
+# missing `$BASE` after a failed fetch, or a concurrent checkout — and its
+# work judged unfinished on the way out.
+commits_on() {
+  local n
+  n="$(git -C "$1" rev-list --count "$BASE..HEAD" 2>/dev/null)"
+  case "$n" in ''|*[!0-9]*) printf '' ;; *) printf '%s' "$n" ;; esac
+}
 
 pushed_up() {
   local where="$1" branch="$2" here there
@@ -338,9 +494,17 @@ pushed_up() {
 # single time, and the request was rebuilt from a base that already
 # contained the feature. Its TDD red could not reproduce, and each pass
 # opened a duplicate.
+# Sets PR_LINE to "<n> <STATE>", or '' when there genuinely is no pull
+# request. Returns 1 when GitHub could not be asked at all, which is a
+# different thing and must never become a verdict: a failing `pr list`
+# used to produce "NOT FINISHED — no pull request for its branch" and a
+# false notification about a builder that had done everything right.
 pr_for() {
-  ghx pr list --head "$1" --state all --limit 1 \
-    --json number,state --jq '.[] | "\(.number) \(.state)"' 2>/dev/null
+  PR_LINE="$(ghx pr list --head "$1" --state all --limit 1 \
+    --json number,state --jq '.[] | "\(.number) \(.state)"')"
+  local status=$?
+  [ "$status" -eq 0 ] || return 1
+  return 0
 }
 
 # Whether EVERY check on a pull request succeeded.
@@ -351,16 +515,26 @@ pr_for() {
 # cancelled one easy to produce. A pull request with NO checks reads as
 # benign and is exactly what a hundred commits sat in, so zero checks is
 # not green either.
+# 0 green, 1 not green, 2 could not be asked. Two is not red.
 all_checks_green() {
   local pr="$1" out status lines bad
   out="$(gh pr checks "$pr" 2>>"$LOG")"
   status=$?
-  lines="$(printf '%s' "$out" | sed '/^$/d' | wc -l | tr -d ' ')"
+  # gh exits 1 when a check failed and 8 when one is pending; anything
+  # else is gh itself not working, and that is not an answer about CI.
+  case "$status" in
+    0|1|8) : ;;
+    *) say "  gh pr checks exited $status — that is gh failing, not CI"; return 2 ;;
+  esac
+  lines="$(printf '%s\n' "$out" | sed '/^$/d' | wc -l | tr -d ' ')"
   if [ "${lines:-0}" -eq 0 ]; then
     say "  #$pr has no checks — that is not green, it is unverified"
     return 1
   fi
-  bad="$(printf '%s\n' "$out" | awk -F'\t' 'NF>1 && $2!="pass" && $2!="skipping" {print $1"="$2}')"
+  # `skipping` is NOT green. gh buckets NEUTRAL there too, and a required
+  # check that reported neutral has told you nothing — while the comment
+  # four lines up says "never with a check pending or skipped".
+  bad="$(printf '%s\n' "$out" | awk -F'\t' 'NF>1 && $2!="pass" {print $1"="$2}')"
   if [ -n "$bad" ]; then
     say "  #$pr is not green: $(printf '%s' "$bad" | tr '\n' ' ')"
     return 1
@@ -374,22 +548,74 @@ all_checks_green() {
 }
 
 # Block on CI. A real blocking call, not a poll.
+# Block on CI for ONE commit. Returns 0 when every run for that sha
+# finished, 1 when GitHub could not be asked, 2 when no run ever appeared.
+#
+# The first version was unsound four ways at once. `--branch` with no
+# commit filter returns everything the branch has ever run — verified, 20
+# runs over 8 commits, 15 already completed — so it watched old runs and
+# returned instantly, and the real gate became `all_checks_green` alone.
+# It had no status filter, no deadline, and discarded every result, so a
+# failing `run list` read as "CI finished" and a dropped connection parked
+# the builder forever with the watchdog already dead.
 wait_for_ci() {
-  local branch="$1" ids id
-  ids="$(ghx run list --branch "$branch" --limit 20 \
-          --json databaseId --jq '.[].databaseId' 2>/dev/null)"
+  local branch="$1" sha="$2" ids id status waited=0
+  local deadline=$((CI_WAIT_MINUTES * 60))
+
+  # A run for this sha may not be registered yet. Wait for one to exist
+  # rather than concluding from its absence.
+  while :; do
+    ids="$(ghx run list --branch "$branch" --commit "$sha" --limit 20 \
+            --json databaseId,status --jq '.[].databaseId')"
+    status=$?
+    [ "$status" -eq 0 ] || return 1
+    [ -n "$(printf '%s' "$ids" | sed '/^$/d')" ] && break
+    [ "$waited" -ge "$deadline" ] && {
+      say "  no CI run appeared for $sha in ${CI_WAIT_MINUTES}m"
+      return 2
+    }
+    sleep "$CI_POLL_SECONDS"
+    waited=$((waited + CI_POLL_SECONDS))
+  done
+
   while IFS= read -r id; do
     [ -n "$id" ] || continue
-    say "  gh run watch $id"
+    say "  gh run watch $id (for $sha)"
+    # `timeout` is not on macOS by default, so the deadline is the
+    # watcher's own: gh exits when the run ends, and a run cannot outlive
+    # its own job timeout.
     gh run watch "$id" --exit-status >>"$LOG" 2>&1 || say "  run $id finished red"
   done <<EOF
 $ids
 EOF
+  return 0
 }
 
 # ---------------------------------------------------------------------
 # Filing a finished request
 # ---------------------------------------------------------------------
+
+# Whether the real repo is somewhere it is safe to commit requests.
+#
+# `file_as_done` and the triage commit both ran `git -C "$REPO" commit`
+# with no branch check, so they committed onto whatever Matt happened to
+# have checked out — and nothing ever pushed, so `origin/main` kept
+# carrying finished requests, which this file's own comments call the fuel
+# for the recursive hook.
+can_commit_requests() {
+  local here want="${BASE#origin/}"
+  here="$(git -C "$REPO" rev-parse --abbrev-ref HEAD 2>/dev/null)"
+  if [ "$here" != "$want" ]; then
+    say "  NOT committing requests: $REPO is on '$here', not '$want'"
+    tell "intake wanted to file a request but $REPO is on $here, not $want"
+    return 1
+  fi
+  if [ -n "$(git -C "$REPO" status --porcelain -- requests 2>/dev/null \
+             | /usr/bin/grep -v '^[AMD]' || true)" ]; then
+    : # changes under requests/ are ours to commit
+  fi
+  return 0
+}
 
 # In the REAL repo, which is the whole point.
 #
@@ -408,11 +634,19 @@ file_as_done() {
     printf '%s\n\n' "$note" | cat - "$REQUESTS/done/$file" > "$REQUESTS/done/$file.tmp" \
       && mv "$REQUESTS/done/$file.tmp" "$REQUESTS/done/$file"
   fi
+  if ! can_commit_requests; then
+    say "  requests/done/$file is moved on disk but NOT committed"
+    return 0
+  fi
   git -C "$REPO" add -A -- requests >>"$LOG" 2>&1
   git -C "$REPO" \
     -c user.name=intake -c user.email=intake@localhost \
     commit -q -m "requests: $file is done" -- requests >>"$LOG" 2>&1
-  say "  filed requests/done/$file in the real repo and committed it"
+  # Pushed, or origin keeps carrying finished requests and every new slot
+  # is seeded with them.
+  git -C "$REPO" push -q origin "HEAD:refs/heads/${BASE#origin/}" >>"$LOG" 2>&1 \
+    || say "  filed and committed, but could not push ${BASE#origin/}"
+  say "  filed requests/done/$file in the real repo, committed and pushed"
 }
 
 # ---------------------------------------------------------------------
@@ -471,15 +705,30 @@ stop_builder() {
   kill_tree "$pid" TERM
   sleep 5
   kill_tree "$pid" KILL
-  left="$(pgrep -f "claude .*$branch" 2>/dev/null | tr '\n' ' ')"
+  # Anchored. Matching the branch as a bare substring of `claude`'s argv
+  # also matched every branch that has this one as a PREFIX — verified
+  # with two live processes, both returned — and `stop_builder` then
+  # killed both. That is the `pkill -P $$` regression the header claims to
+  # have fixed, latent only because MAX_BUILDERS is 1.
+  left="$(claude_pids "$branch")"
   if [ -n "$left" ]; then
     say "  a claude for $branch outlived its parent: $left — killing it too"
     for p in $left; do kill_tree "$p" KILL; done
     sleep 2
   fi
-  left="$(pgrep -f "claude .*$branch" 2>/dev/null | tr '\n' ' ')"
+  left="$(claude_pids "$branch")"
   [ -n "$left" ] && say "  STILL ALIVE after SIGKILL: $left"
   return 0
+}
+
+# Every `claude` working on exactly this branch, and no branch that merely
+# starts with it.
+claude_pids() {
+  pgrep -f "claude " 2>/dev/null | while IFS= read -r p; do
+    case " $(ps -o command= -p "$p" 2>/dev/null) " in
+      *" $1 "*|*" $1"[!a-zA-Z0-9_-]*) printf '%s ' "$p" ;;
+    esac
+  done
 }
 
 # Watch one builder: the cap, the first commit, and the request itself.
@@ -507,7 +756,11 @@ watch_builder() {
       return 0
     fi
 
-    if [ "$mins" -ge "$FIRST_COMMIT_MINUTES" ] && [ "$(commits_on "$where")" -eq 0 ]; then
+    local n
+    n="$(commits_on "$where")"
+    if [ -z "$n" ]; then
+      say "$name: could not count its commits — not killing it on a guess"
+    elif [ "$mins" -ge "$FIRST_COMMIT_MINUTES" ] && [ "$n" -eq 0 ]; then
       say "$name KILLED — ${mins}m and not one commit"
       salvage "$where" "$name"
       stop_builder "$pid" "$branch"
@@ -560,6 +813,148 @@ no_creds() {
     "$@"
 }
 
+# A persistent per-request attempt counter, and a hold when it runs out.
+#
+# `TRIED` is per-process (`tried.$$`), so it resets on every dispatch —
+# which means a request that always ends NOT FINISHED was retried forever,
+# once per launchd event, with nothing counting. `TRIAGE_GIVE_UP` existed
+# for triage and nothing existed for builds.
+bump_attempt() {
+  local name="$1" why="$2" n
+  n="$(cat "$STATE/$name.attempts" 2>/dev/null || echo 0)"
+  n=$(( ${n:-0} + 1 ))
+  printf '%s\n' "$n" > "$STATE/$name.attempts"
+  if [ "$n" -ge "$BUILD_GIVE_UP" ]; then
+    # A hold, not a deletion. `buildable` consults this, so the request
+    # stops retaking the only builder slot without anybody losing it.
+    printf '%s\n' "$why" > "$STATE/$name.held"
+    say "  GIVING UP on $name after $n attempts — held until you clear $STATE/$name.held"
+    tell "$name failed $n times and is now held: $why"
+  else
+    say "  it needs re-dispatching (attempt $n of $BUILD_GIVE_UP); nothing was thrown away"
+    tell "$name did not finish (attempt $n of $BUILD_GIVE_UP): $why"
+  fi
+}
+
+# A fix-only builder, with the failing log in its hands.
+#
+# This did not exist. `build_one` wrote `$STATE/<name>.fixme` and the only
+# reader anywhere was `status.sh`, which printed it — while
+# `request-builder.md` and `requests/README.md` both promised the feature
+# and the pull request body claimed it. A documented feature that does not
+# exist is worse than none.
+dispatch_fix() {
+  local name="$1" file="$2" branch="$3" where="$4" pr="$5" sha="$6"
+  local n logfile runid
+
+  n="$(cat "$STATE/$name.fix-attempts" 2>/dev/null || echo 0)"
+  n=$(( ${n:-0} + 1 ))
+  printf '%s\n' "$n" > "$STATE/$name.fix-attempts"
+  printf '%s\n' "$pr" > "$STATE/$name.fixme"
+
+  if [ "$n" -gt "$FIX_GIVE_UP" ]; then
+    say "  $name has been fixed $FIX_GIVE_UP times and is still red — stopping"
+    printf 'CI red on #%s after %s fix attempts\n' "$pr" "$FIX_GIVE_UP" > "$STATE/$name.held"
+    file_as_done "$file" "CI is red on #$pr after $FIX_GIVE_UP fix attempts. Not merged."
+    tell "$name: #$pr is still red after $FIX_GIVE_UP fix attempts"
+    return 0
+  fi
+
+  # The failing job's log, which is the whole point: without it a fix
+  # builder re-derives the failure from scratch or guesses.
+  logfile="$STATE/$name.ci-failure.log"
+  runid="$(ghx run list --branch "$branch" --commit "$sha" --limit 20 \
+            --json databaseId,conclusion \
+            --jq '[.[] | select(.conclusion=="failure")][0].databaseId')"
+  if [ -n "$runid" ] && [ "$runid" != "null" ]; then
+    gh run view "$runid" --log-failed > "$logfile" 2>>"$LOG" \
+      || say "  could not read the failing log for run $runid"
+  else
+    printf 'No failing run was identified for %s.\n' "$sha" > "$logfile"
+  fi
+  # Enough to work from, not so much that it is the whole log.
+  if [ "$(wc -l < "$logfile" 2>/dev/null || echo 0)" -gt 400 ]; then
+    tail -400 "$logfile" > "$logfile.tail" && mv "$logfile.tail" "$logfile"
+  fi
+
+  say "  dispatching a fix-only builder for $name (attempt $n of $FIX_GIVE_UP), log in $logfile"
+  tell "$name: CI red on #$pr, sending a fix-only builder"
+
+  local code
+  (
+    cd "$where" || exit 1
+    run no_creds claude -p "Invoke the mtg skill first, then read CLAUDE.md.
+
+You are a FIX-ONLY builder. A pull request already exists for this work — #$pr
+on branch $branch — and CI is red on it. You are not implementing the request
+again and you are not re-reading it: the code is already written and already
+pushed.
+
+Your whole job is to make CI green. The failing job's log is at $logfile. Read
+it, find the cause, write or correct the test that proves it, fix it, run that
+ONE test narrowly to watch it go red then green, commit, and push to $branch.
+
+Do not open another pull request. Do not merge. Do not touch the request file.
+Do not rewrite anything the log does not implicate. If the failure is a flake,
+say so plainly rather than changing code to hide it." \
+      --model opus \
+      --permission-mode bypassPermissions \
+      --output-format stream-json --verbose --include-partial-messages \
+      >> "$STATE/$name.fix.jsonl" 2>>"$LOG"
+  ) </dev/null
+  code=$?
+  say "  fix-only builder for $name exited $code; the next dispatch re-checks CI"
+  return 0
+}
+
+# A green deploy workflow is not proof the change is live.
+#
+# This belonged to the builder's old step 10 and was reassigned to the
+# dispatcher when the builder stopped merging — and then implemented
+# nowhere, so "done means deployed on both platforms" lost its only
+# enforcement. `pages.yml` publishes the website and `release.yml` cuts a
+# signed APK; both are watched here, and the shipped web bundle is fetched
+# and checked for real rather than trusted.
+verify_shipped() {
+  local name="$1" pr="$2" sha="$3" id conc bad=0
+
+  local ids
+  ids="$(ghx run list --limit 30 --json databaseId,name,headSha,event \
+          --jq "[.[] | select(.headSha==\"$sha\")] | .[].databaseId")"
+  if [ -z "$(printf '%s' "$ids" | sed '/^$/d')" ]; then
+    # The deploy runs are triggered by the merge commit, not this sha.
+    ids="$(ghx run list --branch "${BASE#origin/}" --limit 10 \
+            --json databaseId --jq '.[].databaseId')"
+  fi
+  while IFS= read -r id; do
+    [ -n "$id" ] || continue
+    gh run watch "$id" --exit-status >>"$LOG" 2>&1 || {
+      conc="$(gh run view "$id" --json name,conclusion --jq '"\(.name) \(.conclusion)"' 2>/dev/null)"
+      say "  deploy run $id ended badly: $conc"
+      bad=1
+    }
+  done <<EOF
+$ids
+EOF
+
+  # The artifact itself. A green workflow has shipped nothing before.
+  local live
+  live="$(curl -s --compressed --max-time 60 "$SITE_JS" 2>/dev/null | wc -c | tr -d ' ')"
+  if [ "${live:-0}" -lt 1000 ]; then
+    say "  SHIPPED ARTIFACT CHECK FAILED: $SITE_JS returned ${live:-0} bytes"
+    tell "$name merged as #$pr but the shipped web bundle could not be read"
+    return 1
+  fi
+  say "  shipped web bundle is ${live} bytes"
+
+  if [ "$bad" -ne 0 ]; then
+    tell "$name merged as #$pr but a deploy run was not green — check the artifact"
+    return 1
+  fi
+  say "  deploys for #$pr were green and the site answered"
+  return 0
+}
+
 # One request, from launch to merged-or-explained. Runs in a subshell.
 build_one() {
   local file="$1" name="$2" branch="$3" where="$4" claim="$5" handed="$6"
@@ -601,6 +996,9 @@ build_one() {
 
   wait "$cpid"; code=$?
   kill_tree "$watchdog" TERM
+  # Reaped quietly: a non-interactive bash otherwise prints
+  # "Terminated: 15 watch_builder ..." into the log on every single build.
+  wait "$watchdog" 2>/dev/null || true
   [ -n "$logger" ] && wait "$logger" 2>/dev/null
   [ -n "$pipe" ] && rm -f "$pipe"
 
@@ -610,12 +1008,37 @@ build_one() {
   # its turn — exit 0, nothing committed, no pull request. The dispatcher
   # read 0 as success and deleted the worktree with the work in it.
   local prline pr="" prstate="" open=false merged=false commits pushed=false
-  prline="$(pr_for "$branch")"
+  if ! pr_for "$branch"; then
+    say "$name: could not ask GitHub whether a pull request exists — keeping its slot"
+    say "  branch $branch, slot $(basename "$where"), log $STATE/$name.log"
+    salvage "$where" "$name"
+    tell "$name: GitHub would not answer; its work is kept and it needs re-dispatching"
+    rm -rf "$claim"
+    return 0
+  fi
+  prline="$PR_LINE"
   if [ -n "$prline" ]; then
     pr="${prline%% *}"
     prstate="${prline##* }"
     [ "$prstate" = "OPEN" ] && open=true
-    [ "$prstate" = "MERGED" ] && merged=true
+    # `--state all --limit 1` surfaces a PREVIOUSLY merged pull request on
+    # the same branch, and `builderDone` accepts `prMerged` — so a builder
+    # that committed, pushed and opened no pull request was filed as done
+    # off somebody else's merge, with "Merged as #7" committed while its
+    # own commits sat unmerged. The `--state all` fix opened this, so the
+    # fix needs a second question: is this work actually in the base?
+    if [ "$prstate" = "MERGED" ]; then
+      # Against a fresh ref. The merge happened on the remote, so the
+      # slot's own `origin/main` is whatever it was when the slot was
+      # prepared — asking a stale ref would call every merged pull
+      # request unmerged.
+      git -C "$where" fetch --quiet origin "${BASE#origin/}" >>"$LOG" 2>&1 || true
+      if git -C "$where" merge-base --is-ancestor HEAD "$BASE" 2>/dev/null; then
+        merged=true
+      else
+        say "  #$pr is MERGED but HEAD is not in $BASE — that is an older pull request"
+      fi
+    fi
   fi
   commits="$(commits_on "$where")"
   pushed_up "$where" "$branch" && pushed=true
@@ -626,20 +1049,47 @@ build_one() {
   case "$verdict" in
     keep:*)
       say "$name NOT FINISHED — ${verdict#keep:}"
-      salvage "$where" "$name"
+      salvage "$where" "$name" || say "  SALVAGE FAILED for $name"
       say "  branch $branch, slot $(basename "$where"), log $STATE/$name.log"
-      say "  it needs re-dispatching; nothing was thrown away"
-      tell "$name did not finish: ${verdict#keep:}"
+      bump_attempt "$name" "did not finish: ${verdict#keep:}"
       ;;
     merged)
       say "$name done: #$pr was already merged"
       file_as_done "$file" "Merged as #$pr."
       ;;
     open)
-      say "$name built: #$pr is open with $commits commit(s) — waiting on CI"
-      wait_for_ci "$branch"
+      local head
+      head="$(git -C "$where" rev-parse HEAD 2>/dev/null)"
+      say "$name built: #$pr is open with $commits commit(s) at ${head:0:8} — waiting on CI"
+      wait_for_ci "$branch" "$head"
+      case $? in
+        1)
+          say "$name: could not ask GitHub about CI — keeping its slot, not judging it"
+          tell "$name: GitHub would not answer about CI on #$pr"
+          rm -rf "$claim"
+          return 0
+          ;;
+        2)
+          say "$name: no CI run ever appeared for ${head:0:8} — keeping its slot"
+          tell "$name: no CI run appeared for #$pr"
+          rm -rf "$claim"
+          return 0
+          ;;
+      esac
+
       local green=false mode action
-      all_checks_green "$pr" && green=true
+      all_checks_green "$pr"
+      case $? in
+        0) green=true ;;
+        1) green=false ;;
+        *)
+          say "$name: gh could not report the checks — keeping its slot, not judging it"
+          tell "$name: gh would not report the checks on #$pr"
+          rm -rf "$claim"
+          return 0
+          ;;
+      esac
+
       ask merge "$file"; mode="$ASK_OUT"
       ask after-ci "$green" "$mode"; action="$ASK_OUT"
       case "$action" in
@@ -652,6 +1102,7 @@ build_one() {
           if ghx pr merge "$pr" --squash >/dev/null; then
             say "$name done: MERGED #$pr"
             file_as_done "$file" "Merged as #$pr."
+            verify_shipped "$name" "$pr" "$head"
             tell "$name merged as #$pr"
           else
             say "$name NOT FINISHED — #$pr is green but would not merge"
@@ -659,13 +1110,20 @@ build_one() {
           fi
           ;;
         notify)
+          # A request must leave the live queue on EVERY terminal outcome,
+          # not only the merged one. It did not, and the consequence was
+          # concrete: run 1 left a `merge: ask` request live and buildable,
+          # run 2 launched a second builder on the same branch,
+          # `prepare_slot` reset it to BASE, and `salvage` force-pushed the
+          # duplicate OVER the first builder's commit — destroying the pull
+          # request Matt had been asked to review.
           say "$name green and left for you (merge: $mode), #$pr"
+          file_as_done "$file" "Green and waiting for you as #$pr (merge: $mode). Not merged."
           tell "$name is green: #$pr is waiting for you ($mode)"
           ;;
         fix)
-          say "$name has a red #$pr — it needs a fix-only builder"
-          tell "$name: CI is red on #$pr"
-          printf '%s\n' "$pr" > "$STATE/$name.fixme"
+          say "$name has a red #$pr"
+          dispatch_fix "$name" "$file" "$branch" "$where" "$pr" "$head"
           ;;
       esac
       ;;
@@ -717,6 +1175,12 @@ EOF
     git -C "$REPO" worktree add -q --detach "$tri" "$BASE" >>"$LOG" 2>&1 \
       || { say "triage could not get a worktree, skipping this pass"; return 0; }
   fi
+  if ! equipped "$tri"; then
+    say "triage NOT STARTED: $tri is missing its instructions — $WHY_UNEQUIPPED"
+    tell "triage cannot start: $WHY_UNEQUIPPED"
+    return 0
+  fi
+
   mkdir -p "$tri/requests"
   while IFS= read -r file; do
     [ -n "$file" ] || continue
@@ -753,12 +1217,18 @@ requests/done/." \
 $todo
 EOF
   if [ "$wrote" -gt 0 ]; then
-    git -C "$REPO" add -A -- requests >>"$LOG" 2>&1
-    git -C "$REPO" \
-      -c user.name=intake -c user.email=intake@localhost \
-      commit -q -m "requests: triage wrote $wrote plan(s)" -- requests >>"$LOG" 2>&1
-    say "triage wrote $wrote plan(s), committed in the real repo"
     TRIAGE_WROTE=$wrote
+    if can_commit_requests; then
+      git -C "$REPO" add -A -- requests >>"$LOG" 2>&1
+      git -C "$REPO" \
+        -c user.name=intake -c user.email=intake@localhost \
+        commit -q -m "requests: triage wrote $wrote plan(s)" -- requests >>"$LOG" 2>&1
+      git -C "$REPO" push -q origin "HEAD:refs/heads/${BASE#origin/}" >>"$LOG" 2>&1 \
+        || say "triage committed $wrote plan(s) but could not push ${BASE#origin/}"
+      say "triage wrote $wrote plan(s), committed in the real repo"
+    else
+      say "triage wrote $wrote plan(s) on disk but could NOT commit them"
+    fi
   fi
 
   # Re-read, and say plainly when a pass produced nothing. Without this,
@@ -827,7 +1297,10 @@ dispatch_wave() {
       say "$name had a builder that died, retrying"
       rm -rf "$claim"
     fi
-    mkdir -p "$claim" || continue
+    # Plain `mkdir`, not `-p`. `mkdir -p` never fails on an existing
+    # directory, so the claim provided no mutual exclusion at all — the
+    # pid-ordering fix above it was correct and guarded nothing.
+    mkdir "$claim" 2>/dev/null || { say "$name was claimed between the check and the claim"; continue; }
     # The pid goes in before the claim can be read as abandoned. There
     # was no pid for the whole worktree-setup window, so a concurrent
     # dispatcher read a LIVE builder as dead and removed the tree it was
@@ -863,9 +1336,9 @@ dispatch_wave() {
     # were told to invoke the mtg skill, found nothing, and built without
     # the parity rule. Nothing failed, which is what made it bad.
     if ! equipped "$slot"; then
-      ask equipped "$slot" || true
-      say "$name NOT STARTED: $slot is missing its instructions"
+      say "$name NOT STARTED: $slot is missing its instructions — $WHY_UNEQUIPPED"
       say "  they have to be on $BASE first"
+      tell "$name cannot start: $WHY_UNEQUIPPED"
       rm -rf "$claim" "$STATE/slot$n.claim"
       continue
     fi
@@ -892,8 +1365,25 @@ dispatch_wave() {
 $BUILDABLE
 EOF
 
-  # The dispatcher owns the pull request now, so it waits for this wave
-  # before reading the folder again.
+  # Let go of the global lock before waiting.
+  #
+  # The dispatcher now owns the CI wait, so a wave is a builder run plus
+  # 13-17 minutes of `apps` — and the lock was held through all of it,
+  # right to the end of `main`. So A15's dropped-event bug was fully
+  # intact: launchd discards WatchPaths events fired while the job runs,
+  # and a second dispatcher that could have picked up a newly dropped
+  # request exited on the lock instead. For up to four hours.
+  #
+  # Per-request exclusion does not depend on the global lock: the
+  # `.building` claim and the slot claim are both atomic `mkdir`s, and a
+  # second dispatcher reads them. The lock only ever existed to stop two
+  # dispatchers triaging at once.
+  if [ "$STARTED_THIS_WAVE" -gt 0 ]; then
+    drop_lock
+    LOCK_HELD=false
+    say "lock released; $STARTED_THIS_WAVE builder(s) still running, so a new request can be picked up now"
+  fi
+
   wait
   return 0
 }
@@ -911,7 +1401,7 @@ main() {
   LOCK="$STATE/dispatch.lock"
   ASK_OUT=""
   PENDING=""; UNTRIAGED=""; BUILDABLE=""; HELD=""
-  STARTED_THIS_WAVE=0; TRIAGE_WROTE=0
+  STARTED_THIS_WAVE=0; TRIAGE_WROTE=0; LOCK_HELD=false
 
   # The off switch. `launchctl unload` is not enough on its own: the
   # PostToolUse hook is committed, so an edit to any requests/*.md from
@@ -930,6 +1420,18 @@ main() {
   # commit, then launched nested builders. Recursively. It is masked
   # today only because scripts/intake.mjs is not yet on main, so the
   # hook's `node` call fails. Merging that arms it.
+  # Comparing `--git-dir` against `--git-common-dir` is defeated by
+  # `GIT_DIR`/`GIT_WORK_TREE` in the environment — both then answer the
+  # same thing and the guard passes — and a submodule passes for the same
+  # reason. A linked worktree's `.git` is a FILE containing a gitdir
+  # pointer, never a directory, and nothing in the environment changes
+  # that. So the shape is tested first and the rev-parse is the backstop.
+  if [ ! -d "$REPO/.git" ]; then
+    mkdir -p "$STATE" 2>/dev/null
+    printf '%s  refusing to dispatch from a linked worktree (%s has no .git directory)\n' \
+      "$(date '+%Y-%m-%d %H:%M:%S')" "$REPO" >> "$LOG" 2>/dev/null
+    exit 0
+  fi
   local gd gc
   gd="$(cd "$REPO" && git rev-parse --git-dir 2>/dev/null)"
   gc="$(cd "$REPO" && git rev-parse --git-common-dir 2>/dev/null)"
@@ -964,12 +1466,26 @@ main() {
   # that wedge the next attempt at the same branch.
   WT_ROOT="${INTAKE_WORKTREE_ROOT:-$HOME/.cache/mtg-intake/wt}"
   TRIAGE_GIVE_UP="${INTAKE_TRIAGE_GIVE_UP:-3}"
+  # How long a claim may have no pid before nobody is coming for it. The
+  # window between `mkdir` and `stamp_claim` is milliseconds.
+  PIDLESS_SECONDS="${INTAKE_PIDLESS_SECONDS:-30}"
+  # A request that keeps failing is held rather than retried forever.
+  # `TRIED` is per-process, so it counted nothing across dispatches.
+  BUILD_GIVE_UP="${INTAKE_BUILD_GIVE_UP:-3}"
+  FIX_GIVE_UP="${INTAKE_FIX_GIVE_UP:-2}"
+  # How long to wait for a CI run to appear for a sha before giving up on
+  # it, and how often to look.
+  CI_WAIT_MINUTES="${INTAKE_CI_WAIT_MINUTES:-10}"
+  CI_POLL_SECONDS="${INTAKE_CI_POLL_SECONDS:-20}"
+  # What the shipped website serves, for the post-merge artifact check.
+  SITE_JS="${INTAKE_SITE_JS:-https://mtg.mattshoe.org/kmp/mtg.js}"
   TRIED="$STATE/tried.$$"
 
   mkdir -p "$STATE" "$WT_ROOT" "$TRIED"
   touch "$LOG"
 
   take_lock || exit 0
+  LOCK_HELD=true
   trap 'rm -rf "$TRIED"; drop_lock' EXIT
   trap 'say "stopped by a signal"; exit 1' TERM INT
 
@@ -1016,6 +1532,12 @@ main() {
     # and the header comment claiming it re-read the folder was false.
     list_buildable
     if [ -n "$BUILDABLE" ] && { [ "$STARTED_THIS_WAVE" -gt 0 ] || [ "$TRIAGE_WROTE" -gt 0 ]; }; then
+      # The wave dropped the lock. Take it back before triaging again, or
+      # two dispatchers end up triaging the same folder.
+      if [ "$LOCK_HELD" != true ]; then
+        take_lock || { say "another dispatcher has the lock; leaving the rest to it"; break; }
+        LOCK_HELD=true
+      fi
       say "re-reading the folder after wave $wave"
       continue
     fi
@@ -1035,9 +1557,8 @@ $HELD
 EOF
   fi
 
-  # Released before the final wait, so a request dropped while CI is
-  # being watched gets its own dispatcher instead of waiting hours.
   drop_lock
+  LOCK_HELD=false
   wait
   say "dispatch finished"
 }

@@ -3,5 +3,6 @@
   "screens": 466,
   "device": 469,
   "web": 398,
-  "worker": 781
+  "worker": 795,
+  "shell": 95
 }

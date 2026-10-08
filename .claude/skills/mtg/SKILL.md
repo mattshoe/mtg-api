@@ -187,10 +187,16 @@ made a fully merged request read as unfinished. Leave the branch.
 
 **If you are a request-builder, none of this is yours.** You stop at an
 open pull request and `scripts/intake/dispatch.sh` does the waiting, the
-check verification and the merge. The `apps` job is 13-17 minutes and
-three of four builders ended their turn rather than sit through it, which
-in a headless run means never coming back. Read
-`.claude/agents/request-builder.md`.
+check verification, the merge, and the post-merge artifact check below.
+The `apps` job is 13-17 minutes and three of four builders ended their
+turn rather than sit through it, which in a headless run means never
+coming back. Read `.claude/agents/request-builder.md`.
+
+Working by hand, all of it is yours, including the artifact check. The
+dispatcher's version is `verify_shipped` in `scripts/intake/dispatch.sh`:
+it watches the deploy runs for the merged sha and fetches
+`https://mtg.mattshoe.org/kmp/mtg.js`, and it notifies rather than failing
+silently when either one does not answer.
 
 Merging deploys — `pages.yml` publishes the website and `release.yml`
 cuts a signed APK. So merging is not the end either. Watch the deploy
@@ -225,8 +231,13 @@ it lives in:
 ```
 npx vitest run test/decks.test.js -t 'the name a deck is renamed to'
 ./apps/gradlew -p apps :core:jvmTest --tests 'DeckStatsTest'
-npm run test:screen -- 'LibraryGridTest'
+./apps/gradlew -p apps :androidApp:testDebugUnitTest --tests 'LibraryGridTest'
 ```
+
+The raw `./apps/gradlew` form, not an `npm run test:screen` — there is no such
+script. A narrow-test wrapper that routes through `scripts/guard.mjs` is
+planned and not written, and naming a command that does not exist is the same
+defect as the `./gradlew` path this replaced.
 
 Seconds, not minutes. Step 4 used to read "run the whole suite, not just
 your test", and that line cost real hours: four suites is about seven

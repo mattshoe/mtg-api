@@ -109,8 +109,15 @@ tree_shape() {
   files="$(git -C "$where" status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
   commits="$(git -C "$where" rev-list --count "$BASE..HEAD" 2>/dev/null || echo 0)"
   here="$(git -C "$where" rev-parse HEAD 2>/dev/null)"
-  there="$(git -C "$where" rev-parse '@{upstream}' 2>/dev/null)"
-  if [ -z "$there" ]; then pushed="never pushed"
+  # Against `origin/<branch>`, not `@{upstream}`. Slots are created with
+  # `worktree add -b` and salvage pushes an explicit refspec, so NO
+  # upstream is ever set — which made a branch that had just been pushed
+  # successfully report "never pushed". Pushed-ness is the one state that
+  # decides whether work is safe, so it was wrong in the common case.
+  local branch
+  branch="$(git -C "$where" rev-parse --abbrev-ref HEAD 2>/dev/null)"
+  there="$(git -C "$where" rev-parse --verify --quiet "refs/remotes/origin/$branch" 2>/dev/null)"
+  if [ -z "$there" ]; then pushed="not on origin"
   elif [ "$here" = "$there" ]; then pushed="pushed"
   else pushed="UNPUSHED"
   fi

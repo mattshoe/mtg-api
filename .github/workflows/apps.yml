@@ -33,7 +33,15 @@ jobs:
   shared:
     runs-on: ubuntu-latest
     steps:
+      # Full history, so `check-suite-floor.mjs` can compare the
+      # committed floors against main's. On a shallow checkout
+      # `git show origin/main:test/suite-floors.json` fails, the guard
+      # catches it and sets the reference to undefined, and a floor
+      # lowered by a merge resolution passes silently — in the only place
+      # that conflict ever lands.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -77,7 +85,15 @@ jobs:
   web:
     runs-on: ubuntu-latest
     steps:
+      # Full history, so `check-suite-floor.mjs` can compare the
+      # committed floors against main's. On a shallow checkout
+      # `git show origin/main:test/suite-floors.json` fails, the guard
+      # catches it and sets the reference to undefined, and a floor
+      # lowered by a merge resolution passes silently — in the only place
+      # that conflict ever lands.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -111,7 +127,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
+      # Full history, so `check-suite-floor.mjs` can compare the
+      # committed floors against main's. On a shallow checkout
+      # `git show origin/main:test/suite-floors.json` fails, the guard
+      # catches it and sets the reference to undefined, and a floor
+      # lowered by a merge resolution passes silently — in the only place
+      # that conflict ever lands.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -202,7 +226,15 @@ jobs:
     needs: [shared, web, android]
     if: always()
     steps:
+      # Full history, so `check-suite-floor.mjs` can compare the
+      # committed floors against main's. On a shallow checkout
+      # `git show origin/main:test/suite-floors.json` fails, the guard
+      # catches it and sets the reference to undefined, and a floor
+      # lowered by a merge resolution passes silently — in the only place
+      # that conflict ever lands.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
           path: results

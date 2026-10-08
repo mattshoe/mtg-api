@@ -152,13 +152,19 @@ export function state(text) {
 /**
  * Whether the dispatcher merges this one when CI goes green.
  *
- * Read from the file and tested here, never decided by the model.
- * Unknown means ask, which is the safe way to be wrong.
+ * Read from the file and tested here, never decided by the model. Only
+ * an explicit `merge: auto` merges; everything else, a missing key
+ * included, is ask. Triage writes `merge: auto` deliberately, so a file
+ * without it was not written by triage.
  */
 export function mergeMode(text) {
   const v = field(text, 'merge')
-  if (v === 'ask') return 'ask'
-  if (v === 'auto' || v === '') return 'auto'
+  if (v === 'auto') return 'auto'
+  // Everything else is ask, including ABSENT. The docstring above said
+  // "unknown means ask" and the code then auto-merged a file with no
+  // `merge:` key at all — so a hand-written `status: ready` request with
+  // no frontmatter beyond that was squash-merged unattended, which is
+  // exactly the case a person writing a request by hand produces.
   return 'ask'
 }
 
@@ -228,9 +234,17 @@ export function equipped(present) {
 export function builderDone({
   exitCode, prOpen, prMerged = false, commits = 0, pushed = false,
 }) {
+  // A merged pull request is done, and the other two questions stop
+  // meaning anything: once the work is in the base, `BASE..HEAD` is
+  // legitimately 0 commits and the branch tip no longer matches what
+  // `ls-remote` reports. Asking them anyway judged a request that had
+  // shipped as unfinished, and rebuilt it.
+  if (prMerged) {
+    return { ok: true, keep: false, why: '', state: 'merged' }
+  }
   const why = []
   if (exitCode !== 0) why.push(`exited ${exitCode}`)
-  if (!prOpen && !prMerged) why.push('no pull request for its branch')
+  if (!prOpen) why.push('no pull request for its branch')
   if (!commits) why.push('nothing committed on its branch')
   else if (!pushed) why.push('its commits are not pushed')
   const ok = why.length === 0
@@ -238,7 +252,7 @@ export function builderDone({
     ok,
     keep: !ok,
     why: why.join('; '),
-    state: ok ? (prMerged ? 'merged' : 'open') : 'unfinished',
+    state: ok ? 'open' : 'unfinished',
   }
 }
 
@@ -267,10 +281,18 @@ export function afterCi({ green, merge }) {
 export const REQUIRED = [
   '.claude/skills/mtg/SKILL.md',
   '.claude/agents/request-builder.md',
+  '.claude/agents/request-triage.md',
   'CLAUDE.md',
   'scripts/guard.mjs',
   'scripts/check-test-count.mjs',
   'test/suite-floors.json',
+  // The Part D enforcement mechanism. Without these three a builder runs
+  // `--permission-mode bypassPermissions` with the deny hook silently
+  // absent, which is the whole of Part D not happening — and nothing
+  // fails, which is what makes it the same bug as the blind builder.
+  '.claude/settings.json',
+  'scripts/bash-deny.mjs',
+  'scripts/intake/deny-bash.mjs',
 ]
 
 /** Whether a changed path is a request, for the PostToolUse hook. */
