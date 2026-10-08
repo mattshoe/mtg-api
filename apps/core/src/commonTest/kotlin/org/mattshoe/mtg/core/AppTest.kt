@@ -22,7 +22,7 @@ class AppTest {
     @Test
     fun navigatingToAGatedViewWhileLockedLandsSomewhereUsable() {
         assertEquals(View.LIBRARY, AppState(admin = Admin().settle()).navigate(View.ENTRY).view)
-        assertEquals(View.ENTRY, AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")).navigate(View.ENTRY).view)
+        assertEquals(View.ENTRY, AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t")).navigate(View.ENTRY).view)
     }
 
     @Test
@@ -33,7 +33,7 @@ class AppTest {
     /** A share opens the wizard with the list in, and nothing else decided. */
     @Test
     fun aShareOpensTheWizardWithTheListAlreadyInIt() {
-        val s = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")).withShare("Name,Quantity\nSol Ring,1")
+        val s = AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t")).withShare("Name,Quantity\nSol Ring,1")
         assertEquals(View.ENTRY, s.view)
         assertEquals(1, s.entry.cardCount, "the header row is not a card")
         assertNull(s.entry.direction)
@@ -86,7 +86,7 @@ class AppTest {
 
     @Test
     fun lockingWhileOnAGatedViewIsCaughtByLandingAgain() {
-        val open = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")).navigate(View.LOGS)
+        val open = AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t")).navigate(View.LOGS)
         assertEquals(View.LOGS, open.view)
         val locked = open.copy(admin = open.admin.signOut())
         assertEquals(View.LIBRARY, locked.navigate(locked.route).view)
@@ -94,7 +94,7 @@ class AppTest {
 
     @Test
     fun everyViewIsReachableUnlocked() {
-        val s = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"))
+        val s = AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t"))
         View.entries.forEach { assertEquals(it, s.navigate(it).view) }
     }
 
@@ -102,7 +102,7 @@ class AppTest {
     fun noViewIsLostBetweenTheNavAndTheRouter() {
         assertEquals(
             View.entries.count { it.inNav },
-            Admin().signIn(Account(slug = "matt", role = "admin"), "t").visible.size,
+            Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t").visible.size,
         )
         assertFalse(Admin().visible.any { it.gated })
     }

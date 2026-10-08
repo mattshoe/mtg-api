@@ -239,11 +239,11 @@ object MtgApp {
                     // One row at a time: the press greys out the row
                     // it was made on and leaves the rest live.
                     if (app.people.changing == null) {
-                        app = app.copy(people = app.people.changing(person.slug))
+                        app = app.copy(people = app.people.changing(person.key))
                         scope.launch {
                             app = try {
-                                api.setRole(token(), person.slug, role)
-                                app.copy(people = app.people.changed(person.slug, role))
+                                api.setRole(token(), person.key, role)
+                                app.copy(people = app.people.changed(person.key, role))
                                     .say("${person.shownName} is now $role")
                             } catch (ex: ApiFailure) {
                                 app.copy(people = app.people.refused(ex.message ?: "that did not work"))
@@ -253,7 +253,7 @@ object MtgApp {
                     }
                 },
                 onSearch = { searchSoon() },
-                onOpenDeck = { slug -> work { openDeck(app, slug) } },
+                onOpenDeck = { key -> work { openDeck(app, key) } },
                 onPreviewEntry = {
                     if (app.entry.canPreview) {
                         app = app.copy(entry = app.entry.working("Checking…"))
@@ -301,7 +301,7 @@ object MtgApp {
                     app = app.copy(history = app.history.cleared())
                     EntryHistory.save(store, app.history)
                 },
-                onEditDeck = { slug -> editDeck(slug) },
+                onEditDeck = { key -> editDeck(key) },
                 onAddCard = { startTweak(null, Tweak.ADD) },
                 onTweak = { card, kind -> startTweak(card, kind) },
                 onTweakState = { next -> app = app.copy(deckTweak = next) },
@@ -330,8 +330,8 @@ object MtgApp {
                         { app.copy(deckEdit = app.deckEdit?.working()) },
                     ) { saveDeck(app) }
                 },
-                onAskDisassemble = { slug -> askDisassemble(slug) },
-                onAskRename = { slug -> askRename(slug) },
+                onAskDisassemble = { key -> askDisassemble(key) },
+                onAskRename = { key -> askRename(key) },
                 onSaveRename = {
                     claim(
                         app.rename?.canSave == true,
@@ -698,29 +698,29 @@ object MtgApp {
         return app.copy(decks = app.decks.loaded(DeckQueries.decode(r.cols, r.rows)))
     }
 
-    private suspend fun openDeck(s: AppState, slug: String): AppState {
+    private suspend fun openDeck(s: AppState, key: String): AppState {
         // The list first, because the header needs the deck's own row.
         if (app.decks.decks.isEmpty()) app = loadDecks()
-        val r = api.query(DeckQueries.cards(slug))
+        val r = api.query(DeckQueries.cards(key))
         // Read `app` again rather than the copy captured before the
         // query: anything that landed while it was in flight — the
         // facet lists, a toast — would otherwise be thrown away.
-        val opened = app.copy(decks = app.decks.opened(slug, DeckQueries.decodeCards(r.cols, r.rows)))
-            .navigate(Route(View.DECKS, slug))
+        val opened = app.copy(decks = app.decks.opened(key, DeckQueries.decodeCards(r.cols, r.rows)))
+            .navigate(Route(View.DECKS, key))
         // The tokens come from Scryfall and land behind the list
         // rather than holding it up. A deck that shows its cards and
         // fills in its tokens a moment later is right; one that waits
         // on a second service to show anything is not.
-        loadTokens(slug)
+        loadTokens(key)
         return opened
     }
 
-    private fun loadTokens(slug: String) {
+    private fun loadTokens(key: String) {
         scope.launch {
             val found = scryfall.tokens(app.decks.scryfallIds)
             // Still the same deck? Opening another one while this was
             // in flight must not hang the first deck's tokens on it.
-            if (app.decks.openSlug == slug) {
+            if (app.decks.openKey == key) {
                 app = app.copy(decks = app.decks.withTokens(found))
             }
         }
@@ -877,8 +877,8 @@ object MtgApp {
                 return@launch
             }
             val body = res.json().await().asDynamic()
-            val slug = body.slug as? String ?: return@launch
-            app = app.browsing(slug)
+            val found = body.key as? String ?: return@launch
+            app = app.browsing(found)
             loadFor(app)
         }
     }
@@ -890,9 +890,9 @@ object MtgApp {
         ).await()
         if (!res.ok) return null
         val body = res.json().await().asDynamic()
-        val slug = body.slug as? String ?: return null
+        val key = (body.key as? String)?.takeIf { it.isNotEmpty() } ?: return null
         return Account(
-            slug = slug,
+            key = key,
             name = body.name as? String,
             avatar = body.avatar as? String,
             role = (body.role as? String) ?: "user",
@@ -1074,8 +1074,8 @@ object MtgApp {
             ShareWhat.DECKLIST -> Export.deck(s.decks.cards)
         }
         val name = when (what) {
-            ShareWhat.LINK -> "${deck.slug}-link.txt"
-            ShareWhat.DECKLIST -> Export.deckFilename(deck.slug, today())
+            ShareWhat.LINK -> Export.deckFilename(deck.name, "link")
+            ShareWhat.DECKLIST -> Export.deckFilename(deck.name, today())
         }
         return when (where) {
             ExportTo.FILE -> {
@@ -1174,8 +1174,8 @@ object MtgApp {
 
     // ------------------------------------------------------------ decks
 
-    private fun editDeck(slug: String) {
-        val deck = app.decks.decks.firstOrNull { it.slug == slug } ?: return
+    private fun editDeck(key: String) {
+        val deck = app.decks.decks.firstOrNull { it.key == key } ?: return
         app = app.copy(deckEdit = DeckEditState.of(deck, app.decks.cards)).opening(Overlay.DECK_EDIT)
     }
 
@@ -1229,7 +1229,7 @@ object MtgApp {
         val t = s.deckTweak ?: return app
         app = app.copy(deckTweak = t.working())
         return try {
-            val plan = api.setDeckList(token(), t.slug, t.commander, t.listAfter(s.decks.cards), dryRun = true)
+            val plan = api.setDeckList(token(), t.key, t.commander, t.listAfter(s.decks.cards), dryRun = true)
             app.copy(deckTweak = app.deckTweak?.planned(plan))
         } catch (ex: ApiFailure) {
             app.copy(deckTweak = app.deckTweak?.failed(ex.message ?: "that did not work"))
@@ -1240,10 +1240,10 @@ object MtgApp {
         val t = s.deckTweak ?: return app
         app = app.copy(deckTweak = t.working())
         return try {
-            val plan = api.setDeckList(token(), t.slug, t.commander, t.listAfter(s.decks.cards), dryRun = false)
+            val plan = api.setDeckList(token(), t.key, t.commander, t.listAfter(s.decks.cards), dryRun = false)
             // Reopen the deck so the list on screen is the list that
             // is now stored, rather than the one that was.
-            openDeck(app.copy(deckTweak = app.deckTweak?.finished()), t.slug)
+            openDeck(app.copy(deckTweak = app.deckTweak?.finished()), t.key)
                 .closing(Overlay.DECK_TWEAK)
                 .say(t.summary + if (plan.buying > 0) " — ${plan.buying} bought" else "")
         } catch (ex: ApiFailure) {
@@ -1255,7 +1255,7 @@ object MtgApp {
         val e = s.deckEdit ?: return app
         app = app.copy(deckEdit = e.working())
         return try {
-            val plan = api.setDeckList(token(), e.slug, e.commander, e.list, dryRun = true)
+            val plan = api.setDeckList(token(), e.key, e.commander, e.list, dryRun = true)
             app.copy(deckEdit = app.deckEdit?.planned(plan))
         } catch (ex: ApiFailure) {
             app.copy(deckEdit = app.deckEdit?.failed(ex.message ?: "that did not work"))
@@ -1266,8 +1266,8 @@ object MtgApp {
         val e = s.deckEdit ?: return app
         app = app.copy(deckEdit = e.working())
         return try {
-            val plan = api.setDeckList(token(), e.slug, e.commander, e.list, dryRun = false)
-            openDeck(app.copy(deckEdit = app.deckEdit?.finished(plan)), e.slug)
+            val plan = api.setDeckList(token(), e.key, e.commander, e.list, dryRun = false)
+            openDeck(app.copy(deckEdit = app.deckEdit?.finished(plan)), e.key)
                 .closing(Overlay.DECK_EDIT)
                 .say("Saved — ${plan.cardCount} cards" + if (plan.buying > 0) ", ${plan.buying} bought" else "")
         } catch (ex: ApiFailure) {
@@ -1275,9 +1275,9 @@ object MtgApp {
         }
     }
 
-    private fun askRename(slug: String) {
-        val deck = app.decks.decks.firstOrNull { it.slug == slug } ?: return
-        app = app.copy(rename = RenameState(slug = deck.slug, was = deck.name))
+    private fun askRename(key: String) {
+        val deck = app.decks.decks.firstOrNull { it.key == key } ?: return
+        app = app.copy(rename = RenameState(key = deck.key, was = deck.name))
             .opening(Overlay.RENAME)
     }
 
@@ -1290,28 +1290,28 @@ object MtgApp {
     private suspend fun renameDeck(s: AppState): AppState {
         val r = s.rename ?: return app
         return try {
-            val done = api.renameDeck(token(), r.slug, r.name.trim())
+            val done = api.renameDeck(token(), r.key, r.name.trim())
             app = app.copy(rename = app.rename?.finished())
             loadDecks()
                 .closing(Overlay.RENAME)
-                .navigate(Route(View.DECKS, done.slug))
+                .navigate(Route(View.DECKS, done.key))
                 .say("Renamed to ${done.name}")
         } catch (ex: ApiFailure) {
             app.copy(rename = app.rename?.failed(ex.message ?: "that did not work"))
         }
     }
 
-    private fun askDisassemble(slug: String) {
+    private fun askDisassemble(key: String) {
         // The overlay covers the button it was pressed from, but not
         // until the next frame — two presses in one frame were two dry
         // runs against the same deck.
         if (app.disassemble?.busy == true) return
-        val deck = app.decks.decks.firstOrNull { it.slug == slug } ?: return
+        val deck = app.decks.decks.firstOrNull { it.key == key } ?: return
         app = app.copy(
-            disassemble = DisassembleState(slug, deck.name, deck.owner).working(),
+            disassemble = DisassembleState(key, deck.name, deck.ownerName.ifEmpty { deck.owner }).working(),
         ).opening(Overlay.DISASSEMBLE)
         work {
-            val plan = api.disassemble(token(), slug, dryRun = true)
+            val plan = api.disassemble(token(), key, dryRun = true)
             app.copy(disassemble = app.disassemble?.planned(plan))
         }
     }
@@ -1320,7 +1320,7 @@ object MtgApp {
         val d = s.disassemble ?: return app
         app = app.copy(disassemble = d.working())
         return try {
-            val r = api.disassemble(token(), d.slug, dryRun = false)
+            val r = api.disassemble(token(), d.key, dryRun = false)
             app = app.copy(disassemble = app.disassemble?.finished())
             loadDecks()
                 .closing(Overlay.DISASSEMBLE)
@@ -1346,16 +1346,16 @@ object MtgApp {
         val n = s.newDeck
         app = app.copy(newDeck = n.working("Creating…"))
         return try {
-            api.createDeck(
+            val made = api.createDeck(
                 token = token(),
                 name = n.name,
                 format = n.format!!.slug,
-                owner = app.viewing,
+                collection = app.viewing,
                 commander = n.commander.ifBlank { null },
                 list = n.list,
                 dryRun = false,
             )
-            app = app.copy(newDeck = app.newDeck.finished())
+            app = app.copy(newDeck = app.newDeck.finished(made.key.orEmpty()))
             loadDecks().say("Created ${n.name}")
         } catch (ex: ApiFailure) {
             app.copy(newDeck = app.newDeck.failed(ex.message ?: "that did not work"))

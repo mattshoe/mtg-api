@@ -11,7 +11,7 @@ import kotlin.test.assertTrue
 class DeckEditStateTest {
 
     private val deck = Deck(
-        slug = "alela", name = "Alela", owner = "matt",
+        key = "q8ytka9m", name = "Alela", owner = "e7de0cb1",
         commander = "Alela, Artful Provocateur (ELD) 324",
         colors = "UWB", bracket = 3, artId = null,
     )
@@ -78,7 +78,7 @@ class DeckEditStateTest {
 
     @Test
     fun anEmptyListIsNotWorthReviewing() {
-        assertFalse(DeckEditState(slug = "x").canReview)
+        assertFalse(DeckEditState(key = "x").canReview)
     }
 
     @Test
@@ -185,7 +185,7 @@ private object NoOpEncoder : kotlinx.serialization.encoding.Encoder {
 
 class DisassembleStateTest {
 
-    private val s = DisassembleState(slug = "alela", deckName = "Alela", owner = "matt")
+    private val s = DisassembleState(key = "q8ytka9m", deckName = "Alela", owner = "Matt")
 
     @Test
     fun itWillNotFireBeforeTheDryRunComesBack() {
@@ -198,7 +198,7 @@ class DisassembleStateTest {
         val w = s.planned(Disassembly(freed = 42)).warning
         assertTrue(w.contains("Alela is deleted"), w)
         assertTrue(w.contains("42 cards"), w)
-        assertTrue(w.contains("matt's bulk"), w)
+        assertTrue(w.contains("Matt's bulk"), w)
         assertTrue(w.contains("cannot be undone"), w)
     }
 
@@ -237,7 +237,7 @@ class DeckPlanWireTest {
     @Test
     fun thePositionalArraysBecomeSomethingReadable() {
         val body = """
-            {"deck":{"slug":"alela","name":"Alela","owner":"matt"},
+            {"deck":{"key":"q8ytka9m","name":"Alela"},
              "commander":"Alela, Artful Provocateur","commander_changed":true,
              "rows":99,"card_count":99,"owned_count":96,
              "added":[["Sol Ring",1],["Mana Crypt",1]],
@@ -250,7 +250,7 @@ class DeckPlanWireTest {
         """.trimIndent()
         val plan = json.decodeFromString<DeckPlan>(body)
 
-        assertEquals("alela", plan.deck.slug)
+        assertEquals("q8ytka9m", plan.deck.key)
         assertEquals(listOf(Tally("Sol Ring", 1), Tally("Mana Crypt", 1)), plan.added)
         assertEquals(listOf(Tally("Fellwar Stone", 1)), plan.removed)
         assertEquals(listOf(Shift("Forest", 8, 10)), plan.changed)
@@ -269,22 +269,22 @@ class DeckPlanWireTest {
 
     @Test
     fun everyFieldAPlanCanCarryDecodesIncludingTheOnesTheFirstTestLeftOut() {
-        // `applied`, `created`, `slug` and `errors` only ever showed up
+        // `applied`, `created`, `key` and `errors` only ever showed up
         // on the apply response, never the dry run, so a decode test
         // built only from a dry-run body never exercised them.
         val body = """
-            {"deck":{"slug":"alela","name":"Alela","owner":"matt"},
+            {"deck":{"key":"q8ytka9m","name":"Alela"},
              "commander":"Alela, Artful Provocateur","commander_changed":false,
              "rows":2,"card_count":2,"owned_count":1,
              "added":[],"removed":[],"changed":[],"newly_missing":[],
              "acquired":[],"returned":[],
              "applied":true,"dry_run":false,"created":true,
-             "slug":"alela-2","errors":["one line could not be read"]}
+             "key":"x3k9q2wd","errors":["one line could not be read"]}
         """.trimIndent()
         val plan = json.decodeFromString<DeckPlan>(body)
         assertTrue(plan.applied)
         assertTrue(plan.created)
-        assertEquals("alela-2", plan.slug)
+        assertEquals("x3k9q2wd", plan.key)
         assertEquals(listOf("one line could not be read"), plan.errors)
         assertTrue(plan.nothingChanges, "an empty diff was read as a change")
     }
@@ -292,7 +292,7 @@ class DeckPlanWireTest {
     @Test
     fun theDisassembleDryRunReads() {
         val body = """
-            {"deck":{"slug":"alela","name":"Alela","owner":"matt"},
+            {"deck":{"key":"q8ytka9m","name":"Alela"},
              "freed":96,"cards":[{"name":"Sol Ring","qty":1}],
              "rows":{"deck_cards":99,"deck_notes":2},
              "applied":false,"dry_run":true}
@@ -311,7 +311,7 @@ class DeckPlanWireTest {
 class DeckProseTest {
 
     private fun deck(name: String = "Alela", colors: String? = null, commander: String? = null) =
-        Deck("alela", name, "matt", commander, colors, null, null)
+        Deck("q8ytka9m", name, "e7de0cb1", commander, colors, null, null)
 
     @Test
     fun bareLettersAreTakenAsTheyAre() {

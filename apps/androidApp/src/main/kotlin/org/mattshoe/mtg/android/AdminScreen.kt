@@ -129,7 +129,7 @@ private fun PersonRow(person: Person, onOpen: (Person) -> Unit) {
             .heightIn(min = 48.dp)
             .clickable { onOpen(person) }
             .padding(vertical = 7.dp)
-            .testTag("person-${person.slug}"),
+            .testTag("person-${person.key}"),
         horizontalArrangement = Arrangement.spacedBy(9.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -173,7 +173,6 @@ private fun PersonPage(
             }
         }
         Fact("Role", person.role)
-        Fact("Collection", person.slug)
         Fact("Key", person.key)
     }
 
@@ -182,10 +181,10 @@ private fun PersonPage(
     Role.all.forEach { role ->
         val on = person.role == role
         Choice(role, describe(role), on) {
-            if (!on && !state.isChanging(person.slug)) onSetRole(person, role)
+            if (!on && !state.isChanging(person.key)) onSetRole(person, role)
         }
     }
-    if (state.strands(person.slug, me)) {
+    if (state.strands(person.key, me)) {
         // The one change nothing here can undo: `ADMIN_PASSWORD` and a
         // script are the way back. Said, not refused — Matt: "I want to
         // be able to assign and remove roles at will!!!!"

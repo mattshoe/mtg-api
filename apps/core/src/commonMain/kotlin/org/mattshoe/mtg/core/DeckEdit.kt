@@ -29,7 +29,7 @@ data class Tally(val name: String, val qty: Int)
 data class Shift(val name: String, val before: Int, val after: Int)
 
 @Serializable
-data class DeckRef(val slug: String = "", val name: String = "", val owner: String = "")
+data class DeckRef(val key: String = "", val name: String = "")
 
 /**
  * What saving this list would do.
@@ -55,7 +55,8 @@ data class DeckPlan(
     val applied: Boolean = false,
     @SerialName("dry_run") val dryRun: Boolean = false,
     val created: Boolean = false,
-    val slug: String? = null,
+    /** The new deck's address, when this created one. */
+    val key: String? = null,
     val errors: List<String> = emptyList(),
 ) {
     val nothingChanges: Boolean
@@ -87,7 +88,7 @@ data class FreedCard(val name: String = "", val qty: Int = 0)
  * approved is what is written.
  */
 data class DeckEditState(
-    val slug: String = "",
+    val key: String = "",
     val deckName: String = "",
     val commander: String = "",
     val list: String = "",
@@ -125,7 +126,7 @@ data class DeckEditState(
          * field so the box below is the 99 and nothing else.
          */
         fun of(deck: Deck, cards: List<DeckCard>) = DeckEditState(
-            slug = deck.slug,
+            key = deck.key,
             deckName = deck.name,
             commander = cards.filter { it.role == "commander" }
                 .joinToString(" // ") { it.name }
@@ -138,8 +139,9 @@ data class DeckEditState(
 
 /** The confirmation in front of a disassemble. Nothing else guards it. */
 data class DisassembleState(
-    val slug: String = "",
+    val key: String = "",
     val deckName: String = "",
+    /** What to call the owner, for the warning. */
     val owner: String = "",
     val plan: Disassembly? = null,
     val busy: Boolean = false,
@@ -199,26 +201,21 @@ internal object ShiftSerializer : KSerializer<Shift> {
 /**
  * Renaming a deck.
  *
- * The slug travels with the name, because the slug is the address and
- * a deck called one thing living at the address of another is a link
- * that lies. The new address is worked out here so the box can show
- * it before anything is written.
+ * The name and only the name. A deck lives at its key, so a rename
+ * never moves it and a link somebody has keeps working.
  */
 data class RenameState(
-    val slug: String,
+    val key: String,
     val was: String,
     val name: String = was,
     val busy: Boolean = false,
     val error: String? = null,
     val done: Boolean = false,
 ) {
-    /** Where it will live, by the same rule the server uses. */
-    val nextSlug: String get() = NewDeck.slugify(name)
-
     val changed: Boolean get() = name.trim() != was.trim()
 
     val canSave: Boolean
-        get() = !busy && !done && name.isNotBlank() && nextSlug.isNotEmpty() && changed
+        get() = !busy && !done && name.isNotBlank() && changed
 
     fun typed(text: String) = copy(name = text, error = null)
     fun working() = copy(busy = true, error = null)

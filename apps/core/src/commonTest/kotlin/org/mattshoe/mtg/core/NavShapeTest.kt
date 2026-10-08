@@ -64,7 +64,7 @@ class NavShapeTest {
 
     @Test
     fun unlockingAddsEntryToTheBarAndNothingElse() {
-        val unlocked = Admin().signIn(Account(slug = "matt", role = "admin"), "t")
+        val unlocked = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t")
         assertEquals(
             listOf(View.LIBRARY, View.DECKS, View.STATS, View.ENTRY),
             unlocked.bar,
@@ -81,7 +81,7 @@ class NavShapeTest {
     fun theAdminHalfLivesBehindTheProfileAndNotInTheBar() {
         assertFalse(View.LOGS.bar, "the server log is in the bottom bar")
         assertFalse(View.ADMIN.bar, "Admin Settings is in the bottom bar")
-        val unlocked = Admin().signIn(Account(slug = "matt", role = Role.ADMIN), "t")
+        val unlocked = Admin().signIn(Account(key = "e7de0cb1", role = Role.ADMIN), "t")
         assertEquals(listOf(View.ADMIN, View.LOGS), unlocked.behindProfile)
         assertEquals(emptyList(), Admin().behindProfile, "a signed-out app offers the log")
     }
@@ -89,7 +89,7 @@ class NavShapeTest {
     @Test
     fun aCardIsInNeitherBecauseItIsNotAPlaceYouGo() {
         assertFalse(View.CARD.bar)
-        assertTrue(View.CARD !in Admin().signIn(Account(slug = "matt", role = "admin"), "t").behindProfile)
+        assertTrue(View.CARD !in Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t").behindProfile)
     }
 
     @Test
@@ -98,7 +98,7 @@ class NavShapeTest {
         // reachable and is a place you navigate to, some piece of
         // chrome has to offer it. Otherwise it is a screen with no
         // door.
-        listOf(Admin(), Admin().signIn(Account(slug = "matt", role = "admin"), "t")).forEach { admin ->
+        listOf(Admin(), Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t")).forEach { admin ->
             val offered = (admin.bar + admin.behindProfile).toSet()
             admin.visible.forEach { view ->
                 assertTrue(
@@ -111,7 +111,7 @@ class NavShapeTest {
 
     @Test
     fun nothingIsOfferedTwice() {
-        listOf(Admin(), Admin().signIn(Account(slug = "matt", role = "admin"), "t")).forEach { admin ->
+        listOf(Admin(), Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t")).forEach { admin ->
             val both = admin.bar.filter { it in admin.behindProfile }
             assertTrue(both.isEmpty(), "offered in two places at once: $both")
         }

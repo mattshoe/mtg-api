@@ -101,7 +101,7 @@ fun DecksScreen(
     scrollState: ScrollState = rememberScrollState(),
     onEdit: (Deck) -> Unit = {},
     onDisassemble: (Deck) -> Unit = {},
-    /** Rename the open deck. The slug moves with the name. */
+    /** Rename the open deck. Its key, and so its address, stays. */
     onRename: (Deck) -> Unit = {},
     onOpenCard: (DeckCard, String) -> Unit = { _, _ -> },
     /** Maintenance, one card at a time, without leaving the screen. */
@@ -196,7 +196,7 @@ internal fun DecksListScreen(
  */
 @Composable
 internal fun DeckLoadingScreen(
-    slug: String,
+    key: String,
     error: String? = null,
     onClose: () -> Unit = {},
 ) {
@@ -213,7 +213,7 @@ internal fun DeckLoadingScreen(
         ) {
             Ghost("← Decks", onClick = onClose)
         }
-        if (error != null) ErrBox(error) else Line("Loading $slug…", Ink3)
+        if (error != null) ErrBox(error) else Line("Loading the deck…", Ink3)
     }
 }
 

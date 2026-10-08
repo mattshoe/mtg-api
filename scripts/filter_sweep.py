@@ -58,7 +58,7 @@ def main():
         sys.exit(f"missing {DUMP} — run :core:jvmTest --tests '*FilterSweepDump*' first")
     cases = json.loads(DUMP.read_text())
 
-    total, _ = ask(args.base, "SELECT COUNT(*) FROM (SELECT 1 FROM cards GROUP BY owner, name_norm)", [])
+    total, _ = ask(args.base, "SELECT COUNT(*) FROM (SELECT 1 FROM cards GROUP BY owner_id, name_norm)", [])
     everything = total["rows"][0][0] if total else None
     print(f"{len(cases)} filters against {everything} grouped rows\n")
 

@@ -21,7 +21,7 @@ import kotlin.test.assertTrue
 class HelpIsHonestTest {
 
     private val locked = Admin()
-    private val open = Admin().signIn(Account(slug = "matt", role = "admin"), "t")
+    private val open = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t")
 
     /**
      * The single letters the toast offers, out of its own text.

@@ -169,7 +169,7 @@ class FilterCoverageTest {
     @Test
     fun tagsMatchTheSlugExactly() {
         val f = Filters(tags = listOf("mana-rock"))
-        assertTrue(where(f).contains("ct.tag_slug = ?"))
+        assertTrue(where(f).contains("ct.tag = ?"))
         assertEquals(listOf("mana-rock"), params(f))
     }
 
@@ -278,10 +278,10 @@ class FilterCoverageTest {
     }
 
     @Test
-    fun deckByNameIsBoundBySlug() {
-        val f = Filters(deck = "alela")
-        assertTrue(where(f).contains("d.slug = ?"))
-        assertEquals(listOf("alela"), params(f))
+    fun deckByNameIsBoundByKey() {
+        val f = Filters(deck = "q8ytka9m")
+        assertTrue(where(f).contains("d.key = ?"))
+        assertEquals(listOf("q8ytka9m"), params(f))
     }
 
     @Test

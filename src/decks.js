@@ -15,6 +15,8 @@
 
 import { parseList, normalize } from './parse.js';
 import { addCards } from './cards.js';
+import { newKey } from './accounts.js';
+import { CARD_COLUMNS } from './card.js';
 
 /**
  * What a deck is holding, by name, for the confirmation step.
@@ -34,16 +36,16 @@ async function heldBy(db, deckId) {
  * Delete a deck and free everything it was holding.
  *
  * @param {D1Database} db
- * @param {{slug?: string, dry_run?: boolean}} body
+ * @param {{key?: string, dry_run?: boolean}} body
  */
 export async function disassembleDeck(db, body) {
-  const slug = String(body?.slug || '').trim();
-  if (!slug) return { status: 400, body: { error: 'slug is required' } };
+  const key = String(body?.key || '').trim();
+  if (!key) return { status: 400, body: { error: 'key is required' } };
 
   const deck = await db.prepare(
-    'SELECT id, slug, name, owner, card_count FROM decks WHERE slug = ?',
-  ).bind(slug).first();
-  if (!deck) return { status: 404, body: { error: `no deck with slug "${slug}"` } };
+    'SELECT id, key, name, card_count FROM decks WHERE key = ?',
+  ).bind(key).first();
+  if (!deck) return { status: 404, body: { error: `no deck with key "${key}"` } };
 
   const held = await heldBy(db, deck.id);
   const freed = held.reduce((a, r) => a + r.qty, 0);
@@ -54,7 +56,7 @@ export async function disassembleDeck(db, body) {
     .bind(deck.id).first();
 
   const out = {
-    deck: { slug: deck.slug, name: deck.name, owner: deck.owner },
+    deck: { key: deck.key, name: deck.name },
     freed,
     cards: held,
     rows: { deck_cards: counts?.cards ?? 0, deck_notes: counts?.notes ?? 0 },
@@ -98,7 +100,7 @@ const commanderNorm = (s) => normalize(String(s || '').replace(/\s*\([^)]*\)\s*$
  * `free` — so it is recomputed from the collection every time rather than
  * carried over from whatever the row said before.
  */
-async function ownedIndex(db, owner, keys) {
+async function ownedIndex(db, ownerId, keys) {
   const found = new Map();
   for (let i = 0; i < keys.length; i += CHUNK) {
     const slice = keys.slice(i, i + CHUNK);
@@ -106,8 +108,8 @@ async function ownedIndex(db, owner, keys) {
     const r = await db.prepare(`
       SELECT name_norm, MIN(id) AS id, name, oracle_id, type_line, SUM(qty) AS owned_qty
         FROM cards
-       WHERE owner = ? AND name_norm IN (${marks})
-       GROUP BY name_norm`).bind(owner, ...slice).all();
+       WHERE owner_id = ? AND name_norm IN (${marks})
+       GROUP BY name_norm`).bind(ownerId, ...slice).all();
     for (const row of r.results || []) found.set(row.name_norm, row);
   }
   return found;
@@ -121,10 +123,10 @@ async function ownedIndex(db, owner, keys) {
  * Proxy and PROPOSED decks are skipped for the same reason card_usage
  * skips them — they do not consume real cards.
  */
-const claimedElsewhere = (db, owner, deckId, keys) => claimedBy(db, owner, deckId, keys);
+const claimedElsewhere = (db, ownerId, deckId, keys) => claimedBy(db, ownerId, deckId, keys);
 
 /** The same question, for any owner and any deck to exclude. */
-async function claimedBy(db, owner, exceptDeckId, keys) {
+async function claimedBy(db, ownerId, exceptDeckId, keys) {
   const found = new Map();
   for (let i = 0; i < keys.length; i += CHUNK) {
     const slice = keys.slice(i, i + CHUNK);
@@ -133,12 +135,12 @@ async function claimedBy(db, owner, exceptDeckId, keys) {
       SELECT dc.name_norm, SUM(dc.qty) AS n
         FROM deck_cards dc
         JOIN decks d ON d.id = dc.deck_id
-       WHERE d.owner = ? AND d.id != ?
+       WHERE d.owner_id = ? AND d.id != ?
          AND d.is_proxy = 0
          AND (d.status IS NULL OR d.status NOT LIKE 'PROPOSED%')
          AND dc.in_collection = 1
          AND dc.name_norm IN (${marks})
-       GROUP BY dc.name_norm`).bind(owner, exceptDeckId, ...slice).all();
+       GROUP BY dc.name_norm`).bind(ownerId, exceptDeckId, ...slice).all();
     for (const row of r.results || []) found.set(row.name_norm, row.n);
   }
   return found;
@@ -158,7 +160,28 @@ async function anyPrintingIndex(db, keys) {
   return found;
 }
 
-const OTHER = { matt: 'kayla', kayla: 'matt' };
+/**
+ * The two collections a deck can borrow from each other: Matt's and
+ * Kayla's, one household's cards.
+ *
+ * It was `{ matt: 'kayla', kayla: 'matt' }`, keyed on the slugs that
+ * are gone. By email now, the same way 0006 found Kayla's account,
+ * because an id is only these two people on the live database and a
+ * display name is anything anybody types. Nobody else has a partner,
+ * so for every other account there is nothing to transfer from.
+ */
+const HOUSEHOLD = ['mattshoe81@gmail.com', 'kayla.maloy18@gmail.com'];
+
+/** The other half of this account's household, as `{ id, name }`, or null. */
+async function otherOf(db, ownerId) {
+  const { results } = await db.prepare(
+    `SELECT id, email, display_name FROM users WHERE email IN (${HOUSEHOLD.map(() => '?').join(',')})`,
+  ).bind(...HOUSEHOLD).all();
+  const rows = results || [];
+  if (!rows.some((r) => r.id === ownerId)) return null;
+  const other = rows.find((r) => r.id !== ownerId);
+  return other ? { id: other.id, name: other.display_name || other.email.split('@')[0] } : null;
+}
 
 /**
  * What each card could be covered by, before anything is decided.
@@ -168,11 +191,11 @@ const OTHER = { matt: 'kayla', kayla: 'matt' };
  *   - `other_free` spare in the other collection, which can be transferred
  *   - anything left is new, and has to be bought
  */
-async function sourcingPlan(db, owner, wanted, ownedIdx, elsewhereIdx) {
-  const other = OTHER[owner];
+async function sourcingPlan(db, ownerId, wanted, ownedIdx, elsewhereIdx) {
+  const other = await otherOf(db, ownerId);
   const keys = [...wanted.keys()];
   const [otherOwned, otherClaimed] = other
-    ? await Promise.all([ownedIndex(db, other, keys), claimedBy(db, other, -1, keys)])
+    ? await Promise.all([ownedIndex(db, other.id, keys), claimedBy(db, other.id, -1, keys)])
     : [new Map(), new Map()];
 
   const plan = [];
@@ -187,7 +210,8 @@ async function sourcingPlan(db, owner, wanted, ownedIdx, elsewhereIdx) {
       need: w.qty,
       own_free: ownFree,
       other_free: otherFree,
-      other_owner: other || null,
+      other_owner: other?.name || null,
+      other_id: other?.id ?? null,
       basic: isBasic(w.name_norm),
     });
   }
@@ -228,6 +252,7 @@ function decideSources(plan, sources = {}, physical = true) {
  * already described correctly — and that keeps a transfer working offline.
  */
 async function transferStatements(db, from, to, byName) {
+  // `from` and `to` are account ids.
   const statements = [];
   const names = [...byName.keys()];
   if (!names.length) return statements;
@@ -243,11 +268,11 @@ async function transferStatements(db, from, to, byName) {
     const marks = slice.map(() => '?').join(',');
     const src = await db.prepare(`
       SELECT id, name_norm, scryfall_id, finish, qty
-        FROM cards WHERE owner = ? AND name_norm IN (${marks}) AND qty > 0
+        FROM cards WHERE owner_id = ? AND name_norm IN (${marks}) AND qty > 0
        ORDER BY finish = 'nonfoil' DESC, id`).bind(from, ...slice).all();
     const dst = await db.prepare(`
       SELECT id, scryfall_id, finish, qty
-        FROM cards WHERE owner = ? AND name_norm IN (${marks})`).bind(to, ...slice).all();
+        FROM cards WHERE owner_id = ? AND name_norm IN (${marks})`).bind(to, ...slice).all();
 
     const destBy = new Map((dst.results || []).map((r) => [`${r.scryfall_id}|${r.finish}`, r]));
 
@@ -276,17 +301,14 @@ async function transferStatements(db, from, to, byName) {
       } else {
         const newId = nextId;
         nextId += 1;
+        // Columns named, not positional: `owner_id` sits at the end of
+        // the table on the live database, where ALTER TABLE put it.
         statements.push(db.prepare(`
-          INSERT INTO cards SELECT ?, ?, ?, finish, foil_flag, scryfall_id, oracle_id,
-            name, name_norm, face1, face2, mana_cost, cmc, oracle_text, flavor_text,
-            power, toughness, loyalty, defense, type_line, supertypes, types, subtypes,
-            colors, color_identity, color_identity_count, produced_mana, rarity, setcode,
-            set_name, set_type, released_at, collector_number, artist, layout, frame,
-            border_color, watermark, security_stamp, reserved, game_changer, full_art,
-            textless, promo, reprint, variation, oversized, story_spotlight, booster,
-            edhrec_rank FROM cards WHERE id = ?`).bind(newId, to, take, row.id));
+          INSERT INTO cards (id, ${CARD_COLUMNS.join(', ')})
+          SELECT ?, ?, ?, ${CARD_COLUMNS.slice(2).join(', ')}
+            FROM cards WHERE id = ?`).bind(newId, to, take, row.id));
         for (const t of CHILD) {
-          const cols = t === 'card_tags' ? 'tag_slug, kind'
+          const cols = t === 'card_tags' ? 'tag, kind'
             : t === 'card_faces' ? 'face_index, name, mana_cost, type_line, oracle_text, flavor_text, power, toughness, loyalty, defense, artist, colors'
               : COLUMN_OF[t];
           statements.push(db.prepare(
@@ -329,13 +351,13 @@ const COLUMN_OF = {
  * is matched by name, the way it worked before the field existed.
  */
 export async function editDeckList(db, body, fetchImpl) {
-  const slug = String(body?.slug || '').trim();
-  if (!slug) return { status: 400, body: { error: 'slug is required' } };
+  const key = String(body?.key || '').trim();
+  if (!key) return { status: 400, body: { error: 'key is required' } };
 
   const deck = await db.prepare(
-    'SELECT id, slug, name, owner, commander, is_proxy, status FROM decks WHERE slug = ?',
-  ).bind(slug).first();
-  if (!deck) return { status: 404, body: { error: `no deck with slug "${slug}"` } };
+    'SELECT id, key, name, owner_id, commander, is_proxy, status FROM decks WHERE key = ?',
+  ).bind(key).first();
+  if (!deck) return { status: 404, body: { error: `no deck with key "${key}"` } };
 
   return planAndWrite(db, deck, body, fetchImpl);
 }
@@ -390,14 +412,14 @@ async function planAndWrite(db, deck, body, fetchImpl) {
 
   const keys = [...wanted.keys()];
   const [owned, anywhere, currentRows, elsewhere] = await Promise.all([
-    ownedIndex(db, deck.owner, keys),
+    ownedIndex(db, deck.owner_id, keys),
     anyPrintingIndex(db, keys),
     deck.id
       ? db.prepare(
         'SELECT qty, name, name_norm, role, section, in_collection FROM deck_cards WHERE deck_id = ?',
       ).bind(deck.id).all()
       : { results: [] },
-    claimedElsewhere(db, deck.owner, deck.id ?? -1, keys),
+    claimedElsewhere(db, deck.owner_id, deck.id ?? -1, keys),
   ]);
 
   // A proxy or merely PROPOSED deck is not made of real cards — card_usage
@@ -418,7 +440,7 @@ async function planAndWrite(db, deck, body, fetchImpl) {
   // `own_free` is clamped at zero: another deck being short already is that
   // deck's problem, and editing this one should make this one whole rather
   // than pay off a debt somewhere else.
-  const plan = await sourcingPlan(db, deck.owner, wanted, owned, elsewhere);
+  const plan = await sourcingPlan(db, deck.owner_id, wanted, owned, elsewhere);
   const decided = decideSources(plan, body?.sources, physical);
   const shortfall = decided.filter((d) => d.buy > 0).map((d) => [d.name, d.buy]);
   const transfers = decided.filter((d) => d.transfer > 0);
@@ -474,7 +496,7 @@ async function planAndWrite(db, deck, body, fetchImpl) {
     : null;
 
   const out = {
-    deck: { slug: deck.slug, name: deck.name, owner: deck.owner },
+    deck: { key: deck.key, name: deck.name },
     commander: hasCommanderField ? (typedCommander || null) : deck.commander,
     commander_changed: newCommander !== null,
     rows: rows.length,
@@ -520,7 +542,6 @@ async function planAndWrite(db, deck, body, fetchImpl) {
   let acquisition = null;
   if (shortfall.length) {
     const purchase = {
-      owner: deck.owner,
       list: shortfall.map(([name, n]) => `${n} ${name}`).join('\n'),
     };
     const refuse = (a) => ({
@@ -536,10 +557,10 @@ async function planAndWrite(db, deck, body, fetchImpl) {
     // /cards/add applies the lines it understood and reports the rest,
     // which is right for a bare import but wrong here: a deck that failed
     // to save must not leave half its shopping list in the collection.
-    const check = await addCards(db, { ...purchase, dry_run: true }, fetchImpl);
+    const check = await addCards(db, deck.owner_id, { ...purchase, dry_run: true }, fetchImpl);
     if (check.status !== 200 || check.body?.failed) return refuse(check);
 
-    acquisition = await addCards(db, purchase, fetchImpl);
+    acquisition = await addCards(db, deck.owner_id, purchase, fetchImpl);
     if (acquisition.status !== 200 || acquisition.body?.failed) return refuse(acquisition);
   }
 
@@ -549,22 +570,23 @@ async function planAndWrite(db, deck, body, fetchImpl) {
   const statements = [];
   if (transfers.length) {
     const byName = new Map(transfers.map((d) => [d.name_norm, d.transfer]));
-    statements.push(...await transferStatements(db, OTHER[deck.owner], deck.owner, byName));
+    const from = decided.find((d) => d.other_id != null)?.other_id;
+    if (from != null) statements.push(...await transferStatements(db, from, deck.owner_id, byName));
   }
   let deckId = deck.id;
 
   if (!deckId) {
     // Pick the id rather than relying on last_insert_rowid() between
     // statements, so creating the deck and filling it stay one batch and
-    // a failure cannot leave an empty deck behind. The UNIQUE slug is
+    // a failure cannot leave an empty deck behind. The UNIQUE key is
     // what actually guards against a collision.
     const max = await db.prepare('SELECT COALESCE(MAX(id), 0) AS n FROM decks').first();
     deckId = (max?.n ?? 0) + 1;
     statements.push(db.prepare(`
-      INSERT INTO decks (id, slug, name, owner, format, recorded_date, status,
+      INSERT INTO decks (id, key, name, owner_id, format, recorded_date, status,
                          colors, commander, theme, bracket, is_proxy, card_count, owned_count)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
-      deckId, deck.slug, deck.name, deck.owner, deck.format,
+      deckId, deck.key, deck.name, deck.owner_id, deck.format,
       new Date().toISOString().slice(0, 10), deck.status ?? null,
       deck.colors ?? null, deck.commander ?? null, deck.theme ?? null,
       deck.bracket ?? null, deck.is_proxy ? 1 : 0, cardCount, ownedCount,
@@ -623,69 +645,44 @@ export const FORMATS = [
 
 const FORMAT_IDS = new Set(FORMATS.map((f) => f.id));
 const COMMANDER_FORMATS = new Set(FORMATS.filter((f) => f.singleton).map((f) => f.id));
-// Who may own a deck is not a list any more.
-//
-// It was `['matt','kayla']`, which was true when there were two
-// collections and no way to make a third. An account owns the
-// collection whose slug it carries, and the caller's right to write
-// to this one has already been checked by the time anything here
-// runs — so the only question left is whether the owner is a slug at
-// all.
-const SLUG = /^[a-z0-9][a-z0-9-]{0,62}$/;
-
-/** A name -> a slug that is safe in a URL and unlikely to collide. */
-export function slugify(name) {
-  return String(name || '')
-    .toLowerCase()
-    .normalize('NFKD').replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 60);
+/** A deck key nobody is using yet: random, like an account's. */
+async function freeDeckKey(db) {
+  for (let tries = 0; tries < 10; tries += 1) {
+    const key = newKey();
+    const taken = await db.prepare('SELECT 1 FROM decks WHERE key = ?1').bind(key).first();
+    if (!taken) return key;
+  }
+  throw new Error('could not find a free deck key');
 }
 
 /**
- * Create a deck from the wizard, list and all.
- *
- * Everything the wizard asks for is validated here rather than only in
- * the browser, because the browser is not the only caller and a deck with
- * no owner or a duplicate slug is not worth being able to make.
- */
-/**
  * Rename a deck.
  *
- * The slug moves with the name, because the slug is what the address
- * bar shows and a deck called one thing living at the address of
- * another is a link that lies. `deck_cards` hangs off `decks.id`, so
+ * The name and nothing else. A deck is addressed by its key, so its
+ * link keeps working whatever it is called, and two accounts may both
+ * have a deck of the same name. `deck_cards` hangs off `decks.id`, so
  * nothing else has to be rewritten.
  */
 export async function renameDeck(db, body) {
-  const slug = String(body?.slug || '').trim();
+  const key = String(body?.key || '').trim();
   const name = String(body?.name || '').trim();
-  if (!slug) return { status: 400, body: { error: 'which deck? pass a slug' } };
+  if (!key) return { status: 400, body: { error: 'which deck? pass its key' } };
   if (!name) return { status: 400, body: { error: 'a deck needs a name' } };
   if (name.length > 120) return { status: 400, body: { error: 'that name is too long' } };
 
-  const deck = await db.prepare('SELECT id, slug, name FROM decks WHERE slug = ?').bind(slug).first();
-  if (!deck) return { status: 404, body: { error: `no deck called ${slug}` } };
-
-  const next = slugify(name);
-  if (!next) return { status: 400, body: { error: 'that name has no letters or digits in it' } };
+  const deck = await db.prepare('SELECT id, key, name FROM decks WHERE key = ?').bind(key).first();
+  if (!deck) return { status: 404, body: { error: `no deck with key ${key}` } };
 
   // Renaming to what it already is: say so rather than pretending to work.
-  if (deck.name === name && deck.slug === next) {
-    return { status: 200, body: { renamed: false, slug: next, name, was: deck.name } };
+  if (deck.name === name) {
+    return { status: 200, body: { renamed: false, key, name, was: deck.name } };
   }
-
-  const clash = await db.prepare('SELECT slug FROM decks WHERE slug = ? AND id != ?')
-    .bind(next, deck.id).first();
-  if (clash) return { status: 409, body: { error: `another deck already lives at ${next}` } };
-
   if (body?.dry_run) {
-    return { status: 200, body: { renamed: false, dry_run: true, slug: next, name, was: deck.name } };
+    return { status: 200, body: { renamed: false, dry_run: true, key, name, was: deck.name } };
   }
 
-  await db.prepare('UPDATE decks SET name = ?, slug = ? WHERE id = ?').bind(name, next, deck.id).run();
-  return { status: 200, body: { renamed: true, slug: next, name, was: deck.name, wasSlug: deck.slug } };
+  await db.prepare('UPDATE decks SET name = ? WHERE id = ?').bind(name, deck.id).run();
+  return { status: 200, body: { renamed: true, key, name, was: deck.name } };
 }
 
 /**
@@ -705,7 +702,7 @@ export async function renameDeck(db, body) {
  * "colourless" and "nobody worked it out" are different facts and
  * only one of them should draw no pips forever.
  */
-async function paintDeck(db, slug, commander) {
+async function paintDeck(db, key, commander) {
   const letters = (rows) => {
     const seen = new Set();
     rows.forEach((r) => String(r?.color_identity ?? '').toUpperCase()
@@ -738,28 +735,35 @@ async function paintDeck(db, slug, commander) {
          FROM deck_cards dc
          JOIN decks d ON d.id = dc.deck_id
          JOIN cards c ON c.name_norm = dc.name_norm
-        WHERE d.slug = ?1`,
-    ).bind(slug).all();
+        WHERE d.key = ?1`,
+    ).bind(key).all();
     colours = letters(results || []);
   }
 
   if (colours) {
-    await db.prepare('UPDATE decks SET colors = ?2 WHERE slug = ?1').bind(slug, colours).run();
+    await db.prepare('UPDATE decks SET colors = ?2 WHERE key = ?1').bind(key, colours).run();
   }
   return colours;
 }
 
-export async function createDeck(db, body, fetchImpl) {
+/**
+ * Create a deck from the wizard, list and all.
+ *
+ * Everything the wizard asks for is validated here rather than only in
+ * the browser, because the browser is not the only caller. `ownerId` is
+ * whose deck it is, resolved by the route from the session and never
+ * read out of `body`.
+ */
+export async function createDeck(db, ownerId, body, fetchImpl) {
   const name = String(body?.name || '').trim();
   const format = String(body?.format || '').trim().toLowerCase();
-  const owner = String(body?.owner || '').trim().toLowerCase();
 
   if (!name) return { status: 400, body: { error: 'the deck needs a name' } };
   if (name.length > 200) return { status: 400, body: { error: 'that name is too long' } };
   if (!FORMAT_IDS.has(format)) {
     return { status: 400, body: { error: 'pick a format', formats: [...FORMAT_IDS] } };
   }
-  if (!SLUG.test(owner)) {
+  if (!Number.isInteger(ownerId)) {
     return { status: 400, body: { error: 'pick whose deck this is' } };
   }
 
@@ -774,18 +778,13 @@ export async function createDeck(db, body, fetchImpl) {
     return { status: 400, body: { error: 'bracket is 1 to 5' } };
   }
 
-  const slug = String(body?.slug || '').trim() || slugify(name);
-  if (!slug) return { status: 400, body: { error: 'that name does not make a usable slug' } };
-  const clash = await db.prepare('SELECT slug FROM decks WHERE slug = ?').bind(slug).first();
-  if (clash) {
-    return { status: 409, body: { error: `a deck already exists at "${slug}"`, slug } };
-  }
+  const key = await freeDeckKey(db);
 
   const deck = {
     id: null,
-    slug,
+    key,
     name,
-    owner,
+    owner_id: ownerId,
     format,
     commander: commander || null,
     theme: String(body?.theme || '').trim() || null,
@@ -800,9 +799,9 @@ export async function createDeck(db, body, fetchImpl) {
   if (r.status !== 200) return r;
   // What colour the deck is, now that its cards exist to be asked.
   // Matt: "Why is milly moth deck showing as colorless???"
-  const colors = r.body.applied ? await paintDeck(db, slug, commander) : null;
+  const colors = r.body.applied ? await paintDeck(db, key, commander) : null;
   return {
     status: r.body.applied ? 201 : 200,
-    body: { ...r.body, created: r.body.applied, slug, colors },
+    body: { ...r.body, created: r.body.applied, key, colors },
   };
 }

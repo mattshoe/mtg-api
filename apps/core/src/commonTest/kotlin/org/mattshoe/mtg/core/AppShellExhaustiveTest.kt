@@ -41,7 +41,7 @@ private val FIVE = listOf("Avacyn", "Bitterblossom", "Craterhoof", "Dragonlord",
 
 private fun fiveCardDeck(slug: String = "alela") = DecksState(
     decks = listOf(deck(slug)),
-    openSlug = slug,
+    openKey = slug,
     cards = FIVE.map { deckCard(it) },
 )
 
@@ -54,10 +54,10 @@ private val aFound = Found(id = 7, name = "Lightning Bolt", scryfallId = null, t
 private fun holding(): AppState = AppState(
     palette = PaletteState(term = "bolt", items = listOf(aFound), active = 0, open = true),
     newDeck = NewDeck(name = "Half typed"),
-    deckEdit = DeckEditState(slug = "alela", deckName = "Alela"),
-    deckTweak = DeckTweak(slug = "alela", deckName = "Alela"),
-    disassemble = DisassembleState(slug = "alela", deckName = "Alela"),
-    rename = RenameState(slug = "alela", was = "Alela"),
+    deckEdit = DeckEditState(key = "alela", deckName = "Alela"),
+    deckTweak = DeckTweak(key = "alela", deckName = "Alela"),
+    disassemble = DisassembleState(key = "alela", deckName = "Alela"),
+    rename = RenameState(key = "alela", was = "Alela"),
     peek = Peek(2),
 )
 
@@ -97,7 +97,7 @@ private fun errorOn(s: AppState, v: View): String? = when (v) {
 
 /** A state with something on every screen, so a reset shows up. */
 private fun populated(): AppState = AppState(
-    admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"),
+    admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t"),
     library = Library(filters = Filters(q = "bolt"), rows = emptyList(), total = 12),
     decks = fiveCardDeck(),
     stats = StatsState(scope = StatsScope("matt")),
@@ -120,7 +120,7 @@ class NavigateLandingTest {
 
     @Test
     fun everyViewLandsOnItselfUnlocked() {
-        val s = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"))
+        val s = AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t"))
         View.entries.forEach { assertEquals(it, s.navigate(it).view, it.slug) }
     }
 
@@ -140,7 +140,7 @@ class NavigateLandingTest {
 
     @Test
     fun theRestSurvivesForEveryViewThatIsReachable() {
-        val s = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"))
+        val s = AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t"))
         View.entries.forEach { assertEquals("thing", s.navigate(it, "thing").route.rest, it.slug) }
     }
 
@@ -153,7 +153,7 @@ class NavigateLandingTest {
 
     @Test
     fun aQueryStringRidesAlongForEveryReachableView() {
-        val s = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"))
+        val s = AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t"))
         View.entries.forEach {
             assertEquals("x=1", s.navigate(Route(it, "", "x=1")).route.query, it.slug)
         }
@@ -171,8 +171,8 @@ class NavigateLandingTest {
     fun theTwoArgumentFormIsTheRouteForm() {
         View.entries.forEach {
             assertEquals(
-                AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")).navigate(Route(it, "r")),
-                AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")).navigate(it, "r"),
+                AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t")).navigate(Route(it, "r")),
+                AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t")).navigate(it, "r"),
                 it.slug,
             )
         }
@@ -186,14 +186,14 @@ class NavigateLandingTest {
     @Test
     fun navigatingToTheSamePlaceTwiceChangesNothingMore() {
         View.entries.forEach {
-            val once = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")).navigate(Route(it, "r", "x=1"))
+            val once = AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t")).navigate(Route(it, "r", "x=1"))
             assertEquals(once, once.navigate(Route(it, "r", "x=1")), it.slug)
         }
     }
 
     @Test
     fun landingIsTheSameDecisionTheAdminWouldMake() {
-        listOf(Admin(), Admin().signIn(Account(slug = "matt", role = "admin"), "t"), Admin()).forEach { admin ->
+        listOf(Admin(), Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t"), Admin()).forEach { admin ->
             View.entries.forEach { v ->
                 val route = Route(v, "r", "x=1")
                 assertEquals(admin.land(route), AppState(admin = admin).navigate(route).route, "$admin $v")
@@ -208,14 +208,14 @@ class NavigateResetsTest {
     @Test
     fun itClearsTheToastWhereverItGoes() {
         View.entries.forEach {
-            assertNull(AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")).say("done").navigate(it).toast, it.slug)
+            assertNull(AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t")).say("done").navigate(it).toast, it.slug)
         }
     }
 
     @Test
     fun itClearsTheOpenCardWhereverItGoes() {
         View.entries.forEach {
-            val s = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"), card = CardDetail(name = "Bolt"))
+            val s = AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t"), card = CardDetail(name = "Bolt"))
             assertNull(s.navigate(it).card, it.slug)
         }
     }
@@ -224,7 +224,7 @@ class NavigateResetsTest {
     fun itTakesEveryOverlayWithIt() {
         Overlay.entries.forEach { o ->
             View.entries.forEach { v ->
-                val s = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")).opening(o).navigate(v)
+                val s = AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t")).opening(o).navigate(v)
                 assertFalse(s.overlays.any, "$o survived a trip to ${v.slug}")
                 assertEquals(0, s.overlays.historyDepth)
             }
@@ -323,14 +323,14 @@ class NavigateAndTheOpenDeckTest {
     @Test
     fun aRouteThatNamesADeckKeepsIt() {
         val s = onDeck()
-        assertEquals("alela", s.decks.openSlug)
+        assertEquals("alela", s.decks.openKey)
         assertEquals(5, s.decks.cards.size)
     }
 
     @Test
     fun theDeckListClosesIt() {
         val s = AppState(decks = fiveCardDeck()).navigate(View.DECKS)
-        assertNull(s.decks.openSlug, "the detail stayed on screen over an address that said list")
+        assertNull(s.decks.openKey, "the detail stayed on screen over an address that said list")
         assertTrue(s.decks.cards.isEmpty())
     }
 
@@ -339,21 +339,21 @@ class NavigateAndTheOpenDeckTest {
         // A card is opened from a deck as often as from the Library, and
         // closing the deck here would re-read its cards on the way back.
         val s = onDeck().navigate(Route(View.CARD, "avacyn"))
-        assertEquals("alela", s.decks.openSlug)
+        assertEquals("alela", s.decks.openKey)
         assertEquals(5, s.decks.cards.size)
     }
 
     @Test
     fun aCardKeepsItEvenWithNothingAfterTheSlash() {
-        assertEquals("alela", onDeck().navigate(Route(View.CARD)).decks.openSlug)
+        assertEquals("alela", onDeck().navigate(Route(View.CARD)).decks.openKey)
     }
 
     @Test
     fun everyOtherViewClosesIt() {
         val keeps = setOf(View.CARD)
         View.entries.filterNot { it in keeps }.forEach { v ->
-            val s = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"), decks = fiveCardDeck()).navigate(v)
-            assertNull(s.decks.openSlug, v.slug)
+            val s = AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t"), decks = fiveCardDeck()).navigate(v)
+            assertNull(s.decks.openKey, v.slug)
             assertTrue(s.decks.cards.isEmpty(), v.slug)
         }
     }
@@ -361,7 +361,7 @@ class NavigateAndTheOpenDeckTest {
     @Test
     fun theDeckTilesThemselvesAreNeverThrownAway() {
         View.entries.forEach {
-            val s = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"), decks = fiveCardDeck()).navigate(it)
+            val s = AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t"), decks = fiveCardDeck()).navigate(it)
             assertEquals(1, s.decks.decks.size, it.slug)
         }
     }
@@ -372,13 +372,13 @@ class NavigateAndTheOpenDeckTest {
         // than a live case: it is `landed` that decides, not `to`.
         val s = AppState(admin = Admin().settle(), decks = fiveCardDeck()).navigate(Route(View.ENTRY, "alela"))
         assertEquals(View.LIBRARY, s.view)
-        assertNull(s.decks.openSlug)
+        assertNull(s.decks.openKey)
     }
 
     @Test
     fun switchingDecksKeepsTheOldOneUntilTheNewOneArrives() {
         val s = onDeck().navigate(Route(View.DECKS, "boros"))
-        assertEquals("alela", s.decks.openSlug, "it threw the list away before the next one was read")
+        assertEquals("alela", s.decks.openKey, "it threw the list away before the next one was read")
         assertEquals("boros", s.route.rest)
     }
 
@@ -502,7 +502,7 @@ class HashTest {
 
     @Test
     fun everyOtherViewWritesItsRoute() {
-        val s = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"))
+        val s = AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t"))
         View.entries.filterNot { it == View.LIBRARY }.forEach {
             val at = s.navigate(Route(it, "r", "x=1"))
             assertEquals(at.route.toHash(), at.hash(), it.slug)
@@ -534,7 +534,7 @@ class HashTest {
 
     @Test
     fun theHashRoundTripsBackToTheSameViewForEveryScreen() {
-        val s = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"))
+        val s = AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t"))
         View.entries.forEach {
             assertEquals(it, Route.parse(s.navigate(it).hash()).view, it.slug)
         }
@@ -555,7 +555,7 @@ class IsAStepFromTest {
 
     @Test
     fun nowhereIsAStepFromItself() {
-        val s = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"))
+        val s = AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t"))
         View.entries.forEach {
             val at = s.navigate(Route(it, "r", "x=1"))
             assertFalse(at.isAStepFrom(at), it.slug)
@@ -564,7 +564,7 @@ class IsAStepFromTest {
 
     @Test
     fun everyOtherViewIsAStepFromEveryView() {
-        val s = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"))
+        val s = AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t"))
         View.entries.forEach { a ->
             View.entries.filterNot { it == a }.forEach { b ->
                 assertTrue(s.navigate(b).isAStepFrom(s.navigate(a)), "${a.slug} to ${b.slug}")
@@ -574,7 +574,7 @@ class IsAStepFromTest {
 
     @Test
     fun andItReadsTheSameBothWays() {
-        val s = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"))
+        val s = AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t"))
         View.entries.forEach { a ->
             View.entries.forEach { b ->
                 assertEquals(
@@ -674,7 +674,7 @@ class CardRefFromTheRouteTest {
 
     @Test
     fun nothingButACardRouteNamesACard() {
-        val s = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"))
+        val s = AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t"))
         View.entries.filterNot { it == View.CARD }.forEach {
             assertNull(s.navigate(it, "sol+ring").cardRef, it.slug)
         }
@@ -786,7 +786,7 @@ class OpenCardTest {
 
     @Test
     fun fromEveryOtherScreenBackGoesToThatScreen() {
-        val s = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"))
+        val s = AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t"))
         View.entries.filterNot { it == View.CARD }.forEach {
             val at = s.navigate(Route(it, "r"))
             assertEquals(at.route, at.openCard(CardRef("sol ring")).from, it.slug)
@@ -850,7 +850,7 @@ class OpenCardTest {
     @Test
     fun itKeepsTheDeckUnderneathLoaded() {
         val s = onDeck().openCard(CardRef("avacyn"))
-        assertEquals("alela", s.decks.openSlug)
+        assertEquals("alela", s.decks.openKey)
         assertEquals(5, s.decks.cards.size)
     }
 
@@ -879,7 +879,7 @@ class OpenCardTest {
 
     @Test
     fun openingACardFromAGatedScreenRemembersThatScreen() {
-        val s = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")).navigate(View.ENTRY).openCard(CardRef("sol ring"))
+        val s = AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t")).navigate(View.ENTRY).openCard(CardRef("sol ring"))
         assertEquals(Route(View.ENTRY), s.from)
     }
 }
@@ -904,7 +904,7 @@ class LeaveCardTest {
 
     @Test
     fun fromEveryScreenItGoesBackToThatScreen() {
-        val s = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"))
+        val s = AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t"))
         View.entries.filterNot { it == View.CARD }.forEach {
             val at = s.navigate(Route(it, "r"))
             assertEquals(at.route, at.openCard(CardRef("sol ring")).leaveCard().route, it.slug)
@@ -932,7 +932,7 @@ class LeaveCardTest {
 
     @Test
     fun goingBackToAScreenTheLockHasSinceClosedBounces() {
-        val open = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")).navigate(View.ENTRY).openCard(CardRef("sol ring"))
+        val open = AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t")).navigate(View.ENTRY).openCard(CardRef("sol ring"))
         val locked = open.copy(admin = open.admin.signOut())
         assertEquals(View.DEFAULT, locked.leaveCard().view, "it rendered a shell that cannot do anything")
     }
@@ -989,7 +989,7 @@ class DeckRunEdgeTest {
 
     @Test
     fun aOneCardDeckIsBothEndsAtOnce() {
-        val one = DecksState(decks = listOf(deck("alela")), openSlug = "alela", cards = listOf(deckCard("Avacyn")))
+        val one = DecksState(decks = listOf(deck("alela")), openKey = "alela", cards = listOf(deckCard("Avacyn")))
         val s = atCard("avacyn", one)
         assertEquals("1 of 1", s.cardPlace)
         assertNull(s.previousCard)
@@ -998,7 +998,7 @@ class DeckRunEdgeTest {
 
     @Test
     fun anEmptyDeckIsNoRunAtAll() {
-        val none = DecksState(decks = listOf(deck("alela")), openSlug = "alela", cards = emptyList())
+        val none = DecksState(decks = listOf(deck("alela")), openKey = "alela", cards = emptyList())
         val s = atCard("avacyn", none)
         assertTrue(s.deckRun.isEmpty())
         assertEquals(-1, s.cardAt)
@@ -1019,14 +1019,14 @@ class DeckRunEdgeTest {
 
     @Test
     fun aDeckThatIsNoLongerOpenOffersNoNeighbours() {
-        val s = atCard("avacyn", fiveCardDeck().copy(openSlug = null))
+        val s = atCard("avacyn", fiveCardDeck().copy(openKey = null))
         assertTrue(s.deckRun.isEmpty())
         assertNull(s.nextCard)
     }
 
     @Test
     fun norDoesOneWhoseSlugDoesNotMatchTheRouteItWasOpenedFrom() {
-        val s = atCard("avacyn", fiveCardDeck().copy(openSlug = "boros"))
+        val s = atCard("avacyn", fiveCardDeck().copy(openKey = "boros"))
         assertTrue(s.deckRun.isEmpty(), "it offered neighbours out of a deck that is not open")
     }
 
@@ -1039,7 +1039,7 @@ class DeckRunEdgeTest {
 
     @Test
     fun aCardOpenedFromAnyOtherScreenBelongsToNoRun() {
-        val s = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"), decks = fiveCardDeck())
+        val s = AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t"), decks = fiveCardDeck())
         View.entries.filterNot { it == View.DECKS }.forEach { v ->
             val at = s.navigate(Route(v, "alela")).openCard(CardRef("avacyn"))
             assertTrue(at.deckRun.isEmpty(), v.slug)
@@ -1057,7 +1057,7 @@ class DeckRunEdgeTest {
 
     @Test
     fun nothingOffACardPageHasAPlace() {
-        val s = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"), decks = fiveCardDeck(), from = Route(View.DECKS, "alela"))
+        val s = AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t"), decks = fiveCardDeck(), from = Route(View.DECKS, "alela"))
         View.entries.filterNot { it == View.CARD }.forEach { v ->
             val at = s.navigate(Route(v, if (v == View.DECKS) "alela" else ""))
             assertEquals(-1, at.cardAt, v.slug)
@@ -1095,7 +1095,7 @@ class DeckRunEdgeTest {
     fun theRunFollowsTheSectionsRatherThanTheRowsThatArrived() {
         val mixed = DecksState(
             decks = listOf(deck("alela")),
-            openSlug = "alela",
+            openKey = "alela",
             cards = listOf(
                 deckCard("Command Tower", "Land"),
                 deckCard("Zealous Conscripts"),
@@ -1114,7 +1114,7 @@ class DeckRunEdgeTest {
     fun aNameInTheDeckTwiceTakesTheFirstOne() {
         val twice = DecksState(
             decks = listOf(deck("alela")),
-            openSlug = "alela",
+            openKey = "alela",
             cards = listOf(deckCard("Avacyn"), deckCard("Avacyn"), deckCard("Bitterblossom")),
         )
         assertEquals(0, atCard("avacyn", twice).cardAt)
@@ -1440,7 +1440,7 @@ class OverlayForgetsTest {
     @Test
     fun openingOneDoesNotChangeWhereYouAre() {
         Overlay.entries.forEach {
-            val was = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")).navigate(Route(View.STATS, "matt"))
+            val was = AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t")).navigate(Route(View.STATS, "matt"))
             assertEquals(was.route, was.opening(it).route, it.name)
         }
     }
@@ -1448,7 +1448,7 @@ class OverlayForgetsTest {
     @Test
     fun andNorDoesClosingIt() {
         Overlay.entries.forEach {
-            val was = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")).navigate(Route(View.STATS, "matt"))
+            val was = AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t")).navigate(Route(View.STATS, "matt"))
             assertEquals(was.route, was.opening(it).closing(it).route, it.name)
         }
     }
@@ -1462,10 +1462,10 @@ class AdminGateTest {
     private val locked = Admin()
 
     /** Signed in, with no role: Entry but not the log. */
-    private val open = Admin().signIn(Account(slug = "matt"), "0.abc")
+    private val open = Admin().signIn(Account(key = "e7de0cb1"), "0.abc")
 
     /** Signed in with the role Matt hands out: everything. */
-    private val operator = Admin().signIn(Account(slug = "matt", role = "admin"), "0.abc")
+    private val operator = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "0.abc")
 
     @Test
     fun lockedReachesEverythingThatIsNotGated() {
@@ -1856,7 +1856,7 @@ class ViewTableTest {
     @Test
     fun noViewIsLostBetweenTheNavAndTheRouter() {
         View.entries.filter { it.inNav }.forEach {
-            assertTrue(it in Admin().signIn(Account(slug = "matt", role = "admin"), "t").visible, it.slug)
+            assertTrue(it in Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t").visible, it.slug)
             assertEquals(it, View.of(it.slug), it.slug)
         }
     }
@@ -1886,7 +1886,7 @@ class FetchingTest {
     @Test
     fun theDefaultIsWhereYouActuallyAre() {
         View.entries.forEach {
-            val at = withACard.copy(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")).navigate(it)
+            val at = withACard.copy(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t")).navigate(it)
             // `navigate` closes the card, so put one back for the card view.
             val ready = if (it == View.CARD) at.copy(card = CardDetail(name = "Bolt")) else at
             assertEquals(busyOn(ready.fetching(it), it), busyOn(ready.fetching(), it), it.slug)
@@ -1991,7 +1991,7 @@ class FetchFailedTest {
     @Test
     fun theDefaultIsWhereYouActuallyAre() {
         View.entries.forEach {
-            val at = withACard.copy(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")).navigate(it)
+            val at = withACard.copy(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t")).navigate(it)
             val ready = if (it == View.CARD) at.copy(card = CardDetail(name = "Bolt")) else at
             assertEquals(ready.fetchFailed("gone", it), ready.fetchFailed("gone"), it.slug)
         }
@@ -2138,7 +2138,7 @@ class WithShareTest {
 
     @Test
     fun itOpensTheWizardWhenThereIsATokenForIt() {
-        assertEquals(View.ENTRY, AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")).withShare(csv).view)
+        assertEquals(View.ENTRY, AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t")).withShare(csv).view)
     }
 
     @Test
@@ -2151,7 +2151,7 @@ class WithShareTest {
 
     @Test
     fun theListIsInTheBoxWithNothingElseDecided() {
-        val s = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")).withShare(csv)
+        val s = AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t")).withShare(csv)
         assertEquals(MassEntry.fromShare(csv), s.entry)
         assertNull(s.entry.direction, "it decided whether this was an add or a remove")
         // The wizard no longer decides whose collection this lands in:
@@ -2163,26 +2163,26 @@ class WithShareTest {
 
     @Test
     fun theHeaderRowIsNotACard() {
-        assertEquals(2, AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")).withShare(csv).entry.cardCount)
+        assertEquals(2, AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t")).withShare(csv).entry.cardCount)
     }
 
     @Test
     fun anEmptyShareIsStillAShare() {
-        val s = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")).withShare("")
+        val s = AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t")).withShare("")
         assertEquals("", s.sharedList)
         assertEquals(0, s.entry.cardCount)
     }
 
     @Test
     fun aSecondShareReplacesTheFirst() {
-        val s = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")).withShare("1 Sol Ring").withShare("1 Mana Crypt")
+        val s = AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t")).withShare("1 Sol Ring").withShare("1 Mana Crypt")
         assertEquals("1 Mana Crypt", s.sharedList)
         assertEquals("1 Mana Crypt", s.entry.list)
     }
 
     @Test
     fun aShareThrowsAwayWhateverWasHalfTypedInTheWizard() {
-        val busy = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"), entry = MassEntry(list = "old", direction = Direction.REMOVE))
+        val busy = AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t"), entry = MassEntry(list = "old", direction = Direction.REMOVE))
         assertEquals("1 Sol Ring", busy.withShare("1 Sol Ring").entry.list)
         assertNull(busy.withShare("1 Sol Ring").entry.direction)
     }
@@ -2198,7 +2198,7 @@ class WithShareTest {
 
     @Test
     fun itLandsByTheSameRuleEverythingElseDoes() {
-        listOf(Admin(), Admin().signIn(Account(slug = "matt", role = "admin"), "t"), Admin()).forEach {
+        listOf(Admin(), Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t"), Admin()).forEach {
             assertEquals(
                 it.land(Route(View.ENTRY)),
                 AppState(admin = it).withShare("1 Sol Ring").route,
@@ -2209,7 +2209,7 @@ class WithShareTest {
 
     @Test
     fun aShareIsSpentOnce() {
-        val s = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")).withShare(csv).shareUsed()
+        val s = AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t")).withShare(csv).shareUsed()
         assertNull(s.sharedList)
         assertEquals(csv, s.entry.list, "spending the share emptied the box")
     }
@@ -2227,7 +2227,7 @@ class WithShareTest {
     @Test
     fun aShareWhileSignedOutCanBeUsedAfterSigningIn() {
         val s = AppState().withShare(csv)
-        val open = s.copy(admin = s.admin.signIn(Account(slug = "matt"), "t"))
+        val open = s.copy(admin = s.admin.signIn(Account(key = "e7de0cb1"), "t"))
         assertEquals(View.ENTRY, open.navigate(View.ENTRY).view)
         assertEquals(csv, open.navigate(View.ENTRY).entry.list)
     }
@@ -2413,7 +2413,7 @@ class SayTest {
         // to put an error, and it is gated — so this needs to be
         // unlocked, or `navigate` bounces straight back to the
         // Library, which does have somewhere and never toasts.
-        val admin = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"))
+        val admin = AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t"))
         assertEquals("boom", admin.navigate(View.ENTRY).fetchFailed("boom").toast)
     }
 }
@@ -2424,7 +2424,7 @@ class TitleTest {
 
     @Test
     fun everyScreenIsCalledWhatTheMenuCallsIt() {
-        val s = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"))
+        val s = AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t"))
         View.entries.filterNot { it == View.CARD }.forEach {
             assertEquals(it.label, s.navigate(it).title, it.slug)
         }
@@ -2440,7 +2440,7 @@ class TitleTest {
     fun aDeckWithProseAfterItsNameIsCalledTheNamePart() {
         val wordy = DecksState(
             decks = listOf(deck("explorers", "Explorers of the Deep — a very long Precon name")),
-            openSlug = "explorers",
+            openKey = "explorers",
         )
         assertEquals("Explorers of the Deep", AppState(decks = wordy).navigate(Route(View.DECKS, "explorers")).title)
     }
@@ -2577,7 +2577,7 @@ class OnKeyShellTest {
     private val locked = AppState()
 
     /** An operator, so every letter that names a screen has one. */
-    private val open = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"))
+    private val open = AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t"))
 
     @Test
     fun everyLetterThatNamesAReachableViewGoesThere() {

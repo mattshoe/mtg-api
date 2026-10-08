@@ -57,8 +57,8 @@ class DeckDetailIsItsOwnDestinationTest {
     @get:Rule
     val rule = createComposeRule()
 
-    private fun deck(slug: String, name: String) = Deck(
-        slug, name, "matt", "Alela, Artful Provocateur (ELD) 324", "UW", 3, null,
+    private fun deck(key: String, name: String) = Deck(
+        key, name, "matt", "Alela, Artful Provocateur (ELD) 324", "UW", 3, null,
     )
 
     private fun card(name: String, role: String? = null) = DeckCard(
@@ -71,7 +71,7 @@ class DeckDetailIsItsOwnDestinationTest {
 
     private fun listState() = AppState(
         route = Route(View.DECKS),
-        admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"),
+        admin = Admin().signIn(Account(key = "matt", role = "admin"), "t"),
         decks = DecksState().loaded(manyDecks()),
     )
 
@@ -93,15 +93,15 @@ class DeckDetailIsItsOwnDestinationTest {
                         // supplies the deck's cards directly, because
                         // what is under test is where the screen
                         // starts, not the network.
-                        onOpenDeck = { slug ->
+                        onOpenDeck = { key ->
                             held.value = held.value
                                 .copy(
                                     decks = held.value.decks.opened(
-                                        slug,
+                                        key,
                                         (0 until 40).map { card("Card Number $it") },
                                     ),
                                 )
-                                .navigate(Route(View.DECKS, slug))
+                                .navigate(Route(View.DECKS, key))
                         },
                         onPreviewEntry = {},
                         onApplyEntry = {},

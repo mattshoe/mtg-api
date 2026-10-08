@@ -14,7 +14,7 @@
 -- ============================================================ cards
 CREATE TABLE cards (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    owner TEXT,                 -- 'matt' | 'kayla'; collections are separate
+    owner TEXT,                 -- retired: the old owner name, read by nothing; dropped later
     qty INTEGER, finish TEXT, foil_flag TEXT,
     scryfall_id TEXT, oracle_id TEXT,
     name TEXT, name_norm TEXT, face1 TEXT, face2 TEXT,
@@ -30,7 +30,8 @@ CREATE TABLE cards (
     watermark TEXT, security_stamp TEXT,
     reserved INT, game_changer INT, full_art INT, textless INT,
     promo INT, reprint INT, variation INT, oversized INT,
-    story_spotlight INT, booster INT, edhrec_rank INTEGER
+    story_spotlight INT, booster INT, edhrec_rank INTEGER,
+    owner_id INTEGER REFERENCES users(id)   -- whose card this is; the only owner there is
 );
 
 CREATE TABLE card_faces (
@@ -51,9 +52,9 @@ CREATE TABLE card_frame_effects(card_id INT, frame_effect TEXT);
 -- ============================================================ decks
 CREATE TABLE decks (
     id INTEGER PRIMARY KEY,
-    slug TEXT UNIQUE,           -- one row per deck, no -vN suffixes
-    name TEXT,
-    owner TEXT,                 -- 'matt' | 'kayla'; never mix the two
+    slug TEXT UNIQUE,           -- retired: was the address, read by nothing; dropped later
+    name TEXT,                  -- free text; two accounts may both have a Milly Moth
+    owner TEXT,                 -- retired: the old owner name, read by nothing; dropped later
     format TEXT,                -- 'commander' | 'standard' | 'modern' | ...
     source_file TEXT,
     recorded_date TEXT,
@@ -65,7 +66,11 @@ CREATE TABLE decks (
     is_proxy INTEGER,
     card_count INTEGER,         -- sum of qty in the list
     owned_count INTEGER,        -- of those, how many are in the collection
-    source_md TEXT              -- the original markdown, so the file is disposable
+    source_md TEXT,             -- the original markdown, so the file is disposable
+    -- The address. Random, like users.key, so it never collides with
+    -- another account's deck of the same name and never moves on a rename.
+    key TEXT,
+    owner_id INTEGER REFERENCES users(id)   -- whose deck this is
 );
 
 CREATE TABLE deck_cards (
@@ -89,9 +94,11 @@ CREATE TABLE deck_notes (
 );
 
 -- ============================================================ oracle-level
-CREATE TABLE card_tags (card_id INT, tag_slug TEXT, kind TEXT,
-                        UNIQUE(card_id, tag_slug, kind));
-CREATE TABLE tags       (slug TEXT, kind TEXT, label TEXT, description TEXT);
+-- `tag` is Scryfall Tagger's own word for the thing (`card-draw`, `ramp`),
+-- not an address of ours.
+CREATE TABLE card_tags (card_id INT, tag TEXT, kind TEXT,
+                        UNIQUE(card_id, tag, kind));
+CREATE TABLE tags       (tag TEXT, kind TEXT, label TEXT, description TEXT);
 CREATE TABLE legalities (oracle_id TEXT, format TEXT, status TEXT);
 CREATE TABLE rulings    (oracle_id TEXT, published_at TEXT, source TEXT,
                          comment TEXT);
@@ -126,7 +133,7 @@ CREATE TABLE logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     ts      TEXT NOT NULL,
     level   TEXT NOT NULL,      -- debug | info | warn | error
-    event   TEXT,               -- route slug: query, cards.add, admin, ...
+    event   TEXT,               -- route name: query, cards.add, admin, ...
     method  TEXT,
     path    TEXT,
     status  INTEGER,
@@ -172,9 +179,12 @@ CREATE INDEX idx_deck_cards_deck ON deck_cards(deck_id);
 CREATE INDEX idx_deck_cards_norm ON deck_cards(name_norm);
 CREATE INDEX idx_deck_cards_role ON deck_cards(role);
 CREATE INDEX idx_decks_owner     ON decks(owner);
+CREATE INDEX idx_decks_owner_id  ON decks(owner_id);
+CREATE UNIQUE INDEX idx_decks_key ON decks(key);
 CREATE INDEX idx_deck_notes_deck ON deck_notes(deck_id);
 CREATE INDEX idx_cards_norm      ON cards(name_norm);
 CREATE INDEX idx_cards_owner     ON cards(owner, name_norm);
+CREATE INDEX idx_cards_owner_id  ON cards(owner_id, name_norm);
 CREATE INDEX idx_cards_oracle    ON cards(oracle_id);
 CREATE INDEX idx_cards_set       ON cards(setcode);
 CREATE INDEX idx_cards_cmc       ON cards(cmc);
@@ -189,7 +199,7 @@ CREATE INDEX idx_colors_card     ON card_colors(card_id);
 CREATE INDEX idx_faces_card      ON card_faces(card_id);
 CREATE INDEX idx_aliases_norm    ON aliases(alias_norm);
 CREATE INDEX idx_tags_card       ON card_tags(card_id);
-CREATE INDEX idx_tags_slug       ON card_tags(tag_slug);
+CREATE INDEX idx_card_tags_tag   ON card_tags(tag);
 CREATE INDEX idx_legal_oracle    ON legalities(oracle_id);
 CREATE INDEX idx_rulings_oracle  ON rulings(oracle_id);
 CREATE INDEX idx_prices_usd      ON prices(usd);
@@ -204,11 +214,12 @@ CREATE INDEX idx_logs_status     ON logs(status, ts DESC);
 -- incremental adds can, and a silent duplicate row would double a count
 -- everywhere downstream.
 CREATE UNIQUE INDEX idx_cards_unique ON cards(owner, scryfall_id, finish);
+CREATE UNIQUE INDEX idx_cards_owner_unique ON cards(owner_id, scryfall_id, finish);
 
 -- ============================================================ views
 -- Was a maintained table. The aggregate is cheap and a view cannot drift.
 CREATE VIEW totals AS
-SELECT owner, name, name_norm, face1, face2,
+SELECT owner_id, name, name_norm, face1, face2,
        SUM(qty)                                        AS total_qty,
        COUNT(*)                                        AS num_printings,
        MAX(CASE WHEN finish != 'nonfoil' THEN 1 ELSE 0 END) AS has_foil,
@@ -218,12 +229,12 @@ SELECT owner, name, name_norm, face1, face2,
        MIN(rarity)                                     AS rarity,
        MIN(color_identity)                             AS color_identity
 FROM cards
-GROUP BY owner, name_norm;
+GROUP BY owner_id, name_norm;
 
 -- The price that actually applies to a stack, given its finish. A foil
 -- row must not quote the nonfoil price.
 CREATE VIEW card_prices AS
-SELECT c.id AS card_id, c.owner, c.name_norm, c.qty, c.finish,
+SELECT c.id AS card_id, c.owner_id, c.name_norm, c.qty, c.finish,
        CASE c.finish
          WHEN 'foil'   THEN COALESCE(p.usd_foil, p.usd)
          WHEN 'etched' THEN COALESCE(p.usd_etched, p.usd_foil, p.usd)
@@ -234,12 +245,12 @@ FROM cards c
 LEFT JOIN prices p ON p.scryfall_id = c.scryfall_id;
 
 CREATE VIEW deck_gaps AS
-SELECT d.slug, d.name AS deck, d.owner, dc.name, dc.qty, dc.role
+SELECT d.key, d.name AS deck, d.owner_id, dc.name, dc.qty, dc.role
 FROM deck_cards dc JOIN decks d ON d.id = dc.deck_id
 WHERE dc.in_collection = 0;
 
 CREATE VIEW decks_not_built AS
-SELECT slug, name, owner, is_proxy, status, card_count, owned_count
+SELECT key, name, owner_id, is_proxy, status, card_count, owned_count
 FROM decks
 -- "Not built" means proxy or PROPOSED, for either owner. Being Kayla's is
 -- not a reason to call a deck unbuilt; her precons are as real as Matt's.
@@ -247,7 +258,7 @@ WHERE NOT (is_proxy = 0
            AND (status IS NULL OR status NOT LIKE 'PROPOSED%'));
 
 CREATE VIEW card_usage AS
-SELECT t.owner,
+SELECT t.owner_id,
        t.name,
        t.name_norm,
        t.total_qty                           AS owned,
@@ -256,7 +267,7 @@ SELECT t.owner,
        COALESCE(u.deck_count, 0)             AS deck_count
 FROM totals t
 LEFT JOIN (
-    SELECT d.owner AS owner,
+    SELECT d.owner_id AS owner_id,
            dc.name_norm,
            SUM(dc.qty)                AS in_decks,
            COUNT(DISTINCT dc.deck_id) AS deck_count
@@ -268,18 +279,18 @@ LEFT JOIN (
     WHERE d.is_proxy = 0
       AND (d.status IS NULL OR d.status NOT LIKE 'PROPOSED%')
       AND dc.in_collection = 1
-    GROUP BY d.owner, dc.name_norm
-) u ON u.name_norm = t.name_norm AND u.owner = t.owner;
+    GROUP BY d.owner_id, dc.name_norm
+) u ON u.name_norm = t.name_norm AND u.owner_id = t.owner_id;
 
 CREATE VIEW bulk_cards AS
 SELECT * FROM card_usage WHERE free > 0;
 
 CREATE VIEW deck_conflicts AS
-SELECT cu.owner, cu.name, cu.owned, cu.in_decks, cu.deck_count,
-       (SELECT GROUP_CONCAT(d2.slug, ', ')
+SELECT cu.owner_id, cu.name, cu.owned, cu.in_decks, cu.deck_count,
+       (SELECT GROUP_CONCAT(d2.name, ', ')
           FROM deck_cards dc2 JOIN decks d2 ON d2.id = dc2.deck_id
          WHERE dc2.name_norm = cu.name_norm
-               AND d2.owner = cu.owner AND d2.is_proxy = 0
+               AND d2.owner_id = cu.owner_id AND d2.is_proxy = 0
                AND (d2.status IS NULL OR d2.status NOT LIKE 'PROPOSED%')) AS decks
 FROM card_usage cu
 WHERE cu.in_decks > cu.owned;
@@ -287,11 +298,10 @@ WHERE cu.in_decks > cu.owned;
 
 -- ------------------------------------------------------------ accounts
 --
--- An account owns a collection, and `users.slug` is which one: the
--- `owner` column on `cards` and `decks` has always held a slug, so
--- nothing in the collection moves when accounts arrive. The slug is
--- also the address — `#/c/<slug>` — which is why it is unique and why
--- it is never rewritten once issued.
+-- An account owns a collection: `cards.owner_id` and `decks.owner_id`
+-- are its `id`. The id is private — never in a URL, a response or a
+-- log — and a write is decided by the id a session resolves to and
+-- nothing else.
 --
 -- Every collection is readable by anyone. `role` is a server-wide
 -- thing and not a collection thing: owning your own cards needs no
@@ -303,6 +313,10 @@ CREATE TABLE users (
   -- would collide, and a guessable address is a poor thing to hand
   -- out. It identifies and never authorises.
   key           TEXT NOT NULL UNIQUE,
+  -- Retired. It used to be what `cards.owner` matched, which is how an
+  -- account's cards went missing when its name changed. Nothing reads
+  -- it; a new account gets its key here only because the live column
+  -- is NOT NULL UNIQUE, and a later migration drops it.
   slug          TEXT NOT NULL UNIQUE,
   display_name  TEXT,
   email         TEXT,

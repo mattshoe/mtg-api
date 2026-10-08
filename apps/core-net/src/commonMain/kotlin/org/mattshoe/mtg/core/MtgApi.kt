@@ -46,14 +46,15 @@ class MtgApi internal constructor(
 
     @Serializable
     private data class CardsRequest(
-        val owner: String,
+        /** The collection's public key. Which one, never whether you may. */
+        val collection: String,
         val list: String,
         @SerialName("dry_run") val dryRun: Boolean,
     )
 
     @Serializable
     private data class DeckListRequest(
-        val slug: String,
+        val key: String,
         val commander: String,
         val list: String,
         @SerialName("dry_run") val dryRun: Boolean,
@@ -61,7 +62,7 @@ class MtgApi internal constructor(
 
     @Serializable
     private data class DisassembleRequest(
-        val slug: String,
+        val key: String,
         @SerialName("dry_run") val dryRun: Boolean,
     )
 
@@ -69,7 +70,7 @@ class MtgApi internal constructor(
     private data class CreateDeckRequest(
         val name: String,
         val format: String,
-        val owner: String,
+        val collection: String,
         val commander: String?,
         val list: String,
         @SerialName("dry_run") val dryRun: Boolean,
@@ -79,7 +80,7 @@ class MtgApi internal constructor(
     private data class ValidateRequest(val list: String)
 
     @Serializable
-    private data class RoleRequest(val slug: String, val role: String)
+    private data class RoleRequest(val key: String, val role: String)
 
     @Serializable
     private data class ErrorBody(val error: String = "")
@@ -87,11 +88,10 @@ class MtgApi internal constructor(
     /**
      * Whose collection an address names.
      *
-     * The key in `#/c/<key>` is public and means nothing on its own:
-     * `cards.owner` holds a slug, and only this says which slug a key
-     * belongs to. No credentials, because every collection is public
-     * to read — and holding the answer is still not permission to
-     * write to it.
+     * The key in `#/c/<key>` is public: this says whether anybody has
+     * it, and what they are called. No credentials, because every
+     * collection is public to read — and holding the key is still not
+     * permission to write to it.
      */
     suspend fun collection(key: String): CollectionRef? {
         val res = http.get("$base/c/$key")
@@ -102,7 +102,6 @@ class MtgApi internal constructor(
     @Serializable
     data class CollectionRef(
         val key: String,
-        val slug: String,
         val name: String? = null,
         val avatar: String? = null,
     )
@@ -140,8 +139,8 @@ class MtgApi internal constructor(
         val res = http.get("$base/auth/me") { header("Authorization", "Bearer $session") }
         if (!res.status.isSuccess()) return null
         val body: Profile = res.decode()
-        return body.slug?.let {
-            Account(slug = it, name = body.name, avatar = body.avatar, role = body.role ?: "user")
+        return body.key?.takeIf { it.isNotEmpty() }?.let {
+            Account(key = it, name = body.name, avatar = body.avatar, role = body.role ?: "user")
         }
     }
 
@@ -160,11 +159,11 @@ class MtgApi internal constructor(
     }
 
     /** Hand the admin role out, or take it back. */
-    suspend fun setRole(session: String, slug: String, role: String) {
+    suspend fun setRole(session: String, key: String, role: String) {
         val res = http.post("$base/admin/role") {
             contentType(ContentType.Application.Json)
             header("Authorization", "Bearer $session")
-            setBody(RoleRequest(slug, role))
+            setBody(RoleRequest(key, role))
         }
         if (!res.status.isSuccess()) throw ApiFailure(errorIn(res.bodyAsText(), res.status))
     }
@@ -182,18 +181,18 @@ class MtgApi internal constructor(
     @Serializable
     data class Session(
         val token: String,
-        val slug: String? = null,
+        val key: String? = null,
         val name: String? = null,
         val avatar: String? = null,
         val role: String? = null,
     ) {
         val account: Account?
-            get() = slug?.let { Account(it, name, avatar, role ?: "user") }
+            get() = key?.takeIf { it.isNotEmpty() }?.let { Account(it, name, avatar, role ?: "user") }
     }
 
     @Serializable
     private data class Profile(
-        val slug: String? = null,
+        val key: String? = null,
         val name: String? = null,
         val email: String? = null,
         val avatar: String? = null,
@@ -219,13 +218,12 @@ class MtgApi internal constructor(
         token: String,
         direction: Direction,
         /**
-         * Which collection, as its slug.
+         * Which collection, as its public key.
          *
-         * One of two names once, when that was every collection there
-         * would ever be. Whether this session may write to it is the
-         * server's call and always was.
+         * Whether this session may write to it is the server's call,
+         * made from the session and never from this.
          */
-        owner: String,
+        collection: String,
         list: String,
         dryRun: Boolean,
     ): Applied {
@@ -233,7 +231,7 @@ class MtgApi internal constructor(
             contentType(ContentType.Application.Json)
             header("Authorization", "Bearer $token")
             header(Idempotency.HEADER, Idempotency.key())
-            setBody(CardsRequest(owner, list, dryRun))
+            setBody(CardsRequest(collection, list, dryRun))
         }
         return res.decode()
     }
@@ -256,7 +254,7 @@ class MtgApi internal constructor(
      */
     suspend fun setDeckList(
         token: String,
-        slug: String,
+        key: String,
         commander: String,
         list: String,
         dryRun: Boolean,
@@ -265,18 +263,18 @@ class MtgApi internal constructor(
             contentType(ContentType.Application.Json)
             header("Authorization", "Bearer $token")
             header(Idempotency.HEADER, Idempotency.key())
-            setBody(DeckListRequest(slug, commander, list, dryRun))
+            setBody(DeckListRequest(key, commander, list, dryRun))
         }
         return res.decode()
     }
 
     /** Delete a deck; its cards go back to the owner's bulk. */
-    suspend fun disassemble(token: String, slug: String, dryRun: Boolean): Disassembly {
+    suspend fun disassemble(token: String, key: String, dryRun: Boolean): Disassembly {
         val res = http.post("$base/decks/disassemble") {
             contentType(ContentType.Application.Json)
             header("Authorization", "Bearer $token")
             header(Idempotency.HEADER, Idempotency.key())
-            setBody(DisassembleRequest(slug, dryRun))
+            setBody(DisassembleRequest(key, dryRun))
         }
         return res.decode()
     }
@@ -284,7 +282,7 @@ class MtgApi internal constructor(
     /** Create a deck, pulling from bulk and buying what bulk cannot cover. */
     @Serializable
     private data class RenameDeckRequest(
-        val slug: String,
+        val key: String,
         val name: String,
         @SerialName("dry_run") val dryRun: Boolean = false,
     )
@@ -292,18 +290,18 @@ class MtgApi internal constructor(
     @Serializable
     data class Renamed(
         val renamed: Boolean = false,
-        val slug: String = "",
+        val key: String = "",
         val name: String = "",
         val was: String = "",
     )
 
-    /** Rename a deck. The slug moves with the name. */
-    suspend fun renameDeck(token: String, slug: String, name: String): Renamed {
+    /** Rename a deck. Its key, and so its address, stays where it is. */
+    suspend fun renameDeck(token: String, key: String, name: String): Renamed {
         val res = http.post("$base/decks/rename") {
             contentType(ContentType.Application.Json)
             header("Authorization", "Bearer $token")
             header(Idempotency.HEADER, Idempotency.key())
-            setBody(RenameDeckRequest(slug, name))
+            setBody(RenameDeckRequest(key, name))
         }
         return res.decode()
     }
@@ -312,7 +310,8 @@ class MtgApi internal constructor(
         token: String,
         name: String,
         format: String,
-        owner: String,
+        /** Whose deck, as the collection's public key. */
+        collection: String,
         commander: String?,
         list: String,
         dryRun: Boolean,
@@ -321,7 +320,7 @@ class MtgApi internal constructor(
             contentType(ContentType.Application.Json)
             header("Authorization", "Bearer $token")
             header(Idempotency.HEADER, Idempotency.key())
-            setBody(CreateDeckRequest(name, format, owner, commander, list, dryRun))
+            setBody(CreateDeckRequest(name, format, collection, commander, list, dryRun))
         }
         return res.decode()
     }

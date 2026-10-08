@@ -131,14 +131,14 @@ class DownloadDecisionTest {
 
     private fun deckOpenState() = AppState(
         route = Route(View.DECKS, "alela"),
-        admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"),
+        admin = Admin().signIn(Account(key = "matt", role = "admin"), "t"),
         decks = DecksState().loaded(listOf(deck())).opened(
             "alela",
             listOf(card("Alela, Artful Provocateur", "commander"), card("Sol Ring")),
         ),
     )
 
-    private val decksBody = """{"cols":["slug","name","owner"],"rows":[],"n":0}"""
+    private val decksBody = """{"cols":["key","name","owner"],"rows":[],"n":0}"""
     private val facetsBody = """{"cols":["kind","value"],"rows":[],"n":0}"""
 
     // Matched on `LIMIT 5000`, the cap `Export.query` asks for and the

@@ -289,7 +289,7 @@ class MainActivity : ComponentActivity() {
                 app = app.say("no collection at that address", failed = true)
                 return@launch
             }
-            app = app.browsing(found.slug)
+            app = app.browsing(found.key)
             loadFor(app)
         }
     }
@@ -382,12 +382,12 @@ class MainActivity : ComponentActivity() {
                             // the row it was made on and leaves the
                             // rest live.
                             if (app.people.changing == null) {
-                                app = app.copy(people = app.people.changing(person.slug))
+                                app = app.copy(people = app.people.changing(person.key))
                                 scope.launch {
                                     app = try {
-                                        api.setRole(token(), person.slug, role)
+                                        api.setRole(token(), person.key, role)
                                         app.copy(
-                                            people = app.people.changed(person.slug, role),
+                                            people = app.people.changed(person.key, role),
                                         ).say("${person.shownName} is now $role")
                                     } catch (ex: ApiFailure) {
                                         val why = ex.message ?: "that did not work"
@@ -405,8 +405,8 @@ class MainActivity : ComponentActivity() {
                         // deck remembered the list as where it came
                         // from and back landed there instead of in the
                         // deck. `loadFor` sees the slug and fetches.
-                        onOpenDeck = { slug ->
-                            val next = app.navigate(Route(View.DECKS, slug))
+                        onOpenDeck = { key ->
+                            val next = app.navigate(Route(View.DECKS, key))
                             app = next
                             loadFor(next)
                         },
@@ -462,7 +462,7 @@ class MainActivity : ComponentActivity() {
                             app = app.copy(history = app.history.cleared())
                             EntryHistory.save(store, app.history)
                         },
-                        onEditDeck = { slug -> editDeck(slug) },
+                        onEditDeck = { key -> editDeck(key) },
                         onReviewDeck = {
                             claim(
                                 app.deckEdit?.canReview == true,
@@ -475,8 +475,8 @@ class MainActivity : ComponentActivity() {
                                 { app.copy(deckEdit = app.deckEdit?.working()) },
                             ) { saveDeck() }
                         },
-                        onAskDisassemble = { slug -> askDisassemble(slug) },
-                        onAskRename = { slug -> askRename(slug) },
+                        onAskDisassemble = { key -> askDisassemble(key) },
+                        onAskRename = { key -> askRename(key) },
                         onSaveRename = {
                             claim(
                                 app.rename?.canSave == true,
@@ -724,15 +724,15 @@ class MainActivity : ComponentActivity() {
         return app.copy(decks = app.decks.loaded(DeckQueries.decode(r.cols, r.rows)))
     }
 
-    private suspend fun openDeck(slug: String): AppState {
+    private suspend fun openDeck(key: String): AppState {
         val all = if (app.decks.decks.isEmpty()) loadDecks() else app
-        val r = api.query(DeckQueries.cards(slug))
-        val opened = all.copy(decks = all.decks.opened(slug, DeckQueries.decodeCards(r.cols, r.rows)))
+        val r = api.query(DeckQueries.cards(key))
+        val opened = all.copy(decks = all.decks.opened(key, DeckQueries.decodeCards(r.cols, r.rows)))
         // Started here and not awaited, the same as the website: a
         // deck that shows its cards and fills in its tokens a moment
         // later is right; one that waits on a second service to show
         // anything is not.
-        loadTokens(slug, opened.decks.scryfallIds)
+        loadTokens(key, opened.decks.scryfallIds)
         return opened
     }
 
@@ -752,7 +752,7 @@ class MainActivity : ComponentActivity() {
      * built has been assigned — and reading `app` there would ask
      * about the deck you were on a moment ago.
      */
-    private fun loadTokens(slug: String, ids: List<String>) {
+    private fun loadTokens(key: String, ids: List<String>) {
         model.tokensJob = scope.launch {
             // Let the deck land first.
             //
@@ -781,7 +781,7 @@ class MainActivity : ComponentActivity() {
             // Asked of the route rather than the loaded deck, because
             // the route names the deck from the moment you navigate
             // and the loaded one only once its cards are back.
-            if (app.route.rest == slug && app.view == View.DECKS) {
+            if (app.route.rest == key && app.view == View.DECKS) {
                 app = app.copy(decks = app.decks.withTokens(found))
             }
         }
@@ -929,9 +929,9 @@ class MainActivity : ComponentActivity() {
 
     // ------------------------------------------------------------ deck
 
-    private fun askRename(slug: String) {
-        val deck = app.decks.decks.firstOrNull { it.slug == slug } ?: return
-        app = app.copy(rename = RenameState(slug = deck.slug, was = deck.name))
+    private fun askRename(key: String) {
+        val deck = app.decks.decks.firstOrNull { it.key == key } ?: return
+        app = app.copy(rename = RenameState(key = deck.key, was = deck.name))
             .opening(Overlay.RENAME)
     }
 
@@ -944,11 +944,11 @@ class MainActivity : ComponentActivity() {
     private suspend fun renameDeck(): AppState {
         val r = app.rename ?: return app
         return try {
-            val done = api.renameDeck(token(), r.slug, r.name.trim())
+            val done = api.renameDeck(token(), r.key, r.name.trim())
             app = app.copy(rename = app.rename?.finished())
             loadDecks()
                 .closing(Overlay.RENAME)
-                .navigate(Route(View.DECKS, done.slug))
+                .navigate(Route(View.DECKS, done.key))
                 .say("Renamed to ${done.name}")
         } catch (ex: ApiFailure) {
             app.copy(rename = app.rename?.failed(ex.message ?: "that did not work"))
@@ -1001,7 +1001,7 @@ class MainActivity : ComponentActivity() {
         val t = app.deckTweak ?: return app
         return try {
             val plan = api.setDeckList(
-                token(), t.slug, t.commander, t.listAfter(app.decks.cards), dryRun = true,
+                token(), t.key, t.commander, t.listAfter(app.decks.cards), dryRun = true,
             )
             app.copy(deckTweak = app.deckTweak?.planned(plan))
         } catch (ex: ApiFailure) {
@@ -1013,12 +1013,12 @@ class MainActivity : ComponentActivity() {
         val t = app.deckTweak ?: return app
         return try {
             val plan = api.setDeckList(
-                token(), t.slug, t.commander, t.listAfter(app.decks.cards), dryRun = false,
+                token(), t.key, t.commander, t.listAfter(app.decks.cards), dryRun = false,
             )
             app = app.copy(deckTweak = app.deckTweak?.finished())
             // Reopen the deck so the list on screen is the list that is
             // now stored, rather than the one that was.
-            openDeck(t.slug)
+            openDeck(t.key)
                 .closing(Overlay.DECK_TWEAK)
                 .say(t.summary + if (plan.buying > 0) " — ${plan.buying} bought" else "")
         } catch (ex: ApiFailure) {
@@ -1058,8 +1058,8 @@ class MainActivity : ComponentActivity() {
             ShareWhat.DECKLIST -> Export.deck(app.decks.cards)
         }
         val name = when (what) {
-            ShareWhat.LINK -> "${deck.slug}-link.txt"
-            ShareWhat.DECKLIST -> Export.deckFilename(deck.slug, today())
+            ShareWhat.LINK -> Export.deckFilename(deck.name, "link")
+            ShareWhat.DECKLIST -> Export.deckFilename(deck.name, today())
         }
         val copiedLabel = if (what == ShareWhat.LINK) "Link copied" else "${app.decks.totalCards} cards copied"
         return when (where) {
@@ -1163,8 +1163,8 @@ class MainActivity : ComponentActivity() {
 
     // ------------------------------------------------------------ decks
 
-    private fun editDeck(slug: String) {
-        val deck = app.decks.decks.firstOrNull { it.slug == slug } ?: return
+    private fun editDeck(key: String) {
+        val deck = app.decks.decks.firstOrNull { it.key == key } ?: return
         app = app.copy(deckEdit = DeckEditState.of(deck, app.decks.cards)).opening(Overlay.DECK_EDIT)
     }
 
@@ -1172,7 +1172,7 @@ class MainActivity : ComponentActivity() {
         val e = app.deckEdit ?: return app
         app = app.copy(deckEdit = e.working())
         return try {
-            val plan = api.setDeckList(token(), e.slug, e.commander, e.list, dryRun = true)
+            val plan = api.setDeckList(token(), e.key, e.commander, e.list, dryRun = true)
             app.copy(deckEdit = app.deckEdit?.planned(plan))
         } catch (ex: ApiFailure) {
             app.copy(deckEdit = app.deckEdit?.failed(ex.message ?: "that did not work"))
@@ -1183,22 +1183,22 @@ class MainActivity : ComponentActivity() {
         val e = app.deckEdit ?: return app
         app = app.copy(deckEdit = e.working())
         return try {
-            val plan = api.setDeckList(token(), e.slug, e.commander, e.list, dryRun = false)
+            val plan = api.setDeckList(token(), e.key, e.commander, e.list, dryRun = false)
             app = app.copy(deckEdit = app.deckEdit?.finished(plan))
-            openDeck(e.slug).closing(Overlay.DECK_EDIT)
+            openDeck(e.key).closing(Overlay.DECK_EDIT)
                 .say("Saved — ${plan.cardCount} cards" + if (plan.buying > 0) ", ${plan.buying} bought" else "")
         } catch (ex: ApiFailure) {
             app.copy(deckEdit = app.deckEdit?.failed(ex.message ?: "that did not work"))
         }
     }
 
-    private fun askDisassemble(slug: String) {
+    private fun askDisassemble(key: String) {
         if (app.disassemble?.busy == true) return
-        val deck = app.decks.decks.firstOrNull { it.slug == slug } ?: return
-        app = app.copy(disassemble = DisassembleState(slug, deck.name, deck.owner).working())
+        val deck = app.decks.decks.firstOrNull { it.key == key } ?: return
+        app = app.copy(disassemble = DisassembleState(key, deck.name, deck.ownerName.ifEmpty { deck.owner }).working())
             .opening(Overlay.DISASSEMBLE)
         work {
-            val plan = api.disassemble(token(), slug, dryRun = true)
+            val plan = api.disassemble(token(), key, dryRun = true)
             app.copy(disassemble = app.disassemble?.planned(plan))
         }
     }
@@ -1207,7 +1207,7 @@ class MainActivity : ComponentActivity() {
         val d = app.disassemble ?: return app
         app = app.copy(disassemble = d.working())
         return try {
-            val r = api.disassemble(token(), d.slug, dryRun = false)
+            val r = api.disassemble(token(), d.key, dryRun = false)
             app = app.copy(disassemble = app.disassemble?.finished())
             loadDecks().closing(Overlay.DISASSEMBLE)
                 .copy(decks = app.decks.close())
@@ -1231,16 +1231,16 @@ class MainActivity : ComponentActivity() {
         val n = app.newDeck
         app = app.copy(newDeck = n.working("Creating…"))
         return try {
-            api.createDeck(
+            val made = api.createDeck(
                 token = token(),
                 name = n.name,
                 format = n.format!!.slug,
-                owner = app.viewing,
+                collection = app.viewing,
                 commander = n.commander.ifBlank { null },
                 list = n.list,
                 dryRun = false,
             )
-            app = app.copy(newDeck = app.newDeck.finished())
+            app = app.copy(newDeck = app.newDeck.finished(made.key.orEmpty()))
             loadDecks().say("Created ${n.name}")
         } catch (ex: ApiFailure) {
             app.copy(newDeck = app.newDeck.failed(ex.message ?: "that did not work"))

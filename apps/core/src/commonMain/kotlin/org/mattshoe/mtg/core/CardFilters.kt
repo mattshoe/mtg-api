@@ -124,9 +124,9 @@ enum class Sort(val slug: String, val label: String, val keys: List<String>) {
  * Free copies come from the card_usage view, joined once rather than
  * correlated per row. As a subquery it re-evaluated the view for every
  * candidate row and blew D1's CPU limit on a whole-collection query. The
- * join is 1:1 on (owner, name_norm), so it cannot fan rows out.
+ * join is 1:1 on (owner_id, name_norm), so it cannot fan rows out.
  */
-const val USAGE_JOIN = "LEFT JOIN card_usage u ON u.owner = c.owner AND u.name_norm = c.name_norm"
+const val USAGE_JOIN = "LEFT JOIN card_usage u ON u.owner_id = c.owner_id AND u.name_norm = c.name_norm"
 
 /**
  * Prices live in their own table, refreshed nightly, so the price of a
@@ -141,7 +141,7 @@ const val PRICE_EXPR = """CASE c.finish
          WHEN 'etched' THEN COALESCE(pr.usd_etched, pr.usd_foil, pr.usd)
          ELSE pr.usd END"""
 
-private const val SELECT_COLS = """c.owner, c.name, c.name_norm, c.face2, c.layout,
+private const val SELECT_COLS = """(SELECT key FROM users WHERE id = c.owner_id) AS owner, c.name, c.name_norm, c.face2, c.layout,
        c.scryfall_id, c.mana_cost, c.cmc, c.type_line,
        c.color_identity, c.rarity, c.setcode, c.set_name, c.collector_number,
        c.edhrec_rank, c.released_at, c.finish, c.power, c.toughness, c.artist"""
@@ -151,6 +151,7 @@ private val NUM_OPS = setOf(">=", "<=", "=", ">", "<", "!=")
 /** Everything the panel and the query box can set. */
 data class Filters(
     // who and how many. Everything, both collections, unless narrowed.
+    // `owner` is the owning account's public key, never its id.
     // One row per card, not per owner. Grouping by (owner, name_norm)
     // was defended as "the truth rather than a total", but the tile
     // does not say whose it is, so a card they both own was the same
@@ -410,7 +411,7 @@ fun conditions(s: Filters): Sql {
     // else's collection ended up on the screen. `both` is still the
     // pooled read, for the places that genuinely want one.
     if (s.owner.isBlank()) c.add("1=0")
-    else if (s.owner != "both") c.add("c.owner = ?", s.owner)
+    else if (s.owner != "both") c.add(Owners.owns("c.owner_id"), s.owner)
 
     // Both faces, so "bolt" finds a card whose back is the bolt.
     // `name_norm` is stored lowercased; the other two are lowered here.
@@ -453,7 +454,7 @@ fun conditions(s: Filters): Sql {
         c.add("EXISTS (SELECT 1 FROM card_keywords k WHERE k.card_id = c.id AND lower(k.keyword) = ?)", it.lowercase())
     }
     s.tags.forEach {
-        c.add("EXISTS (SELECT 1 FROM card_tags ct WHERE ct.card_id = c.id AND ct.tag_slug = ?)", it)
+        c.add("EXISTS (SELECT 1 FROM card_tags ct WHERE ct.card_id = c.id AND ct.tag = ?)", it)
     }
 
     c.inList("c.rarity", s.rarities)
@@ -516,13 +517,13 @@ fun conditions(s: Filters): Sql {
     when {
         s.deck == "_any" -> c.where +=
             "EXISTS (SELECT 1 FROM deck_cards dc JOIN decks d ON d.id = dc.deck_id " +
-            "WHERE dc.name_norm = c.name_norm AND d.owner = c.owner)"
+            "WHERE dc.name_norm = c.name_norm AND d.owner_id = c.owner_id)"
         s.deck == "_none" -> c.where +=
             "NOT EXISTS (SELECT 1 FROM deck_cards dc JOIN decks d ON d.id = dc.deck_id " +
-            "WHERE dc.name_norm = c.name_norm AND d.owner = c.owner)"
+            "WHERE dc.name_norm = c.name_norm AND d.owner_id = c.owner_id)"
         s.deck.isNotBlank() -> c.add(
             "EXISTS (SELECT 1 FROM deck_cards dc JOIN decks d ON d.id = dc.deck_id " +
-                "WHERE dc.name_norm = c.name_norm AND d.slug = ?)",
+                "WHERE dc.name_norm = c.name_norm AND d.key = ?)",
             s.deck,
         )
     }

@@ -41,8 +41,8 @@ class CardFiltersTest {
     @Test
     fun bothMeansNoOwnerClause() {
         assertFalse(where(Filters(owner = "both")).contains("c.owner"))
-        assertTrue(where(Filters(owner = "matt")).contains("c.owner = ?"))
-        assertEquals(listOf<Any?>("matt"), params(Filters(owner = "matt")))
+        assertTrue(where(Filters(owner = "e7de0cb1")).contains("c.owner_id = (SELECT id FROM users WHERE key = ?)"))
+        assertEquals(listOf<Any?>("e7de0cb1"), params(Filters(owner = "e7de0cb1")))
     }
 
     // ---------------------------------------------------------- colours

@@ -174,7 +174,6 @@ private fun PersonPage(
 
             Div(attrs = { classes("facts") }) {
                 Fact("Role", person.role)
-                Fact("Collection", person.slug)
                 Fact("Key", person.key)
             }
         }
@@ -185,7 +184,7 @@ private fun PersonPage(
     Div(attrs = { classes("pick") }) {
         Role.all.forEach { role ->
             val on = person.role == role
-            val busy = state.isChanging(person.slug)
+            val busy = state.isChanging(person.key)
             Button(attrs = {
                 classes("opt")
                 if (on) classes("on")
@@ -201,7 +200,7 @@ private fun PersonPage(
             }
         }
     }
-    if (state.strands(person.slug, me)) {
+    if (state.strands(person.key, me)) {
         // The one change nothing here can undo: `ADMIN_PASSWORD` and a
         // script are the way back. Said, not refused — Matt: "I want to
         // be able to assign and remove roles at will!!!!"

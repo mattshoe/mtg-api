@@ -10,7 +10,7 @@ import kotlinx.serialization.json.JsonArray
  * rather than from a hard-coded list, so a panel never offers a type
  * nothing has and never misses one that arrived last week.
  */
-data class DeckRef2(val slug: String, val name: String, val owner: String) {
+data class DeckRef2(val key: String, val name: String, val owner: String) {
     val label: String get() = "$name ($owner)"
 }
 
@@ -52,7 +52,7 @@ object FacetQueries {
     )
     val sets = Sql("SELECT DISTINCT upper(setcode) FROM cards ORDER BY 1", emptyList())
     val keywords = Sql("SELECT DISTINCT keyword FROM card_keywords ORDER BY 1", emptyList())
-    val tags = Sql("SELECT tag_slug FROM card_tags GROUP BY 1 ORDER BY COUNT(*) DESC LIMIT 600", emptyList())
+    val tags = Sql("SELECT tag FROM card_tags GROUP BY 1 ORDER BY COUNT(*) DESC LIMIT 600", emptyList())
     val formats = Sql("SELECT DISTINCT format FROM legalities ORDER BY 1", emptyList())
     val artists = Sql("SELECT DISTINCT artist FROM cards WHERE artist IS NOT NULL ORDER BY 1", emptyList())
     val watermarks =
@@ -63,7 +63,10 @@ object FacetQueries {
     val frames = Sql("SELECT DISTINCT frame FROM cards WHERE frame IS NOT NULL ORDER BY 1", emptyList())
     val borders =
         Sql("SELECT DISTINCT border_color FROM cards WHERE border_color IS NOT NULL ORDER BY 1", emptyList())
-    val decks = Sql("SELECT slug, name, owner FROM decks ORDER BY owner, name", emptyList())
+    val decks = Sql(
+        "SELECT key, name, ${Owners.nameOf("owner_id")} AS owner FROM decks ORDER BY owner_id, name",
+        emptyList(),
+    )
 
     /** In the order `assemble` expects them back. */
     val all: List<Sql> = listOf(
@@ -109,7 +112,7 @@ object FacetQueries {
         "types" to "SELECT DISTINCT type AS value FROM card_types WHERE kind='type' AND type GLOB '[A-Za-z]*' ORDER BY 1",
         "sets" to "SELECT DISTINCT upper(setcode) AS value FROM cards ORDER BY 1",
         "keywords" to "SELECT DISTINCT keyword AS value FROM card_keywords ORDER BY 1",
-        "tags" to "SELECT tag_slug AS value FROM card_tags GROUP BY 1 ORDER BY COUNT(*) DESC LIMIT 600",
+        "tags" to "SELECT tag AS value FROM card_tags GROUP BY 1 ORDER BY COUNT(*) DESC LIMIT 600",
         "formats" to "SELECT DISTINCT format AS value FROM legalities ORDER BY 1",
         "artists" to "SELECT DISTINCT artist AS value FROM cards WHERE artist IS NOT NULL ORDER BY 1",
         "watermarks" to "SELECT DISTINCT watermark AS value FROM cards WHERE watermark IS NOT NULL ORDER BY 1",
@@ -161,7 +164,7 @@ object FacetQueries {
         fun JsonArray.str(n: String) = at[n]?.let { i ->
             (getOrNull(i) as? kotlinx.serialization.json.JsonPrimitive)?.content
         }.orEmpty()
-        return rows.map { DeckRef2(it.str("slug"), it.str("name"), it.str("owner")) }
+        return rows.map { DeckRef2(it.str("key"), it.str("name"), it.str("owner")) }
     }
 
     /** The twelve answers, in the order `all` asked for them. */

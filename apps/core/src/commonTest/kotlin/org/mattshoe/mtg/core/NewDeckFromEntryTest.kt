@@ -105,7 +105,7 @@ class NewDeckFromEntryTest {
 
     @Test
     fun theBackGestureStepsTheDeckWizardRatherThanClosingIt() {
-        val s = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"))
+        val s = AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t"))
             .navigate(View.ENTRY)
             .opening(Overlay.NEW_DECK)
             .let { it.copy(newDeck = it.newDeck.pick(Format.COMMANDER).goTo(DeckStep.NAME)) }
@@ -116,7 +116,7 @@ class NewDeckFromEntryTest {
 
     @Test
     fun theBackGestureClosesTheDeckWizardFromItsFirstStep() {
-        val s = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"))
+        val s = AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t"))
             .navigate(View.ENTRY)
             .opening(Overlay.NEW_DECK)
         assertFalse(Overlay.NEW_DECK in assertNotNull(s.back()).overlays)

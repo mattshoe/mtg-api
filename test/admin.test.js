@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   get, post, postAnon, postAs, sql, count, snapshot, adminToken,
-  TEST_PASSWORD, stubScryfall,
+  TEST_PASSWORD, stubScryfall, MATT,
 } from './helpers.js';
 
 const BOLT = '1 Lightning Bolt (2X2) 117';
@@ -95,7 +95,7 @@ describe('writes are gated', () => {
 
   it('accepts the write once a token is presented', async () => {
     const token = await adminToken();
-    const r = await postAs('/cards/add', { list: `2 ${BOLT.slice(2)}` }, token, stubScryfall());
+    const r = await postAs('/cards/add', { collection: MATT, list: `2 ${BOLT.slice(2)}` }, token, stubScryfall());
     expect(r.status).toBe(200);
     expect(r.body.applied).toBe(true);
     expect(await count('cards', "name_norm = 'lightning bolt'")).toBe(1);

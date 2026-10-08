@@ -62,13 +62,13 @@ class MtgApiTest {
         val out = api(
             body = """{"applied":false,"dry_run":true,"resolved":2,"failed":0,
                 "changes":[["Lightning Bolt","2X2","117","nonfoil",0,4]],"errors":[],"notes":[]}""",
-        ).cards("0.abc", Direction.ADD, "matt", "4 Lightning Bolt", dryRun = true)
+        ).cards("0.abc", Direction.ADD, "e7de0cb1", "4 Lightning Bolt", dryRun = true)
 
         val req = seen.single()
         assertEquals("/cards/add", req.url.encodedPath)
         assertEquals("Bearer 0.abc", req.headers[HttpHeaders.Authorization])
         val sent = Json.parseToJsonElement(req.bodyText()).jsonObject
-        assertEquals("matt", sent["owner"]!!.jsonPrimitive.content)
+        assertEquals("e7de0cb1", sent["collection"]!!.jsonPrimitive.content)
         assertEquals("true", sent["dry_run"]!!.jsonPrimitive.content)
 
         assertTrue(out.dryRun)
@@ -86,10 +86,10 @@ class MtgApiTest {
     @Test
     fun removeGoesToTheRemoveEndpoint() = runTest {
         api(body = """{"applied":true,"dry_run":false,"resolved":1,"changes":[],"errors":[]}""")
-            .cards("t", Direction.REMOVE, "kayla", "1 Sol Ring", dryRun = false)
+            .cards("t", Direction.REMOVE, "bprh3d2s", "1 Sol Ring", dryRun = false)
         val sent = Json.parseToJsonElement(seen.single().bodyText()).jsonObject
         assertEquals("/cards/remove", seen.single().url.encodedPath)
-        assertEquals("kayla", sent["owner"]!!.jsonPrimitive.content)
+        assertEquals("bprh3d2s", sent["collection"]!!.jsonPrimitive.content)
         assertEquals("false", sent["dry_run"]!!.jsonPrimitive.content)
     }
 
@@ -99,7 +99,7 @@ class MtgApiTest {
             body = """{"applied":true,"resolved":1,"failed":2,"changes":[],
                 "errors":["no card named Biterblosom","line 4 unreadable"],
                 "notes":["rulings skipped on a big import"]}""",
-        ).cards("t", Direction.ADD, "matt", "x", dryRun = false)
+        ).cards("t", Direction.ADD, "e7de0cb1", "x", dryRun = false)
         assertEquals(2, out.failed)
         assertEquals("no card named Biterblosom", out.errors[0])
         assertEquals(1, out.notes.size)
@@ -109,7 +109,7 @@ class MtgApiTest {
     fun anExpiredTokenIsReportedNotSwallowed() = runTest {
         val e = assertFailsWith<ApiFailure> {
             api(HttpStatusCode.Unauthorized, """{"error":"admin session expired — unlock again"}""")
-                .cards("stale", Direction.ADD, "matt", "1 Sol Ring", dryRun = true)
+                .cards("stale", Direction.ADD, "e7de0cb1", "1 Sol Ring", dryRun = true)
         }
         assertTrue(e.message!!.contains("expired"))
     }
@@ -118,7 +118,7 @@ class MtgApiTest {
     fun aReplyThatIsNotJsonSaysSoRatherThanCrashing() = runTest {
         val e = assertFailsWith<ApiFailure> {
             api(HttpStatusCode.InternalServerError, "<html>upstream is having a moment</html>")
-                .cards("t", Direction.ADD, "matt", "1 Sol Ring", dryRun = true)
+                .cards("t", Direction.ADD, "e7de0cb1", "1 Sol Ring", dryRun = true)
         }
         assertTrue(e.message!!.contains("500") || e.message!!.contains("could not be read"))
     }
@@ -127,7 +127,7 @@ class MtgApiTest {
     fun aListFullOfCommasAndApostrophesSurvivesTheJson() = runTest {
         val list = "1 Kardur, Doomscourge\n1 Ambition's Cost\n\"quoted\",2"
         api(body = """{"applied":false,"dry_run":true,"resolved":3,"changes":[],"errors":[]}""")
-            .cards("t", Direction.ADD, "matt", list, dryRun = true)
+            .cards("t", Direction.ADD, "e7de0cb1", list, dryRun = true)
         val sent = Json.parseToJsonElement(seen.single().bodyText()).jsonObject
         assertEquals(list, sent["list"]!!.jsonPrimitive.content)
     }
@@ -136,7 +136,7 @@ class MtgApiTest {
     fun aWholeCollectionExportGoesUpIntact() = runTest {
         val list = (1..4000).joinToString("\n") { "1 Card Number $it" }
         api(body = """{"applied":false,"dry_run":true,"resolved":4000,"changes":[],"errors":[]}""")
-            .cards("t", Direction.ADD, "matt", list, dryRun = true)
+            .cards("t", Direction.ADD, "e7de0cb1", list, dryRun = true)
         val sent = Json.parseToJsonElement(seen.single().bodyText()).jsonObject
         assertEquals(list, sent["list"]!!.jsonPrimitive.content)
     }
@@ -144,20 +144,22 @@ class MtgApiTest {
     @Test
     fun aWriteGoesToWhicheverCollectionItWasHanded() = runTest {
         // It used to take one of two names, which is every collection
-        // there would ever be. A slug is whatever an account's slug
-        // is, and the server is the one that decides whether this
+        // there would ever be. A collection is whatever key it is
+        // handed, and the server is the one that decides whether this
         // session may write to it.
         api(body = """{"applied":true,"dry_run":false,"resolved":1,"changes":[],"errors":[]}""")
-            .cards("t", Direction.ADD, "ulamog-fan-42", "1 Sol Ring", dryRun = false)
+            .cards("t", Direction.ADD, "u1am0g42", "1 Sol Ring", dryRun = false)
         val sent = Json.parseToJsonElement(seen.single().bodyText()).jsonObject
-        assertEquals("ulamog-fan-42", sent["owner"]!!.jsonPrimitive.content)
+        assertEquals("u1am0g42", sent["collection"]!!.jsonPrimitive.content)
+        assertNull(sent["owner"], "the retired owner field still goes up")
     }
 
     @Test
     fun aNewDeckLandsInWhicheverCollectionItWasHanded() = runTest {
-        api(body = """{"created":true,"dry_run":false,"name":"Burn","slug":"burn","missing":[]}""")
-            .createDeck("t", "Burn", "modern", "ulamog-fan-42", null, "1 Sol Ring", dryRun = false)
+        api(body = """{"created":true,"dry_run":false,"name":"Burn","key":"b7rn4k2x","missing":[]}""")
+            .createDeck("t", "Burn", "modern", "u1am0g42", null, "1 Sol Ring", dryRun = false)
         val sent = Json.parseToJsonElement(seen.single().bodyText()).jsonObject
-        assertEquals("ulamog-fan-42", sent["owner"]!!.jsonPrimitive.content)
+        assertEquals("u1am0g42", sent["collection"]!!.jsonPrimitive.content)
+        assertNull(sent["owner"], "the retired owner field still goes up")
     }
 }

@@ -193,7 +193,7 @@ class QuickFindQueryTest {
         assertTrue(sql.contains("name_norm LIKE ?"), sql)
         assertTrue(sql.contains("lower(face1) LIKE ?"), sql)
         assertTrue(sql.contains("lower(face2) LIKE ?"), sql)
-        assertTrue(sql.contains("GROUP BY owner, name_norm"), sql)
+        assertTrue(sql.contains("GROUP BY owner_id, name_norm"), sql)
         assertTrue(sql.contains("ORDER BY length(name), name"), sql)
     }
 

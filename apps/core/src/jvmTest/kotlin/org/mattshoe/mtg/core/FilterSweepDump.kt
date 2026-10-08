@@ -17,8 +17,8 @@ class FilterSweepDump {
         fun case(name: String, f: Filters) = add(name to f)
 
         case("no filters", Filters())
-        case("owner matt", Filters(owner = "matt"))
-        case("owner kayla", Filters(owner = "kayla"))
+        case("owner matt, by key", Filters(owner = "e7de0cb1"))
+        case("owner kayla, by key", Filters(owner = "bprh3d2s"))
 
         // colour, all four modes, both targets
         ColorMode.entries.forEach { m ->
@@ -117,7 +117,7 @@ class FilterSweepDump {
         case(
             "everything at once",
             Filters(
-                owner = "matt", q = "a", text = "draw", cmcMin = "1", cmcMax = "6",
+                owner = "e7de0cb1", q = "a", text = "draw", cmcMin = "1", cmcMax = "6",
                 types = listOf("Creature"), rarities = listOf("rare"),
                 colors = listOf("G"), colorMode = ColorMode.ATLEAST,
                 flags = mapOf(Flag.REPRINT to Tri.NO), hasRulings = Tri.YES,

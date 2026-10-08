@@ -165,9 +165,10 @@ data class Route(
 /**
  * Somebody signed in.
  *
- * `slug` is both who they are and where their collection lives:
- * `cards.owner` has held a slug since the first day, so an account
- * whose slug is `matt` owns every row that says `matt`.
+ * `key` is where their collection lives: the public address `#/c/<key>`
+ * carries. Who they *are* is an id the server keeps to itself and this
+ * never sees — there used to be a slug here, and a card belonged to an
+ * account only while two strings happened to match.
  *
  * `role` is about running the server — the log, the maintenance job —
  * and not about owning cards. Every account owns its own collection
@@ -175,21 +176,20 @@ data class Route(
  * default for their own cards and only their own cards".
  */
 data class Account(
-    val slug: String,
-    val name: String? = null,
-    val avatar: String? = null,
-    val role: String = Role.USER,
     /**
      * The public identifier the collection is shared by, which is
      * what goes in an address. Never what decides whether anybody may
      * edit it: that is the session's business.
      */
-    val key: String = "",
+    val key: String,
+    val name: String? = null,
+    val avatar: String? = null,
+    val role: String = Role.USER,
 ) {
     val isOperator: Boolean get() = role == Role.ADMIN
 
     /** What to call them. A Google account can arrive with no name on it. */
-    val shownName: String get() = name?.takeIf { it.isNotBlank() } ?: slug
+    val shownName: String get() = name?.takeIf { it.isNotBlank() } ?: key
 
     /**
      * Whether this account may edit that collection.
@@ -209,7 +209,7 @@ data class Account(
      * in `canEdit`, and it is the one that counts.
      */
     fun owns(collection: String): Boolean =
-        isOperator || (collection.isNotEmpty() && collection == slug)
+        isOperator || (collection.isNotEmpty() && collection == key)
 }
 
 data class Admin(

@@ -83,7 +83,7 @@ class CollectionRouteTest {
 
     @Test
     fun anAddressNamingACollectionIsTheCollectionYouAreLookingAt() {
-        val me = Account(slug = "matt", name = "Matt", key = "mykey123")
+        val me = Account(key = "mykey123", name = "Matt")
         val s = AppState(admin = Admin().signIn(me, "t")).navigate(Route.parse("#/c/$key/decks"))
         assertEquals(key, s.route.collection)
     }
@@ -92,7 +92,7 @@ class CollectionRouteTest {
     fun theRootSendsSomebodySignedInToTheirOwnCollection() {
         // "If you go to the root domain then you get redirected to
         // your own collection with a slug in the url."
-        val me = Account(slug = "matt", name = "Matt", key = "mykey123")
+        val me = Account(key = "mykey123", name = "Matt")
         val s = AppState(admin = Admin().signIn(me, "t")).navigate(Route.parse("#/"))
         val home = assertNotNull(s.homeRoute())
         assertEquals("mykey123", home.collection)
@@ -111,19 +111,20 @@ class CollectionRouteTest {
         // The bug this prevents: following a shared link and being
         // bounced to your own collection, which is exactly what makes
         // a link worthless.
-        val me = Account(slug = "matt", name = "Matt", key = "mykey123")
+        val me = Account(key = "mykey123", name = "Matt")
         val s = AppState(admin = Admin().signIn(me, "t")).navigate(Route.parse("#/c/$key/decks"))
         assertEquals(null, s.homeRoute(), "a shared link bounced to the reader's own collection")
     }
 
     @Test
-    fun theKeyIsNotTheOwner() {
-        // `cards.owner` holds a slug; the address holds a key. What
-        // joins them is a lookup, so a key alone names a collection
-        // and still says nothing about who may edit it.
-        val me = Account(slug = "matt", name = "Matt", key = "mykey123")
+    fun signedInAndNamingNothingYouSeeTheCollectionAtYourKey() {
+        // The app holds the owner's key and never the id behind it;
+        // the database turns one into the other. So signed in and
+        // naming nothing, what is on screen is the collection at your
+        // own key, and it is yours to edit.
+        val me = Account(key = "mykey123", name = "Matt")
         val s = AppState(admin = Admin().signIn(me, "t"))
-        assertEquals("matt", s.viewing, "the owner is the slug, not the key")
+        assertEquals("mykey123", s.viewing, "your own collection is not the one at your key")
         assertTrue(s.canEdit)
     }
 }
@@ -161,11 +162,11 @@ class SharedLinkTest {
         // The property the whole key design rests on: following a
         // link makes you a reader of that collection and nothing
         // more, whoever you are signed in as.
-        val me = Account(slug = "matt", name = "Matt", key = "mykey123")
+        val me = Account(key = "mykey123", name = "Matt")
         val s = AppState(admin = Admin().signIn(me, "t"))
             .navigate(Deeplink.parse("https://mtg.mattshoe.org/#/c/$key/decks")!!)
-            .browsing("kayla")
-        assertEquals("kayla", s.viewing)
+            .browsing(key)
+        assertEquals(key, s.viewing)
         assertTrue(!s.canEdit, "a shared link handed out edit rights")
     }
 }

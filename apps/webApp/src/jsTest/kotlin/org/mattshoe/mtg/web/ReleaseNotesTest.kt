@@ -58,7 +58,7 @@ class ReleaseNotesTest {
     }
 
     private fun adminSettings(releases: Releases) = AppState(
-        admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"),
+        admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t"),
         releases = releases,
     ).navigate(View.ADMIN)
 

@@ -64,10 +64,10 @@ class NoMoreWhoseTest {
         // The switch said Both / Matt / Kayla. "Both" is not a
         // collection anybody owns, and the other two were a list of
         // the only two people there would ever be.
-        val me = Account(slug = "matt", name = "Matt", key = "e7de0cb1")
+        val me = Account(key = "e7de0cb1", name = "Matt")
         val s = AppState(admin = Admin().signIn(me, "t"))
-        assertEquals("matt", s.statsScope().owner)
-        assertEquals("kayla", s.browsing("kayla").statsScope().owner)
+        assertEquals("e7de0cb1", s.statsScope().owner)
+        assertEquals("bprh3d2s", s.browsing("bprh3d2s").statsScope().owner)
     }
 
     @Test
@@ -78,12 +78,14 @@ class NoMoreWhoseTest {
     @Test
     fun anOldStatsLinkThatNamesACollectionStillMeansThatCollection() {
         // `#/stats/kayla` was how the switch spelled itself into the
-        // address. Somebody's bookmark still says it, and it still
-        // names a collection even though nothing offers the choice.
-        val me = Account(slug = "matt", name = "Matt", key = "e7de0cb1")
+        // address. A collection is named by its key now, so the same
+        // shape of link, `#/stats/<key>`, still names that collection
+        // even though nothing offers the choice. (An old bookmark
+        // holding a slug names nobody: there are no slugs to match.)
+        val me = Account(key = "e7de0cb1", name = "Matt")
         val s = AppState(admin = Admin().signIn(me, "t"))
-            .navigate(Route(View.STATS, "kayla"))
-        assertEquals("kayla", s.statsScope().owner)
+            .navigate(Route(View.STATS, "bprh3d2s"))
+        assertEquals("bprh3d2s", s.statsScope().owner)
     }
 
 }

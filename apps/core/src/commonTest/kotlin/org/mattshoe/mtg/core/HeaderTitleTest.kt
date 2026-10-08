@@ -25,7 +25,7 @@ import kotlin.test.assertNotEquals
  */
 class HeaderTitleTest {
 
-    private val bar = Admin().signIn(Account(slug = "matt", role = "admin"), "t").bar
+    private val bar = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t").bar
 
     @Test
     fun noTabNameIsPrintedTwice() {
@@ -66,7 +66,7 @@ class HeaderTitleTest {
     fun aScreenThatIsNotInTheBarStillGetsItsLabel() {
         // Server Logs is behind the profile, so nothing else on
         // screen says where you are.
-        val unlocked = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")).navigate(View.LOGS)
+        val unlocked = AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t")).navigate(View.LOGS)
         assertEquals(View.LOGS, unlocked.view, "the fixture never reached the log")
         assertEquals(View.LOGS.label, unlocked.titleBeside(bar))
     }

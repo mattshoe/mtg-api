@@ -71,6 +71,8 @@ data class NewDeck(
      */
     val hint: Completion = Completion(),
     val created: Boolean = false,
+    /** The new deck's address, once the server has made it. */
+    val key: String = "",
 ) {
 
     val cardCount: Int get() = DeckList.countCards(list)
@@ -242,18 +244,5 @@ data class NewDeck(
     fun working(what: String) = copy(busy = what, error = null)
     fun failed(message: String) = copy(busy = null, error = message)
     fun validated(v: Validation) = copy(checked = v, busy = null, error = null)
-    fun finished() = copy(created = true, busy = null, step = DeckStep.DONE)
-
-    /** The slug the API will give this deck. */
-    val slug: String get() = slugify(name)
-
-
-    companion object {
-        /** Lowercase, words joined by hyphens, nothing else. */
-        fun slugify(name: String): String = name.trim().lowercase()
-            .map { if (it.isLetterOrDigit()) it else '-' }
-            .joinToString("")
-            .split("-").filter { it.isNotEmpty() }
-            .joinToString("-")
-    }
+    fun finished(key: String = "") = copy(created = true, key = key, busy = null, step = DeckStep.DONE)
 }

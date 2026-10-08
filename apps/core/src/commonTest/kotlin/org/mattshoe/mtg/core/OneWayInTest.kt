@@ -32,28 +32,28 @@ import kotlin.test.assertTrue
  */
 class OneWayInTest {
 
-    private val me = Account(slug = "matt", name = "Matt", key = "e7de0cb1")
+    private val me = Account(key = "e7de0cb1", name = "Matt")
     private val operator = me.copy(role = "admin")
 
     @Test
     fun aFreshAccountIsNobodySpecial() {
-        assertEquals("user", Account(slug = "kayla").role)
-        assertFalse(Account(slug = "kayla").isOperator)
+        assertEquals("user", Account(key = "bprh3d2s").role)
+        assertFalse(Account(key = "bprh3d2s").isOperator)
     }
 
     @Test
     fun andThatIsEnoughToEditYourOwnCollection() {
         // The whole of what an account buys you, with no role at all.
-        assertTrue(me.owns("matt"))
-        assertFalse(me.owns("kayla"))
+        assertTrue(me.owns("e7de0cb1"))
+        assertFalse(me.owns("bprh3d2s"))
     }
 
     @Test
     fun andTheAdminRoleBuysYouEverybodyElses() {
         // Which is what the role is for, once Matt hands it out —
         // `RolesTest` is where the role system itself lives.
-        assertTrue(operator.owns("matt"))
-        assertTrue(operator.owns("kayla"))
+        assertTrue(operator.owns("e7de0cb1"))
+        assertTrue(operator.owns("bprh3d2s"))
     }
 
     @Test

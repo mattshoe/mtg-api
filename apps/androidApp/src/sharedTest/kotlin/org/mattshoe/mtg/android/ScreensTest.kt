@@ -143,7 +143,7 @@ class ScreensTest {
 
     @Test
     fun unlockingBringsTheGatedTabsBack() {
-        var state = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"))
+        var state = AppState(admin = Admin().signIn(Account(key = "matt", role = "admin"), "t"))
         content { AppShell(state, { state = it }, {}, {}, {}, {}, {}) }
         // Entry joins the bar; the log and the lock are behind the
         // profile, which is the split Matt asked for.
@@ -370,7 +370,7 @@ class ScreensTest {
 
     @Test
     fun theAdminActionsAreHiddenWhileLocked() {
-        val decks = DecksState(decks = listOf(deck()), openSlug = "alela", cards = listOf(deckCard()))
+        val decks = DecksState(decks = listOf(deck()), openKey = "alela", cards = listOf(deckCard()))
         content { DecksScreen(decks, {}, {}, admin = false) }
         rule.onNodeWithText("Edit list").assertDoesNotExistNow()
     }
@@ -378,10 +378,10 @@ class ScreensTest {
     @Test
     fun theAdminActionsAppearWhenUnlocked() {
         var edited: Deck? = null
-        val decks = DecksState(decks = listOf(deck()), openSlug = "alela", cards = listOf(deckCard()))
+        val decks = DecksState(decks = listOf(deck()), openKey = "alela", cards = listOf(deckCard()))
         content { DecksScreen(decks, {}, {}, admin = true, onEdit = { edited = it }) }
         rule.onNodeWithText("Edit list").performScrollTo().performClick()
-        rule.runOnIdle { assertEquals("alela", edited?.slug) }
+        rule.runOnIdle { assertEquals("alela", edited?.key) }
     }
 
     @Test

@@ -152,11 +152,13 @@ class NewDeckTest {
     }
 
     @Test
-    fun theSlugIsWhatTheApiWillCallIt() {
-        assertEquals("alela-artful-provocateur", NewDeck.slugify("Alela, Artful Provocateur"))
-        assertEquals("mono-red", NewDeck.slugify("  Mono   Red  "))
-        assertEquals("kardur-doomscourge", NewDeck.slugify("Kardur, Doomscourge"))
-        assertEquals("deck-2", NewDeck.slugify("Deck #2"))
+    fun theDecksAddressIsTheKeyTheServerGaveIt() {
+        // Nothing here works an address out of the name any more. The
+        // server makes a random key, and that is where the deck lives.
+        val done = ready().validated(checked()).finished("q8ytka9m")
+        assertEquals("q8ytka9m", done.key)
+        assertTrue(done.created)
+        assertEquals(DeckStep.DONE, done.step)
     }
 
     @Test
@@ -277,14 +279,13 @@ class NewDeckTest {
     }
 
     @Test
-    fun theInstanceSlugIsTheSameRuleAsTheStaticOne() {
-        // Screens read `deck.slug`, not `NewDeck.slugify(deck.name)` —
-        // if the instance property ever drifted from the companion
-        // function, the preview address and the one the server gives
-        // the deck would quietly disagree.
+    fun aDeckHasNoAddressUntilTheServerMakesOne() {
+        // A preview address worked out from the name was a guess the
+        // server could disagree with. There is no guess: until the
+        // deck exists, it is nowhere.
         val s = NewDeck(name = "Kardur, Doomscourge")
-        assertEquals(NewDeck.slugify("Kardur, Doomscourge"), s.slug)
-        assertEquals("kardur-doomscourge", s.slug)
+        assertEquals("", s.key)
+        assertEquals("", ready().key)
     }
 }
 

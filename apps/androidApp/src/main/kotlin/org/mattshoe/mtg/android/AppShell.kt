@@ -133,7 +133,7 @@ fun AppShell(
     onSaveDeck: () -> Unit = {},
     onAskDisassemble: (String) -> Unit = {},
     onDisassemble: () -> Unit = {},
-    /** Rename the open deck. The slug moves with the name. */
+    /** Rename the open deck. Its key, and so its address, stays. */
     onAskRename: (String) -> Unit = {},
     onSaveRename: () -> Unit = {},
     /** Maintenance on one card, without leaving the deck. */
@@ -203,7 +203,7 @@ fun AppShell(
     // container, which is what actually makes an inherited offset
     // impossible rather than merely unlikely.
     val deckScrollStates = remember { mutableMapOf<String, ScrollState>() }
-    val deckScrollState = deckScrollStates.getOrPut(state.decks.openSlug.orEmpty()) { ScrollState(0) }
+    val deckScrollState = deckScrollStates.getOrPut(state.decks.openKey.orEmpty()) { ScrollState(0) }
 
     // Nothing focuses this by hand, so the shortcuts work from the
     // moment the app opens rather than after the first tap.
@@ -337,7 +337,7 @@ fun AppShell(
                                 state = state.decks,
                                 scrollState = deckScrollState,
                                 admin = state.canEdit,
-                                onOpen = { onOpenDeck(it.slug) },
+                                onOpen = { onOpenDeck(it.key) },
                             )
                         } else if (openDeck == null) {
                             // The address names a deck whose cards have
@@ -345,7 +345,7 @@ fun AppShell(
                             // with the deck's own way back — not the
                             // shelf, which would take the gesture.
                             DeckLoadingScreen(
-                                slug = state.route.rest,
+                                key = state.route.rest,
                                 error = state.decks.error,
                                 onClose = { onState(state.navigate(Route(View.DECKS))) },
                             )
@@ -356,9 +356,9 @@ fun AppShell(
                                 scrollState = deckScrollState,
                                 admin = state.canEdit,
                                 onClose = { onState(state.navigate(Route(View.DECKS))) },
-                                onEdit = { onEditDeck(it.slug) },
-                                onDisassemble = { onAskDisassemble(it.slug) },
-                                onRename = { onAskRename(it.slug) },
+                                onEdit = { onEditDeck(it.key) },
+                                onDisassemble = { onAskDisassemble(it.key) },
+                                onRename = { onAskRename(it.key) },
                                 // The carousel, not the card's page.
                                 // Matt: "this should be what happens
                                 // when you tap a card in the deck
@@ -379,7 +379,7 @@ fun AppShell(
                     View.ADMIN -> AdminScreen(
                         state = state.people,
                         releases = state.releases,
-                        me = state.admin.account?.slug,
+                        me = state.admin.account?.key,
                         person = state.person,
                         onSearch = { onState(state.copy(people = state.people.searching(it))) },
                         onOpen = { onState(state.navigate(Route(View.ADMIN, it.key))) },
@@ -890,7 +890,7 @@ private val MENU_INSET = 8.dp
 private val MENU_WIDTH = 220.dp
 
 /** Where a deck tap goes, as a route rather than a special case. */
-fun AppState.openDeck(slug: String) = navigate(Route(View.DECKS, slug))
+fun AppState.openDeck(key: String) = navigate(Route(View.DECKS, key))
 
 /**
  * One keystroke, through the shared shortcut table.

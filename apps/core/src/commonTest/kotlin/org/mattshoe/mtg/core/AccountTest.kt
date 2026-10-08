@@ -24,7 +24,7 @@ import kotlin.test.assertTrue
  */
 class AccountTest {
 
-    private val me = Account(slug = "matt", name = "Matt", avatar = null, role = "user")
+    private val me = Account(key = "e7de0cb1", name = "Matt", avatar = null, role = "user")
 
     @Test
     fun nobodyIsSignedInToBeginWith() {
@@ -39,7 +39,7 @@ class AccountTest {
         val s = Admin().signIn(me)
         assertTrue(s.signedIn)
         assertTrue(s.unlocked, "a signed-in account cannot edit its own collection")
-        assertEquals("matt", s.account?.slug)
+        assertEquals("e7de0cb1", s.account?.key)
     }
 
     // `theOperatorsPasswordStillUnlocksWithoutAnAccount` was here.
@@ -84,15 +84,15 @@ class AccountTest {
     @Test
     fun theProfileSaysWhoYouAreRatherThanThatYouAreAdmin() {
         assertEquals("Matt", Admin().signIn(me).account?.name)
-        assertEquals("matt", Admin().signIn(me).account?.slug)
+        assertEquals("e7de0cb1", Admin().signIn(me).account?.key)
     }
 
     @Test
     fun anAccountWithNoNameIsStillCalledSomething() {
         // A Google account can come back with no name on it, and a
         // profile that says nothing at all reads as a failure.
-        val nameless = Account(slug = "player-7", name = null, avatar = null, role = "user")
-        assertEquals("player-7", Admin().signIn(nameless).shownName)
+        val nameless = Account(key = "p7x2m9qa", name = null, avatar = null, role = "user")
+        assertEquals("p7x2m9qa", Admin().signIn(nameless).shownName)
     }
 
     @Test
@@ -105,9 +105,9 @@ class AccountTest {
     }
 
     @Test
-    fun anAccountOwnsTheCollectionWhoseSlugItCarries() {
-        assertTrue(me.owns("matt"))
-        assertFalse(me.owns("kayla"))
+    fun anAccountOwnsTheCollectionWhoseKeyItCarries() {
+        assertTrue(me.owns("e7de0cb1"))
+        assertFalse(me.owns("bprh3d2s"))
         assertFalse(me.owns(""))
     }
 
@@ -119,7 +119,7 @@ class AccountTest {
         // hands it out, which is `RolesTest`'s half.
         val ops = me.copy(role = Role.ADMIN)
         assertTrue(ops.isOperator)
-        assertTrue(ops.owns(me.slug))
-        assertTrue(ops.owns("kayla"))
+        assertTrue(ops.owns(me.key))
+        assertTrue(ops.owns("bprh3d2s"))
     }
 }

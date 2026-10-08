@@ -330,18 +330,20 @@ class NewDeckParityTest {
     // ---------------------------------------------------------- 3 · name
 
     @Test
-    fun theNameStepSaysWhereTheDeckWillLive() {
+    fun theNameStepSaysAnyNameWillDo() {
         val s = wizard(NewDeck().pick(Format.COMMANDER).goTo(DeckStep.NAME))
 
         shown("the box is labelled the way the web's is", "Deck name")
-        absent("no address before there is a name", "It will live at #/decks/test-deck")
+        // There is no address to predict: the server picks a random
+        // key, so a name another account already uses is fine.
+        absent("no note before there is a name", "Any name. Another collection may have a deck called the same.")
         fact("a nameless deck goes no further") {
             rule.onNodeWithText("Continue →").assertIsNotEnabled()
         }
 
         rule.onNode(hasSetTextAction()).performScrollTo().performTextInput("Test Deck")
         rule.waitForIdle()
-        shown("the slug is shown as it is typed", "It will live at #/decks/test-deck")
+        shown("the note says a shared name is fine", "Any name. Another collection may have a deck called the same.")
         fact("a named deck may continue") {
             rule.onNodeWithText("Continue →").assertIsEnabled()
         }
@@ -599,11 +601,11 @@ class NewDeckParityTest {
     @Test
     fun theDoneStepSaysWhereTheDeckWentAndNothingElse() {
         var closed = false
-        wizard(carded().validated(checkedOk()).finished(), onClose = { closed = true })
+        wizard(carded().validated(checkedOk()).finished("q8ytka9m"), onClose = { closed = true })
 
         shown("the panel says what it is asking", "Created")
         shown("the web's own word for it", "Created")
-        shown("and where it lives", "Test Deck is at #/decks/test-deck")
+        shown("and where it lives, at the key the server gave it", "Test Deck is at #/decks/q8ytka9m")
         fact("there is nothing left to create") {
             assertTrue(!somewhere("Create Test Deck"), "it says: ${words()}")
         }

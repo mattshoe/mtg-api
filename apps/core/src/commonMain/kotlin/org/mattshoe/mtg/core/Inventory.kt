@@ -248,7 +248,7 @@ object Inventory {
         Feature(Area.LIBRARY, "Filter panel: pool, deck, finish, quantity", "filters.js", logic = true, done = true,
             tests = listOf(
                 "bothMeansNoOwnerClause", "poolFiltersOnFreeCopies", "deckAnyAndNoneAreTheirOwnClauses",
-                "theThreePoolsAreTheThreeAnswers", "deckByNameIsBoundBySlug",
+                "theThreePoolsAreTheThreeAnswers", "deckByNameIsBoundByKey",
                 "finishIsAnEqualsAndAnEmptyFinishMeansAny", "theCollectionGroupWritesItsFields",
                 "andNothingInThePanelAsksWhoseCollectionItIs",
                 "theCollectionGroupHoldsWhichDeckAndNotWhoseItIs",
@@ -344,7 +344,7 @@ object Inventory {
             )),
         Feature(Area.DECKS, "Deck detail with its card list", "decks.js", logic = true, done = true,
             tests = listOf(
-                "gapsAreTheCardsTheOwnerIsShortOf", "oneDecksCardsAreBoundBySlug", "closingADeckForgetsItsCards",
+                "gapsAreTheCardsTheOwnerIsShortOf", "oneDecksCardsAreBoundByKey", "closingADeckForgetsItsCards",
                 "aDeckDetailCountsCardsAndFlagsWhatIsMissing",
                 "openingADeckAsksThroughTheCallback", "eachRouteSaysWhatItNeeds",
                 "theShelfIsOneShelfWithACountAndNobodysNameOverIt",
@@ -490,14 +490,14 @@ object Inventory {
                 "andBackStillGoesToTheDeck", "aDeckCanBeReadOneCardAtATimeWithoutGoingBack",
                 "aCardOpenedFromTheLibraryHasNoDeckToStepThrough",
             )),
-        Feature(Area.DECKS, "Rename a deck, and the slug moves with it", "decks.js", logic = true, done = true,
+        Feature(Area.DECKS, "Rename a deck, and its address stays where it is", "decks.js", logic = true, done = true,
             tests = listOf(
                 "itOpensOnTheNameItAlreadyHas", "thereIsNothingToSaveUntilSomethingChanges",
-                "aNewNameIsSaveable", "theNewAddressIsShownBeforeAnythingIsWritten",
-                "whitespaceAloneIsNotARename", "aNameWithNothingToMakeASlugFromIsRefused",
+                "aNewNameIsSaveable", "theAddressStaysWhereItIsWhateverTheNameBecomes",
+                "whitespaceAloneIsNotARename",
                 "nothingIsOfferedTwiceWhileItIsBeingWritten", "norAfterItIsDone",
                 "aFailureLetsYouTryAgainWithoutLosingWhatYouTyped", "typingAgainClearsTheLastComplaint",
-                "theSlugFollowsTheSameRuleTheWizardUses", "closingItForgetsIt",
+                "closingItForgetsIt",
             )),
         Feature(Area.DECKS, "A decklist whose first card is the commander", "newdeck.js", logic = true, done = true,
             tests = listOf(

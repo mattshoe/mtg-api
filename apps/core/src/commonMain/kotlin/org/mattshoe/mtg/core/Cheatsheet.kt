@@ -79,8 +79,8 @@ object Cheatsheet {
         KeyGroup(
             "Collection",
             listOf(
-                Key("owner:", "matt or kayla", "owner:kayla"),
-                Key("deck:", "in this deck, by slug", "deck:fairy-alela-faerie-tribal"),
+                Key("owner:", "whose, by name or collection key", "owner:kayla"),
+                Key("deck:", "in this deck, by its key or its name", "deck:\"milly moth\""),
                 Key("is:free", "has an unassigned copy", "is:free"),
                 Key("is:indeck", "slotted into some deck", "-is:indeck"),
             ),

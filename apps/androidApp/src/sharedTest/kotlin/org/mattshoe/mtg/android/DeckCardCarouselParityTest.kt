@@ -385,6 +385,6 @@ class DeckCardCarouselParityTest {
         peeking()
         val back = held.value.back()
         assertTrue(back != null && Overlay.CARD_PEEK !in back.overlays)
-        assertEquals("alela", back!!.decks.openSlug)
+        assertEquals("alela", back!!.decks.openKey)
     }
 }

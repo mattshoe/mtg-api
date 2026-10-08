@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:test'
 import { describe, it, expect } from 'vitest'
-import { post, postAs, postAnon, call, sql, stubScryfall } from './helpers.js'
+import { postOperator, postAs, postAnon, call, sql, stubScryfall, MATT } from './helpers.js'
 import { signIn, newSession } from '../src/accounts.js'
 
 /**
@@ -30,11 +30,10 @@ describe('roles', () => {
   const getAs = (path, token) => call(path, { method: 'GET', token })
   const getAnon = (path) => call(path, { method: 'GET' })
 
-  async function account(name, { slug = null, role = null } = {}) {
+  async function account(name, { role = null } = {}) {
     const user = await signIn(env.DB, {
       provider: 'google', subject: `sub-${name}`, name, email: `${name}@example.com`,
     })
-    if (slug) await env.DB.prepare('UPDATE users SET slug = ?2 WHERE id = ?1').bind(user.id, slug).run()
     if (role) await env.DB.prepare('UPDATE users SET role = ?2 WHERE id = ?1').bind(user.id, role).run()
     return { user, token: await newSession(env.DB, user.id) }
   }
@@ -50,36 +49,36 @@ describe('roles', () => {
   })
 
   it('a user edits only its own cards', async () => {
-    const { token } = await account('Someone', { slug: 'someone' })
-    expect((await postAs('/cards/add', { owner: 'someone', list, dry_run: true }, token, stubScryfall())).status)
+    const { user, token } = await account('Someone')
+    expect((await postAs('/cards/add', { collection: user.key, list, dry_run: true }, token, stubScryfall())).status)
       .toBe(200)
-    expect((await postAs('/cards/add', { owner: 'matt', list, dry_run: true }, token, stubScryfall())).status)
+    expect((await postAs('/cards/add', { collection: MATT, list, dry_run: true }, token, stubScryfall())).status)
       .toBe(403)
   })
 
   it('an admin edits anybody\'s', async () => {
-    const { token } = await account('Boss', { slug: 'boss', role: 'admin' })
-    const r = await postAs('/cards/add', { owner: 'matt', list, dry_run: true }, token, stubScryfall())
+    const { token } = await account('Boss', { role: 'admin' })
+    const r = await postAs('/cards/add', { collection: MATT, list, dry_run: true }, token, stubScryfall())
     expect(r.status).toBe(200)
   })
 
   // ------------------------------------------------------- who is there
 
   it('an admin can see every account', async () => {
-    await account('Someone', { slug: 'someone' })
-    const { token } = await account('Boss', { slug: 'boss', role: 'admin' })
+    const { user: someone } = await account('Someone')
+    const { user: me, token } = await account('Boss', { role: 'admin' })
     const r = await getAs('/admin/users', token)
     expect(r.status).toBe(200)
-    const slugs = r.body.users.map((u) => u.slug)
-    expect(slugs).toContain('someone')
-    expect(slugs).toContain('boss')
-    const boss = r.body.users.find((u) => u.slug === 'boss')
+    const keys = r.body.users.map((u) => u.key)
+    expect(keys).toContain(someone.key)
+    expect(keys).toContain(me.key)
+    const boss = r.body.users.find((u) => u.key === me.key)
     expect(boss.role).toBe('admin')
-    expect(boss.key).toBeTruthy()
+    expect(boss.name).toBe('Boss')
   })
 
   it('and the list carries no email, because a role list is not a mailing list', async () => {
-    const { token } = await account('Boss', { slug: 'boss', role: 'admin' })
+    const { token } = await account('Boss', { role: 'admin' })
     const r = await getAs('/admin/users', token)
     r.body.users.forEach((u) => {
       expect(Object.keys(u)).not.toContain('email')
@@ -88,7 +87,7 @@ describe('roles', () => {
   })
 
   it('a user cannot see the list', async () => {
-    const { token } = await account('Someone', { slug: 'someone' })
+    const { token } = await account('Someone')
     expect((await getAs('/admin/users', token)).status).toBe(403)
   })
 
@@ -99,47 +98,47 @@ describe('roles', () => {
   // ------------------------------------------------------ handing it out
 
   it('an admin can promote somebody', async () => {
-    const { user } = await account('Someone', { slug: 'someone' })
-    const { token } = await account('Boss', { slug: 'boss', role: 'admin' })
-    const r = await postAs('/admin/role', { slug: 'someone', role: 'admin' }, token)
+    const { user } = await account('Someone')
+    const { token } = await account('Boss', { role: 'admin' })
+    const r = await postAs('/admin/role', { key: user.key, role: 'admin' }, token)
     expect(r.status).toBe(200)
     expect((await sql('SELECT role FROM users WHERE id = ?1', user.id))[0].role).toBe('admin')
   })
 
   it('and demote them again', async () => {
-    const { user } = await account('Other', { slug: 'other', role: 'admin' })
-    const { token } = await account('Boss', { slug: 'boss', role: 'admin' })
-    const r = await postAs('/admin/role', { slug: 'other', role: 'user' }, token)
+    const { user } = await account('Other', { role: 'admin' })
+    const { token } = await account('Boss', { role: 'admin' })
+    const r = await postAs('/admin/role', { key: user.key, role: 'user' }, token)
     expect(r.status).toBe(200)
     expect((await sql('SELECT role FROM users WHERE id = ?1', user.id))[0].role).toBe('user')
   })
 
   it('a user cannot promote anybody, least of all itself', async () => {
-    const { user, token } = await account('Someone', { slug: 'someone' })
-    const r = await postAs('/admin/role', { slug: 'someone', role: 'admin' }, token)
+    const { user, token } = await account('Someone')
+    const r = await postAs('/admin/role', { key: user.key, role: 'admin' }, token)
     expect(r.status).toBe(403)
     expect((await sql('SELECT role FROM users WHERE id = ?1', user.id))[0].role).toBe('user')
   })
 
   it('nobody at all cannot', async () => {
-    await account('Someone', { slug: 'someone' })
-    const r = await postAnon('/admin/role', { slug: 'someone', role: 'admin' })
+    const { user } = await account('Someone')
+    const r = await postAnon('/admin/role', { key: user.key, role: 'admin' })
     expect(r.status).toBe(401)
   })
 
   it('there is no third role to be given', async () => {
-    const { user } = await account('Someone', { slug: 'someone' })
-    const { token } = await account('Boss', { slug: 'boss', role: 'admin' })
+    const { user } = await account('Someone')
+    const { token } = await account('Boss', { role: 'admin' })
     for (const role of ['owner', 'superuser', '', 'ADMIN', 'admin ', null]) {
-      const r = await postAs('/admin/role', { slug: 'someone', role }, token)
+      const r = await postAs('/admin/role', { key: user.key, role }, token)
       expect(r.status, `role ${JSON.stringify(role)} was accepted`).toBe(400)
     }
     expect((await sql('SELECT role FROM users WHERE id = ?1', user.id))[0].role).toBe('user')
   })
 
   it('a role cannot be given to somebody who is not there', async () => {
-    const { token } = await account('Boss', { slug: 'boss', role: 'admin' })
-    const r = await postAs('/admin/role', { slug: 'nobody-at-all', role: 'admin' }, token)
+    const { token } = await account('Boss', { role: 'admin' })
+    const r = await postAs('/admin/role', { key: 'zzzzzzzz', role: 'admin' }, token)
     expect(r.status).toBe(404)
   })
 
@@ -157,27 +156,27 @@ describe('roles', () => {
    * back — rather than taking the decision away.
    */
   it('the last admin can demote themselves, and is not stopped', async () => {
-    const { user, token } = await account('Boss', { slug: 'boss', role: 'admin' })
-    const r = await postAs('/admin/role', { slug: 'boss', role: 'user' }, token)
+    const { user, token } = await account('Boss', { role: 'admin' })
+    const r = await postAs('/admin/role', { key: user.key, role: 'user' }, token)
     expect(r.status).toBe(200)
     expect((await sql('SELECT role FROM users WHERE id = ?1', user.id))[0].role).toBe('user')
   })
 
   it('and once nobody is an admin, the password is the way back', async () => {
-    const { user, token } = await account('Boss', { slug: 'boss', role: 'admin' })
-    await postAs('/admin/role', { slug: 'boss', role: 'user' }, token)
+    const { user, token } = await account('Boss', { role: 'admin' })
+    await postAs('/admin/role', { key: user.key, role: 'user' }, token)
     // The session that was an admin is now an ordinary account.
-    expect((await postAs('/admin/role', { slug: 'boss', role: 'admin' }, token)).status).toBe(403)
+    expect((await postAs('/admin/role', { key: user.key, role: 'admin' }, token)).status).toBe(403)
     // And the operator's door still opens.
-    const r = await post('/admin/role', { slug: 'boss', role: 'admin' })
+    const r = await postOperator('/admin/role', { key: user.key, role: 'admin' })
     expect(r.status).toBe(200)
     expect((await sql('SELECT role FROM users WHERE id = ?1', user.id))[0].role).toBe('admin')
   })
 
   it('and one of two admins can, obviously', async () => {
-    const { user, token } = await account('Boss', { slug: 'boss', role: 'admin' })
-    await account('Other', { slug: 'other', role: 'admin' })
-    const r = await postAs('/admin/role', { slug: 'boss', role: 'user' }, token)
+    const { user, token } = await account('Boss', { role: 'admin' })
+    await account('Other', { role: 'admin' })
+    const r = await postAs('/admin/role', { key: user.key, role: 'user' }, token)
     expect(r.status).toBe(200)
     expect((await sql('SELECT role FROM users WHERE id = ?1', user.id))[0].role).toBe('user')
   })
@@ -185,14 +184,14 @@ describe('roles', () => {
   it('the operator\'s password can still do it with no account at all', async () => {
     // The scripts hold one, and a locked-out database is fixed from
     // there rather than from a browser.
-    const { user } = await account('Someone', { slug: 'someone' })
-    const r = await post('/admin/role', { slug: 'someone', role: 'admin' })
+    const { user } = await account('Someone')
+    const r = await postOperator('/admin/role', { key: user.key, role: 'admin' })
     expect(r.status).toBe(200)
     expect((await sql('SELECT role FROM users WHERE id = ?1', user.id))[0].role).toBe('admin')
   })
 
   it('/auth/me says which role you are, so the app can draw the right menu', async () => {
-    const { token } = await account('Boss', { slug: 'boss', role: 'admin' })
+    const { token } = await account('Boss', { role: 'admin' })
     const r = await getAs('/auth/me', token)
     expect(r.body.role).toBe('admin')
   })

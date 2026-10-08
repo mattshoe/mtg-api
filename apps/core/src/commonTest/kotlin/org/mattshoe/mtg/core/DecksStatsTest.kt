@@ -11,16 +11,16 @@ import kotlin.test.assertTrue
 class DecksTest {
 
     private fun rows(vararg j: String) = j.map { Json.parseToJsonElement(it) as JsonArray }
-    private val cols = listOf("slug", "name", "owner", "commander", "colors", "bracket", "art_id")
+    private val cols = listOf("key", "name", "owner", "commander", "colors", "bracket", "art_id")
 
     @Test
     fun aDeckDecodes() {
         val d = DeckQueries.decode(
             cols,
-            rows("""["alela","Alela","matt","Alela, Artful Provocateur (ELD) 324","UW",3,"abc"]"""),
+            rows("""["q8ytka9m","Alela","e7de0cb1","Alela, Artful Provocateur (ELD) 324","UW",3,"abc"]"""),
         ).single()
-        assertEquals("alela", d.slug)
-        assertEquals("matt", d.owner)
+        assertEquals("q8ytka9m", d.key)
+        assertEquals("e7de0cb1", d.owner)
         assertEquals(3, d.bracket)
         assertEquals(listOf("U", "W"), d.colorPips)
     }
@@ -31,14 +31,14 @@ class DecksTest {
     fun theCommanderNameDropsItsSetAnnotation() {
         val d = DeckQueries.decode(
             cols,
-            rows("""["a","A","matt","Alela, Artful Provocateur (ELD) 324",null,null,null]"""),
+            rows("""["a","A","e7de0cb1","Alela, Artful Provocateur (ELD) 324",null,null,null]"""),
         ).single()
         assertEquals("Alela, Artful Provocateur", d.commanderName)
     }
 
     @Test
     fun aDeckWithNoCommanderSaysSoRatherThanGuessing() {
-        val d = DeckQueries.decode(cols, rows("""["a","A","matt",null,null,null,null]""")).single()
+        val d = DeckQueries.decode(cols, rows("""["a","A","e7de0cb1",null,null,null,null]""")).single()
         assertNull(d.commanderName)
         assertTrue(d.colorPips.isEmpty())
     }
@@ -55,10 +55,10 @@ class DecksTest {
     }
 
     @Test
-    fun oneDecksCardsAreBoundBySlug() {
-        val q = DeckQueries.cards("alela")
-        assertEquals(listOf<Any?>("alela"), q.params)
-        assertTrue(q.sql.contains("d.slug = ?"))
+    fun oneDecksCardsAreBoundByKey() {
+        val q = DeckQueries.cards("q8ytka9m")
+        assertEquals(listOf<Any?>("q8ytka9m"), q.params)
+        assertTrue(q.sql.contains("WHERE d.key = ?"))
     }
 
     @Test
@@ -273,7 +273,7 @@ class DecksTest {
     @Test
     fun closingADeckForgetsItsCards() {
         val s = DecksState().opened("alela", listOf(DeckCard("Sol Ring", 1, null, 1))).close()
-        assertNull(s.openSlug)
+        assertNull(s.openKey)
         assertTrue(s.cards.isEmpty())
     }
 }
@@ -294,10 +294,11 @@ class StatsTest {
      */
     @Test
     fun aScopedQueryBindsTheOwnerOncePerSubquery() {
-        val q = StatsQueries.totals(StatsScope("matt"))
+        val q = StatsQueries.totals(StatsScope("e7de0cb1"))
         assertEquals(8, q.params.size)
-        assertTrue(q.params.all { it == "matt" })
-        assertEquals(8, Regex("owner = \\?").findAll(q.sql).count())
+        assertTrue(q.params.all { it == "e7de0cb1" })
+        assertEquals(8, Regex("owner_id = \\(SELECT id FROM users WHERE key = \\?\\)").findAll(q.sql).count())
+        assertEquals(8, q.sql.count { it == '?' })
     }
 
     @Test
@@ -308,7 +309,7 @@ class StatsTest {
     @Test
     fun theSideBySideIsAlwaysBoth() {
         assertTrue(StatsQueries.perOwner().params.isEmpty())
-        assertTrue(StatsQueries.perOwner().sql.contains("GROUP BY c.owner"))
+        assertTrue(StatsQueries.perOwner().sql.contains("GROUP BY c.owner_id"))
     }
 
     @Test
@@ -338,8 +339,8 @@ class StatsTest {
 
     @Test
     fun choosingAnOwnerReplacesTheScopeAndDropsAnyStaleError() {
-        val s = StatsState(error = "network down").scopedTo("kayla")
-        assertEquals("kayla", s.scope.owner)
+        val s = StatsState(error = "network down").scopedTo("bprh3d2s")
+        assertEquals("bprh3d2s", s.scope.owner)
         assertNull(s.error)
         assertEquals(StatsScope(), StatsState().scopedTo(null).scope, "null is everything, not a third collection")
     }
@@ -424,12 +425,12 @@ class GuildNameTest {
 
     @Test
     fun aDeckKnowsWhatItIsCalled() {
-        val dimir = Deck("x", "X", "matt", null, "{U}{B}", null, null)
+        val dimir = Deck("x", "X", "e7de0cb1", null, "{U}{B}", null, null)
         assertEquals("Dimir", dimir.guild)
         // Whatever shape the free text is in, the identity is what is
         // read — these rows say "Simic (Green/Blue)" and worse.
-        assertEquals("Simic", Deck("x", "X", "matt", null, "Simic (Green/Blue)", null, null).guild)
-        assertEquals("Five-colour", Deck("x", "X", "matt", null, "Five-color (WUBRG)", null, null).guild)
+        assertEquals("Simic", Deck("x", "X", "e7de0cb1", null, "Simic (Green/Blue)", null, null).guild)
+        assertEquals("Five-colour", Deck("x", "X", "e7de0cb1", null, "Five-color (WUBRG)", null, null).guild)
     }
 
     @Test
@@ -437,7 +438,7 @@ class GuildNameTest {
         // A deck whose colours were never worked out is not a
         // colourless deck, and a tile that says "Colourless" about
         // one is stating something nobody established.
-        assertNull(Deck("x", "X", "matt", null, null, null, null).guild)
-        assertNull(Deck("x", "X", "matt", null, "", null, null).guild)
+        assertNull(Deck("x", "X", "e7de0cb1", null, null, null, null).guild)
+        assertNull(Deck("x", "X", "e7de0cb1", null, "", null, null).guild)
     }
 }

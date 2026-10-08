@@ -34,7 +34,7 @@ fun DecksPage(
     admin: Boolean = false,
     onEdit: (Deck) -> Unit = {},
     onDisassemble: (Deck) -> Unit = {},
-    /** Rename the open deck. The slug moves with the name. */
+    /** Rename the open deck. Its key, and so its address, stays. */
     onRename: (Deck) -> Unit = {},
     onOpenCard: (DeckCard, String) -> Unit = { _, _ -> },
     /** Maintenance, one card at a time, without leaving the page. */

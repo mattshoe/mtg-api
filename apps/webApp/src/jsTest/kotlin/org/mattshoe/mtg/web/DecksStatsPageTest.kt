@@ -48,8 +48,8 @@ class DecksStatsPageTest {
         return (0 until f.length).mapNotNull { f[it] as? HTMLButtonElement }
     }
 
-    private fun deck(slug: String, owner: String, name: String = slug) =
-        Deck(slug, name, owner, "Alela, Artful Provocateur (ELD) 324", "UW", 3, null)
+    private fun deck(key: String, owner: String, name: String = key) =
+        Deck(key, name, owner, "Alela, Artful Provocateur (ELD) 324", "UW", 3, null)
 
     @Test
     fun theShelfIsOneShelfWithACountAndNobodysNameOverIt() = runTest {
@@ -94,7 +94,7 @@ class DecksStatsPageTest {
         // grid had it — there is no separate Open button to aim at.
         (root.querySelector(".deck-card") as HTMLElement).click()
         settle()
-        assertEquals("a", opened?.slug)
+        assertEquals("a", opened?.key)
     }
 
     @Test
@@ -117,7 +117,7 @@ class DecksStatsPageTest {
             ),
         )
         settle()
-        assertEquals("a", opened?.slug, "Enter on a focused tile did not open the deck")
+        assertEquals("a", opened?.key, "Enter on a focused tile did not open the deck")
     }
 
     @Test

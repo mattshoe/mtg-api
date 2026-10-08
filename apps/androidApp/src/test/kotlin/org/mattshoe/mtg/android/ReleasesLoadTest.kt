@@ -70,7 +70,7 @@ class ReleasesLoadTest {
                         "body":"Release notes in Admin Settings.\n\nBuilt from abc."}]"""
                 request.url.encodedPath == "/admin/users" -> """{"users":[]}"""
                 request.url.encodedPath == "/auth/me" ->
-                    """{"slug":"matt","name":"Matt","role":"admin","key":"e7de0cb1"}"""
+                    """{"key":"e7de0cb1","name":"Matt","role":"admin"}"""
                 else -> """{"cols":[],"rows":[],"n":0}"""
             }
             respond(body, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))

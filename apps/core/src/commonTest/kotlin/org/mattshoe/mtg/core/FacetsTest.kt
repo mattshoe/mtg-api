@@ -28,20 +28,20 @@ class FacetsTest {
 
     @Test
     fun aDeckRefsLabelIsTheNameAndTheOwnerInParens() {
-        val ref = DeckRef2(slug = "alela", name = "Alela, Artful Provocateur", owner = "matt")
+        val ref = DeckRef2(key = "q8ytka9m", name = "Alela, Artful Provocateur", owner = "Matt")
         // What a picker actually shows: two decks named the same thing
         // by two different owners have to read differently, or picking
         // one is a coin flip.
-        assertEquals("Alela, Artful Provocateur (matt)", ref.label)
+        assertEquals("Alela, Artful Provocateur (Matt)", ref.label)
     }
 
     @Test
-    fun theLabelDoesNotTouchTheSlug() {
-        // The slug is what the URL and the SQL key on; nothing about
+    fun theLabelDoesNotTouchTheKey() {
+        // The key is what the URL and the SQL match on; nothing about
         // the label should leak into it or vice versa.
-        val ref = DeckRef2(slug = "some-other-slug", name = "Korvold", owner = "kayla")
-        assertEquals("Korvold (kayla)", ref.label)
-        assertFalse(ref.label.contains("some-other-slug"))
+        val ref = DeckRef2(key = "zk4m8w2p", name = "Korvold", owner = "Kayla")
+        assertEquals("Korvold (Kayla)", ref.label)
+        assertFalse(ref.label.contains("zk4m8w2p"))
     }
 
     // ----------------------------------------------------- Facets.loaded
@@ -239,8 +239,8 @@ class FacetsTest {
     // ----------------------------------------------------- decodeDecks
 
     @Test
-    fun decodeDecksReadsSlugNameAndOwnerByColumnName() {
-        val cols = listOf("slug", "name", "owner")
+    fun decodeDecksReadsKeyNameAndOwnerByColumnName() {
+        val cols = listOf("key", "name", "owner")
         val rows = listOf(
             JsonArray(listOf(JsonPrimitive("alela"), JsonPrimitive("Alela, Artful Provocateur"), JsonPrimitive("matt"))),
             JsonArray(listOf(JsonPrimitive("korvold"), JsonPrimitive("Korvold"), JsonPrimitive("kayla"))),
@@ -257,11 +257,11 @@ class FacetsTest {
 
     @Test
     fun decodeDecksReadsByColumnNameNotByPosition() {
-        // The SQL says `SELECT slug, name, owner`, but nothing here
+        // The SQL says `SELECT key, name, ... AS owner`, but nothing here
         // should rely on that order never changing — the lookup is by
         // name, and this proves a reordered result set still decodes
         // the same deck.
-        val cols = listOf("owner", "slug", "name")
+        val cols = listOf("owner", "key", "name")
         val row = JsonArray(listOf(JsonPrimitive("matt"), JsonPrimitive("alela"), JsonPrimitive("Alela")))
         assertEquals(listOf(DeckRef2("alela", "Alela", "matt")), FacetQueries.decodeDecks(cols, listOf(row)))
     }
@@ -271,14 +271,14 @@ class FacetsTest {
         // A deck row missing its name entirely must still produce a
         // row the picker can show — blank is recoverable, a crash on
         // the whole facets read is not.
-        val cols = listOf("slug", "owner")
+        val cols = listOf("key", "owner")
         val row = JsonArray(listOf(JsonPrimitive("alela"), JsonPrimitive("matt")))
         assertEquals(listOf(DeckRef2("alela", "", "matt")), FacetQueries.decodeDecks(cols, listOf(row)))
     }
 
     @Test
     fun decodeDecksOfNoRowsIsAnEmptyList() {
-        assertEquals(emptyList(), FacetQueries.decodeDecks(listOf("slug", "name", "owner"), emptyList()))
+        assertEquals(emptyList(), FacetQueries.decodeDecks(listOf("key", "name", "owner"), emptyList()))
     }
 
     // ------------------------------------------------------- assemble

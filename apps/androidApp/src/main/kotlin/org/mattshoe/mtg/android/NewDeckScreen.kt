@@ -172,7 +172,7 @@ private fun FormatStep(s: NewDeck, onState: (NewDeck) -> Unit, onClose: () -> Un
 private fun NameStep(s: NewDeck, onState: (NewDeck) -> Unit) {
     Panel(
         head = "What is it called?",
-        note = if (s.name.isNotBlank()) "It will live at #/decks/${s.slug}" else null,
+        note = if (s.name.isNotBlank()) "Any name. Another collection may have a deck called the same." else null,
     ) {
         OutlinedTextField(
             value = s.name,
@@ -357,7 +357,7 @@ private fun ReviewStep(s: NewDeck, onState: (NewDeck) -> Unit, onCreate: () -> U
 private fun DoneStep(s: NewDeck, onClose: () -> Unit) {
     Panel(head = "Created") {
         Tag("Created", Ok)
-        Line("${s.name} is at #/decks/${s.slug}", Ink2, Design.SMALL)
+        Line("${s.name} is at #/decks/${s.key}", Ink2, Design.SMALL)
         Foot { Primary("Done", onClick = onClose) }
     }
 }

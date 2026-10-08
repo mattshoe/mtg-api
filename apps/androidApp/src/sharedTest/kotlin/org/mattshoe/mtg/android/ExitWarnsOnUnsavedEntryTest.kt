@@ -145,7 +145,7 @@ class ExitWarnsOnUnsavedEntryTest {
         // keeps the state above the wizard alive, the same as the web,
         // so it is not the moment to warn about anything.
         var exited = 0
-        val start = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"), route = Route(View.ENTRY))
+        val start = AppState(admin = Admin().signIn(Account(key = "matt", role = "admin"), "t"), route = Route(View.ENTRY))
             .copy(entry = MassEntry().copy(list = "1 Sol Ring"))
         val read = shell(start) { exited++ }
 

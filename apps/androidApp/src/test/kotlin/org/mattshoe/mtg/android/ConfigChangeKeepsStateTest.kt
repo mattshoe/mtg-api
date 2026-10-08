@@ -164,7 +164,7 @@ class ConfigChangeKeepsStateTest {
     fun theUnlockSurvivesARotation() {
         val built = launch()
         built.get().setStateForTesting(
-            built.get().stateForTesting().copy(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")),
+            built.get().stateForTesting().copy(admin = Admin().signIn(Account(key = "matt", role = "admin"), "t")),
         )
         settle()
 

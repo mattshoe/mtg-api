@@ -93,7 +93,7 @@ class MutatingButtonsTest {
 
     @Test
     fun aDeckSaveOffersNothingWhileItIsSaving() = runTest {
-        val busy = DeckEditState(slug = "alela", deckName = "Alela", list = "1 Sol Ring").working()
+        val busy = DeckEditState(key = "alela", deckName = "Alela", list = "1 Sol Ring").working()
         val root = mount { DeckEditDialog(busy, {}, {}, {}, {}) }
         settle()
         assertTrue(

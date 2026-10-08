@@ -73,7 +73,7 @@ class NewDeckInEntryParityTest {
         rule.waitForIdle()
     }
 
-    private fun unlocked() = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"))
+    private fun unlocked() = AppState(admin = Admin().signIn(Account(key = "matt", role = "admin"), "t"))
 
     private fun onEntry() = unlocked().navigate(View.ENTRY)
 

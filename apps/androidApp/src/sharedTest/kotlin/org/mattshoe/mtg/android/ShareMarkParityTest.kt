@@ -63,7 +63,7 @@ class ShareMarkParityTest {
 
     private fun opened() = AppState(
         route = Route(View.DECKS, "alela"),
-        admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"),
+        admin = Admin().signIn(Account(key = "matt", role = "admin"), "t"),
         decks = DecksState().loaded(listOf(deck())).opened(
             "alela",
             listOf(card("Alela, Artful Provocateur", "commander"), card("Sol Ring")),

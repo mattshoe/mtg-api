@@ -57,8 +57,12 @@ internal class FakeWorker private constructor(
      */
     var session: String = "s-matt"
 
-    /** Who that session is, as the server would answer. */
-    var whoAmI: String = "matt"
+    /**
+     * Who that session is, as the server would answer: Matt's key in
+     * `test/fixtures/seed.sql`, so every scoped query the phone makes
+     * resolves to the seed's account 1 the way the live one does.
+     */
+    var whoAmI: String = "m4tt0001"
 
     /** The token it hands back. */
     var token: String = "e2e-token"
@@ -101,10 +105,9 @@ internal class FakeWorker private constructor(
         if (held != session) return fail(401, "no session")
         return ok(
             JSONObject()
-                .put("slug", whoAmI)
-                .put("name", whoAmI.replaceFirstChar(Char::uppercase))
-                .put("role", "user")
-                .put("key", "e7de0cb1"),
+                .put("key", whoAmI)
+                .put("name", "Matt Shoemaker")
+                .put("role", "user"),
         )
     }
 

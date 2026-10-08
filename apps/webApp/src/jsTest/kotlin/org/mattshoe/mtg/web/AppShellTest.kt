@@ -98,7 +98,7 @@ class AppShellTest {
 
     @Test
     fun unlockedShowsThemAll() = runTest {
-        val root = mount(AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")))
+        val root = mount(AppState(admin = Admin().signIn(Account(key = "matt", role = "admin"), "t")))
         settle()
         val tabs = root.tabs()
         assertTrue(tabs.contains("Entry"))
@@ -130,7 +130,7 @@ class AppShellTest {
     @Test
     fun everyUnlockedTabRendersItsOwnScreen() = runTest {
         View.entries.forEach { view ->
-            val root = mount(AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")).navigate(view))
+            val root = mount(AppState(admin = Admin().signIn(Account(key = "matt", role = "admin"), "t")).navigate(view))
             settle()
             assertTrue(
                 root.querySelectorAll("button").length > 0,

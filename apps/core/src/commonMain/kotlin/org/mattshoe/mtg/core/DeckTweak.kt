@@ -23,7 +23,8 @@ enum class Tweak(val title: String, val verb: String) {
  * what you want, see what it would do, then let it happen.
  */
 data class DeckTweak(
-    val slug: String = "",
+    /** The deck's key. */
+    val key: String = "",
     val deckName: String = "",
     /** Kept so the edit does not quietly drop the deck's commander. */
     val commander: String = "",
@@ -245,11 +246,11 @@ data class DeckTweak(
         const val MAX_QTY = 99
 
         fun add(deck: Deck, commander: String) =
-            DeckTweak(deck.slug, deck.name, commander, Tweak.ADD, qty = 1)
+            DeckTweak(deck.key, deck.name, commander, Tweak.ADD, qty = 1)
 
         /** Opened on a card, with the choice of what to do still to make. */
         fun on(deck: Deck, commander: String, card: DeckCard, kind: Tweak? = null) = DeckTweak(
-            slug = deck.slug,
+            key = deck.key,
             deckName = deck.name,
             commander = commander,
             kind = kind,

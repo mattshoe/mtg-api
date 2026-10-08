@@ -1,6 +1,7 @@
 import { env } from 'cloudflare:test';
 import { describe, it, expect } from 'vitest';
 import { post, sql, stubScryfall } from './helpers.js';
+import { MATT } from './helpers.js';
 import { signIn } from '../src/accounts.js';
 
 /**
@@ -33,7 +34,6 @@ import { signIn } from '../src/accounts.js';
 describe('what intake writes, and what shape it is', () => {
   // ------------------------------------------------------------ shapes
 
-  const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
   const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
   const DATE = /^\d{4}-\d{2}-\d{2}$/;
   const STAMP = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}/;
@@ -142,7 +142,7 @@ describe('what intake writes, and what shape it is', () => {
     const NEW = {
       name: 'Audit Brew',
       format: 'commander',
-      owner: 'matt',
+      collection: MATT,
       commander: "Akroma's Will",
       list: '1 Lightning Bolt',
       bracket: '3',
@@ -151,9 +151,10 @@ describe('what intake writes, and what shape it is', () => {
 
     const SHAPES = {
       id: wholeNumber(1),
-      slug: matching(SLUG),
+      key: matching(KEY),
       name: text,
-      owner: matching(SLUG),
+      // Matt's, because Matt's session made it: the id, not a name.
+      owner_id: (value) => (value === 1 ? null : `${JSON.stringify(value)} is not account 1`),
       format: oneOf('commander', 'standard', 'modern', 'legacy', 'vintage', 'pauper', 'pioneer', 'brawl', 'historic', 'oathbreaker', 'other'),
       recorded_date: matching(DATE),
       colors: colourString,
@@ -172,12 +173,14 @@ describe('what intake writes, and what shape it is', () => {
       source_file: 'typed into the app, not imported from a file',
       source_md: 'likewise: there is no markdown to keep',
       status: 'free prose on the imported decks; the wizard does not ask and must not guess',
+      slug: 'retired: the address is `key` now, and a new deck leaves this empty',
+      owner: 'retired: the owner is `owner_id` now, and a new deck leaves this empty',
     };
 
     async function made(body = NEW) {
       const r = await post('/decks/create', { ...body, dry_run: false }, stubScryfall());
       expect(r.status, JSON.stringify(r.body)).toBe(201);
-      return (await sql('SELECT * FROM decks WHERE slug = ?1', r.body.slug))[0];
+      return (await sql('SELECT * FROM decks WHERE key = ?1', r.body.key))[0];
     }
 
     it('every column is the shape it should be', async () => {
@@ -199,7 +202,7 @@ describe('what intake writes, and what shape it is', () => {
 
     it('a deck with no commander takes them from the list', async () => {
       const deck = await made({
-        name: 'Audit Modern', format: 'modern', owner: 'matt', list: '1 Lightning Bolt',
+        name: 'Audit Modern', format: 'modern', collection: MATT, list: '1 Lightning Bolt',
       });
       expect(deck.colors).toBe('R');
     });
@@ -209,13 +212,13 @@ describe('what intake writes, and what shape it is', () => {
       expect(deck).toMatchObject({
         name: 'Audit Brew',
         format: 'commander',
-        owner: 'matt',
+        owner_id: 1,
         commander: "Akroma's Will",
         bracket: '3',
         theme: 'audit',
         is_proxy: 0,
       });
-      expect(deck.slug).toBe('audit-brew');
+      expect(deck.key).toMatch(KEY);
     });
   });
 
@@ -224,7 +227,7 @@ describe('what intake writes, and what shape it is', () => {
   describe('a card added in the app', () => {
     const SHAPES = {
       id: wholeNumber(1),
-      owner: matching(SLUG),
+      owner_id: (value) => (value === 1 ? null : `${JSON.stringify(value)} is not account 1`),
       qty: wholeNumber(1),
       finish: oneOf('nonfoil', 'foil', 'etched', 'glossy'),
       scryfall_id: matching(UUID),
@@ -298,12 +301,13 @@ describe('what intake writes, and what shape it is', () => {
       loyalty: 'not a planeswalker',
       defense: 'not a battle',
       foil_flag: "the finish column says it; this is the old import's word for the same thing",
+      owner: 'retired: the owner is `owner_id` now, and a new card leaves this empty',
     };
 
     async function added() {
       const r = await post(
         '/cards/add',
-        { owner: 'matt', list: '1 Lightning Bolt (2X2) 117', dry_run: false },
+        { collection: MATT, list: '1 Lightning Bolt (2X2) 117', dry_run: false },
         stubScryfall(),
       );
       expect(r.status, JSON.stringify(r.body)).toBe(200);
@@ -377,7 +381,9 @@ describe('what intake writes, and what shape it is', () => {
     const SHAPES = {
       id: wholeNumber(1),
       key: matching(KEY),
-      slug: matching(SLUG),
+      // Retired, but NOT NULL UNIQUE until a migration drops it, so a
+      // new account's slug is its key and nothing else.
+      slug: (value, row) => (value === row.key ? null : `"${value}" is not the key "${row.key}"`),
       display_name: text,
       email: matching(/^[^@\s]+@[^@\s]+\.[^@\s]+$/),
       avatar_url: matching(/^https:\/\/\S+$/),
@@ -409,9 +415,10 @@ describe('what intake writes, and what shape it is', () => {
       expect((await joined()).role).toBe('user');
     });
 
-    it('and a name that is all punctuation still makes a usable slug', async () => {
+    it('and a name that is all punctuation still gets a usable address', async () => {
       const u = await joined({ subject: 'audit-2', name: '!!!' });
-      expect(u.slug).toMatch(SLUG);
+      expect(u.key).toMatch(KEY);
+      expect(u.slug).toBe(u.key);
     });
   });
 });

@@ -36,7 +36,7 @@ class CoreSqlDump {
         case("library count", count)
         val loaded = Library(
             Filters(
-                owner = "matt", q = "a", text = "draw", cmcMin = "1", cmcMax = "6",
+                owner = "m4tt0001", q = "a", text = "draw", cmcMin = "1", cmcMax = "6",
                 types = listOf("Creature"), rarities = listOf("rare"),
                 colors = listOf("G"), colorMode = ColorMode.ATLEAST,
                 flags = mapOf(Flag.REPRINT to Tri.NO), hasRulings = Tri.YES,
@@ -53,7 +53,7 @@ class CoreSqlDump {
         Sort.entries.forEach { s ->
             case("library sorted by ${s.slug}", Load.library(Library(Filters(sort = s))).first)
         }
-        case("export", Load.export(Filters(owner = "matt")))
+        case("export", Load.export(Filters(owner = "m4tt0001")))
 
         // The search box, every shape it can take. These are the ones
         // only a database can vet: an fts5 expression is a little
@@ -78,9 +78,11 @@ class CoreSqlDump {
         ).forEach { (name, f) -> case("search: $name", Load.library(Library(f)).first) }
 
         // --- everything else, which no test has ever executed
+        // Owners are named by their public key, the seed's own two.
         case("decks", Load.decks())
-        case("one deck", Load.deck("a-deck"))
-        listOf("matt", "kayla").forEach { o -> case("stats for $o", Load.stats(StatsScope(o))) }
+        case("decks for one collection", Load.decks("m4tt0001"))
+        case("one deck", Load.deck("q8ytka9m"))
+        listOf("m4tt0001", "k4yy0003").forEach { o -> case("stats for $o", Load.stats(StatsScope(o))) }
         case("stats for everything", Load.stats(StatsScope()))
         case("stats per owner", StatsQueries.perOwner())
         Load.card("sol ring").forEachIndexed { i, s -> case("card detail $i", s) }

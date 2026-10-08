@@ -129,8 +129,8 @@ describe('routing', () => {
 
 describe('the seeded fixture', () => {
   it('has both owners, a DFC, a non-nonfoil finish, and decks', async () => {
-    expect(await count('cards', "owner = 'matt'")).toBeGreaterThan(0);
-    expect(await count('cards', "owner = 'kayla'")).toBeGreaterThan(0);
+    expect(await count('cards', "owner_id = 1")).toBeGreaterThan(0);
+    expect(await count('cards', "owner_id = 3")).toBeGreaterThan(0);
     expect(await count('cards', 'face2 IS NOT NULL')).toBeGreaterThan(0);
     expect(await count('cards', "name LIKE '%''%'")).toBeGreaterThan(0);
     expect(await count('decks')).toBeGreaterThan(1);

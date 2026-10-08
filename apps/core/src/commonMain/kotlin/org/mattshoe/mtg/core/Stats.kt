@@ -27,7 +27,7 @@ data class Totals(
 /**
  * Which collection the numbers are about.
  *
- * A slug, and null for every collection at once. It was one of two
+ * The owner's public key, and null for every collection at once. It was one of two
  * names and a "Both" that nobody owns, chosen from a switch on the
  * page — a real question when there were two collections and a
  * password that could write to either, and a meaningless one now
@@ -37,7 +37,7 @@ data class StatsScope(val owner: String? = null) {
     val label: String get() = owner ?: "Everything"
 
     /** `1=1` rather than an empty string, so it always slots into a WHERE. */
-    internal val where: String get() = if (owner == null) "1=1" else "owner = ?"
+    internal val where: String get() = if (owner == null) "1=1" else Owners.owns("owner_id")
     internal val params: List<Any?> get() = owner?.let { listOf(it) } ?: emptyList()
 }
 
@@ -72,13 +72,13 @@ object StatsQueries {
 
     /** The side-by-side, always both, whatever the page is scoped to. */
     fun perOwner() = Sql(
-        """SELECT c.owner,
+        """SELECT ${Owners.nameOf("c.owner_id")} AS owner,
                   COUNT(*)                        AS printings,
                   COUNT(DISTINCT c.name_norm)     AS uniques,
                   SUM(c.qty)                      AS physical
              FROM cards c
-            GROUP BY c.owner
-            ORDER BY c.owner""",
+            GROUP BY c.owner_id
+            ORDER BY c.owner_id""",
         emptyList(),
     )
 

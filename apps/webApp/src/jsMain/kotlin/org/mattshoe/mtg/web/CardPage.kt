@@ -222,7 +222,7 @@ private fun Body(card: CardDetail) {
         card.usedIn.forEach { use ->
             Div(attrs = { classes("flex-wrap", "small") }) {
                 Span(attrs = { classes("t-name") }) { Text(use.name) }
-                Span(attrs = { classes("tag", "mini") }) { Text(use.owner) }
+                Span(attrs = { classes("tag", "mini") }) { Text(use.ownerName.ifEmpty { use.owner }) }
                 Span(attrs = { classes("tag", "mini") }) { Text("${use.qty}×") }
                 use.role?.let { Span(attrs = { classes("tag", "mini") }) { Text(it) } }
                 // A proxy does not consume a real card, so it must not
@@ -250,7 +250,7 @@ private fun Owners(card: CardDetail) {
     H3 { Text("Who owns it") }
     holdings.forEach { h ->
         Div(attrs = { classes("owner-line") }) {
-            Span(attrs = { classes("t-name") }) { Text(h.owner) }
+            Span(attrs = { classes("t-name") }) { Text(h.ownerName) }
             Span(attrs = { classes("tag", "mini", "mono") }) { Text("${h.owned} owned") }
             Span(attrs = {
                 classes("tag", "mini", "mono")
@@ -321,7 +321,7 @@ private fun PrintingLine(p: Printing) {
         Span(attrs = { classes("mono", "cn") }) { Text(p.collectorNumber.orEmpty()) }
         Span(attrs = { classes("t-name") }) { Text(p.setName.orEmpty()) }
         if (p.owner.isNotBlank()) {
-            Span(attrs = { classes("tag", "mini") }) { Text(p.owner) }
+            Span(attrs = { classes("tag", "mini") }) { Text(p.ownerName.ifEmpty { p.owner }) }
         }
         if (p.finish != "nonfoil") {
             Span(attrs = { classes("tag", "mini") }) { Text(p.finish) }

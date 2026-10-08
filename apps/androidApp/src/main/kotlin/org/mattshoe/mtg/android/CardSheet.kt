@@ -203,7 +203,7 @@ private fun Body(card: CardDetail) {
                 // stylesheet, and takes the slack so the figures stay
                 // in a column down the side.
                 RowName(
-                    h.owner.replaceFirstChar { it.uppercase() },
+                    h.ownerName.replaceFirstChar { it.uppercase() },
                     Modifier.weight(1f),
                     weight = FontWeight.SemiBold,
                 )
@@ -261,7 +261,7 @@ private fun Body(card: CardDetail) {
                 }
                 RowName(p.setName.orEmpty(), Modifier.weight(1f), color = Ink2)
                 // Whose copy it is. A card is not one person's.
-                if (p.owner.isNotBlank()) Tag(p.owner)
+                if (p.owner.isNotBlank()) Tag(p.ownerName.ifEmpty { p.owner })
                 if (p.finish != "nonfoil") Tag(p.finish)
                 Figure("${p.qty}×")
                 Text(
@@ -318,7 +318,7 @@ private fun Body(card: CardDetail) {
             ) {
                 RowName(use.name, weight = FontWeight.Medium)
                 // Whose deck it is. The page is not one person's.
-                if (use.owner.isNotBlank()) Tag(use.owner)
+                if (use.owner.isNotBlank()) Tag(use.ownerName.ifEmpty { use.owner })
                 Tag("${use.qty}×")
                 use.role?.let { Tag(it) }
                 // A proxy does not consume a real card, so it must not

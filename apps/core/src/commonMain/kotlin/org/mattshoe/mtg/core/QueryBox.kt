@@ -105,7 +105,7 @@ private val IS_SHAPES = mapOf(
     "oversized" to "c.oversized = 1",
     "free" to "COALESCE(u.free, 0) > 0",
     "indeck" to "EXISTS (SELECT 1 FROM deck_cards dc JOIN decks d ON d.id = dc.deck_id " +
-        "WHERE dc.name_norm = c.name_norm AND d.owner = c.owner)",
+        "WHERE dc.name_norm = c.name_norm AND d.owner_id = c.owner_id)",
     "hasrulings" to "EXISTS (SELECT 1 FROM rulings r WHERE r.oracle_id = c.oracle_id)",
     "priced" to "pr.usd IS NOT NULL",
     "unpriced" to "pr.usd IS NULL",
@@ -257,7 +257,14 @@ fun parseQueryBox(input: String): Sql {
             "cn" -> push("c.collector_number = ?", listOf(v), tok.neg)
             "artist" -> push("lower(c.artist) LIKE ? ESCAPE '\\'", listOf(like(v)), tok.neg)
             "watermark" -> push("lower(c.watermark) LIKE ? ESCAPE '\\'", listOf(like(v)), tok.neg)
-            "owner" -> push("c.owner = ?", listOf(v.lowercase()), tok.neg)
+            // By key, or by the start of the owner's name: `owner:kayla`
+            // still reads naturally, and it is a filter over cards anybody
+            // may read, so a name is as good a handle as a key here.
+            "owner" -> push(
+                "c.owner_id IN (SELECT id FROM users WHERE key = ? OR lower(display_name) LIKE ? || '%')",
+                listOf(v.lowercase(), v.lowercase()),
+                tok.neg,
+            )
 
             "game" -> push(
                 "EXISTS (SELECT 1 FROM card_games g WHERE g.card_id = c.id AND g.game = ?)",
@@ -268,7 +275,7 @@ fun parseQueryBox(input: String): Sql {
                 listOf(v.lowercase()), tok.neg,
             )
             "tag" -> push(
-                "EXISTS (SELECT 1 FROM card_tags ct WHERE ct.card_id = c.id AND ct.tag_slug = ?)",
+                "EXISTS (SELECT 1 FROM card_tags ct WHERE ct.card_id = c.id AND ct.tag = ?)",
                 listOf(v.lowercase()), tok.neg,
             )
             "format" -> push(
@@ -288,8 +295,8 @@ fun parseQueryBox(input: String): Sql {
             )
             "deck" -> push(
                 "EXISTS (SELECT 1 FROM deck_cards dc JOIN decks d ON d.id = dc.deck_id " +
-                    "WHERE dc.name_norm = c.name_norm AND d.slug = ?)",
-                listOf(v.lowercase()), tok.neg,
+                    "WHERE dc.name_norm = c.name_norm AND (d.key = ? OR lower(d.name) = ?))",
+                listOf(v.lowercase(), v.lowercase()), tok.neg,
             )
 
             "is", "not" -> {

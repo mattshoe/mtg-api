@@ -13,8 +13,10 @@ import kotlinx.serialization.json.JsonPrimitive
  * a screen should be assembling SQL for.
  */
 data class Deck(
-    val slug: String,
+    /** The deck's address: random, never derived from its name, never moved by a rename. */
+    val key: String,
     val name: String,
+    /** The owning account's public key. */
     val owner: String,
     val commander: String?,
     /** Alphabetical, as the database stores it: 'UW', never 'WU'. */
@@ -22,6 +24,8 @@ data class Deck(
     val bracket: Int?,
     /** The commander's art, for the banner across the top of a tile. */
     val artId: String?,
+    /** What to call the owner. */
+    val ownerName: String = "",
 ) {
     /**
      * The deck's colour identity as WUBRG letters.
@@ -307,7 +311,9 @@ object DeckQueries {
     const val EVERY = "*"
 
     fun all(owner: String = EVERY) = Sql(
-        """SELECT d.slug, d.name, d.owner, d.commander, d.colors, d.bracket,
+        """SELECT d.key, d.name, ${Owners.keyOf("d.owner_id")} AS owner,
+                  ${Owners.nameOf("d.owner_id")} AS owner_name,
+                  d.commander, d.colors, d.bracket,
                   c.scryfall_id AS art_id
              FROM decks d
              LEFT JOIN (SELECT name_norm, MIN(id) AS id, scryfall_id
@@ -317,7 +323,7 @@ object DeckQueries {
                     THEN substr(d.commander, 1, instr(d.commander, ' (') - 1)
                     ELSE d.commander END))
             ${scopeOf(owner)}
-            ORDER BY d.owner, d.name""",
+            ORDER BY d.owner_id, d.name""",
         if (owner.isEmpty() || owner == EVERY) emptyList() else listOf(owner),
     )
 
@@ -333,7 +339,7 @@ object DeckQueries {
     private fun scopeOf(owner: String) = when (owner) {
         "" -> "WHERE 1=0"
         EVERY -> ""
-        else -> "WHERE d.owner = ?"
+        else -> "WHERE ${Owners.owns("d.owner_id")}"
     }
 
     /**
@@ -346,13 +352,13 @@ object DeckQueries {
      * type. Both collapse to one row per name first — a card with nine
      * printings would otherwise appear nine times.
      */
-    fun cards(slug: String) = Sql(
+    fun cards(key: String) = Sql(
         """SELECT dc.name, dc.name_norm, dc.qty, dc.role,
                   -- `totals` is already one row per owner and name, and
                   -- the column is `total_qty`. `SUM(t.qty)` was neither,
                   -- so opening any deck answered "no such column".
                   COALESCE((SELECT t.total_qty FROM totals t
-                             WHERE t.name_norm = dc.name_norm AND t.owner = d.owner), 0) AS owned,
+                             WHERE t.name_norm = dc.name_norm AND t.owner_id = d.owner_id), 0) AS owned,
                   COALESCE(mine.type_line, alt.type_line)         AS type_line,
                   COALESCE(mine.scryfall_id, alt.scryfall_id)     AS scryfall_id,
                   COALESCE(mine.mana_cost, alt.mana_cost)         AS mana_cost,
@@ -369,11 +375,11 @@ object DeckQueries {
                   COALESCE(mine.collector_number, alt.collector_number) AS collector_number
              FROM deck_cards dc
              JOIN decks d ON d.id = dc.deck_id
-             LEFT JOIN (SELECT owner, name_norm, MIN(id) AS id, scryfall_id, type_line,
+             LEFT JOIN (SELECT owner_id, name_norm, MIN(id) AS id, scryfall_id, type_line,
                                mana_cost, cmc, produced_mana, oracle_text, color_identity, rarity,
                                setcode, set_name, collector_number
-                          FROM cards GROUP BY owner, name_norm) mine
-               ON mine.name_norm = dc.name_norm AND mine.owner = d.owner
+                          FROM cards GROUP BY owner_id, name_norm) mine
+               ON mine.name_norm = dc.name_norm AND mine.owner_id = d.owner_id
              LEFT JOIN (SELECT name_norm, MIN(id) AS id, scryfall_id, type_line,
                                mana_cost, cmc, produced_mana, oracle_text, color_identity, rarity,
                                setcode, set_name, collector_number
@@ -381,9 +387,9 @@ object DeckQueries {
                ON alt.name_norm = dc.name_norm
              LEFT JOIN prices pm ON pm.scryfall_id = mine.scryfall_id
              LEFT JOIN prices pa ON pa.scryfall_id = alt.scryfall_id
-            WHERE d.slug = ?
+            WHERE d.key = ?
             ORDER BY dc.role IS NULL, dc.role, dc.name""",
-        listOf(slug),
+        listOf(key),
     )
 
     fun decode(cols: List<String>, rows: List<JsonArray>): List<Deck> {
@@ -395,9 +401,10 @@ object DeckQueries {
         }
         return rows.map {
             Deck(
-                slug = it.str("slug").orEmpty(),
+                key = it.str("key").orEmpty(),
                 name = it.str("name").orEmpty(),
                 owner = it.str("owner").orEmpty(),
+                ownerName = it.str("owner_name").orEmpty(),
                 commander = it.str("commander"),
                 colors = it.str("colors"),
                 bracket = it.str("bracket")?.toIntOrNull(),
@@ -451,7 +458,8 @@ internal fun oneName(raw: String): String {
 /** The decks screen: a list, or one deck opened. */
 data class DecksState(
     val decks: List<Deck> = emptyList(),
-    val openSlug: String? = null,
+    /** The open deck's key. */
+    val openKey: String? = null,
     val cards: List<DeckCard> = emptyList(),
     /**
      * The real tokens the open deck makes, from Scryfall's own
@@ -462,7 +470,7 @@ data class DecksState(
     val busy: Boolean = false,
     val error: String? = null,
 ) {
-    val open: Deck? get() = decks.firstOrNull { it.slug == openSlug }
+    val open: Deck? get() = decks.firstOrNull { it.key == openKey }
 
     /** A card the deck wants more of than its owner has. Basics never count. */
     val gaps: List<DeckCard> get() = cards.filter { it.short > 0 }
@@ -494,14 +502,14 @@ data class DecksState(
 
     fun loading() = copy(busy = true, error = null)
     fun loaded(decks: List<Deck>) = copy(decks = decks, busy = false, error = null)
-    fun opened(slug: String, cards: List<DeckCard>) =
-        copy(openSlug = slug, cards = cards, tokens = emptyList(), busy = false, error = null)
+    fun opened(key: String, cards: List<DeckCard>) =
+        copy(openKey = key, cards = cards, tokens = emptyList(), busy = false, error = null)
 
     fun withTokens(t: List<TokenCard>) = copy(tokens = t)
 
     /** Every printing the open deck can ask Scryfall about. */
     val scryfallIds: List<String> get() = cards.mapNotNull { it.scryfallId }.distinct()
 
-    fun close() = copy(openSlug = null, cards = emptyList(), tokens = emptyList())
+    fun close() = copy(openKey = null, cards = emptyList(), tokens = emptyList())
     fun failed(message: String) = copy(busy = false, error = message)
 }

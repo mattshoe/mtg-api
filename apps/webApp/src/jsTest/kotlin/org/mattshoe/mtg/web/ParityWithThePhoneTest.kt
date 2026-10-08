@@ -145,7 +145,7 @@ class ParityWithThePhoneTest {
 
     @Test
     fun theEntryWizardOffersANewDeck() = runTest {
-        shell(AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")).navigate(View.ENTRY))
+        shell(AppState(admin = Admin().signIn(Account(key = "matt", role = "admin"), "t")).navigate(View.ENTRY))
         settle()
         assertTrue(says("New deck"), "the website's entry wizard does not offer a new deck")
         assertTrue(says("What are you doing?"), "the first question still asks the old one")
@@ -153,7 +153,7 @@ class ParityWithThePhoneTest {
 
     @Test
     fun pickingItAndContinuingOpensTheWizard() = runTest {
-        shell(AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")).navigate(View.ENTRY))
+        shell(AppState(admin = Admin().signIn(Account(key = "matt", role = "admin"), "t")).navigate(View.ENTRY))
         settle()
         assertNotNull(option("New deck")).click()
         settle()

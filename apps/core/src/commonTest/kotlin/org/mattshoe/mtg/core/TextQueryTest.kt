@@ -87,7 +87,10 @@ class TextQueryTest {
 
     // ------------------------------------------------------- into SQL
 
-    private fun where(f: Filters) = buildQuery(f).sql.substringAfter("WHERE").substringBefore("GROUP BY")
+    // The owner's key is a subselect in the column list, WHERE and all;
+    // the clause this reads is the one over the cards.
+    private fun where(f: Filters) = buildQuery(f).sql.replace(Owners.keyOf("c.owner_id"), "")
+        .substringAfter("WHERE").substringBefore("GROUP BY")
     private fun params(f: Filters) = buildQuery(f).params
 
     @Test

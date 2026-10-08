@@ -134,6 +134,19 @@ object Export {
             .joinToString("\n")
     }
 
-    /** `alela-2026-09-30.txt`. */
-    fun deckFilename(slug: String, today: String) = "$slug-$today.txt"
+    /**
+     * `alela-2026-09-30.txt`, from the deck's name.
+     *
+     * A file name and nothing else: it is never looked up by, so a
+     * name two decks share making the same file name is harmless.
+     */
+    fun deckFilename(name: String, today: String): String {
+        val base = name.lowercase()
+            .map { if (it.isLetterOrDigit()) it else '-' }
+            .joinToString("")
+            .split('-').filter { it.isNotEmpty() }
+            .joinToString("-")
+            .ifEmpty { "deck" }
+        return "$base-$today.txt"
+    }
 }
