@@ -111,7 +111,7 @@ class TasksTest {
 
     @Test
     fun aFinishedTaskSaysWhenToTheMinute() {
-        assertEquals("2026-10-03 12:30", decoded().single { it.title == "Merged two" }.finished)
+        assertEquals("2026-10-03 12:30 UTC", decoded().single { it.title == "Merged two" }.finished)
         assertNull(decoded().single { it.title == "Waiting on CI" }.finished)
     }
 

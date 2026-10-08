@@ -38,8 +38,8 @@ data class Task(
     /** `merged_at` or `closed_at`, as it came. Sorts as text because it is ISO. */
     val finishedAt: String?,
 ) {
-    /** `2026-10-03 12:30`, UTC, as GitHub gave it. */
-    val finished: String? get() = finishedAt?.take(16)?.replace('T', ' ')
+    /** `2026-10-03 12:30 UTC`, as GitHub gave it, and said so. */
+    val finished: String? get() = finishedAt?.take(16)?.replace('T', ' ')?.plus(" UTC")
 }
 
 /** The tasks panel on Admin Settings. */
