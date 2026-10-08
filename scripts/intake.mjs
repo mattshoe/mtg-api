@@ -116,11 +116,6 @@ export function statusOf(text) {
   return field(text, 'status')
 }
 
-/** Triage sets this when it could not tell what was wanted. */
-export function waiting(text) {
-  return statusOf(text) === 'needs-matt'
-}
-
 /**
  * Whether a builder may be spun up on this.
  *
@@ -145,6 +140,11 @@ export function state(text) {
   if (!triaged(text)) return 'untriaged'
   const s = statusOf(text)
   if (s === 'ready') return 'ready'
+  // There was a `waiting()` export beside this that did nothing but
+  // `statusOf(text) === 'needs-matt'`. Nothing called it — the dispatcher
+  // asks `state` for this and matches on the word — so it had five tests
+  // and no caller, which is what `builderDone` and `afterCi` were removed
+  // for. This line is the only place the question is answered now.
   if (s === 'needs-matt') return 'needs-matt'
   return s ? `held: status ${s}` : 'held: no status'
 }

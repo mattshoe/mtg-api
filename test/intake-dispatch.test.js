@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  pending, triaged, waiting, buildable, branchFor, hookFires, equipped,
+  pending, triaged, buildable, branchFor, hookFires, equipped,
   statusOf, mergeMode, REQUIRED,
 } from '../scripts/intake.mjs'
 import { raise } from '../scripts/suite-floor.mjs'
@@ -152,28 +152,6 @@ describe('statusOf', () => {
   })
 })
 
-describe('waiting', () => {
-  it('is true when triage left a question for Matt', () => {
-    expect(waiting('---\nstatus: needs-matt\n---\n\n# Thing\n')).toBe(true)
-  })
-
-  it('is false when triage called it ready', () => {
-    expect(waiting('---\nstatus: ready\n---\n\n# Thing\n')).toBe(false)
-  })
-
-  it('only reads the frontmatter, not the body', () => {
-    expect(waiting('---\nstatus: ready\n---\n\nstatus: needs-matt\n')).toBe(false)
-  })
-
-  it('sees needs-matt behind a trailing comment', () => {
-    expect(waiting('---\nstatus: needs-matt  # which account?\n---\n')).toBe(true)
-  })
-
-  it('sees needs-matt in a CRLF file', () => {
-    expect(waiting('---\r\nstatus: needs-matt\r\n---\r\n')).toBe(true)
-  })
-})
-
 describe('buildable', () => {
   const ready = '---\nstatus: ready\n---\n\n# T\n\n## Plan\n\nx\n'
     + '\n## Tests\n\ny\n\n## Done when\n\nz\n'
@@ -263,8 +241,9 @@ describe('branchFor', () => {
   // The old test here asserted the output matched the character set its
   // own `replace()` had just produced, so it could not fail. What it
   // should have caught: two different request files landing on one
-  // branch, with the `.building` claims keyed on the filename so neither
-  // blocks the other, and two builders committing to the same ref.
+  // branch, and `gh pr list --head "$branch"` then answering about the
+  // WRONG pull request — so the dispatcher files one request under
+  // requests/done because a different request's PR had merged.
   it('never puts two different requests on one branch', () => {
     const names = [
       'deck_page.md', 'deck-page.md', 'Deck Page.md', 'deck.page.md',
@@ -279,7 +258,11 @@ describe('branchFor', () => {
     }
   })
 
-  it('is stable, because the claim and the worktree are keyed on it', () => {
+  // `build_one` names the branch once and then asks GitHub about it with
+  // `gh pr list --head "$branch"`. An unstable name would ask about a
+  // branch no builder ever pushed, and every outcome would read as "no
+  // pull request at all".
+  it('is stable, because the dispatcher asks GitHub about it by name', () => {
     expect(branchFor('deck-page.md')).toBe(branchFor('deck-page.md'))
     expect(branchFor('/r/requests/deck-page.md')).toBe(branchFor('deck-page.md'))
   })
