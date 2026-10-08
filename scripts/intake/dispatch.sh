@@ -26,6 +26,13 @@ DEBOUNCE="${INTAKE_DEBOUNCE:-15}"
 # large request on both platforms — the Android screens suite alone is
 # three and a half minutes a run — and it is a cap, not a target.
 MAX_MINUTES="${INTAKE_MAX_MINUTES:-240}"
+# How many builders at once. One, because Gradle is the bottleneck and it
+# does not parallelise across processes: `--no-daemon` restarts a JVM every
+# time, the ~/.gradle cache is locked, and `forkEvery(1)` in androidApp
+# spawns a JVM per test class. Three concurrent builders on one laptop
+# thrash rather than going three times faster — the run that provoked this
+# took two hours and committed nothing.
+MAX_BUILDERS="${INTAKE_MAX_BUILDERS:-1}"
 # What a builder's worktree is branched from. origin/main normally;
 # override it while the intake machinery itself is still on a branch.
 BASE="${INTAKE_BASE:-origin/main}"
@@ -101,7 +108,12 @@ fi
 held="$(comm -23 <(pending) <(buildable))"
 [ -n "$held" ] && say "held back, not triaged or waiting on Matt: $(echo "$held" | tr '\n' ' ')"
 
+started=0
 for file in $(buildable); do
+  if [ "$started" -ge "$MAX_BUILDERS" ]; then
+    say "stopping at $MAX_BUILDERS builder(s); the rest wait for the next run"
+    break
+  fi
   name="${file%.md}"
   branch="$(ask branch "$file")"
   claimed="$STATE/$name.building"
@@ -224,6 +236,7 @@ the request file into requests/done/ and committed that." \
   ) &
   # bash 3.2 on macOS has no BASHPID, so the parent records the child.
   echo $! > "$claimed/pid"
+  started=$((started + 1))
 done
 
 wait

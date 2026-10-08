@@ -71,6 +71,16 @@ the change looks like on each platform.
 If something genuinely cannot exist on one platform, say so in the PR
 body and say why. Silence is not an exception.
 
+**Never hand-roll a wait loop.** No `until ... grep ... sleep`, no
+`while ! test -f ...`, no polling a log file. `CLAUDE.md` forbids it and
+one builder died of it: its gradle run was killed, never wrote a `BUILD`
+line, and the agent sat in two `until` loops polling that file for two
+hours while thirty files of its work sat uncommitted.
+
+Run a suite in the **foreground** and let it finish. It takes the minutes
+it takes. If you must background something, you own noticing when it dies,
+and you almost certainly do not want to.
+
 **Read the BUILD line, never the exit code.** `npm run test:screens`
 has exited 0 over `BUILD FAILED` more than once. Grep for
 `BUILD SUCCESSFUL`. A killed Gradle run leaves the previous run's XML
@@ -82,6 +92,14 @@ green. If you deliberately removed tests, lower the floor in
 `test/suite-floors.json` in the same commit and say why in the message.
 
 **Never claim something works that you have not watched work.**
+
+**You are not alone on this machine.** Other builders may be running, and
+Gradle does not share well: `--no-daemon` means a full JVM start every
+time, the `~/.gradle` cache is locked, and `forkEvery(1)` in androidApp
+spawns a JVM per test class. Three concurrent Gradle builds on one laptop
+do not run three times faster, they thrash. So run one suite at a time,
+never two in parallel, and prefer a single `--tests 'YourTest'` over a
+whole suite.
 
 **Say what you are doing as you do it.** Your output is streamed to a log
 that is the only window into you. A single line before each long command —
