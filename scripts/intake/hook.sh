@@ -18,6 +18,18 @@ STATE="$REPO/.intake"
 # pull request. `scripts/intake/uninstall.sh` touches this file.
 [ -f "$STATE/disabled" ] && exit 0
 
+# Never from a linked worktree. This hook is committed, so it is checked out
+# in every builder worktree, and the builder was told to edit its own request
+# file — which fired this, which started a SECOND dispatcher rooted at the
+# worktree, with its own lock, its own `.intake/` and its own MAX_BUILDERS, so
+# the global cap was gone. That dispatcher then ran a triage agent inside the
+# live builder's tree, rewriting files it was about to commit, and launched
+# nested builders. Recursively.
+if [ "$(cd "$REPO" && git rev-parse --git-dir 2>/dev/null)" \
+     != "$(cd "$REPO" && git rev-parse --git-common-dir 2>/dev/null)" ]; then
+  exit 0
+fi
+
 path="$(cat | /usr/bin/python3 -c \
   'import json,sys; print(json.load(sys.stdin).get("tool_input",{}).get("file_path",""))' \
   2>/dev/null)"
