@@ -193,7 +193,7 @@ fun AppShell(
             onFiles = onFiles,
             onReuse = onReuse,
             onClearHistory = onClearHistory,
-            onNewDeck = { onState(state.opening(Overlay.NEW_DECK)) },
+            onNewDeck = { onState(state.startingADeck()) },
         )
     }
 
