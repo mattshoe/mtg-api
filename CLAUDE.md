@@ -216,8 +216,6 @@ never happened, and caught three agents with it.
 | web, real browser | `npm run test:web` | ~2m30s |
 | Android screens, JVM | `npm run test:screens` | ~3m30s |
 | Android screens, device | `npm run test:android` | ~23m |
-| all but the device | `npm run test:all` | ~8m |
-
 Everything goes through `scripts/guard.mjs`, which kills the whole
 process group on timeout. Run long things in the background and read
 the output file; do not hand-roll `until ... sleep` wait loops, which
