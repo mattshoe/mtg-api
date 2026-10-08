@@ -3,6 +3,7 @@ import { parse } from 'yaml';
 import appsYml from '../.github/workflows/apps.yml?raw';
 import gradleProperties from '../apps/gradle.properties?raw';
 import androidBuild from '../apps/androidApp/build.gradle.kts?raw';
+import floors from './suite-floors.json';
 
 // Why a pull request takes as long as it does.
 //
@@ -44,6 +45,12 @@ describe('the apps workflow', () => {
     const [name] = jobRunning(/:androidApp:connectedDebugAndroidTest/);
     const shards = jobs[name]?.strategy?.matrix?.shard ?? [];
     expect(shards.length, `"${name}" runs every device test on one emulator`).toBeGreaterThan(1);
+    // Two shards of 235 and 234 took 2:35 and 4:45 on #46 — the split
+    // is by test, not by cost, so one half can carry the slow ones.
+    // Under 200 a shard keeps the slow half inside ten minutes.
+    const perShard = Math.ceil(floors.device / shards.length);
+    expect(perShard, `${shards.length} shards is ${perShard} device tests each, and the slow shard decides the run`)
+      .toBeLessThan(200);
     expect(jobs[name].strategy['fail-fast'], 'one shard failing would cancel the other and hide its results')
       .toBe(false);
     const script = steps(jobs[name]).map((s) => s.with?.script ?? '').join('\n');
