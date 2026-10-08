@@ -49,6 +49,10 @@ claim() {
   git -C "$REPO" worktree prune
   git -C "$REPO" fetch -q origin main 2>>"$LOG" || say "could not fetch; base may be stale"
 
+  # 0 claimed something, 2 nothing to claim, 1 broken. An empty answer and a
+  # broken one must never look the same to the caller — that conflation is the
+  # oldest bug in this system and it came back when these node calls moved
+  # inside a child process.
   cd "$REPO" && node scripts/intake.mjs buildable > "$STATE/queue.$$" || {
     say "intake.mjs failed"; rm -f "$STATE/queue.$$"; return 1
   }
@@ -66,21 +70,41 @@ claim() {
       say "skipping ${f%.md}: $wt is still there ($(git -C "$wt" status --porcelain 2>/dev/null | wc -l | tr -d ' ') uncommitted, $(git -C "$wt" rev-list --count "$BASE"..HEAD 2>/dev/null || echo 0) commits) — delete it to retry"
       continue
     fi
-    b="$(cd "$REPO" && node scripts/intake.mjs branch "$f")" || continue
+    b="$(cd "$REPO" && node scripts/intake.mjs branch "$f")" || {
+      say "intake.mjs failed naming a branch for $f"; return 1
+    }
     if git -C "$REPO" worktree add -q -b "$b" "$wt" "$BASE" 2>>"$LOG"; then
       file="$f"; branch="$b"; tree="$wt"; break
     fi
     say "skipping ${f%.md}: no worktree on $b (the branch may already exist)"
   done < "$STATE/queue.$$"
   rm -f "$STATE/queue.$$"
-  [ -n "$file" ] || return 1
+  [ -n "$file" ] || return 2
 
   printf '%s\t%s\t%s\n' "$file" "$branch" "$tree"
 }
 
 if [ "${1:-}" = "--claim" ]; then claim; exit $?; fi
 
-got="$(/usr/bin/lockf -k -t 120 "$STATE/pick.lock" "$0" --claim)" || exit 0
+# `lockf` is BSD, so it is on macOS and not on the Linux runners CI uses;
+# `flock` is the other way round. Pick whichever is here. With neither, run
+# the claim unlocked and say so: two dispatchers would then have to collide
+# inside the same few seconds, and each still refuses a worktree that exists.
+if [ -x /usr/bin/lockf ]; then
+  got="$(/usr/bin/lockf -k -t 120 "$STATE/pick.lock" "$0" --claim)"; rc=$?
+elif command -v flock >/dev/null 2>&1; then
+  got="$(flock -w 120 "$STATE/pick.lock" "$0" --claim)"; rc=$?
+else
+  say "no lockf and no flock; claiming without a lock"
+  got="$("$0" --claim)"; rc=$?
+fi
+
+case "$rc" in
+  0) : ;;
+  2) exit 0 ;;                      # nothing to claim, which is normal
+  *) tell "intake stopped: it could not read the queue"; exit 1 ;;
+esac
+[ -n "$got" ] || exit 0
 [ -n "$got" ] || exit 0
 file="${got%%	*}"
 rest="${got#*	}"

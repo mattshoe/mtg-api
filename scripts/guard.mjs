@@ -50,10 +50,19 @@ const GRADLE_LOCK = process.env.INTAKE_GRADLE_LOCK
   || join(process.env.HOME || '/tmp', '.mtg-gradle.lock');
 const isGradle = /(^|\/)gradlew?$/.test(cmd) || args.some((a) => /(^|\/)gradlew?$/.test(a));
 if (isGradle && process.env.INTAKE_NO_GRADLE_LOCK !== '1') {
-  // -k keeps the lock file, -t waits this long for the turn and then fails
-  // loudly rather than running two builds at once.
-  args = ['-k', '-t', String(Math.max(seconds, 1800)), GRADLE_LOCK, cmd, ...args];
-  cmd = '/usr/bin/lockf';
+  // `lockf` is BSD (macOS), `flock` is Linux. Use whichever exists and run
+  // unlocked if neither does — CI builds one thing at a time anyway, and a
+  // missing mutex must not stop a build.
+  const wait = String(Math.max(seconds, 1800));
+  if (existsSync('/usr/bin/lockf')) {
+    // -k keeps the lock file, -t waits this long and then fails loudly
+    // rather than running two builds at once.
+    args = ['-k', '-t', wait, GRADLE_LOCK, cmd, ...args];
+    cmd = '/usr/bin/lockf';
+  } else if (existsSync('/usr/bin/flock')) {
+    args = ['-w', wait, GRADLE_LOCK, cmd, ...args];
+    cmd = '/usr/bin/flock';
+  }
 }
 
 // One file per command, not one for all of them. A single shared
