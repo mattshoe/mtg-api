@@ -61,6 +61,9 @@ class MtgViewModel : ViewModel() {
      */
     var tokensJob: Job? = null
 
+    /** The release notes load, held for the same reason. */
+    var releasesJob: Job? = null
+
     var lookupJob: Job? = null
     var findJob: Job? = null
     var tweakJob: Job? = null

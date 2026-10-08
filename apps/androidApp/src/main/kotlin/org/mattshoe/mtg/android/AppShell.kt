@@ -378,6 +378,7 @@ fun AppShell(
 
                     View.ADMIN -> AdminScreen(
                         state = state.people,
+                        releases = state.releases,
                         me = state.admin.account?.slug,
                         person = state.person,
                         onSearch = { onState(state.copy(people = state.people.searching(it))) },
