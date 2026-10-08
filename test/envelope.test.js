@@ -11,7 +11,7 @@ import { describe, it, expect } from 'vitest';
 import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
 import worker from '../src/index.js';
 import source from '../src/index.js?raw';
-import { call, get, postAnon, adminToken } from './helpers.js';
+import { call, get, postAnon, adminToken, MATT } from './helpers.js';
 import { overloaded } from '../src/index.js';
 
 /** The methods each route actually answers to. */
@@ -217,7 +217,8 @@ describe('slashes', () => {
     const init = {
       method: 'POST',
       token,
-      body: { list: '1 Lightning Bolt (2X2) 117' },
+      // The operator's password names no account, so it names the collection.
+      body: { collection: MATT, list: '1 Lightning Bolt (2X2) 117' },
       headers: { 'idempotency-key': 'envelope-slash-test' },
     };
     const first = await call('/cards/add/', init);

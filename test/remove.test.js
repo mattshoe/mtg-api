@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { post, sql, count, snapshot, stubScryfall } from './helpers.js';
+import { MATT, KAYLA } from './helpers.js';
 
 const CHILD_TABLES = ['card_faces', 'card_colors', 'card_types', 'card_keywords',
   'card_finishes', 'card_games', 'card_promo_types', 'card_frame_effects', 'card_tags'];
@@ -100,15 +101,15 @@ describe('POST /cards/remove — refusals', () => {
     const before = await snapshot();
     const r = await post('/cards/remove', { list: '1 Black Lotus' });
     expect(r.body.applied).toBe(false);
-    expect(r.body.errors[0]).toMatch(/not in matt's collection/);
+    expect(r.body.errors[0]).toMatch(/not in this collection/);
     expect(await snapshot()).toEqual(before);
   });
 
   it("removing from the wrong owner's collection fails", async () => {
     await seedBolt(2); // matt's
-    const r = await post('/cards/remove', { owner: 'kayla', list: '1 Lightning Bolt' });
+    const r = await post('/cards/remove', { collection: KAYLA, list: '1 Lightning Bolt' });
     expect(r.body.applied).toBe(false);
-    expect(r.body.errors[0]).toMatch(/kayla/);
+    expect(r.body.errors[0]).toMatch(/Lightning Bolt: not in this collection/);
     expect((await sql("SELECT qty FROM cards WHERE name_norm='lightning bolt'"))[0].qty).toBe(2);
   });
 
@@ -145,7 +146,7 @@ describe('POST /cards/remove — decks are left alone', () => {
         FROM cards c
         JOIN deck_cards dc ON dc.name_norm = c.name_norm AND dc.in_collection = 1
         JOIN decks d ON d.id = dc.deck_id AND d.owner = c.owner
-       WHERE c.owner = 'matt' AND c.qty = 1
+       WHERE c.owner_id = 1 AND c.qty = 1
        LIMIT 1`);
     if (!rows.length) {
       // The fixture must supply this case; failing loudly beats skipping.

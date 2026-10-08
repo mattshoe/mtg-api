@@ -4,6 +4,9 @@ import * as jose from 'jose';
 import { call, sql } from './helpers.js';
 import { ISSUER } from '../src/google.js';
 
+/** Every account but the two the seed holds, Matt at 1 and Kayla at 3. */
+const NEWCOMERS = 'WHERE id NOT IN (1, 3)';
+
 /**
  * Signing in with Google.
  *
@@ -111,7 +114,7 @@ describe('sign in with Google', () => {
     const r = await signInWith();
     expect(r.status).toBe(302);
     expect(r.headers.get('set-cookie')).toMatch(/mtg_session=/);
-    const users = await sql('SELECT slug, email FROM users');
+    const users = await sql(`SELECT key, email FROM users ${NEWCOMERS}`);
     expect(users).toHaveLength(1);
     expect(users[0].email).toBe('someone@example.com');
     expect(await sql('SELECT 1 FROM sessions')).toHaveLength(1);
@@ -120,7 +123,7 @@ describe('sign in with Google', () => {
   it('signing in twice is one account and two sessions', async () => {
     await signInWith();
     await signInWith();
-    expect(await sql('SELECT 1 FROM users')).toHaveLength(1);
+    expect(await sql(`SELECT 1 FROM users ${NEWCOMERS}`)).toHaveLength(1);
     expect(await sql('SELECT 1 FROM sessions')).toHaveLength(2);
   });
 
@@ -136,13 +139,13 @@ describe('sign in with Google', () => {
       fetchImpl: stubGoogle({ jwks, idToken: forged }),
     });
     expect(r.status).toBe(401);
-    expect(await sql('SELECT 1 FROM users')).toHaveLength(0);
+    expect(await sql(`SELECT 1 FROM users ${NEWCOMERS}`)).toHaveLength(0);
   });
 
   it('a token from the wrong issuer is refused', async () => {
     const r = await signInWith({ iss: 'https://evil.example.com' });
     expect(r.status).toBe(401);
-    expect(await sql('SELECT 1 FROM users')).toHaveLength(0);
+    expect(await sql(`SELECT 1 FROM users ${NEWCOMERS}`)).toHaveLength(0);
   });
 
   it('a token meant for somebody else\'s client is refused', async () => {
@@ -150,13 +153,13 @@ describe('sign in with Google', () => {
     // signed, issued for a different application entirely.
     const r = await signInWith({ aud: 'someone-elses-client.apps.googleusercontent.com' });
     expect(r.status).toBe(401);
-    expect(await sql('SELECT 1 FROM users')).toHaveLength(0);
+    expect(await sql(`SELECT 1 FROM users ${NEWCOMERS}`)).toHaveLength(0);
   });
 
   it('an expired token is refused', async () => {
     const r = await signInWith({ exp: Math.floor(Date.now() / 1000) - 60 });
     expect(r.status).toBe(401);
-    expect(await sql('SELECT 1 FROM users')).toHaveLength(0);
+    expect(await sql(`SELECT 1 FROM users ${NEWCOMERS}`)).toHaveLength(0);
   });
 
   it('a callback with the wrong state is refused', async () => {
@@ -252,18 +255,18 @@ describe('signing in with an ID token', () => {
     const r = await post(await token(privateKey), jwks);
     expect(r.status).toBe(200);
     expect(r.body.token).toMatch(/^[A-Za-z0-9_-]{43}$/);
-    expect(r.body.slug).toBeTruthy();
+    expect(r.body.key).toMatch(/^[0-9a-hjkmnp-tv-z]{8}$/);
     // And it works as a bearer, which is the whole point of handing
     // it over rather than setting a cookie.
     const me = await call('/auth/me', { method: 'GET', token: r.body.token });
-    expect(me.body.slug).toBe(r.body.slug);
+    expect(me.body.key).toBe(r.body.key);
   });
 
   it('the same person on the phone and the laptop is one account', async () => {
     const { privateKey, jwks } = await keys();
     await post(await token(privateKey), jwks);
     await post(await token(privateKey), jwks);
-    expect(await sql('SELECT 1 FROM users')).toHaveLength(1);
+    expect(await sql(`SELECT 1 FROM users ${NEWCOMERS}`)).toHaveLength(1);
     expect(await sql('SELECT 1 FROM sessions')).toHaveLength(2);
   });
 
@@ -271,7 +274,7 @@ describe('signing in with an ID token', () => {
     const { privateKey, jwks } = await keys();
     const r = await post(await token(privateKey, { aud: 'someone-else.apps.googleusercontent.com' }), jwks);
     expect(r.status).toBe(401);
-    expect(await sql('SELECT 1 FROM users')).toHaveLength(0);
+    expect(await sql(`SELECT 1 FROM users ${NEWCOMERS}`)).toHaveLength(0);
   });
 
   it('a token signed by the wrong key is refused', async () => {
@@ -279,7 +282,7 @@ describe('signing in with an ID token', () => {
     const { jwks } = await keys();
     const r = await post(await token(stranger.privateKey), jwks);
     expect(r.status).toBe(401);
-    expect(await sql('SELECT 1 FROM users')).toHaveLength(0);
+    expect(await sql(`SELECT 1 FROM users ${NEWCOMERS}`)).toHaveLength(0);
   });
 
   it('an expired token is refused', async () => {

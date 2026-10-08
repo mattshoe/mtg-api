@@ -197,10 +197,10 @@ describe('POST /query value fidelity', () => {
 
   it('bound parameters work', async () => {
     const r = await post('/query', {
-      sql: 'SELECT COUNT(*) AS n FROM cards WHERE owner = ?',
-      params: ['kayla'],
+      sql: 'SELECT COUNT(*) AS n FROM cards WHERE owner_id = ?',
+      params: [3],
     });
-    expect(r.body.rows[0][0]).toBe(await count('cards', 'owner = ?', 'kayla'));
+    expect(r.body.rows[0][0]).toBe(await count('cards', 'owner_id = ?', 3));
   });
 
   it('a CTE is treated as row-returning and still capped', async () => {
@@ -236,10 +236,10 @@ describe('GET /query', () => {
   });
 
   it('accepts bound params as a JSON array', async () => {
-    const r = await get('/query?params=' + encodeURIComponent('["kayla"]')
-      + '&sql=' + encodeURIComponent('SELECT COUNT(*) FROM cards WHERE owner = ?'));
+    const r = await get('/query?params=' + encodeURIComponent('[3]')
+      + '&sql=' + encodeURIComponent('SELECT COUNT(*) FROM cards WHERE owner_id = ?'));
     expect(r.status).toBe(200);
-    expect(r.body.rows[0][0]).toBe(await count('cards', 'owner = ?', 'kayla'));
+    expect(r.body.rows[0][0]).toBe(await count('cards', 'owner_id = ?', 3));
   });
 
   it('rejects params that are not a JSON array', async () => {
@@ -312,9 +312,9 @@ describe('GET /query — reads that must be allowed', () => {
   const reads = [
     ['a join',
       "SELECT c.name, u.free FROM cards c JOIN card_usage u ON u.name_norm = c.name_norm"
-      + " AND u.owner = c.owner WHERE c.owner = 'matt' LIMIT 5"],
+      + " AND u.owner_id = c.owner_id WHERE c.owner_id = 1 LIMIT 5"],
     ['a subquery',
-      "SELECT name FROM cards WHERE owner = 'matt' AND name_norm IN"
+      "SELECT name FROM cards WHERE owner_id = 1 AND name_norm IN"
       + " (SELECT name_norm FROM deck_cards) LIMIT 5"],
     ['a scalar function',
       "SELECT name FROM cards WHERE substr(type_line, 1, 8) = 'Artifact' LIMIT 5"],
@@ -346,8 +346,8 @@ describe('GET /query — reads that must be allowed', () => {
 
 describe('GET /query — writes that must stay refused', () => {
   const writes = [
-    ['INSERT', "INSERT INTO tags (slug, kind, label) VALUES ('x', 'y', 'z')"],
-    ['UPDATE', "UPDATE cards SET qty = 99 WHERE owner = 'matt'"],
+    ['INSERT', "INSERT INTO tags (tag, kind, label) VALUES ('x', 'y', 'z')"],
+    ['UPDATE', "UPDATE cards SET qty = 99 WHERE owner_id = 1"],
     ['DELETE', 'DELETE FROM cards'],
     ['DROP', 'DROP TABLE cards'],
     ['CREATE', 'CREATE TABLE evil (a TEXT)'],
@@ -357,7 +357,7 @@ describe('GET /query — writes that must stay refused', () => {
     ['a PRAGMA write', 'PRAGMA writable_schema = 1'],
     // The one a word list only catches by luck: it opens with WITH.
     ['a write hidden behind a CTE',
-      "WITH t AS (SELECT 'x' AS s) INSERT INTO tags (slug, kind, label)"
+      "WITH t AS (SELECT 'x' AS s) INSERT INTO tags (tag, kind, label)"
       + " SELECT s, 'k', 'l' FROM t"],
     ['a delete hidden behind a CTE',
       'WITH t AS (SELECT id FROM cards LIMIT 1) DELETE FROM cards WHERE id IN (SELECT id FROM t)'],
@@ -380,7 +380,7 @@ describe('GET /query — writes that must stay refused', () => {
 
   it('names the write it found when the shape looked like a read', async () => {
     const r = await getSql(
-      "WITH t AS (SELECT 'x' AS s) INSERT INTO tags (slug, kind, label) SELECT s, 'k', 'l' FROM t",
+      "WITH t AS (SELECT 'x' AS s) INSERT INTO tags (tag, kind, label) SELECT s, 'k', 'l' FROM t",
     );
     expect(r.body.error).toMatch(/writes to the database/);
     expect(r.body.error).toMatch(/OpenWrite/);
@@ -427,7 +427,7 @@ describe('POST /query — a write is refused however it is dressed', () => {
     // its first word: this one begins "WITH".
     const before = await snapshot();
     const r = await postAnon('/query', {
-      sql: "WITH t AS (SELECT 'x' AS s) INSERT INTO tags (slug, kind, label) SELECT s, 'k', 'l' FROM t",
+      sql: "WITH t AS (SELECT 'x' AS s) INSERT INTO tags (tag, kind, label) SELECT s, 'k', 'l' FROM t",
     });
     expect(r.status).toBe(403);
     expect(await snapshot()).toEqual(before);

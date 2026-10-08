@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { post, sql, exec, count, snapshot, stubScryfall } from './helpers.js';
+import { KAYLA } from './helpers.js';
 
 // From test/fixtures/scryfall/collection-basic.json — the printing the stub
 // hands back for "Lightning Bolt (2X2) 117".
@@ -10,10 +11,10 @@ const YAVIMAYA = '1 Yavimaya, Cradle of Growth (M3C) 409';
 const FABLE = '1 Fable of the Mirror-Breaker';
 
 /** The one card row this add should have produced. */
-async function stack(name, finish = 'nonfoil', owner = 'matt') {
+async function stack(name, finish = 'nonfoil', ownerId = 1) {
   const rows = await sql(
-    'SELECT * FROM cards WHERE owner = ? AND name_norm = ? AND finish = ?',
-    owner, name.toLowerCase(), finish,
+    'SELECT * FROM cards WHERE owner_id = ? AND name_norm = ? AND finish = ?',
+    ownerId, name.toLowerCase(), finish,
   );
   return rows;
 }
@@ -31,7 +32,7 @@ describe('POST /cards/add — a new card', () => {
     expect(rows[0].qty).toBe(4);
     expect(rows[0].setcode).toBe('2x2');
     expect(rows[0].name_norm).toBe('lightning bolt');
-    expect(rows[0].owner).toBe('matt');
+    expect(rows[0].owner_id).toBe(1);
   });
 
   it('derives every child table from the Scryfall record', async () => {
@@ -78,12 +79,12 @@ describe('POST /cards/add — a new card', () => {
 describe('POST /cards/add — an existing card', () => {
   it('increments a row that came from the seed, not from a prior add', async () => {
     // A row already in the database has a low explicit id and sits under the
-    // unique index. The add path must find it by (owner, scryfall_id, finish)
+    // unique index. The add path must find it by (owner_id, scryfall_id, finish)
     // and update it, rather than collide trying to insert alongside it.
     await exec(
-      `INSERT INTO cards (owner, qty, finish, foil_flag, scryfall_id, name, name_norm,
+      `INSERT INTO cards (owner_id, qty, finish, foil_flag, scryfall_id, name, name_norm,
                           setcode, collector_number)
-       VALUES ('matt', 3, 'nonfoil', '', ?, 'Lightning Bolt', 'lightning bolt', '2x2', '117')`,
+       VALUES (1, 3, 'nonfoil', '', ?, 'Lightning Bolt', 'lightning bolt', '2x2', '117')`,
       BOLT_SCRYFALL_ID,
     );
 
@@ -125,7 +126,7 @@ describe('POST /cards/add — an existing card', () => {
     await post('/cards/add', { list: '1 Lightning Bolt (2X2) 117' }, stubScryfall());
     await post('/cards/add', { list: '1 Lightning Bolt (2X2) 117 *F*' }, stubScryfall());
 
-    const rows = await sql("SELECT finish, qty FROM cards WHERE owner='matt' AND name_norm='lightning bolt' ORDER BY finish");
+    const rows = await sql("SELECT finish, qty FROM cards WHERE owner_id = 1 AND name_norm='lightning bolt' ORDER BY finish");
     expect(rows).toEqual([
       { finish: 'foil', qty: 1 },
       { finish: 'nonfoil', qty: 1 },
@@ -227,7 +228,7 @@ describe('POST /cards/add — failures', () => {
     expect(r.body.resolved).toBe(3);
     expect(r.body.failed).toBe(1);
     expect(r.body.errors[0]).toMatch(/Not A Real Card/);
-    expect(await count('cards', "owner='matt' AND name_norm='lightning bolt'")).toBe(1);
+    expect(await count('cards', "owner_id = 1 AND name_norm='lightning bolt'")).toBe(1);
   });
 
   it('a Scryfall outage leaves the database untouched', async () => {
@@ -260,24 +261,28 @@ describe('POST /cards/add — failures', () => {
 
 describe('POST /cards/add — owners', () => {
   it("adding for kayla does not touch matt's collection", async () => {
-    const mattBefore = await count('cards', "owner = 'matt'");
-    await post('/cards/add', { owner: 'kayla', list: BOLT }, stubScryfall());
+    const mattBefore = await count('cards', "owner_id = 1");
+    await post('/cards/add', { collection: KAYLA, list: BOLT }, stubScryfall());
 
-    expect(await count('cards', "owner = 'matt'")).toBe(mattBefore);
-    const rows = await sql("SELECT owner, qty FROM cards WHERE name_norm = 'lightning bolt'");
-    expect(rows).toEqual([{ owner: 'kayla', qty: 1 }]);
+    expect(await count('cards', "owner_id = 1")).toBe(mattBefore);
+    const rows = await sql("SELECT owner_id, qty FROM cards WHERE name_norm = 'lightning bolt'");
+    expect(rows).toEqual([{ owner_id: 3, qty: 1 }]);
   });
 
   it('the same printing can be owned by both people independently', async () => {
-    await post('/cards/add', { owner: 'matt', list: '2 Lightning Bolt (2X2) 117' }, stubScryfall());
-    await post('/cards/add', { owner: 'kayla', list: '3 Lightning Bolt (2X2) 117' }, stubScryfall());
-    const rows = await sql("SELECT owner, qty FROM cards WHERE name_norm='lightning bolt' ORDER BY owner");
-    expect(rows).toEqual([{ owner: 'kayla', qty: 3 }, { owner: 'matt', qty: 2 }]);
+    await post('/cards/add', { list: '2 Lightning Bolt (2X2) 117' }, stubScryfall());
+    await post('/cards/add', { collection: KAYLA, list: '3 Lightning Bolt (2X2) 117' }, stubScryfall());
+    const rows = await sql("SELECT owner_id, qty FROM cards WHERE name_norm='lightning bolt' ORDER BY owner_id");
+    expect(rows).toEqual([{ owner_id: 1, qty: 2 }, { owner_id: 3, qty: 3 }]);
   });
 
-  it('owner is lowercased', async () => {
-    await post('/cards/add', { owner: 'MATT', list: BOLT }, stubScryfall());
-    expect(await count('cards', "owner = 'matt' AND name_norm = 'lightning bolt'")).toBe(1);
+  it('an owner name in the body is refused rather than read', async () => {
+    // It used to be lowercased and trusted. Ownership is an id now, and
+    // a name in the body is not one.
+    const before = await snapshot();
+    const r = await post('/cards/add', { owner: 'MATT', list: BOLT }, stubScryfall());
+    expect(r.status).toBe(400);
+    expect(await snapshot()).toEqual(before);
   });
 });
 

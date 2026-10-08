@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { env } from 'cloudflare:test';
 import {
-  postAs, post, get, call, sql, stubScryfall, MATT, KAYLA,
+  postAs, post, postOperator, get, call, sql, stubScryfall, MATT, KAYLA,
 } from './helpers.js';
 import { signIn, newSession } from '../src/accounts.js';
 
@@ -113,9 +113,9 @@ describe('a card belongs to an account id', () => {
   });
 
   it('the operator has no account, so it has to name the collection by key', async () => {
-    const none = await post('/cards/add', { list, dry_run: true }, stubScryfall());
+    const none = await postOperator('/cards/add', { list, dry_run: true }, stubScryfall());
     expect(none.status).toBe(400);
-    const named = await post('/cards/add', { collection: KAYLA, list, dry_run: false }, stubScryfall());
+    const named = await postOperator('/cards/add', { collection: KAYLA, list, dry_run: false }, stubScryfall());
     expect(named.status, JSON.stringify(named.body)).toBe(200);
     const [row] = await sql("SELECT owner_id FROM cards WHERE name = 'Sol Ring' AND owner_id = 3");
     expect(row?.owner_id).toBe(3);

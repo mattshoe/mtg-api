@@ -2,8 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { env } from 'cloudflare:test';
 import { get, postAnon, stubScryfall } from './helpers.js';
 import {
-  signIn, newSession, userForToken, endSession, slugFor, hashToken,
+  signIn, newSession, userForToken, endSession, hashToken,
 } from '../src/accounts.js';
+
+const KEY = /^[0-9a-hjkmnp-tv-z]{8}$/;
 
 /**
  * Accounts, and the sessions that stand for them.
@@ -19,9 +21,10 @@ import {
  * until it expires — so it gets the same treatment. The token goes to
  * the browser; only its SHA-256 lands in the database.
  *
- * `cards.owner` and `decks.owner` already hold a slug, so `users.slug`
- * is the join and the collection needs no migration: an account whose
- * slug is `matt` owns every row that already says `matt`.
+ * An account owns the rows whose `owner_id` is its `users.id`. The
+ * slug that used to be the join is retired: a new account's `slug`
+ * column holds its key only because the column is still NOT NULL
+ * UNIQUE, and nothing reads it.
  */
 describe('accounts', () => {
   const google = { provider: 'google', subject: '1234567890' };
@@ -31,7 +34,8 @@ describe('accounts', () => {
       ...google, email: 'someone@example.com', name: 'Some One',
     });
     expect(user.id).toBeGreaterThan(0);
-    expect(user.slug).toBe('some-one');
+    expect(user.key).toMatch(KEY);
+    expect(user.slug, 'the retired slug column should just hold the key').toBe(user.key);
     expect(user.email).toBe('someone@example.com');
     // Every account owns its own collection and nothing else. The
     // server-wide role is a separate thing and starts off.
@@ -39,66 +43,63 @@ describe('accounts', () => {
   });
 
   it('signing in again finds the same account rather than making another', async () => {
+    const users = async () => (await env.DB.prepare('SELECT COUNT(*) AS n FROM users').all()).results[0].n;
+    const before = await users();
     const first = await signIn(env.DB, { ...google, email: 'a@example.com', name: 'Some One' });
     const again = await signIn(env.DB, { ...google, email: 'a@example.com', name: 'Some One' });
     expect(again.id).toBe(first.id);
-    const { results } = await env.DB.prepare('SELECT COUNT(*) AS n FROM users').all();
-    expect(results[0].n).toBe(1);
+    expect(await users()).toBe(before + 1);
   });
 
-  it('two people with the same name get different slugs', async () => {
+  it('two people with the same name get different keys', async () => {
     const one = await signIn(env.DB, { provider: 'google', subject: '1', name: 'Some One' });
     const two = await signIn(env.DB, { provider: 'google', subject: '2', name: 'Some One' });
-    expect(one.slug).toBe('some-one');
-    expect(two.slug).toMatch(/^some-one-[0-9a-hjkmnp-tv-z]{4}$/);
+    expect(one.id).not.toBe(two.id);
+    expect(one.key).toMatch(KEY);
+    expect(two.key).toMatch(KEY);
+    expect(two.key).not.toBe(one.key);
   });
 
-  it('a slug is a path segment and nothing else', () => {
-    // It goes in a URL — `#/c/<slug>` — so anything that would need
-    // escaping there has no business in one.
-    expect(slugFor("Matt O'Shoemaker")).toBe('matt-o-shoemaker');
-    expect(slugFor('  Ünïcødé  Name ')).toBe('unicode-name');
-    expect(slugFor('///')).toBe('player');
-    expect(slugFor('')).toBe('player');
+  it('the address is a path segment whatever the name is', async () => {
+    // It goes in a URL — `#/c/<key>` — so anything that would need
+    // escaping there has no business in one. It is not built from
+    // the name, so no name can put anything there.
+    const names = ["Matt O'Shoemaker", '  Ünïcødé  Name ', '///', '', null];
+    for (const [n, name] of names.entries()) {
+      const u = await signIn(env.DB, { provider: 'google', subject: `seg-${n}`, name });
+      expect(u.key, `the address for ${JSON.stringify(name)}`).toMatch(KEY);
+    }
   });
 
   /**
-   * The slug stops counting at a collision.
+   * A crowd of one name is a crowd of accounts.
    *
    * Matt: "What slug when we have thousands of users??? How are we
    * going to keep them distinct???"
    *
-   * It used to try `base-2`, `base-3` … up to `base-999` and then
-   * throw, which is a query per attempt on the sign-in path and a
-   * hard failure for the thousandth John Smith. Four random
-   * characters cost one query and have no ceiling.
-   *
-   * None of this is what keeps accounts apart: `users.key` is, and it
-   * is eight characters of a 32-letter alphabet — a trillion of them.
-   * The slug is the word in `cards.owner` and on the screen, and it
-   * only has to be unique, not meaningful.
+   * The answer ended up being: not with a slug at all. `users.key` is
+   * eight characters of a 32-letter alphabet — a trillion of them —
+   * and the retired `slug` column, which is still UNIQUE, holds the
+   * same key, so the thousandth John Smith collides with nothing.
    */
-  it('a crowd of the same name all get their own slug', async () => {
+  it('a crowd of the same name all get their own key', async () => {
     const seen = new Set();
     for (let n = 0; n < 25; n += 1) {
       const u = await signIn(env.DB, { provider: 'google', subject: `crowd-${n}`, name: 'John Smith' });
-      expect(seen.has(u.slug), `${u.slug} was handed out twice`).toBe(false);
-      seen.add(u.slug);
+      expect(seen.has(u.key), `${u.key} was handed out twice`).toBe(false);
+      expect(u.slug).toBe(u.key);
+      seen.add(u.key);
     }
     expect(seen.size).toBe(25);
-    // The first one gets the clean name; the rest are marked.
-    expect(seen.has('john-smith')).toBe(true);
-    [...seen].filter((s) => s !== 'john-smith').forEach((s) => {
-      expect(s, `${s} is not the name plus a suffix`).toMatch(/^john-smith-[0-9a-hjkmnp-tv-z]{4}$/);
-    });
   });
 
-  it('and none of them is a number anybody could guess the next of', async () => {
-    // `john-smith-2` tells you there is a `john-smith` and invites a
-    // `john-smith-3`. A random suffix says nothing.
+  it('and none of them is a name or a number anybody could guess the next of', async () => {
+    // `jane-doe-2` tells you there is a `jane-doe` and invites a
+    // `jane-doe-3`. A random key says nothing.
     await signIn(env.DB, { provider: 'google', subject: 'g1', name: 'Jane Doe' });
     const second = await signIn(env.DB, { provider: 'google', subject: 'g2', name: 'Jane Doe' });
-    expect(second.slug).not.toBe('jane-doe-2');
+    expect(second.key).not.toMatch(/jane|doe|-\d/i);
+    expect(second.slug).not.toMatch(/jane|doe|-\d/i);
   });
 
   it('the key is what is actually unique, and it is long', async () => {
@@ -111,11 +112,11 @@ describe('accounts', () => {
     expect(keys.size).toBe(10);
   });
 
-  it('a slug cannot collide with a collection that already exists', async () => {
-    // `cards.owner` holds slugs today and nobody has signed in yet, so
-    // the names already in the collection have to be reserved or the
-    // first Matthew to sign in would be handed Matt's cards.
+  it('a new account called Matt is not the account that owns Matt\'s collection', async () => {
+    // Ownership is the id, and a new sign-in gets a new one, so the
+    // first Matthew through the door is not handed Matt's cards.
     const user = await signIn(env.DB, { provider: 'google', subject: '9', name: 'Matt' });
+    expect(user.id).not.toBe(1);
     expect(user.slug).not.toBe('matt');
   });
 
@@ -138,7 +139,7 @@ describe('accounts', () => {
     const token = await newSession(env.DB, user.id);
     const found = await userForToken(env.DB, token);
     expect(found.id).toBe(user.id);
-    expect(found.slug).toBe(user.slug);
+    expect(found.key).toBe(user.key);
   });
 
   it('a token nobody issued names nobody', async () => {
@@ -210,7 +211,7 @@ describe('a collection key', () => {
     const b = await signIn(env.DB, { provider: 'google', subject: '2', name: 'Same Name' });
     expect(a.key).not.toBe(b.key);
     // And the names collided, which is the thing a key is for.
-    expect(b.slug).toMatch(/^same-name-[0-9a-hjkmnp-tv-z]{4}$/);
+    expect(b.display_name).toBe(a.display_name);
   });
 
   it('it is not a name, so it gives nothing away', async () => {
@@ -239,8 +240,9 @@ describe('a collection key', () => {
     const r = await get(`/c/${user.key}`);
     expect(r.status).toBe(200);
     expect(r.body.key).toBe(user.key);
-    expect(r.body.slug).toBe(user.slug);
     expect(r.body.name).toBe('Some One');
+    expect(r.body).not.toHaveProperty('slug');
+    expect(r.body).not.toHaveProperty('id');
     // Somebody else's address is not their inbox.
     expect(JSON.stringify(r.body)).not.toContain('private@example.com');
   });
@@ -254,7 +256,7 @@ describe('a collection key', () => {
     // nobody can write to one by holding it.
     const user = await signIn(env.DB, google);
     const r = await postAnon('/cards/add', {
-      owner: user.slug, list: '1 Sol Ring (M3C) 409', dry_run: true, key: user.key,
+      collection: user.key, list: '1 Sol Ring (M3C) 409', dry_run: true,
     }, stubScryfall());
     expect(r.status).toBe(401);
   });

@@ -9,7 +9,7 @@ describe('totals', () => {
   it('has the columns the old table had', async () => {
     const info = await sql('PRAGMA table_info(totals)');
     expect(info.map((c) => c.name)).toEqual([
-      'owner', 'name', 'name_norm', 'face1', 'face2', 'total_qty',
+      'owner_id', 'name', 'name_norm', 'face1', 'face2', 'total_qty',
       'num_printings', 'has_foil', 'sets', 'cmc', 'type_line', 'rarity',
       'color_identity',
     ]);
@@ -17,37 +17,37 @@ describe('totals', () => {
 
   it('sums quantity across printings of the same card', async () => {
     const rows = await sql(`
-      SELECT t.owner, t.name_norm, t.total_qty, t.num_printings,
+      SELECT t.owner_id, t.name_norm, t.total_qty, t.num_printings,
              (SELECT SUM(qty) FROM cards c
-               WHERE c.owner = t.owner AND c.name_norm = t.name_norm) AS real_qty,
+               WHERE c.owner_id = t.owner_id AND c.name_norm = t.name_norm) AS real_qty,
              (SELECT COUNT(*) FROM cards c
-               WHERE c.owner = t.owner AND c.name_norm = t.name_norm) AS real_printings
+               WHERE c.owner_id = t.owner_id AND c.name_norm = t.name_norm) AS real_printings
         FROM totals t`);
     expect(rows.length).toBeGreaterThan(0);
     for (const r of rows) {
-      expect(r.total_qty, `${r.owner}/${r.name_norm}`).toBe(r.real_qty);
-      expect(r.num_printings, `${r.owner}/${r.name_norm}`).toBe(r.real_printings);
+      expect(r.total_qty, `${r.owner_id}/${r.name_norm}`).toBe(r.real_qty);
+      expect(r.num_printings, `${r.owner_id}/${r.name_norm}`).toBe(r.real_printings);
     }
   });
 
   it('never merges the two collections', async () => {
     const dupes = await sql(`
-      SELECT name_norm, COUNT(DISTINCT owner) AS owners
+      SELECT name_norm, COUNT(DISTINCT owner_id) AS owners
         FROM totals GROUP BY name_norm HAVING owners > 1`);
     for (const d of dupes) {
-      const rows = await sql('SELECT owner FROM totals WHERE name_norm = ?', d.name_norm);
+      const rows = await sql('SELECT owner_id FROM totals WHERE name_norm = ?', d.name_norm);
       // A card owned by both people is two rows, not one merged row.
-      expect(new Set(rows.map((r) => r.owner)).size).toBe(d.owners);
+      expect(new Set(rows.map((r) => r.owner_id)).size).toBe(d.owners);
     }
-    const perOwner = await sql('SELECT COUNT(*) AS n FROM totals GROUP BY owner');
+    const perOwner = await sql('SELECT COUNT(*) AS n FROM totals GROUP BY owner_id');
     expect(perOwner.length).toBeGreaterThan(1);
   });
 
   it('has_foil is set when any printing is not nonfoil', async () => {
     const rows = await sql(`
-      SELECT t.name_norm, t.owner, t.has_foil,
+      SELECT t.name_norm, t.owner_id, t.has_foil,
              (SELECT MAX(CASE WHEN finish != 'nonfoil' THEN 1 ELSE 0 END)
-                FROM cards c WHERE c.owner = t.owner AND c.name_norm = t.name_norm) AS real
+                FROM cards c WHERE c.owner_id = t.owner_id AND c.name_norm = t.name_norm) AS real
         FROM totals t`);
     for (const r of rows) expect(r.has_foil).toBe(r.real);
   });
@@ -81,21 +81,21 @@ describe('card_usage', () => {
 
   it('proxy and PROPOSED decks do not consume cards', async () => {
     const excluded = await sql(`
-      SELECT dc.name_norm, d.owner, SUM(dc.qty) AS q
+      SELECT dc.name_norm, d.owner_id, SUM(dc.qty) AS q
         FROM deck_cards dc JOIN decks d ON d.id = dc.deck_id
        WHERE (d.is_proxy = 1 OR d.status LIKE 'PROPOSED%')
          AND dc.in_collection = 1
-       GROUP BY dc.name_norm, d.owner`);
+       GROUP BY dc.name_norm, d.owner_id`);
 
     for (const e of excluded) {
       const real = await sql(`
         SELECT COALESCE(SUM(dc.qty), 0) AS q
           FROM deck_cards dc JOIN decks d ON d.id = dc.deck_id
-         WHERE dc.name_norm = ? AND d.owner = ? AND dc.in_collection = 1
+         WHERE dc.name_norm = ? AND d.owner_id = ? AND dc.in_collection = 1
            AND d.is_proxy = 0 AND (d.status IS NULL OR d.status NOT LIKE 'PROPOSED%')`,
-      e.name_norm, e.owner);
+      e.name_norm, e.owner_id);
       const usage = await sql(
-        'SELECT in_decks FROM card_usage WHERE name_norm = ? AND owner = ?', e.name_norm, e.owner,
+        'SELECT in_decks FROM card_usage WHERE name_norm = ? AND owner_id = ?', e.name_norm, e.owner_id,
       );
       if (usage.length) expect(usage[0].in_decks).toBe(real[0].q);
     }
@@ -103,14 +103,14 @@ describe('card_usage', () => {
 
   it('does not count one owner\'s deck against the other\'s collection', async () => {
     const rows = await sql(`
-      SELECT cu.owner, cu.name_norm, cu.in_decks
+      SELECT cu.owner_id, cu.name_norm, cu.in_decks
         FROM card_usage cu WHERE cu.in_decks > 0`);
     for (const r of rows) {
       const real = await sql(`
         SELECT SUM(dc.qty) AS q FROM deck_cards dc JOIN decks d ON d.id = dc.deck_id
-         WHERE dc.name_norm = ? AND d.owner = ? AND dc.in_collection = 1
+         WHERE dc.name_norm = ? AND d.owner_id = ? AND dc.in_collection = 1
            AND d.is_proxy = 0 AND (d.status IS NULL OR d.status NOT LIKE 'PROPOSED%')`,
-      r.name_norm, r.owner);
+      r.name_norm, r.owner_id);
       expect(r.in_decks).toBe(real[0].q);
     }
   });
@@ -147,36 +147,36 @@ describe('deck_gaps', () => {
   });
 
   it('every row names a real deck', async () => {
-    const rows = await sql('SELECT slug FROM deck_gaps');
+    const rows = await sql('SELECT key FROM deck_gaps');
     for (const r of rows) {
-      expect(await count('decks', 'slug = ?', r.slug)).toBe(1);
+      expect(await count('decks', 'key = ?', r.key)).toBe(1);
     }
   });
 });
 
 describe('decks_not_built', () => {
   it('is proxies and PROPOSED decks, for either owner', async () => {
-    const view = await sql('SELECT slug FROM decks_not_built ORDER BY slug');
+    const view = await sql('SELECT key FROM decks_not_built ORDER BY key');
     const direct = await sql(`
-      SELECT slug FROM decks
+      SELECT key FROM decks
        WHERE NOT (is_proxy = 0 AND (status IS NULL OR status NOT LIKE 'PROPOSED%'))
-       ORDER BY slug`);
+       ORDER BY key`);
     expect(view).toEqual(direct);
   });
 
   it('a real built deck is not in it', async () => {
     const built = await sql(`
-      SELECT slug FROM decks
+      SELECT key FROM decks
        WHERE is_proxy = 0 AND (status IS NULL OR status NOT LIKE 'PROPOSED%') LIMIT 1`);
     if (built.length) {
-      expect(await count('decks_not_built', 'slug = ?', built[0].slug)).toBe(0);
+      expect(await count('decks_not_built', 'key = ?', built[0].key)).toBe(0);
     }
   });
 });
 
 describe('deck_conflicts', () => {
   it('fires only when a card is slotted more times than it is owned', async () => {
-    const rows = await sql('SELECT owner, name, owned, in_decks FROM deck_conflicts');
+    const rows = await sql('SELECT owner_id, name, owned, in_decks FROM deck_conflicts');
     for (const r of rows) expect(r.in_decks).toBeGreaterThan(r.owned);
   });
 
@@ -184,9 +184,9 @@ describe('deck_conflicts', () => {
     // Built rather than found: own 2 copies, commit both to two real decks,
     // then sell one. Two decks so the surviving row keeps in_decks at 2.
     const decks = await sql(`
-      SELECT id, owner FROM decks
+      SELECT id, owner_id FROM decks
        WHERE is_proxy = 0 AND (status IS NULL OR status NOT LIKE 'PROPOSED%')
-         AND owner = 'matt' LIMIT 2`);
+         AND owner_id = 1 LIMIT 2`);
     if (decks.length < 2) throw new Error('fixture needs two built decks for matt');
 
     await post('/cards/add', { list: '2 Lightning Bolt (2X2) 117' }, stubScryfall());
@@ -222,7 +222,7 @@ describe('deck_conflicts', () => {
     // snapshot that does not notice either.
     const [deck] = await sql(`
       SELECT id FROM decks WHERE is_proxy = 0
-        AND (status IS NULL OR status NOT LIKE 'PROPOSED%') AND owner = 'matt' LIMIT 1`);
+        AND (status IS NULL OR status NOT LIKE 'PROPOSED%') AND owner_id = 1 LIMIT 1`);
     await post('/cards/add', { list: '1 Lightning Bolt (2X2) 117' }, stubScryfall());
     await exec(
       `INSERT INTO deck_cards (deck_id, qty, name, name_norm, raw_name, role, in_collection)
