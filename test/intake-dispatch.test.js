@@ -168,6 +168,14 @@ describe('mergeMode', () => {
     expect(mergeMode('---\nstatus: ready\n---\n\nshould we merge: ask?\n')).toBe('auto')
   })
 
+  it('answers auto for a file with no frontmatter at all', () => {
+    // Nothing here can build such a file — `buildable` rejects it — but this
+    // must still not return `ask`, or a malformed request would read as
+    // "waiting for Matt" rather than as the junk it is.
+    expect(mergeMode('# no frontmatter at all\n')).toBe('auto')
+    expect(mergeMode('')).toBe('auto')
+  })
+
   it('ignores a trailing comment and reads a CRLF file', () => {
     expect(mergeMode('---\nmerge: ask # schema change\n---\n')).toBe('ask')
     expect(mergeMode('---\r\nmerge: ask\r\n---\r\n')).toBe('ask')
