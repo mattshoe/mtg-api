@@ -280,6 +280,24 @@ class LibraryDriverTest {
         assertEquals("edhrec", app.select("select.sort").value, "the dropdown lost its selection")
     }
 
+    /**
+     * "The edhrec sorting looks backwards." Down is the good end on
+     * every column, and the good end of a rank is rank 1.
+     */
+    @Test
+    fun pickingEdhrecWithTheArrowDownSaysMostPlayedFirst() = runTest {
+        val app = mount()
+        settle()
+        app.pick("select.sort", "edhrec")
+        settle()
+        assertTrue(app.state.library.filters.descending, "picking EDHREC reversed the arrow")
+        assertEquals(
+            "Most played first",
+            app.button("↓").getAttribute("title"),
+            "the arrow points down on EDHREC but puts the rank 22,000 end on top",
+        )
+    }
+
     @Test
     fun theDirectionButtonFlipsAndSaysWhichWayItIs() = runTest {
         val app = mount()
