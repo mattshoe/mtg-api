@@ -570,14 +570,23 @@ describe('a worktree that is already there', () => {
     expect(readFileSync(handed, 'utf8')).toContain('EDITED AFTER THE COMMIT')
   })
 
-  it('is never overwritten — no agent starts on top of it', () => {
-    const tree = withExistingWorktree()
-    const r = run('dispatch.sh')
-    expect(r.status).toBe(0)
-    expect(box.log()).not.toContain('claude')
-    logged('skipping a-thing')
-    logged('delete it to retry')
-    expect(readFileSync(join(tree, 'half.txt'), 'utf8')).toBe('half a change\n')
+  it('is resumed, not refused, once its agent has stopped', () => {
+    // Refusing meant the only way past a stopped agent was a human deleting
+    // its unpushed work by hand. That is a wedge with a polite message, not
+    // recovery — and a rate limit stops an agent at any moment.
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    const wt = join(box.repo, '.intake', 'wt', 'a-thing')
+    mkdirSync(join(wt, 'requests'), { recursive: true })
+    writeFileSync(join(wt, 'precious.txt'), 'work from the agent that stopped\n')
+
+    run('dispatch.sh')
+
+    // It picked the tree up rather than turning away...
+    expect(box.intakeLog()).toContain('resuming a-thing')
+    // ...told the agent what it was inheriting...
+    expect(box.log()).toContain('YOU ARE RESUMING')
+    // ...and did not touch what was already there.
+    expect(readFileSync(join(wt, 'precious.txt'), 'utf8')).toContain('work from the agent that stopped')
   })
 
   it('is never deleted, and the request stays live so nothing is lost', () => {
