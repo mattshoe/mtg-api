@@ -14,9 +14,10 @@
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
+import { withoutFrontmatter } from './next-version.mjs'
 
 export function releaseBody(notes, sha) {
-  const written = notes.map((n) => n.trim()).filter(Boolean)
+  const written = notes.map((n) => withoutFrontmatter(n).trim()).filter(Boolean)
   const built = `Built from ${sha}. Install over the top; same signing key.`
   return [...written, built].join('\n\n')
 }
