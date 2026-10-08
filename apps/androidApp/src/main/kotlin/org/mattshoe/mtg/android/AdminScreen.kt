@@ -14,10 +14,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.mattshoe.mtg.core.Design
 import org.mattshoe.mtg.core.People
 import org.mattshoe.mtg.core.Person
+import org.mattshoe.mtg.core.Releases
 import org.mattshoe.mtg.core.Role
 
 /**
@@ -38,6 +41,7 @@ fun AdminScreen(
     state: People,
     me: String?,
     person: Person?,
+    releases: Releases = Releases(),
     onSearch: (String) -> Unit = {},
     onOpen: (Person) -> Unit = {},
     onSetRole: (Person, String) -> Unit = { _, _ -> },
@@ -53,6 +57,7 @@ fun AdminScreen(
             PersonPage(state, person, me, onSetRole, onBack)
         } else {
             Everybody(state, onSearch, onOpen)
+            ReleaseNotes(releases)
         }
     }
 }
@@ -79,6 +84,38 @@ private fun Everybody(state: People, onSearch: (String) -> Unit, onOpen: (Person
             state.rows.isEmpty() -> Line("No accounts yet.", Ink3)
             state.nothingMatched -> Line("Nobody matches that.", Ink3)
             else -> state.shown.forEach { p -> PersonRow(p, onOpen) }
+        }
+    }
+}
+
+/**
+ * Every build that shipped, newest first: its version, the day, and
+ * what a person wrote about it.
+ *
+ * Matt: "I JUST WANT TO FUCKING SEE THEM IN THE ADMIN SETTINGS!!!!!"
+ */
+@Composable
+private fun ReleaseNotes(releases: Releases) {
+    Panel(head = "Release notes") {
+        when {
+            releases.busy -> Line("Loading…", Ink3)
+            releases.error != null -> Line("Could not load release notes: ${releases.error}", Bad)
+            releases.rows.isEmpty() -> Line("No releases yet.", Ink3)
+            else -> releases.rows.forEach { r ->
+                Column(
+                    Modifier.fillMaxWidth()
+                        .padding(vertical = 7.dp)
+                        .semantics(mergeDescendants = true) {}
+                        .testTag("release"),
+                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                ) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Line(r.version, Ink, Design.BODY, FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                        Line(r.date, Ink3, Design.MINI)
+                    }
+                    Line(r.shownNote, if (r.note == null) Ink3 else Ink, Design.SMALL)
+                }
+            }
         }
     }
 }

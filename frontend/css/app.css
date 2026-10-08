@@ -1706,6 +1706,14 @@ select.sort {
 .person-row + .person-row { border-top: 1px solid var(--line); border-radius: 0; }
 .person-row .chev { margin-left: 2px; font-size: 18px; }
 
+/* Release notes on Admin Settings: one build per entry, newest first. */
+.wrap > .panel + .panel { margin-top: 16px; }
+.release { display: flex; flex-direction: column; gap: 4px; padding: 10px 4px; }
+.release + .release { border-top: 1px solid var(--line); }
+.release-head { display: flex; align-items: baseline; gap: 9px; }
+.release-version { color: var(--text); font-weight: 650; }
+.release-note { color: var(--text); white-space: pre-line; }
+
 /* One account's own page: a big face, their name, their address. */
 .person-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
 .person-face {
