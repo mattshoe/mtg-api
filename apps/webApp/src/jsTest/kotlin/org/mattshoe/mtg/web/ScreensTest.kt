@@ -237,7 +237,7 @@ class ScreensTest {
     // ------------------------------------------------------------- card
 
     @Test
-    fun theCardSheetSaysWhatIsOwnedAndWhatIsFree() = runTest {
+    fun theCardSheetSaysWhichDecksWantItAndNotWhoOwnsIt() = runTest {
         val detail = CardDetail(
             name = "Sol Ring",
             printings = listOf(
@@ -249,8 +249,8 @@ class ScreensTest {
         settle()
         // The name is in the header bar, the same as every other
         // page's title, rather than repeated at the top of the body.
-        assertTrue(root.text().contains("3 owned"), root.text())
-        assertTrue(root.text().contains("2 free"))
+        // Matt does not want ownership on the card page.
+        assertTrue("owned" !in root.text() && "free" !in root.text(), root.text())
         assertTrue(root.text().contains("Alela"))
     }
 
