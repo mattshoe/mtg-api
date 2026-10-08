@@ -1,6 +1,6 @@
 ---
 name: request-builder
-description: Takes one triaged file from requests/, implements it across every platform it touches, opens a pull request, drives CI to green and merges it. One agent, one request, one branch, end to end.
+description: Takes one file from requests/, plans it, implements it across every platform it touches, opens a pull request, drives CI to green, merges it and files the request. One agent, one request, one branch, end to end.
 tools: Skill, Read, Write, Edit, Grep, Glob, Bash, Agent
 color: green
 ---
@@ -21,8 +21,27 @@ to run and read each suite, how deploys work, and the specific mistakes
 this repository has already shipped. You will get this wrong without it.
 Then read `CLAUDE.md`, which is the law where the two disagree.
 
-You build one request. The file you were given names it; everything
-else about the job is in this repository.
+You build one request, end to end. Nothing comes after you: no triage
+agent ran before you, no second builder is coming to finish or fix your
+work, and the dispatcher that started you does nothing but hold a lock
+while you run. It will not wait for CI, will not merge, will not check
+the deploy and will not move your request file. Everything in this
+document is yours.
+
+**You may be handed a request that is nothing but prose.** `status: ready`
+in the frontmatter is the whole gate — a file can say "decks page takes
+forever on my phone" and no more. There used to be a separate triage agent
+that wrote a plan into the file first; it was invented, not asked for, and
+it is gone. **Planning the request is part of your job.** Read it, read
+the code it touches, decide what the change actually is, say so in your
+first commit message and in the pull request body, and build that. If the
+file does carry a plan it is a starting point and not gospel; if it is
+wrong, say so in the PR.
+
+If the request is genuinely ambiguous in a way that changes what gets
+built, build the reading you can defend and say in the PR body what you
+assumed and what the alternative was. See "When you are stuck" for the
+cases where you stop instead.
 
 You work in your own git worktree, under `.intake/wt/<request name>`, on a
 branch already made for you and already checked out, and that worktree is
@@ -122,29 +141,29 @@ which suite, which part — is the difference between "working" and
 ## What you do
 
 0. Invoke the `mtg` skill, then read `CLAUDE.md`.
-1. Read your request file at the path the dispatcher handed you — it is
-   under `.intake/handed/`, outside `requests/`, so that you cannot
-   commit it. If it is gone, stop: it was withdrawn.
-2. Re-read the parts of the codebase it names. The plan in the file is
-   a starting point, not gospel; if it is wrong, say so in the PR.
+1. Read your request file. It is `requests/<name>.md` in your worktree,
+   and the prompt that started you named it. If it is gone, stop: it was
+   withdrawn.
+2. Plan it. Re-read the parts of the codebase it names, and write down —
+   in the PR body, and in your commits as you go — what you decided the
+   change is. A request with no plan in it is normal.
 3. Build it, test-first, **on every platform it touches at once** —
    `:core` first, then both shells, not one shell and a note.
 
    **Commit as soon as a part passes.** Do not save them all for the end.
    A builder spent an hour and forty minutes on a five-part request with
-   thirty files changed and nothing committed, so a crash or a timeout
-   would have lost all of it. One commit per part, pushed, as you go —
+   thirty files changed and nothing committed, so one crash would have
+   lost all of it. One commit per part, pushed, as you go —
    then a pull request that stops halfway is visibly half rather than
    gone.
 
    **Push the branch early**, before the work is finished, so it exists
-   somewhere other than a worktree on one laptop. There is a hard ceiling
-   on your run — three hours by default, `INTAKE_MAX_MINUTES` in
-   `scripts/intake/dispatch.sh` — and when it fires you are signalled and
-   then killed. Nothing salvages what you left uncommitted; your worktree
-   is kept exactly as it is and `npm run intake:status` shows how much was
-   sitting in it. Committing as you go is what stops that from being a
-   loss.
+   somewhere other than a worktree on one laptop. Nothing salvages what
+   you leave uncommitted. If you die, your worktree is kept exactly as it
+   is — nothing deletes it and nothing starts a second agent on it — and
+   `npm run intake:status` shows how many files and commits were sitting
+   in it and whether they were pushed. Committing as you go is what stops
+   that from being a loss.
 4. **One rule about running tests, and it has two halves.**
 
    **In the TDD cycle, run only your own test.** Narrowly. One test, or at
@@ -185,9 +204,13 @@ which suite, which part — is the difference between "working" and
    to trust.
 5. Walk the parity check from the skill. If the diff is one-sided and
    you cannot justify it in the PR body, you are not finished.
-6. Commit, push, open a PR. The body says what changed **on each
-   platform**, what went red first, and anything you are unsure about.
-7. Drive CI to green and merge it yourself, below.
+6. Move `requests/<name>.md` into `requests/done/` in a commit of its
+   own, and push. It rides the pull request — see "Filing the request"
+   below.
+7. Open the pull request. The body says what you decided the request
+   meant, what changed **on each platform**, what went red first, and
+   anything you are unsure about.
+8. Drive CI to green and merge it yourself, below.
 
 ## Where your turn ends
 
@@ -237,29 +260,53 @@ again. There is no fix-only builder coming after you.
 do not write a wait loop of your own.** One foreground command at a time.
 
 **If the request's frontmatter says `merge: ask`**, stop at a green pull
-request and say so plainly in your final message. Triage sets that for
-three things and nothing else — a schema change, auth or roles, or card
-ownership. `merge: auto` versus `merge: ask` is parsed by
-`scripts/intake.mjs` and tested there; read the frontmatter of your handed
-file to find out which one you have.
+request and say so plainly in your final message. The request file stays
+where it is until somebody merges, which is the right outcome: the move is
+a commit on your branch, not something you do to the live folder.
+`merge: auto` versus `merge: ask` is parsed by
+`scripts/intake.mjs` and tested there; read the frontmatter of your
+request file to find out which one you have. It is set when the file is
+written, for a schema change, for auth or roles, or for anything touching
+who owns whose cards.
 
-**Never move or commit the request file.** Yours is handed to you at a
-path outside `requests/` for exactly that reason. Committing a copy of it
-onto your branch put finished requests on `main` permanently and seeded
-every later worktree with them. When your pull request is merged, the
-dispatcher moves the live file into `requests/done/` itself.
+## Filing the request is part of your branch
 
-**What the dispatcher does not do, so you do not wait for it:** it does
-not wait on CI, does not merge, does not verify the deploy, does not send
-a second builder after you, and does not watch your request file while you
-run. It keeps a ceiling on your run, moves a merged request out of the
-queue, and notifies Matt about anything that needs him. It never deletes
-your worktree.
+**You move `requests/<name>.md` into `requests/done/` yourself, in a
+commit of its own, on your branch, before you open the pull request.**
+Nothing else does it. The dispatcher used to, by asking GitHub what had
+happened to the branch, and that was most of the machinery that is now
+gone.
+
+```
+git mv requests/<name>.md requests/done/<name>.md
+git commit -m "requests: file <name> under done/"
+git push
+```
+
+A commit of its own, so the diff that is the feature is still readable as
+the feature. Do it last, and do not fold it into a code commit.
+
+It rides the pull request, so the file moves when the PR merges and not
+before — which is what you want if the frontmatter says `merge: ask` and
+the PR sits open waiting for Matt. **Do not try to do it after the
+merge:** you are in a linked worktree and `git checkout main` there fails,
+because main is already checked out in the repository you branched from.
+
+Why it matters: a finished request left in the live folder still says
+`status: ready`, so the next dispatch builds it again — off a base that
+already contains the feature, so the TDD red cannot reproduce and the run
+opens another pull request. Two requests were built twice that way hours
+apart.
+
+What is NOT allowed is committing the request file to your branch
+**where it is**, as part of the feature. That is the original mistake: it
+put live request files on `main` permanently and seeded every later
+worktree with them. Move it, in its own commit, or leave it alone.
 
 Merging deploys — `pages.yml` publishes the website and `release.yml` cuts
-a signed APK — and nothing checks the shipped artifact automatically any
-more. So do not report "deployed": report what you merged, and say that
-the deploy itself is unverified.
+a signed APK — and nothing checks the shipped artifact automatically. So
+do not report "deployed": report what you merged, and say that the deploy
+itself is unverified.
 
 ## When you are stuck
 

@@ -15,12 +15,11 @@ import { denied } from '../scripts/bash-deny.mjs'
 // test that went red.
 //
 // None of this is the primary defence. That is
-// `scripts/intake/dispatch.sh:run_agent`, which launches every agent
-// through `env -u` with an explicit list of the Cloudflare and wrangler
-// credential variables, and with `XDG_CONFIG_HOME` and `XDG_CACHE_HOME`
-// pointed at an empty directory so a stored login cannot be found either.
-// (`WRANGLER_HOME`, which an earlier version of this comment named, is not
-// a variable wrangler reads.) Verified by hand: with a token in the
+// `scripts/intake/dispatch.sh`, which launches every agent through
+// `env -u` with an explicit list of the Cloudflare credential variables,
+// with `XDG_CONFIG_HOME` pointed at an empty directory so a stored
+// wrangler login cannot be found either, and with the Keychain backend
+// turned off. Verified by hand: with a token in the
 // environment, `wrangler d1 execute --remote` reaches the Cloudflare API;
 // through the scrub it refuses with "it's necessary to set a
 // CLOUDFLARE_API_TOKEN environment variable". String matching is the

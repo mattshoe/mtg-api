@@ -1,56 +1,74 @@
 # requests/
 
-One file per thing you want. Drop it in and walk away.
+One file per thing Matt wants. A file lands here, an agent builds it and
+opens a pull request, and nobody has to be sitting there while it happens.
 
-A watcher notices the file, triage reads it and writes a plan into it, and
-a builder agent picks it up, implements it, opens a pull request, waits for
-CI and merges it on green. You do not have to be here, and neither do I.
+## Who writes the file
 
-## Writing one
-
-A request is a file. That is the whole format:
+Matt asks for something in conversation. **The coordinating Claude session
+writes the file** — that is the normal path, and it is the reason
+`status: ready` means anything: a coordinator writes a request complete, in
+one Write, rather than saving a half-finished one and coming back to it.
 
 ```
 requests/edhrec-rank-on-tiles.md
 ```
 
 ```markdown
+---
+status: ready
+merge: auto
+---
+
 # EDHREC rank on the grid tiles
 
-The carousel shows it now. I want it on the Library tiles too,
+The carousel shows it now. Matt wants it on the Library tiles too,
 small, under the price.
 ```
 
-A title and a sentence is plenty. Half a sentence is fine —
-`requests/decks-load-slow.md` containing "decks page takes forever on
-my phone" is a legitimate request and triage will come back with
-questions in the file itself rather than blocking on you.
+That is the whole format: frontmatter, a title, and whatever the
+coordinator knows about what Matt actually wants. A plan is welcome and
+optional — the builder plans too, and a request that is one sentence of
+prose is a legitimate request.
 
-Name the file whatever you like; the name becomes the branch, so
-`fix-the-thing.md` is easier to live with than `asdf.md`.
+- `status: ready` is the only gate. Anything else — `needs-matt`,
+  `blocked`, a typo, no `status:` line at all — is held, never built. So a
+  file that is not finished is safe as long as it does not say `ready`.
+- `merge: auto` merges on green CI. Use `merge: ask` for a schema change,
+  for auth or roles, or for anything touching who owns whose cards; the
+  builder then stops at a green pull request. A missing `merge:` line
+  means ask, because that is the shape a file typed by hand has.
+- The name becomes the branch, so `fix-the-thing.md` is easier to live
+  with than `asdf.md`.
+
+**Writing the file is what starts the build.** The coordinator used Write
+or Edit on a path under `requests/`, which fires the PostToolUse hook in
+`.claude/settings.json`, which runs the dispatcher. The launchd watcher
+covers files that appear while nobody is here.
+
+Matt can still drop a file in himself, and nothing cares which of them did
+it.
 
 ## What happens to it
 
 ```
-requests/thing.md          you wrote it
-  → triage                 reads it and sizes it, IN PLACE. It does not
-                           split one request into several or fold two into
-                           one — the copy-back out of its worktree could
-                           only ever return the files it was handed, so
-                           anything it created was silently thrown away
-  → requests/thing.md      rewritten with a plan, tests and a done-when
-  → builder                one worktree under `.intake/wt/thing`, TDD, both
-                           platforms, a pull request, then CI, then merge
+requests/thing.md          written, with status: ready
+  → dispatcher             takes the lock, fetches, makes ONE worktree
+                           under `.intake/wt/thing` off origin/main and
+                           runs ONE agent in it. Then it logs a line and
+                           releases the lock. That is all it does
+  → builder                plans it, builds it test-first on both
+                           platforms, opens a pull request, blocks on
+                           `gh pr checks --watch --fail-fast`
+  → requests/done/thing.md moved there by the builder, in a commit of its
+                           own on its own branch, so it rides the PR
   → merged                 by the builder itself, on all-green. That
                            deploys the site and cuts an APK
-  → requests/done/thing.md moved here by the dispatcher
 ```
 
-The builder owns the whole of that, CI and the merge included. It waits
-with `gh pr checks <n> --watch --fail-fast`, which blocks in the
-foreground, then checks that every check says SUCCESS rather than merely
-that none failed, then squash-merges. Green CI is the gate — not you, and
-not the dispatcher.
+The builder owns all of that: the plan, the tests, both platforms, the
+pull request, the CI wait, the merge and the filing. Green CI is the gate —
+not Matt, and not the dispatcher.
 
 That division was the other way round for a while and it was the wrong fix
 for a real problem. Builders were told to "watch CI", the `apps` job takes
@@ -60,27 +78,30 @@ into the dispatcher fixed the symptom and cost 2,000 lines of bash that
 three audit rounds found seven criticals in, four of them in that
 machinery. Naming a command that blocks fixed the cause.
 
-`merge: ask` is the one exception: the builder stops at a green pull
-request and says so, and you get a notification. Triage sets it for three
-things and nothing else — a schema change, auth or roles, or card
-ownership.
-
 If CI comes back red, the same builder fixes it and watches again. Nothing
 re-dispatches a second builder at a request, and no builder ever starts on
 a worktree that already exists.
 
 ## What the dispatcher does, and what it does not
 
-`scripts/intake/dispatch.sh` is 276 lines and does four things: it triages
-anything with no plan, starts **one** builder in a fresh worktree with a
-time ceiling on it (three hours; `INTAKE_MAX_MINUTES`), moves a merged
-request into `requests/done/`, and notifies you about anything that needs
-you.
+`scripts/intake/dispatch.sh` is one straight-line script with no
+functions in it, and reading it is faster than reading this paragraph.
+(No line count here on purpose: three comments in this tree have quoted
+one that the next edit falsified.) It checks the two switches, refuses to
+run from a linked worktree, takes a lock directory so only one runs at a
+time, fetches `origin/main`, asks `scripts/intake.mjs` for the first
+buildable request, makes a worktree for it off `origin/main`, runs one
+`claude -p` there with the Cloudflare credentials unset and the `gh`
+login left alone, and logs what it decided to `.intake/intake.log`. The
+lock is held for the whole build, because Gradle does not share a
+laptop.
 
-It does not wait on CI, does not merge, does not verify the deploy, does
+It does not triage, does not wait on CI, does not merge, does not verify
+the deploy, does not move your request file, does not notify anybody, does
 not send a fix-only builder after a red one, does not watch your request
-file while a builder runs, and does not hold or retry a request that keeps
-failing. All of that existed and all of it is gone.
+file while a builder runs, and keeps no attempt counters, holds or time
+ceilings. All of that existed and all of it is gone — 2,306 lines of it,
+which is where every bug lived.
 
 **A worktree is never deleted automatically.** If a builder dies, its tree
 stays on disk under `.intake/wt/` with whatever it had, and
@@ -88,26 +109,30 @@ stays on disk under `.intake/wt/` with whatever it had, and
 pushed. That rule was learned by losing about thirty-two modified files to
 a dispatcher that tidied up.
 
-**A request leaves this folder only when its pull request merged.** Every
-other outcome leaves the file exactly where it is, which is why a dead
-builder's request is still listed as ready — and why an existing worktree
-stops the next dispatch instead of starting a second builder over it.
+**An existing worktree stops the request.** The dispatcher refuses, says
+which tree to go and look at, and leaves the request where it is. Removing
+that tree by hand is what lets the request be retried.
 
 ## The rules the builder works under
 
-They are not negotiable and they are in the agent definition, not
-here, so an agent cannot talk itself out of them:
+They are not negotiable and they are in `.claude/agents/request-builder.md`,
+not here, so an agent cannot talk itself out of them:
 
+- it plans the request itself, because a request may be prose and nothing
+  triaged it first
 - TDD, and the red is recorded in the commit message
-- **parity**: a change to one platform is a change to both
-- every suite green before the PR, read off the BUILD line and never
-  off an exit code
-- a suite that shrinks needs the floor lowered deliberately, in the
-  same commit, with the reason
-- the builder never moves the request file and never commits it. Its copy
-  is handed to it at a path outside `requests/` for that reason: a builder
-  that committed the live file put finished requests on `main` permanently
-  and seeded every later worktree with them
+- **parity**: a change to one platform is a change to both, in the same
+  pull request
+- every suite green before the PR, read off the BUILD line and never off
+  an exit code
+- a suite that shrinks needs the floor lowered deliberately, in the same
+  commit, with the reason
+- it waits for CI with `gh pr checks <n> --watch --fail-fast`, which
+  blocks, and merges on green unless the frontmatter says `merge: ask`
+- it moves the request into `requests/done/` in a commit of its own, on
+  its branch. What it must never do is commit the request file where it
+  is: that put live request files on `main` permanently and seeded every
+  later worktree with them
 - it never calls ScheduleWakeup or Monitor, never backgrounds a build and
   never writes its own wait loop. One foreground command at a time,
   because a headless run gets no second turn
@@ -120,8 +145,8 @@ has to apply by hand.
 
 ## Taking one back
 
-Delete the file. Nothing picks it up afterwards, and if triage is mid-run
-its plan is thrown away rather than written back over the deletion.
+Delete the file before an agent has picked it up. Nothing looks at it
+afterwards.
 
 It does **not** stop a builder that is already running — the dispatcher
 used to watch the live file on an interval and kill the builder, and that
@@ -149,13 +174,21 @@ Back on:
 rm .intake/disabled && bash scripts/intake/install.sh
 ```
 
+`install.sh` writes `.intake/enabled`, which is the opt-in. `.intake/` is
+gitignored, so a fresh clone is not armed by the committed hook until
+somebody installs — an absent `enabled` is as dead as a present
+`disabled`.
+
 ## Seeing what is happening
 
 ```
 npm run intake:status
 ```
 
-One screen: the dispatcher's lock and whether its process is alive, every
-request with the state `scripts/intake.mjs` gives for it, every worktree
+One screen: both switches, the lock and whether a pid in it is still
+alive, every request with the state `scripts/intake.mjs` gives for it,
+every worktree
 under `.intake/wt` with how many files and commits it holds and whether
-they are pushed, and the open pull requests with their check counts.
+they are pushed, and the open pull requests with their check counts. A
+banner only when `node` or `gh` actually failed, never because the answer
+was empty.

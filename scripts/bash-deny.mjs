@@ -16,17 +16,15 @@
 // no Cloudflare credentials. That is the user's decision to make and is
 // not something this file can substitute for.
 //
-// What this does do: `scripts/intake/dispatch.sh:run_agent` launches every
-// agent through `env -u` with an EXPLICIT list of the Cloudflare and
-// wrangler credential variables, and points `XDG_CONFIG_HOME` and
-// `XDG_CACHE_HOME` at an empty directory so a stored login cannot be found
-// either. A named list and not a pattern, which means a new spelling in a
-// future wrangler release has to be added here by hand — the trade is that
-// the list is readable and cannot sweep up something a builder needs.
-// (`WRANGLER_HOME` is not a variable wrangler reads at all; an earlier
-// round of this comment and one of its tests both asserted on it.) The
-// rules below close the spellings a model would reach for. Two rounds of
-// attack have found 18 and then 21 bypasses, so assume there are more.
+// What this does do: `scripts/intake/dispatch.sh` launches every agent
+// through `env -u` with an EXPLICIT list of the Cloudflare credential
+// variables, points `XDG_CONFIG_HOME` at an empty directory so a stored
+// wrangler login cannot be found either, and turns the Keychain backend
+// off. A named list and not a pattern, which means a new spelling in a
+// future wrangler release has to be added there by hand — the trade is
+// that the list is readable and cannot sweep up something a builder needs.
+// The rules below close the spellings a model would reach for. Two rounds
+// of attack have found 18 and then 21 bypasses, so assume there are more.
 //
 // Split from the hook because the suite runs inside workerd, which has no
 // `node:fs` — the same shape as `suite-floor.mjs`.

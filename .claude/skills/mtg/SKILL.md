@@ -187,9 +187,11 @@ Not `--delete-branch`, though. It makes `gh` check out the base branch in
 the worktree you are standing in, and the stale tree that leaves behind
 made a fully merged request read as unfinished. Leave the branch.
 
-**If you are a request-builder this is yours too**, and the mechanism
-matters more than the rule. The `apps` job is 13-17 minutes, and three of
-four builders told to "watch CI" ended their turn waiting for a
+**If you are a request-builder this is yours too** — you wait for CI and
+you merge your own work, and nothing downstream does it for you — and the
+mechanism matters more than the rule. The `apps` job is 13-17 minutes,
+and three of four builders told to "watch CI" ended their turn waiting
+for a
 notification that a headless `claude -p` run can never deliver. There is
 no next turn, nothing wakes you, and `scripts/intake/dispatch.sh` will not
 start a second builder on a worktree that already exists. So wait with a
@@ -216,8 +218,10 @@ curl and the dex grep under "Verifying a deploy for real". A green deploy
 workflow is not proof.
 
 The only thing that stops at a green PR is a request file whose
-frontmatter says `merge: ask`, which triage sets for three things and
-nothing else — a schema change, auth or roles, or card ownership.
+frontmatter says `merge: ask`, which is written into the file for three
+things and nothing else — a schema change, auth or roles, or card
+ownership. There is no triage agent; whoever writes the request writes
+that line, and a file with no `merge:` line at all means ask.
 
 ### 3. Test-driven, with no exceptions. This is core
 
@@ -381,11 +385,11 @@ on the website **and** in the shipped APK. Do not send a progress table
 of work that is not deployed; Matt has been explicit and furious about
 this twice.
 
-A builder under `requests/` merges its own work on green CI, and
-**nothing in the intake machinery checks the deploy.** The dispatcher used
-to resolve the squash commit, watch the `pages` and `release` runs and grep
-both artifacts for a marker string; that code is gone along with the rest
-of the 2,306-line version. So the artifact check is a thing a person or a
+A builder under `requests/` merges its own work on green CI and files its
+own request under `requests/done/`, and **nothing in the intake machinery
+checks the deploy.** The dispatcher used to resolve the squash commit,
+watch the `pages` and `release` runs and grep both artifacts for a marker
+string; that code is gone along with the rest of the 2,306-line version. So the artifact check is a thing a person or a
 hand-driven agent does, and a builder that has merged should report what it
 merged and say plainly that the deploy is unverified.
 
