@@ -800,7 +800,9 @@ class MainActivity : ComponentActivity() {
         app = app.copy(releases = app.releases.loading())
         model.releasesJob = scope.launch {
             app = try {
-                app.copy(releases = app.releases.loaded(github.releases()))
+                // Asked first, then copied. See `loadPeople`.
+                val found = github.releases()
+                app.copy(releases = app.releases.loaded(found))
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -817,7 +819,13 @@ class MainActivity : ComponentActivity() {
      * rather than an empty list that looks like an empty database.
      */
     private suspend fun loadPeople(): AppState = try {
-        app.copy(people = app.people.loaded(api.people(token())))
+        // Asked first, then copied. `app.copy(people = ...(api.people()))`
+        // reads `app` before the call suspends and writes that snapshot
+        // back when it returns, over whatever landed meanwhile — which
+        // was the release notes, loading beside this, left on "Loading…"
+        // for good.
+        val found = api.people(token())
+        app.copy(people = app.people.loaded(found))
     } catch (ex: ApiFailure) {
         app.copy(people = app.people.failed(ex.message ?: "that did not work"))
     }
