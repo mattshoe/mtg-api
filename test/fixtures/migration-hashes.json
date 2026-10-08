@@ -3,5 +3,6 @@
   "0002_accounts.sql": "f8c56a120395e746f671771b544cb2263d48d67b2416c3acbbb273c7e3be4b4a",
   "0003_collection_key.sql": "d021671af0f0d0eb2f0b20d6f616f38b65e92e8b0b0c148b2b421d10025a4940",
   "0004_first_admin.sql": "4ba1fa78fedaa47709f81dd55f47b48adff8da45f9d972dc813d7790ce79b3b6",
-  "0005_paint_old_decks.sql": "0f38938cb6f997faf35e6ba14264c2eec541a43e19bb8d63011de993f6d658f1"
+  "0005_paint_old_decks.sql": "0f38938cb6f997faf35e6ba14264c2eec541a43e19bb8d63011de993f6d658f1",
+  "0006_kayla_owns_her_cards.sql": "4b7ce94de9c7bd0d06da698667e0cd7866805e4bb99b2f0a96ca6b599d59afd9"
 }
