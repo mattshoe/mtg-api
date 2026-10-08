@@ -46,7 +46,7 @@ mkdir -p "$STATE"
 # The claim runs as this same script re-invoked with --claim, because the
 # chosen request has to come back out of the locked section on stdout.
 claim() {
-  local f b wt file branch tree
+  local f b wt file branch tree resumed=''
   git -C "$REPO" worktree prune
   git -C "$REPO" fetch -q origin main 2>>"$LOG" || say "could not fetch; base may be stale"
 
@@ -65,11 +65,23 @@ claim() {
   while IFS= read -r f; do
     [ -n "$f" ] || continue
     wt="$STATE/wt/${f%.md}"
-    # A worktree is the claim: nothing ever deletes one on its own, so its
-    # existence means some agent has this request, running or stopped.
+    # A worktree that exists means an agent had this request. If one is
+    # still running there, leave it alone. If not, the agent stopped —
+    # rate limited, killed, crashed — and the work is sitting in that
+    # tree. RESUME it rather than refusing: refusing meant the only way
+    # forward was a human deleting somebody's unpushed work by hand,
+    # which is not recovery, it is a wedge with a polite message.
     if [ -e "$wt" ]; then
-      say "skipping ${f%.md}: $wt is still there ($(git -C "$wt" status --porcelain 2>/dev/null | wc -l | tr -d ' ') uncommitted, $(git -C "$wt" rev-list --count "$BASE"..HEAD 2>/dev/null || echo 0) commits) — delete it to retry"
-      continue
+      if pgrep -f "requests/${f}" >/dev/null 2>&1; then
+        say "skipping ${f%.md}: an agent is still working in $wt"
+        continue
+      fi
+      b="$(cd "$REPO" && node scripts/intake.mjs branch "$f")" || {
+        say "intake.mjs failed naming a branch for $f"; return 1
+      }
+      file="$f"; branch="$b"; tree="$wt"; resumed=yes
+      say "resuming ${f%.md} in $wt ($(git -C "$wt" status --porcelain 2>/dev/null | wc -l | tr -d ' ') uncommitted, $(git -C "$wt" rev-list --count "$BASE"..HEAD 2>/dev/null || echo 0) commits)"
+      break
     fi
     b="$(cd "$REPO" && node scripts/intake.mjs branch "$f")" || {
       say "intake.mjs failed naming a branch for $f"; return 1
@@ -97,7 +109,7 @@ claim() {
   cp "$REQUESTS/$file" "$tree/requests/$file" 2>>"$LOG" \
     || say "could not hand over $file; the agent will read the committed copy"
 
-  printf '%s\t%s\t%s\n' "$file" "$branch" "$tree"
+  printf '%s\t%s\t%s\t%s\n' "$file" "$branch" "$tree" "${resumed:-no}"
 }
 
 if [ "${1:-}" = "--claim" ]; then claim; exit $?; fi
@@ -121,11 +133,14 @@ case "$rc" in
   *) tell "intake stopped: it could not read the queue"; exit 1 ;;
 esac
 [ -n "$got" ] || exit 0
-[ -n "$got" ] || exit 0
-file="${got%%	*}"
-rest="${got#*	}"
-branch="${rest%%	*}"
-tree="${rest#*	}"
+
+# Four tab-separated fields. Read them with IFS rather than `${v%%\t*}`:
+# inside a parameter expansion bash reads \t as a literal backslash-t, and
+# claim now prints a fourth field, so the old split glued `resumed` onto the
+# end of `tree`.
+IFS="$(printf '\t')" read -r file branch tree resumed <<EOF
+$got
+EOF
 name="${file%.md}"
 
 # Agents authenticate as their own service account, `intake-agent`, which
@@ -139,7 +154,18 @@ if [ -f "$HOME/.mtg-agent.env" ]; then
 fi
 [ -n "$AGENT_TOKEN" ] || say "no ~/.mtg-agent.env; the agent cannot act on the API as admin"
 
-say "building $name on $branch"
+RESUME_NOTE=""
+if [ "${resumed:-no}" = "yes" ]; then
+  RESUME_NOTE="
+
+YOU ARE RESUMING. A previous agent worked on this and stopped — rate limited,
+killed, or crashed. Its work is in this worktree already: $(git -C "$tree" rev-list --count "$BASE"..HEAD 2>/dev/null || echo 0) commit(s) and $(git -C "$tree" status --porcelain 2>/dev/null | wc -l | tr -d ' ') uncommitted file(s).
+Run \`git status\` and \`git log --oneline $BASE..HEAD\` before you do anything
+else, and carry on from there. Do not start over and do not discard what is
+there without reading it."
+fi
+
+say "building $name on $branch${resumed:+ (resuming)}"
 # Not `exec`: that replaces this shell and the EXIT trap never runs, so the
 # lock would be held forever. Staying in the foreground also means the lock is
 # held for the whole build, which is the one-at-a-time rule.
@@ -162,7 +188,7 @@ Never background a command and poll its output, and never background a suite. On
 
 node_modules is already there, symlinked. Do not run npm ci.
 
-Commit and push each part as it passes. Nothing you leave uncommitted is safe." \
+Commit and push BEFORE your first test run, and after every part that passes. Not at the end. An agent can be rate limited or killed at any moment, and anything uncommitted at that point is work the next agent has to read back off disk instead of building on. Four agents were caught by this with up to thirteen files uncommitted.$RESUME_NOTE" \
   --permission-mode bypassPermissions --model opus \
   --output-format stream-json --verbose --include-partial-messages \
   >>"$STATE/$name.log" 2>&1
