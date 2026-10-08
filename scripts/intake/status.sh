@@ -78,7 +78,10 @@ last_event() {
   line="$(tail -1 "$jsonl")"
   kind="$(printf '%s' "$line" | /usr/bin/sed -nE 's/.*"type":"([a-z_]+)".*/\1/p' | head -1)"
   [ -n "$kind" ] || kind="?"
-  when="$(/usr/bin/stat -f %m "$jsonl" 2>/dev/null || echo "")"
+  # `stat -f %m` is BSD and `stat -c %Y` is GNU. This runs on Matt's laptop
+  # and on an ubuntu CI runner, and the GNU one silently returned nothing
+  # there — so the age, and the STUCK flag that depends on it, vanished.
+  when="$(stat -f %m "$jsonl" 2>/dev/null || stat -c %Y "$jsonl" 2>/dev/null || echo "")"
   if [ -n "$when" ]; then
     now="$(date +%s)"
     age=$(( (now - when) / 60 ))
