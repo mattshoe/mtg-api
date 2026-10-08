@@ -41,7 +41,7 @@ class ArtCropAlignmentParityTest {
     val rule = createComposeRule()
 
     private fun deck(key: String, owner: String, name: String = key) =
-        Deck(slug, name, owner, "Alela, Artful Provocateur (ELD) 324", "UW", 3, "abcdef12-3456")
+        Deck(key, name, owner, "Alela, Artful Provocateur (ELD) 324", "UW", 3, "abcdef12-3456")
 
     private fun card(name: String, type: String?, role: String? = null) =
         DeckCard(

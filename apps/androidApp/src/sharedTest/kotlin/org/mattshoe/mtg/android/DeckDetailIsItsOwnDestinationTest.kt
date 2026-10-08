@@ -55,7 +55,7 @@ class DeckDetailIsItsOwnDestinationTest {
     val rule = createComposeRule()
 
     private fun deck(key: String, name: String) = Deck(
-        slug, name, "matt", "Alela, Artful Provocateur (ELD) 324", "UW", 3, null,
+        key, name, "matt", "Alela, Artful Provocateur (ELD) 324", "UW", 3, null,
     )
 
     private fun card(name: String, role: String? = null) = DeckCard(

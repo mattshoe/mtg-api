@@ -59,7 +59,7 @@ class DecksParityTest {
 
     /** The web suite's deck, down to the set annotation on the commander. */
     private fun deck(key: String, owner: String, name: String = key) =
-        Deck(slug, name, owner, "Alela, Artful Provocateur (ELD) 324", "UW", 3, null)
+        Deck(key, name, owner, "Alela, Artful Provocateur (ELD) 324", "UW", 3, null)
 
     /** One collection's shelf: the only kind the page shows now. */
     private fun shelf() = DecksState().loaded(

@@ -65,13 +65,13 @@ class IdempotencyTest {
     @Test
     fun everyWriteCarriesOne() = runTest {
         val a = api("""{"applied":true,"resolved":1,"failed":0,"changes":[],"errors":[]}""")
-        a.cards("t", Direction.ADD, "matt", "1 Sol Ring", dryRun = false)
+        a.cards("t", Direction.ADD, "e7de0cb1", "1 Sol Ring", dryRun = false)
         assertNotNull(keyOf(0), "an add went out with no idempotency key")
 
-        val d = api("""{"slug":"x","card_count":0,"owned_count":0,"buying":0,"applied":true}""")
+        val d = api("""{"key":"x","card_count":0,"owned_count":0,"buying":0,"applied":true}""")
         d.setDeckList("t", "x", "c", "1 Sol Ring", dryRun = false)
         d.disassemble("t", "x", dryRun = false)
-        d.createDeck("t", "n", "commander", "matt", null, "1 Sol Ring", dryRun = false)
+        d.createDeck("t", "n", "commander", "e7de0cb1", null, "1 Sol Ring", dryRun = false)
         listOf(1, 2, 3).forEach { assertNotNull(seen[it].headers[Idempotency.HEADER], "request $it") }
         // And no two of them are the same.
         assertEquals(4, (0..3).mapNotNull { keyOf(it) }.toSet().size)
