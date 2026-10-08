@@ -50,6 +50,47 @@ class AppTest {
         assertEquals(1, s.entry.cardCount)
     }
 
+    /**
+     * Matt shared a list out of ManaBox to start a deck for Kayla. The
+     * list was in the entry box, and picking "New deck" opened a wizard
+     * with an empty one.
+     */
+    @Test
+    fun startingADeckFromASharedListTakesTheListWithIt() {
+        val s = AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "user"), "t"))
+            .withShare("1 Sol Ring\n1 Arcane Signet")
+            .startingADeck()
+        assertTrue(Overlay.NEW_DECK in s.overlays, "the deck wizard did not open")
+        assertEquals("1 Sol Ring\n1 Arcane Signet", s.newDeck.list, "the shared list did not reach the deck wizard")
+    }
+
+    @Test
+    fun startingADeckWithNothingInTheBoxStartsEmpty() {
+        val s = AppState().startingADeck()
+        assertTrue(Overlay.NEW_DECK in s.overlays)
+        assertEquals("", s.newDeck.list)
+    }
+
+    /**
+     * Android's picker answered into the entry box whatever was on
+     * screen, so a file picked on the deck wizard's cards step went
+     * somewhere nobody could see it.
+     */
+    @Test
+    fun aFileUploadedOnTheDeckWizardLandsInTheDecksList() {
+        val s = AppState().startingADeck().uploaded(listOf("deck.txt"), "1 Sol Ring")
+        assertEquals("1 Sol Ring", s.newDeck.list, "the file did not reach the deck wizard")
+        assertEquals("", s.entry.list, "the file went into the entry box behind the wizard")
+    }
+
+    @Test
+    fun aFileUploadedOnEntryLandsInTheEntryBoxAfterWhatIsThere() {
+        val s = AppState().copy(entry = MassEntry().type("4 Lightning Bolt"))
+            .uploaded(listOf("manabox.txt"), "1 Sol Ring")
+        assertEquals("4 Lightning Bolt\n1 Sol Ring", s.entry.list)
+        assertEquals("manabox.txt — decklist, 1 card", s.toast)
+    }
+
     @Test
     fun aShareIsSpentOnce() {
         assertNull(AppState().withShare("1 Sol Ring").shareUsed().sharedList)

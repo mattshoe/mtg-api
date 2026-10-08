@@ -457,6 +457,13 @@ data class AppState(
 
     fun shareUsed() = copy(sharedList = null)
 
+    fun startingADeck() = opening(Overlay.NEW_DECK)
+
+    fun uploaded(names: List<String>, text: String) =
+        copy(entry = entry.type(Upload.merge(entry.list, text)))
+            .say(Upload.describe(names, text))
+            .shareUsed()
+
     // --------------------------------------------------------- overlays
 
     fun opening(o: Overlay) = copy(overlays = overlays.open(o), toast = null, toastFailed = false)
