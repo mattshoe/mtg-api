@@ -22,14 +22,14 @@ import kotlin.test.assertTrue
 // ------------------------------------------------------------ helpers
 
 private fun deck(
-    slug: String = "d",
+    key: String = "d",
     name: String = "D",
-    owner: String = "matt",
+    owner: String = "e7de0cb1",
     commander: String? = null,
     colors: String? = null,
     bracket: Int? = null,
     artId: String? = null,
-) = Deck(slug, name, owner, commander, colors, bracket, artId)
+) = Deck(key, name, owner, commander, colors, bracket, artId)
 
 /** The identity a hand-written `decks.colors` is read as. */
 private fun ident(colors: String?) = deck(colors = colors).identity
@@ -66,7 +66,7 @@ private fun land(name: String = "Nonbasic Land", produces: String? = null, qty: 
 
 private fun rows(vararg j: String) = j.map { Json.parseToJsonElement(it) as JsonArray }
 
-private val deckCols = listOf("slug", "name", "owner", "commander", "colors", "bracket", "art_id")
+private val deckCols = listOf("key", "name", "owner", "commander", "colors", "bracket", "art_id")
 
 // =========================================================== identity
 
@@ -812,9 +812,9 @@ class DeckCardExhaustiveTest {
 class DecksStateExhaustiveTest {
 
     private val three = listOf(
-        deck(slug = "b", name = "B", owner = "matt"),
-        deck(slug = "a", name = "A", owner = "kayla"),
-        deck(slug = "c", name = "C", owner = "matt"),
+        deck(key = "b", name = "B", owner = "e7de0cb1"),
+        deck(key = "a", name = "A", owner = "bprh3d2s"),
+        deck(key = "c", name = "C", owner = "e7de0cb1"),
     )
 
     @Test fun aFreshScreenHasNothingOnIt() {
@@ -822,7 +822,7 @@ class DecksStateExhaustiveTest {
         assertTrue(s.decks.isEmpty())
         assertTrue(s.cards.isEmpty())
         assertTrue(s.tokens.isEmpty())
-        assertNull(s.openSlug)
+        assertNull(s.openKey)
         assertNull(s.error)
         assertFalse(s.busy)
         assertNull(s.open)
@@ -841,7 +841,7 @@ class DecksStateExhaustiveTest {
         val s = DecksState().loaded(three).opened("b", listOf(c())).loading()
         assertEquals(3, s.decks.size)
         assertEquals(1, s.cards.size)
-        assertEquals("b", s.openSlug)
+        assertEquals("b", s.openKey)
     }
 
     @Test fun loadedStopsBeingBusy() = assertFalse(DecksState().loading().loaded(three).busy)
@@ -850,8 +850,8 @@ class DecksStateExhaustiveTest {
         assertNull(DecksState().failed("nope").loaded(three).error)
 
     @Test fun loadedReplacesTheListRatherThanAddingToIt() {
-        val s = DecksState().loaded(three).loaded(listOf(deck(slug = "z")))
-        assertEquals(listOf("z"), s.decks.map { it.slug })
+        val s = DecksState().loaded(three).loaded(listOf(deck(key = "z")))
+        assertEquals(listOf("z"), s.decks.map { it.key })
     }
 
     @Test fun loadedWithNothingIsAnEmptyList() =
@@ -870,15 +870,15 @@ class DecksStateExhaustiveTest {
 
     @Test fun failedKeepsTheOpenDeck() {
         val s = DecksState().loaded(three).opened("b", listOf(c())).failed("nope")
-        assertEquals("b", s.openSlug)
+        assertEquals("b", s.openKey)
         assertEquals(1, s.cards.size)
     }
 
     @Test fun anEmptyMessageIsStillAnError() = assertEquals("", DecksState().failed("").error)
 
-    @Test fun openingADeckRecordsItsSlugAndItsCards() {
+    @Test fun openingADeckRecordsItsKeyAndItsCards() {
         val s = DecksState().loaded(three).opened("b", listOf(c(name = "Sol Ring")))
-        assertEquals("b", s.openSlug)
+        assertEquals("b", s.openKey)
         assertEquals(listOf("Sol Ring"), s.cards.map { it.name })
         assertFalse(s.busy)
         assertNull(s.error)
@@ -894,7 +894,7 @@ class DecksStateExhaustiveTest {
 
     @Test fun openingADeckWithNoCardsIsAllowed() {
         val s = DecksState().opened("a", emptyList())
-        assertEquals("a", s.openSlug)
+        assertEquals("a", s.openKey)
         assertTrue(s.cards.isEmpty())
     }
 
@@ -915,7 +915,7 @@ class DecksStateExhaustiveTest {
             .opened("b", listOf(c()))
             .withTokens(listOf(TokenCard("1", "Soldier", "Token Creature — Soldier")))
             .close()
-        assertNull(s.openSlug)
+        assertNull(s.openKey)
         assertTrue(s.cards.isEmpty())
         assertTrue(s.tokens.isEmpty())
     }
@@ -925,31 +925,31 @@ class DecksStateExhaustiveTest {
 
     @Test fun closingTwiceIsNotAnError() {
         val s = DecksState().loaded(three).opened("b", listOf(c())).close().close()
-        assertNull(s.openSlug)
+        assertNull(s.openKey)
     }
 
     // -------------------------------------------------- which is open
 
-    @Test fun theOpenDeckIsTheOneWhoseSlugMatches() {
+    @Test fun theOpenDeckIsTheOneWhoseKeyMatches() {
         val s = DecksState().loaded(three).opened("c", emptyList())
         assertEquals("C", s.open?.name)
     }
 
-    @Test fun aSlugNothingMatchesIsNoOpenDeck() =
+    @Test fun aKeyNothingMatchesIsNoOpenDeck() =
         assertNull(DecksState().loaded(three).opened("zzz", emptyList()).open)
 
     @Test fun nothingOpenIsNoOpenDeck() = assertNull(DecksState().loaded(three).open)
 
-    @Test fun theFirstMatchWinsWhenTwoDecksShareASlug() {
+    @Test fun theFirstMatchWinsWhenTwoDecksShareAKey() {
         val s = DecksState()
-            .loaded(listOf(deck(slug = "a", name = "First"), deck(slug = "a", name = "Second")))
+            .loaded(listOf(deck(key = "a", name = "First"), deck(key = "a", name = "Second")))
             .opened("a", emptyList())
         assertEquals("First", s.open?.name)
     }
 
     @Test fun theOpenDeckSurvivesAReload() {
         val s = DecksState().loaded(three).opened("b", listOf(c())).loaded(three)
-        assertEquals("b", s.open?.slug)
+        assertEquals("b", s.open?.key)
     }
 
     // There were ten tests here, over `DecksState.byOwner`: owners in
@@ -1186,7 +1186,7 @@ class DeckQueriesSqlExhaustiveTest {
     @Test fun theDeckListHasNoPlaceholders() = assertEquals(0, all.count { it == '?' })
 
     @Test fun theDeckListSelectsEveryColumnTheTileDraws() {
-        listOf("d.slug", "d.name", "d.owner", "d.commander", "d.colors", "d.bracket", "AS art_id")
+        listOf("d.key", "d.name", "AS owner,", "AS owner_name", "d.commander", "d.colors", "d.bracket", "AS art_id")
             .forEach { assertTrue(it in all, "$it missing from the deck list query") }
     }
 
@@ -1212,30 +1212,30 @@ class DeckQueriesSqlExhaustiveTest {
     }
 
     @Test fun theDeckListIsOrderedByOwnerThenName() =
-        assertTrue(all.trimEnd().endsWith("ORDER BY d.owner, d.name"))
+        assertTrue(all.trimEnd().endsWith("ORDER BY d.owner_id, d.name"))
 
     @Test fun theDeckListIsTheSameTextEveryTime() = assertEquals(all, DeckQueries.all().sql)
 
     // ----------------------------------------------------- one deck
 
-    @Test fun oneDeckBindsItsSlugAndNothingElse() {
+    @Test fun oneDeckBindsItsKeyAndNothingElse() {
         assertEquals(listOf<Any?>("alela"), DeckQueries.cards("alela").params)
     }
 
     @Test fun oneDeckHasExactlyOnePlaceholder() = assertEquals(1, cards.count { it == '?' })
 
-    @Test fun thePlaceholderIsTheSlug() = assertTrue("d.slug = ?" in cards)
+    @Test fun thePlaceholderIsTheKey() = assertTrue("WHERE d.key = ?" in cards)
 
-    @Test fun theSlugIsBoundRatherThanInterpolated() {
+    @Test fun theKeyIsBoundRatherThanInterpolated() {
         val q = DeckQueries.cards("'; DROP TABLE decks; --")
         assertEquals(listOf<Any?>("'; DROP TABLE decks; --"), q.params)
         assertFalse("DROP TABLE" in q.sql)
     }
 
-    @Test fun anEmptySlugIsStillBound() =
+    @Test fun anEmptyKeyIsStillBound() =
         assertEquals(listOf<Any?>(""), DeckQueries.cards("").params)
 
-    @Test fun theTextOfTheQueryDoesNotDependOnTheSlug() =
+    @Test fun theTextOfTheQueryDoesNotDependOnTheKey() =
         assertEquals(DeckQueries.cards("a").sql, DeckQueries.cards("b").sql)
 
     @Test fun oneDeckReadsItsRowsFromDeckCards() {
@@ -1253,7 +1253,7 @@ class DeckQueriesSqlExhaustiveTest {
     }
 
     @Test fun ownedCopiesAreScopedToTheDecksOwner() {
-        assertTrue("t.owner = d.owner" in cards)
+        assertTrue("t.owner_id = d.owner_id" in cards)
     }
 
     @Test fun ownedCopiesFallBackToNoneRatherThanNull() {
@@ -1261,9 +1261,9 @@ class DeckQueriesSqlExhaustiveTest {
     }
 
     @Test fun thereAreTwoPrintingJoinsOwnThenAnybodys() {
-        assertTrue("GROUP BY owner, name_norm) mine" in cards)
+        assertTrue("GROUP BY owner_id, name_norm) mine" in cards)
         assertTrue("GROUP BY name_norm) alt" in cards)
-        assertTrue("mine.name_norm = dc.name_norm AND mine.owner = d.owner" in cards)
+        assertTrue("mine.name_norm = dc.name_norm AND mine.owner_id = d.owner_id" in cards)
         assertTrue("alt.name_norm = dc.name_norm" in cards)
     }
 
@@ -1312,10 +1312,10 @@ class DeckDecodeExhaustiveTest {
     @Test fun aWholeDeckRowDecodes() {
         val d = DeckQueries.decode(
             deckCols,
-            rows("""["alela","Alela — Faeries","matt","Alela (ELD) 324","UW",3,"abc"]"""),
+            rows("""["q8ytka9m","Alela — Faeries","e7de0cb1","Alela (ELD) 324","UW",3,"abc"]"""),
         ).single()
-        assertEquals("alela", d.slug)
-        assertEquals("matt", d.owner)
+        assertEquals("q8ytka9m", d.key)
+        assertEquals("e7de0cb1", d.owner)
         assertEquals(3, d.bracket)
         assertEquals("abc", d.artId)
         assertEquals("Alela", d.title)
@@ -1340,12 +1340,12 @@ class DeckDecodeExhaustiveTest {
             deckCols,
             rows("""["z","Z","m",null,null,null,null]""", """["a","A","m",null,null,null,null]"""),
         )
-        assertEquals(listOf("z", "a"), ds.map { it.slug })
+        assertEquals(listOf("z", "a"), ds.map { it.key })
     }
 
     @Test fun aColumnThatIsNotThereIsNotAFailure() {
-        val d = DeckQueries.decode(listOf("slug"), rows("""["alela"]""")).single()
-        assertEquals("alela", d.slug)
+        val d = DeckQueries.decode(listOf("key"), rows("""["alela"]""")).single()
+        assertEquals("alela", d.key)
         assertEquals("", d.name)
         assertEquals("", d.owner)
         assertNull(d.commander)
@@ -1356,13 +1356,13 @@ class DeckDecodeExhaustiveTest {
 
     @Test fun noColumnsAtAllIsAllDefaults() {
         val d = DeckQueries.decode(emptyList(), rows("""["alela","Alela"]""")).single()
-        assertEquals("", d.slug)
+        assertEquals("", d.key)
         assertEquals("", d.name)
     }
 
     @Test fun aRowShorterThanItsHeaderIsNotAnIndexCrash() {
         val d = DeckQueries.decode(deckCols, rows("""["alela","Alela"]""")).single()
-        assertEquals("alela", d.slug)
+        assertEquals("alela", d.key)
         assertEquals("Alela", d.name)
         assertEquals("", d.owner)
         assertNull(d.bracket)
@@ -1371,13 +1371,13 @@ class DeckDecodeExhaustiveTest {
 
     @Test fun anEmptyRowIsAllDefaults() {
         val d = DeckQueries.decode(deckCols, rows("[]")).single()
-        assertEquals("", d.slug)
+        assertEquals("", d.key)
         assertNull(d.commander)
     }
 
     @Test fun nullsBecomeNullsAndTheNonNullableOnesBecomeEmpty() {
         val d = DeckQueries.decode(deckCols, rows("[null,null,null,null,null,null,null]")).single()
-        assertEquals("", d.slug)
+        assertEquals("", d.key)
         assertEquals("", d.name)
         assertEquals("", d.owner)
         assertNull(d.commander)
@@ -1415,24 +1415,25 @@ class DeckDecodeExhaustiveTest {
         assertEquals("true", DeckQueries.decode(deckCols, rows("""["a","A","m",true,null,null,null]""")).single().commander)
 
     @Test fun columnsBeyondTheHeaderAreIgnored() {
-        val d = DeckQueries.decode(listOf("slug", "name"), rows("""["a","A","m","x","y",9,"z"]""")).single()
-        assertEquals("a", d.slug)
+        val d = DeckQueries.decode(listOf("key", "name"), rows("""["a","A","m","x","y",9,"z"]""")).single()
+        assertEquals("a", d.key)
         assertEquals("A", d.name)
         assertNull(d.commander)
     }
 
     @Test fun aRepeatedColumnNameTakesTheLastOne() {
-        val d = DeckQueries.decode(listOf("slug", "slug"), rows("""["first","second"]""")).single()
-        assertEquals("second", d.slug)
+        val d = DeckQueries.decode(listOf("key", "key"), rows("""["first","second"]""")).single()
+        assertEquals("second", d.key)
     }
 
     @Test fun theColumnOrderIsWhatTheHeaderSays() {
         val d = DeckQueries.decode(
-            listOf("owner", "slug", "name"),
-            rows("""["matt","alela","Alela"]"""),
+            listOf("owner_name", "owner", "key", "name"),
+            rows("""["Matt Shoemaker","e7de0cb1","q8ytka9m","Alela"]"""),
         ).single()
-        assertEquals("alela", d.slug)
-        assertEquals("matt", d.owner)
+        assertEquals("q8ytka9m", d.key)
+        assertEquals("e7de0cb1", d.owner)
+        assertEquals("Matt Shoemaker", d.ownerName)
     }
 
     // ------------------------------------------------------- the cards

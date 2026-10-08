@@ -74,7 +74,7 @@ class OverlayTest {
 class ShortcutsTest {
 
     private val locked = Admin()
-    private val open = Admin().signIn(Account(slug = "matt"), "t")
+    private val open = Admin().signIn(Account(key = "e7de0cb1"), "t")
 
     @Test
     fun lettersGoToTheirView() {
@@ -91,7 +91,7 @@ class ShortcutsTest {
         // The log needs the role, so an ordinary account's `v` is as
         // dead as a stranger's.
         assertNull(Shortcuts.of("v", false, open, false))
-        val op = Admin().signIn(Account(slug = "matt", role = "admin"), "t")
+        val op = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t")
         assertEquals(Action.Go(View.LOGS), Shortcuts.of("v", false, op, false))
     }
 
@@ -133,7 +133,7 @@ class ShortcutsTest {
         assertFalse(on.contains("lock"), on)
 
         // The log is the operator's, and the help says so only to one.
-        val op = Shortcuts.help(Admin().signIn(Account(slug = "matt", role = "admin"), "t"))
+        val op = Shortcuts.help(Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t"))
         assertTrue(op.contains("v logs"), op)
     }
 }
@@ -169,7 +169,7 @@ class OnKeyTest {
         // stray keystroke should start.
         assertNull(AppState().onKey("l"), "`l` still does something")
         assertNull(
-            AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")).onKey("l"),
+            AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t")).onKey("l"),
             "`l` still does something while signed in",
         )
     }
@@ -184,7 +184,7 @@ class OnKeyTest {
         // It used to be the `l` key doing this. Signing out is a
         // button in the profile now, and the landing rule is the
         // same: a screen you can no longer reach bounces.
-        val s = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")).navigate(View.LOGS)
+        val s = AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t")).navigate(View.LOGS)
         assertEquals(View.LOGS, s.view)
         val out = s.copy(admin = s.admin.signOut())
         assertEquals(View.LIBRARY, out.navigate(out.route).view)

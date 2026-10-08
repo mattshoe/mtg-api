@@ -26,7 +26,7 @@ import kotlin.test.assertTrue
  */
 class NobodysCollectionTest {
 
-    private val me = Account(slug = "matt", name = "Matt", key = "e7de0cb1")
+    private val me = Account(key = "e7de0cb1", name = "Matt")
 
     @Test
     fun aFreshPageHasNotHeardBackYet() {
@@ -44,7 +44,7 @@ class NobodysCollectionTest {
     @Test
     fun anAccountSettlesIt() {
         assertTrue(AppState(admin = Admin().signIn(me, "t")).collectionKnown)
-        assertEquals("matt", AppState(admin = Admin().signIn(me, "t")).viewing)
+        assertEquals("e7de0cb1", AppState(admin = Admin().signIn(me, "t")).viewing)
     }
 
     @Test
@@ -52,9 +52,9 @@ class NobodysCollectionTest {
         // A link somebody sent names a collection outright, which is
         // the whole point of having one. It does not wait on
         // `/auth/me` to be readable.
-        val s = AppState().browsing("kayla")
+        val s = AppState().browsing("bprh3d2s")
         assertTrue(s.collectionKnown)
-        assertEquals("kayla", s.viewing)
+        assertEquals("bprh3d2s", s.viewing)
     }
 
     @Test
@@ -113,8 +113,8 @@ class NobodysCollectionTest {
     fun noDeckQueryEverGoesOutWithoutACollectionOnIt() {
         // The query itself, not the caller's discipline: an empty
         // owner used to mean "every deck in the database".
-        assertTrue("d.owner = ?" in DeckQueries.all("matt").sql)
-        assertEquals(listOf("matt"), DeckQueries.all("matt").params)
+        assertTrue("d.owner_id = (SELECT id FROM users WHERE key = ?)" in DeckQueries.all("e7de0cb1").sql)
+        assertEquals(listOf("e7de0cb1"), DeckQueries.all("e7de0cb1").params)
         assertTrue(
             "1=0" in DeckQueries.all("").sql,
             "an empty owner still reads every collection: ${DeckQueries.all("").sql}",
@@ -122,7 +122,7 @@ class NobodysCollectionTest {
         // And the pooled read is a word, so it cannot happen by
         // omission — only by asking for it.
         assertFalse("1=0" in DeckQueries.all(DeckQueries.EVERY).sql)
-        assertFalse("d.owner = ?" in DeckQueries.all(DeckQueries.EVERY).sql)
+        assertFalse("users WHERE key = ?" in DeckQueries.all(DeckQueries.EVERY).sql)
         assertEquals(emptyList(), DeckQueries.all(DeckQueries.EVERY).params)
     }
 
@@ -138,7 +138,7 @@ class NobodysCollectionTest {
         assertFalse("1=0" in Library(filters = Filters(owner = "both")).queries().first.sql)
         // And a collection that is known is scoped to it, not to 1=0.
         val mine = AppState(admin = Admin().signIn(me, "t")).scopedLibrary().filters
-        assertEquals("matt", mine.owner)
-        assertTrue("c.owner = ?" in Library(filters = mine).queries().first.sql)
+        assertEquals("e7de0cb1", mine.owner)
+        assertTrue("c.owner_id = (SELECT id FROM users WHERE key = ?)" in Library(filters = mine).queries().first.sql)
     }
 }

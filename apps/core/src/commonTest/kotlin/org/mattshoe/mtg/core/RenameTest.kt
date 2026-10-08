@@ -9,19 +9,19 @@ import kotlin.test.assertTrue
 /**
  * Renaming a deck.
  *
- * The slug is the address. It moves with the name, so the box has to
- * say where the deck is about to live before anything is written —
- * every link anybody has to it is about to change.
+ * The name and only the name. A deck lives at its key, which is
+ * random and never worked out from the name, so a rename does not
+ * move it and every link anybody has to it keeps working.
  */
 class RenameTest {
 
-    private fun opened() = RenameState(slug = "fairy-deck", was = "Fairy Deck")
+    private fun opened() = RenameState(key = "q8ytka9m", was = "Fairy Deck")
 
     @Test
     fun itOpensOnTheNameItAlreadyHas() {
         val s = opened()
         assertEquals("Fairy Deck", s.name)
-        assertEquals("fairy-deck", s.nextSlug)
+        assertEquals("q8ytka9m", s.key)
     }
 
     @Test
@@ -35,21 +35,17 @@ class RenameTest {
     }
 
     @Test
-    fun theNewAddressIsShownBeforeAnythingIsWritten() {
-        assertEquals("alela-flyers", opened().typed("Alela Flyers").nextSlug)
+    fun theAddressStaysWhereItIsWhateverTheNameBecomes() {
+        val typed = opened().typed("Alela Flyers")
+        assertEquals("q8ytka9m", typed.key, "typing a new name moved the deck")
+        assertEquals("q8ytka9m", typed.working().finished().key, "saving a new name moved the deck")
+        assertEquals("q8ytka9m", typed.failed("no").key)
     }
 
     @Test
     fun whitespaceAloneIsNotARename() {
         assertFalse(opened().typed("   ").canSave)
         assertFalse(opened().typed(" Fairy Deck ").canSave, "the same name padded is still the same name")
-    }
-
-    @Test
-    fun aNameWithNothingToMakeASlugFromIsRefused() {
-        val s = opened().typed("!!!")
-        assertEquals("", s.nextSlug)
-        assertFalse(s.canSave, "a name with no letters or digits was accepted")
     }
 
     @Test
@@ -75,11 +71,6 @@ class RenameTest {
     fun typingAgainClearsTheLastComplaint() {
         val s = opened().typed("Alela Flyers").failed("already taken").typed("Alela Fliers")
         assertNull(s.error)
-    }
-
-    @Test
-    fun theSlugFollowsTheSameRuleTheWizardUses() {
-        assertEquals(NewDeck.slugify("Kayla's Big Deck"), opened().typed("Kayla's Big Deck").nextSlug)
     }
 
     @Test

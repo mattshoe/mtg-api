@@ -136,7 +136,7 @@ class CardRefTest {
             .let { it.copy(decks = it.decks.opened("alela", listOf(DeckCard("Sol Ring", 1, null, 1)))) }
         val card = deck.openCard(ref, "Sol Ring")
         assertEquals(1, card.decks.cards.size, "the deck's cards were thrown away")
-        assertEquals("alela", card.leaveCard().decks.openSlug)
+        assertEquals("alela", card.leaveCard().decks.openKey)
     }
 
     @Test

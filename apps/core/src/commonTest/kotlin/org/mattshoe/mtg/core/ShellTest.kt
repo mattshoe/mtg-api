@@ -69,7 +69,7 @@ class ShellTest {
     fun signedInShowsTheFour() {
         // Four, not five: the log needs a role, and a fresh account
         // has none. Matt hands those out.
-        val me = Admin().signIn(Account(slug = "matt"), "s")
+        val me = Admin().signIn(Account(key = "e7de0cb1"), "s")
         assertTrue(me.unlocked)
         assertEquals(4, me.visible.size)
         assertFalse(me.reachable(View.LOGS))
@@ -78,7 +78,7 @@ class ShellTest {
 
     @Test
     fun andAnOperatorSeesTheAdminHalfAsWell() {
-        val op = Admin().signIn(Account(slug = "matt", role = Role.ADMIN), "s")
+        val op = Admin().signIn(Account(key = "e7de0cb1", role = Role.ADMIN), "s")
         assertEquals(6, op.visible.size)
         assertTrue(op.reachable(View.LOGS))
         assertTrue(op.reachable(View.ADMIN))
@@ -88,7 +88,7 @@ class ShellTest {
     @Test
     fun aGatedRouteBouncesWhileLocked() {
         assertEquals(View.LIBRARY, Admin().settle().land(Route.parse("#/entry")).view)
-        assertEquals(View.ENTRY, Admin().signIn(Account(slug = "matt"), "s").land(Route.parse("#/entry")).view)
+        assertEquals(View.ENTRY, Admin().signIn(Account(key = "e7de0cb1"), "s").land(Route.parse("#/entry")).view)
     }
 
     @Test
@@ -107,7 +107,7 @@ class ShellTest {
 
     @Test
     fun signingOutForgetsTheSession() {
-        assertFalse(Admin().signIn(Account(slug = "matt"), "s").signOut().unlocked)
+        assertFalse(Admin().signIn(Account(key = "e7de0cb1"), "s").signOut().unlocked)
     }
 
     /**
@@ -121,7 +121,7 @@ class ShellTest {
     fun signingOutClearsWhatWasStoredNotJustTheFlag() {
         val store = Store.inMemory()
         val anon = Admin()
-        val signedIn = anon.signIn(Account(slug = "matt"), "0.abc")
+        val signedIn = anon.signIn(Account(key = "e7de0cb1"), "0.abc")
         AdminToken.sync(store, anon, signedIn)
         assertEquals("0.abc", store.get(AdminToken.KEY), "signing in should have written the session")
 
@@ -145,7 +145,7 @@ class ShellTest {
         // update that leaves the token alone — opening a dialog,
         // navigating — must not disturb what is already stored.
         val store = Store.inMemory()
-        val signedIn = Admin().signIn(Account(slug = "matt"), "0.abc")
+        val signedIn = Admin().signIn(Account(key = "e7de0cb1"), "0.abc")
         AdminToken.sync(store, Admin(), signedIn)
         AdminToken.sync(store, signedIn, signedIn.copy(settled = true))
         assertEquals("0.abc", store.get(AdminToken.KEY))

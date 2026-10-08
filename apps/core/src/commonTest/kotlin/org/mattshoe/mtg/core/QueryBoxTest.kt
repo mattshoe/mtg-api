@@ -291,22 +291,22 @@ class AdvancedWithPanelTest {
 
     @Test
     fun theBoxIsAndedOnTopOfThePanel() {
-        val f = Filters(owner = "matt", adv = "t:creature")
+        val f = Filters(owner = "e7de0cb1", adv = "t:creature")
         val s = conditions(f)
-        assertTrue(s.sql.contains("c.owner = ?"))
+        assertTrue(s.sql.contains("c.owner_id = (SELECT id FROM users WHERE key = ?)"))
         assertTrue(s.sql.contains("c.type_line"))
-        assertEquals(listOf<Any?>("matt", "%creature%"), s.params)
+        assertEquals(listOf<Any?>("e7de0cb1", "%creature%"), s.params)
     }
 
     @Test
     fun theBoxComesAfterThePanelSoItReadsInOrder() {
-        val s = conditions(Filters(owner = "matt", adv = "t:creature")).sql
+        val s = conditions(Filters(owner = "e7de0cb1", adv = "t:creature")).sql
         assertTrue(s.indexOf("c.owner") < s.indexOf("c.type_line"))
     }
 
     @Test
     fun anEmptyBoxAddsNothing() {
-        assertEquals(conditions(Filters(owner = "matt")).sql, conditions(Filters(owner = "matt", adv = "  ")).sql)
+        assertEquals(conditions(Filters(owner = "e7de0cb1")).sql, conditions(Filters(owner = "e7de0cb1", adv = "  ")).sql)
     }
 
     @Test

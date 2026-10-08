@@ -190,7 +190,7 @@ class DeckPeekTest {
         val s = threeCards().peekAt(1)
         val back = assertNotNull(s.back())
         assertFalse(Overlay.CARD_PEEK in back.overlays)
-        assertEquals("alela", back.decks.openSlug, "one press closed the deck as well")
+        assertEquals("alela", back.decks.openKey, "one press closed the deck as well")
     }
 }
 

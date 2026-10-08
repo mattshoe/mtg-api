@@ -29,7 +29,7 @@ class DeckRunTest {
         decks = listOf(
             Deck("alela", "Alela", "matt", commander = null, colors = null, bracket = null, artId = null),
         ),
-        openSlug = "alela",
+        openKey = "alela",
         cards = listOf(
             card("Zealous Conscripts"),
             card("Command Tower", "Land"),
@@ -97,7 +97,7 @@ class DeckRunTest {
 
     @Test
     fun norIsOneOpenedFromADeckThatIsNoLongerLoaded() {
-        val s = AppState(decks = deck.copy(openSlug = "something-else"))
+        val s = AppState(decks = deck.copy(openKey = "something-else"))
             .navigate(Route(View.DECKS, "alela"))
             .openCard(CardRef("bitterblossom"))
         assertTrue(s.deckRun.isEmpty(), "it offered neighbours out of a deck that is not open")

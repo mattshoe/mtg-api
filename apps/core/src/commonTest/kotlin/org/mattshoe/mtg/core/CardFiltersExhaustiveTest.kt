@@ -47,9 +47,9 @@ private const val NAMES =
 class FilterFieldAloneTest {
 
     @Test
-    fun ownerIsAnEqualsOnTheOwnerColumn() {
-        assertEquals("c.owner = ?", where(Filters(owner = "matt")))
-        assertEquals(listOf<Any?>("matt"), params(Filters(owner = "matt")))
+    fun ownerIsTheIdItsKeyNames() {
+        assertEquals("c.owner_id = (SELECT id FROM users WHERE key = ?)", where(Filters(owner = "e7de0cb1")))
+        assertEquals(listOf<Any?>("e7de0cb1"), params(Filters(owner = "e7de0cb1")))
     }
 
     @Test
@@ -340,7 +340,7 @@ class FilterFieldAloneTest {
     @Test
     fun aTagIsMatchedOnItsSlugExactly() {
         assertEquals(
-            "EXISTS (SELECT 1 FROM card_tags ct WHERE ct.card_id = c.id AND ct.tag_slug = ?)",
+            "EXISTS (SELECT 1 FROM card_tags ct WHERE ct.card_id = c.id AND ct.tag = ?)",
             where(Filters(tags = listOf("mana-rock"))),
         )
     }
@@ -403,7 +403,7 @@ class FilterFieldAloneTest {
 
     @Test
     fun theQueryBoxComesLastSoTheStructuredClausesReadFirst() {
-        val sql = where(Filters(owner = "matt", adv = "mv<=2"))
+        val sql = where(Filters(owner = "e7de0cb1", adv = "mv<=2"))
         assertTrue(sql.indexOf("c.owner") < sql.indexOf("c.cmc"), sql)
     }
 
@@ -586,7 +586,10 @@ class FilterEmptyInputTest {
 
     @Test
     fun anEmptyWhereClauseMeansNoWhereKeywordAtAll() {
-        assertFalse(buildQuery(Filters()).sql.contains("WHERE"), buildQuery(Filters()).sql)
+        // The owner's key comes back through a subselect of its own;
+        // that WHERE is inside the column list, not over the cards.
+        val outer = buildQuery(Filters()).sql.replace(Owners.keyOf("c.owner_id"), "")
+        assertFalse(outer.contains("WHERE"), buildQuery(Filters()).sql)
     }
 
     @Test
@@ -1958,25 +1961,25 @@ class FilterCombinationTest {
 
     @Test
     fun twoFiltersAreJoinedWithAnAnd() {
-        val sql = where(Filters(owner = "matt", finish = "foil"))
-        assertEquals("c.owner = ?\n  AND c.finish = ?", sql)
+        val sql = where(Filters(owner = "e7de0cb1", finish = "foil"))
+        assertEquals("c.owner_id = (SELECT id FROM users WHERE key = ?)\n  AND c.finish = ?", sql)
     }
 
     @Test
     fun twoFiltersBindInTheOrderTheClausesAppear() {
-        assertEquals(listOf<Any?>("matt", "foil"), params(Filters(owner = "matt", finish = "foil")))
+        assertEquals(listOf<Any?>("e7de0cb1", "foil"), params(Filters(owner = "e7de0cb1", finish = "foil")))
     }
 
     @Test
     fun threeFiltersAreTwoAnds() {
-        val f = Filters(owner = "matt", finish = "foil", collnum = "1")
+        val f = Filters(owner = "e7de0cb1", finish = "foil", collnum = "1")
         assertEquals(2, Regex("\n  AND ").findAll(where(f)).count())
     }
 
     @Test
     fun aFilterAndASortAreIndependent() {
-        val sql = buildQuery(Filters(owner = "matt", sort = Sort.CMC)).sql
-        assertTrue(sql.contains("WHERE c.owner = ?"), sql)
+        val sql = buildQuery(Filters(owner = "e7de0cb1", sort = Sort.CMC)).sql
+        assertTrue(sql.contains("WHERE c.owner_id = (SELECT id FROM users WHERE key = ?)"), sql)
         assertTrue(sql.contains("ORDER BY (MIN(c.cmc))"), sql)
     }
 
@@ -2011,7 +2014,7 @@ class FilterCombinationTest {
     @Test
     fun aStackFilterAloneStillProducesAWhereLessStatement() {
         val sql = buildQuery(Filters(qtyMin = "4")).sql
-        assertFalse(sql.contains("WHERE"), sql)
+        assertFalse(sql.replace(Owners.keyOf("c.owner_id"), "").contains("WHERE"), sql)
         assertTrue(sql.contains("HAVING SUM(c.qty) >= ?"), sql)
     }
 
@@ -2052,13 +2055,13 @@ class FilterCombinationTest {
     fun aPoolAndADeckAreTwoDifferentQuestions() {
         val f = Filters(pool = Pool.COMMITTED, deck = "alela")
         assertTrue(where(f).contains("COALESCE(u.free, 0) <= 0"))
-        assertTrue(where(f).contains("d.slug = ?"))
+        assertTrue(where(f).contains("d.key = ?"))
     }
 
     @Test
     fun deckAnyBindsNothingBecauseItIsAboutTheOwnersOwnDecks() {
         assertTrue(params(Filters(deck = "_any")).isEmpty())
-        assertTrue(where(Filters(deck = "_any")).contains("d.owner = c.owner"))
+        assertTrue(where(Filters(deck = "_any")).contains("d.owner_id = c.owner_id"))
     }
 
     @Test
@@ -2069,23 +2072,23 @@ class FilterCombinationTest {
     }
 
     @Test
-    fun aNamedDeckAsksBySlugRatherThanByOwner() {
-        val sql = where(Filters(deck = "alela"))
-        assertTrue(sql.contains("d.slug = ?"), sql)
-        assertFalse(sql.contains("d.owner = c.owner"), sql)
+    fun aNamedDeckAsksByKeyRatherThanByOwner() {
+        val sql = where(Filters(deck = "q8ytka9m"))
+        assertTrue(sql.contains("d.key = ?"), sql)
+        assertFalse(sql.contains("d.owner_id = c.owner_id"), sql)
     }
 
     @Test
-    fun aDeckCalledUnderscoreAnythingElseIsStillASlug() {
+    fun aDeckCalledUnderscoreAnythingElseIsStillAKey() {
         assertEquals(listOf<Any?>("_other"), params(Filters(deck = "_other")))
     }
 
     @Test
     fun theQueryBoxAndsOnTopOfThePanelRatherThanReplacingIt() {
-        val f = Filters(owner = "matt", adv = "t:creature")
-        assertTrue(where(f).contains("c.owner = ?"))
+        val f = Filters(owner = "e7de0cb1", adv = "t:creature")
+        assertTrue(where(f).contains("c.owner_id = (SELECT id FROM users WHERE key = ?)"))
         assertTrue(where(f).contains("lower(c.type_line) LIKE ?"))
-        assertEquals(listOf<Any?>("matt", "%creature%"), params(f))
+        assertEquals(listOf<Any?>("e7de0cb1", "%creature%"), params(f))
     }
 
     @Test
@@ -2531,7 +2534,7 @@ class QueryShapeTest {
 
     @Test
     fun thePageQueryJoinsUsageOnOwnerAndNameSoItCannotFanRowsOut() {
-        assertTrue(buildQuery(Filters()).sql.contains("ON u.owner = c.owner AND u.name_norm = c.name_norm"))
+        assertTrue(buildQuery(Filters()).sql.contains("ON u.owner_id = c.owner_id AND u.name_norm = c.name_norm"))
     }
 
     @Test

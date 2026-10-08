@@ -49,7 +49,7 @@ class DecksStatsPageTest {
     }
 
     private fun deck(key: String, owner: String, name: String = key) =
-        Deck(slug, name, owner, "Alela, Artful Provocateur (ELD) 324", "UW", 3, null)
+        Deck(key, name, owner, "Alela, Artful Provocateur (ELD) 324", "UW", 3, null)
 
     @Test
     fun theShelfIsOneShelfWithACountAndNobodysNameOverIt() = runTest {

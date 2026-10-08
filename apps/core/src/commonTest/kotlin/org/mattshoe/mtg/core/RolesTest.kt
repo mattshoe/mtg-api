@@ -26,7 +26,7 @@ import kotlin.test.assertTrue
  */
 class RolesTest {
 
-    private val me = Account(slug = "matt", name = "Matt", key = "e7de0cb1")
+    private val me = Account(key = "e7de0cb1", name = "Matt")
     private val boss = me.copy(role = Role.ADMIN)
 
     // ------------------------------------------------------- the two roles
@@ -40,20 +40,20 @@ class RolesTest {
 
     @Test
     fun anAccountIsAUserUnlessItSaysOtherwise() {
-        assertEquals(Role.USER, Account(slug = "kayla").role)
-        assertFalse(Account(slug = "kayla").isOperator)
+        assertEquals(Role.USER, Account(key = "bprh3d2s").role)
+        assertFalse(Account(key = "bprh3d2s").isOperator)
     }
 
     @Test
     fun aUserOwnsItsOwnCollectionAndNoOther() {
-        assertTrue(me.owns("matt"))
-        assertFalse(me.owns("kayla"))
+        assertTrue(me.owns("e7de0cb1"))
+        assertFalse(me.owns("bprh3d2s"))
     }
 
     @Test
     fun anAdminOwnsEverybodys() {
-        assertTrue(boss.owns("matt"))
-        assertTrue(boss.owns("kayla"), "the admin role does not reach other collections")
+        assertTrue(boss.owns("e7de0cb1"))
+        assertTrue(boss.owns("bprh3d2s"), "the admin role does not reach other collections")
         // An admin reaches every collection there is, and "" is not
         // one of them — it is "nobody said yet", which `scopedLibrary`
         // and `DeckQueries` both refuse outright.
@@ -116,11 +116,11 @@ class RolesTest {
     fun whatComesBackIsWhoIsThere() {
         val s = People().loaded(
             listOf(
-                Person("matt", "Matt", null, Role.ADMIN, "e7de0cb1"),
-                Person("kayla", "Kayla", null, Role.USER, "a1b2c3d4"),
+                Person("e7de0cb1", "Matt", null, Role.ADMIN),
+                Person("bprh3d2s", "Kayla", null, Role.USER),
             ),
         )
-        assertEquals(listOf("matt", "kayla"), s.rows.map { it.slug })
+        assertEquals(listOf("e7de0cb1", "bprh3d2s"), s.rows.map { it.key })
         assertFalse(s.busy)
         assertTrue(s.rows.first().isAdmin)
         assertFalse(s.rows.last().isAdmin)
@@ -128,7 +128,7 @@ class RolesTest {
 
     @Test
     fun aFailureSaysWhatWentWrongAndKeepsNothingStale() {
-        val s = People().loaded(listOf(Person("matt", "Matt", null, Role.ADMIN, "k"))).failed("500")
+        val s = People().loaded(listOf(Person("e7de0cb1", "Matt", null, Role.ADMIN))).failed("500")
         assertEquals("500", s.error)
         assertFalse(s.busy)
         assertTrue(s.rows.isEmpty(), "a stale list under an error reads as current")
@@ -136,8 +136,8 @@ class RolesTest {
 
     @Test
     fun aPersonIsOfferedTheRoleTheyDoNotHave() {
-        val user = Person("kayla", "Kayla", null, Role.USER, "k")
-        val admin = Person("matt", "Matt", null, Role.ADMIN, "m")
+        val user = Person("bprh3d2s", "Kayla", null, Role.USER)
+        val admin = Person("e7de0cb1", "Matt", null, Role.ADMIN)
         assertEquals(Role.ADMIN, user.otherRole)
         assertEquals(Role.USER, admin.otherRole)
     }
@@ -147,11 +147,11 @@ class RolesTest {
         // Pressing a row's button must not grey out every other row:
         // a list that goes dead on one press reads as broken.
         val s = People()
-            .loaded(listOf(Person("kayla", "Kayla", null, Role.USER, "k")))
-            .changing("kayla")
-        assertEquals("kayla", s.changing)
-        assertTrue(s.isChanging("kayla"))
-        assertFalse(s.isChanging("matt"))
+            .loaded(listOf(Person("bprh3d2s", "Kayla", null, Role.USER)))
+            .changing("bprh3d2s")
+        assertEquals("bprh3d2s", s.changing)
+        assertTrue(s.isChanging("bprh3d2s"))
+        assertFalse(s.isChanging("e7de0cb1"))
     }
 
     @Test
@@ -159,22 +159,22 @@ class RolesTest {
         val s = People()
             .loaded(
                 listOf(
-                    Person("kayla", "Kayla", null, Role.USER, "k"),
-                    Person("zoe", "Zoe", null, Role.USER, "z"),
+                    Person("bprh3d2s", "Kayla", null, Role.USER),
+                    Person("z0e4k2pq", "Zoe", null, Role.USER),
                 ),
             )
-            .changing("kayla")
-            .changed("kayla", Role.ADMIN)
-        assertEquals(Role.ADMIN, s.rows.first { it.slug == "kayla" }.role)
-        assertEquals(Role.USER, s.rows.first { it.slug == "zoe" }.role)
+            .changing("bprh3d2s")
+            .changed("bprh3d2s", Role.ADMIN)
+        assertEquals(Role.ADMIN, s.rows.first { it.key == "bprh3d2s" }.role)
+        assertEquals(Role.USER, s.rows.first { it.key == "z0e4k2pq" }.role)
         assertNull(s.changing, "the row is still spinning after it came back")
     }
 
     @Test
     fun aRefusalLeavesTheRowAsItWasAndSaysWhy() {
         val s = People()
-            .loaded(listOf(Person("matt", "Matt", null, Role.ADMIN, "m")))
-            .changing("matt")
+            .loaded(listOf(Person("e7de0cb1", "Matt", null, Role.ADMIN)))
+            .changing("e7de0cb1")
             .refused("that is the last admin")
         assertEquals(Role.ADMIN, s.rows.single().role, "the row moved on a refusal")
         assertEquals("that is the last admin", s.error)
@@ -191,17 +191,17 @@ class RolesTest {
         // Including the last admin, including yourself. The screen
         // used to withhold that one button, which is the shape of
         // needing somebody.
-        val alone = People().loaded(listOf(Person("matt", "Matt", null, Role.ADMIN, "m")))
-        assertTrue(alone.mayChange("matt", me = "matt"))
+        val alone = People().loaded(listOf(Person("e7de0cb1", "Matt", null, Role.ADMIN)))
+        assertTrue(alone.mayChange("e7de0cb1", me = "e7de0cb1"))
 
         val two = People().loaded(
             listOf(
-                Person("matt", "Matt", null, Role.ADMIN, "m"),
-                Person("kayla", "Kayla", null, Role.USER, "k"),
+                Person("e7de0cb1", "Matt", null, Role.ADMIN),
+                Person("bprh3d2s", "Kayla", null, Role.USER),
             ),
         )
-        assertTrue(two.mayChange("matt", me = "matt"))
-        assertTrue(two.mayChange("kayla", me = "matt"))
+        assertTrue(two.mayChange("e7de0cb1", me = "e7de0cb1"))
+        assertTrue(two.mayChange("bprh3d2s", me = "e7de0cb1"))
     }
 
     @Test
@@ -210,29 +210,29 @@ class RolesTest {
         // browser can promote anybody from — `ADMIN_PASSWORD` is the
         // way back. That is worth a word on the row, and not worth
         // taking the decision away.
-        val alone = People().loaded(listOf(Person("matt", "Matt", null, Role.ADMIN, "m")))
-        assertTrue(alone.strands("matt", me = "matt"))
+        val alone = People().loaded(listOf(Person("e7de0cb1", "Matt", null, Role.ADMIN)))
+        assertTrue(alone.strands("e7de0cb1", me = "e7de0cb1"))
 
         val two = People().loaded(
             listOf(
-                Person("matt", "Matt", null, Role.ADMIN, "m"),
-                Person("zoe", "Zoe", null, Role.ADMIN, "z"),
+                Person("e7de0cb1", "Matt", null, Role.ADMIN),
+                Person("z0e4k2pq", "Zoe", null, Role.ADMIN),
             ),
         )
-        assertFalse(two.strands("matt", me = "matt"), "with two admins nothing is stranded")
-        assertFalse(alone.strands("kayla", me = "matt"), "promoting somebody strands nothing")
+        assertFalse(two.strands("e7de0cb1", me = "e7de0cb1"), "with two admins nothing is stranded")
+        assertFalse(alone.strands("bprh3d2s", me = "e7de0cb1"), "promoting somebody strands nothing")
     }
 
     @Test
     fun andSomebodyElsesRowNeverWarns() {
         val s = People().loaded(
             listOf(
-                Person("matt", "Matt", null, Role.ADMIN, "m"),
-                Person("kayla", "Kayla", null, Role.USER, "k"),
+                Person("e7de0cb1", "Matt", null, Role.ADMIN),
+                Person("bprh3d2s", "Kayla", null, Role.USER),
             ),
         )
-        assertFalse(s.strands("kayla", me = "matt"))
-        assertTrue(s.mayChange("kayla", me = "matt"))
+        assertFalse(s.strands("bprh3d2s", me = "e7de0cb1"))
+        assertTrue(s.mayChange("bprh3d2s", me = "e7de0cb1"))
     }
 
     // ------------------------------------------------------------ the wire
@@ -241,19 +241,19 @@ class RolesTest {
     fun theListDecodesWhatTheServerSends() {
         val people = People.decode(
             """{"users":[
-              {"slug":"matt","name":"Matt","avatar":null,"role":"admin","key":"e7de0cb1"},
-              {"slug":"kayla","name":"Kayla","avatar":"http://x/y.png","role":"user","key":"a1b2c3d4"}
+              {"key":"e7de0cb1","name":"Matt","avatar":null,"role":"admin"},
+              {"key":"bprh3d2s","name":"Kayla","avatar":"http://x/y.png","role":"user"}
             ]}""",
         )
         assertEquals(2, people.size)
-        assertEquals("matt", people.first().slug)
+        assertEquals("e7de0cb1", people.first().key)
         assertEquals(Role.ADMIN, people.first().role)
         assertEquals("http://x/y.png", people.last().avatar)
     }
 
     @Test
     fun anUnknownRoleOnTheWireReadsAsAUserRatherThanThrowing() {
-        val people = People.decode("""{"users":[{"slug":"x","role":"wizard","key":"k"}]}""")
+        val people = People.decode("""{"users":[{"key":"k","role":"wizard"}]}""")
         assertEquals(Role.USER, people.single().role, "an unknown role was taken at its word")
     }
 
@@ -287,9 +287,9 @@ class RolesTest {
 class PeopleSearchTest {
 
     private val everybody = listOf(
-        Person("matt", "Matt Shoemaker", null, Role.ADMIN, "e7de0cb1"),
-        Person("matthew-shoemaker", "Matthew Shoemaker", null, Role.USER, "a1b2c3d4"),
-        Person("kayla", "Kayla", null, Role.USER, "99887766"),
+        Person("e7de0cb1", "Matt Shoemaker", null, Role.ADMIN),
+        Person("a1b2c3d4", "Matthew Shoemaker", null, Role.USER),
+        Person("bprh3d2s", "Kayla", null, Role.USER),
     )
 
     private val loaded = People().loaded(everybody)
@@ -299,14 +299,14 @@ class PeopleSearchTest {
     @Test
     fun aPersonIsShownAtTheAddressTheirCollectionActuallyHas() {
         // `/c/e7de0cb1`, not `/c/matt`. The key is what an address
-        // carries; the slug is what `cards.owner` holds.
+        // carries, and the only thing about an account the app holds.
         assertEquals("/c/e7de0cb1", everybody.first().address)
         assertEquals("/c/a1b2c3d4", everybody[1].address)
     }
 
     @Test
     fun andAnAccountWithNoKeyYetHasNoAddressToShow() {
-        assertNull(Person("ghost", "Ghost", null, Role.USER, "").address)
+        assertNull(Person("", "Ghost", null, Role.USER).address)
     }
 
     // -------------------------------------------------------- the search
@@ -319,24 +319,24 @@ class PeopleSearchTest {
 
     @Test
     fun aNameNarrowsIt() {
-        assertEquals(listOf("kayla"), loaded.searching("kay").shown.map { it.slug })
+        assertEquals(listOf("bprh3d2s"), loaded.searching("kay").shown.map { it.key })
     }
 
     @Test
-    fun andSoDoesASlugOrAKey() {
-        assertEquals(listOf("matthew-shoemaker"), loaded.searching("matthew-").shown.map { it.slug })
-        assertEquals(listOf("matt"), loaded.searching("e7de").shown.map { it.slug })
+    fun andSoDoesAKey() {
+        assertEquals(listOf("a1b2c3d4"), loaded.searching("a1b2").shown.map { it.key })
+        assertEquals(listOf("e7de0cb1"), loaded.searching("e7de").shown.map { it.key })
     }
 
     @Test
     fun caseAndSpacingDoNotMatter() {
-        assertEquals(listOf("kayla"), loaded.searching("  KAYLA ").shown.map { it.slug })
+        assertEquals(listOf("bprh3d2s"), loaded.searching("  KAYLA ").shown.map { it.key })
     }
 
     @Test
     fun aRoleIsSomethingYouCanSearchFor() {
         // "who are the admins" is the question this screen exists for.
-        assertEquals(listOf("matt"), loaded.searching("admin").shown.map { it.slug })
+        assertEquals(listOf("e7de0cb1"), loaded.searching("admin").shown.map { it.key })
     }
 
     @Test
@@ -351,9 +351,9 @@ class PeopleSearchTest {
         // Searching narrows what is shown and changes nothing else:
         // a role set while a search is on must land on the row it was
         // set on, not on whatever is visible.
-        val narrowed = loaded.searching("kay").changed("matt", Role.USER)
+        val narrowed = loaded.searching("kay").changed("e7de0cb1", Role.USER)
         assertEquals(3, narrowed.rows.size)
-        assertEquals(Role.USER, narrowed.rows.first { it.slug == "matt" }.role)
+        assertEquals(Role.USER, narrowed.rows.first { it.key == "e7de0cb1" }.role)
     }
 
     // -------------------------------------------------------- one person
@@ -368,7 +368,7 @@ class PeopleSearchTest {
     @Test
     fun andTheAppFindsThemByTheKeyInTheAddress() {
         val s = AppState(people = loaded).navigate(Route(View.ADMIN, "e7de0cb1"))
-        assertEquals("matt", s.person?.slug)
+        assertEquals("e7de0cb1", s.person?.key)
     }
 
     @Test

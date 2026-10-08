@@ -235,7 +235,22 @@ class AppDriverTest {
 
     private fun cardPages() = document.querySelectorAll("div.card-page").length
 
-    private fun hash() = window.location.hash
+    /**
+     * Where the page is, less whose collection it is.
+     *
+     * Signing in now moves you to your own collection with its key in
+     * the address — `#/c/e7de0cb1/search` — which `homeRoute` always
+     * meant to do and could not while the web read no key off
+     * `/auth/me`. These tests are about where back and forward go, not
+     * about that prefix; [addressSaysWhose] is the one that is.
+     */
+    private fun hash() = window.location.hash.replace(Regex("^#/c/[^/]+/"), "#/")
+
+    @Test
+    fun addressSaysWhose() = runTest {
+        mount("#/search", token = "t")
+        waitFor("your key in the address") { window.location.hash == "#/c/e7de0cb1/search" }
+    }
 
     // ------------------------------------------------- opening a card
 

@@ -30,7 +30,7 @@ class BackTest {
         nameNorm = name.lowercase(), typeLine = "Artifact", scryfallId = "abcdef12-3456",
     )
 
-    private fun onADeck() = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t"))
+    private fun onADeck() = AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t"))
         .navigate(Route(View.DECKS, "alela"))
         .let { it.copy(decks = it.decks.loaded(listOf(deck())).opened("alela", listOf(card("Sol Ring")))) }
 
@@ -67,7 +67,7 @@ class BackTest {
         val once = readingACardFromThatDeck().back() ?: error("nothing to go back to")
         assertEquals(
             "alela",
-            once.decks.openSlug,
+            once.decks.openKey,
             "coming back off the card closed the deck it came from",
         )
     }
@@ -92,7 +92,7 @@ class BackTest {
     fun backOutOfThatDeckThenClosesIt() {
         val atDeck = readingACardFromThatDeck().back() ?: error("nothing to go back to")
         val out = atDeck.back() ?: error("nothing to go back to")
-        assertNull(out.decks.openSlug, "the second press did not come out of the deck")
+        assertNull(out.decks.openKey, "the second press did not come out of the deck")
     }
 
     // ----------------------------------------- the suggestion list
@@ -113,7 +113,7 @@ class BackTest {
         assertFalse(once.complete.open, "the suggestion list was left over the screen")
         assertTrue(Overlay.CHEATSHEET in once.overlays, "an overlay back was not asked to touch came off")
         assertEquals(View.CARD, once.view, "back left the card as well as the list")
-        assertEquals("alela", once.decks.openSlug, "a deck back was not asked to touch closed")
+        assertEquals("alela", once.decks.openKey, "a deck back was not asked to touch closed")
     }
 
     @Test
@@ -135,7 +135,7 @@ class BackTest {
         val s = onADeck().typedCardName(suggesting())
 
         val closed = s.back() ?: error("nothing to go back to")
-        assertEquals("alela", closed.decks.openSlug, "the first press went past the list")
+        assertEquals("alela", closed.decks.openKey, "the first press went past the list")
 
         val out = closed.back() ?: error("nothing to go back to")
         assertEquals(View.DECKS, out.view)
@@ -187,7 +187,7 @@ class BackTest {
 
     @Test
     fun backFromAnotherViewGoesToTheDefaultOne() {
-        val once = AppState(admin = Admin().signIn(Account(slug = "matt", role = "admin"), "t")).navigate(View.STATS).back()
+        val once = AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t")).navigate(View.STATS).back()
             ?: error("nothing to go back to")
         assertEquals(View.DEFAULT, once.view)
     }

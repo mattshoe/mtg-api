@@ -64,7 +64,7 @@ class DecksLayoutTest {
         querySelectorAll(css).let { n -> (0 until n.length).mapNotNull { n[it] as? HTMLElement } }
 
     private fun deck(key: String, owner: String, name: String = key) =
-        Deck(slug, name, owner, "Alela, Artful Provocateur (ELD) 324", "UW", 3, null)
+        Deck(key, name, owner, "Alela, Artful Provocateur (ELD) 324", "UW", 3, null)
 
     /** One collection's shelf: the only kind the page shows now. */
     private fun shelf() = DecksState().loaded(
