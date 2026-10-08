@@ -13,6 +13,7 @@ import kotlinx.browser.window
 import kotlinx.coroutines.await
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
+import org.mattshoe.mtg.core.GitHubReleases
 import org.mattshoe.mtg.core.MtgApi
 import org.mattshoe.mtg.core.Scryfall
 import org.w3c.dom.HTMLButtonElement
@@ -56,11 +57,15 @@ class AppDriverTest {
     /** Every request body the app sent, in order, so a test can read what it asked. */
     private val sent = mutableListOf<String>()
 
+    /** What `/auth/me` says the session is. Admin Settings needs `admin`. */
+    private var role = "user"
+
     @BeforeTest
     fun stubTheNetwork() {
         writes.clear()
         searches = 0
         sent.clear()
+        role = "user"
         val engine = MockEngine { request ->
             if (request.method.value == "POST" && """"dry_run":false""" in
                 (request.body as? io.ktor.http.content.TextContent)?.text.orEmpty()
@@ -106,6 +111,12 @@ class AppDriverTest {
                 request.url.encodedPath.endsWith("/cards/autocomplete") ->
                     """{"object":"catalog","total_values":2,"data":["Vesuva","Vesuvan Mist"]}"""
 
+                request.url.encodedPath.endsWith("/repos/mattshoe/mtg-api/releases") ->
+                    """[{"tag_name":"android-v2.1.0-297","published_at":"2026-10-09T10:00:00Z",""" +
+                        """"body":"Release notes in Admin Settings.\n\nBuilt from abc."}]"""
+
+                request.url.encodedPath == "/admin/users" -> """{"users":[]}"""
+
                 request.url.encodedPath == "/cards/validate" ->
                     """{"checked":1,"unknown":0,"ok":true,"cards":[],"bad":[],"suggestions":{}}"""
 
@@ -123,7 +134,11 @@ class AppDriverTest {
         val http = HttpClient(engine) {
             install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true; isLenient = true }) }
         }
-        MtgApp.useForTesting(MtgApi.withEngine("https://example.test", http), Scryfall.withEngine(http))
+        MtgApp.useForTesting(
+            MtgApi.withEngine("https://example.test", http),
+            Scryfall.withEngine(http),
+            GitHubReleases.withEngine(http),
+        )
         stubWhoAmI()
     }
 
@@ -143,7 +158,7 @@ class AppDriverTest {
             if ("$url".contains("/auth/me")) {
                 Promise.resolve(
                     Response(
-                        """{"key":"e7de0cb1","name":"Matt","role":"user"}""",
+                        """{"key":"e7de0cb1","name":"Matt","role":"$role"}""",
                         ResponseInit(status = 200, headers = js("({'Content-Type':'application/json'})")),
                     ),
                 )
@@ -970,5 +985,24 @@ class AppDriverTest {
         waitFor("the card page") { cardPages() == 1 }
         settle()
         assertTrue(window.scrollY < 10, "the card opened at ${window.scrollY}")
+    }
+
+    // ------------------------------------------------- release notes
+
+    /**
+     * Opening Admin Settings asks GitHub for the builds and lists them.
+     *
+     * The shell tests hand the page a loaded `Releases`; this is the
+     * part they cannot see, that anything ever loads one.
+     */
+    @Test
+    fun openingAdminSettingsLoadsTheReleaseNotes() = runTest {
+        role = "admin"
+        val root = mount("#/admin")
+        waitFor("a release note on Admin Settings") {
+            root.all("[data-release]").isNotEmpty()
+        }
+        val text = root.all("[data-release]").first().textContent.orEmpty()
+        assertTrue("2.1.0 (297)" in text && "Release notes in Admin Settings." in text, text)
     }
 }

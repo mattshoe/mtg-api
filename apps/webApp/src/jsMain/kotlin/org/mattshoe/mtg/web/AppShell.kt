@@ -161,6 +161,7 @@ fun AppShell(
 
         View.ADMIN -> AdminPage(
             state = state.people,
+            releases = state.releases,
             me = state.admin.account?.key,
             person = state.person,
             onSearch = { onState(state.copy(people = state.people.searching(it))) },

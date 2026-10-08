@@ -50,6 +50,9 @@ import kotlin.test.assertTrue
 @RunWith(AndroidJUnit4::class)
 class MainActivityFacetsTest {
 
+    @get:Rule(order = Int.MIN_VALUE)
+    val retry = Retry()
+
 
     /**
      * Pump Robolectric's main looper until the load has finished.

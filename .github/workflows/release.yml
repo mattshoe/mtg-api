@@ -137,7 +137,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="android-v${{ steps.v.outputs.name }}-${{ steps.v.outputs.code }}"
+          # The body is the release note the merge added under
+          # release-notes/, which Admin Settings lists as the release
+          # notes on both platforms. See scripts/release-note.mjs.
+          node scripts/release-note.mjs > "$RUNNER_TEMP/notes.md"
           gh release create "$TAG" mtg-collection.apk \
             --title "Android app ${{ steps.v.outputs.name }} (${{ steps.v.outputs.code }})" \
-            --notes "Built from ${{ github.sha }}. Install over the top; same signing key." \
+            --notes-file "$RUNNER_TEMP/notes.md" \
             --latest

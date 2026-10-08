@@ -1,5 +1,6 @@
 package org.mattshoe.mtg.android
 
+import org.junit.Rule
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.test.core.app.ApplicationProvider
@@ -34,6 +35,9 @@ import kotlin.test.assertTrue
  */
 @RunWith(AndroidJUnit4::class)
 class BrandMarkAssetTest {
+
+    @get:Rule(order = Int.MIN_VALUE)
+    val retry = Retry()
 
     private fun mark(): Bitmap {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()

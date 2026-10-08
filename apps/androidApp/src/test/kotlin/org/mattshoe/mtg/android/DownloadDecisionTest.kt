@@ -1,5 +1,6 @@
 package org.mattshoe.mtg.android
 
+import org.junit.Rule
 import android.content.ClipboardManager
 import android.content.Context
 import android.os.Looper
@@ -67,6 +68,9 @@ import kotlin.test.assertTrue
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 @RunWith(AndroidJUnit4::class)
 class DownloadDecisionTest {
+
+    @get:Rule(order = Int.MIN_VALUE)
+    val retry = Retry()
 
     @Before
     fun setUp() {

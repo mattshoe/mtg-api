@@ -13,6 +13,7 @@ import org.jetbrains.compose.web.dom.Span
 import org.jetbrains.compose.web.dom.Text
 import org.mattshoe.mtg.core.People
 import org.mattshoe.mtg.core.Person
+import org.mattshoe.mtg.core.Releases
 import org.mattshoe.mtg.core.Role
 
 /**
@@ -33,6 +34,7 @@ fun AdminPage(
     state: People,
     me: String?,
     person: Person?,
+    releases: Releases = Releases(),
     onSearch: (String) -> Unit = {},
     onOpen: (Person) -> Unit = {},
     onSetRole: (Person, String) -> Unit = { _, _ -> },
@@ -43,6 +45,7 @@ fun AdminPage(
             PersonPage(state, person, me, onSetRole, onBack)
         } else {
             Everybody(state, onSearch, onOpen)
+            ReleaseNotes(releases)
         }
     }
 }
@@ -74,6 +77,44 @@ private fun Everybody(state: People, onSearch: (String) -> Unit, onOpen: (Person
                 state.nothingMatched ->
                     Div(attrs = { classes("empty") }) { Text("Nobody matches that.") }
                 else -> state.shown.forEach { p -> PersonRow(p, onOpen) }
+            }
+        }
+    }
+}
+
+/**
+ * Every build that shipped, newest first: its version, the day, and
+ * what a person wrote about it.
+ *
+ * Matt: "I JUST WANT TO FUCKING SEE THEM IN THE ADMIN SETTINGS!!!!!"
+ */
+@Composable
+private fun ReleaseNotes(releases: Releases) {
+    Div(attrs = { classes("panel") }) {
+        Div(attrs = { classes("panel-head") }) {
+            H2 { Text("Release notes") }
+        }
+        Div(attrs = { classes("panel-body") }) {
+            when {
+                releases.busy -> Div(attrs = { classes("empty") }) { Text("Loading…") }
+                releases.error != null ->
+                    Div(attrs = { classes("err") }) { Text("Could not load release notes: ${releases.error}") }
+                releases.rows.isEmpty() -> Div(attrs = { classes("empty") }) { Text("No releases yet.") }
+                else -> releases.rows.forEach { r ->
+                    Div(attrs = {
+                        classes("release")
+                        attr("data-release", r.tag)
+                    }) {
+                        Div(attrs = { classes("release-head") }) {
+                            Span(attrs = { classes("release-version") }) { Text(r.version) }
+                            Span(attrs = { classes("spacer") }) {}
+                            Span(attrs = { classes("muted", "small") }) { Text(r.date) }
+                        }
+                        Div(attrs = { classes(if (r.note == null) "muted" else "release-note", "small") }) {
+                            Text(r.shownNote)
+                        }
+                    }
+                }
             }
         }
     }

@@ -44,6 +44,8 @@ data class AppState(
     val resolvedCollection: String = "",
     /** Who is there, for the Admin Settings screen. */
     val people: People = People(),
+    /** Every build that shipped, for the release notes on Admin Settings. */
+    val releases: Releases = Releases(),
     /** What is on top, and therefore what back closes. */
     val overlays: Overlays = Overlays(),
     /** Set when a share arrived and has not been used yet. */
