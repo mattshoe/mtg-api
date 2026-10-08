@@ -100,6 +100,14 @@ enum class Sort(val slug: String, val label: String, val keys: List<String>) {
     ;
 
     /**
+     * True when a low value is the good end. A rank is: rank 1 is the
+     * card everybody plays. `buildQuery` flips the SQL for these, so
+     * `descending` means "best first" on every column and the arrow
+     * pointing down never puts the cards nobody plays at the top.
+     */
+    val ascendingIsBetter: Boolean get() = this == EDHREC
+
+    /**
      * What the direction arrow means for this column.
      *
      * "Largest first" is nothing to a Name or an Artist, and the
@@ -108,7 +116,7 @@ enum class Sort(val slug: String, val label: String, val keys: List<String>) {
     fun directionLabel(descending: Boolean): String = when (this) {
         NAME, ARTIST, SET -> if (descending) "Z to A" else "A to Z"
         RELEASED -> if (descending) "Newest first" else "Oldest first"
-        EDHREC -> if (descending) "Least played first" else "Most played first"
+        EDHREC -> if (descending) "Most played first" else "Least played first"
         else -> if (descending) "Largest first" else "Smallest first"
     }
 
@@ -573,7 +581,7 @@ fun buildQuery(s: Filters, countOnly: Boolean = false): Sql {
         return Sql("SELECT COUNT(*) FROM ($inner)", params)
     }
 
-    val dir = if (s.descending) "DESC" else "ASC"
+    val dir = if (s.descending != s.sort.ascendingIsBetter) "DESC" else "ASC"
     val order = "ORDER BY " +
         s.sort.keys.joinToString(", ") { "($it) IS NULL, ($it) $dir" } +
         ", c.name_norm ASC"

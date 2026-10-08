@@ -2196,12 +2196,21 @@ private fun singleFieldSweep(): List<Pair<String, Filters>> = listOf(
 /** Every sort key, both directions, and the slug codec around them. */
 class SortExhaustiveTest {
 
+    /**
+     * The SQL direction a sort should get. The arrow means "best first"
+     * everywhere, and for a rank the best end is the low one, so EDHREC
+     * is the one column whose SQL runs the other way. Named here by hand
+     * rather than read off `Sort`, so the property cannot vouch for itself.
+     */
+    private fun sqlDir(sort: Sort, descending: Boolean): String =
+        if (descending != (sort == Sort.EDHREC)) "DESC" else "ASC"
+
     @Test
     fun everySortPutsAllOfItsKeysInTheOrderBy() {
         Sort.entries.forEach { sort ->
             val sql = buildQuery(Filters(sort = sort)).sql
             sort.keys.forEach { key ->
-                assertTrue(sql.contains("($key) DESC"), "${sort.slug} lost the key $key:\n$sql")
+                assertTrue(sql.contains("($key) ${sqlDir(sort, true)}"), "${sort.slug} lost the key $key:\n$sql")
             }
         }
     }
@@ -2211,7 +2220,7 @@ class SortExhaustiveTest {
         Sort.entries.forEach { sort ->
             val sql = buildQuery(Filters(sort = sort, descending = true)).sql
             sort.keys.forEach { key ->
-                assertTrue(sql.contains("($key) IS NULL, ($key) DESC"), "${sort.slug}:\n$sql")
+                assertTrue(sql.contains("($key) IS NULL, ($key) ${sqlDir(sort, true)}"), "${sort.slug}:\n$sql")
             }
         }
     }
@@ -2221,7 +2230,7 @@ class SortExhaustiveTest {
         Sort.entries.forEach { sort ->
             val sql = buildQuery(Filters(sort = sort, descending = false)).sql
             sort.keys.forEach { key ->
-                assertTrue(sql.contains("($key) IS NULL, ($key) ASC"), "${sort.slug}:\n$sql")
+                assertTrue(sql.contains("($key) IS NULL, ($key) ${sqlDir(sort, false)}"), "${sort.slug}:\n$sql")
             }
         }
     }
@@ -2338,8 +2347,8 @@ class SortExhaustiveTest {
 
     @Test
     fun theRankSortSaysPlayedBecauseALowerRankIsMorePlayed() {
-        assertEquals("Most played first", Sort.EDHREC.directionLabel(false))
-        assertEquals("Least played first", Sort.EDHREC.directionLabel(true))
+        assertEquals("Most played first", Sort.EDHREC.directionLabel(true))
+        assertEquals("Least played first", Sort.EDHREC.directionLabel(false))
     }
 
     @Test

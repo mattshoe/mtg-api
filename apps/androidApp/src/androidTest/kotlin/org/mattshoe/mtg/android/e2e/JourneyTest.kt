@@ -21,6 +21,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mattshoe.mtg.core.Sort
 import org.mattshoe.mtg.core.View
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -178,6 +179,42 @@ internal class JourneyTest : E2eTest() {
             "the server log is offered to somebody who is nobody",
         )
         assertEquals(false, state().admin.unlocked, "a signed-out app says it may edit")
+    }
+
+    /**
+     * "The edhrec sorting looks backwards."
+     *
+     * Picking EDHREC rank leaves the arrow pointing down, and down is
+     * the good end on every column. For a rank that is rank 1, so the
+     * first tile has to be the most played card the database has —
+     * read back out of the same SQLite the query ran against.
+     */
+    @Test
+    fun pickingTheEdhrecSortPutsTheMostPlayedCardFirst() {
+        settled()
+        compose.onNodeWithTag("library").performScrollToNode(hasTestTag("select-sort"))
+        compose.onNodeWithTag("select-sort").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("EDHREC rank").performClick()
+        until("picking EDHREC rank never loaded") {
+            state().library.loadedFor?.sort == Sort.EDHREC && !state().library.busy
+        }
+        assertTrue(state().library.filters.descending, "picking a column reversed the arrow")
+
+        val rows = state().library.rows
+        val owners = rows.map { it.owner }.distinct().joinToString(",") { "'$it'" }
+        // A row's owner is the account's public key, so join to it.
+        val best = fake.rows(
+            "SELECT MIN(c.edhrec_rank) FROM cards c JOIN users u ON u.id = c.owner_id WHERE u.key IN ($owners)",
+        )
+            .single().single()?.toLong()
+        val first = rows.first()
+        assertEquals(
+            best,
+            first.edhrecRank,
+            "the arrow points down on EDHREC but the first tile is ${first.fullName}, " +
+                "rank ${first.edhrecRank}, and the most played card is rank $best",
+        )
     }
 
     @Test
