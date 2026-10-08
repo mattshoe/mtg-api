@@ -46,7 +46,6 @@ export function pending(entries, { done = [] } = {}) {
   ))
 }
 
-/** The sections triage promises to leave behind. */
 /** The frontmatter block, or '' when there is none. */
 function frontmatter(text) {
   const t = normalise(text)
@@ -68,7 +67,7 @@ function field(text, key) {
 }
 
 /**
- * The `status:` triage set, or '' when it set none.
+ * The `status:` field, or '' when it set none.
  *
  * Anything the frontmatter did not say exactly was treated as ready to
  * build: `status: blocked`, `status: done`, `Needs-Matt`, a value with a
@@ -121,8 +120,8 @@ export function state(text) {
  * The builder merges its own work now, so this is what its prompt means
  * by `merge: ask`. Read from the file and tested here, never decided by
  * the model. Only an explicit `merge: auto` merges; everything else, a
- * missing key included, is ask. Triage writes `merge: auto` deliberately,
- * so a file without it was not written by triage.
+ * missing key included, is ask. The coordinating session writes the file,
+ * so an absent `merge:` means it did not say, and not-saying is not consent.
  */
 export function mergeMode(text) {
   const v = field(text, 'merge')
