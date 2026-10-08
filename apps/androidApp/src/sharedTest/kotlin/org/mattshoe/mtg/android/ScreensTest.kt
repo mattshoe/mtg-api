@@ -338,7 +338,11 @@ class ScreensTest {
             usedIn = listOf(DeckUse("p", "Proxy deck", "matt", 1, null, true)),
         )
         content { CardSheet(detail) {} }
-        rule.onAllNodesWithText("1 free").onFirst().assertExists()
+        // The page no longer counts copies, so a proxy is said on its
+        // deck row and nothing on the page claims it took a copy.
+        rule.onNodeWithText("proxy").assertExists()
+        rule.onAllNodesWithText("committed", substring = true).assertCountEquals(0)
+        rule.onAllNodesWithText("free", substring = true).assertCountEquals(0)
     }
 
     // --------------------------------------------------------- overlays
