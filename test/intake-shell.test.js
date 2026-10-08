@@ -997,3 +997,57 @@ describe('status.sh', () => {
     expect(status().stdout).toContain('OFF')
   })
 })
+
+describe('what a builder is launched with', () => {
+  // The deny list is string matching, and string matching was attacked
+  // with eighteen spellings a model would reach for first — `eval`,
+  // `bash -c`, `W=wrangler; $W deploy`, `--admin=true`, `wrangler
+  // dep""loy`, `wrangler d1 execute` with no `--remote` — and every one
+  // got through. So the first line of defence is not holding the keys.
+
+  beforeEach(() => {
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    box.stub('gh', ghStub())
+    // A builder that reports its own environment back.
+    box.stub('claude', `
+printenv | grep -E '^(CLOUDFLARE|CF_|WRANGLER)' > ${JSON.stringify(join(box.root, 'builder-env.txt'))} || true
+printenv WRANGLER_HOME >> ${JSON.stringify(join(box.root, 'builder-env.txt'))} || true
+branch="$(git rev-parse --abbrev-ref HEAD)"
+echo x >> built.txt
+git add -A
+git -c user.name=b -c user.email=b@b commit -qm "build: $branch"
+git push -q origin "HEAD:refs/heads/$branch"
+exit 0
+`)
+  })
+
+  const builderEnv = () => readFileSync(join(box.root, 'builder-env.txt'), 'utf8')
+
+  it('carries no Cloudflare credentials, even when the dispatcher has them', () => {
+    run('dispatch.sh', {
+      env: {
+        CLOUDFLARE_API_TOKEN: 'a-real-looking-token',
+        CLOUDFLARE_ACCOUNT_ID: 'an-account',
+        CF_API_TOKEN: 'another',
+      },
+    })
+    const env = builderEnv()
+    expect(env).not.toContain('a-real-looking-token')
+    expect(env).not.toContain('an-account')
+    expect(env).not.toContain('another')
+  })
+
+  it('has WRANGLER_HOME pointed somewhere with no stored login in it', () => {
+    // Wrangler finds credentials in exactly two places: the environment,
+    // and its own config under WRANGLER_HOME. Both are taken away.
+    run('dispatch.sh')
+    expect(builderEnv()).toContain('no-cloudflare-auth')
+  })
+
+  it('still gets everything it legitimately needs', () => {
+    run('dispatch.sh', { env: { SOME_HARMLESS_VAR: 'kept' } })
+    // The scrub is a named list, not a whitelist: it must not have
+    // emptied the environment wholesale.
+    expect(existsSync(box.path('requests/done/a-thing.md'))).toBe(true)
+  })
+})

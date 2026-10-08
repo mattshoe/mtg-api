@@ -530,6 +530,36 @@ run() {
   "$@"
 }
 
+# Launch an agent with no way to reach production.
+#
+# The deny list in `.claude/settings.json` and the PreToolUse hook are
+# string matching, and string matching is a SECOND line of defence. It was
+# attacked with eighteen spellings a model would reach for first — `eval`,
+# `bash -c`, `W=wrangler; $W deploy`, `--admin=true`, `wrangler dep""loy`,
+# and a `wrangler d1 execute` with no `--remote` at all, which still
+# reaches production — and every one of them got through.
+#
+# The first line of defence is not holding the keys. Wrangler finds
+# credentials in exactly two places: these environment variables, and its
+# own config under `WRANGLER_HOME`. Both are taken away here, so
+# `wrangler d1 execute --remote` fails on its own with "not authenticated"
+# whatever the agent types and whatever the matcher misses.
+#
+# The local suite does not need any of this: it runs the Worker in
+# workerd against a local D1 through miniflare.
+no_creds() {
+  local void="$STATE/no-cloudflare-auth"
+  mkdir -p "$void"
+  env \
+    -u CLOUDFLARE_API_TOKEN -u CLOUDFLARE_ACCOUNT_ID \
+    -u CLOUDFLARE_EMAIL -u CLOUDFLARE_API_KEY \
+    -u CF_API_TOKEN -u CF_ACCOUNT_ID -u CF_API_KEY \
+    -u WRANGLER_API_TOKEN -u WRANGLER_CLIENT_ID \
+    WRANGLER_HOME="$void" \
+    CLOUDFLARE_API_TOKEN= CLOUDFLARE_ACCOUNT_ID= \
+    "$@"
+}
+
 # One request, from launch to merged-or-explained. Runs in a subshell.
 build_one() {
   local file="$1" name="$2" branch="$3" where="$4" claim="$5" handed="$6"
@@ -559,7 +589,7 @@ build_one() {
   # thing that is writing to the branch.
   (
     cd "$where" || exit 1
-    run claude -p "$(builder_prompt "$name" "$branch" "$handed")" \
+    run no_creds claude -p "$(builder_prompt "$name" "$branch" "$handed")" \
       --model opus \
       --permission-mode bypassPermissions \
       --output-format stream-json --verbose --include-partial-messages
@@ -702,7 +732,7 @@ EOF
   # top-level session's config.
   (
     cd "$tri" || exit 1
-    run claude -p "You are the request-triage agent. Follow .claude/agents/request-triage.md \
+    run no_creds claude -p "You are the request-triage agent. Follow .claude/agents/request-triage.md \
 exactly. The untriaged files under requests/ are: $(printf '%s' "$todo" | tr '\n' ' '). \
 Rewrite each one in place with the frontmatter and the Plan/Tests/Done-when \
 sections. Do not write production code, do not open a branch, and do not touch \
