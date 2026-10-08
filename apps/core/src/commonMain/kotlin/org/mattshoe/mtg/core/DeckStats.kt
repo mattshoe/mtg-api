@@ -25,6 +25,17 @@ fun manaValueText(v: Double): String {
 
 /** One bar of a chart: what it is, how many, and what the number means. */
 data class Bar(val label: String, val value: Int, val note: String = "") {
+    /**
+     * The colours to draw it in, as WUBRG letters.
+     *
+     * A colour bar is labelled "Red" and a combination bar "UR"; a
+     * ring draws either from this, and a combination is one band per
+     * colour rather than a hue of its own nobody could name.
+     */
+    val letters: List<String>
+        get() = Pip.entries.firstOrNull { it.label == label }?.let { listOf(it.letter) }
+            ?: label.map { it.toString() }.filter { Pip.of(it) != null }.ifEmpty { listOf("C") }
+
     /** How wide to draw it, given the tallest bar beside it. */
     fun share(most: Int): Int = if (most <= 0) 0 else ((value * 100.0) / most).roundToInt()
 }
@@ -92,6 +103,15 @@ data class DeckStats(
     val curve: List<Bar>,
     val pips: List<Bar>,
     val sources: List<Bar>,
+    /**
+     * What the deck makes, by exact combination: a card making blue
+     * and red is one "UR" source, not one of each.
+     *
+     * Matt: "a R slice would ONLY account for cards that produce ONLY
+     * red mana, while a UR slice would ONLY account for cards that
+     * produce EXACTLY UR".
+     */
+    val combos: List<Bar>,
     val types: List<Bar>,
     val rarities: List<Bar>,
     val lands: Int,
@@ -155,6 +175,7 @@ object DeckAnalysis {
             curve = curve(nonland),
             pips = pips(cards),
             sources = sources(cards, spendable(cards)),
+            combos = combos(cards, spendable(cards)),
             types = types(cards),
             rarities = rarities(cards),
             lands = lands,
@@ -244,18 +265,46 @@ object DeckAnalysis {
             // One card making the same colour twice is still one
             // source of it, but a dual making two different colours
             // is a source of each.
-            c.knownProducedMana.orEmpty()
-                .mapNotNull { Pip.of(it.toString().uppercase()) }
-                .map { pip ->
-                    val usable = spendable == null || pip == Pip.C || pip.letter.single() in spendable
-                    if (usable) pip else Pip.C
-                }
-                .distinct()
-                .forEach { pip -> counts[pip] = (counts[pip] ?: 0) + c.qty }
+            makes(c, spendable).forEach { pip -> counts[pip] = (counts[pip] ?: 0) + c.qty }
         }
         return Pip.entries.mapNotNull { pip ->
             counts[pip]?.takeIf { it > 0 }?.let { Bar(pip.label, it, pip.letter) }
         }
+    }
+
+    /** What one card can make, once each, with unusable colours folded to colourless. */
+    private fun makes(c: DeckCard, spendable: Set<Char>?): List<Pip> =
+        c.knownProducedMana.orEmpty()
+            .mapNotNull { Pip.of(it.toString().uppercase()) }
+            .map { pip ->
+                val usable = spendable == null || pip == Pip.C || pip.letter.single() in spendable
+                if (usable) pip else Pip.C
+            }
+            .distinct()
+
+    /**
+     * How many cards make each exact set of colours.
+     *
+     * Colourless beside a colour is not a combination of its own: a
+     * painland making {C}, {U} or {R} is a UR land. Only a card that
+     * makes nothing coloured is colourless. Ordered singles first,
+     * then pairs and up, each in WUBRG order, colourless last.
+     */
+    private fun combos(cards: List<DeckCard>, spendable: Set<Char>?): List<Bar> {
+        val counts = mutableMapOf<String, Int>()
+        cards.forEach { c ->
+            val pips = makes(c, spendable)
+            if (pips.isEmpty()) return@forEach
+            val key = Pip.COLOURS.filter { it in pips }.joinToString("") { it.letter }.ifEmpty { Pip.C.letter }
+            counts[key] = (counts[key] ?: 0) + c.qty
+        }
+        val order = "WUBRGC"
+        return counts.entries
+            .sortedWith(
+                compareBy<Map.Entry<String, Int>>({ it.key == Pip.C.letter }, { it.key.length })
+                    .thenBy { e -> e.key.map { order.indexOf(it) }.joinToString(",") { it.toString() } },
+            )
+            .map { (key, n) -> Bar(key, n, Guild.of(key.takeIf { it != Pip.C.letter }.orEmpty()).orEmpty()) }
     }
 
     /** The deck by card type, in the order a list is written in. */

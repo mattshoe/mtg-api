@@ -159,6 +159,9 @@ private fun Colours(s: DeckStats) {
     Div(attrs = { classes("pies") }) {
         Pie("Needs", s.pips)
         Pie("Makes", s.sources)
+        // Makes again, with a dual as its own slice rather than a
+        // point in each colour's total.
+        Pie("Exactly", s.combos)
     }
     Div(attrs = { classes("sub") }) {
         Text("Pips the deck asks for, against cards that can produce them. ")
@@ -216,12 +219,15 @@ private fun Pie(caption: String, bars: List<Bar>) {
     val total = bars.sumOf { it.value }
     if (total <= 0) return
     var at = 0.0
-    val stops = bars.joinToString(", ") { bar ->
-        val from = at
-        at += (bar.value * 100.0) / total
-        val colour = Pip.entries.firstOrNull { it.label == bar.label }?.letter?.lowercase() ?: "c"
-        "var(--$colour) ${from}% ${at}%"
-    }
+    // A combination is a band of each of its colours.
+    val stops = bars.flatMap { bar ->
+        val band = (bar.value * 100.0) / total / bar.letters.size
+        bar.letters.map { letter ->
+            val from = at
+            at += band
+            "var(--${letter.lowercase()}) ${from}% ${at}%"
+        }
+    }.joinToString(", ")
     Div(attrs = { classes("pie-set") }) {
         Div(attrs = {
             classes("pie")
@@ -234,9 +240,10 @@ private fun Pie(caption: String, bars: List<Bar>) {
         Span(attrs = { classes("pie-cap") }) { Text("$caption · $total") }
         Div(attrs = { classes("pie-key") }) {
             bars.forEach { bar ->
-                val letter = Pip.entries.firstOrNull { it.label == bar.label }?.letter ?: "C"
+                // Every colour of a combination keyed by its symbol,
+                // so UR reads {U}{R} and not a tint.
                 Span(attrs = { classes("k") }) {
-                    ManaPip(letter, "sm")
+                    bar.letters.forEach { ManaPip(it, "sm") }
                     Text("${(bar.value * 100) / total}%")
                 }
             }

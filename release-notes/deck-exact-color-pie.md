@@ -1,0 +1,1 @@
+Deck stats has a third ring, Exactly, beside Needs and Makes. A card that makes exactly U and R counts once as a UR slice instead of a point in blue and a point in red, so the R slice is only cards that make red and nothing else. Website and Android.

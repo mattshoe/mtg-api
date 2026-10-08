@@ -511,6 +511,30 @@ class DeckStatsParityTest {
         show(deck())
         assertTrue(exists("ring-Needs"), "no ring for what the deck needs")
         assertTrue(exists("ring-Makes"), "no ring for what the deck makes")
+        assertTrue(exists("ring-Exactly"), "no ring for the exact colour combinations")
+    }
+
+    @Test
+    fun aDualLandIsItsOwnSliceInTheExactlyRing() {
+        // Matt: "a UR slice would ONLY account for cards that produce
+        // EXACTLY UR". Five Mountains, three Islands, two Steam Vents:
+        // the makes ring says 7 red and 5 blue; this one says 5 only
+        // red, 3 only blue and 2 both.
+        show(
+            listOf(
+                card("Mountain", "Basic Land — Mountain", null, 0.0, qty = 5, produces = "R"),
+                card("Island", "Basic Land — Island", null, 0.0, qty = 3, produces = "U"),
+                card("Steam Vents", "Land", null, 0.0, qty = 2, produces = "UR"),
+            ),
+        )
+        rule.onNodeWithText("Exactly · 10").assertExists()
+        rule.onNodeWithContentDescription("Exactly · 10 — U 30%, R 50%, UR 20%", useUnmergedTree = true)
+            .assertExists()
+        // The dual is keyed by both its symbols, so it is named and
+        // not only tinted.
+        assertTrue(exists("pip-Exactly-UR-U"), "the UR slice has no blue symbol in the key")
+        assertTrue(exists("pip-Exactly-UR-R"), "the UR slice has no red symbol in the key")
+        assertTrue(exists("pip-Exactly-R"), "the red-only slice has no key")
     }
 
     @Test

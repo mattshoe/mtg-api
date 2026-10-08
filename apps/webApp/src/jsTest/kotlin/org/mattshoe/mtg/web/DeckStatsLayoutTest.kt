@@ -250,7 +250,7 @@ class DeckStatsLayoutTest {
         val frame = render(900)
         settle()
         val pies = frame.all("div.pie")
-        assertEquals(2, pies.size, "one for needs, one for makes")
+        assertEquals(3, pies.size, "one for needs, one for makes, one for exact combinations")
         pies.forEach { pie ->
             val bg = pie.getAttribute("style").orEmpty()
             assertTrue(bg.contains("conic-gradient"), "the ring has no slices: $bg")
@@ -258,6 +258,55 @@ class DeckStatsLayoutTest {
         val caps = frame.all("span.pie-cap").map { it.textContent.orEmpty() }
         assertTrue(caps.any { it.startsWith("Needs") }, caps.toString())
         assertTrue(caps.any { it.startsWith("Makes") }, caps.toString())
+        assertTrue(caps.any { it.startsWith("Exactly") }, caps.toString())
+    }
+
+    @Test
+    fun theThreeRingsSitSideBySide() = runTest {
+        // Android lays them in one row; the web must not wrap the
+        // third onto a row of its own.
+        assertTrue(styled(), "app.css never loaded, so the layout proves nothing")
+        val frame = render(900)
+        settle()
+        val tops = frame.all("div.pie").map { it.getBoundingClientRect().top }
+        assertEquals(3, tops.size, "expected three rings")
+        assertTrue(tops.max() - tops.min() < 1, "the rings are not in one row, tops: $tops")
+    }
+
+    @Test
+    fun aDualLandIsItsOwnSliceInTheExactlyRing() = runTest {
+        // Matt: "a UR slice would ONLY account for cards that produce
+        // EXACTLY UR". Five Mountains, three Islands, two Steam Vents:
+        // the makes ring says 7 red and 5 blue; this one says 5 only
+        // red, 3 only blue and 2 both.
+        val frame = document.createElement("div") as HTMLElement
+        frame.style.width = "900px"
+        document.body!!.appendChild(frame)
+        roots += frame
+        val cards = listOf(
+            card("Mountain", "Basic Land — Mountain", null, 0.0, qty = 5, produces = "R"),
+            card("Island", "Basic Land — Island", null, 0.0, qty = 3, produces = "U"),
+            card("Steam Vents", "Land", null, 0.0, qty = 2, produces = "UR"),
+        )
+        renderComposable(root = frame) { DeckStatsPanel(DeckAnalysis.of(cards)) }
+        settle()
+        val set = frame.all("div.pie-set")
+            .firstOrNull { it.querySelector(".pie-cap")?.textContent.orEmpty().startsWith("Exactly") }
+        assertTrue(set != null, "there is no Exactly ring at all")
+        assertEquals("Exactly · 10", set.querySelector(".pie-cap")?.textContent)
+        // Every slice is named by its symbols, so a dual reads {U}{R}
+        // rather than being told apart by hue.
+        val keys = set.all(".pie-key .k").map { k ->
+            k.all("img.mana-sym").joinToString("") { it.getAttribute("alt").orEmpty() } +
+                " " + k.textContent.orEmpty().trim()
+        }
+        assertEquals(listOf("{U} 30%", "{R} 50%", "{U}{R} 20%"), keys, "the key should name each exact combination")
+        val title = set.querySelector(".pie")?.getAttribute("title").orEmpty()
+        assertEquals("U 30%, R 50%, UR 20%", title)
+        // The UR slice runs 80% to 100%, and is drawn as a band of
+        // blue and a band of red rather than a colour of its own.
+        val bg = set.querySelector(".pie")?.getAttribute("style").orEmpty()
+        assertTrue(bg.contains("var(--u) 80% 90%") && bg.contains("var(--r) 90% 100%"), "the UR slice is not drawn in its two colours: $bg")
     }
 
     @Test

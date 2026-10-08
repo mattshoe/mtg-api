@@ -930,6 +930,9 @@ private fun Colours(s: org.mattshoe.mtg.core.DeckStats) {
     ) {
         Ring("Needs", s.pips, Modifier.weight(1f))
         Ring("Makes", s.sources, Modifier.weight(1f))
+        // Makes again, with a dual as its own slice rather than a
+        // point in each colour's total.
+        Ring("Exactly", s.combos, Modifier.weight(1f))
     }
     // One caption, the web's `.sub`, and the splash warning is the last
     // sentence of it rather than a line of its own in amber. The web
@@ -980,14 +983,18 @@ private fun Ring(caption: String, bars: List<Bar>, modifier: Modifier = Modifier
         ) {
             var at = -90f
             bars.forEach { bar ->
-                val sweep = 360f * bar.value / total
-                drawArc(
-                    color = c(Design.pip(letterFor(bar.label))),
-                    startAngle = at,
-                    sweepAngle = sweep,
-                    useCenter = true,
-                )
-                at += sweep
+                // A combination is a band of each of its colours, and
+                // the hairlines below fall only between slices.
+                val band = 360f * bar.value / total / bar.letters.size
+                bar.letters.forEach { letter ->
+                    drawArc(
+                        color = c(Design.pip(letter)),
+                        startAngle = at,
+                        sweepAngle = band,
+                        useCenter = true,
+                    )
+                    at += band
+                }
             }
             // A hairline on every boundary, so two neighbouring
             // slices are told apart by an edge and not only by their
@@ -1017,17 +1024,19 @@ private fun Ring(caption: String, bars: List<Bar>, modifier: Modifier = Modifier
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    PipDot(letterFor(bar.label), 14.dp, 9.sp, "pip-$caption-${letterFor(bar.label)}")
+                    // Every colour of a combination keyed by its
+                    // symbol, so UR reads {U}{R} and not a tint.
+                    val letters = bar.letters
+                    letters.forEach { letter ->
+                        val tag = if (letters.size == 1) "pip-$caption-$letter" else "pip-$caption-${bar.label}-$letter"
+                        PipDot(letter, 14.dp, 9.sp, tag)
+                    }
                     Line("$pct%", Ink2, Design.TINY)
                 }
             }
         }
     }
 }
-
-/** The letter a colour goes by, which is how a slice is named rather than tinted. */
-private fun letterFor(label: String): String =
-    Pip.entries.firstOrNull { it.label == label }?.letter ?: "C"
 
 /**
  * One mana symbol: the colour, with its letter on it. The web's `.sym`.
