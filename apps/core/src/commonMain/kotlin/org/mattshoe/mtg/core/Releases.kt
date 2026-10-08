@@ -12,8 +12,8 @@ import kotlinx.serialization.json.jsonPrimitive
  * Matt: "I want versioned release notes for every build. It should be
  * accessible via admin settings". Every merge to main cuts a GitHub
  * release in `release.yml`, so the release is the build and its tag is
- * the version. `versionName` has sat at 2.1.0 for a long time, which is
- * why the version shown carries the build number beside it.
+ * the version: semver, bumped by the note (`scripts/next-version.mjs`),
+ * with the build number beside it.
  *
  * The note is written by hand, one file per pull request under
  * `release-notes/`, and `release.yml` puts it into the release body.

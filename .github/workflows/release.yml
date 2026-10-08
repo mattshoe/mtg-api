@@ -77,13 +77,16 @@ jobs:
       # Commits on main only ever go up, so the code only ever goes up,
       # which is the one thing Android insists on. The offset keeps it
       # above the 4 that was last published by hand.
+      #
+      # The name is semver: the newest android-v tag, bumped by the
+      # `bump:` the merge's release note declares, a patch if it says
+      # nothing. See scripts/next-version.mjs and release-notes/README.md.
       - name: Work out the version
         if: steps.key.outputs.have == 'yes'
         id: v
         run: |
           echo "code=$(( $(git rev-list --count HEAD) + 100 ))" >> "$GITHUB_OUTPUT"
-          echo "name=$(grep -oE 'versionName = System.getenv\("MTG_VERSION_NAME"\) \?: "[^"]+"' \
-            apps/androidApp/build.gradle.kts | grep -oE '"[0-9.]+"$' | tr -d '"')" >> "$GITHUB_OUTPUT"
+          echo "name=$(node scripts/next-version.mjs)" >> "$GITHUB_OUTPUT"
 
       - name: Build the APK
         if: steps.key.outputs.have == 'yes'
