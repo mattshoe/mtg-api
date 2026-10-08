@@ -5,8 +5,9 @@
   "type": "module",
   "description": "REST API over Matt's Magic: The Gathering collection, on Cloudflare Workers + D1",
   "scripts": {
-    "test": "node scripts/guard.mjs 900 -- npm run test:raw",
-    "test:raw": "eslint frontend/js frontend/sw.js && vitest run --reporter=basic",
+    "test": "node scripts/guard.mjs 1500 -- npm run test:raw",
+    "test:raw": "eslint frontend/js frontend/sw.js && vitest run --reporter=basic && npm run test:shell",
+    "test:shell": "vitest run --config vitest.shell.config.js --reporter=basic",
     "test:watch": "vitest",
     "test:core": "node scripts/guard.mjs 900 -- ./apps/gradlew -p apps :core:jvmTest",
     "test:web": "node scripts/guard.mjs 1200 -- ./apps/gradlew -p apps :webApp:jsTest",
@@ -16,7 +17,8 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "lint": "eslint frontend/js frontend/sw.js",
-    "check:floor": "node scripts/check-suite-floor.mjs"
+    "check:floor": "node scripts/check-suite-floor.mjs",
+    "intake:status": "bash scripts/intake/status.sh"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.8.19",

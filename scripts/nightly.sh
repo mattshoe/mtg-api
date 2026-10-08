@@ -11,6 +11,28 @@
 # backup pages out through the API instead, so nothing is ever locked.
 set -uo pipefail
 
+# Not from inside a builder.
+#
+# This script sources `~/.mtg-api.env` itself — the production Cloudflare
+# token and the admin password — and then writes to production with them.
+# So a builder running `bash scripts/nightly.sh` reaches the real database
+# whatever the deny list does about `wrangler`, and a reviewer did exactly
+# that.
+#
+# **This guard is currently unarmed.** It fires on INTAKE_BUILDER, which
+# the old dispatcher set on every agent it launched; the rewrite
+# does not set it, and nothing else does. The check is kept because it
+# costs nothing and works the moment something sets the variable again —
+# but do not read it as protection today. The live defence is that the
+# dispatcher unsets the Cloudflare variables and points XDG_CONFIG_HOME at
+# an empty directory, which this script defeats by sourcing
+# `~/.mtg-api.env` itself.
+if [ -n "${INTAKE_BUILDER:-}" ]; then
+  echo "nightly.sh: refusing to run inside an intake builder (INTAKE_BUILDER is set)." >&2
+  echo "  It holds production credentials. Nothing a builder does needs them." >&2
+  exit 1
+fi
+
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BACKUPS="${MTG_BACKUP_DIR:-$HOME/mtg-backups}"
 KEEP_DAYS=30

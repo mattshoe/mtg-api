@@ -16,7 +16,13 @@ The cycle, in this order:
    that passes before the fix is testing nothing, and this repo has
    shipped four of those.
 3. **Write the smallest production change that makes it pass.**
-4. **Run the whole suite**, not just your test.
+4. **Run your test again and watch it pass.** Your test, narrowly —
+   `npx vitest run <file> -t '<name>'`, or `--tests 'OneTest'` for
+   Gradle. Seconds, not minutes. This step used to say "run the whole
+   suite, not just your test", and that was wrong: a whole-suite run
+   inside the cycle tells you nothing about the line you just changed
+   and costs about seven minutes a time. The full set runs ONCE, when
+   the work is done and before the pull request.
 5. **Record the red in the commit message.** Nothing checks it and
    nothing can; write it so the next reader knows the test could
    fail.

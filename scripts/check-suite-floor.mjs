@@ -15,7 +15,8 @@
 // leaves behind.
 import { readdirSync, readFileSync, statSync, existsSync, writeFileSync } from 'node:fs'
 import { join, extname } from 'node:path'
-import { verdict, raise, requested } from './suite-floor.mjs'
+import { execFileSync } from 'node:child_process'
+import { verdict, raise, requested, notLowered } from './suite-floor.mjs'
 
 const FLOORS = 'test/suite-floors.json'
 
@@ -86,14 +87,40 @@ if (absent.length > 0) {
 }
 
 if (raising) {
-  const next = raise(floors, actual)
+  // Re-read immediately before writing and merge per suite, so a
+  // concurrent `--raise` in another worktree is a three-way merge rather
+  // than a last-writer-wins overwrite. Only the suites named on the
+  // command line may move.
+  const onDisk = existsSync(FLOORS) ? JSON.parse(readFileSync(FLOORS, 'utf8')) : {}
+  const next = raise(onDisk, actual, named)
   writeFileSync(FLOORS, `${JSON.stringify(next, null, 2)}\n`)
   Object.entries(next).forEach(([s, n]) => {
-    const was = floors[s]
+    const was = onDisk[s]
     console.log(was === n ? `  ${s}: ${n}` : `  ${s}: ${was ?? 0} -> ${n}`)
   })
   console.log(`check-suite-floor: ${FLOORS} written. Commit it.`)
   process.exit(0)
+}
+
+// A floor below the one main carries is invisible otherwise: `raise`
+// will not lower one, but a merge resolution in this file will, and the
+// result goes green. `main` is the reference; a checkout with no `main`
+// to compare against just skips this.
+let reference
+try {
+  reference = JSON.parse(execFileSync('git', ['show', `${process.env.FLOOR_REF || 'origin/main'}:${FLOORS}`], {
+    encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
+  }))
+} catch { reference = undefined }
+const held = notLowered(reference, floors)
+if (!held.ok) {
+  console.error('check-suite-floor: a committed floor is below main\'s —\n')
+  held.lowered.forEach((r) => console.error(`  \u2717 ${r}`))
+  console.error(
+    '\nA floor may only ever go up. If a test was deliberately removed, say '
+    + 'so in the commit message and lower it in a commit of its own.\n',
+  )
+  process.exit(1)
 }
 
 // Only the suites named on the command line are judged. The rest

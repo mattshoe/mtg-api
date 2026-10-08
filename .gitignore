@@ -28,5 +28,6 @@ frontend/kmp/
 # The guard writes each running test group's id here so the next run
 # of the same command can clean up anything a SIGKILL left behind.
 .test-guard/
-.vitest-results
+.vitest-results/
+.vitest-shell-results/
 .intake/

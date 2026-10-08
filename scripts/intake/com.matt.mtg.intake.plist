@@ -1,6 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
   "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  A template. `install.sh` substitutes @REPO@ and @RUNNER@ and writes the
+  result to ~/Library/LaunchAgents.
+
+  It used to be a literal file with four hardcoded paths pointing straight
+  at a script inside a mutable working tree on a feature branch. A
+  checkout, a `git clean -xfd`, or the repo moving left the watcher loaded
+  and pointing at nothing — and `status.sh` only tailed intake.log, so the
+  dashboard showed a healthy idle queue while every request was lost.
+-->
 <plist version="1.0">
 <dict>
   <key>Label</key>
@@ -11,31 +21,36 @@
        directory, which includes a file being dropped in. -->
   <key>WatchPaths</key>
   <array>
-    <string>/Users/matthewshoemaker/repos/mtg-api/requests</string>
+    <string>@REPO@/requests</string>
   </array>
 
+  <!-- A stable launcher OUTSIDE the working tree, which knows where the
+       repo is and says so loudly when the dispatcher is not there. -->
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string>
-    <string>/Users/matthewshoemaker/repos/mtg-api/scripts/intake/dispatch.sh</string>
+    <string>@RUNNER@</string>
   </array>
 
   <key>WorkingDirectory</key>
-  <string>/Users/matthewshoemaker/repos/mtg-api</string>
+  <string>@REPO@</string>
 
   <key>EnvironmentVariables</key>
   <dict>
     <key>PATH</key>
-    <string>/Users/matthewshoemaker/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <string>@PATH@</string>
   </dict>
 
   <key>StandardOutPath</key>
-  <string>/Users/matthewshoemaker/repos/mtg-api/.intake/launchd.log</string>
+  <string>@LOGDIR@/launchd.log</string>
   <key>StandardErrorPath</key>
-  <string>/Users/matthewshoemaker/repos/mtg-api/.intake/launchd.log</string>
+  <string>@LOGDIR@/launchd.log</string>
 
+  <!-- True, so a reboot drains whatever is in the queue. A request
+       dropped while the machine was off used to sit there until something
+       else happened to the folder. -->
   <key>RunAtLoad</key>
-  <false/>
+  <true/>
   <key>ThrottleInterval</key>
   <integer>30</integer>
 </dict>

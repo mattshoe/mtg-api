@@ -44,7 +44,13 @@ export default defineWorkersConfig({
     // test`, which is why a one-minute suite took over ten and
     // looked for all the world like it had hung.
     include: ['test/**/*.test.js'],
-    exclude: ['**/node_modules/**', '.claude/**', '**/.wrangler/**'],
+    // `intake-shell.test.js` drives the real bash scripts and needs
+    // node:child_process, which workerd does not have. It runs under
+    // `vitest.shell.config.js` instead.
+    exclude: [
+      '**/node_modules/**', '.claude/**', '**/.wrangler/**',
+      'test/intake-shell.test.js',
+    ],
     setupFiles: ['./test/setup.js'],
     // A stuck test fails; it does not hang the run. Without these a
     // single test waiting on something that never arrives holds the

@@ -15,7 +15,9 @@ One collection of Magic cards, three front ends over one API.
    read the failure, then fix it. Six tests here landed green and proved
    nothing.
 3. **Green CI is the gate.** Merge your own work, do not ask permission
-   for a green pull request, then check the deployed artifact.
+   for a green pull request, then check the deployed artifact. Wait for CI
+   with a command that BLOCKS — `gh pr checks <n> --watch` — never by
+   ending your turn.
 
 Everything else in this document is detail. Those three are the job, and
 each has its own section below.
@@ -171,13 +173,43 @@ asked:
 Every check green means:
 
 ```
-gh pr merge <n> --squash --delete-branch
+gh pr merge <n> --squash
 ```
 
 Green means **all** of them — `shared`, `web`, `android` (the emulator,
 about fifteen minutes), `tally`, and both worker `test` jobs. Never with
 a check pending or skipped. Never `--admin`. Never force anything past a
 failure: a red check is a thing to fix, not a thing to get around.
+`--admin` and a push to `main` are both refused by the PreToolUse hook in
+`.claude/settings.json`, so trying produces a blocked tool call.
+
+Not `--delete-branch`, though. It makes `gh` check out the base branch in
+the worktree you are standing in, and the stale tree that leaves behind
+made a fully merged request read as unfinished. Leave the branch.
+
+**If you are a request-builder this is yours too** — you wait for CI and
+you merge your own work, and nothing downstream does it for you — and the
+mechanism matters more than the rule. The `apps` job is 13-17 minutes,
+and three of four builders told to "watch CI" ended their turn waiting
+for a
+notification that a headless `claude -p` run can never deliver. There is
+no next turn, nothing wakes you, and `scripts/intake/dispatch.sh` will not
+start a second builder on a worktree that already exists. So wait with a
+command that blocks in the foreground and stays inside your turn:
+
+```
+gh pr checks <n> --watch --fail-fast
+```
+
+Then count the checks that are not SUCCESS, because "nothing red" is
+satisfied by a skipped, cancelled or neutral check:
+
+```
+gh pr checks <n> --json name,state --jq '[.[]|select(.state!="SUCCESS")]|length'   # must be 0
+```
+
+Never ScheduleWakeup, never Monitor, never a wait loop of your own, never
+a backgrounded build. Read `.claude/agents/request-builder.md`.
 
 Merging deploys — `pages.yml` publishes the website and `release.yml`
 cuts a signed APK. So merging is not the end either. Watch the deploy
@@ -186,9 +218,10 @@ curl and the dex grep under "Verifying a deploy for real". A green deploy
 workflow is not proof.
 
 The only thing that stops at a green PR is a request file whose
-frontmatter says `merge: ask`, which triage sets only for something
-genuinely risky — a schema change, or anything touching auth or who can
-edit whose collection.
+frontmatter says `merge: ask`, which is written into the file for three
+things and nothing else — a schema change, auth or roles, or card
+ownership. There is no triage agent; whoever writes the request writes
+that line, and a file with no `merge:` line at all means ask.
 
 ### 3. Test-driven, with no exceptions. This is core
 
@@ -200,11 +233,39 @@ The cycle, in this order, every time:
 
 1. **Write the test.** It describes the behaviour you are about to add,
    or the bug you are about to fix, in the words a person would use.
-2. **Run it. Watch it fail.** Not "it should fail" — run it, read the
-   failure, and check the message names the actual cause.
+2. **Run YOUR test. Watch it fail.** Not "it should fail" — run it, read
+   the failure, and check the message names the actual cause.
 3. **Write the smallest production change that makes it pass.**
-4. **Run the whole suite**, not just your test.
+4. **Run YOUR test again and watch it pass.**
 5. **Record the red in the commit message**, with the real failure text.
+
+**The cycle is narrow. Keep it narrow.** One test, or at most the one file
+it lives in:
+
+```
+npx vitest run test/decks.test.js -t 'the name a deck is renamed to'
+./apps/gradlew -p apps :core:jvmTest --tests 'DeckStatsTest'
+./apps/gradlew -p apps :androidApp:testDebugUnitTest --tests 'LibraryGridTest'
+```
+
+The raw `./apps/gradlew` form, not an `npm run test:screen` — there is no such
+script. A narrow-test wrapper that routes through `scripts/guard.mjs` is
+planned and not written, and naming a command that does not exist is the same
+defect as the `./gradlew` path this replaced.
+
+Seconds, not minutes. Step 4 used to read "run the whole suite, not just
+your test", and that line cost real hours: four suites is about seven
+minutes, a cycle needs a red run and a green run, and a five-part change
+then spends over an hour waiting before anybody thinks about anything.
+Running thousands of other people's tests after every edit is not
+thoroughness — it tells you nothing about the line you just changed, and
+it is the single most expensive habit an agent can pick up here.
+
+**Then once, when the work is finished and before the pull request, run
+the full set.** That is where a whole-suite run belongs, and everything
+below about reading the BUILD line and not letting a floor drop applies
+to it. CI runs all of it on the pull request as well, which is what CI is
+for.
 
 #### Why step 2 is the whole discipline
 
@@ -324,10 +385,18 @@ on the website **and** in the shipped APK. Do not send a progress table
 of work that is not deployed; Matt has been explicit and furious about
 this twice.
 
-A builder under `requests/` merges its own work on green and then
-verifies the deployed artifact. Reporting "PR green" is not reporting
-done; reporting "merged" is not either. Done is the string in the
-deployed `mtg.js` and in the shipped APK's dex.
+A builder under `requests/` merges its own work on green CI and files its
+own request under `requests/done/`, and **nothing in the intake machinery
+checks the deploy.** The dispatcher used to resolve the squash commit,
+watch the `pages` and `release` runs and grep both artifacts for a marker
+string; that code is gone along with the rest of the 2,306-line version. So the artifact check is a thing a person or a
+hand-driven agent does, and a builder that has merged should report what it
+merged and say plainly that the deploy is unverified.
+
+What does not change is what "done" means. Reporting "PR green" is not
+reporting done; reporting "merged" is not either. Done is the string in
+the deployed `mtg.js` and in the shipped APK's dex, checked with the curl
+and the dex grep under "Verifying a deploy for real".
 
 ## Running the suites
 
@@ -393,9 +462,12 @@ Merging to `main` deploys:
 
 **Merge on green.** Matt: "WHAT THE FUCK ARE YOU ASKING MY PERMISSION
 FOR?!?! THAT'S WHAT FUCKING CI IS FOR!!!!" Every check green means
-`gh pr merge <n> --squash --delete-branch`, not a question. Then watch
-the deploy and check the artifact below — a green deploy workflow is not
-proof the change is live.
+`gh pr merge <n> --squash`, not a question. Then watch the deploy and
+check the artifact below — a green deploy workflow is not proof the change
+is live. (A request-builder merges the same way, and waits for CI with the
+blocking `gh pr checks --watch` in §2. Nothing automatic checks the
+artifact after the merge any more, so say the deploy is unverified rather
+than calling it done.)
 
 ### Verifying a deploy for real
 
@@ -415,13 +487,55 @@ edit only its own cards. `admin` can do anything including handing out
 `admin`, and only accounts Matt decides get it. There is no shared admin
 password login any more — you sign into your own account.
 
-The distinction that matters: **`Route.collection` is the collection
-*key*, which is what an address carries and what somebody pastes into a
-chat. `AppState.resolvedCollection` is the owner slug, which is what
-`cards.owner` holds.** They are joined by `GET /c/:key`. Keeping them
-apart is what stops an address from being mistaken for permission. Four
-places had this wrong once and two tests were pinning the wrong value,
-which is why nothing caught it.
+### Three identifiers, and the lines between them
+
+Matt: "THE FUCKING USER ID NEEDS TO BE PRIVATE AND DIFFERENT FROM USER
+KEY!!!!! USER KEY IS NOT SUFFICIENT TO MUTATE DATA!!! ONLY USER ID!!"
+
+**`users.key`** — `bprh3d2s`, 8 random base32 characters. **Public.** It
+is what `/c/<key>` carries and what a shared link is made of. It names a
+collection to *look at*. It is **not a credential** and must never
+authorise a write.
+
+**`users.id`** — the integer primary key. **Private.** Never in a URL,
+never in a response body, never in a page, never logged. The only thing a
+mutation may be decided by, reached only by resolving the session cookie
+through `sessions` to a row in `users`. The shells never hold one.
+
+**Slugs** — every one of them is being deleted, and you must not add
+another. Matt: "FUCK THE SLUG!!! WHAT THE FUCK DO YOU NEED A SLUG FOR?!"
+and "WE'RE GOING TO HAVE FUCKING COLLISIONS IN URLS ALL OVER THE FUCKING
+PLACE".
+
+An identifier derived from text a person typed collides as soon as there
+is a second person, and both slugs in this schema already do:
+
+- `users.slug` is what `cards.owner` holds, so ownership is two strings
+  happening to match — which is what emptied Kayla's collection
+- `decks.slug` is `UNIQUE` **globally** (`schema.sql:54`) and every lookup
+  is `WHERE slug = ?` with no owner, so two accounts cannot own a deck
+  with the same name
+
+**The rule: an address is a random opaque key, an identity is an id, and
+there is nothing in between.** A name is free text that anybody may reuse.
+Do not add a column called `slug`, and do not derive an identifier from
+anything a person typed.
+
+The two remaining ones, `tags.slug` and `card_tags.tag_slug`, hold
+Scryfall Tagger's vocabulary rather than an address of ours, and are being
+renamed to `tag` — the values are fine, the word is not.
+
+See `requests/cards-owner-should-be-a-user-id.md`.
+
+In the app, `Route.collection` is the **key** — what an address carries —
+and `AppState.resolvedCollection` is the owner, joined by `GET /c/:key`.
+Keeping them apart is what stops an address being mistaken for
+permission. Four places had this wrong once, and two tests were *pinning*
+the wrong value, which is why nothing caught it.
+
+**So: a key lets you read. Only a session that resolves to an id lets you
+write.** If you find a key or a slug reaching a permission decision, that
+is a security bug, not a style question.
 
 **No account is ever deleted unless Matt asks for that account by
 name.** An empty collection is not a reason. Account id 2
