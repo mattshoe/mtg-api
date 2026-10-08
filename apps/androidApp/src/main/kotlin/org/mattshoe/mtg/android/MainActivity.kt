@@ -210,6 +210,9 @@ class MainActivity : ComponentActivity() {
         return app
     }
 
+    /** What the picker hands back, for a test that cannot open a picker. */
+    internal fun readFilesForTesting(uris: List<Uri>) = readFiles(uris)
+
     /** `exportList`, for a test that cannot see a private method. */
     internal suspend fun exportListForTesting(where: ExportTo): AppState {
         app = exportList(where)
