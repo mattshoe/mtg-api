@@ -110,8 +110,13 @@ claim() {
   # — measured at 5 minutes, and one agent spent exactly that before it could
   # run a single test. A symlink makes it free. An agent that genuinely needs a
   # new dependency edits package.json and lets CI install it.
-  [ -d "$REPO/node_modules" ] && [ ! -e "$tree/node_modules" ] \
-    && ln -s "$REPO/node_modules" "$tree/node_modules"
+  if [ -d "$REPO/node_modules" ] && [ ! -e "$tree/node_modules" ]; then
+    ln -s "$REPO/node_modules" "$tree/node_modules"
+    # and keep it out of git: it showed up as untracked in a worktree, so
+    # `git add -A` would have committed a symlink to somebody's home.
+    printf 'node_modules
+' >> "$tree/.git/info/exclude" 2>/dev/null || true
+  fi
 
   # Hand over the LIVE request file, not the one the worktree was cut from.
   # Without this the agent reads main's copy: four requests sat at `status:
