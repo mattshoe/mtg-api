@@ -1,5 +1,33 @@
 {
+  "permissions": {
+    "deny": [
+      "Bash(wrangler deploy)",
+      "Bash(wrangler deploy:*)",
+      "Bash(npx wrangler deploy:*)",
+      "Bash(npm run deploy)",
+      "Bash(npm run deploy:*)",
+      "Bash(yarn deploy:*)",
+      "Bash(pnpm run deploy:*)",
+      "Bash(git push origin main:*)",
+      "Bash(git push origin master:*)",
+      "Bash(git push --force origin main:*)",
+      "Bash(gh pr merge:*--admin*)",
+      "WebFetch"
+    ]
+  },
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/intake/deny-bash.mjs\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Write|Edit",

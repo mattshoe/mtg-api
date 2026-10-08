@@ -920,11 +920,14 @@ main() {
   # only.
   FIRST_COMMIT_MINUTES="${INTAKE_FIRST_COMMIT_MINUTES:-40}"
   WATCH_SECONDS="${INTAKE_WATCH_SECONDS:-60}"
-  # Two, now that the Gradle mutex in scripts/guard.mjs exists. True
+  # One, still. Two is the plan and the measurement supports it — true
   # Gradle occupancy in the one complete transcript was about 32% of
-  # wall-clock; the other 68% was reading, editing, npm ci and polling,
-  # none of which contends.
-  MAX_BUILDERS="${INTAKE_MAX_BUILDERS:-2}"
+  # wall-clock — but it is only safe once the `lockf` Gradle mutex exists
+  # in scripts/guard.mjs, and that is deferred. Gradle does not share:
+  # `~/.gradle` is locked and `forkEvery(1)` spawns a JVM per test class,
+  # so two builders without the mutex thrash. The slot machinery below
+  # already handles N; this is the only line that has to change.
+  MAX_BUILDERS="${INTAKE_MAX_BUILDERS:-1}"
   BASE="${INTAKE_BASE:-origin/main}"
   # Outside the repo, so `git clean -fdx` in the primary tree cannot
   # destroy a live builder and leave the stale `.git/worktrees/` entries
