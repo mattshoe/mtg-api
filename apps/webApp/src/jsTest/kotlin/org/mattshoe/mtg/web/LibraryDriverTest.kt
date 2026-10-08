@@ -421,9 +421,9 @@ class LibraryDriverTest {
         // he typed.
         val app = mount()
         settle()
+        app.token("tags", "blink, removal, mana-rock…", "blink")
         assertTrue(app.text().contains("Oracle tags"), "the row is not called Oracle tags: ${app.text()}")
         assertTrue(!app.text().contains("Scryfall tags"), "the row still says Scryfall tags")
-        app.token("tags", "blink, removal, mana-rock…", "blink")
         assertEquals(listOf("blink"), app.state.library.filters.tags)
     }
 
