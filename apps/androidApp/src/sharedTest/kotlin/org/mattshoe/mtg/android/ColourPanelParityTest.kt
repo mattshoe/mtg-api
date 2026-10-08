@@ -5,6 +5,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -194,14 +196,15 @@ class ColourPanelParityTest {
         val rows = (1..3).map { n ->
             val found = rule.onAllNodes(hasTestTag("exactly-row-$n"), useUnmergedTree = false).fetchSemanticsNodes()
             assertTrue(found.isNotEmpty(), "the Exactly ring has no table row for slice $n")
-            found.single().config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.Text)
+            found.single().config.getOrNull(SemanticsProperties.Text)
                 .orEmpty().joinToString(" | ") { it.text }
         }
         assertEquals(
             listOf(
-                "1 | Mono-white | 5 | 50%",
-                "2 | Mono-blue | 3 | 30%",
-                "3 | Azorius | 2 | 20%",
+                // The letter under each symbol is read out with it.
+                "1 | W | Mono-white | 5 | 50%",
+                "2 | U | Mono-blue | 3 | 30%",
+                "3 | W | U | Azorius | 2 | 20%",
             ),
             rows,
         )
