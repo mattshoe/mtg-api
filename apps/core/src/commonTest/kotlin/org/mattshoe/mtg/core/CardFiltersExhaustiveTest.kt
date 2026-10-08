@@ -338,11 +338,16 @@ class FilterFieldAloneTest {
     }
 
     @Test
-    fun aTagIsMatchedOnItsSlugExactly() {
+    fun aTagIsMatchedExactlyOrThroughTheTagsBeneathIt() {
+        // What the rows are is test/oracle-tags.test.js, against a real
+        // database. This only holds the binding: the tag goes in twice.
+        val f = Filters(tags = listOf("mana-rock"))
         assertEquals(
-            "EXISTS (SELECT 1 FROM card_tags ct WHERE ct.card_id = c.id AND ct.tag = ?)",
-            where(Filters(tags = listOf("mana-rock"))),
+            "EXISTS (SELECT 1 FROM card_tags ct WHERE ct.card_id = c.id AND " +
+                "(ct.tag = ? OR ct.tag IN (SELECT tn.tag FROM tag_names tn WHERE tn.name = ?)))",
+            where(f),
         )
+        assertEquals(listOf<Any?>("mana-rock", "mana-rock"), params(f))
     }
 
     @Test
@@ -1050,7 +1055,7 @@ class FilterListEdgeTest {
     fun tagsAreAndedOneExistsEach() {
         val f = Filters(tags = listOf("ramp", "mana-rock"))
         assertEquals(2, Regex("card_tags").findAll(where(f)).count())
-        assertEquals(listOf<Any?>("ramp", "mana-rock"), params(f))
+        assertEquals(listOf<Any?>("ramp", "ramp", "mana-rock", "mana-rock"), params(f))
     }
 
     @Test

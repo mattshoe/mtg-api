@@ -274,10 +274,7 @@ fun parseQueryBox(input: String): Sql {
                 "EXISTS (SELECT 1 FROM card_keywords k WHERE k.card_id = c.id AND lower(k.keyword) = ?)",
                 listOf(v.lowercase()), tok.neg,
             )
-            "tag" -> push(
-                "EXISTS (SELECT 1 FROM card_tags ct WHERE ct.card_id = c.id AND ct.tag = ?)",
-                listOf(v.lowercase()), tok.neg,
-            )
+            "tag" -> push(TAGGED, listOf(v.lowercase(), v.lowercase()), tok.neg)
             "format" -> push(
                 "EXISTS (SELECT 1 FROM legalities l WHERE l.oracle_id = c.oracle_id " +
                     "AND l.format = ? AND l.status = 'legal')",
