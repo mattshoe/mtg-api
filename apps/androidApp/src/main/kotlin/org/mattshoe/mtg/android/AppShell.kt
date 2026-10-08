@@ -379,6 +379,8 @@ fun AppShell(
                     View.ADMIN -> AdminScreen(
                         state = state.people,
                         releases = state.releases,
+                        tasks = state.tasks,
+                        onToggleDone = { onState(state.copy(tasks = state.tasks.toggleDone())) },
                         me = state.admin.account?.key,
                         person = state.person,
                         onSearch = { onState(state.copy(people = state.people.searching(it))) },

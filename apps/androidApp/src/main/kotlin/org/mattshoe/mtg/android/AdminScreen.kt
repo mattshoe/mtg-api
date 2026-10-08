@@ -22,6 +22,8 @@ import org.mattshoe.mtg.core.People
 import org.mattshoe.mtg.core.Person
 import org.mattshoe.mtg.core.Releases
 import org.mattshoe.mtg.core.Role
+import org.mattshoe.mtg.core.Task
+import org.mattshoe.mtg.core.Tasks
 
 /**
  * Admin Settings, on Android. Sibling of `AdminPage`.
@@ -42,6 +44,8 @@ fun AdminScreen(
     me: String?,
     person: Person?,
     releases: Releases = Releases(),
+    tasks: Tasks = Tasks(),
+    onToggleDone: () -> Unit = {},
     onSearch: (String) -> Unit = {},
     onOpen: (Person) -> Unit = {},
     onSetRole: (Person, String) -> Unit = { _, _ -> },
@@ -57,6 +61,7 @@ fun AdminScreen(
             PersonPage(state, person, me, onSetRole, onBack)
         } else {
             Everybody(state, onSearch, onOpen)
+            TaskList(tasks, onToggleDone)
             ReleaseNotes(releases)
         }
     }
@@ -85,6 +90,59 @@ private fun Everybody(state: People, onSearch: (String) -> Unit, onOpen: (Person
             state.nothingMatched -> Line("Nobody matches that.", Ink3)
             else -> state.shown.forEach { p -> PersonRow(p, onOpen) }
         }
+    }
+}
+
+/**
+ * Intake requests and where each one is: the active ones, then the
+ * finished ones folded behind a toggle, newest first.
+ *
+ * Matt: "I want the done ones minimized by default but still
+ * browsable, ordered by the time which they completed, most recent
+ * first". Sibling of the website's `taskList`.
+ */
+@Composable
+private fun TaskList(tasks: Tasks, onToggleDone: () -> Unit) {
+    Panel(head = "Tasks") {
+        when {
+            tasks.busy -> Line("Loading…", Ink3)
+            tasks.error != null -> Line("Could not load tasks: ${tasks.error}", Bad)
+            tasks.rows.isEmpty() -> Line("No tasks yet.", Ink3)
+            else -> {
+                if (tasks.active.isEmpty()) Line("Nothing in progress.", Ink3)
+                tasks.active.forEach { TaskRow(it, "task") }
+                Line(
+                    (if (tasks.showDone) "▾ " else "▸ ") + "Done (${tasks.done.size})",
+                    Ink,
+                    Design.SMALL,
+                    FontWeight.SemiBold,
+                    modifier = Modifier.fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .clickable { onToggleDone() }
+                        .padding(vertical = 12.dp)
+                        .testTag("tasks-done-toggle"),
+                )
+                if (tasks.showDone) tasks.done.forEach { TaskRow(it, "task-done") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TaskRow(task: Task, tag: String) {
+    Row(
+        Modifier.fillMaxWidth()
+            .padding(vertical = 7.dp)
+            .semantics(mergeDescendants = true) {}
+            .testTag(tag),
+        horizontalArrangement = Arrangement.spacedBy(9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            Line(task.title, Ink, Design.BODY)
+            task.finished?.let { Line(it, Ink3, Design.MINI) }
+        }
+        Tag(task.status.word)
     }
 }
 
