@@ -611,3 +611,47 @@ Do not re-make these.
 Matt swears a lot and it is not aimed at you. What he wants is the thing
 actually finished, on both platforms, verified. Short answers. No
 progress tables. No "almost".
+
+## The TDD cycle is unit tests only
+
+This is a hard requirement and it is the one most often got wrong, at a cost
+of hours per request.
+
+**The cycle:** write one unit test for the change you are making, run ONLY
+that test, watch it fail, read the failure, make the smallest change that
+passes it, run ONLY that test again. Seconds per turn, not minutes.
+
+The commands that belong in a cycle, with the single test named:
+
+```
+./apps/gradlew -p apps :core:jvmTest --tests 'YourTest'       # a few seconds
+npx vitest run test/thing.test.js -t 'the one case'           # under a second
+npx vitest run --config vitest.shell.config.js -t 'the case'  # a second or two
+```
+
+**Never run a functional suite inside the cycle.** These are the functional
+suites, and each is minutes:
+
+| command | what it is | when |
+|---|---|---|
+| `npm run test:screens` | Compose screens on the JVM, ~9 min | once, at the end |
+| `npm run test:web` | a real browser, ~2 min | once, at the end |
+| `npm run test:android` | the emulator, ~17 min | CI only |
+| `npm test` | the whole Worker suite, ~1 min | once, at the end |
+| `npm run test:all` | all of the above | never — nothing points at this |
+
+Running a functional suite per cycle is how a one-line request takes two
+hours: the suite is minutes, TDD needs a red run and a green run, and a
+five-part change then spends over an hour waiting before anyone thinks about
+anything. One request measured 55% of its 108 minutes inside suites it did not
+need to run.
+
+**Functional tests are the last step, once.** When the feature is built and
+its unit tests are green, run the functional suites the diff reaches — one
+pass, not per part. Fix what the cross-impacts turn out to be then. Do not go
+looking for cross-impacts during the cycle; that is what the final pass is
+for, and that is what CI is for after it.
+
+Parity still holds: a change to the website is a change to the phone in the
+same pull request, with a test on each side. That is about what you write, not
+about how often you run it.

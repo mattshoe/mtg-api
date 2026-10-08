@@ -13,7 +13,6 @@
     "test:web": "node scripts/guard.mjs 1200 -- ./apps/gradlew -p apps :webApp:jsTest",
     "test:screens": "node scripts/guard.mjs 1200 -- ./apps/gradlew -p apps :androidApp:testDebugUnitTest && node scripts/check-test-count.mjs apps/androidApp/src/sharedTest apps/androidApp/build/test-results/testDebugUnitTest",
     "test:android": "node scripts/guard.mjs 2700 -- ./apps/gradlew -p apps :androidApp:connectedDebugAndroidTest -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true && node scripts/check-test-count.mjs apps/androidApp/src/sharedTest apps/androidApp/build/outputs/androidTest-results",
-    "test:all": "npm run test && npm run test:core && npm run test:web && npm run test:screens",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "lint": "eslint frontend/js frontend/sw.js",
