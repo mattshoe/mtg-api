@@ -203,7 +203,10 @@ internal class JourneyTest : E2eTest() {
 
         val rows = state().library.rows
         val owners = rows.map { it.owner }.distinct().joinToString(",") { "'$it'" }
-        val best = fake.rows("SELECT MIN(edhrec_rank) FROM cards WHERE owner IN ($owners)")
+        // A row's owner is the account's public key, so join to it.
+        val best = fake.rows(
+            "SELECT MIN(c.edhrec_rank) FROM cards c JOIN users u ON u.id = c.owner_id WHERE u.key IN ($owners)",
+        )
             .single().single()?.toLong()
         val first = rows.first()
         assertEquals(
