@@ -46,6 +46,8 @@ data class AppState(
     val people: People = People(),
     /** Every build that shipped, for the release notes on Admin Settings. */
     val releases: Releases = Releases(),
+    /** Intake requests and where each one is, for Admin Settings. */
+    val tasks: Tasks = Tasks(),
     /** What is on top, and therefore what back closes. */
     val overlays: Overlays = Overlays(),
     /** Set when a share arrived and has not been used yet. */
