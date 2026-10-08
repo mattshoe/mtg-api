@@ -329,6 +329,7 @@ class MainActivity : ComponentActivity() {
     /** The token load, so a test can wait for it instead of sleeping. */
     internal val tokensJob: Job? get() = model.tokensJob
     internal val releasesJob: Job? get() = model.releasesJob
+    internal val tasksJob: Job? get() = model.tasksJob
 
     /**
      * Everything, because a narrow list greys out the file you actually
