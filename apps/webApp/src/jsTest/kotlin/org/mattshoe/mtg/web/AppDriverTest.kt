@@ -230,7 +230,7 @@ class AppDriverTest {
     private suspend fun settle() = repeat(12) { tick() }
 
     /** The page, mounted the way `index.html` mounts it. */
-    private fun mount(hash: String, token: String = ""): HTMLElement {
+    private fun mount(hash: String, token: String = "", share: String? = null): HTMLElement {
         window.location.hash = hash
         val view = document.createElement("div") as HTMLElement
         val nav = document.createElement("div") as HTMLElement
@@ -238,7 +238,7 @@ class AppDriverTest {
         document.body!!.appendChild(nav)
         roots += view
         roots += nav
-        MtgApp.mount(view, null, token)
+        MtgApp.mount(view, share, token)
         MtgApp.mountNav(nav)
         return view
     }
@@ -730,6 +730,34 @@ class AppDriverTest {
         waitFor("the file to land in the box") {
             (view.all("textarea").first() as org.w3c.dom.HTMLTextAreaElement).value.contains("Arcane Signet")
         }
+    }
+
+    @Test
+    fun newDeckTakesTheSharedListWithIt() = runTest {
+        // Matt shared a list out of ManaBox to start a deck for Kayla,
+        // picked "New deck", and the wizard opened on an empty list.
+        val view = mount("#/entry", token = "t", share = "1 Sol Ring\n1 Arcane Signet")
+        waitFor("the entry wizard") { view.textContent.orEmpty().contains("What are you doing?") }
+        view.all("button.opt").first { it.textContent.orEmpty().contains("New deck") }.click()
+        settle()
+        pressOnThePage("Continue →")
+        waitFor("the wizard") { palette() != null }
+        suspend fun onward(there: () -> Boolean) {
+            waitFor("Continue to come alive") {
+                paletteButtons().any { it.says() == "Continue →" && !it.disabled }
+            }
+            press("Continue →")
+            waitFor("the next step", cond = there)
+        }
+        press("Commander")
+        onward { box("Deck name") != null }
+        typeInto("Deck name", "Kayla")
+        onward { box("e.g. Alela, Artful Provocateur") != null }
+        typeInto("e.g. Alela, Artful Provocateur", "Alela, Cunning Conqueror")
+        onward { palette()?.querySelector("textarea") != null }
+
+        val box = palette()!!.querySelector("textarea") as org.w3c.dom.HTMLTextAreaElement
+        assertEquals("1 Sol Ring\n1 Arcane Signet", box.value, "the shared list did not reach the deck wizard")
     }
 
     @Test

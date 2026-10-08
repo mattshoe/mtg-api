@@ -69,16 +69,18 @@ class NewDeckWizardReachesTheShellTest {
         start: AppState,
         onCommanderTyped: (Completion) -> Unit = {},
         onPickFile: () -> Unit = {},
-    ) {
+    ): () -> AppState {
+        var latest = start
         rule.setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
                 Surface {
                     val held = androidx.compose.runtime.remember {
                         androidx.compose.runtime.mutableStateOf(start)
                     }
+                    latest = held.value
                     AppShell(
                         state = held.value,
-                        onState = { held.value = it },
+                        onState = { held.value = it; latest = it },
                         onSearch = {},
                         onOpenDeck = {},
                         onPreviewEntry = {},
@@ -90,6 +92,25 @@ class NewDeckWizardReachesTheShellTest {
             }
         }
         rule.waitForIdle()
+        return { latest }
+    }
+
+    /**
+     * Matt shared a list out of ManaBox to start a deck for Kayla,
+     * picked "New deck", and the wizard opened on an empty card list.
+     */
+    @Test
+    fun newDeckTakesTheSharedListWithIt() {
+        val start = AppState(admin = Admin().signIn(Account(key = "matt", role = "user"), "t"))
+            .withShare("1 Sol Ring\n1 Arcane Signet")
+        val state = shell(start)
+
+        rule.onNodeWithText("New deck").performScrollTo().performClick()
+        rule.onNodeWithText("Continue →").performScrollTo().performClick()
+        rule.waitForIdle()
+
+        assertTrue(Overlay.NEW_DECK in state().overlays, "Continue did not open the deck wizard")
+        assertEquals("1 Sol Ring\n1 Arcane Signet", state().newDeck.list, "the shared list did not reach the deck wizard")
     }
 
     @Test
