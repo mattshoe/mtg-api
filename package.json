@@ -24,7 +24,8 @@
     "@cloudflare/vitest-pool-workers": "^0.8.19",
     "eslint": "^9.0.0",
     "vitest": "~3.0.9",
-    "wrangler": "^4.20.0"
+    "wrangler": "^4.20.0",
+    "yaml": "^2.9.1"
   },
   "dependencies": {
     "arctic": "^3.7.0",

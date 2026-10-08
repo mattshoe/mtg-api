@@ -1,0 +1,68 @@
+name: emulator-cache
+
+# A booted Android emulator, cached where every pull request can read it.
+#
+# `apps.yml` restores this and never saves it. A cache written by a pull
+# request is visible to that pull request only, and `apps.yml` does not
+# run on main, so without this every pull request downloaded a system
+# image and cold-booted an emulator from nothing — a minute and a half of
+# each shard, every run.
+#
+# Daily, because GitHub evicts a cache nobody has read for seven days.
+# On a hit it looks and stops, which costs seconds.
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/emulator-cache.yml
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  avd:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Already there?
+        id: look
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+            /usr/local/lib/android/sdk/system-images/android-34/google_apis/x86_64
+          key: avd-34-google_apis-x86_64-v1
+          lookup-only: true
+
+      - name: Enable KVM
+        if: steps.look.outputs.cache-hit != 'true'
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      # The same device `apps.yml` asks for, booted once with snapshots
+      # on, so the cache holds a warm one.
+      - name: Boot it once and keep the snapshot
+        if: steps.look.outputs.cache-hit != 'true'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: false
+          script: echo "snapshot taken"
+
+      - name: Save it
+        if: steps.look.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+            /usr/local/lib/android/sdk/system-images/android-34/google_apis/x86_64
+          key: avd-34-google_apis-x86_64-v1

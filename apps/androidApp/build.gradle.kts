@@ -145,6 +145,13 @@ android {
                 // worth having here: the failure mode is a suite that
                 // goes green locally and red on hardware nobody has.
                 it.setForkEvery(1)
+                // How many of those JVMs run at once, which is a
+                // different question. Unset, the 42 classes ran one
+                // after another on a runner with cores to spare. Half
+                // the cores, at most four, so a laptop running this
+                // still has room for everything else on it.
+                it.maxParallelForks =
+                    (Runtime.getRuntime().availableProcessors() / 2).coerceIn(1, 4)
                 it.testLogging { events("failed") }
                 // A hung test used to be indistinguishable from a slow
                 // suite: the task sat there until the outer guard killed
