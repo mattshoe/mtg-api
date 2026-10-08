@@ -1145,7 +1145,24 @@ triage_pass() {
   list_untriaged
   [ -n "$UNTRIAGED" ] || return 0
 
-  local todo="" f n tri file still wrote=0
+  # Triage does not run unlocked, ever.
+  #
+  # The wave now drops the global lock once its builders are backgrounded,
+  # which is right — but it left this function running with no lock at
+  # all, so two dispatchers ran two `acceptEdits` opus agents in the SAME
+  # worktree, rewriting each other's request files. Stopping exactly that
+  # is the lock's only purpose. Measured at five seconds of overlap, and
+  # one reviewer watched a merged-and-filed request come back from the
+  # dead when the loser's stale copy was written back and committed.
+  if [ "$LOCK_HELD" != true ]; then
+    if ! take_lock; then
+      say "triage skipped: another dispatcher has the lock and is doing it"
+      return 0
+    fi
+    LOCK_HELD=true
+  fi
+
+  local todo="" f n tri file still wrote=0 produced
   while IFS= read -r f; do
     [ -n "$f" ] || continue
     n="$(cat "$STATE/${f%.md}.triage-tries" 2>/dev/null || echo 0)"
@@ -1181,13 +1198,27 @@ EOF
     return 0
   fi
 
+  # Emptied first. The folder was never reset between passes, so a
+  # leftover could be written back over a live request — and copying the
+  # whole folder back, which the split/combine fix requires, turns that
+  # from possible into certain.
+  rm -rf "$tri/requests"
   mkdir -p "$tri/requests"
+  local seeded=0
   while IFS= read -r file; do
     [ -n "$file" ] || continue
-    cp "$REQUESTS/$file" "$tri/requests/$file" 2>/dev/null
+    if cp "$REQUESTS/$file" "$tri/requests/$file" 2>>"$LOG"; then
+      seeded=$((seeded + 1))
+    else
+      say "  could not hand $file to triage; leaving it for the next pass"
+    fi
   done <<EOF
 $todo
 EOF
+  if [ "$seeded" -eq 0 ]; then
+    say "triage had nothing it could read; skipping this pass"
+    return 0
+  fi
 
   # No wrapper hop. The old prompt said "invoke the mtg skill first, then
   # run the request-triage agent", which loaded the skill once in the
@@ -1205,17 +1236,58 @@ requests/done/." \
       --permission-mode acceptEdits
   ) >> "$LOG" 2>&1
 
-  # Copy the plans back and COMMIT them, so nothing a five-minute opus
-  # run produced depends on an uncommitted file in a throwaway tree.
+  # Copy the WHOLE folder back, not the handed list, and honour what
+  # triage deleted.
+  #
+  # `request-triage.md` tells triage to split one request into several NEW
+  # files and to combine two into one NEW file, deleting the originals.
+  # Iterating the handed-over filenames meant every new file stayed in the
+  # triage worktree forever, every original triage deleted was NOT deleted
+  # in `requests/`, it was re-triaged on every dispatch, and after
+  # TRIAGE_GIVE_UP it was abandoned as "needs Matt" — so the user's
+  # request was simply gone. Measured: three requests in, the triage tree
+  # held `card-page-combined.md`, `split-part-one.md` and
+  # `split-part-two.md`, the real folder still held the three untouched
+  # originals, and the log read TRIAGE PRODUCED NO PLAN FOR all three.
+  local withdrawn=0 base
+  for produced in "$tri"/requests/*.md; do
+    [ -f "$produced" ] || continue
+    base="$(basename "$produced")"
+    [ "$base" = "README.md" ] && continue
+    # Never resurrect. Matt withdraws a request by deleting it, triage
+    # takes about five minutes, and `cmp -s` against a path that no longer
+    # exists fails — so the copy-back used to restore the file, commit it
+    # to main and dispatch a builder, which is the exact opposite of what
+    # `requests/README.md` promises. A file that was handed over and has
+    # since gone was withdrawn; a file triage invented is new and belongs.
+    case "$todo" in
+      *"$base"*)
+        if [ ! -f "$REQUESTS/$base" ]; then
+          say "  $base was withdrawn while triage was running; not writing it back"
+          withdrawn=$((withdrawn + 1))
+          continue
+        fi
+        ;;
+    esac
+    if ! cmp -s "$produced" "$REQUESTS/$base"; then
+      cp "$produced" "$REQUESTS/$base" && wrote=$((wrote + 1))
+    fi
+  done
+
+  # What triage deleted, it meant to delete: a combine absorbs its
+  # originals and a split replaces its source.
   while IFS= read -r file; do
     [ -n "$file" ] || continue
-    if [ -f "$tri/requests/$file" ] && ! cmp -s "$tri/requests/$file" "$REQUESTS/$file"; then
-      cp "$tri/requests/$file" "$REQUESTS/$file"
+    if [ ! -f "$tri/requests/$file" ] && [ -f "$REQUESTS/$file" ]; then
+      say "  triage folded $file into something else; removing it"
+      rm -f "$REQUESTS/$file"
       wrote=$((wrote + 1))
     fi
   done <<EOF
 $todo
 EOF
+  [ "$withdrawn" -gt 0 ] && say "  $withdrawn request(s) were withdrawn while triage ran"
+
   if [ "$wrote" -gt 0 ]; then
     TRIAGE_WROTE=$wrote
     if can_commit_requests; then

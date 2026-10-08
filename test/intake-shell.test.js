@@ -1676,3 +1676,145 @@ git -C "$REPO" worktree list --porcelain | grep -c slot1 || true
     expect(r.stdout.trim()).toBe('0')
   })
 })
+
+describe('triage, which must not run twice at once', () => {
+  // The lock release added for R4 made this reachable: `triage_pass` ran
+  // with no lock at all, so two dispatchers ran two `acceptEdits` opus
+  // agents in the SAME worktree, rewriting each other's request files.
+  // Stopping exactly that was the lock's only stated purpose.
+  //
+  // Worse, the copy-back had no liveness check, so a request that had been
+  // merged and filed under done/ came back from the dead when the loser's
+  // stale copy was written back and committed.
+
+  it('holds the lock while it runs, even after a builder released it', () => {
+    // The wave drops the lock once its builders are backgrounded, which is
+    // the R4 fix. So the case that matters is a wave that DID start a
+    // builder and then went on to triage: one ready request and one raw
+    // one in the same folder.
+    build({
+      requests: {
+        'ready-one.md': READY('Ready one'),
+        'raw-one.md': '# Raw one\n\nmake it faster\n',
+      },
+    })
+    box.stub('gh', ghStub())
+    // Triage reports whether a lock exists at the moment it runs.
+    box.stub('claude', `
+case "$*" in
+  *request-triage*)
+    if [ -d ${JSON.stringify(box.path('.intake/dispatch.lock'))} ]; then
+      echo "TRIAGE_SAW_LOCK" >> ${JSON.stringify(box.calls)}
+    else
+      echo "TRIAGE_SAW_NO_LOCK" >> ${JSON.stringify(box.calls)}
+    fi
+    ;;
+  *)
+    branch="$(git rev-parse --abbrev-ref HEAD)"
+    echo x >> built.txt
+    git add -A
+    git -c user.name=b -c user.email=b@b commit -qm "build: $branch"
+    git push -q origin "HEAD:refs/heads/$branch"
+    ;;
+esac
+exit 0
+`)
+    run('dispatch.sh', { timeout: 120_000 })
+    expect(box.log()).toContain('TRIAGE_SAW_LOCK')
+    expect(box.log()).not.toContain('TRIAGE_SAW_NO_LOCK')
+  })
+
+  it('does not start when another dispatcher already holds the lock', () => {
+    build({ requests: { 'raw-one.md': '# Raw one\n\nmake it faster\n' } })
+    box.stub('gh', ghStub({ state: 'NONE' }))
+    box.stub('claude', 'exit 0')
+    const stand = join(box.root, 'dispatch.sh')
+    writeFileSync(stand, '#!/bin/bash\nsleep 45\n')
+    chmodSync(stand, 0o755)
+    const held = spawn('bash', [stand], { detached: true, stdio: 'ignore' })
+    held.unref()
+    mkdirSync(box.path('.intake/dispatch.lock'))
+    writeFileSync(box.path('.intake/dispatch.lock/pid'), String(held.pid))
+    writeFileSync(box.path('.intake/dispatch.lock/command'),
+      spawnSync('ps', ['-o', 'command=', '-p', String(held.pid)], { encoding: 'utf8' }).stdout.trim())
+    const r = run('dispatch.sh')
+    held.kill('SIGKILL')
+    expect(r.status).toBe(0)
+    const launched = box.log().split('\n').filter((l) => l.startsWith('claude '))
+    expect(launched.filter((l) => l.includes('request-triage'))).toEqual([])
+  })
+
+  it('never writes a plan back over a request that has gone', () => {
+    // Deleting a request while triage runs un-deleted it: `cmp -s` against
+    // a nonexistent path fails, so the copy-back restored the file,
+    // committed it to main, and dispatched a builder — the exact opposite
+    // of what the README promises.
+    build({ requests: { 'raw-one.md': '# Raw one\n\nmake it faster\n' } })
+    box.stub('gh', ghStub({ state: 'NONE' }))
+    box.stub('claude', `
+printf -- '---\\nstatus: ready\\nmerge: auto\\n---\\n\\n# Raw one\\n\\n## Plan\\n\\np\\n\\n## Tests\\n\\nt\\n\\n## Done when\\n\\nd\\n' > requests/raw-one.md
+rm -f ${JSON.stringify(box.path('requests/raw-one.md'))}
+exit 0
+`)
+    run('dispatch.sh', { timeout: 120_000 })
+    expect(existsSync(box.path('requests/raw-one.md'))).toBe(false)
+    logged('withdrawn while triage was running')
+  })
+
+  it('carries a split back, as new files', () => {
+    // `request-triage.md` tells triage to split one request into several
+    // NEW files. The copy-back iterated only the handed-over filenames, so
+    // every new file stayed in the triage worktree forever, the original
+    // was never deleted, it was re-triaged on every dispatch, and after
+    // TRIAGE_GIVE_UP it was abandoned as "needs Matt". The user's request
+    // was simply gone.
+    build({ requests: { 'three-jobs.md': '# Three jobs\n\nfix the deck page\n' } })
+    box.stub('gh', ghStub({ state: 'NONE' }))
+    box.stub('claude', `
+plan() { printf -- '---\\nstatus: ready\\nmerge: auto\\n---\\n\\n# %s\\n\\n## Plan\\n\\np\\n\\n## Tests\\n\\nt\\n\\n## Done when\\n\\nd\\n' "$1"; }
+plan "Part one" > requests/split-part-one.md
+plan "Part two" > requests/split-part-two.md
+rm -f requests/three-jobs.md
+exit 0
+`)
+    run('dispatch.sh', { env: { INTAKE_MAX_BUILDERS: '2' }, timeout: 120_000 })
+    // The originals are gone from the live folder and the new ones are there.
+    expect(existsSync(box.path('requests/three-jobs.md'))).toBe(false)
+    const live = readdirSync(box.path('requests')).filter((f) => f.endsWith('.md'))
+    expect(live).toContain('split-part-one.md')
+    expect(live).toContain('split-part-two.md')
+    expect(box.intakeLog()).not.toContain('TRIAGE PRODUCED NO PLAN FOR')
+  })
+
+  it('carries a combine back, deleting both originals', () => {
+    build({
+      requests: {
+        'card-page-a.md': '# A\n\nbigger tiles\n',
+        'card-page-b.md': '# B\n\nshow the rank\n',
+      },
+    })
+    box.stub('gh', ghStub({ state: 'NONE' }))
+    box.stub('claude', `
+printf -- '---\\nstatus: ready\\nmerge: auto\\n---\\n\\n# Card page\\n\\nabsorbed card-page-a.md and card-page-b.md\\n\\n## Plan\\n\\np\\n\\n## Tests\\n\\nt\\n\\n## Done when\\n\\nd\\n' > requests/card-page-combined.md
+rm -f requests/card-page-a.md requests/card-page-b.md
+exit 0
+`)
+    run('dispatch.sh', { env: { INTAKE_MAX_BUILDERS: '2' }, timeout: 120_000 })
+    expect(existsSync(box.path('requests/card-page-a.md'))).toBe(false)
+    expect(existsSync(box.path('requests/card-page-b.md'))).toBe(false)
+    expect(readdirSync(box.path('requests')).filter((f) => f.endsWith('.md')))
+      .toContain('card-page-combined.md')
+  })
+
+  it('starts from a clean triage folder, so a stale copy cannot be written back', () => {
+    build({ requests: { 'raw-one.md': '# Raw one\n\nmake it faster\n' } })
+    box.stub('gh', ghStub({ state: 'NONE' }))
+    box.stub('claude', 'exit 0')
+    // A leftover from a previous pass, for a request that no longer exists.
+    mkdirSync(join(box.root, '.cache/mtg-intake/wt/triage/requests'), { recursive: true })
+    writeFileSync(join(box.root, '.cache/mtg-intake/wt/triage/requests/ghost.md'),
+      READY('A ghost'))
+    run('dispatch.sh', { timeout: 120_000 })
+    expect(existsSync(box.path('requests/ghost.md'))).toBe(false)
+  })
+})
