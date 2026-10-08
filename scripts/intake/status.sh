@@ -195,6 +195,24 @@ for f in requests/*.md; do
   [ -n "$tries" ] && printf '      %-32s %s\n' "triage attempts with no plan" "$tries"
 done
 
+# Holds, listed on their own.
+#
+# A hold is a file in `.intake/`, and a request is FILED under `done/` when
+# it is given up on — so the per-request loop above cannot see it, and
+# printing the hold only there made it invisible again by a different
+# route. This is the block that says what is waiting for Matt.
+held_any=0
+for hf in "$STATE"/*.held; do
+  [ -f "$hf" ] || continue
+  [ "$held_any" -eq 0 ] && echo "HELD (clear the file to let it run again)"
+  held_any=1
+  hn="$(basename "$hf" .held)"
+  printf '  %-36s %s
+' "$hn" "$(cat "$hf" 2>/dev/null)"
+  printf '      %-32s %s
+' "clear with" "rm $STATE/$hn.held"
+done
+
 if [ -n "$(ls requests/done/*.md 2>/dev/null)" ]; then
   echo "DONE"
   for f in requests/done/*.md; do printf '  %s\n' "$(basename "$f" .md)"; done

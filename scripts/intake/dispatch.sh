@@ -265,7 +265,22 @@ claim_alive() {
       age=$(( (now - started) / 60 ))
       if [ "$age" -ge "$MAX_MINUTES" ]; then
         say "  $(basename "$dir") has been held ${age}m, past the ${MAX_MINUTES}m cap"
-        say "  its pid $pid is alive and is the process it recorded — stopping it first"
+
+        # Whose process is it? A claim is stamped with the DISPATCHER's pid
+        # during worktree setup, before the builder's pid is known — so a
+        # dispatcher that is simply doing a long job (it owns the CI wait
+        # now) holds old-looking claims. Killing on the cap in that case
+        # would have one dispatcher kill another, taking every healthy
+        # builder it was running with it. A dispatcher bounds its own
+        # builders through `watch_builder`; nothing else needs to.
+        case "$cmd" in
+          *dispatch.sh*)
+            say "  it is held by dispatcher $pid, which bounds its own builders — leaving it"
+            return 0 ;;
+        esac
+
+        # A builder, though, is exactly what the cap is for.
+        say "  its pid $pid is a live builder past the cap — stopping it first"
         kill_tree "$pid" TERM
         sleep 5
         kill_tree "$pid" KILL
@@ -806,13 +821,31 @@ commit_requests() {
     return 1
   fi
 
+  # Only paths git can be asked about. A request Matt dropped in is
+  # UNTRACKED until the dispatcher commits it, so once it has been moved to
+  # `done/` its old path neither exists nor is in HEAD — and
+  # `git add -A -- <that path>` fails with a pathspec error, which took
+  # `file_as_done` down with it and left the request moved on disk but never
+  # committed. Found by driving it; every earlier drive happened to have the
+  # request file tracked in the base commit, which is why it looked fine.
+  local staged=0
   for p in "$@"; do
-    git -C "$REPO" add -A -- "$p" >>"$LOG" 2>&1 \
-      || { say "  could not stage $p"; tell "intake could not stage $p"; return 1; }
+    if [ -e "$REPO/$p" ] \
+       || git -C "$REPO" ls-files --error-unmatch -- "$p" >/dev/null 2>&1; then
+      git -C "$REPO" add -A -- "$p" >>"$LOG" 2>&1 \
+        || { say "  could not stage $p"; tell "intake could not stage $p"; return 1; }
+      staged=$((staged + 1))
+    fi
   done
+  if [ "$staged" -eq 0 ]; then
+    say "  nothing to stage for: $*"
+    return 1
+  fi
+  # Committed from the index, not from a pathspec: a pathspec here would
+  # hit the same "did not match" problem for the path that has gone.
   if ! git -C "$REPO" \
        -c user.name=intake -c user.email=intake@localhost \
-       commit -q -m "$message" -- "$@" >>"$LOG" 2>&1; then
+       commit -q -m "$message" >>"$LOG" 2>&1; then
     say "  COMMIT FAILED: $message"
     tell "intake could not commit requests/ — see .intake/intake.log"
     return 1
