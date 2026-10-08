@@ -195,7 +195,7 @@ class CardSheetParityTest {
 
     private fun deckCard(name: String) = DeckCard(name = name, qty = 1, role = null, owned = 1)
 
-    private val sections = listOf("Who owns it", "Printings", "Legal in", "In decks", "Rulings")
+    private val sections = listOf("Printings", "Legal in", "In decks", "Rulings")
 
     // ------------------------------------------------- legality chips
 
@@ -442,83 +442,29 @@ class CardSheetParityTest {
         )
     }
 
-    // --------------------------------------------- who owns it, where
+    // ------------------------------------------ whose deck, not whose copy
 
     @Test
-    fun theSheetSaysWhoOwnsHowManyMostCopiesFirst() {
-        // It used to be one person's page, so the other half of the
-        // collection was simply not there.
-        open(shared())
-        Parity.check(
-            Parity.Fact("the section names itself") { seen("Who owns it") },
-            Parity.Fact("matt has 24 and none of them spare, across one row") {
-                onOneRow("Matt", "24 owned", "0 free")
-            },
-            Parity.Fact("kayla has 10 and five of them spare, across one row") {
-                onOneRow("Kayla", "10 owned", "5 free")
-            },
-            // The website sets each count in its own `.tag.mini.mono`
-            // rather than running them into a sentence, and a figure
-            // you can pick out is the whole point of the row.
-            Parity.Fact("every count is its own figure, not a word in a sentence") {
-                count("24 owned") == 1 && count("10 owned") == 1 && count("0 free") == 1
-            },
-            // Only here: the printing and the deck rows carry the
-            // owner as the database spells him, exactly as the web's
-            // `.tag` does.
-            Parity.Fact("the name is capitalised, the way `.owner-line .t-name` is") {
-                count("Matt") == 1 && count("Kayla") == 1
-            },
-            Parity.Fact("the owner with the most copies comes first") {
-                topOf("Matt") < topOf("Kayla")
-            },
-        )
-        rule.onRoot().shoot("card_sheet_who_owns_it")
-    }
-
-    @Test
-    fun anOwnerWhoHasNoneOfItButWantsItStillGetsALine() {
-        // Nought owned against two wanted is the most useful thing the
-        // page can tell you.
-        open(
-            CardDetail(
-                name = "Sol Ring",
-                usedIn = listOf(DeckUse("a", "Alela", "kayla", 2, null, false)),
-            ),
-        )
-        Parity.check(
-            Parity.Fact("an owner with no copies is still listed, and said to be short") {
-                onOneRow("Kayla", "0 owned", "0 free", "2 short")
-            },
-            Parity.Fact("how short she is, is a figure of its own") {
-                count("2 short") == 1
-            },
-        )
-    }
-
-    @Test
-    fun aPrintingSaysWhoseCopyItIsAndADeckSaysWhoseDeckItIs() {
+    fun aPrintingSaysNothingOfWhoseCopyItIsButADeckSaysWhoseDeckItIs() {
+        // Matt: "I DO NOT want ownership information on the cards
+        // details. But i do need to keep deck membership."
         open(shared())
         Parity.check(
             // Pieces that line up, not a dot-joined sentence: the web
-            // sets the code, the number, the name and each tag in its
-            // own span of `.print-line`.
-            Parity.Fact("kayla's printing names her, across one row") {
-                onOneRow("LCC", "4", "The Lost Caverns of Ixalan Commander", "kayla", "10×")
+            // sets the code, the number and the name in its own span
+            // of `.print-line`.
+            Parity.Fact("each printing reads across one row") {
+                onOneRow("LCC", "4", "The Lost Caverns of Ixalan Commander") &&
+                    onOneRow("M3C", "409", "Modern Horizons 3")
             },
-            Parity.Fact("matt's printing names him, across one row") {
-                onOneRow("M3C", "409", "Modern Horizons 3", "matt", "24×")
+            Parity.Fact("no printing says how many anybody has") {
+                count("10×") == 0 && count("24×") == 1
             },
             Parity.Fact("both decks that want it are listed, each naming its owner") {
                 onOneRow("Alela", "kayla", "5×") && onOneRow("Bello", "matt", "24×")
             },
-            // The owner is its own tag beside the row, the way the web
-            // page puts it in its own span.
-            Parity.Fact("each name is a tag on a printing and on a deck row") {
-                count("kayla") == 2 && count("matt") == 2
-            },
-            Parity.Fact("and the owner section names them once more, capitalised") {
-                count("Kayla") == 1 && count("Matt") == 1
+            Parity.Fact("each owner is named once, on the deck row and nowhere else") {
+                count("kayla") == 1 && count("matt") == 1 && count("Kayla") == 0 && count("Matt") == 0
             },
         )
     }
@@ -537,10 +483,10 @@ class CardSheetParityTest {
             // Nothing known is a dash, never a zero — a card is not free.
             Parity.Fact("an unpriced printing reads as a dash") { seen("—") },
             Parity.Fact("the foil printing says it is a foil, on its own row") {
-                onOneRow("SLD", "17", "Artist Series", "foil", "1×", "—")
+                onOneRow("SLD", "17", "Artist Series", "foil", "—")
             },
             Parity.Fact("the finish is a tag of its own, not a word in a sentence") {
-                count("foil") == 1 && count("1×") == 1
+                count("foil") == 1
             },
         )
     }
@@ -555,10 +501,10 @@ class CardSheetParityTest {
         val long = "The Lost Caverns of Ixalan Commander"
         Parity.check(
             Parity.Fact("the row you can buy reads across in one line") {
-                onOneRow("LCC", "124", long, "3×", "$5.36", "TCGplayer ↗")
+                onOneRow("LCC", "124", long, "$5.36", "TCGplayer ↗")
             },
             Parity.Fact("so does the one nobody sells") {
-                onOneRow("SLD", "17", "Artist Series", "foil", "1×", "—")
+                onOneRow("SLD", "17", "Artist Series", "foil", "—")
             },
             // The set name is the only part long enough to be a
             // problem, so it is the part that gives way, and it gives
@@ -610,44 +556,17 @@ class CardSheetParityTest {
     }
 
     @Test
-    fun aCardNobodyOwnsSaysSoRatherThanShowingAnEmptyList() {
+    fun aCardWithNoPrintingsSaysSoRatherThanShowingAnEmptyList() {
         open(CardDetail(name = "Sol Ring", nameNorm = "sol ring"))
         Parity.check(
             Parity.Fact("the printings section names itself") { seen("Printings") },
-            Parity.Fact("it says nobody owns one") { seen("Nobody owns one.") },
+            Parity.Fact("it says there are none") { seen("None recorded.") },
             Parity.Fact("it says the card is in no deck") { seen("Not in a deck.") },
-            Parity.Fact("a card nobody owns gets no owner section at all") {
-                !seen("Who owns it")
-            },
-            Parity.Fact("nought owned and nought free are both stated") {
-                seen("0 owned") && seen("0 free")
+            Parity.Fact("and nothing about owning it") {
+                inside("owned") == 0 && inside("free") == 0
             },
         )
         rule.onRoot().shoot("card_sheet_nobody_owns")
-    }
-
-    @Test
-    fun moreDecksThanCopiesIsSaidOutLoudInTheWebsWords() {
-        open(
-            CardDetail(
-                name = "Sol Ring",
-                printings = listOf(
-                    Printing(1, "m3c", "Modern Horizons 3", "409", "nonfoil", 1, null, owner = "matt"),
-                ),
-                usedIn = listOf(
-                    DeckUse("a", "Alela", "matt", 1, null, false),
-                    DeckUse("b", "Bello", "matt", 2, null, false),
-                ),
-            ),
-        )
-        Parity.check(
-            Parity.Fact("the overcommitment is stated as the web states it") {
-                seen("3 committed")
-            },
-            Parity.Fact("the owner line says how short he is") {
-                onOneRow("Matt", "1 owned", "0 free", "2 short")
-            },
-        )
     }
 
     @Test
@@ -660,7 +579,6 @@ class CardSheetParityTest {
             ),
         )
         Parity.check(
-            Parity.Fact("the copy is still spare") { seen("1 free") },
             Parity.Fact("a proxy is not counted as a committed copy") {
                 inside("committed") == 0
             },
@@ -688,12 +606,6 @@ class CardSheetParityTest {
             // the figures. The owner used to be stranded on the end.
             Parity.Fact("the deck row keeps its owner, its quantity and its role") {
                 onOneRow("Alela", "matt", "1×", "ramp")
-            },
-            // Once at the top of the page and once on his own line:
-            // each is its own `.tag`, not a phrase inside a sentence,
-            // which is nought nodes with this text rather than two.
-            Parity.Fact("the figures the page opens with are tags of their own") {
-                count("3 owned") == 2 && count("2 free") == 2
             },
             Parity.Fact("the rulings under it are oldest first") {
                 topOf("2004-10-04 It is a mana ability.") <

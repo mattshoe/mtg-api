@@ -3,6 +3,7 @@ package org.mattshoe.mtg.android
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.onFirst
@@ -304,7 +305,7 @@ class ScreensTest {
     // ------------------------------------------------------------- card
 
     @Test
-    fun theCardSheetSaysWhatIsOwnedAndWhatIsFree() {
+    fun theCardSheetSaysWhichDecksWantItAndNotWhoOwnsIt() {
         val detail = CardDetail(
             name = "Sol Ring",
             printings = listOf(
@@ -314,12 +315,9 @@ class ScreensTest {
         )
         content { CardSheet(detail) {} }
         rule.onNodeWithText("Sol Ring").assertIsDisplayed()
-        // Twice over now, as on the website: once in the tags at the
-        // top and once on the owner's line. They used to be one
-        // run-on sentence per place, which read as text rather than
-        // as the figures they are.
-        rule.onAllNodesWithText("3 owned").onFirst().assertIsDisplayed()
-        rule.onAllNodesWithText("2 free").onFirst().assertExists()
+        // Matt does not want ownership on the card page.
+        rule.onAllNodesWithText("owned", substring = true).assertCountEquals(0)
+        rule.onAllNodesWithText("free", substring = true).assertCountEquals(0)
         // The deck row is a row now, not one joined string: the
         // name, then whose deck it is, then how many, then the role —
         // each its own node, as the website sets them. Joined, the
@@ -327,11 +325,9 @@ class ScreensTest {
         rule.onNodeWithText("Alela").assertExists()
         rule.onNodeWithText("1×").assertExists()
         rule.onNodeWithText("ramp").assertExists()
-        // A card is nobody's in particular, so the page says who has it.
-        // Twice: once on the printing, once on the deck row. Both
-        // are the website's doing — a shared collection turns on
-        // whose copy it is, so it says so wherever a copy appears.
-        rule.onAllNodesWithText("matt").onFirst().assertExists()
+        // Whose deck it is, once, on the deck row. The printing no
+        // longer says whose copy it is.
+        rule.onAllNodesWithText("matt").assertCountEquals(1)
     }
 
     @Test
@@ -342,7 +338,11 @@ class ScreensTest {
             usedIn = listOf(DeckUse("p", "Proxy deck", "matt", 1, null, true)),
         )
         content { CardSheet(detail) {} }
-        rule.onAllNodesWithText("1 free").onFirst().assertExists()
+        // The page no longer counts copies, so a proxy is said on its
+        // deck row and nothing on the page claims it took a copy.
+        rule.onNodeWithText("proxy").assertExists()
+        rule.onAllNodesWithText("committed", substring = true).assertCountEquals(0)
+        rule.onAllNodesWithText("free", substring = true).assertCountEquals(0)
     }
 
     // --------------------------------------------------------- overlays

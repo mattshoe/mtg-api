@@ -1,5 +1,7 @@
 package org.mattshoe.mtg.core
 
+import kotlinx.serialization.json.JsonArray
+
 /**
  * The whole app's state, and the one object that knows how to fill it.
  *
@@ -324,6 +326,7 @@ data class AppState(
                         // The one bad fact a deck row can state: the
                         // deck wants more than the collection holds.
                         PeekTag("${card.owned} owned", bad = card.short > 0),
+                        PeekTag.edhrec(card.edhrecRank),
                     ),
                     inDeck = card,
                 )
@@ -340,6 +343,7 @@ data class AppState(
                     tags = listOfNotNull(
                         PeekTag("${row.qty} owned"),
                         row.free?.let { PeekTag("$it free") },
+                        PeekTag.edhrec(row.edhrecRank),
                     ),
                 )
             }
@@ -683,7 +687,34 @@ object Load {
         CardQueries.usedIn(nameNorm),
         CardQueries.legalities(nameNorm),
         CardQueries.rulings(nameNorm),
+        CardQueries.facts(nameNorm),
     )
+
+    /**
+     * The answers to [card], handed back in its order, as the page.
+     *
+     * Here rather than in each shell: the website and the phone each
+     * picked the five answers apart themselves, and only the website
+     * remembered to take the card's real name off its printings.
+     */
+    fun cardDetail(
+        nameNorm: String,
+        label: String,
+        answers: List<Pair<List<String>, List<JsonArray>>>,
+    ): CardDetail {
+        val (f, p, u, l, r) = answers
+        val owned = CardQueries.decodePrintings(p.first, p.second)
+        return CardDetail(
+            name = label,
+            nameNorm = nameNorm,
+            printings = owned,
+            usedIn = CardQueries.decodeUses(u.first, u.second),
+            legalities = CardQueries.decodeLegalities(l.first, l.second),
+            rulings = CardQueries.decodeRulings(r.first, r.second),
+            faces = CardQueries.decodeFaces(f.first, f.second),
+            facts = answers.getOrNull(5)?.let { CardQueries.decodeFacts(it.first, it.second) } ?: CardFacts(),
+        ).named(owned)
+    }
 
     fun find(term: String): Sql = PaletteQueries.find(term)
 

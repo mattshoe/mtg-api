@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -52,9 +53,9 @@ import org.mattshoe.mtg.core.Prices
 /**
  * One card, opened. Sibling of `CardPage` on the web.
  *
- * Both are handed a `CardDetail` and neither works out how many copies
- * are spare, which chips to draw or which rulings to show — `free`,
- * `legalityChips`, `byOwner` and `rulingsShown` are all on the state,
+ * Both are handed a `CardDetail` and neither works out which facts to
+ * say, which chips to draw or which rulings to show — `facts.lines`,
+ * `legalityChips`, `printingsShown` and `rulingsShown` are all on the state,
  * so the answers cannot come out different on a phone. Everything this
  * file decides is how to draw them.
  *
@@ -141,6 +142,28 @@ private fun Steps(previous: DeckCard?, next: DeckCard?, place: String, onStep: (
     }
 }
 
+/**
+ * Everything else the database has on the card, a label beside each
+ * value — `.fact` on the web. The wording is `CardFacts`'s, so the
+ * two say the same lines.
+ */
+@Composable
+private fun Facts(card: CardDetail) {
+    val lines = card.facts.lines
+    if (lines.isEmpty()) return
+    Heading("Details")
+    lines.forEachIndexed { i, f ->
+        if (i > 0) RowRule()
+        Row(
+            Modifier.fillMaxWidth().padding(vertical = 2.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(f.label, color = Ink3, fontSize = Design.SMALL.sp, modifier = Modifier.width(128.dp))
+            Text(f.value, color = Ink, fontSize = Design.SMALL.sp, modifier = Modifier.weight(1f))
+        }
+    }
+}
+
 @Composable
 private fun Body(card: CardDetail) {
     // The scan, the same picture the web page puts at the top. A card
@@ -164,68 +187,23 @@ private fun Body(card: CardDetail) {
         }
     }
 
-    // What the card actually says. Everything below this point is
-    // about the collection's relationship to the card — how many are
-    // owned, who has them, which decks want them. None of it is the
-    // card, and until now none of the card was here either.
+    // What the card actually says, then everything else the database
+    // has on it. Nothing about who owns it or how many: Matt does not
+    // want ownership on this page. Which decks want it stays.
     card.faces.forEach { FacePanel(it, named = card.faces.size > 1) }
 
-    // `.flex-wrap` of `.tag.mini`, the way the web states a figure:
-    // boxed, so a number reads as a number and not as the start of a
-    // sentence. Three of them run together in plain text is a phrase
-    // you have to parse; three pills are three facts.
-    FlowRow(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Tag("${card.owned} owned")
-        Tag("${card.free} free")
-        // More decks want it than exist. Worth saying out loud, in the
-        // same words the web says it in.
-        if (card.overCommitted) Tag("${card.committed} committed", Bad)
-    }
-
-    // Who has how many. The page used to be one person's, which made
-    // the other half of the collection invisible.
-    if (card.byOwner.isNotEmpty()) {
-        Heading("Who owns it")
-        card.byOwner.forEachIndexed { i, h ->
-            // `.owner-line + .owner-line`: a hairline, so two people
-            // read as two rows rather than one paragraph.
-            if (i > 0) RowRule()
-            Row(
-                Modifier.fillMaxWidth().padding(vertical = 3.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                // `.owner-line .t-name` is capitalised by the
-                // stylesheet, and takes the slack so the figures stay
-                // in a column down the side.
-                RowName(
-                    h.ownerName.replaceFirstChar { it.uppercase() },
-                    Modifier.weight(1f),
-                    weight = FontWeight.SemiBold,
-                )
-                Figure("${h.owned} owned")
-                // Nought spare reads differently from three spare, and
-                // it is the number people are actually here for.
-                Figure("${h.free} free", if (h.free > 0) Ok else Ink2)
-                if (h.short > 0) Figure("${h.short} short", Bad)
-            }
-        }
-    }
+    Facts(card)
 
     Heading("Printings")
-    if (card.printings.isEmpty()) {
-        Text("Nobody owns one.", fontSize = Design.SMALL.sp)
+    if (card.printingsShown.isEmpty()) {
+        Text("None recorded.", fontSize = Design.SMALL.sp)
     } else {
         // Where to buy another, when the database has a listing for
         // that exact printing. The price beside it is the one for the
         // finish this copy is in, worked out by the `card_prices`
         // view, so a foil is not quoted at the nonfoil price.
         val open = androidx.compose.ui.platform.LocalUriHandler.current
-        card.printings.forEachIndexed { i, p ->
+        card.printingsShown.forEachIndexed { i, p ->
             val shop = p.tcgplayer
             if (i > 0) RowRule()
             Row(
@@ -260,10 +238,7 @@ private fun Body(card: CardDetail) {
                     )
                 }
                 RowName(p.setName.orEmpty(), Modifier.weight(1f), color = Ink2)
-                // Whose copy it is. A card is not one person's.
-                if (p.owner.isNotBlank()) Tag(p.ownerName.ifEmpty { p.owner })
                 if (p.finish != "nonfoil") Tag(p.finish)
-                Figure("${p.qty}×")
                 Text(
                     Prices.money(p.price, dash = "—"),
                     fontSize = Design.MINI.sp,

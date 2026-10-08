@@ -68,7 +68,7 @@ class ParityWithThePhoneTest {
     private var tweaked: Pair<DeckCard, Tweak?>? = null
     private lateinit var held: androidx.compose.runtime.MutableState<AppState>
 
-    private fun card(name: String, qty: Int = 1) = DeckCard(
+    private fun card(name: String, qty: Int = 1, rank: Long? = 412) = DeckCard(
         name = name,
         qty = qty,
         role = null,
@@ -80,6 +80,7 @@ class ParityWithThePhoneTest {
         setCode = "m3c",
         setName = "Modern Horizons 3 Commander",
         collectorNumber = "409",
+        edhrecRank = rank,
     )
 
     /** In page order: grouped by type, sorted by name inside a group. */
@@ -213,6 +214,18 @@ class ParityWithThePhoneTest {
         assertNotNull(button("Full details"), "no way through to the card's own page")
     }
 
+    /** What the sheet under the carousel says, and nothing behind it. */
+    private fun sheetSays(): String =
+        (document.querySelector(".peek-sheet") as? HTMLElement)?.textContent.orEmpty()
+
+    @Test
+    fun theSheetSaysHowMuchTheCardIsPlayed() = runTest {
+        // Matt: "I asked to have the edhrec rank of every card on its
+        // 'bottom sheet' thingy on the carousel. It's still missing."
+        peek()
+        assertTrue("EDHREC #412" in sheetSays(), "the deck's sheet has no EDHREC rank: ${sheetSays()}")
+    }
+
     @Test
     fun theSheetChangesTheDeck() = runTest {
         peek()
@@ -224,7 +237,7 @@ class ParityWithThePhoneTest {
 
     // --------------------------------------------- and over the Library
 
-    private fun row(name: String, qty: Int = 2, free: Int? = 1) = CardRow(
+    private fun row(name: String, qty: Int = 2, free: Int? = 1, rank: Long? = 1234) = CardRow(
         id = 1,
         owner = "matt",
         name = name,
@@ -240,7 +253,7 @@ class ParityWithThePhoneTest {
         setCode = "m3c",
         setName = "Modern Horizons 3 Commander",
         collectorNumber = "409",
-        edhrecRank = null,
+        edhrecRank = rank,
         releasedAt = null,
         finish = "nonfoil",
         power = null,
@@ -286,6 +299,15 @@ class ParityWithThePhoneTest {
         listOf("Count", "Swap", "Remove").forEach {
             assertEquals(null, button(it), "the Library's sheet offers \"$it\"")
         }
+    }
+
+    @Test
+    fun theLibrarysSheetSaysHowMuchTheCardIsPlayedToo() = runTest {
+        shell(inTheLibrary())
+        settle()
+        (document.querySelectorAll("div.card")[0] as HTMLElement).click()
+        settle()
+        assertTrue("EDHREC #1,234" in sheetSays(), "the Library's sheet has no EDHREC rank: ${sheetSays()}")
     }
 
     @Test

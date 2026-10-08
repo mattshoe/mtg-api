@@ -110,7 +110,22 @@ data class Peek(val at: Int = -1, val of: PeekOf = PeekOf.DECK) {
 }
 
 /** One fact the carousel's sheet states, and whether it is a bad one. */
-data class PeekTag(val text: String, val bad: Boolean = false)
+data class PeekTag(val text: String, val bad: Boolean = false) {
+    companion object {
+        /**
+         * How much the card is played, on every card.
+         *
+         * "unranked" rather than nothing for a card EDHREC has no
+         * number for, so a missing line can only ever be a bug.
+         */
+        fun edhrec(rank: Long?): PeekTag =
+            PeekTag(rank?.let { "EDHREC #${grouped(it)}" } ?: "EDHREC unranked")
+
+        /** 1234 as 1,234. No `String.format` in common code. */
+        private fun grouped(n: Long): String =
+            n.toString().reversed().chunked(3).joinToString(",").reversed()
+    }
+}
 
 /**
  * One card, as the carousel's sheet needs it.
@@ -160,6 +175,8 @@ data class DeckCard(
     val setCode: String? = null,
     val setName: String? = null,
     val collectorNumber: String? = null,
+    /** How much it is played, for the sheet under the carousel. Lower is more. */
+    val edhrecRank: Long? = null,
 ) {
     val isCommander: Boolean get() = role == "commander"
 
@@ -372,17 +389,18 @@ object DeckQueries {
                   -- which printing of the card the collection holds.
                   COALESCE(mine.setcode, alt.setcode)             AS setcode,
                   COALESCE(mine.set_name, alt.set_name)           AS set_name,
-                  COALESCE(mine.collector_number, alt.collector_number) AS collector_number
+                  COALESCE(mine.collector_number, alt.collector_number) AS collector_number,
+                  COALESCE(mine.edhrec_rank, alt.edhrec_rank)     AS edhrec_rank
              FROM deck_cards dc
              JOIN decks d ON d.id = dc.deck_id
              LEFT JOIN (SELECT owner_id, name_norm, MIN(id) AS id, scryfall_id, type_line,
                                mana_cost, cmc, produced_mana, oracle_text, color_identity, rarity,
-                               setcode, set_name, collector_number
+                               setcode, set_name, collector_number, edhrec_rank
                           FROM cards GROUP BY owner_id, name_norm) mine
                ON mine.name_norm = dc.name_norm AND mine.owner_id = d.owner_id
              LEFT JOIN (SELECT name_norm, MIN(id) AS id, scryfall_id, type_line,
                                mana_cost, cmc, produced_mana, oracle_text, color_identity, rarity,
-                               setcode, set_name, collector_number
+                               setcode, set_name, collector_number, edhrec_rank
                           FROM cards GROUP BY name_norm) alt
                ON alt.name_norm = dc.name_norm
              LEFT JOIN prices pm ON pm.scryfall_id = mine.scryfall_id
@@ -439,6 +457,7 @@ object DeckQueries {
                 setCode = it.str("setcode"),
                 setName = it.str("set_name"),
                 collectorNumber = it.str("collector_number"),
+                edhrecRank = it.str("edhrec_rank")?.toDoubleOrNull()?.toLong(),
             )
         }
     }

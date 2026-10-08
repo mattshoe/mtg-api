@@ -2102,13 +2102,14 @@ class LoadNeedsTest {
 
     @Test
     fun aCardAsksForEverythingTheDrawerShows() {
-        // Five, not four. The fifth is the card itself — the face
+        // Six: the sixth is everything else `cards` has on it. Before
+        // that, five, not four. The fifth is the card itself — the face
         // query. For a long time this was four, and a card page that
         // asks four questions about the collection and none about the
         // card is how both platforms ended up showing no mana cost,
         // no type line, no rules text and no power and toughness.
-        assertEquals(5, Load.card("sol ring").size)
-        assertEquals(5, Load.card("sol ring").distinct().size)
+        assertEquals(6, Load.card("sol ring").size)
+        assertEquals(6, Load.card("sol ring").distinct().size)
         assertTrue(
             Load.card("sol ring").first().sql.contains("oracle_text"),
             "the card's own face is not the first thing asked for",

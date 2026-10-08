@@ -153,47 +153,11 @@ class CardPageLayoutTest {
     )
 
     @Test
-    fun thePageSaysWhoOwnsHowMany() = runTest {
-        // It used to be one person's page, so the other half of the
-        // collection was simply not there.
-        val frame = open(shared())
-        settle()
-        val rows = frame.all("div.owner-line")
-        assertEquals(2, rows.size, "the page shows ${rows.size} owners")
-        val matt = rows.first { it.textContent.orEmpty().contains("matt") }.textContent.orEmpty()
-        val kayla = rows.first { it.textContent.orEmpty().contains("kayla") }.textContent.orEmpty()
-        assertTrue("24 owned" in matt && "0 free" in matt, matt)
-        assertTrue("10 owned" in kayla && "5 free" in kayla, kayla)
-    }
-
-    @Test
-    fun aPrintingSaysWhoseCopyItIs() = runTest {
-        val frame = open(shared())
-        settle()
-        val lines = frame.all("div.print-line, a.print-line").map { it.textContent.orEmpty() }
-        assertTrue(lines.any { "kayla" in it }, lines.toString())
-        assertTrue(lines.any { "matt" in it }, lines.toString())
-    }
-
-    @Test
     fun aDeckRowSaysWhoseDeckItIs() = runTest {
         val frame = open(shared())
         settle()
         val text = frame.all("div.card-page").first().textContent.orEmpty()
         assertTrue("Alela" in text && "Bello" in text, text)
-    }
-
-    @Test
-    fun theOwnerLinesStayOnOneLineOnAPhone() = runTest {
-        val frame = open(shared())
-        settle()
-        if (!Stylesheet.applied()) return@runTest
-        frame.all("div.card-page").first().style.width = "340px"
-        settle()
-        frame.all("div.owner-line").forEach { row ->
-            val tops = row.all("span").map { it.getBoundingClientRect().top }
-            assertTrue((tops.max() - tops.min()) < 4, "an owner wrapped on a phone")
-        }
     }
 
     @Test

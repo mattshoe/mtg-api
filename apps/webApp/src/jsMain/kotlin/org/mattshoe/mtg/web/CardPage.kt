@@ -29,9 +29,9 @@ import org.mattshoe.mtg.core.Prices
  * its own scroll. A card is a place now, so none of those are
  * questions any more.
  *
- * Sibling of `CardSheet` on Android. Both are handed a `CardDetail`
- * and neither works out how many copies are spare — `free` is on the
- * state, so the number cannot come out different on a phone.
+ * Sibling of `CardSheet` on Android. Both are handed a `CardDetail`.
+ * It says nothing about who owns the card or how many: Matt does not
+ * want ownership here. Which decks want it stays.
  */
 @Composable
 fun CardPage(
@@ -173,24 +173,13 @@ private fun Body(card: CardDetail) {
     // collection; this is the card.
     card.faces.forEach { FacePanel(it, card.faces.size > 1) }
 
-    Div(attrs = { classes("flex-wrap", "small") }) {
-        Span(attrs = { classes("tag", "mini") }) { Text("${card.owned} owned") }
-        Span(attrs = { classes("tag", "mini") }) { Text("${card.free} free") }
-        if (card.overCommitted) {
-            // More decks want it than exist. Worth saying out loud.
-            Span(attrs = { classes("tag", "bad", "mini") }) {
-                Text("${card.committed} committed")
-            }
-        }
-    }
-
-    Owners(card)
+    Facts(card)
 
     H3 { Text("Printings") }
-    if (card.printings.isEmpty()) {
-        Div(attrs = { classes("muted", "small") }) { Text("Nobody owns one.") }
+    if (card.printingsShown.isEmpty()) {
+        Div(attrs = { classes("muted", "small") }) { Text("None recorded.") }
     } else {
-        card.printings.forEach { p -> PrintingLine(p) }
+        card.printingsShown.forEach { p -> PrintingLine(p) }
     }
 
     H3 { Text("Legal in") }
@@ -236,32 +225,18 @@ private fun Body(card: CardDetail) {
 }
 
 /**
- * Who owns how many, and how much of it is spare.
- *
- * The page was scoped to one person, so the other half of the
- * collection was simply invisible: Matt's page for a card said "1
- * owned" while Kayla had three of it sitting in a box. A card
- * belongs to nobody in particular, so it says who has it instead.
+ * Everything else the database has on the card, a label beside each
+ * value. The wording is `CardFacts`'s, so a phone says the same lines.
  */
 @Composable
-private fun Owners(card: CardDetail) {
-    val holdings = card.byOwner
-    if (holdings.isEmpty()) return
-    H3 { Text("Who owns it") }
-    holdings.forEach { h ->
-        Div(attrs = { classes("owner-line") }) {
-            Span(attrs = { classes("t-name") }) { Text(h.ownerName) }
-            Span(attrs = { classes("tag", "mini", "mono") }) { Text("${h.owned} owned") }
-            Span(attrs = {
-                classes("tag", "mini", "mono")
-                // Nought spare is worth reading differently from
-                // three spare, and it is the number people are
-                // actually here for.
-                if (h.free > 0) classes("ok")
-            }) { Text("${h.free} free") }
-            if (h.short > 0) {
-                Span(attrs = { classes("tag", "mini", "bad", "mono") }) { Text("${h.short} short") }
-            }
+private fun Facts(card: CardDetail) {
+    val lines = card.facts.lines
+    if (lines.isEmpty()) return
+    H3 { Text("Details") }
+    lines.forEach { f ->
+        Div(attrs = { classes("fact", "small") }) {
+            Span(attrs = { classes("fact-label", "muted") }) { Text(f.label) }
+            Span(attrs = { classes("fact-value") }) { Text(f.value) }
         }
     }
 }
@@ -304,7 +279,8 @@ fun priceLine(price: Double?, layout: String?, releasedAt: String?, today: Strin
     Prices.orReason(price, layout, releasedAt, today)
 
 /**
- * One printing you own, and where to buy another.
+ * One printing, and where to buy another. Whose copy it is and how
+ * many are not said: Matt does not want ownership on this page.
  *
  * The shop link and the price are both already in the database —
  * `card_prices` works out which of usd, usd_foil and usd_etched
@@ -320,13 +296,9 @@ private fun PrintingLine(p: Printing) {
         Span(attrs = { classes("mono", "set") }) { Text(p.setCode.uppercase()) }
         Span(attrs = { classes("mono", "cn") }) { Text(p.collectorNumber.orEmpty()) }
         Span(attrs = { classes("t-name") }) { Text(p.setName.orEmpty()) }
-        if (p.owner.isNotBlank()) {
-            Span(attrs = { classes("tag", "mini") }) { Text(p.ownerName.ifEmpty { p.owner }) }
-        }
         if (p.finish != "nonfoil") {
             Span(attrs = { classes("tag", "mini") }) { Text(p.finish) }
         }
-        Span(attrs = { classes("tag", "mini", "mono") }) { Text("${p.qty}×") }
         Span(attrs = { classes("num", "mono") }) { Text(Prices.money(p.price, dash = "—")) }
         // Say where it goes. A row that is only subtly a link is a
         // link nobody finds, so the shop is named rather than hinted

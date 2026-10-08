@@ -1285,17 +1285,15 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
   box-shadow: inset 0 0 0 1px var(--accent);
 }
 
-/* Who owns how many. One line each, the name on the left and the
-   counts hard right so two owners line up against each other. */
-.owner-line {
-  display: flex; align-items: center; gap: 8px; padding: 7px 0;
-  font-size: 12.5px; color: var(--text-2);
+/* One line of the card page's Details: the label on the left, the
+   value beside it, so a column of them reads like a spec sheet. */
+.fact {
+  display: flex; align-items: baseline; gap: 12px; padding: 5px 0;
+  font-size: 12.5px; color: var(--text);
 }
-.owner-line + .owner-line { border-top: 1px solid var(--line); }
-.owner-line .t-name {
-  flex: 1; min-width: 0; color: var(--text); font-weight: 600;
-  text-transform: capitalize; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
+.fact + .fact { border-top: 1px solid var(--line); }
+.fact .fact-label { flex: none; width: 128px; color: var(--text-3); }
+.fact .fact-value { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 
 /* One printing on the card page. Same shape as a deck row: a line
    you can read across, and a link out where there is one to follow. */
