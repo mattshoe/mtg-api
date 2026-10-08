@@ -48,13 +48,47 @@ export function verdict(floors, actual) {
  * thing this file exists to prevent. A suite missing from the run
  * keeps the floor it had, so running one suite locally cannot erase
  * the others.
+ *
+ * It merges rather than overwrites, per suite, against whatever is on
+ * disk at the moment of writing — two builders raising different
+ * floors are then an ordinary three-way merge instead of a resolution
+ * that picks one side and silently drops the other.
+ *
+ * `named` is the suites the command line asked about. A suite nobody
+ * named cannot move its own floor even if the run left results for it,
+ * because a killed Gradle task leaves the PREVIOUS run's XML on disk
+ * and that reads as a real count.
  */
-export function raise(floors, actual) {
+export function raise(floors, actual, named) {
+  const asked = named === undefined ? null : new Set(named)
   const next = { ...floors }
   for (const [suite, n] of Object.entries(actual)) {
+    if (asked && !asked.has(suite)) continue
     next[suite] = Math.max(next[suite] ?? 0, n)
   }
   return next
+}
+
+/**
+ * Floors that went DOWN against a reference copy, usually main's.
+ *
+ * `raise` cannot lower a floor, but a human resolving a merge conflict
+ * in `suite-floors.json` can — and a floor below main's real count
+ * means a later deletion of up to twenty tests passes unnoticed. The
+ * file is the one place in this repo where the wrong three-way merge is
+ * invisible, so it gets checked rather than trusted.
+ */
+export function notLowered(reference, floors) {
+  const lowered = []
+  for (const [suite, was] of Object.entries(reference ?? {})) {
+    const now = floors[suite]
+    if (now === undefined) {
+      lowered.push(`${suite} lost its floor of ${was}`)
+    } else if (now < was) {
+      lowered.push(`${suite} floor ${was} -> ${now}`)
+    }
+  }
+  return { ok: lowered.length === 0, lowered }
 }
 
 /**

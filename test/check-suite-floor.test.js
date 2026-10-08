@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { verdict, raise, requested } from '../scripts/suite-floor.mjs'
+import { verdict, raise, requested, notLowered } from '../scripts/suite-floor.mjs'
 
 // The suite cannot shrink.
 //
@@ -111,5 +111,39 @@ describe('requested', () => {
 
   it('ignores an asked-for suite with no floor yet', () => {
     expect(requested({ core: 10 }, ['core', 'brandNew'])).toEqual({ core: 10 })
+  })
+})
+
+describe('notLowered', () => {
+  // `raise` cannot lower a floor, but a human resolving a merge conflict
+  // in `suite-floors.json` can — two builders raising the same floor
+  // produce a one-line conflict, and picking one side lands a floor
+  // below main's real count. A later deletion of up to twenty tests then
+  // passes unnoticed, which is the exact failure the floors exist to
+  // stop. These are regression guards, not proof of a fix: the function
+  // was written alongside them.
+
+  it('is happy when every floor held or grew', () => {
+    expect(notLowered({ core: 10, web: 20 }, { core: 10, web: 25 }).ok).toBe(true)
+  })
+
+  it('catches a floor that went down, and says by how much', () => {
+    const v = notLowered({ core: 2310 }, { core: 2290 })
+    expect(v.ok).toBe(false)
+    expect(v.lowered[0]).toContain('core floor 2310 -> 2290')
+  })
+
+  it('catches a floor that vanished, which is the same bug spelled differently', () => {
+    const v = notLowered({ core: 10, web: 20 }, { core: 10 })
+    expect(v.ok).toBe(false)
+    expect(v.lowered[0]).toContain('web lost its floor of 20')
+  })
+
+  it('does not mind a brand new suite appearing', () => {
+    expect(notLowered({ core: 10 }, { core: 10, device: 5 }).ok).toBe(true)
+  })
+
+  it('does not mind having no reference to compare against', () => {
+    expect(notLowered(undefined, { core: 10 }).ok).toBe(true)
   })
 })
