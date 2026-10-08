@@ -13,3 +13,10 @@ config.set({
   },
   browserNoActivityTimeout: 120000,
 });
+
+// One class or one case, for the TDD cycle: Karma takes no `--tests`,
+// so `WEB_TEST_GREP=CardDetailsTest ./apps/gradlew -p apps :webApp:jsTest`
+// hands the pattern to Mocha instead. Unset, everything runs.
+if (process.env.WEB_TEST_GREP) {
+  config.client.mocha.grep = process.env.WEB_TEST_GREP;
+}

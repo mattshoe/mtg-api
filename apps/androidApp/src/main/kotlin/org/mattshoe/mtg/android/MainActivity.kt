@@ -865,23 +865,8 @@ class MainActivity : ComponentActivity() {
     }
 
     private suspend fun loadCard(nameNorm: String, label: String): AppState {
-        val (face, printings, uses, legal, rules) = Load.card(nameNorm)
-        val f = api.query(face)
-        val p = api.query(printings)
-        val u = api.query(uses)
-        val l = api.query(legal)
-        val r = api.query(rules)
-        return app.copy(
-            card = CardDetail(
-                name = label,
-                nameNorm = nameNorm,
-                printings = CardQueries.decodePrintings(p.cols, p.rows),
-                usedIn = CardQueries.decodeUses(u.cols, u.rows),
-                legalities = CardQueries.decodeLegalities(l.cols, l.rows),
-                rulings = CardQueries.decodeRulings(r.cols, r.rows),
-                faces = CardQueries.decodeFaces(f.cols, f.rows),
-            ),
-        )
+        val answers = Load.card(nameNorm).map { api.query(it).let { a -> a.cols to a.rows } }
+        return app.copy(card = Load.cardDetail(nameNorm, label, answers))
     }
 
     // ---------------------------------------------------- find and hint
