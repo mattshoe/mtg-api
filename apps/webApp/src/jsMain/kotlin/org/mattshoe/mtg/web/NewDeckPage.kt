@@ -123,7 +123,7 @@ private fun NameStep(s: NewDeck, onState: (NewDeck) -> Unit) {
         onInput { onState(s.rename(it.value)) }
     }
     if (s.name.isNotBlank()) {
-        Div(attrs = { classes("muted", "small") }) { Text("It will live at #/decks/${s.slug}") }
+        Div(attrs = { classes("muted", "small") }) { Text("Any name. Another collection may have a deck called the same.") }
     }
     Next("Continue →", s.canLeaveName) {
         onState(s.goTo(if (s.needsCommander) DeckStep.COMMANDER else DeckStep.CARDS))
@@ -284,7 +284,7 @@ private fun Figure(value: String, label: String) {
 @Composable
 private fun DoneStep(s: NewDeck, onClose: () -> Unit) {
     Div(attrs = { classes("tag", "ok") }) { Text("Created") }
-    Div(attrs = { classes("muted", "small") }) { Text("${s.name} is at #/decks/${s.slug}") }
+    Div(attrs = { classes("muted", "small") }) { Text("${s.name} is at #/decks/${s.key}") }
     Button(attrs = {
         classes("btn", "primary")
         onClick { onClose() }

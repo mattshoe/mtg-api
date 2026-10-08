@@ -39,7 +39,7 @@ the same thing as query parameters and is read-only, for callers that can only
 fetch a URL — Claude desktop and mobile among them:
 
 ```
-https://mtg-api.mattshoe81.workers.dev/query?fmt=tsv&sql=SELECT name, free FROM bulk_cards WHERE owner='matt' ORDER BY free DESC LIMIT 20
+https://mtg-api.mattshoe81.workers.dev/query?fmt=tsv&sql=SELECT name, free FROM bulk_cards WHERE owner_id=(SELECT id FROM users WHERE key='e7de0cb1') ORDER BY free DESC LIMIT 20
 ```
 
 A GET that could delete rows is one link preview or prefetch away from doing
@@ -48,7 +48,7 @@ it, so anything that writes is refused there with a 405. POST is unrestricted.
 ```bash
 curl -X POST https://mtg-api.mattshoe81.workers.dev/query \
   -H 'content-type: application/json' \
-  -d '{"sql":"SELECT name, free FROM bulk_cards WHERE owner=? ORDER BY free DESC LIMIT 5","params":["matt"]}'
+  -d '{"sql":"SELECT name, free FROM bulk_cards WHERE owner_id=(SELECT id FROM users WHERE key=?) ORDER BY free DESC LIMIT 5","params":["e7de0cb1"]}'
 ```
 
 ```json
@@ -157,7 +157,7 @@ Scryfall what the card is. Both need an admin token.
 ```bash
 curl -X POST https://mtg-api.mattshoe81.workers.dev/cards/add \
   -H 'content-type: application/json' \
-  -d '{"owner":"matt","list":"4 Lightning Bolt (2X2) 117\n1 Sol Ring *F*","dry_run":true}'
+  -d '{"list":"4 Lightning Bolt (2X2) 117\n1 Sol Ring *F*","dry_run":true}'
 ```
 
 ```json
@@ -167,7 +167,11 @@ curl -X POST https://mtg-api.mattshoe81.workers.dev/cards/add \
 ```
 
 Each `changes` row is `[name, set, collector_number, finish, qty_before, qty_after]`.
-`owner` defaults to `matt`. `dry_run` plans without writing anything.
+The cards go to the signed-in account's own collection. `"collection": "<key>"`
+names another one by its public key, which only an account allowed to edit it
+(or the admin role) gets past; the operator's password has no collection of its
+own and must name one. An `owner` field is refused. `dry_run` plans without
+writing anything.
 
 `list` takes whatever an exporter actually produces, text or CSV — the
 format is detected rather than declared.
@@ -199,7 +203,7 @@ database untouched.
 ### `POST /decks/disassemble`
 
 ```json
-{"slug": "fairy-alela-faerie-tribal", "dry_run": false}
+{"key": "q8ytka9m", "dry_run": false}
 ```
 
 Deletes the deck, its list and its notes, and hands every card it was
@@ -213,7 +217,7 @@ counts `freed` from rows that are actually `in_collection`, and why a deck
 made mostly of gaps frees almost nothing.
 
 ```json
-{"deck":{"slug":"…","name":"…","owner":"kayla"},
+{"deck":{"key":"…","name":"…"},
  "freed":100,"cards":[{"name":"Bitterblossom","qty":1}],
  "rows":{"deck_cards":78,"deck_notes":1},"applied":true,"dry_run":false}
 ```
@@ -245,14 +249,15 @@ verdict that the names are bad.
 ### `POST /decks/create`
 
 ```json
-{"name": "Fairy Deck", "format": "commander", "owner": "kayla",
+{"name": "Fairy Deck", "format": "commander",
  "commander": "Alela, Cunning Conqueror", "bracket": "3", "list": "1 Bitterblossom\n…"}
 ```
 
 A new deck, list and all, behind the wizard at `#/decks/_new`. Admin only.
 `GET /decks/formats` is the dropdown's source and says which formats take
-a commander. The slug comes from the name and a clash is a 409 rather
-than a second deck at the same URL.
+a commander. The deck goes in your own collection (or `collection: <key>`)
+and gets a random `key`, which is its address and is in the reply. Any name
+is fine, including one another account already uses.
 
 Everything the wizard asks is validated here too, because the browser is
 not the only caller. Creating goes through the same path as editing a
@@ -263,7 +268,7 @@ written, and if any of it cannot be resolved nothing is created at all.
 ### `POST /decks/list`
 
 ```json
-{"slug": "fairy-alela-faerie-tribal", "list": "1 Alela, Cunning Conqueror\n3 Bitterblossom", "dry_run": false}
+{"key": "q8ytka9m", "list": "1 Alela, Cunning Conqueror\n3 Bitterblossom", "dry_run": false}
 ```
 
 Replaces a deck's list wholesale from a decklist, in the same format
@@ -329,7 +334,7 @@ marked as such, and section headings are kept for rows that survive.
 
 ## The data
 
-18 tables. One row in `cards` per (owner, printing, finish), with `qty` as how
+18 tables. One row in `cards` per (owner_id, printing, finish), with `qty` as how
 many of that stack are owned.
 
 **Join keys.** `cards.name_norm` is `lower(trim(name))` and matches
@@ -337,8 +342,10 @@ many of that stack are owned.
 `card_*` child table's `card_id` points at, and what `card_search.rowid` is.
 `cards.oracle_id` joins `legalities` and `rulings`.
 
-**Owners.** `matt` and `kayla`. The two collections are never merged — filter
-on `owner`.
+**Owners.** `owner_id` on `cards` and `decks` is the owning account's
+`users.id`. A collection is named publicly by `users.key`, so filter with
+`owner_id = (SELECT id FROM users WHERE key = ?)`. Collections are never
+merged. The old `owner` and `slug` columns are retired and read by nothing.
 
 **Views.**
 

@@ -262,7 +262,7 @@ fun RenameDialog(
                 if (state.done) {
                     Div(attrs = { classes("tag", "ok") }) { Text("Renamed") }
                     Div(attrs = { classes("muted", "small") }) {
-                        Text("${state.was} is now ${state.name}, at #/decks/${state.nextSlug}")
+                        Text("${state.was} is now ${state.name}. Its link has not changed.")
                     }
                     Button(attrs = {
                         classes("btn", "primary")
@@ -277,11 +277,7 @@ fun RenameDialog(
                         onKeyDown { e -> if (e.key == "Enter" && state.canSave) onSave() }
                     }
                     Div(attrs = { classes("muted", "small") }) {
-                        if (state.nextSlug.isEmpty()) {
-                            Text("That name has no letters or digits in it.")
-                        } else {
-                            Text("It will live at #/decks/${state.nextSlug}")
-                        }
+                        Text("Only the name changes. The deck stays at #/decks/${state.key}")
                     }
                     state.error?.let { Div(attrs = { classes("err") }) { Text(it) } }
                     Div(attrs = { classes("flex-wrap") }) {

@@ -142,12 +142,12 @@ fun AppShell(
 
         View.DECKS -> DecksPage(
             state = state.decks,
-            onOpen = { onOpenDeck(it.slug) },
+            onOpen = { onOpenDeck(it.key) },
             onClose = { onState(state.copy(decks = state.decks.close())) },
             admin = state.canEdit,
-            onEdit = { onEditDeck(it.slug) },
-            onRename = { onAskRename(it.slug) },
-            onDisassemble = { onAskDisassemble(it.slug) },
+            onEdit = { onEditDeck(it.key) },
+            onRename = { onAskRename(it.key) },
+            onDisassemble = { onAskDisassemble(it.key) },
             // The carousel, not the card's page. The page is a
             // button inside it. Same rule as the phone, and the rule
             // itself is `AppState.peekCard` in the shared core.
@@ -161,7 +161,7 @@ fun AppShell(
 
         View.ADMIN -> AdminPage(
             state = state.people,
-            me = state.admin.account?.slug,
+            me = state.admin.account?.key,
             person = state.person,
             onSearch = { onState(state.copy(people = state.people.searching(it))) },
             onOpen = { onState(state.navigate(Route(View.ADMIN, it.key))) },
@@ -311,7 +311,7 @@ fun AppShell(
 }
 
 /** Where a deck tap goes, as a route rather than a special case. */
-fun AppState.openDeck(slug: String) = navigate(Route(View.DECKS, slug))
+fun AppState.openDeck(key: String) = navigate(Route(View.DECKS, key))
 
 /** For the tests, and for anything that wants the history without the shell. */
 fun AppState.withHistory(h: EntryHistory) = copy(history = h)

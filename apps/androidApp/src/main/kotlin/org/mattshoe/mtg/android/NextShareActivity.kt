@@ -90,11 +90,11 @@ class NextShareActivity : ComponentActivity() {
      *
      * The wizard used to ask, and a share sheet is the worst place to
      * be asked anything. This activity holds no `AppState`, so it
-     * asks the server who the session is rather than keeping a slug
+     * asks the server who the session is rather than keeping a key
      * of its own that could go stale behind a sign-out.
      */
     private suspend fun mine(): String =
-        api.me(token())?.slug
+        api.me(token())?.key
             ?: throw ApiFailure("Sign in on the app before sharing a list to it")
 
     private fun readShare(from: Intent?): MassEntry {

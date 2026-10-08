@@ -500,18 +500,31 @@ never in a response body, never in a page, never logged. The only thing a
 mutation may be decided by, reached only by resolving the session cookie
 through `sessions` to a row in `users`. The shells never hold one.
 
-**Slugs** — every one of them is being deleted, and you must not add
-another. Matt: "FUCK THE SLUG!!! WHAT THE FUCK DO YOU NEED A SLUG FOR?!"
+**Ownership is `owner_id`.** `cards.owner_id` and `decks.owner_id`
+reference `users.id` (migration 0007). The app never holds an id: it
+names an owner by key and SQL resolves it —
+`owner_id = (SELECT id FROM users WHERE key = ?)`, see `Owners.kt` — and
+rows come back with the owner's key and display name. A write body names
+a collection as `collection: <key>` or not at all (your own); an `owner`
+field is refused with a 400. A deck lives at `decks.key`, a random
+8-character key like an account's, and a rename changes its name and
+nothing else.
+
+**Slugs** — every one of them is retired, and you must not add
+another. `users.slug`, `decks.slug`, `cards.owner` and `decks.owner`
+are still columns, read by nothing, until a later migration drops them;
+a new account's `users.slug` just holds its key because the live column
+is `NOT NULL UNIQUE`. Matt: "FUCK THE SLUG!!! WHAT THE FUCK DO YOU NEED A SLUG FOR?!"
 and "WE'RE GOING TO HAVE FUCKING COLLISIONS IN URLS ALL OVER THE FUCKING
 PLACE".
 
 An identifier derived from text a person typed collides as soon as there
 is a second person, and both slugs in this schema already do:
 
-- `users.slug` is what `cards.owner` holds, so ownership is two strings
+- `users.slug` was what `cards.owner` held, so ownership was two strings
   happening to match — which is what emptied Kayla's collection
-- `decks.slug` is `UNIQUE` **globally** (`schema.sql:54`) and every lookup
-  is `WHERE slug = ?` with no owner, so two accounts cannot own a deck
+- `decks.slug` was `UNIQUE` **globally** and every lookup was
+  `WHERE slug = ?` with no owner, so two accounts could not own a deck
   with the same name
 
 **The rule: an address is a random opaque key, an identity is an id, and
@@ -519,14 +532,15 @@ there is nothing in between.** A name is free text that anybody may reuse.
 Do not add a column called `slug`, and do not derive an identifier from
 anything a person typed.
 
-The two remaining ones, `tags.slug` and `card_tags.tag_slug`, hold
-Scryfall Tagger's vocabulary rather than an address of ours, and are being
-renamed to `tag` — the values are fine, the word is not.
+`tags.tag` and `card_tags.tag` (they were `slug` and `tag_slug`) hold
+Scryfall Tagger's vocabulary rather than an address of ours — the values
+were fine, the word was not.
 
 See `requests/cards-owner-should-be-a-user-id.md`.
 
 In the app, `Route.collection` is the **key** — what an address carries —
-and `AppState.resolvedCollection` is the owner, joined by `GET /c/:key`.
+and `AppState.resolvedCollection` is the same key once `GET /c/:key` has
+said somebody has it.
 Keeping them apart is what stops an address being mistaken for
 permission. Four places had this wrong once, and two tests were *pinning*
 the wrong value, which is why nothing caught it.
@@ -537,7 +551,7 @@ is a security bug, not a style question.
 
 **No account is ever deleted unless Matt asks for that account by
 name.** An empty collection is not a reason. Account id 2
-(`matthew.shoemaker.277@gmail.com`, slug `matthew-shoemaker`, key
+(`matthew.shoemaker.277@gmail.com`, key
 `t4pee71g`, role `user`) is Matt's test account and owns no cards and
 no decks by design. Leave it alone.
 

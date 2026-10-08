@@ -226,7 +226,7 @@ fun RenameDialog(
             ) {
                 if (state.done) {
                     Text(
-                        "${state.was} is now ${state.name}, at #/decks/${state.nextSlug}",
+                        "${state.was} is now ${state.name}. Its link has not changed.",
                         fontSize = 13.sp,
                     )
                 } else {
@@ -238,11 +238,7 @@ fun RenameDialog(
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Text(
-                        if (state.nextSlug.isEmpty()) {
-                            "That name has no letters or digits in it."
-                        } else {
-                            "It will live at #/decks/${state.nextSlug}"
-                        },
+                        "Only the name changes. The deck stays at #/decks/${state.key}",
                         fontSize = 13.sp,
                     )
                     state.error?.let { ErrBox(it) }
