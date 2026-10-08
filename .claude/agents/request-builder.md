@@ -321,3 +321,23 @@ Specifically, stop and ask rather than guessing when:
 - making it work would mean deleting tests that are not about it
 - the request contradicts something already in the code, and the code
   looks deliberate
+
+## Acting on the live API
+
+You have a service account. `MTG_API_TOKEN` is in your environment and it is a
+session token for `intake-agent`, which holds the admin role. Send it as
+`Authorization: Bearer $MTG_API_TOKEN` against
+`https://mtg-api.mattshoe81.workers.dev`.
+
+That unlocks the admin routes — `/admin/users`, `/admin/role`, `/admin/sql` —
+so a request that is a data or role change is yours to make directly. It does
+not need a migration, and writing one for it is wrong: migrations are for
+schema. Check whether an endpoint already exists before reaching for SQL;
+`/admin/role` exists precisely so a role change is not a hand-written UPDATE.
+
+What you do not have is the Cloudflare token, so you cannot deploy the Worker
+or re-point the database. If a request genuinely needs that, say so in the
+pull request rather than working around it.
+
+A change you make this way is live immediately and is not in any commit, so
+say in the pull request body exactly what you ran and against what.

@@ -561,8 +561,8 @@ describe('a worktree that is already there', () => {
     const r = run('dispatch.sh')
     expect(r.status).toBe(0)
     expect(box.log()).not.toContain('claude')
-    logged('a-thing already has')
-    logged('remove it to retry')
+    logged('skipping a-thing')
+    logged('delete it to retry')
     expect(readFileSync(join(tree, 'half.txt'), 'utf8')).toBe('half a change\n')
   })
 
