@@ -263,7 +263,10 @@ class ScreensTest {
         )
         val root = mount { CardPage(detail) }
         settle()
-        assertTrue(root.text().contains("1 free"), root.text())
+        // The page no longer counts copies, so a proxy is said on its
+        // deck row and nothing on the page claims it took a copy.
+        assertTrue(root.text().contains("proxy"), root.text())
+        assertTrue("committed" !in root.text() && "free" !in root.text(), root.text())
     }
 
     // --------------------------------------------------------- overlays
