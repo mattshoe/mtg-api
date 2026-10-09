@@ -192,6 +192,22 @@ export function titleOf(text) {
   return /^#\s+(.+)$/m.exec(String(text ?? ''))?.[1]?.trim() ?? ''
 }
 
+/**
+ * `in progress`, with the request file's heading and its text whole: a
+ * request written straight into requests/ is on this laptop and nowhere
+ * else, and the task's own page in the app shows it. The Worker keeps the
+ * text only for a task that has none, so one sent from the app keeps
+ * what was typed into it.
+ */
+export function started(name, text) {
+  return {
+    name,
+    status: 'in progress',
+    ...(titleOf(text) && { title: titleOf(text) }),
+    ...(text && { details: text }),
+  }
+}
+
 /** One transition to the Worker. Throws a sentence when it refuses. */
 export async function report(transition, { token, base = API, fetch = globalThis.fetch }) {
   const res = await fetch(`${base}/tasks/status`, {
@@ -272,7 +288,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   if (cmd === 'building') {
     let text = ''
     try { text = readFileSync(join(repo, 'requests', `${name}.md`), 'utf8') } catch { /* gone */ }
-    transition = { name, status: 'in progress', title: titleOf(text) || undefined }
+    transition = started(name, text)
   } else if (cmd === 'settle') {
     let prs = []
     try {

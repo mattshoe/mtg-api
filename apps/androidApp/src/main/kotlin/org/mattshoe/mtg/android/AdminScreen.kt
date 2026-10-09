@@ -49,6 +49,8 @@ fun AdminScreen(
     onToggleDone: () -> Unit = {},
     /** The New task button, which opens its own screen. */
     onNewTask: () -> Unit = {},
+    /** A task tapped, which opens its own screen. */
+    onOpenTask: (Task) -> Unit = {},
     onSearch: (String) -> Unit = {},
     onOpen: (Person) -> Unit = {},
     onSetRole: (Person, String) -> Unit = { _, _ -> },
@@ -64,7 +66,7 @@ fun AdminScreen(
             PersonPage(state, person, me, onSetRole, onBack)
         } else {
             Everybody(state, onSearch, onOpen)
-            TaskList(tasks, onToggleDone, onNewTask)
+            TaskList(tasks, onToggleDone, onNewTask, onOpenTask)
             ReleaseNotes(releases)
         }
     }
@@ -105,7 +107,7 @@ private fun Everybody(state: People, onSearch: (String) -> Unit, onOpen: (Person
  * first". Sibling of the website's `taskList`.
  */
 @Composable
-private fun TaskList(tasks: Tasks, onToggleDone: () -> Unit, onNewTask: () -> Unit) {
+private fun TaskList(tasks: Tasks, onToggleDone: () -> Unit, onNewTask: () -> Unit, onOpen: (Task) -> Unit) {
     Panel(head = "Tasks") {
         // Matt: "I want to be able to tap a "new task" button".
         Box(Modifier.testTag("new-task")) { Primary("New task") { onNewTask() } }
@@ -115,7 +117,7 @@ private fun TaskList(tasks: Tasks, onToggleDone: () -> Unit, onNewTask: () -> Un
             tasks.rows.isEmpty() -> Line("No tasks yet.", Ink3)
             else -> {
                 if (tasks.active.isEmpty()) Line("Nothing in progress.", Ink3)
-                tasks.active.forEach { TaskRow(it, "task", tasks.now) }
+                tasks.active.forEach { TaskRow(it, "task", tasks.now, onOpen) }
                 Line(
                     (if (tasks.showDone) "▾ " else "▸ ") + "Done (${tasks.done.size})",
                     Ink,
@@ -127,16 +129,20 @@ private fun TaskList(tasks: Tasks, onToggleDone: () -> Unit, onNewTask: () -> Un
                         .padding(vertical = 12.dp)
                         .testTag("tasks-done-toggle"),
                 )
-                if (tasks.showDone) tasks.done.forEach { TaskRow(it, "task-done", tasks.now) }
+                if (tasks.showDone) tasks.done.forEach { TaskRow(it, "task-done", tasks.now, onOpen) }
             }
         }
     }
 }
 
 @Composable
-private fun TaskRow(task: Task, tag: String, now: Long) {
+private fun TaskRow(task: Task, tag: String, now: Long, onOpen: (Task) -> Unit) {
     Row(
         Modifier.fillMaxWidth()
+            // Matt: "I want to be able to tap on a task and be taken to a
+            // details page". The whole row, at a thumb's height, like a person's.
+            .heightIn(min = 48.dp)
+            .clickable { onOpen(task) }
             .padding(vertical = 7.dp)
             .semantics(mergeDescendants = true) {}
             .testTag(tag),
@@ -149,6 +155,7 @@ private fun TaskRow(task: Task, tag: String, now: Long) {
             task.note?.let { Line(it, Ink3, Design.MINI) }
         }
         Tag(task.status.word)
+        Line("›", Ink3, Design.BODY)
     }
 }
 

@@ -92,20 +92,35 @@ export async function inbox(db) {
 }
 
 /**
- * The laptop has written these. Its files are dropped with it: they
- * are on disk now, and a blob kept here past that is only weight.
+ * One task by its key, everything D1 knows about it and its files,
+ * whether or not the laptop has collected it. Its own page in the app
+ * reads this. Null when there is no such task.
+ */
+export async function task(db, key) {
+  const t = await db.prepare(
+    `SELECT id, key, name, title, details, status, status_at, note, pr, created_at, received_at, started_at, finished_at
+       FROM task_inbox WHERE key = ?1`,
+  ).bind(String(key)).first();
+  if (!t) return null;
+  const { results: files = [] } = await db.prepare(
+    'SELECT name, type, bytes FROM task_files WHERE task_id = ?1 ORDER BY position',
+  ).bind(t.id).all();
+  const { id, ...row } = t;
+  return { ...row, files: files.map((f) => ({ name: f.name, type: f.type, data: toBase64(f.bytes) })) };
+}
+
+/**
+ * The laptop has written these. Their files stay: the task's own page
+ * shows them, and the laptop's copy is on a machine the app cannot reach.
  */
 export async function received(db, keys, names = {}) {
   if (!Array.isArray(keys)) return { status: 400, body: { error: 'keys must be a list' } };
   const now = new Date().toISOString();
   // `names` is the request file each became, so the dispatcher's
   // transitions, which only know the file, land on this same row.
-  const statements = keys.flatMap((k) => [
-    db.prepare('DELETE FROM task_files WHERE task_id = (SELECT id FROM task_inbox WHERE key = ?1)').bind(String(k)),
-    db.prepare(
-      'UPDATE task_inbox SET received_at = ?2, name = COALESCE(?3, name) WHERE key = ?1 AND received_at IS NULL',
-    ).bind(String(k), now, names?.[k] ? String(names[k]) : null),
-  ]);
+  const statements = keys.map((k) => db.prepare(
+    'UPDATE task_inbox SET received_at = ?2, name = COALESCE(?3, name) WHERE key = ?1 AND received_at IS NULL',
+  ).bind(String(k), now, names?.[k] ? String(names[k]) : null));
   if (statements.length) await db.batch(statements);
   return { status: 200, body: { received: keys.length } };
 }
@@ -160,6 +175,9 @@ export async function setStatus(db, body) {
     ).bind(newKey(), title, now, name).run();
   }
   const note = body.note ? String(body.note).slice(0, 500) : null;
+  // The request file's text, for a task written on the laptop. One sent
+  // from the app keeps what was typed into it.
+  const details = body.details ? String(body.details).slice(0, MAX_DETAILS) : null;
   // A task that was never seen starting (filed straight into done/, or
   // finished before status lived here) may be given its pull request's
   // own times, so a done row can say how long it took. Only where it has
@@ -167,6 +185,7 @@ export async function setStatus(db, body) {
   const iso = (v) => (/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z$/.test(String(v ?? '')) ? String(v) : null);
   await db.prepare(
     `UPDATE task_inbox SET
+            details = CASE WHEN details = '' AND ?9 IS NOT NULL THEN ?9 ELSE details END,
             status_at = CASE WHEN status = ?2 THEN COALESCE(status_at, ?4) ELSE ?4 END,
             status = ?2,
             note = ?6,
@@ -178,7 +197,7 @@ export async function setStatus(db, body) {
       WHERE ${where}`,
   ).bind(
     key ?? name, status, body.pr ? String(body.pr) : null, now, FINISHED.has(status) ? 1 : 0, note,
-    iso(body.started_at), iso(body.finished_at),
+    iso(body.started_at), iso(body.finished_at), details,
   ).run();
   return { status: 200, body: { status } };
 }

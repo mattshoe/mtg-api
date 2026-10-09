@@ -41,6 +41,8 @@ fun AdminPage(
     onToggleDone: () -> Unit = {},
     /** The New task button, which opens its own page. */
     onNewTask: () -> Unit = {},
+    /** A task tapped, which opens its own page. */
+    onOpenTask: (Task) -> Unit = {},
     onSearch: (String) -> Unit = {},
     onOpen: (Person) -> Unit = {},
     onSetRole: (Person, String) -> Unit = { _, _ -> },
@@ -51,7 +53,7 @@ fun AdminPage(
             PersonPage(state, person, me, onSetRole, onBack)
         } else {
             Everybody(state, onSearch, onOpen)
-            TaskList(tasks, onToggleDone, onNewTask)
+            TaskList(tasks, onToggleDone, onNewTask, onOpenTask)
             ReleaseNotes(releases)
         }
     }
@@ -98,7 +100,7 @@ private fun Everybody(state: People, onSearch: (String) -> Unit, onOpen: (Person
  * first". Sibling of Android's `TaskList`.
  */
 @Composable
-private fun TaskList(tasks: Tasks, onToggleDone: () -> Unit, onNewTask: () -> Unit) {
+private fun TaskList(tasks: Tasks, onToggleDone: () -> Unit, onNewTask: () -> Unit, onOpen: (Task) -> Unit) {
     Div(attrs = { classes("panel") }) {
         Div(attrs = { classes("panel-head") }) {
             H2 { Text("Tasks") }
@@ -116,7 +118,7 @@ private fun TaskList(tasks: Tasks, onToggleDone: () -> Unit, onNewTask: () -> Un
                 tasks.rows.isEmpty() -> Div(attrs = { classes("empty") }) { Text("No tasks yet.") }
                 else -> {
                     if (tasks.active.isEmpty()) Div(attrs = { classes("empty") }) { Text("Nothing in progress.") }
-                    tasks.active.forEach { TaskRow(it, "data-task", tasks.now) }
+                    tasks.active.forEach { TaskRow(it, "data-task", tasks.now, onOpen) }
                     Button(attrs = {
                         classes("tasks-toggle")
                         attr("data-tasks-toggle", "")
@@ -125,7 +127,7 @@ private fun TaskList(tasks: Tasks, onToggleDone: () -> Unit, onNewTask: () -> Un
                     }) {
                         Text((if (tasks.showDone) "▾ " else "▸ ") + "Done (${tasks.done.size})")
                     }
-                    if (tasks.showDone) tasks.done.forEach { TaskRow(it, "data-task-done", tasks.now) }
+                    if (tasks.showDone) tasks.done.forEach { TaskRow(it, "data-task-done", tasks.now, onOpen) }
                 }
             }
         }
@@ -133,10 +135,13 @@ private fun TaskList(tasks: Tasks, onToggleDone: () -> Unit, onNewTask: () -> Un
 }
 
 @Composable
-private fun TaskRow(task: Task, marker: String, now: Long) {
-    Div(attrs = {
-        classes("task")
+private fun TaskRow(task: Task, marker: String, now: Long, onOpen: (Task) -> Unit) {
+    // A button, like a person's row: Matt: "I want to be able to tap
+    // on a task and be taken to a details page".
+    Button(attrs = {
+        classes("task", "person-row")
         attr(marker, task.key)
+        onClick { onOpen(task) }
     }) {
         Div(attrs = { classes("task-what") }) {
             Span(attrs = { classes("task-title") }) { Text(task.title) }
@@ -144,6 +149,7 @@ private fun TaskRow(task: Task, marker: String, now: Long) {
             task.note?.let { Span(attrs = { classes("muted", "small") }) { Text(it) } }
         }
         Span(attrs = { classes("tag", "mini") }) { Text(task.status.word) }
+        Span(attrs = { classes("muted", "chev") }) { Text("›") }
     }
 }
 

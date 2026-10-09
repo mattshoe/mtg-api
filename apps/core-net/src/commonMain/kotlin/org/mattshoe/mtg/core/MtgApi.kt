@@ -335,6 +335,14 @@ class MtgApi internal constructor(
         return Tasks.decode(text)
     }
 
+    /** One task, its text and its files, for its own page. Admin only, server-side. */
+    suspend fun task(session: String, key: String): TaskDetail {
+        val res = http.get("$base/tasks/$key") { header("Authorization", "Bearer $session") }
+        val text = res.bodyAsText()
+        if (!res.status.isSuccess()) throw ApiFailure(errorIn(text, res.status))
+        return TaskDetail.decode(key, text)
+    }
+
     /**
      * The builds that shipped, newest first. GitHub's release list, as
      * the Worker keeps it: it serves its last copy when GitHub refuses

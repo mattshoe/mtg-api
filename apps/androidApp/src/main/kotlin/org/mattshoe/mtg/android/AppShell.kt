@@ -43,6 +43,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.mattshoe.mtg.core.AppState
+import org.mattshoe.mtg.core.TaskDetail
+import org.mattshoe.mtg.core.openTask
+import org.mattshoe.mtg.core.openTaskKey
+import org.mattshoe.mtg.core.openingTask
 import org.mattshoe.mtg.core.CardRow
 import org.mattshoe.mtg.core.Completion
 import org.mattshoe.mtg.core.DeckCard
@@ -411,12 +415,20 @@ fun AppShell(
                             onSend = onSendTask,
                             onCancel = { onState(state.navigate(Route(View.ADMIN))) },
                         )
+                    } else if (state.openTaskKey != null) {
+                        TaskScreen(
+                            detail = state.taskDetail?.takeIf { it.key == state.openTaskKey } ?: TaskDetail(state.openTaskKey!!, busy = true),
+                            listed = state.openTask,
+                            now = state.tasks.now.takeIf { it > 0 } ?: System.currentTimeMillis(),
+                            onBack = { onState(state.navigate(Route(View.ADMIN))) },
+                        )
                     } else AdminScreen(
                         state = state.people,
                         releases = state.releases,
                         tasks = state.tasks,
                         onToggleDone = { onState(state.copy(tasks = state.tasks.toggleDone())) },
                         onNewTask = { onState(state.startingATask()) },
+                        onOpenTask = { onState(state.openingTask(it)) },
                         me = state.admin.account?.key,
                         person = state.person,
                         onSearch = { onState(state.copy(people = state.people.searching(it))) },

@@ -56,6 +56,28 @@ describe('tasks', () => {
     expect(row[0].received_at).toBeTruthy()
   })
 
+  // Matt: "a details page that shows the whole request and all
+  // information about it, including any attachments". The page asks for
+  // one task by its key, and its files are still there once the laptop
+  // has collected it.
+  it('a received task keeps its files, and an admin reads it back by key', async () => {
+    const { key } = (await post('/tasks', {
+      title: 'Bigger buttons', details: 'Too small.', files: [{ name: 'shot.png', type: 'image/png', data: HELLO }],
+    })).body
+    await post('/tasks/inbox/received', { keys: [key], names: { [key]: 'bigger-buttons' } })
+    const r = await getAs(`/tasks/${key}`, await mattSession())
+    expect(r.status).toBe(200)
+    expect(r.body).toMatchObject({ key, name: 'bigger-buttons', title: 'Bigger buttons', details: 'Too small.', status: 'pending' })
+    expect(r.body.files).toEqual([{ name: 'shot.png', type: 'image/png', data: HELLO }])
+  })
+
+  it('a task nobody sent is a 404, and nobody without the role reads one', async () => {
+    expect((await getAs('/tasks/zzzzzzzz', await mattSession())).status).toBe(404)
+    const { key } = (await post('/tasks', { title: 'Private', details: 'x' })).body
+    expect((await getAs(`/tasks/${key}`, await user())).status).toBe(403)
+    expect((await call(`/tasks/${key}`, { method: 'GET' })).status).toBe(401)
+  })
+
   it('nobody without the admin role sends one or reads the inbox', async () => {
     const token = await user()
     expect((await postAs('/tasks', { title: 'Mine', details: 'x' }, token)).status).toBe(403)
@@ -193,6 +215,20 @@ describe('task status', () => {
     await post('/tasks/status', { name: 'one-row', title: 'One row', status: 'in progress' })
     const tasks = (await getAs('/tasks')).body.tasks
     expect(tasks).toEqual([expect.objectContaining({ key, name: 'one-row', status: 'in progress' })])
+  })
+
+  // A request written straight into requests/ has no details from the
+  // app, so the dispatcher sends the file's text with its first status.
+  it('the request file the dispatcher sends is the details of a task written on the laptop, and only of that one', async () => {
+    const text = '---\nstatus: ready\n---\n\n# Deck colours\n\nShow them.\n'
+    await post('/tasks/status', { name: 'deck-colours', title: 'Deck colours', status: 'in progress', details: text })
+    const [row] = (await getAs('/tasks')).body.tasks
+    expect((await getAs(`/tasks/${row.key}`)).body).toMatchObject({ details: text, status: 'in progress' })
+
+    const { key } = (await post('/tasks', { title: 'From the app', details: 'What Matt typed.' })).body
+    await post('/tasks/inbox/received', { keys: [key], names: { [key]: 'from-the-app' } })
+    await post('/tasks/status', { name: 'from-the-app', status: 'in progress', details: '# From the app\n\nWhat Matt typed.\n' })
+    expect((await getAs(`/tasks/${key}`)).body.details).toBe('What Matt typed.')
   })
 
   it('a cancelled task is never collected', async () => {

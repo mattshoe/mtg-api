@@ -40,6 +40,9 @@ import kotlin.test.assertTrue
  * So this mounts `MtgApp` — the actual object the page mounts — over a
  * stubbed network, and presses the buttons.
  */
+/** A real 1×1 PNG, so a picture sent with a task has something to decode. */
+private const val PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+
 class AppDriverTest {
 
     private val roots = mutableListOf<HTMLElement>()
@@ -144,6 +147,14 @@ class AppDriverTest {
                 request.url.encodedPath == "/admin/users" -> """{"users":[]}"""
 
                 request.url.encodedPath == "/tasks" -> """{"key":"ab12cd34","files":1}"""
+
+                // One task's own page: the row, its text and its files.
+                request.url.encodedPath == "/tasks/ab12cd34" ->
+                    """{"key":"ab12cd34","name":"task-status-in-the-app","title":"Task status in the app",""" +
+                        """"details":"I want to see the status of ongoing tasks.","status":"in review",""" +
+                        """"note":"CI running","pr":"https://github.com/mattshoe/mtg-api/pull/73",""" +
+                        """"created_at":"2026-10-08T09:00:00.000Z","started_at":"2026-10-08T09:05:00.000Z","finished_at":null,""" +
+                        """"files":[{"name":"shot.png","type":"image/png","data":"$PNG"}]}"""
 
                 request.url.encodedPath == "/cards/validate" ->
                     """{"checked":1,"unknown":0,"ok":true,"cards":[],"bad":[],"suggestions":{}}"""
@@ -1198,6 +1209,43 @@ class AppDriverTest {
 
         window.location.hash = "#/admin"
         waitFor("the list to ask again") { tasksAsked == 2 }
+    }
+
+    /**
+     * Matt: "I want to be able to tap on a task and be taken to a details
+     * page that shows the whole request and all information about it,
+     * including any attachments and whatnot". The real app: the row on
+     * Admin Settings, its own address, the Worker asked and nobody else,
+     * and the picture shown. Sibling of Android's `TaskDetailParityTest`
+     * and `TaskDetailLoadTest`.
+     */
+    @Test
+    fun tappingATaskOpensItsPageWithTheWholeRequestAndItsFiles() = runTest {
+        role = "admin"
+        val root = mount("#/admin")
+        waitFor("a task on Admin Settings") { root.all("[data-task]").isNotEmpty() }
+        (root.all("[data-task]").first() as HTMLElement).click()
+        waitFor("the task's page") { document.querySelector("[data-task-detail]") != null }
+        assertTrue(window.location.hash.endsWith("/admin/task/ab12cd34"), "address is ${window.location.hash}")
+        waitFor("the request on the page") {
+            document.querySelector("[data-task-detail-body]")?.textContent.orEmpty()
+                .contains("I want to see the status of ongoing tasks.")
+        }
+        val pull = document.querySelector("[data-task-detail-pull]") as? HTMLElement
+        assertEquals("https://github.com/mattshoe/mtg-api/pull/73", pull?.getAttribute("href"), "no link to the pull request")
+        val facts = document.querySelectorAll("[data-task-detail-fact]").let { l -> (0 until l.length).map { l.item(it)?.textContent.orEmpty() } }
+        assertTrue(facts.any { "Why" in it && "CI running" in it }, "why it is in review is not on the page: $facts")
+        assertTrue(facts.any { "requests/task-status-in-the-app.md" in it }, "the request file is not named: $facts")
+        waitFor("the picture sent with the task") {
+            val img = document.querySelector("[data-task-detail-image]") as? org.w3c.dom.HTMLImageElement
+            img != null && img.complete && img.naturalWidth > 0
+        }
+        val img = document.querySelector("[data-task-detail-image]") as org.w3c.dom.HTMLImageElement
+        assertTrue(img.getBoundingClientRect().height > 0, "the picture is on the page with no height")
+        assertEquals(0, askedGitHub, "the website asked GitHub itself")
+
+        root.button("← Admin Settings").click()
+        waitFor("back on Admin Settings") { window.location.hash.endsWith("/admin") }
     }
 
     // --------------------------------------------------------- new task

@@ -1,5 +1,7 @@
 package org.mattshoe.mtg.web
 
+import org.mattshoe.mtg.core.TaskDetail
+import org.mattshoe.mtg.core.openTaskKey
 import androidx.compose.runtime.Composition
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -199,6 +201,7 @@ object MtgApp {
 
     /** The minute tick that keeps a running task's elapsed time current. */
     private var tasksClock: Job? = null
+    private var taskDetailJob: Job? = null
     private var findJob: Job? = null
     private var tweakJob: Job? = null
 
@@ -656,6 +659,8 @@ object MtgApp {
                 intoPage(View.ADMIN) { loadPeople() }
                 loadReleases()
                 if (s.route.rest.isEmpty()) loadTasks()
+                // A task's own page, by its address or a tap.
+                s.openTaskKey?.let { loadTaskDetail(it) }
             }
 
             // A card reached by its own address — a link somebody
@@ -836,6 +841,27 @@ object MtgApp {
             } catch (e: Exception) {
                 app.copy(releases = app.releases.failed(e.message ?: "that did not work"))
             }
+        }
+    }
+
+    /**
+     * One task's page, from the Worker and nobody else: the row, its
+     * text and its files. A load already under way for the same task is
+     * left to finish. Sibling of Android's `loadTaskDetail`.
+     */
+    private fun loadTaskDetail(key: String) {
+        if (taskDetailJob?.isActive == true && app.taskDetail?.key == key) return
+        val had = app.taskDetail?.takeIf { it.key == key }
+        app = app.copy(taskDetail = (had ?: TaskDetail(key)).loading())
+        taskDetailJob = scope.launch {
+            val loaded = try {
+                api.task(token(), key)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                (app.taskDetail?.takeIf { it.key == key } ?: TaskDetail(key)).failed(e.message ?: "that did not work")
+            }
+            if (app.taskDetail?.key == key) app = app.copy(taskDetail = loaded)
         }
     }
 
