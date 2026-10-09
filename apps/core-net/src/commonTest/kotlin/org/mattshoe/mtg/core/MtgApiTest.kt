@@ -242,4 +242,26 @@ class MtgApiTest {
         }
         assertEquals("API rate limit exceeded", e.message)
     }
+
+    /** A task's own page: one row and its files, by key, with the session. */
+    @Test
+    fun oneTaskIsAskedForByItsKeyWithTheSession() = runTest {
+        val d = api(
+            body = """{"key":"ab12cd34","title":"Bigger buttons","status":"pending","details":"Too small.",
+                "files":[{"name":"shot.png","type":"image/png","data":"aGVsbG8="}]}""",
+        ).task("0.abc", "ab12cd34")
+        assertEquals("Too small.", d.body)
+        assertEquals(listOf("shot.png"), d.files.map { it.name })
+        val req = seen.single()
+        assertEquals("/tasks/ab12cd34", req.url.encodedPath)
+        assertEquals("Bearer 0.abc", req.headers[HttpHeaders.Authorization])
+    }
+
+    @Test
+    fun aTaskNobodySentSaysSo() = runTest {
+        val e = assertFailsWith<ApiFailure> {
+            api(HttpStatusCode.NotFound, """{"error":"no task has that key"}""").task("0.abc", "zzzzzzzz")
+        }
+        assertEquals("no task has that key", e.message)
+    }
 }
