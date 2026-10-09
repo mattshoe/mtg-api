@@ -36,10 +36,10 @@ describe('tasks', () => {
       files: [{ name: 'shot.png', type: 'image/png', data: HELLO }],
     })
     expect(sent.status).toBe(200)
-    const { key } = await sent.json()
+    const { key } = sent.body
     expect(key).toMatch(/^[a-z0-9]{8}$/)
 
-    const inbox = await (await getAs('/tasks/inbox', await mattSession())).json()
+    const inbox = (await getAs('/tasks/inbox', await mattSession())).body
     expect(inbox.tasks).toHaveLength(1)
     const t = inbox.tasks[0]
     expect(t).toMatchObject({ key, title: 'Bigger buttons', details: 'The buttons on the deck page are too small to hit.' })
@@ -48,9 +48,9 @@ describe('tasks', () => {
   })
 
   it('a task the laptop has received is not handed out again', async () => {
-    const { key } = await (await post('/tasks', { title: 'One', details: 'x' })).json()
+    const { key } = (await post('/tasks', { title: 'One', details: 'x' })).body
     expect((await post('/tasks/inbox/received', { keys: [key] })).status).toBe(200)
-    const inbox = await (await getAs('/tasks/inbox', await mattSession())).json()
+    const inbox = (await getAs('/tasks/inbox', await mattSession())).body
     expect(inbox.tasks).toEqual([])
     const row = await sql('SELECT received_at FROM task_inbox WHERE key = ?1', key)
     expect(row[0].received_at).toBeTruthy()
@@ -68,10 +68,10 @@ describe('tasks', () => {
   it('a task needs a title and some details', async () => {
     const r = await post('/tasks', { title: '  ', details: 'x' })
     expect(r.status).toBe(400)
-    expect((await r.json()).error).toBe('a task needs a title')
+    expect(r.body.error).toBe('a task needs a title')
     const d = await post('/tasks', { title: 'Something', details: '' })
     expect(d.status).toBe(400)
-    expect((await d.json()).error).toBe('say what the task is')
+    expect(d.body.error).toBe('say what the task is')
   })
 
   it('a file too big to keep is refused by name, and nothing is written', async () => {
@@ -80,7 +80,15 @@ describe('tasks', () => {
       title: 'Huge', details: 'x', files: [{ name: 'huge.bin', type: 'application/octet-stream', data: big }],
     })
     expect(r.status).toBe(400)
-    expect((await r.json()).error).toBe('huge.bin is over 1.5 MB')
+    expect(r.body.error).toBe('huge.bin is over 1.5 MB')
     expect(await sql('SELECT * FROM task_inbox')).toEqual([])
+  })
+
+  it('the open /query cannot read a task, any more than it can read the log', async () => {
+    await post('/tasks', { title: 'Private', details: 'not for strangers' })
+    const g = await call(`/query?sql=${encodeURIComponent('SELECT details FROM task_inbox')}`, { method: 'GET' })
+    expect(g.status).toBe(401)
+    const p = await postAnon('/query', { sql: 'SELECT name FROM task_files' })
+    expect(p.status).toBe(401)
   })
 })
