@@ -1110,6 +1110,25 @@ class AppDriverTest {
         assertTrue("2.1.0 (297)" in text && "Release notes in Admin Settings." in text, text)
     }
 
+    /**
+     * `adminSettingsLoadsTheTasksOnEveryVisitToTheList` went red on CI
+     * twice with "the first visit should ask GitHub once. Expected <1>,
+     * actual <2>". The test before it left `/auth/me` unanswered at
+     * unmount; the answer landed in the next test's app, which loaded
+     * the page again through the next test's network.
+     */
+    @Test
+    fun anUnmountedAppStopsLoading() = runTest {
+        role = "admin"
+        whoAmIMs = 400
+        mount("#/admin")
+        settle()
+        MtgApp.unmount()
+        val before = tasksAsked
+        rest(800)
+        assertEquals(before, tasksAsked, "the app kept loading after it was unmounted")
+    }
+
     // ------------------------------------------------------------ tasks
 
     /**
@@ -1122,10 +1141,6 @@ class AppDriverTest {
     @Test
     fun adminSettingsLoadsTheTasksOnEveryVisitToTheList() = runTest {
         role = "admin"
-        // Slow enough that the tasks are back before anybody knows who
-        // you are. That ordering asked GitHub twice on a cold load, and
-        // only CI was slow enough to show it.
-        whoAmIMs = 300
         val root = mount("#/admin")
         waitFor("a task on Admin Settings") { root.all("[data-task]").isNotEmpty() }
         val text = root.all("[data-task]").first().textContent.orEmpty()
