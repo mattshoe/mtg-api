@@ -40,7 +40,7 @@ fun TaskPage(detail: TaskDetail, listed: Task?, now: Long, onBack: () -> Unit) {
             H2 { Text(task?.title ?: "Task") }
         }
         Div(attrs = { classes("panel-body") }) {
-            detail.copy(task = task).facts(now).forEach { (label, value) ->
+            detail.copy(task = task).facts(now) { ms -> -kotlin.js.Date(ms.toDouble()).getTimezoneOffset() }.forEach { (label, value) ->
                 Div(attrs = {
                     classes("fact")
                     attr("data-task-detail-fact", "")

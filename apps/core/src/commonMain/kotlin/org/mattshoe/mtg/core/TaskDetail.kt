@@ -57,8 +57,11 @@ data class TaskDetail(
     /**
      * Label and value, in the order both shells list them. Nothing is
      * listed that the row does not have.
+     *
+     * [offset] is the reader's zone, minutes east of UTC at an instant,
+     * which each shell reads off its own clock.
      */
-    fun facts(now: Long): List<Pair<String, String>> {
+    fun facts(now: Long, offset: (Long) -> Int): List<Pair<String, String>> {
         val t = task ?: return emptyList()
         return listOfNotNull(
             "Status" to t.status.word,
@@ -68,7 +71,7 @@ data class TaskDetail(
             t.took?.let { "Took" to it.removePrefix("took ") },
             t.elapsed(now)?.let { "Time so far" to it },
             name?.let { "Request" to "requests/$it.md" },
-            createdAt?.let { shown(it) }?.let { "Sent" to it },
+            createdAt?.let { shown(it, offset) }?.let { "Sent" to it },
         )
     }
 
@@ -123,9 +126,32 @@ data class TaskDetail(
             TaskDetail(key).failed(UNREADABLE)
         }
 
-        /** `2026-10-08T10:00:00.000Z` as `2026-10-08 10:00 UTC`. */
-        private fun shown(iso: String) =
-            if (Tasks.epochMillis(iso) == null) null else iso.take(16).replace('T', ' ') + " UTC"
+        /**
+         * `2026-10-08T10:00:00.000Z` as `2026-10-08 06:00` on a clock four
+         * hours behind. Matt: "the time values on task details should show
+         * local time not utc".
+         */
+        private fun shown(iso: String, offset: (Long) -> Int): String? {
+            val utc = Tasks.epochMillis(iso) ?: return null
+            val minutes = utc.floorDiv(60_000L) + offset(utc)
+            val (y, m, d) = civil(minutes.floorDiv(1440L))
+            val inDay = minutes.mod(1440L)
+            fun two(n: Long) = n.toString().padStart(2, '0')
+            return "$y-${two(m)}-${two(d)} ${two(inDay / 60)}:${two(inDay % 60)}"
+        }
+
+        /** Days since 1970-01-01 as year, month, day. Howard Hinnant's civil from days. */
+        private fun civil(days: Long): Triple<Long, Long, Long> {
+            val z = days + 719468
+            val era = (if (z >= 0) z else z - 146096) / 146097
+            val doe = z - era * 146097
+            val yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365
+            val doy = doe - (365 * yoe + yoe / 4 - yoe / 100)
+            val mp = (5 * doy + 2) / 153
+            val d = doy - (153 * mp + 2) / 5 + 1
+            val m = if (mp < 10) mp + 3 else mp - 9
+            return Triple(yoe + era * 400 + (if (m <= 2) 1 else 0), m, d)
+        }
 
         private fun base64Bytes(data: String): Long {
             val clean = data.trim()
