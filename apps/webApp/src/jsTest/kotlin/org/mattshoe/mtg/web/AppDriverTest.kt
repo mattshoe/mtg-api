@@ -1280,13 +1280,14 @@ class AppDriverTest {
 
         val send = { root.button("Send task") }
         assertTrue(send().disabled, "Send was live with nothing typed")
-        typeOnThePage("[data-new-task] input[type=text]", "Bigger buttons")
-        // A frame between the two boxes, as there is between a person's
-        // keystrokes in two different fields.
+        // Matt: "fuck the title field". The details are the only box.
+        assertEquals(
+            null, document.querySelector("[data-new-task] input[type=text]"),
+            "the New task page still asks for a title",
+        )
+        typeOnThePage("[data-new-task] textarea", "Bigger buttons. They are too small to hit.")
         settle()
-        typeOnThePage("[data-new-task] textarea", "They are too small to hit.")
-        settle()
-        assertTrue(!send().disabled, "Send stayed dead with a title and details typed")
+        assertTrue(!send().disabled, "Send stayed dead with the details typed")
 
         val input = field("[data-new-task] input[type=file]") as org.w3c.dom.HTMLInputElement
         val picked: dynamic = js("new DataTransfer()")
@@ -1301,13 +1302,14 @@ class AppDriverTest {
         waitFor("the task to go up") { sent.any { "Bigger buttons" in it } }
         val body = sent.first { "Bigger buttons" in it }
         assertTrue("They are too small to hit." in body, body)
+        assertTrue(""""title"""" !in body, "a title went up; the Worker makes its own: $body")
         assertTrue(
             """"name":"shot.png"""" in body && """"data":"aGVsbG8="""" in body,
             "the file did not go up: $body",
         )
         waitFor("back on Admin Settings") { window.location.hash.endsWith("/admin") }
         waitFor("the toast") {
-            document.querySelector(".toast")?.textContent.orEmpty().contains("Task sent: Bigger buttons")
+            document.querySelector(".toast")?.textContent.orEmpty().contains("Task sent.")
         }
     }
 
