@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
@@ -301,6 +303,14 @@ fun AppShell(
                 onRefresh = onRefresh,
                 modifier = Modifier.weight(1f),
             ) {
+                // Behind the page, the full height of it. The pull
+                // arrives through nested scrolling, so it only starts
+                // on something that scrolls — and a short page, the
+                // server log with nothing in it, ends long before the
+                // screen does. A thumb on the blank space under it
+                // landed on nothing and the pull went nowhere. Any
+                // touch the page does not take lands here instead.
+                Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()))
                 when (state.view) {
                     View.LIBRARY -> LibraryScreen(
                         state = state.library,
