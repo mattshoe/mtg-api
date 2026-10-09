@@ -80,6 +80,11 @@ claim() {
   # stuck in `building`. Ask main, not the laptop.
   filed="$(git -C "$REPO" ls-tree --name-only "$BASE" requests/done/ 2>/dev/null | sed 's|requests/done/||')"
 
+  # Two passes, fresh requests first. A request whose agent keeps dying has a
+  # worktree, and resuming it used to win the alphabetical race on every tick
+  # — so one failing task starved everything behind it. `remove-task-title`
+  # did exactly that while `search-reset-not-complete` sat at pending through
+  # seven timer firings.
   file=''
   while IFS= read -r f; do
     [ -n "$f" ] || continue
@@ -88,24 +93,7 @@ claim() {
       continue
     fi
     wt="$STATE/wt/${f%.md}"
-    # A worktree that exists means an agent had this request. If one is
-    # still running there, leave it alone. If not, the agent stopped —
-    # rate limited, killed, crashed — and the work is sitting in that
-    # tree. RESUME it rather than refusing: refusing meant the only way
-    # forward was a human deleting somebody's unpushed work by hand,
-    # which is not recovery, it is a wedge with a polite message.
-    if [ -e "$wt" ]; then
-      if pgrep -f "requests/${f}" >/dev/null 2>&1; then
-        say "skipping ${f%.md}: an agent is still working in $wt"
-        continue
-      fi
-      b="$(cd "$REPO" && node scripts/intake.mjs branch "$f")" || {
-        say "intake.mjs failed naming a branch for $f"; return 1
-      }
-      file="$f"; branch="$b"; tree="$wt"; resumed=yes
-      say "resuming ${f%.md} in $wt ($(git -C "$wt" status --porcelain 2>/dev/null | wc -l | tr -d ' ') uncommitted, $(git -C "$wt" rev-list --count "$BASE"..HEAD 2>/dev/null || echo 0) commits)"
-      break
-    fi
+    [ -e "$wt" ] && continue
     b="$(cd "$REPO" && node scripts/intake.mjs branch "$f")" || {
       say "intake.mjs failed naming a branch for $f"; return 1
     }
@@ -114,6 +102,24 @@ claim() {
     fi
     say "skipping ${f%.md}: no worktree on $b (the branch may already exist)"
   done < "$STATE/queue.$$"
+
+  # Only when nothing fresh is waiting, pick up where a stopped agent left off.
+  if [ -z "$file" ]; then
+    while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      printf '%s\n' "$filed" | /usr/bin/grep -qxF "$f" && continue
+      wt="$STATE/wt/${f%.md}"
+      [ -e "$wt" ] || continue
+      if pgrep -f "requests/${f}" >/dev/null 2>&1; then
+        say "skipping ${f%.md}: an agent is still working in $wt"
+        continue
+      fi
+      b="$(cd "$REPO" && node scripts/intake.mjs branch "$f")" || continue
+      file="$f"; branch="$b"; tree="$wt"; resumed=yes
+      say "resuming ${f%.md} in $wt ($(git -C "$wt" status --porcelain 2>/dev/null | wc -l | tr -d ' ') uncommitted, $(git -C "$wt" rev-list --count "$BASE"..HEAD 2>/dev/null || echo 0) commits)"
+      break
+    done < "$STATE/queue.$$"
+  fi
   rm -f "$STATE/queue.$$"
   [ -n "$file" ] || return 2
 
