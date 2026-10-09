@@ -213,6 +213,47 @@ describe('POST /cards/add — dry run', () => {
   });
 });
 
+// Matt, four times: "GET RID OF THE FUCKING RULINGS. DO NOT EVER SET
+// THEM ON A NEW CARD."
+//
+// The fetch is gone, but gone is not the same as cannot come back. Scryfall
+// has no bulk rulings endpoint, so anything that wants them has to ask per
+// card, inside whatever HTTP request the person is waiting on. That is the
+// shape this forbids.
+describe('POST /cards/add — rulings are never set', () => {
+  it('writes no rulings row for a brand new card', async () => {
+    const before = await count('rulings');
+    const r = await post('/cards/add', { list: '1 Fable of the Mirror-Breaker' });
+    expect(r.body.applied).toBe(true);
+    // Looked up by prefix: it is a two-faced card and `name_norm` carries
+    // both faces, which is exactly the kind of guess worth not making.
+    const card = (await sql("SELECT oracle_id, name_norm FROM cards WHERE name_norm LIKE 'fable of the mirror%'"))[0];
+    expect(card?.oracle_id, 'the card itself must still land').toBeTruthy();
+    expect(await count('rulings', 'oracle_id = ?', card.oracle_id)).toBe(0);
+    expect(await count('rulings'), 'the table must be exactly as it was').toBe(before);
+  });
+
+  it('asks Scryfall for nothing but the names', async () => {
+    const stub = stubScryfall();
+    const paths = [];
+    const watch = async (url, init) => {
+      paths.push(new URL(url).pathname);
+      return stub(url, init);
+    };
+    const r = await post('/cards/add', {
+      list: '1 Fable of the Mirror-Breaker\n1 Lightning Bolt (2X2) 117',
+    }, watch);
+    expect(r.body.applied).toBe(true);
+    expect(paths.filter((p) => p.endsWith('/rulings')), 'a rulings request went out').toEqual([]);
+    expect(paths.every((p) => p === '/cards/collection'), `unexpected calls: ${paths}`).toBe(true);
+  });
+
+  it('has no rulings method on the Scryfall client to call', async () => {
+    const { makeClient } = await import('../src/scryfall.js');
+    expect(makeClient(fetch).rulings).toBeUndefined();
+  });
+});
+
 describe('POST /cards/add — failures', () => {
   it('applies the good lines and reports the bad ones', async () => {
     const r = await post('/cards/add', {
