@@ -97,48 +97,57 @@ class TasksTest {
         )
     }
 
-    /** "A row should answer the question without Matt having to ask me": why, and for how long. */
+    /**
+     * Matt: "Why does it say \"3m for 3m\" and \"17m for 7m\"?!?!?!" and
+     * "I don't give a fuck good long is been in the fucking status just
+     * show the total fucking time!!!!" One duration, since it was
+     * created, whatever it started at or has been in since.
+     */
     @Test
-    fun aPausedTaskSaysWhyAndHowLongItHasBeenPaused() {
-        val t = decoded().single { it.title == "Builder died" }
-        assertEquals("agent crashed", t.note)
-        assertEquals("for 2h 05m · agent crashed", t.detail(Tasks.epochMillis("2026-10-08T12:00:00Z")!!))
+    fun aLiveTaskShowsOneDurationTheTotalTimeSinceItWasCreated() {
+        val t = Task(
+            "k", "reconcile tells the truth", TaskStatus.IN_PROGRESS, null,
+            startedAt = "2026-10-08T09:05:00Z", statusAt = "2026-10-08T09:10:00Z",
+            createdAt = "2026-10-08T09:00:00Z",
+        )
+        assertEquals("17m", t.elapsed(Tasks.epochMillis("2026-10-08T09:17:00Z")!!))
     }
 
     @Test
-    fun aTaskInReviewNamesItsPullRequest() {
+    fun theTimeSinceItWasCreatedIsWhatTheWorkerWrote() {
+        val t = decoded().single { it.title == "Builder died" }
+        assertEquals("2026-10-01T00:00:00.000Z", t.createdAt)
+        assertEquals("7d 12h", t.elapsed(Tasks.epochMillis("2026-10-08T12:00:00Z")!!))
+    }
+
+    /** The pull request stays on the task for its details page, not in the list. */
+    @Test
+    fun aTaskInReviewStillKnowsItsPullRequest() {
         val t = decoded().single { it.title == "Waiting on CI" }
         assertEquals("https://github.com/mattshoe/mtg-api/pull/142", t.pr)
-        assertEquals("PR #142", t.detail(0))
     }
 
     @Test
     fun aBlockedTaskSaysWhatItIsWaitingOn() {
-        assertEquals("needs the Cloudflare token", decoded().single { it.title == "Needs Matt" }.detail(0))
+        assertEquals("needs the Cloudflare token", decoded().single { it.title == "Needs Matt" }.note)
     }
 
-    /** A finished task's clock has stopped; how long it took is `took`, not this. */
+    /** Matt: four stopped tasks all read `building`. A held one says paused, and how long it has existed. */
     @Test
-    fun aFinishedTaskDoesNotCountHowLongItHasBeenFinished() {
-        val t = Task("k", "Shipped", TaskStatus.MERGED, "2026-10-08T11:00:00Z", statusAt = "2026-10-08T11:00:00Z")
-        assertNull(t.detail(Tasks.epochMillis("2026-10-09T11:00:00Z")!!))
-    }
-
-    /** Matt: four stopped tasks all read `building`. A held one says paused, and its clock does not run. */
-    @Test
-    fun aTaskHeldBackIsPausedAndNotCountingUp() {
+    fun aTaskHeldBackIsPausedAndStillSaysHowOldItIs() {
         val held = decoded().single { it.title == "On hold" }
         assertEquals("paused", held.status.word)
-        assertNull(held.copy(startedAt = "2026-10-08T10:00:00Z").elapsed(Tasks.epochMillis("2026-10-08T11:00:00Z")!!))
+        assertEquals("7d 11h", held.elapsed(Tasks.epochMillis("2026-10-08T11:00:00Z")!!))
     }
 
     @Test
-    fun theStartAndFinishAreWhatTheWorkerWrote() {
+    fun theCreationStartAndFinishAreWhatTheWorkerWrote() {
         val t = decoded().single { it.title == "Merged one" }
         assertEquals("k1", t.key)
         assertEquals("2026-10-01T09:00:00.000Z", t.startedAt)
         assertEquals("2026-10-01T10:00:00.000Z", t.finishedAt)
-        assertEquals("took 1h 00m", t.took)
+        assertEquals("2026-10-01T00:00:00.000Z", t.createdAt)
+        assertEquals("took 10h 00m", t.took)
     }
 
     @Test
@@ -177,29 +186,47 @@ class TasksTest {
 
     /**
      * Matt: "Done tasks should show how long they took, not a UTC
-     * timestamp". From the start the dispatcher wrote to the finish, in
-     * the same words a running one counts in.
+     * timestamp", and "are the completed ones going to show it too???"
+     * Created to finished, frozen, in the same words a live one counts in.
      */
     @Test
-    fun aFinishedTaskSaysHowLongItTook() {
-        val shipped = Task("k1", "Shipped", TaskStatus.MERGED, "2026-10-08T13:05:00Z", startedAt = "2026-10-08T10:00:00Z")
+    fun aFinishedTaskSaysHowLongItTookFromCreatedToFinished() {
+        val shipped = Task(
+            "k1", "Shipped", TaskStatus.MERGED, "2026-10-08T13:05:00Z",
+            startedAt = "2026-10-08T11:00:00Z", createdAt = "2026-10-08T10:00:00Z",
+        )
         assertEquals("took 3h 05m", shipped.took)
-        val dropped = Task("k2", "Dropped", TaskStatus.CANCELLED, "2026-10-08T10:12:00Z", startedAt = "2026-10-08T10:00:00Z")
+        val dropped = Task("k2", "Dropped", TaskStatus.CANCELLED, "2026-10-08T10:12:00Z", createdAt = "2026-10-08T10:00:00Z")
         assertEquals("took 12m", dropped.took)
     }
 
+    /**
+     * Reconcile makes a row the first time it writes a status, so one
+     * filed under done/ after the fact was "created" after it finished.
+     * It took from its pull request's start, which #76 stores as
+     * `started_at`, not from when the row was made.
+     */
     @Test
-    fun aTaskWithNoKnownStartOrStillGoingSaysNothingAboutHowLongItTook() {
-        assertNull(Task("k1", "Shipped", TaskStatus.MERGED, "2026-10-08T11:00:00Z").took)
-        assertNull(Task("k1", "Going", TaskStatus.IN_PROGRESS, null, startedAt = "2026-10-08T10:00:00Z").took)
+    fun aTaskWhoseRowWasMadeAfterItFinishedTookFromItsStart() {
+        val filed = Task(
+            "k1", "Filed by hand", TaskStatus.MERGED, "2026-10-08T13:05:00Z",
+            startedAt = "2026-10-08T10:00:00Z", createdAt = "2026-10-09T09:00:00Z",
+        )
+        assertEquals("took 3h 05m", filed.took)
     }
 
-    /** Only a task being worked on counts up: a paused one would count forever. */
     @Test
-    fun aPausedOrPendingTaskSaysNothingAboutTime() {
+    fun aTaskWithNoKnownCreationOrStillGoingSaysNothingAboutHowLongItTook() {
+        assertNull(Task("k1", "Shipped", TaskStatus.MERGED, "2026-10-08T11:00:00Z").took)
+        assertNull(Task("k1", "Going", TaskStatus.IN_PROGRESS, null, createdAt = "2026-10-08T10:00:00Z").took)
+    }
+
+    /** Every live task has an age, paused and pending as much as running. */
+    @Test
+    fun aPausedOrPendingTaskSaysHowLongSinceItWasCreated() {
         val now = Tasks.epochMillis("2026-10-08T12:00:00Z")!!
-        assertNull(Task("k", "Died", TaskStatus.PAUSED, null, startedAt = "2026-10-08T10:00:00Z").elapsed(now))
-        assertNull(Task("k", "Waiting", TaskStatus.PENDING, null, startedAt = "2026-10-08T10:00:00Z").elapsed(now))
+        assertEquals("2h 00m", Task("k", "Died", TaskStatus.PAUSED, null, createdAt = "2026-10-08T10:00:00Z").elapsed(now))
+        assertEquals("2h 00m", Task("k", "Waiting", TaskStatus.PENDING, null, createdAt = "2026-10-08T10:00:00Z").elapsed(now))
     }
 
     @Test
@@ -216,9 +243,9 @@ class TasksTest {
     }
 
     @Test
-    fun anActiveTaskSaysHowLongSinceItStarted() {
+    fun anActiveTaskSaysHowLongSinceItWasCreated() {
         val start = "2026-10-08T09:15:00Z"
-        val t = Task("k1", "Going", TaskStatus.IN_PROGRESS, null, startedAt = start)
+        val t = Task("k1", "Going", TaskStatus.IN_PROGRESS, null, createdAt = start)
         val at = Tasks.epochMillis(start)!!
         assertEquals("just started", t.elapsed(at + 30_000))
         assertEquals("12m", t.elapsed(at + 12 * 60_000))
@@ -227,11 +254,11 @@ class TasksTest {
     }
 
     @Test
-    fun aTaskWithNoKnownStartOrThatHasFinishedSaysNothingAboutTime() {
+    fun aTaskWithNoKnownCreationOrThatHasFinishedSaysNothingAboutTime() {
         val now = Tasks.epochMillis("2026-10-08T12:00:00Z")!!
         assertNull(Task("k1", "Going", TaskStatus.IN_PROGRESS, null).elapsed(now))
         assertNull(
-            Task("k1", "Shipped", TaskStatus.MERGED, "2026-10-08T11:00:00Z", startedAt = "2026-10-08T10:00:00Z")
+            Task("k1", "Shipped", TaskStatus.MERGED, "2026-10-08T11:00:00Z", createdAt = "2026-10-08T10:00:00Z")
                 .elapsed(now),
         )
     }

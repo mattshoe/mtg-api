@@ -530,9 +530,11 @@ and the task is `in review` until it merges or somebody stops it.
 
 Each row carries its detail with it: `status_at` (when it entered this
 status — a repeat write of the same status does not move it), `note`
-(why), `pr` (the pull request), `started_at`, `finished_at`.
-`Task.detail(now)` turns those into the row's second line on both shells,
-"for 2h 05m · agent crashed · PR #142".
+(why), `pr` (the pull request), `created_at`, `started_at`, `finished_at`.
+A row shows ONE duration and the note, nothing else: `Task.elapsed(now)`
+is how long since it was created while it is live, `Task.took` is created
+to finished once it is done. Matt, on "17m for 7m": "just show the total
+fucking time". The pull request belongs on the details page, not the row.
 
 ### Who writes each transition
 

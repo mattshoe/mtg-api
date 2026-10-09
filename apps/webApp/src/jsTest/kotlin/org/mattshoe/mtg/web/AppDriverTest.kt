@@ -131,12 +131,13 @@ class AppDriverTest {
                     """[{"tag_name":"android-v2.1.0-297","published_at":"2026-10-09T10:00:00Z",""" +
                         """"body":"Release notes in Admin Settings.\n\nBuilt from abc."}]"""
 
-                // Started two hours and a half minute ago by the real clock.
+                // Created two hours and a half minute ago by the real clock, started an hour after.
                 request.url.encodedPath == "/tasks" && request.method.value == "GET" -> {
                     tasksAsked++
-                    val started = kotlin.js.Date(kotlin.js.Date.now() - (2 * 60 * 60 + 30) * 1000.0).toISOString()
+                    val created = kotlin.js.Date(kotlin.js.Date.now() - (2 * 60 * 60 + 30) * 1000.0).toISOString()
+                    val started = kotlin.js.Date(kotlin.js.Date.now() - (60 * 60 + 30) * 1000.0).toISOString()
                     """{"tasks":[{"key":"ab12cd34","name":"task-status-in-the-app","title":"Task status in the app",""" +
-                        """"status":"in review","pr":null,"created_at":"2026-10-08T09:00:00.000Z",""" +
+                        """"status":"in review","pr":null,"created_at":"$created",""" +
                         """"started_at":"$started","finished_at":null}]}"""
                 }
 
@@ -1412,6 +1413,6 @@ class AppDriverTest {
         val root = mount("#/admin")
         waitFor("a task on Admin Settings") { root.all("[data-task]").isNotEmpty() }
         val text = root.all("[data-task]").first().textContent.orEmpty()
-        assertTrue("2h 00m" in text, "the running task does not count from its start to now: '$text'")
+        assertTrue("2h 00m" in text, "the running task does not count from its creation to now: '$text'")
     }
 }
