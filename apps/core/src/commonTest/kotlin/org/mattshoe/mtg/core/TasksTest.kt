@@ -245,6 +245,40 @@ class TasksTest {
         assertNull(Tasks.epochMillis("yesterday"))
     }
 
+    /**
+     * One ask per visit to the list. The Worker answers in one request,
+     * fast enough to finish before `/auth/me` does, and the reload that
+     * follows sign-in asked a second time: CI's `TasksLoadTest` "the
+     * first visit should ask the Worker once expected:<1> but was:<2>".
+     */
+    @Test
+    fun loadedTasksAreFreshUntilTheVisitEnds() {
+        assertFalse(Tasks().fresh, "nothing loaded is not fresh")
+        assertTrue(Tasks().loaded(decoded()).fresh)
+        assertFalse(Tasks().loaded(decoded()).loading().fresh)
+        assertFalse(Tasks().failed("offline").fresh, "a failed load must be asked again")
+        assertFalse(Tasks().loaded(decoded()).stale().fresh)
+    }
+
+    private fun onTheList() = AppState(
+        admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t"),
+        tasks = Tasks().loaded(decoded()),
+    ).navigate(View.ADMIN).let { it.copy(tasks = Tasks().loaded(decoded())) }
+
+    @Test
+    fun landingOnTheSameRouteAgainKeepsTheTasksFresh() {
+        val s = onTheList()
+        assertTrue(s.navigate(s.route).tasks.fresh, "the reload after sign-in would ask for the tasks again")
+    }
+
+    @Test
+    fun leavingTheListOrPullingToRefreshAsksAgain() {
+        val s = onTheList()
+        assertFalse(s.navigate(Route(View.ADMIN, "t4pee71g")).tasks.fresh, "opening a person did not end the visit")
+        assertFalse(s.navigate(View.LIBRARY).tasks.fresh, "leaving Admin Settings did not end the visit")
+        assertFalse(s.refreshed().tasks.fresh, "a pull did not ask for the tasks again")
+    }
+
     @Test
     fun theTasksPanelKnowsWhatTimeItIs() {
         assertEquals(42L, Tasks().at(42L).now)
