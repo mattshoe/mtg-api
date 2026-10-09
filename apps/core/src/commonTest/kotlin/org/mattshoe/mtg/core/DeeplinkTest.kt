@@ -56,6 +56,33 @@ class DeeplinkTest {
     }
 
     @Test
+    fun aSharedLinkOpensWhatItNames() {
+        // What the share button hands out: the route in the path of the
+        // Worker's preview page, so a pasted link previews as the deck.
+        val landing = Deeplink.parse("https://mtg-api.mattshoe81.workers.dev/s/c/k4yy0003/decks/d0000020")
+        assertEquals(View.DECKS, landing?.view)
+        assertEquals("d0000020", landing?.rest)
+        assertEquals("k4yy0003", landing?.collection)
+    }
+
+    @Test
+    fun aSharedSearchKeepsItsFilters() {
+        val landing = Deeplink.parse("https://mtg-api.mattshoe81.workers.dev/s/search?q=bolt&colors=R")
+        assertEquals(View.LIBRARY, landing?.view)
+        assertEquals("q=bolt&colors=R", landing?.query)
+    }
+
+    @Test
+    fun theRestOfTheApiIsNotALink() {
+        listOf(
+            "https://mtg-api.mattshoe81.workers.dev/query",
+            "https://mtg-api.mattshoe81.workers.dev/",
+            "https://mtg-api.mattshoe81.workers.dev/sx/decks/alela",
+            "https://evil.workers.dev/s/decks/alela",
+        ).forEach { url -> assertNull(Deeplink.parse(url), url) }
+    }
+
+    @Test
     fun everyLinkTheAppItselfBuildsCanBeReadBackAgain() {
         // The round trip. `Share.link` is what the share button hands
         // out; if this app cannot open its own links then the deep

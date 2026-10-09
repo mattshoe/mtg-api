@@ -22,6 +22,9 @@
 //   POST /maintenance run it now (admin)
 //   GET  /logs        the request log (admin)
 //   GET  /logs/stats  headline numbers for it (admin)
+//   GET  /s/<route>   a shared link: Open Graph tags for that deck, card or
+//                     collection, then on to mtg.mattshoe.org/#/<route>
+//   GET  /.well-known/assetlinks.json  so Android opens /s/ links in the app
 //
 // Reading is open. Anything that writes needs an admin token — see admin.js.
 
@@ -41,6 +44,9 @@ import { runMaintenance, CRON_TASKS } from './maintenance.js';
 import { newEntry, writeEntry, buildLogQuery, logStats } from './log.js';
 import { keyFrom, claim, remember, release } from './idempotency.js';
 import { newTask, inbox, received } from './tasks.js';
+import { preview } from './preview.js';
+// The site's own file, bundled in, so the two hosts cannot disagree.
+import ASSET_LINKS from '../frontend/.well-known/assetlinks.json';
 
 /**
  * May this caller change that collection, and if not, why not.
@@ -286,6 +292,8 @@ const INDEX = {
     'GET /logs/stats': 'counts, slowest routes, retention — admin only',
     'GET /maintenance': 'what the daily job did last',
     'POST /maintenance': 'run it now — needs admin; {"only":"orphans"} or {"all":true,"wait":true}',
+    'GET /s': '/s/<route> — a shared link: Open Graph tags for that deck, card or collection, then on to the site',
+    'GET /.well-known/assetlinks.json': 'lets Android open /s/ links in the app',
   },
   auth: 'Reads are open. Writes need Authorization: Bearer <token> from POST /admin.',
 };
@@ -477,6 +485,20 @@ async function route(request, env, ctx, entry) {
       if (method !== 'GET') return notAllowed('GET');
       return json(await getSchema(env.DB));
     }
+
+  // A shared link. The route rides in the path because a fragment never
+  // reaches a server — see preview.js.
+  if (path === '/s' || path.startsWith('/s/')) {
+    if (method !== 'GET' && method !== 'HEAD') return notAllowed('GET');
+    return preview(env.DB, url.pathname.replace(/^\/s\/?/, ''), url.search);
+  }
+
+  // So Android verifies this host and opens a shared link in the app
+  // rather than a browser. The same app and key as the site's copy.
+  if (path === '/.well-known/assetlinks.json') {
+    if (method !== 'GET' && method !== 'HEAD') return notAllowed('GET');
+    return json(ASSET_LINKS);
+  }
 
   // The share body, parsed somewhere other than the phone.
   //

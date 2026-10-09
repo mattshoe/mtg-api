@@ -27,6 +27,9 @@ object Deeplink {
      */
     private val HOSTS = setOf("mtg.mattshoe.org", "www.mtg.mattshoe.org")
 
+    /** Where [Share.link] points: the Worker's `/s/<route>` preview page. */
+    private const val PREVIEW_HOST = "mtg-api.mattshoe81.workers.dev"
+
     /** `https://mtg.mattshoe.org/#/decks/alela` in, a route out, or null. */
     fun parse(url: String?): Route? {
         val raw = url?.trim().orEmpty()
@@ -40,6 +43,14 @@ object Deeplink {
         // port and any userinfo are not part of the host.
         val authority = afterScheme.takeWhile { it != '/' && it != '?' && it != '#' }
         val host = authority.substringAfterLast('@').substringBefore(':').lowercase()
+
+        // A shared link: the route is in the path, after `/s`, and
+        // the rest of the API is not a page of the app.
+        if (host == PREVIEW_HOST) {
+            val path = afterScheme.removePrefix(authority).substringBefore('#')
+            if (path != "/s" && !path.startsWith("/s/") && !path.startsWith("/s?")) return null
+            return Route.parse(path.removePrefix("/s"))
+        }
         if (host !in HOSTS) return null
 
         // Everything after the first `#`. No fragment is the site

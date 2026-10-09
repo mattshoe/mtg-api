@@ -494,6 +494,39 @@ class AppDriverTest {
     }
 
     @Test
+    fun aDecksLinkIsOneAChatAppCanPreview() = runTest {
+        // Pasted into Discord, a hash link previewed as the bare site:
+        // the fragment never reaches a server. The copied link has to
+        // carry the deck in its path, on the Worker that answers with
+        // the deck's own tags.
+        val copied = mutableListOf<String>()
+        val nav = window.navigator.asDynamic()
+        val stub = js("({})")
+        stub.writeText = { text: String -> copied += text; Promise.resolve(Unit) }
+        val descriptor = js("({configurable: true})")
+        descriptor.value = stub
+        js("Object").defineProperty(nav, "clipboard", descriptor)
+        try {
+            val view = mount("#/decks/alela")
+            waitFor("the deck") { view.textContent.orEmpty().contains("Sol Ring") }
+            val share = view.querySelector("button[aria-label='Share this deck']") as HTMLButtonElement
+            share.click()
+            settle()
+            // Link is the first group, Copy the first place it goes.
+            val anchor = share.parentElement as HTMLElement
+            (anchor.querySelectorAll("button.app-tab")[0] as HTMLButtonElement).click()
+            waitFor("the link on the clipboard") { copied.isNotEmpty() }
+        } finally {
+            js("delete navigator.clipboard")
+        }
+        assertEquals(
+            "https://mtg-api.mattshoe81.workers.dev/s/decks/alela",
+            copied.single(),
+            "the copied link is not one a crawler can read the deck out of",
+        )
+    }
+
+    @Test
     fun changingAFilterIsNotAStepBackHasToUndo() = runTest {
         // Every keystroke would otherwise be a history entry and the
         // back button would take a hundred presses to leave a search.

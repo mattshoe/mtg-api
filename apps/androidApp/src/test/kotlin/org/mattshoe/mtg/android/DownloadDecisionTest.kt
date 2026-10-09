@@ -308,7 +308,7 @@ class DownloadDecisionTest {
         assertEquals("Link copied", after.toast)
         val clip = clipboardText(activity).orEmpty()
         assertTrue(
-            clip.startsWith("https://mtg.mattshoe.org/#/card/"),
+            clip.startsWith("https://mtg-api.mattshoe81.workers.dev/s/card/"),
             "the clipboard does not hold a link to the card: $clip",
         )
     }

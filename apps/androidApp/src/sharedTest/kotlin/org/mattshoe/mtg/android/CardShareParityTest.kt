@@ -133,8 +133,10 @@ class CardShareParityTest {
             "the share did not hand over this card's address",
         )
         assertTrue(
-            shared!!.startsWith("https://mtg.mattshoe.org/#/card/"),
-            "the link is not a card link: $shared",
+            shared!!.startsWith("https://mtg-api.mattshoe81.workers.dev/s/card/"),
+            // A hash link previews as the bare site in Discord: the
+            // fragment never reaches the server that builds the preview.
+            "the link is not a card link a chat app can preview: $shared",
         )
     }
 

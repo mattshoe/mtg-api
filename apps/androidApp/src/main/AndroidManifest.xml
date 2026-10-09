@@ -30,6 +30,18 @@
                 <data android:scheme="http" android:host="mtg.mattshoe.org" />
                 <data android:scheme="http" android:host="www.mtg.mattshoe.org" />
             </intent-filter>
+            <!-- What the share button hands out: the Worker's preview page,
+                 so a pasted link previews as the deck in Discord. Only
+                 under /s/, because the rest of that host is the API. The
+                 Worker serves the same assetlinks.json as the site. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="mtg-api.mattshoe81.workers.dev" />
+                <data android:pathPrefix="/s/" />
+            </intent-filter>
             <!-- A share from another app opens the whole app, in its own
                  task, with the list in the entry box. It used to open a
                  second activity that drew the wizard alone, inside the
