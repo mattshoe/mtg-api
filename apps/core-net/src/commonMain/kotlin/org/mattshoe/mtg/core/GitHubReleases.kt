@@ -39,6 +39,8 @@ class GitHubReleases internal constructor(private val http: HttpClient) {
         }
     }
 
+    suspend fun tasks(store: Store): List<Task> = tasks()
+
     /**
      * The branch's first commit, one ask per task not already known. A refusal
      * leaves the start unknown rather than losing the whole list.

@@ -108,6 +108,29 @@ class GitHubReleasesTest {
         assertTrue(urls.none { "kept" in it && "/compare/" in it }, "a kept start was asked for again: $urls")
     }
 
+    /**
+     * What both shells do on every visit to Admin Settings: the second
+     * visit asks GitHub nothing about a task that was done at the first.
+     */
+    @Test
+    fun aDoneTasksStartIsAskedOnceAcrossVisits() = runTest {
+        val store = Store.inMemory()
+        val github = routed(
+            "/pulls" to """[{"title":"Shipped","state":"closed","head":{"ref":"request/shipped-1234567"},
+                "merged_at":"2026-01-02T00:00:00Z","closed_at":"2026-01-02T00:00:00Z"}]""",
+            "/git/matching-refs/heads/request/" to """[{"ref":"refs/heads/request/shipped-1234567"}]""",
+            "/contents/requests/done" to """[{"name":"shipped.md","type":"file"}]""",
+            "/compare/main...request/shipped-1234567" to
+                """{"commits":[{"commit":{"author":{"date":"2026-01-01T20:00:00Z"}}}]}""",
+        )
+        github.tasks(store)
+        seen.clear()
+        val again = github.tasks(store)
+        assertEquals("took 4h 00m", again.single().took)
+        val urls = seen.map { it.url.toString() }
+        assertTrue(urls.none { "/compare/" in it }, "the second visit asked for a start it already had: $urls")
+    }
+
     @Test
     fun aRefusedCompareLeavesTheStartUnknownButStillListsTheTask() = runTest {
         val found = routed(
