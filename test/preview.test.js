@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
 import worker from '../src/index.js';
 import { sql } from './helpers.js';
+import siteAssetLinks from '../frontend/.well-known/assetlinks.json';
 
 // A link pasted into Discord or Slack is fetched by a crawler that reads
 // the page's Open Graph tags and nothing else. The site routes on a hash,
@@ -102,5 +103,16 @@ describe('GET /s/… — a shared link previews as the thing it points at', () =
     const r = await get('/s/"><script>x</script>');
     expect(r.html).not.toContain('<script>x');
     expect(goesTo(r.html)).toMatch(/^https:\/\/mtg\.mattshoe\.org\/#\//);
+  });
+});
+
+describe('GET /.well-known/assetlinks.json — the phone may open a shared link', () => {
+  it('names the same app and signing key the site does, so Android opens the app rather than a browser', async () => {
+    const ctx = createExecutionContext();
+    const res = await worker.fetch(new Request('https://mtg-api.test/.well-known/assetlinks.json'), env, ctx);
+    await waitOnExecutionContext(ctx);
+    expect(res.status, 'Android cannot verify the share host without this file').toBe(200);
+    expect(res.headers.get('content-type') || '').toMatch(/application\/json/);
+    expect(await res.json()).toEqual(siteAssetLinks);
   });
 });

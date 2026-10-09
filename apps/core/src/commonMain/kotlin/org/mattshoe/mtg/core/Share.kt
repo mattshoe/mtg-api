@@ -11,8 +11,19 @@ object Share {
 
     const val SITE = "https://mtg.mattshoe.org/"
 
+    /**
+     * The Worker's preview page, which the route is put after.
+     *
+     * A chat app fetches a pasted link to build its preview, and a
+     * fragment never reaches a server, so a link to the site itself
+     * previewed as the bare site whatever it pointed at. `/s/<route>`
+     * answers with that deck's or card's tags and sends the reader on
+     * to [SITE] with the same route after the `#` — see src/preview.js.
+     */
+    const val PREVIEW = "https://mtg-api.mattshoe81.workers.dev/s/"
+
     /** The whole address, not the fragment. A hash on its own is not a link. */
-    fun link(state: AppState): String = SITE + state.hash()
+    fun link(state: AppState): String = PREVIEW + state.hash().removePrefix("#").removePrefix("/")
 
     /** What a share sheet puts above it. */
     fun title(state: AppState): String = when {
