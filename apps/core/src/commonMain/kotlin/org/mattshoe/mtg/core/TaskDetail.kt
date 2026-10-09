@@ -89,7 +89,8 @@ data class TaskDetail(
 
         private val COMMENT = Regex("""<!--.*-->""")
 
-        private val FRONTMATTER = Regex("""\A---\n.*?\n---\n""", RegexOption.DOT_MATCHES_ALL)
+        /** `^` without MULTILINE is the start of the text, on the JVM and in JS alike; JS has no `\A`. */
+        private val FRONTMATTER = Regex("""^---\n[\s\S]*?\n---\n""")
 
         /** The Worker's `GET /tasks/<key>` in. */
         fun decode(key: String, body: String): TaskDetail = try {
