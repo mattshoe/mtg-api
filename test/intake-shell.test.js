@@ -16,6 +16,8 @@
 // against a ~400-line one. Most of it tested machinery that no longer
 // exists: triage, worktree slots, per-request claim directories, salvage,
 // time ceilings and process-group kills, `.fixme`/`.held`/`.attempts`,
+// and — removed later, for the same reason — the pick lock, the resume
+// pass and the attempt ledger that bounded it,
 // fix-only re-dispatch, notifications, and the dispatcher's own CI wait,
 // merge, request filing and deploy verification. All of that went with the
 // rewrite and so did its tests. What is left is the behaviour the dispatcher
@@ -676,10 +678,14 @@ describe('a worktree that is already there', () => {
     expect(existsSync(join(box.repo, '.intake', 'wt', 'a-thing'))).toBe(false)
   })
 
-  it('is resumed, not refused, once its agent has stopped', () => {
-    // Refusing meant the only way past a stopped agent was a human deleting
-    // its unpushed work by hand. That is a wedge with a polite message, not
-    // recovery — and a rate limit stops an agent at any moment.
+  it('is left alone, agent or no agent, and no second one is started on it', () => {
+    // There is no resume any more. The machinery that picked a stopped
+    // agent's worktree back up is what ran SEVEN agents on one request in
+    // four hours, and it existed only because agents kept dying of a
+    // missing apps/local.properties and a suite that cannot finish inside
+    // their tool limit. Both of those are fixed, so a worktree that is
+    // already there is simply not the dispatcher's to take — reconcile has
+    // already told the app whether an agent is alive in it.
     build({ requests: { 'a-thing.md': READY('A thing') } })
     const wt = join(box.repo, '.intake', 'wt', 'a-thing')
     mkdirSync(join(wt, 'requests'), { recursive: true })
@@ -687,11 +693,8 @@ describe('a worktree that is already there', () => {
 
     run('dispatch.sh')
 
-    // It picked the tree up rather than turning away...
-    expect(box.intakeLog()).toContain('resuming a-thing')
-    // ...told the agent what it was inheriting...
-    expect(box.log()).toContain('YOU ARE RESUMING')
-    // ...and did not touch what was already there.
+    expect(box.log()).not.toContain('claude')
+    // and it did not touch what was already there.
     expect(readFileSync(join(wt, 'precious.txt'), 'utf8')).toContain('work from the agent that stopped')
   })
 
@@ -1048,145 +1051,6 @@ describe('status.sh', () => {
     const out = status().stdout
     expect(out).toContain('NOT ENABLED')
     expect(out).not.toContain('OFF (')
-  })
-})
-
-// How a request stops consuming agents.
-//
-// `remove-task-title` ran SEVEN agents in four hours and would have run an
-// eighth. Each one read its worktree from cold, did a little, backgrounded
-// an Android suite it could not outlive and died — and a stopped agent
-// leaves a worktree behind, so the next timer firing resumed it and did
-// exactly the same thing. Nothing in the system had any notion of "this
-// has been tried enough", so the loop was bounded only by Matt noticing
-// four hours of tokens had gone.
-//
-// The bound itself is `attempt()` and `test/intake-dispatch.test.js` holds
-// it to account. These tests are about the shell: that the dispatcher asks,
-// that holding the request file is what actually ends the loop, and that
-// the next tick really does leave it alone.
-describe('a request that keeps dying', () => {
-  const ledger = (name) => join(box.repo, '.intake', 'attempts', name)
-  const agents = () => box.log().split('\n').filter((l) => l.startsWith('claude ')).length
-
-  /** A worktree a stopped agent left behind, as the resume path finds one. */
-  const stoppedAgent = () => {
-    const wt = join(box.repo, '.intake', 'wt', 'a-thing')
-    mkdirSync(join(wt, 'requests'), { recursive: true })
-    return wt
-  }
-
-  it('is held once two agents in a row leave the branch where it was', () => {
-    build({ requests: { 'a-thing.md': READY('A thing') } })
-
-    run('dispatch.sh')          // builds it; the stub commits nothing
-    run('dispatch.sh')          // resumes; still nothing
-    run('dispatch.sh')          // and this is the one that must refuse
-
-    expect(agents()).toBe(2)
-    expect(box.intakeLog()).toContain('holding a-thing')
-    expect(readFileSync(box.path('requests/a-thing.md'), 'utf8'))
-      .toContain('status: hold')
-  })
-
-  it('is left alone on every tick after that, which is the whole point', () => {
-    build({ requests: { 'a-thing.md': READY('A thing') } })
-    run('dispatch.sh'); run('dispatch.sh'); run('dispatch.sh')
-    const spent = agents()
-
-    run('dispatch.sh'); run('dispatch.sh')
-
-    expect(agents()).toBe(spent)
-  })
-
-  it('tells Matt, rather than going quiet with his work half done', () => {
-    build({ requests: { 'a-thing.md': READY('A thing') } })
-    run('dispatch.sh'); run('dispatch.sh'); run('dispatch.sh')
-
-    expect(box.log()).toContain('osascript')
-    expect(box.intakeLog()).toContain('NEEDS YOU')
-  })
-
-  it('says in the request file why it stopped and how to restart it', () => {
-    build({ requests: { 'a-thing.md': READY('A thing') } })
-    run('dispatch.sh'); run('dispatch.sh'); run('dispatch.sh')
-
-    const text = readFileSync(box.path('requests/a-thing.md'), 'utf8')
-    expect(text).toContain('agents in a row')
-    expect(text).toContain('Set `status: ready`')
-  })
-
-  it('keeps the worktree and everything in it, because the work is kept', () => {
-    build({ requests: { 'a-thing.md': READY('A thing') } })
-    run('dispatch.sh')
-    writeFileSync(join(box.repo, '.intake/wt/a-thing/precious.txt'), 'half a feature\n')
-    run('dispatch.sh'); run('dispatch.sh')
-
-    expect(readFileSync(join(box.repo, '.intake/wt/a-thing/precious.txt'), 'utf8'))
-      .toContain('half a feature')
-  })
-
-  it('forgets the count when it holds, so un-holding gives a full allowance', () => {
-    build({ requests: { 'a-thing.md': READY('A thing') } })
-    run('dispatch.sh'); run('dispatch.sh'); run('dispatch.sh')
-
-    expect(existsSync(ledger('a-thing'))).toBe(false)
-  })
-
-  it('is held after six agents however much each of them committed', () => {
-    // The other bound, and the one that caught `remove-task-title`: that
-    // request DID commit, eight times over seven runs, so no progress rule
-    // would ever have stopped it. Six agent lifetimes is enough on its own.
-    build({ requests: { 'a-thing.md': READY('A thing') } })
-    stoppedAgent()
-    mkdirSync(join(box.repo, '.intake', 'attempts'), { recursive: true })
-    writeFileSync(ledger('a-thing'), '6 somethingelse 0\n')
-
-    run('dispatch.sh')
-
-    expect(agents()).toBe(0)
-    expect(box.intakeLog()).toContain('6 agents have worked on this')
-  })
-
-  it('does not hold one that is simply taking a few goes', () => {
-    build({ requests: { 'a-thing.md': READY('A thing') } })
-    stoppedAgent()
-    mkdirSync(join(box.repo, '.intake', 'attempts'), { recursive: true })
-    writeFileSync(ledger('a-thing'), '3 somethingelse 0\n')
-
-    run('dispatch.sh')
-
-    expect(agents()).toBe(1)
-    expect(readFileSync(box.path('requests/a-thing.md'), 'utf8')).toContain('status: ready')
-  })
-
-  it('builds anyway when the bound itself cannot be read', () => {
-    // Fails OPEN on purpose. A bound that cannot answer is a reason to say
-    // so in the log, not a reason to stop building anything — the opposite
-    // choice would turn one broken node call into a dead queue.
-    build({ requests: { 'a-thing.md': READY('A thing') } })
-    box.breakDispatcher(
-      'node scripts/intake.mjs attempt "$STATE/attempts/$name" "$headnow"',
-      'node scripts/intake.mjs no-such-command',
-    )
-
-    run('dispatch.sh')
-
-    expect(agents()).toBe(1)
-    expect(box.intakeLog()).toContain('could not bound the attempts')
-  })
-
-  it('launches a fourth agent with the bound taken out, so the bound is the thing stopping it', () => {
-    // The mutation that proves the three tests above are not passing for
-    // some other reason. Without the `case $?` the dispatcher resumes
-    // forever, which is the production behaviour this pull request ends.
-    build({ requests: { 'a-thing.md': READY('A thing') } })
-    box.breakDispatcher('  3)\n', '  333)\n')
-
-    run('dispatch.sh'); run('dispatch.sh'); run('dispatch.sh'); run('dispatch.sh')
-
-    expect(agents()).toBe(4)
-    expect(readFileSync(box.path('requests/a-thing.md'), 'utf8')).toContain('status: ready')
   })
 })
 

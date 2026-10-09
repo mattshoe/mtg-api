@@ -2,10 +2,24 @@
 #
 # A file appears in requests/, an agent builds it and opens a pull request.
 #
-# That is the whole job. Everything else that used to be in here — triage, a
-# time ceiling, worktree slots, salvage, CI waiting, merging, deploy checks,
-# fix-only retries, notifications — was invented, not asked for, and that is
-# where every bug lived. 2306 lines, then 395, now this.
+# That is the whole job. It was 2306 lines, then 395, then 312, now this.
+#
+# What came out, and why it was never needed: a lock, a `--claim`
+# re-invocation to get a value back out of it, a resume pass for stopped
+# agents, an attempt ledger bounding the resumes, and a notification path.
+# All of it existed to survive agents dying. The agents were dying because
+# their worktree had no apps/local.properties, so every Android command
+# failed in sixteen seconds with nowhere to go, and because the
+# instructions told them to run a suite that cannot finish inside their
+# ten-minute tool limit. Both of those are fixed. None of the machinery
+# was ever the problem, and every bug Matt saw today lived in it.
+#
+# Matt: "I just want a fucking request to start a fucking agent."
+#
+# There is no lock because `git worktree add -b` is the lock: the second
+# dispatcher to ask for the same branch is refused by git, atomically. That
+# is also what makes parallel free-for-all work — each tick takes whatever
+# request has no worktree yet.
 #
 # The agent does the work: it reads the request, builds it, opens the pull
 # request, waits for CI, merges on green, and moves the request file into
@@ -22,30 +36,14 @@ BASE="${INTAKE_BASE:-origin/main}"
 
 say() { printf '%s  %s\n' "$(date '+%H:%M:%S')" "$1" >>"$LOG"; }
 
-# Something Matt has to know about, as opposed to something merely recorded.
-#
-# This was called and never defined. `grep -rn 'tell()'` found nothing and
-# `git log -S` says it never existed, so every notification the dispatcher
-# has tried to send since #43 died as `tell: command not found` on a stderr
-# launchd throws away — nine times in the production log. The one path that
-# exists to reach Matt when the queue stops has never reached him.
-#
-# It writes to the log as well, so the reason survives even where the
-# desktop notification cannot be delivered.
-tell() {
-  say "NEEDS YOU: $1"
-  osascript -e "display notification \"$1\" with title \"mtg intake\"" >/dev/null 2>&1 || true
-}
-
 # Opt-in. .intake/ is gitignored, so a fresh clone must not be armed by the
 # committed hook before anyone has installed anything.
 [ -f "$STATE/enabled" ] || exit 0
 
 # Reconcile BEFORE honouring the off switch. Status is only ever written
 # inside a dispatch, so pausing intake used to freeze every row mid-flight:
-# Matt watched a task read `in progress` for three hours after I had switched
-# the system off and nothing was running. A paused system still has to tell
-# the truth about what it is not doing.
+# Matt watched a task read `in progress` for three hours after I had
+# switched the system off and nothing was running.
 if [ -f "$STATE/disabled" ]; then
   node "$REPO/scripts/intake/task-status.mjs" reconcile >>"$LOG" 2>&1 || true
   exit 0
@@ -58,230 +56,117 @@ fi
 
 mkdir -p "$STATE"
 
-# Every run puts D1 right about what this laptop can see: a dead agent is
-# paused rather than in progress forever, a held request paused, a
-# withdrawn one cancelled. It may not stop a build. See task-status.mjs.
-# Anything Matt submitted from the app, turned into a request file before we
-# decide what is buildable. Without this a task submitted in the app sat at
-# `pending` forever: nothing polled the inbox, and launchd only fires on a
-# change under requests/ — which submitting from the app does not cause.
+# Anything Matt submitted from the app, turned into a request file. Without
+# this a task submitted in the app sat at `pending` forever: nothing polled
+# the inbox, and launchd only fires on a change under requests/, which
+# submitting from the app does not cause.
 node "$REPO/scripts/intake/inbox.mjs" >>"$LOG" 2>&1 || true
 
+# Every run puts D1 right about what this laptop can see: a dead agent
+# reads paused rather than in progress forever, a held request paused, a
+# withdrawn one cancelled. It may not stop a build.
 node "$REPO/scripts/intake/task-status.mjs" reconcile >>"$LOG" 2>&1 || true
 
-# Choosing a request and creating its worktree is the only part that needs
-# exclusivity, and it takes seconds. It runs behind `lockf`, so a dispatcher
-# that arrives at the same instant WAITS for its turn and then picks a
-# different request — rather than losing a `mkdir` race and giving up, which
-# made the whole queue serial no matter how many requests were ready.
-#
-# `lockf` blocks in the kernel. It is not a polling loop and it cannot orphan:
-# the lock dies with the process holding it.
-#
-# The claim runs as this same script re-invoked with --claim, because the
-# chosen request has to come back out of the locked section on stdout.
-claim() {
-  local f b wt file branch tree resumed=''
-  git -C "$REPO" worktree prune
-  git -C "$REPO" fetch -q origin main 2>>"$LOG" || say "could not fetch; base may be stale"
+git -C "$REPO" worktree prune
+git -C "$REPO" fetch -q origin main 2>>"$LOG" || say "could not fetch; base may be stale"
 
-  # 0 claimed something, 2 nothing to claim, 1 broken. An empty answer and a
-  # broken one must never look the same to the caller — that conflation is the
-  # oldest bug in this system and it came back when these node calls moved
-  # inside a child process.
-  cd "$REPO" && node scripts/intake.mjs buildable > "$STATE/queue.$$" || {
-    say "intake.mjs failed"; rm -f "$STATE/queue.$$"; return 1
-  }
-  # Try each candidate until one actually gets a worktree. Returning on the
-  # first failure would let a single request with a leftover branch — a
-  # worktree removed by hand, say — block everything behind it, which is the
-  # same wedge the skip above exists to prevent.
-  # What origin/main already has filed. The queue is decided from the LOCAL
-  # requests/ folder, and that folder lags main whenever an agent merges its
-  # own work — which is every time one succeeds. Twice now a finished request
-  # has been re-dispatched, and the agent then committed to a branch whose
-  # pull request had already merged, which Admin Settings reads as a task
-  # stuck in `building`. Ask main, not the laptop.
-  filed="$(git -C "$REPO" ls-tree --name-only "$BASE" requests/done/ 2>/dev/null | sed 's|requests/done/||')"
+# What origin/main already has filed. The queue is decided from the LOCAL
+# requests/ folder, and that folder lags main whenever an agent merges its
+# own work — which is every time one succeeds. Twice a finished request was
+# re-dispatched, and the agent then committed to a branch whose pull
+# request had already merged. Ask main, not the laptop.
+filed="$(git -C "$REPO" ls-tree --name-only "$BASE" requests/done/ 2>/dev/null | sed 's|requests/done/||')"
 
-  # Two passes, fresh requests first. A request whose agent keeps dying has a
-  # worktree, and resuming it used to win the alphabetical race on every tick
-  # — so one failing task starved everything behind it. `remove-task-title`
-  # did exactly that while `search-reset-not-complete` sat at pending through
-  # seven timer firings.
-  file=''
-  while IFS= read -r f; do
-    [ -n "$f" ] || continue
-    if printf '%s\n' "$filed" | /usr/bin/grep -qxF "$f"; then
-      say "skipping ${f%.md}: already filed under requests/done on ${BASE}"
-      continue
-    fi
-    wt="$STATE/wt/${f%.md}"
-    [ -e "$wt" ] && continue
-    b="$(cd "$REPO" && node scripts/intake.mjs branch "$f")" || {
-      say "intake.mjs failed naming a branch for $f"; return 1
-    }
-    if git -C "$REPO" worktree add -q -b "$b" "$wt" "$BASE" 2>>"$LOG"; then
-      file="$f"; branch="$b"; tree="$wt"; break
-    fi
-    say "skipping ${f%.md}: no worktree on $b (the branch may already exist)"
-  done < "$STATE/queue.$$"
-
-  # Only when nothing fresh is waiting, pick up where a stopped agent left off.
-  if [ -z "$file" ]; then
-    while IFS= read -r f; do
-      [ -n "$f" ] || continue
-      printf '%s\n' "$filed" | /usr/bin/grep -qxF "$f" && continue
-      wt="$STATE/wt/${f%.md}"
-      [ -e "$wt" ] || continue
-      if pgrep -f "requests/${f}" >/dev/null 2>&1; then
-        say "skipping ${f%.md}: an agent is still working in $wt"
-        continue
-      fi
-      b="$(cd "$REPO" && node scripts/intake.mjs branch "$f")" || continue
-      file="$f"; branch="$b"; tree="$wt"; resumed=yes
-      say "resuming ${f%.md} in $wt ($(git -C "$wt" status --porcelain 2>/dev/null | wc -l | tr -d ' ') uncommitted, $(git -C "$wt" rev-list --count "$BASE"..HEAD 2>/dev/null || echo 0) commits)"
-      break
-    done < "$STATE/queue.$$"
-  fi
-  rm -f "$STATE/queue.$$"
-  [ -n "$file" ] || return 2
-
-  # node_modules, shared rather than installed. A cold worktree costs `npm ci`
-  # — measured at 5 minutes, and one agent spent exactly that before it could
-  # run a single test. A symlink makes it free. An agent that genuinely needs a
-  # new dependency edits package.json and lets CI install it.
-  if [ -d "$REPO/node_modules" ] && [ ! -e "$tree/node_modules" ]; then
-    ln -s "$REPO/node_modules" "$tree/node_modules"
-    # and keep it out of git: it showed up as untracked in a worktree, so
-    # `git add -A` would have committed a symlink to somebody's home.
-    printf 'node_modules
-' >> "$tree/.git/info/exclude" 2>/dev/null || true
-  fi
-
-  # The Android SDK path. Without it NO Gradle task touching :androidApp
-  # runs in a worktree — not the suite, not one test by name; it dies in
-  # sixteen seconds on "SDK location not found". It is gitignored, as it
-  # has to be, so it exists in the clone and in no worktree. All three live
-  # ones were missing it, which is why no agent could ever check its own
-  # Android work.
-  mkdir -p "$tree/apps" 2>/dev/null
-  cp "$REPO/apps/local.properties" "$tree/apps/local.properties" 2>/dev/null || true
-
-  # The same for the instructions. An agent reads CLAUDE.md and .claude/
-  # out of the tree it works in, so a worktree cut days ago hands it the
-  # law as it stood then. `remove-task-title` nearly died an eighth time
-  # on this: main had just banned the suite that killed its seven previous
-  # agents and its own worktree still said to run it.
-  cp "$REPO/CLAUDE.md" "$tree/CLAUDE.md" 2>/dev/null || true
-  cp -R "$REPO/.claude/." "$tree/.claude/" 2>/dev/null || true
-
-  # Hand over the LIVE request file, not the one the worktree was cut from.
-  # Without this the agent reads main's copy: four requests sat at `status:
-  # hold` on main while the live files said `ready`, so every agent correctly
-  # refused to build and stopped. The file Matt is looking at is the file the
-  # agent must read.
-  cp "$REQUESTS/$file" "$tree/requests/$file" 2>>"$LOG" \
-    || say "could not hand over $file; the agent will read the committed copy"
-
-  printf '%s\t%s\t%s\t%s\n' "$file" "$branch" "$tree" "${resumed:-no}"
+# An empty queue and a broken one must never look the same to this loop.
+# That conflation is the oldest bug in this system and it has come back
+# twice, so the queue is read into a variable where a failure is visible
+# rather than piped in, where it arrives as "no requests".
+queue="$(cd "$REPO" && node scripts/intake.mjs buildable)" || {
+  # The one thing worth waking Matt for: nothing can build at all until
+  # this is fixed, and no row in the app will say so because reconcile
+  # asks the same broken file. There was a `tell` helper for alarms like
+  # this; it had nine callers, was never defined, and died as `tell:
+  # command not found` on a stderr launchd throws away. Two lines with one
+  # caller cannot do that.
+  say "NEEDS YOU: intake.mjs failed; nothing can build until that is fixed"
+  osascript -e 'display notification "mtg intake cannot read the queue" with title "mtg intake"' >/dev/null 2>&1 || true
+  exit 1
 }
 
-if [ "${1:-}" = "--claim" ]; then claim; exit $?; fi
-
-# `lockf` is BSD, so it is on macOS and not on the Linux runners CI uses;
-# `flock` is the other way round. Pick whichever is here. With neither, run
-# the claim unlocked and say so: two dispatchers would then have to collide
-# inside the same few seconds, and each still refuses a worktree that exists.
-if [ -x /usr/bin/lockf ]; then
-  got="$(/usr/bin/lockf -k -t 120 "$STATE/pick.lock" "$0" --claim)"; rc=$?
-elif command -v flock >/dev/null 2>&1; then
-  got="$(flock -w 120 "$STATE/pick.lock" "$0" --claim)"; rc=$?
-else
-  say "no lockf and no flock; claiming without a lock"
-  got="$("$0" --claim)"; rc=$?
-fi
-
-case "$rc" in
-  0) : ;;
-  2) exit 0 ;;                      # nothing to claim, which is normal
-  *) tell "intake stopped: it could not read the queue"; exit 1 ;;
-esac
-[ -n "$got" ] || exit 0
-
-# Four tab-separated fields. Read them with IFS rather than `${v%%\t*}`:
-# inside a parameter expansion bash reads \t as a literal backslash-t, and
-# claim now prints a fourth field, so the old split glued `resumed` onto the
-# end of `tree`.
-IFS="$(printf '\t')" read -r file branch tree resumed <<EOF
-$got
+# Take the first ready request that has no worktree yet. Trying each
+# candidate rather than returning on the first failure matters: one request
+# with a leftover branch would otherwise block everything behind it.
+file=''
+while IFS= read -r f; do
+  [ -n "$f" ] || continue
+  if printf '%s\n' "$filed" | /usr/bin/grep -qxF "$f"; then
+    say "skipping ${f%.md}: already filed under requests/done on ${BASE}"
+    continue
+  fi
+  # A worktree already there means an agent is on it, or one stopped on it
+  # and its work is kept. Either way this is not the dispatcher's to take —
+  # reconcile has already told the app which of the two it is.
+  wt="$STATE/wt/${f%.md}"
+  [ -e "$wt" ] && continue
+  b="$(cd "$REPO" && node scripts/intake.mjs branch "$f")" || continue
+  if git -C "$REPO" worktree add -q -b "$b" "$wt" "$BASE" 2>>"$LOG"; then
+    file="$f"; branch="$b"; tree="$wt"; break
+  fi
+  say "skipping ${f%.md}: no worktree on $b (the branch may already exist)"
+done <<EOF
+$queue
 EOF
+
+[ -n "$file" ] || exit 0
 name="${file%.md}"
 
-# Agents authenticate as their own service account, `intake-agent`, which
-# has the admin role and its own long-lived session token. They never see
-# the operator password: that one unlocks /admin/sql on any database and is
-# the way back in when every account has lost admin, so it stays out of
-# reach. Revoking an agent is one row out of `sessions`.
+# node_modules, shared rather than installed. A cold worktree costs `npm
+# ci` — measured at 5 minutes, and one agent spent exactly that before it
+# could run a single test. A symlink makes it free.
+if [ -d "$REPO/node_modules" ] && [ ! -e "$tree/node_modules" ]; then
+  ln -s "$REPO/node_modules" "$tree/node_modules"
+  # and keep it out of git: it showed up as untracked in a worktree, so
+  # `git add -A` would have committed a symlink to somebody's home.
+  printf 'node_modules\n' >> "$tree/.git/info/exclude" 2>/dev/null || true
+fi
+
+# The Android SDK path. Without it NO Gradle task touching :androidApp runs
+# in a worktree — not the suite, not one test by name; it dies in sixteen
+# seconds on "SDK location not found". It is gitignored, as it has to be,
+# so it exists in the clone and in no worktree. All three live worktrees
+# were missing it, which is why no agent could ever check its own Android
+# work, and is half of why they kept dying.
+mkdir -p "$tree/apps" 2>/dev/null
+cp "$REPO/apps/local.properties" "$tree/apps/local.properties" 2>/dev/null || true
+
+# The instructions, as they are NOW. An agent reads CLAUDE.md and .claude/
+# out of the tree it works in, so a worktree cut days ago hands it the law
+# as it stood then — and main had just banned the suite that was killing
+# agents while their own worktrees still said to run it.
+cp "$REPO/CLAUDE.md" "$tree/CLAUDE.md" 2>/dev/null || true
+cp -R "$REPO/.claude/." "$tree/.claude/" 2>/dev/null || true
+
+# Hand over the LIVE request file, not the one the worktree was cut from.
+# Without this the agent reads main's copy: four requests sat at `status:
+# hold` on main while the live files said `ready`, so every agent correctly
+# refused to build and stopped. The file Matt is looking at is the file the
+# agent must read.
+cp "$REQUESTS/$file" "$tree/requests/$file" 2>>"$LOG" \
+  || say "could not hand over $file; the agent will read the committed copy"
+
+# Agents authenticate as their own service account, `intake-agent`, with
+# its own session token. They never see the operator password: that one
+# unlocks /admin/sql on any database and is the way back in when every
+# account has lost admin, so it stays out of reach.
 AGENT_TOKEN=""
 if [ -f "$HOME/.mtg-agent.env" ]; then
   AGENT_TOKEN="$(/usr/bin/grep -m1 "^MTG_AGENT_TOKEN=" "$HOME/.mtg-agent.env" | cut -d= -f2-)"
 fi
 [ -n "$AGENT_TOKEN" ] || say "no ~/.mtg-agent.env; the agent cannot act on the API as admin"
 
-RESUME_NOTE=""
-if [ "${resumed:-no}" = "yes" ]; then
-  RESUME_NOTE="
-
-YOU ARE RESUMING. A previous agent worked on this and stopped — rate limited,
-killed, or crashed. Its work is in this worktree already: $(git -C "$tree" rev-list --count "$BASE"..HEAD 2>/dev/null || echo 0) commit(s) and $(git -C "$tree" status --porcelain 2>/dev/null | wc -l | tr -d ' ') uncommitted file(s).
-Run \`git status\` and \`git log --oneline $BASE..HEAD\` before you do anything
-else, and carry on from there. Do not start over and do not discard what is
-there without reading it."
-fi
-
-# A request may not consume agent lifetimes without end.
-#
-# `remove-task-title` ran SEVEN agents in four hours. Each one read the
-# worktree from cold, did a little, backgrounded an Android suite it could
-# not outlive and died — and because a stopped agent leaves a worktree
-# behind, the next tick resumed it and did exactly the same. Nothing in the
-# system had any notion of "this has been tried enough", so the loop was
-# bounded only by Matt noticing.
-#
-# The bound itself, and the reason progress is measured as a changed HEAD
-# sha rather than a commit count, is `attempt()` in scripts/intake.mjs.
-# HEAD is read HERE, before the agent runs, so what it records is the
-# PREVIOUS attempt's result.
-#
-# It fails OPEN. A bound that cannot be read is a reason to say so, not a
-# reason to stop building.
-mkdir -p "$STATE/attempts"
-headnow="$(git -C "$tree" rev-parse HEAD 2>/dev/null || echo none)"
-why="$(cd "$REPO" && node scripts/intake.mjs attempt "$STATE/attempts/$name" "$headnow" 2>&1 >/dev/null)"
-case $? in
-  0) : ;;
-  3)
-    # Holding the LIVE request file is the only thing that ends the loop:
-    # the queue is `status: ready` in that file and nothing else, so an
-    # agent simply not being launched would be claimed again in 60 seconds.
-    (cd "$REPO" && node scripts/intake.mjs hold "$file" "$why") >>"$LOG" 2>&1 || true
-    node "$REPO/scripts/intake/task-status.mjs" blocked "$file" "$why" >>"$LOG" 2>&1 || true
-    say "holding $name: $why"
-    tell "$name needs you: $why"
-    exit 0
-    ;;
-  *) say "could not bound the attempts on $name; building anyway" ;;
-esac
-
-say "building $name on $branch${resumed:+ (resuming)}"
-# Task status lives in D1 and this is the thing that sees it change: a
-# builder starting here, and its pull request coming to something when it
-# exits. Neither write may stop a build. See scripts/intake/task-status.mjs.
+say "building $name on $branch"
 node "$REPO/scripts/intake/task-status.mjs" building "$file" >>"$LOG" 2>&1 || true
-# Not `exec`: that replaces this shell and the EXIT trap never runs, so the
-# lock would be held forever. Staying in the foreground also means the lock is
-# held for the whole build, which is the one-at-a-time rule.
+
 cd "$tree" || exit 1
 env \
   -u CLOUDFLARE_API_TOKEN -u CLOUDFLARE_ACCOUNT_ID -u CLOUDFLARE_API_KEY \
@@ -303,7 +188,9 @@ Never background a command and poll its output, and never background a suite. On
 
 node_modules is already there, symlinked. Do not run npm ci.
 
-Commit and push BEFORE your first test run, and after every part that passes. Not at the end. An agent can be rate limited or killed at any moment, and anything uncommitted at that point is work the next agent has to read back off disk instead of building on. Four agents were caught by this with up to thirteen files uncommitted.$RESUME_NOTE" \
+Commit and push BEFORE your first test run, and after every part that passes. Not at the end. An agent can be rate limited or killed at any moment, and anything uncommitted at that point is work somebody has to read back off disk. Four agents were caught by this with up to thirteen files uncommitted.
+
+NOBODY IS COMING AFTER YOU. There is no resume: if you stop, this request sits with your worktree until Matt looks at it. Finish it." \
   --permission-mode bypassPermissions --model opus \
   --output-format stream-json --verbose --include-partial-messages \
   >>"$STATE/$name.log" 2>&1

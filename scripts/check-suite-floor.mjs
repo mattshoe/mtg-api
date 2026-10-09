@@ -112,13 +112,29 @@ try {
     encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
   }))
 } catch { reference = undefined }
-const held = notLowered(reference, floors)
+// The commits being checked are the ones that have to authorise a
+// lowering — all of them on the branch, not `log -1`. On a pull request
+// `actions/checkout` checks out a MERGE commit whose message is "Merge
+// <sha> into <sha>", so `log -1` reads GitHub's text and never the
+// author's. That is how the first version of this failed its own pull
+// request. `origin/main..HEAD` is the branch's own commits in both
+// places: locally HEAD is the commit, in CI it is the merge commit and
+// the range still walks the branch.
+let message = ''
+for (const args of [['log', `${process.env.FLOOR_REF || 'origin/main'}..HEAD`, '--format=%B'], ['log', '-1', '--format=%B']]) {
+  try {
+    message = execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
+    if (message.trim()) break
+  } catch { /* try the next, then give up with nothing authorised */ }
+}
+const held = notLowered(reference, floors, message)
 if (!held.ok) {
   console.error('check-suite-floor: a committed floor is below main\'s —\n')
   held.lowered.forEach((r) => console.error(`  \u2717 ${r}`))
   console.error(
-    '\nA floor may only ever go up. If a test was deliberately removed, say '
-    + 'so in the commit message and lower it in a commit of its own.\n',
+    '\nA floor may only ever go up. If a test was deliberately removed, put '
+    + '\n  Floor-lowered: <suite>=<number> <why>\nin the commit message, with '
+    + 'the exact number the file now carries.\n',
   )
   process.exit(1)
 }
