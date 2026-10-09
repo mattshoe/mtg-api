@@ -30,12 +30,14 @@
                 <data android:scheme="http" android:host="mtg.mattshoe.org" />
                 <data android:scheme="http" android:host="www.mtg.mattshoe.org" />
             </intent-filter>
-        </activity>
-        <!-- A share from another app lands straight on the wizard,
-             which is the whole reason this build exists. -->
-        <activity android:name=".NextShareActivity" android:exported="true" android:launchMode="singleTask">
+            <!-- A share from another app opens the whole app, in its own
+                 task, with the list in the entry box. It used to open a
+                 second activity that drew the wizard alone, inside the
+                 sharing app's task, with nothing behind "New deck" or
+                 "Upload a file". -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/*" />
                 <data android:mimeType="application/*" />

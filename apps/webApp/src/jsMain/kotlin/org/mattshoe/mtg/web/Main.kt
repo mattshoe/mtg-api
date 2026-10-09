@@ -29,7 +29,6 @@ import org.mattshoe.mtg.core.CardRef
 import org.mattshoe.mtg.core.CardRow
 import org.mattshoe.mtg.core.Completion
 import org.mattshoe.mtg.core.DeckCard
-import org.mattshoe.mtg.core.DeckList
 import org.mattshoe.mtg.core.DeckEditState
 import org.mattshoe.mtg.core.DeckQueries
 import org.mattshoe.mtg.core.DeckTweak
@@ -1024,24 +1023,9 @@ object MtgApp {
      * the wizard instead of the entry box.
      */
     private fun readDeckFiles(files: List<File>) {
-        scope.launch {
-            val texts = mutableListOf<String>()
-            files.forEach { f ->
-                val bytes = f.size.toLong()
-                if (bytes > Upload.MAX_BYTES) {
-                    app = app.say("${f.name} is too big (${Upload.size(bytes)})", failed = true)
-                    return@forEach
-                }
-                val text = readText(f)
-                if (text == null) app = app.say("could not read ${f.name}", failed = true)
-                else texts += text
-            }
-            if (texts.isEmpty()) return@launch
-            val merged = Upload.merge(app.newDeck.list, texts.joinToString("\n"))
-            app = app.copy(newDeck = app.newDeck.type(merged)).say(
-                "Loaded ${DeckList.entries(merged).size} cards",
-            )
-        }
+        // `AppState.uploaded` sends it to the deck's list while the
+        // wizard is open — the same rule Android's one picker follows.
+        readFiles(files)
     }
 
     private fun lookup(term: String) {
@@ -1170,10 +1154,7 @@ object MtgApp {
                 else { chunks += text; names += f.name }
             }
             if (chunks.isEmpty()) return@launch
-            val incoming = chunks.joinToString("\n")
-            app = app.copy(entry = app.entry.type(Upload.merge(app.entry.list, incoming)))
-                .say(Upload.describe(names, incoming))
-                .shareUsed()
+            app = app.uploaded(names, chunks.joinToString("\n"))
         }
     }
 

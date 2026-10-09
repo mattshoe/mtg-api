@@ -457,6 +457,34 @@ data class AppState(
 
     fun shareUsed() = copy(sharedList = null)
 
+    /**
+     * The entry wizard's "New deck", taking whatever is in the box
+     * with it.
+     *
+     * Matt shared a list out of ManaBox to start a deck, picked "New
+     * deck", and the wizard opened on an empty card list.
+     */
+    fun startingADeck(): AppState {
+        val opened = opening(Overlay.NEW_DECK)
+        return if (entry.list.isBlank() || opened.newDeck.list.isNotBlank()) opened
+        else opened.copy(newDeck = opened.newDeck.type(entry.list))
+    }
+
+    /**
+     * A file read off disk, into whichever box is on screen.
+     *
+     * Android had one picker for both and always answered into the
+     * entry box, so a file picked on the deck wizard went behind it.
+     */
+    fun uploaded(names: List<String>, text: String): AppState {
+        val landed = if (Overlay.NEW_DECK in overlays) {
+            copy(newDeck = newDeck.type(Upload.merge(newDeck.list, text)))
+        } else {
+            copy(entry = entry.type(Upload.merge(entry.list, text)))
+        }
+        return landed.say(Upload.describe(names, text)).shareUsed()
+    }
+
     // --------------------------------------------------------- overlays
 
     fun opening(o: Overlay) = copy(overlays = overlays.open(o), toast = null, toastFailed = false)
