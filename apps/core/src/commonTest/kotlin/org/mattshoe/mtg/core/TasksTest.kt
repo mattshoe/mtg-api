@@ -200,6 +200,21 @@ class TasksTest {
         assertEquals("took 12m", dropped.took)
     }
 
+    /**
+     * Reconcile makes a row the first time it writes a status, so one
+     * filed under done/ after the fact was "created" after it finished.
+     * It took from its pull request's start, which #76 stores as
+     * `started_at`, not from when the row was made.
+     */
+    @Test
+    fun aTaskWhoseRowWasMadeAfterItFinishedTookFromItsStart() {
+        val filed = Task(
+            "k1", "Filed by hand", TaskStatus.MERGED, "2026-10-08T13:05:00Z",
+            startedAt = "2026-10-08T10:00:00Z", createdAt = "2026-10-09T09:00:00Z",
+        )
+        assertEquals("took 3h 05m", filed.took)
+    }
+
     @Test
     fun aTaskWithNoKnownCreationOrStillGoingSaysNothingAboutHowLongItTook() {
         assertNull(Task("k1", "Shipped", TaskStatus.MERGED, "2026-10-08T11:00:00Z").took)
