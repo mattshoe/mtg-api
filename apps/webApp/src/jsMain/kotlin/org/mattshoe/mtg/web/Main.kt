@@ -855,7 +855,7 @@ object MtgApp {
         app = app.copy(tasks = app.tasks.loading())
         scope.launch {
             app = try {
-                val found = github.tasks()
+                val found = github.tasks(store)
                 app.copy(tasks = app.tasks.loaded(found).at(kotlin.js.Date.now().toLong()))
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e

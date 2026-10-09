@@ -39,7 +39,12 @@ class GitHubReleases internal constructor(private val http: HttpClient) {
         }
     }
 
-    suspend fun tasks(store: Store): List<Task> = tasks()
+    /**
+     * The same, with the starts kept in [store] between visits: what
+     * both shells call, so GitHub is asked about a done task once.
+     */
+    suspend fun tasks(store: Store): List<Task> =
+        tasks(Tasks.knownStarts(store)).also { Tasks.saveStarts(store, it) }
 
     /**
      * The branch's first commit, one ask per task not already known. A refusal
