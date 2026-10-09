@@ -34,6 +34,11 @@ say() { printf '%s  %s\n' "$(date '+%H:%M:%S')" "$1" >>"$LOG"; }
 
 mkdir -p "$STATE"
 
+# Every run puts D1 right about what this laptop can see: a dead agent is
+# paused rather than in progress forever, a held request paused, a
+# withdrawn one cancelled. It may not stop a build. See task-status.mjs.
+node "$REPO/scripts/intake/task-status.mjs" reconcile >>"$LOG" 2>&1 || true
+
 # Choosing a request and creating its worktree is the only part that needs
 # exclusivity, and it takes seconds. It runs behind `lockf`, so a dispatcher
 # that arrives at the same instant WAITS for its turn and then picks a

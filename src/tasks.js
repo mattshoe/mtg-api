@@ -113,17 +113,16 @@ export async function received(db, keys, names = {}) {
 /**
  * Every status a task can have, in the words the app shows, which are
  * Matt's. `in progress` is an agent alive on it this second and nothing
- * else; `blocked` needs Matt or something it depends on, and the note
- * says which; `stopped` is an agent that started and died; `failing` is
- * a pull request whose CI is red; `closed` is one shut without merging.
- * Each is written by whatever caused it, and a cancelled task is never
- * collected.
+ * else; `blocked` needs Matt or something it depends on; `paused` is
+ * nothing running with the work kept, whether held by Matt, rate limited,
+ * crashed or killed. The note says which. There is no `failing`: red CI
+ * mid-run is still `in review`. Each is written by whatever caused it,
+ * and a cancelled task is never collected.
  */
 export const STATUSES = [
-  'pending', 'in progress', 'blocked', 'paused', 'stopped',
-  'in review', 'failing', 'merged', 'deployed', 'closed', 'cancelled',
+  'pending', 'in progress', 'blocked', 'paused', 'in review', 'merged', 'deployed', 'cancelled',
 ];
-const FINISHED = new Set(['merged', 'deployed', 'closed', 'cancelled']);
+const FINISHED = new Set(['merged', 'deployed', 'cancelled']);
 
 /** Every task, newest first, without its files. */
 export async function list(db) {
