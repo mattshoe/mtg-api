@@ -52,6 +52,8 @@ data class AppState(
     val tasks: Tasks = Tasks(),
     /** The task being written on Admin Settings' New task page. */
     val newTask: NewTask = NewTask(),
+    /** One task's own page, while it is open. */
+    val taskDetail: TaskDetail? = null,
     /** What is on top, and therefore what back closes. */
     val overlays: Overlays = Overlays(),
     /** Set when a share arrived and has not been used yet. */
@@ -622,6 +624,8 @@ data class AppState(
         // The task page is a page of Admin Settings, so back is Admin
         // Settings — the same as its own Cancel.
         writingTask -> navigate(Route(View.ADMIN))
+        // A task's own page is the same: back is the list it came from.
+        openTaskKey != null -> navigate(Route(View.ADMIN))
         // Inside the entry wizard, Back is a step and not an exit.
         // It had never heard of the wizard, so the gesture went
         // straight from step four to the Library and whatever was

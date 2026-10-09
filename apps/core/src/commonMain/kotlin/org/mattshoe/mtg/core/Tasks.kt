@@ -91,17 +91,7 @@ data class Task(
         return between(start, to)
     }
 
-    private fun between(start: Long, to: Long): String {
-        val minutes = ((to - start) / 60_000).coerceAtLeast(0)
-        val hours = minutes / 60
-        val days = hours / 24
-        return when {
-            minutes < 1 -> "just started"
-            hours < 1 -> "${minutes}m"
-            days < 1 -> "${hours}h ${(minutes % 60).toString().padStart(2, '0')}m"
-            else -> "${days}d ${hours % 24}h"
-        }
-    }
+    private fun between(start: Long, to: Long): String = Tasks.span(start, to)
 }
 
 /** The tasks panel on Admin Settings. */
@@ -164,6 +154,19 @@ data class Tasks(
             }
         } catch (e: Exception) {
             emptyList()
+        }
+
+        /** From one moment to another, as a row says it: `just started`, `42m`, `2h 05m`, `3d 4h`. */
+        fun span(start: Long, to: Long): String {
+            val minutes = ((to - start) / 60_000).coerceAtLeast(0)
+            val hours = minutes / 60
+            val days = hours / 24
+            return when {
+                minutes < 1 -> "just started"
+                hours < 1 -> "${minutes}m"
+                days < 1 -> "${hours}h ${(minutes % 60).toString().padStart(2, '0')}m"
+                else -> "${days}d ${hours % 24}h"
+            }
         }
 
         private val ISO = Regex("""(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?Z""")
