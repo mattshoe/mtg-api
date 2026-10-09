@@ -930,14 +930,14 @@ private fun Colours(s: org.mattshoe.mtg.core.DeckStats) {
         Modifier.fillMaxWidth().padding(top = 14.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Ring("Needs", s.pips, Modifier.weight(1f))
-        Ring("Makes", s.sources, Modifier.weight(1f))
+        Ring(org.mattshoe.mtg.core.ColourRing.NEEDS, s.pips, Modifier.weight(1f))
+        Ring(org.mattshoe.mtg.core.ColourRing.SOURCES, s.sources, Modifier.weight(1f))
     }
-    // Makes again, with a dual as its own slice rather than a point in
+    // Sources again, with a dual as its own slice rather than a point in
     // each colour's total. On a line of its own and bigger, because it
     // has the most slices to tell apart. The web's `.pie-set.wide`:
     // every slice numbered, and a table saying what each number is.
-    Ring("Exactly", s.combos, Modifier.fillMaxWidth().padding(top = 10.dp), ring = 180.dp, numbered = s.exactly)
+    Ring(org.mattshoe.mtg.core.ColourRing.PRODUCTION, s.combos, Modifier.fillMaxWidth().padding(top = 10.dp), ring = 180.dp, numbered = s.exactly)
     // The web's `.sub`, in the caption grey rather than amber: amber
     // said "wrong" in the one channel this collection's owner cannot
     // see anyway, and the sentence itself is what carries it.
@@ -964,12 +964,14 @@ private var androidx.compose.ui.semantics.SemanticsPropertyReceiver.ringArcs by 
  */
 @Composable
 private fun Ring(
-    caption: String,
+    which: org.mattshoe.mtg.core.ColourRing,
     bars: List<Bar>,
     modifier: Modifier = Modifier,
     ring: androidx.compose.ui.unit.Dp = 76.dp,
     numbered: List<org.mattshoe.mtg.core.RingSlice> = emptyList(),
 ) {
+    val caption = which.caption
+    val key = which.tag
     val total = bars.sumOf { it.value }
     // Nothing to split: a colourless deck has no colour chart.
     if (total <= 0) {
@@ -979,7 +981,7 @@ private fun Ring(
     val slices = bars.map { it to (it.value * 100) / total }
     val told = slices.joinToString(", ") { (bar, pct) -> "${bar.label} $pct%" }
     Column(
-        modifier.testTag("ring-$caption"),
+        modifier.testTag("ring-$key"),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
@@ -1070,7 +1072,7 @@ private fun Ring(
                         Row(Modifier.width(symbols), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                             slice.bar.letters.forEach { letter ->
                                 val letters = slice.bar.letters
-                                val tag = if (letters.size == 1) "pip-$caption-$letter" else "pip-$caption-${slice.bar.label}-$letter"
+                                val tag = if (letters.size == 1) "pip-$key-$letter" else "pip-$key-${slice.bar.label}-$letter"
                                 PipDot(letter, 14.dp, 9.sp, tag)
                             }
                         }
@@ -1099,7 +1101,7 @@ private fun Ring(
                     // symbol, so UR reads {U}{R} and not a tint.
                     val letters = bar.letters
                     letters.forEach { letter ->
-                        val tag = if (letters.size == 1) "pip-$caption-$letter" else "pip-$caption-${bar.label}-$letter"
+                        val tag = if (letters.size == 1) "pip-$key-$letter" else "pip-$key-${bar.label}-$letter"
                         PipDot(letter, 14.dp, 9.sp, tag)
                     }
                     Line("$pct%", Ink2, Design.TINY)

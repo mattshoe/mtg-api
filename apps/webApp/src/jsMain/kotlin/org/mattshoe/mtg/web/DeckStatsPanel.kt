@@ -11,6 +11,7 @@ import org.jetbrains.compose.web.dom.Td
 import org.jetbrains.compose.web.dom.Tr
 import org.jetbrains.compose.web.dom.Text
 import org.mattshoe.mtg.core.Bar
+import org.mattshoe.mtg.core.ColourRing
 import org.mattshoe.mtg.core.DeckStats
 import org.mattshoe.mtg.core.Design
 import org.mattshoe.mtg.core.Pip
@@ -163,12 +164,12 @@ private fun Colours(s: DeckStats) {
         }
     }
     Div(attrs = { classes("pies") }) {
-        Pie("Needs", s.pips)
-        Pie("Makes", s.sources)
-        // Makes again, with a dual as its own slice rather than a
+        Pie(ColourRing.NEEDS.caption, s.pips)
+        Pie(ColourRing.SOURCES.caption, s.sources)
+        // Sources again, with a dual as its own slice rather than a
         // point in each colour's total. On a line of its own and
         // bigger, because it has the most slices to tell apart.
-        Pie("Exactly", s.combos, numbered = s.exactly)
+        Pie(ColourRing.PRODUCTION.caption, s.combos, numbered = s.exactly)
     }
     if (s.unsupported.isNotEmpty()) {
         Div(attrs = { classes("sub") }) {

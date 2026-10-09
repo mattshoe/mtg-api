@@ -147,6 +147,24 @@ data class TokenCard(
 }
 
 /**
+ * The three colour rings, in the order they are drawn, and what each
+ * is called on both platforms.
+ *
+ * [tag] is the name a test finds the ring by; it predates the
+ * captions and is not shown to anybody.
+ */
+enum class ColourRing(val tag: String, val caption: String) {
+    /** Pips the deck's costs ask for, per colour. */
+    NEEDS("Needs", "Needs"),
+
+    /** Cards that make each colour, a dual counted once in each. */
+    SOURCES("Makes", "Sources per Colour"),
+
+    /** Cards by the exact combination they make, a dual as its own slice. */
+    PRODUCTION("Exactly", "Mana Production"),
+}
+
+/**
  * What a deck is made of.
  *
  * All of it derived from the cards, in the shared core, so the phone

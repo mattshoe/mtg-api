@@ -258,8 +258,9 @@ class DeckStatsLayoutTest {
         }
         val caps = frame.all("span.pie-cap").map { it.textContent.orEmpty() }
         assertTrue(caps.any { it.startsWith("Needs") }, caps.toString())
-        assertTrue(caps.any { it.startsWith("Makes") }, caps.toString())
-        assertTrue(caps.any { it.startsWith("Exactly") }, caps.toString())
+        assertTrue(caps.any { it.startsWith("Sources per Colour") }, caps.toString())
+        assertTrue(caps.any { it.startsWith("Mana Production") }, caps.toString())
+        assertTrue(caps.none { it.startsWith("Exactly") || it.startsWith("Makes") }, "a ring still has its old name: " + caps)
     }
 
     /** The ring whose caption starts with this, measured. */
@@ -276,8 +277,8 @@ class DeckStatsLayoutTest {
         val frame = render(900)
         settle()
         val needs = frame.ring("Needs")
-        val makes = frame.ring("Makes")
-        val exactly = frame.ring("Exactly")
+        val makes = frame.ring("Sources per Colour")
+        val exactly = frame.ring("Mana Production")
         assertTrue(needs != null && makes != null && exactly != null, "expected three rings")
         assertTrue(abs(needs.top - makes.top) < 1, "needs and makes are not in one row: ${needs.top} vs ${makes.top}")
         assertTrue(
@@ -299,7 +300,7 @@ class DeckStatsLayoutTest {
         val frame = render(900)
         settle()
         val needs = frame.ring("Needs")
-        val exactly = frame.ring("Exactly")
+        val exactly = frame.ring("Mana Production")
         assertTrue(needs != null && exactly != null, "expected the needs and exactly rings")
         assertTrue(
             exactly.width > needs.width * 1.25,
@@ -335,9 +336,9 @@ class DeckStatsLayoutTest {
         renderComposable(root = frame) { DeckStatsPanel(DeckAnalysis.of(cards)) }
         settle()
         val set = frame.all("div.pie-set")
-            .firstOrNull { it.querySelector(".pie-cap")?.textContent.orEmpty().startsWith("Exactly") }
+            .firstOrNull { it.querySelector(".pie-cap")?.textContent.orEmpty().startsWith("Mana Production") }
         assertTrue(set != null, "there is no Exactly ring at all")
-        assertEquals("Exactly · 10", set.querySelector(".pie-cap")?.textContent)
+        assertEquals("Mana Production · 10", set.querySelector(".pie-cap")?.textContent)
         val title = set.querySelector(".pie")?.getAttribute("title").orEmpty()
         assertEquals("U 30%, R 50%, UR 20%", title)
     }
@@ -466,7 +467,7 @@ class DeckStatsLayoutTest {
         assertTrue(styled(), "app.css never loaded, so the layout proves nothing")
         val frame = render(900)
         settle()
-        val exactly = frame.ring("Exactly")
+        val exactly = frame.ring("Mana Production")
         assertTrue(exactly != null, "there is no Exactly ring at all")
         assertTrue(exactly.width >= 170, "the Exactly ring is ${exactly.width}px across, no bigger than before")
     }

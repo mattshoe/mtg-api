@@ -630,4 +630,15 @@ class SliceFillTest {
         assertEquals("#938AA0", Design.css(0xFF938AA0))
         assertEquals("#05000A", Design.css(0xFF05000A))
     }
+
+    @Test
+    fun theColourRingsAreNeedsSourcesPerColourAndManaProduction() {
+        // Matt: "Change the name of 'Exactly' to Mana Production", and
+        // "makes" to something that says what it counts: each colour's
+        // sources, a dual counted once in each.
+        assertEquals(
+            listOf("Needs", "Sources per Colour", "Mana Production"),
+            ColourRing.entries.map { it.caption },
+        )
+    }
 }

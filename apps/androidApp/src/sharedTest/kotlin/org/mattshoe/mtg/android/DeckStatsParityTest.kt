@@ -517,8 +517,8 @@ class DeckStatsParityTest {
                 card("Steam Vents", "Land", null, 0.0, qty = 2, produces = "UR"),
             ),
         )
-        rule.onNodeWithText("Exactly · 10").assertExists()
-        rule.onNodeWithContentDescription("Exactly · 10 — U 30%, R 50%, UR 20%", useUnmergedTree = true)
+        rule.onNodeWithText("Mana Production · 10").assertExists()
+        rule.onNodeWithContentDescription("Mana Production · 10 — U 30%, R 50%, UR 20%", useUnmergedTree = true)
             .assertExists()
         // The dual is keyed by both its symbols, so it is named and
         // not only tinted.
@@ -532,7 +532,7 @@ class DeckStatsParityTest {
         show(deck())
         val s = stats(deck())
         rule.onNodeWithText("Needs · ${s.pips.sumOf { it.value }}").assertExists()
-        rule.onNodeWithText("Makes · ${s.sources.sumOf { it.value }}").assertExists()
+        rule.onNodeWithText("Sources per Colour · ${s.sources.sumOf { it.value }}").assertExists()
     }
 
     @Test
