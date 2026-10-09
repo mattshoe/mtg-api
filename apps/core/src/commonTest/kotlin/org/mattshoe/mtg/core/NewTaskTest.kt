@@ -39,14 +39,17 @@ class NewTaskTest {
         assertFalse(user.startingATask().writingTask, "a plain account reached the task page")
     }
 
+    /**
+     * Matt: "come up with your own fucking task titles just give me a way
+     * to enter the task details fuck the title field". Details are all
+     * it needs; the Worker names it.
+     */
     @Test
-    fun itCannotBeSentWithoutATitleAndDetails() {
+    fun detailsAloneAreEnoughToSend() {
         val t = NewTask()
-        assertFalse(t.canSend)
-        assertFalse(t.titled("Bigger buttons").canSend, "sent with no details")
-        assertFalse(t.described("They are too small").canSend, "sent with no title")
-        assertFalse(t.titled("  ").described("x").canSend, "a blank title counted")
-        assertTrue(t.titled("Bigger buttons").described("They are too small").canSend)
+        assertFalse(t.canSend, "sent with nothing typed")
+        assertFalse(t.described("   ").canSend, "blank details counted")
+        assertTrue(t.described("They are too small").canSend, "details alone could not be sent")
     }
 
     @Test
@@ -72,25 +75,25 @@ class NewTaskTest {
 
     @Test
     fun sendingTwiceIsNotPossible() {
-        val t = NewTask().titled("x").described("y").sending()
+        val t = NewTask().described("y").sending()
         assertFalse(t.canSend, "a second press could send it again")
     }
 
     @Test
     fun sentGoesBackToAdminSettingsWithAnEmptyFormAndSaysSo() {
         val s = onAdmin().startingATask()
-            .let { it.copy(newTask = it.newTask.titled("Bigger buttons").described("too small").sending()) }
+            .let { it.copy(newTask = it.newTask.described("too small").sending()) }
             .taskSent()
         assertEquals(Route(View.ADMIN), s.route)
         assertEquals(NewTask(), s.newTask)
-        assertEquals("Task sent: Bigger buttons. It is a request within five minutes.", s.toast)
+        assertEquals("Task sent. It is a request within five minutes.", s.toast)
     }
 
     @Test
     fun aRefusalStaysOnThePageWithEverythingTypedStillThere() {
-        val t = NewTask().titled("x").described("y").attach(listOf(file("a.png"))).sending()
+        val t = NewTask().described("y").attach(listOf(file("a.png"))).sending()
             .failed("that needs the admin role")
-        assertEquals("x", t.title)
+        assertEquals("y", t.details)
         assertEquals(listOf("a.png"), t.files.map { it.name })
         assertEquals("that needs the admin role", t.error)
         assertTrue(t.canSend)
