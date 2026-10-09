@@ -6,6 +6,7 @@ const TABLES = [
   'card_games', 'card_keywords', 'card_promo_types', 'card_search', 'card_tags',
   'card_types', 'cards', 'deck_cards', 'deck_notes', 'decks', 'idempotency', 'legalities',
   'identities', 'logs', 'maintenance_log', 'prices', 'rulings', 'sessions', 'tag_names', 'tags', 'task_files', 'task_inbox', 'users',
+  'github_releases',
 ];
 
 const VIEWS = ['bulk_cards', 'card_prices', 'card_usage', 'deck_conflicts',
