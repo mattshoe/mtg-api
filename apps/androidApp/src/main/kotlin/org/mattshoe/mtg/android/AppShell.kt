@@ -378,11 +378,20 @@ fun AppShell(
                     View.STATS -> StatsScreen(state.stats)
 
 
-                    View.ADMIN -> AdminScreen(
+                    View.ADMIN -> if (state.writingTask) {
+                        NewTaskScreen(
+                            task = state.newTask,
+                            onState = { onState(state.copy(newTask = it)) },
+                            onPickFile = onPickFile,
+                            onSend = onSendTask,
+                            onCancel = { onState(state.navigate(Route(View.ADMIN))) },
+                        )
+                    } else AdminScreen(
                         state = state.people,
                         releases = state.releases,
                         tasks = state.tasks,
                         onToggleDone = { onState(state.copy(tasks = state.tasks.toggleDone())) },
+                        onNewTask = { onState(state.startingATask()) },
                         me = state.admin.account?.key,
                         person = state.person,
                         onSearch = { onState(state.copy(people = state.people.searching(it))) },

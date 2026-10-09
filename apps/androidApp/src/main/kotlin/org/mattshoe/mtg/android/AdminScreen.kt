@@ -1,6 +1,7 @@
 package org.mattshoe.mtg.android
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.clickable
@@ -46,6 +47,8 @@ fun AdminScreen(
     releases: Releases = Releases(),
     tasks: Tasks = Tasks(),
     onToggleDone: () -> Unit = {},
+    /** The New task button, which opens its own screen. */
+    onNewTask: () -> Unit = {},
     onSearch: (String) -> Unit = {},
     onOpen: (Person) -> Unit = {},
     onSetRole: (Person, String) -> Unit = { _, _ -> },
@@ -61,7 +64,7 @@ fun AdminScreen(
             PersonPage(state, person, me, onSetRole, onBack)
         } else {
             Everybody(state, onSearch, onOpen)
-            TaskList(tasks, onToggleDone)
+            TaskList(tasks, onToggleDone, onNewTask)
             ReleaseNotes(releases)
         }
     }
@@ -102,8 +105,10 @@ private fun Everybody(state: People, onSearch: (String) -> Unit, onOpen: (Person
  * first". Sibling of the website's `taskList`.
  */
 @Composable
-private fun TaskList(tasks: Tasks, onToggleDone: () -> Unit) {
+private fun TaskList(tasks: Tasks, onToggleDone: () -> Unit, onNewTask: () -> Unit) {
     Panel(head = "Tasks") {
+        // Matt: "I want to be able to tap a "new task" button".
+        Box(Modifier.testTag("new-task")) { Primary("New task") { onNewTask() } }
         when {
             tasks.busy -> Line("Loading…", Ink3)
             tasks.error != null -> Line("Could not load tasks: ${tasks.error}", Bad)
