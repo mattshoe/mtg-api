@@ -320,7 +320,7 @@ fun AppShell(
                 when (state.view) {
                     View.LIBRARY -> LibraryScreen(
                         state = state.library,
-                        onState = { onState(state.copy(library = it)) },
+                        onState = { onState(state.filtered(it)) },
                         onSearch = onSearch,
                         // The carousel, the same as a deck's rows.
                         // Matt: "let's use the same carousel for the

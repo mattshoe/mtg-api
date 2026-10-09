@@ -9,6 +9,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -61,15 +62,17 @@ class ResetClearsNameBoxTest {
         return { state }
     }
 
+    private val nameField = hasSetTextAction() and hasText("Card name")
+
     /** What the name box shows, read back out of the field itself. */
     private fun nameBox(): String =
-        rule.onNode(hasSetTextAction()).fetchSemanticsNode()
+        rule.onNode(nameField).fetchSemanticsNode()
             .config.getOrNull(SemanticsProperties.EditableText)?.text.orEmpty()
 
     @Test
     fun resetEverythingEmptiesTheNameBox() {
         val state = shell()
-        rule.onNode(hasSetTextAction()).performTextInput("bolt")
+        rule.onNode(nameField).performTextInput("bolt")
         rule.waitForIdle()
         assertEquals("bolt", nameBox(), "the box did not take the name, so this proves nothing")
 

@@ -118,7 +118,7 @@ fun AppShell(
     when (state.view) {
         View.LIBRARY -> LibraryPage(
             state = state.library,
-            onState = { onState(state.copy(library = it)) },
+            onState = { onState(state.filtered(it)) },
             onSearch = onSearch,
             // The carousel, the same as a deck's rows.
             onOpen = { row -> onState(state.peekRow(row)) },
