@@ -9,7 +9,6 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performMultiTouchInput
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pinch
@@ -106,7 +105,7 @@ class CarouselPinchZoomTest {
     private val zoom: CardZoom get() = held.value.peek.zoom
 
     private fun spread() {
-        rule.onNodeWithTag("carousel-pager").performMultiTouchInput {
+        rule.onNodeWithTag("carousel-pager").performTouchInput {
             pinch(
                 start0 = center + Offset(-20f, 0f),
                 end0 = center + Offset(-160f, 0f),
@@ -118,7 +117,7 @@ class CarouselPinchZoomTest {
     }
 
     private fun squeeze() {
-        rule.onNodeWithTag("carousel-pager").performMultiTouchInput {
+        rule.onNodeWithTag("carousel-pager").performTouchInput {
             pinch(
                 start0 = center + Offset(-200f, 0f),
                 end0 = center + Offset(-5f, 0f),
