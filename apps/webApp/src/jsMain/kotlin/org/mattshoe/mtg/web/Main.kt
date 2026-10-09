@@ -13,6 +13,7 @@ import kotlinx.browser.window
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.await
 import kotlinx.coroutines.launch
@@ -392,6 +393,10 @@ object MtgApp {
         composition = null
         // Nothing to unlock here: the shell's `DisposableEffect`
         // releases the page as the composition goes away.
+        //
+        // Work launched and not yet run would otherwise run anyway,
+        // against whatever `api` and `github` the next mount brought.
+        scope.coroutineContext.cancelChildren()
     }
 
     // ------------------------------------------------------- listeners
