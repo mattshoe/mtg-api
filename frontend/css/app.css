@@ -1770,6 +1770,16 @@ select.sort {
 .task-file-name { flex: 1; min-width: 0; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .new-task-actions { margin-top: 16px; }
 
+/* One task's own page: what D1 knows about it, the request as written,
+   and the files, pictures shown in place. */
+.task-detail { max-width: 760px; }
+.task-detail h3 { margin: 18px 0 6px; }
+.task-detail-text { color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; }
+.task-detail-image {
+  display: block; max-width: 100%; max-height: 480px; margin: 4px 0 10px;
+  border: 1px solid var(--line); border-radius: 8px;
+}
+
 /* One account's own page: a big face, their name, their address. */
 .person-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
 .person-face {

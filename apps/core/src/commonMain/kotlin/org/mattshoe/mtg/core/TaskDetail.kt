@@ -147,6 +147,6 @@ val AppState.openTaskKey: String?
 /** The open task as the list has it, once the list has loaded. */
 val AppState.openTask: Task? get() = openTaskKey?.let { key -> tasks.rows.firstOrNull { it.key == key } }
 
-/** A task tapped on Admin Settings. Landing still checks the role. */
+/** A task tapped on Admin Settings: its row at once, the rest on its way. Landing still checks the role. */
 fun AppState.openingTask(task: Task): AppState =
-    copy(taskDetail = TaskDetail(task.key, task = task)).navigate(Route(View.ADMIN, "${TaskDetail.ROUTE}/${task.key}"))
+    copy(taskDetail = TaskDetail(task.key, task = task, busy = true)).navigate(Route(View.ADMIN, "${TaskDetail.ROUTE}/${task.key}"))

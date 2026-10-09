@@ -16,6 +16,10 @@ import org.jetbrains.compose.web.dom.Input
 import org.jetbrains.compose.web.dom.Span
 import org.jetbrains.compose.web.dom.Text
 import org.mattshoe.mtg.core.AppState
+import org.mattshoe.mtg.core.TaskDetail
+import org.mattshoe.mtg.core.openTask
+import org.mattshoe.mtg.core.openTaskKey
+import org.mattshoe.mtg.core.openingTask
 import org.mattshoe.mtg.core.CardRow
 import org.mattshoe.mtg.core.EntryHistory
 import org.mattshoe.mtg.core.CardDetail
@@ -170,12 +174,20 @@ fun AppShell(
                 onSend = onSendTask,
                 onCancel = { onState(state.navigate(Route(View.ADMIN))) },
             )
+        } else if (state.openTaskKey != null) {
+            TaskPage(
+                detail = state.taskDetail?.takeIf { it.key == state.openTaskKey } ?: TaskDetail(state.openTaskKey!!, busy = true),
+                listed = state.openTask,
+                now = state.tasks.now.takeIf { it > 0 } ?: kotlin.js.Date.now().toLong(),
+                onBack = { onState(state.navigate(Route(View.ADMIN))) },
+            )
         } else AdminPage(
             state = state.people,
             releases = state.releases,
             tasks = state.tasks,
             onToggleDone = { onState(state.copy(tasks = state.tasks.toggleDone())) },
             onNewTask = { onState(state.startingATask()) },
+            onOpenTask = { onState(state.openingTask(it)) },
             me = state.admin.account?.key,
             person = state.person,
             onSearch = { onState(state.copy(people = state.people.searching(it))) },

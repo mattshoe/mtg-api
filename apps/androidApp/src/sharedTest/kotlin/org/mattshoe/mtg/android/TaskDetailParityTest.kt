@@ -97,8 +97,9 @@ class TaskDetailParityTest {
         ),
     )
 
+    /** Merged, so a row's label and value read as one line. */
     private fun texts(tag: String): List<String> =
-        rule.onAllNodes(hasTestTag(tag), useUnmergedTree = true).fetchSemanticsNodes().map { it.says() }
+        rule.onAllNodes(hasTestTag(tag)).fetchSemanticsNodes().map { it.says() }
 
     private fun SemanticsNode.says(): String =
         config.getOrNull(SemanticsProperties.Text).orEmpty().joinToString(" ") { it.text }

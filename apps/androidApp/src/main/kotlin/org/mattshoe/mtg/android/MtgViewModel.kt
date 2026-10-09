@@ -67,6 +67,9 @@ class MtgViewModel : ViewModel() {
     /** The tasks load, held for the same reason. */
     var tasksJob: Job? = null
 
+    /** One task's page load, held for the same reason. */
+    var taskDetailJob: Job? = null
+
     /** The minute tick that keeps a running task's elapsed time current. */
     var tasksClock: Job? = null
 

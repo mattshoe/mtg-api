@@ -1,5 +1,7 @@
 package org.mattshoe.mtg.android
 
+import org.mattshoe.mtg.core.TaskDetail
+import org.mattshoe.mtg.core.openTaskKey
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -642,6 +644,8 @@ class MainActivity : ComponentActivity() {
                 intoPage(View.ADMIN) { loadPeople() }
                 loadReleases()
                 if (s.route.rest.isEmpty()) loadTasks()
+                // A task's own page, by its address or a tap.
+                s.openTaskKey?.let { loadTaskDetail(it) }
             }
 
             // A card reached by its address rather than by a tap that
@@ -851,6 +855,27 @@ class MainActivity : ComponentActivity() {
             } catch (e: Exception) {
                 app.copy(releases = app.releases.failed(e.message ?: "that did not work"))
             }
+        }
+    }
+
+    /**
+     * One task's page, from the Worker and nobody else: the row, its
+     * text and its files. A load already under way for the same task is
+     * left to finish. Sibling of the website's `loadTaskDetail`.
+     */
+    private fun loadTaskDetail(key: String) {
+        if (model.taskDetailJob?.isActive == true && app.taskDetail?.key == key) return
+        val had = app.taskDetail?.takeIf { it.key == key }
+        app = app.copy(taskDetail = (had ?: TaskDetail(key)).loading())
+        model.taskDetailJob = scope.launch {
+            val loaded = try {
+                api.task(token(), key)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                (app.taskDetail?.takeIf { it.key == key } ?: TaskDetail(key)).failed(e.message ?: "that did not work")
+            }
+            if (app.taskDetail?.key == key) app = app.copy(taskDetail = loaded)
         }
     }
 
