@@ -51,6 +51,7 @@ import org.mattshoe.mtg.core.Scryfall
 import org.mattshoe.mtg.core.GitHubReleases
 import org.mattshoe.mtg.core.Share
 import org.mattshoe.mtg.core.ShareWhat
+import org.mattshoe.mtg.core.SharedFile
 import org.mattshoe.mtg.core.StatsQueries
 import org.mattshoe.mtg.core.Store
 import org.mattshoe.mtg.core.Table
@@ -176,7 +177,23 @@ class MainActivity : ComponentActivity() {
             // collection decides what every query asks for.
             resolveCollection()
             loadFor(app)
+        } else if (takeShare(incoming)) {
+            loadFor(app)
         }
+    }
+
+    /**
+     * A file or text shared from another app, into the entry box.
+     *
+     * Returns whether it moved. The reading is `SharedFile`; what a
+     * share does to the app is `AppState.withShare`, the same one the
+     * website's share target uses.
+     */
+    private fun takeShare(from: Intent?): Boolean {
+        if (from?.action != Intent.ACTION_SEND && from?.action != Intent.ACTION_SEND_MULTIPLE) return false
+        val share = SharedFile.read(this, from)
+        app = if (share.list.isBlank()) app.say(share.problem, failed = true) else app.withShare(share.list)
+        return true
     }
 
     /**
@@ -209,6 +226,9 @@ class MainActivity : ComponentActivity() {
         app = shareDeck(what, where)
         return app
     }
+
+    /** What the picker hands back, for a test that cannot open a picker. */
+    internal fun readFilesForTesting(uris: List<Uri>) = readFiles(uris)
 
     /** `exportList`, for a test that cannot see a private method. */
     internal suspend fun exportListForTesting(where: ExportTo): AppState {
@@ -363,7 +383,7 @@ class MainActivity : ComponentActivity() {
             // A link that started the app decides where it opens,
             // before the first fetch, so nothing is read for the
             // Library and then thrown away for the deck.
-            followLink(intent)
+            if (!followLink(intent)) takeShare(intent)
             loadFor(app)
             loadFacets()
         }
@@ -1171,10 +1191,9 @@ class MainActivity : ComponentActivity() {
                 }
             }
             if (chunks.isEmpty()) return@launch
-            val incoming = chunks.joinToString("\n")
-            app = app.copy(entry = app.entry.type(Upload.merge(app.entry.list, incoming)))
-                .say(Upload.describe(names, incoming))
-                .shareUsed()
+            // Into whichever box is on screen — the deck wizard's, when
+            // it is open. This always wrote the entry box behind it.
+            app = app.uploaded(names, chunks.joinToString("\n"))
         }
     }
 

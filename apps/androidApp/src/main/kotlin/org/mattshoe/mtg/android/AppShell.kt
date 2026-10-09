@@ -435,7 +435,7 @@ fun AppShell(
                             onState = { onState(state.copy(entry = it)) },
                             onPreview = onPreviewEntry,
                             onApply = onApplyEntry,
-                            onNewDeck = { onState(state.opening(Overlay.NEW_DECK)) },
+                            onNewDeck = { onState(state.startingADeck()) },
                             history = state.history,
                             onPickFile = onPickFile,
                             onReuse = onReuse,
