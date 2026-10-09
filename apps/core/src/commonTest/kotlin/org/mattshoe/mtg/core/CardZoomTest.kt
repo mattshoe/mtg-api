@@ -152,6 +152,23 @@ class CardZoomTest {
     }
 
     @Test
+    fun theWebsitesBackAndEscapeZoomOutToo() {
+        // The website's popstate and Escape both reach `dismissTop`,
+        // not `back`.
+        val out = zoomedIn().dismissTop()!!
+        assertTrue(Overlay.CARD_PEEK in out.overlays, "dismissing closed the carousel instead of zooming out")
+        assertEquals(CardZoom(), out.peek.zoom)
+    }
+
+    @Test
+    fun aZoomIsOneMoreThingBackHasToUndo() {
+        // So the website pushes a history entry for it, and the
+        // browser's back has something to pop that is not the
+        // carousel itself.
+        assertEquals(peeking().historyDepth + 1, zoomedIn().historyDepth)
+    }
+
+    @Test
     fun anotherCardOpensZoomedOut() {
         assertEquals(CardZoom(), zoomedIn().back()!!.back()!!.peekAt(0).peek.zoom)
     }

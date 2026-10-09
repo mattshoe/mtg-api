@@ -325,6 +325,8 @@ data class AppState(
 
     fun peekZoom(zoom: CardZoom): AppState = this
 
+    val historyDepth: Int get() = overlays.historyDepth
+
     private fun runFor(of: PeekOf): List<DeckCard> = when (of) {
         PeekOf.DECK -> decks.pageOrder
         // Sized only; the Library's own rows are mapped in `peekRun`.
