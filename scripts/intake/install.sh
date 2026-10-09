@@ -73,7 +73,11 @@ rm -f "$REPO/.intake/disabled"
 touch "$REPO/.intake/enabled"
 
 launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
-launchctl load "$PLIST"
+# `launchctl load` is the legacy call and fails quietly in a user domain —
+# after one reinstall the job was simply gone, and the timer with it. Use
+# bootstrap, and say so if the job is not listed afterwards.
+launchctl bootstrap "gui/$(id -u)" "$PLIST" 2>/dev/null || launchctl load "$PLIST" 2>/dev/null || true
+launchctl list | grep -q "$LABEL" || echo "  WARNING: $LABEL did not load"
 
 # The second job: tasks written in the app, collected from the Worker's
 # inbox into requests/ every five minutes. See scripts/intake/inbox.mjs.
