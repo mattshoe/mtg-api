@@ -38,6 +38,7 @@ class TasksTest {
         row("k6", "Sent from the phone", "queued"),
         row("k7", "Never mind", "cancelled", null, "2026-10-04T08:00:00.000Z"),
         row("k8", "Builder died", "stopped", "2026-10-07T08:00:00.000Z"),
+        row("k9", "On hold", "paused"),
     ).joinToString(",", """{"tasks":[""", "]}")
 
     private fun decoded() = Tasks.decode(body)
@@ -58,6 +59,14 @@ class TasksTest {
         assertEquals("queued", statusOf("Sent from the phone"))
         assertEquals("cancelled", statusOf("Never mind"))
         assertEquals("stopped", statusOf("Builder died"))
+    }
+
+    /** Matt: four stopped tasks all read `building`. A held one says paused, and its clock does not run. */
+    @Test
+    fun aTaskHeldBackIsPausedAndNotCountingUp() {
+        val held = decoded().single { it.title == "On hold" }
+        assertEquals("paused", held.status.word)
+        assertNull(held.copy(startedAt = "2026-10-08T10:00:00Z").elapsed(Tasks.epochMillis("2026-10-08T11:00:00Z")!!))
     }
 
     @Test

@@ -144,6 +144,12 @@ describe('task status', () => {
     expect((await getAs('/tasks')).body.tasks[0].status).toBe('cancelled')
   })
 
+  it('a request held back is paused, and nothing about that reads as building', async () => {
+    expect((await post('/tasks/status', { name: 'held-one', title: 'Held one', status: 'paused' })).status).toBe(200)
+    const [t] = (await getAs('/tasks')).body.tasks
+    expect(t).toMatchObject({ name: 'held-one', status: 'paused', started_at: null, finished_at: null })
+  })
+
   it('a status nobody defined is refused, and so is a task nobody named', async () => {
     const r = await post('/tasks/status', { name: 'x', title: 'X', status: 'nearly' })
     expect(r.status).toBe(400)
