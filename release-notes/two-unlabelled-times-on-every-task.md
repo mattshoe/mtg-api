@@ -1,0 +1,1 @@
+A task row on Admin Settings shows one time, how long since it was created, and a finished one shows how long it took from created to finished. The time in its current status and the pull request number are gone from the row.
