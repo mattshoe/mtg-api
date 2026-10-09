@@ -68,8 +68,21 @@ touch "$REPO/.intake/enabled"
 launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
 launchctl load "$PLIST"
 
+# The second job: tasks written in the app, collected from the Worker's
+# inbox into requests/ every five minutes. See scripts/intake/inbox.mjs.
+INBOX_LABEL="com.matt.mtg.intake-inbox"
+INBOX_PLIST="$HOME/Library/LaunchAgents/$INBOX_LABEL.plist"
+sed -e "s|@REPO@|$REPO|g" \
+    -e "s|@NODE@|$NODE_DIR/node|g" \
+    -e "s|@LOGDIR@|$LOGDIR|g" \
+    -e "s|@PATH@|$JOB_PATH|g" \
+    "$REPO/scripts/intake/$INBOX_LABEL.plist" > "$INBOX_PLIST"
+launchctl bootout "gui/$(id -u)/$INBOX_LABEL" 2>/dev/null || true
+launchctl load "$INBOX_PLIST"
+
 echo "loaded $LABEL"
 echo "  watching  $REPO/requests"
 echo "  runner    $RUNNER"
+echo "  inbox     $INBOX_LABEL, every five minutes"
 echo "  logs      $LOGDIR/launchd.log and $REPO/.intake/intake.log"
 echo "  off       bash $REPO/scripts/intake/uninstall.sh"

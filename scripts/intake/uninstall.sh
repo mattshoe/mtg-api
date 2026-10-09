@@ -36,5 +36,10 @@ if [ -f "$PLIST" ]; then
   echo "removed $PLIST"
 fi
 
+# The inbox job, which collects tasks written in the app.
+INBOX_LABEL="com.matt.mtg.intake-inbox"
+launchctl bootout "gui/$(id -u)/$INBOX_LABEL" 2>/dev/null || true
+rm -f "$HOME/Library/LaunchAgents/$INBOX_LABEL.plist"
+
 echo
 echo "To turn it back on:  rm $STATE/disabled && bash $REPO/scripts/intake/install.sh"
