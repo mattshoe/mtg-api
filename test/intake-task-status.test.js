@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { outcome, titleOf, report, reconcile } from '../scripts/intake/task-status.mjs'
+import { outcome, titleOf, started, report, reconcile } from '../scripts/intake/task-status.mjs'
 
 /**
  * The dispatcher's half of "task status lives in D1".
@@ -42,6 +42,16 @@ describe('what the dispatcher writes', () => {
   it('the title is the request file\'s heading, after its frontmatter', () => {
     expect(titleOf('---\nstatus: ready\n---\n\n# Bigger buttons\n\nThey are small.\n')).toBe('Bigger buttons')
     expect(titleOf('no heading here')).toBe('')
+  })
+
+  // The task's own page in the app shows the whole request, and one
+  // written straight into requests/ is only on this laptop until now.
+  it('in progress carries the request file whole, so the app can show it', () => {
+    const text = '---\nstatus: ready\n---\n\n# Bigger buttons\n\nThey are small.\n'
+    expect(started('bigger-buttons', text)).toEqual({
+      name: 'bigger-buttons', status: 'in progress', title: 'Bigger buttons', details: text,
+    })
+    expect(started('gone', '')).toEqual({ name: 'gone', status: 'in progress' })
   })
 
   it('posts the transition to the Worker with the agent token, by the request\'s name', async () => {

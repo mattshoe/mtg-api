@@ -20,6 +20,7 @@
 //   POST /tasks/inbox/received  the laptop has them (admin)
 //   GET  /tasks       every task and where it is (admin)
 //   POST /tasks/status one transition, from the dispatcher (admin)
+//   GET  /tasks/:key  one task, its details and its files (admin)
 //   GET  /releases    the release notes, GitHub's list as the Worker keeps it
 //   GET  /maintenance last run of the daily job
 //   POST /maintenance run it now (admin)
@@ -46,7 +47,7 @@ import { lookupPrices } from './prices.js';
 import { runMaintenance, CRON_TASKS } from './maintenance.js';
 import { newEntry, writeEntry, buildLogQuery, logStats } from './log.js';
 import { keyFrom, claim, remember, release } from './idempotency.js';
-import { newTask, inbox, received, list as taskList, setStatus } from './tasks.js';
+import { newTask, inbox, received, list as taskList, setStatus, task as oneTask } from './tasks.js';
 import { releases } from './releases.js';
 import { preview } from './preview.js';
 // The site's own file, bundled in, so the two hosts cannot disagree.
@@ -292,7 +293,8 @@ const INDEX = {
     'GET /tasks/inbox': 'the tasks the laptop has not collected yet, files included; admin only',
     'POST /tasks/inbox/received': '{"keys":["..."],"names":{"<key>":"<request file>"}} — the laptop has written these; admin only',
     'GET /tasks': 'every task, newest first, with its status; admin only',
-    'POST /tasks/status': '{"key" or "name","status","note"?,"title"?,"pr"?} — one transition, written by whoever caused it; admin only',
+    'POST /tasks/status': '{"key" or "name","status","note"?,"title"?,"pr"?,"details"?} — one transition, written by whoever caused it; details is the request file, kept only for a task with none; admin only',
+    'GET /tasks/:key': 'one task, its details, status and files, collected or not; admin only',
     'GET /releases': 'GitHub\'s release list, kept by the Worker for a few minutes',
     'GET /logs': '?min=info&q=&event=&status=error&since=24&limit=100 — admin only',
     'POST /logs/client': '{"level":"info","message":"...","detail":{...}} — admin only',
@@ -782,8 +784,9 @@ async function route(request, env, ctx, entry) {
       return new Response(r.body, { headers: { 'content-type': 'application/json' } });
     }
 
-    if (path === '/tasks' || path === '/tasks/inbox' || path === '/tasks/inbox/received' || path === '/tasks/status') {
-      const wants = path === '/tasks/inbox' || (path === '/tasks' && method === 'GET') ? 'GET' : 'POST';
+    const taskKey = /^\/tasks\/([a-z0-9]{8})$/.exec(path)?.[1];
+    if (path === '/tasks' || path === '/tasks/inbox' || path === '/tasks/inbox/received' || path === '/tasks/status' || taskKey) {
+      const wants = path === '/tasks/inbox' || taskKey || (path === '/tasks' && method === 'GET') ? 'GET' : 'POST';
       if (method !== wants) return notAllowed(wants);
       const who = await whoAmI(env, request, verifyToken);
       if (!who.operator && who.user?.role !== 'admin') {
@@ -793,6 +796,10 @@ async function route(request, env, ctx, entry) {
       }
       entry.admin = true;
       if (path === '/tasks/inbox') return json({ tasks: await inbox(env.DB) });
+      if (taskKey) {
+        const found = await oneTask(env.DB, taskKey);
+        return found ? json(found) : json({ error: 'no task has that key' }, 404);
+      }
       if (method === 'GET') return json({ tasks: await taskList(env.DB) });
       const { body, error } = await readJson(request);
       if (error) return json({ error }, 400);
