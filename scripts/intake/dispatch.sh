@@ -37,6 +37,12 @@ mkdir -p "$STATE"
 # Every run puts D1 right about what this laptop can see: a dead agent is
 # paused rather than in progress forever, a held request paused, a
 # withdrawn one cancelled. It may not stop a build. See task-status.mjs.
+# Anything Matt submitted from the app, turned into a request file before we
+# decide what is buildable. Without this a task submitted in the app sat at
+# `pending` forever: nothing polled the inbox, and launchd only fires on a
+# change under requests/ — which submitting from the app does not cause.
+node "$REPO/scripts/intake/inbox.mjs" >>"$LOG" 2>&1 || true
+
 node "$REPO/scripts/intake/task-status.mjs" reconcile >>"$LOG" 2>&1 || true
 
 # Choosing a request and creating its worktree is the only part that needs
