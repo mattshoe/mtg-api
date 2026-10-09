@@ -16,8 +16,7 @@ dependencyResolutionManagement {
 
 rootProject.name = "mtg-share"
 
-// The app that ships, and the ManaBox stand-in its tests share from.
-include(":app")
+// The ManaBox stand-in, for sharing a real file into the app by hand.
 include(":sender")
 
 // Shared across platforms: models, parsing, the wizard's rules.

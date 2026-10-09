@@ -15,7 +15,7 @@ import xml.etree.ElementTree as ET
 from collections import defaultdict
 from pathlib import Path
 
-MODULES = ("core", "core-net", "webApp", "androidApp", "app", "sender")
+MODULES = ("core", "core-net", "webApp", "androidApp", "sender")
 
 # What to call each runner in the table. Anything not listed is still
 # counted, under the raw task name, so a new source of tests shows up
