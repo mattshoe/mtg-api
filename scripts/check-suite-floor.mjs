@@ -112,13 +112,21 @@ try {
     encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
   }))
 } catch { reference = undefined }
-const held = notLowered(reference, floors)
+// The commit being checked is the one that has to authorise a lowering.
+let message = ''
+try {
+  message = execFileSync('git', ['log', '-1', '--format=%B'], {
+    encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
+  })
+} catch { /* no git log to read; nothing is authorised */ }
+const held = notLowered(reference, floors, message)
 if (!held.ok) {
   console.error('check-suite-floor: a committed floor is below main\'s —\n')
   held.lowered.forEach((r) => console.error(`  \u2717 ${r}`))
   console.error(
-    '\nA floor may only ever go up. If a test was deliberately removed, say '
-    + 'so in the commit message and lower it in a commit of its own.\n',
+    '\nA floor may only ever go up. If a test was deliberately removed, put '
+    + '\n  Floor-lowered: <suite>=<number> <why>\nin the commit message, with '
+    + 'the exact number the file now carries.\n',
   )
   process.exit(1)
 }

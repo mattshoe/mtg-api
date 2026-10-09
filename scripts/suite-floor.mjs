@@ -78,9 +78,38 @@ export function raise(floors, actual, named) {
  * file is the one place in this repo where the wrong three-way merge is
  * invisible, so it gets checked rather than trusted.
  */
-export function notLowered(reference, floors) {
+/**
+ * The suites a commit message explicitly authorises lowering.
+ *
+ * `Floor-lowered: shell=128 worker=872` and a reason. Nothing else gets
+ * past `notLowered`, which is the point — the guard exists because a merge
+ * resolution can quietly drop a floor and the result goes green.
+ *
+ * This had no implementation for a while and the failure message promised
+ * one: "If a test was deliberately removed, say so in the commit message
+ * and lower it in a commit of its own." It said that and then refused
+ * every such commit, so a legitimate deletion could not land at all. A
+ * guard with no legitimate path is a wedge, not a guard.
+ *
+ * Unlike the `Red:` trailer Matt rightly rejected, this does not claim a
+ * discipline was followed — it names a number and a suite, and the number
+ * either matches the file or it does not.
+ */
+export function authorised(message) {
+  const m = /^Floor-lowered:(.*)$/m.exec(String(message ?? ''))
+  if (!m) return {}
+  const out = {}
+  for (const pair of m[1].matchAll(/([A-Za-z0-9_-]+)=(\d+)/g)) out[pair[1]] = Number(pair[2])
+  return out
+}
+
+export function notLowered(reference, floors, message) {
+  const ok = authorised(message)
   const lowered = []
   for (const [suite, was] of Object.entries(reference ?? {})) {
+    // Authorised only for the exact number the message names, so a
+    // trailer cannot licence a drop further than it says.
+    if (ok[suite] !== undefined && ok[suite] === floors[suite]) continue
     const now = floors[suite]
     if (now === undefined) {
       lowered.push(`${suite} lost its floor of ${was}`)
