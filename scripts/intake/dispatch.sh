@@ -22,6 +22,21 @@ BASE="${INTAKE_BASE:-origin/main}"
 
 say() { printf '%s  %s\n' "$(date '+%H:%M:%S')" "$1" >>"$LOG"; }
 
+# Something Matt has to know about, as opposed to something merely recorded.
+#
+# This was called and never defined. `grep -rn 'tell()'` found nothing and
+# `git log -S` says it never existed, so every notification the dispatcher
+# has tried to send since #43 died as `tell: command not found` on a stderr
+# launchd throws away — nine times in the production log. The one path that
+# exists to reach Matt when the queue stops has never reached him.
+#
+# It writes to the log as well, so the reason survives even where the
+# desktop notification cannot be delivered.
+tell() {
+  say "NEEDS YOU: $1"
+  osascript -e "display notification \"$1\" with title \"mtg intake\"" >/dev/null 2>&1 || true
+}
+
 # Opt-in. .intake/ is gitignored, so a fresh clone must not be armed by the
 # committed hook before anyone has installed anything.
 [ -f "$STATE/enabled" ] || exit 0

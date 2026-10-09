@@ -152,6 +152,10 @@ function build({ requests = {}, done = {}, enabled = true } = {}) {
   }
   stub('claude', 'exit 0')
   stub('gh', 'exit 0')
+  // Stubbed for every box: otherwise `tell` fires a real desktop
+  // notification on the machine running the suite, and no assertion can see
+  // that it happened.
+  stub('osascript', 'exit 0')
 
   box = {
     root, repo, origin, bin, calls, git, stub,
@@ -212,11 +216,14 @@ function build({ requests = {}, done = {}, enabled = true } = {}) {
  * the dispatcher to exit rather than for a pipe some orphan still holds.
  */
 function run(script, { env = {}, timeout = 60_000 } = {}) {
+  // stderr is CAPTURED, not discarded. It used to be ignored, which is how
+  // `tell: command not found` ran green through 124 tests while failing
+  // nine times in production.
   return spawnSync('bash', [box.path('scripts/intake', script)], {
     encoding: 'utf8',
     timeout,
     cwd: box.repo,
-    stdio: ['pipe', 'ignore', 'ignore'],
+    stdio: ['pipe', 'ignore', 'pipe'],
     env: {
       ...process.env,
       PATH: `${box.bin}:${process.env.PATH}`,
@@ -478,6 +485,25 @@ describe('asking intake.mjs', () => {
   // a parse error or ENOSPC all yielded empty stdout — and it logged
   // "nothing pending" and exited 0 with a full queue. Empty output and
   // failure must never be the same thing.
+
+  it('reaches Matt when it gives up, rather than dying on an undefined tell', () => {
+    // `tell` was called and never defined. Every notification since #43 died
+    // as `tell: command not found` on a stderr launchd discards — nine times
+    // in the production log — so the one path that exists to reach Matt when
+    // the queue stops never reached him. The test asserts the notification
+    // actually leaves, not merely that the line was executed.
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    box.stub('osascript', 'exit 0')
+    box.stub('node', 'exit 7')               // intake.mjs cannot answer
+    const r = run('dispatch.sh')
+
+    expect(r.status).toBe(1)
+    expect(box.intakeLog()).toContain('NEEDS YOU')
+    // The desktop notification was actually attempted.
+    expect(box.log()).toContain('osascript')
+    // And nothing fell over on the way.
+    expect(r.stderr || '').not.toContain('command not found')
+  })
 
   it('fails loudly when node is not there at all', () => {
     build({ requests: { 'a-thing.md': READY('A thing') } })
