@@ -223,6 +223,40 @@ else, and carry on from there. Do not start over and do not discard what is
 there without reading it."
 fi
 
+# A request may not consume agent lifetimes without end.
+#
+# `remove-task-title` ran SEVEN agents in four hours. Each one read the
+# worktree from cold, did a little, backgrounded an Android suite it could
+# not outlive and died — and because a stopped agent leaves a worktree
+# behind, the next tick resumed it and did exactly the same. Nothing in the
+# system had any notion of "this has been tried enough", so the loop was
+# bounded only by Matt noticing.
+#
+# The bound itself, and the reason progress is measured as a changed HEAD
+# sha rather than a commit count, is `attempt()` in scripts/intake.mjs.
+# HEAD is read HERE, before the agent runs, so what it records is the
+# PREVIOUS attempt's result.
+#
+# It fails OPEN. A bound that cannot be read is a reason to say so, not a
+# reason to stop building.
+mkdir -p "$STATE/attempts"
+headnow="$(git -C "$tree" rev-parse HEAD 2>/dev/null || echo none)"
+why="$(cd "$REPO" && node scripts/intake.mjs attempt "$STATE/attempts/$name" "$headnow" 2>&1 >/dev/null)"
+case $? in
+  0) : ;;
+  3)
+    # Holding the LIVE request file is the only thing that ends the loop:
+    # the queue is `status: ready` in that file and nothing else, so an
+    # agent simply not being launched would be claimed again in 60 seconds.
+    (cd "$REPO" && node scripts/intake.mjs hold "$file" "$why") >>"$LOG" 2>&1 || true
+    node "$REPO/scripts/intake/task-status.mjs" blocked "$file" "$why" >>"$LOG" 2>&1 || true
+    say "holding $name: $why"
+    tell "$name needs you: $why"
+    exit 0
+    ;;
+  *) say "could not bound the attempts on $name; building anyway" ;;
+esac
+
 say "building $name on $branch${resumed:+ (resuming)}"
 # Task status lives in D1 and this is the thing that sees it change: a
 # builder starting here, and its pull request coming to something when it
@@ -244,7 +278,9 @@ env \
 
 It is yours end to end: build it test-first, open the pull request, wait for CI with \`gh pr checks <n> --watch --fail-fast\` (it blocks — do not use ScheduleWakeup or Monitor, you get no second turn), merge it on green unless the request says 'merge: ask', and move requests/$name.md into requests/done/ in your own commit.
 
-Run tests the way .claude/agents/request-builder.md says: one unit test at a time during the cycle, named, red then green. The functional suites — test:screens, test:web, test:android, npm test — run ONCE at the end, on what your diff reaches. Never in the cycle.
+Run tests the way .claude/agents/request-builder.md says: one unit test at a time during the cycle, named, red then green. The functional suites you may run — test:web and npm test — run ONCE at the end, on what your diff reaches. Never in the cycle.
+
+Do NOT run npm run test:screens or the whole :androidApp:testDebugUnitTest task, ever. A cold worktree compile takes 12 to 20 minutes and your Bash tool stops every command at 10, so it cannot finish in the foreground and backgrounding it is banned — seven agent runs on one request died in four hours doing exactly that. Run your own Android test by name with --tests 'YourTest' during the cycle, then push and read CI's android job.
 
 Never background a command and poll its output, and never background a suite. One agent spent 55% of its run inside polling loops and another spent twelve minutes reading its own background task files. Run it in the foreground and let it finish.
 

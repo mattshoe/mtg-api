@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   pending, buildable, branchFor, hookFires, equipped,
-  statusOf, mergeMode, REQUIRED,
+  statusOf, mergeMode, REQUIRED, attempt, heldText, MAX_ATTEMPTS, MAX_STALE,
 } from '../scripts/intake.mjs'
 import { raise } from '../scripts/suite-floor.mjs'
 
@@ -372,5 +372,132 @@ describe('raise', () => {
 
   it('cannot lower a floor however it is called', () => {
     expect(raise({ core: 2310 }, { core: 5 }, ['core'])).toEqual({ core: 2310 })
+  })
+})
+
+// How a request stops consuming agents.
+//
+// `remove-task-title` ran seven agents in four hours and would have run an
+// eighth. Each one read its worktree from cold, backgrounded an Android
+// suite it could not outlive and died; a stopped agent leaves a worktree
+// behind, so the next tick resumed it and did the same thing again.
+//
+// Two bounds, because the loop has two shapes. A request that six separate
+// agent lifetimes have not finished needs Matt whatever it has committed.
+// A request where two agents in a row could not reach a commit at all is
+// wedged, and there is no point paying for a third.
+describe('attempt', () => {
+  const ledger = (n, head, stale) => `${n} ${head} ${stale}`
+
+  it('lets the first agent run, with nothing recorded yet', () => {
+    expect(attempt('', 'abc1234').stop).toBe(false)
+  })
+
+  it('counts the attempt it just allowed, so the next one knows', () => {
+    expect(attempt('', 'abc1234').line).toBe('1 abc1234 0')
+  })
+
+  it('records the head it was given, which is the last attempt\'s result', () => {
+    expect(attempt(ledger(1, 'aaaaaaa', 0), 'bbbbbbb').line).toBe('2 bbbbbbb 0')
+  })
+
+  it(`stops the ${MAX_ATTEMPTS + 1}th agent on one request`, () => {
+    let line = ''
+    for (let i = 1; i <= MAX_ATTEMPTS; i += 1) {
+      const v = attempt(line, `sha${i}`)
+      expect(v.stop).toBe(false)
+      line = v.line
+    }
+    expect(attempt(line, 'sha7').stop).toBe(true)
+  })
+
+  it('says how many agents it spent, because the row has to say why', () => {
+    let line = ''
+    for (let i = 1; i <= MAX_ATTEMPTS; i += 1) line = attempt(line, `sha${i}`).line
+    expect(attempt(line, 'sha7').why).toContain(`${MAX_ATTEMPTS} agents`)
+  })
+
+  it(`stops after ${MAX_STALE} attempts in a row that left head where it was`, () => {
+    const a = attempt('', 'stuck00')
+    expect(a.stop).toBe(false)
+    const b = attempt(a.line, 'stuck00')
+    expect([b.stop, b.stale]).toEqual([false, 1])
+    expect(attempt(b.line, 'stuck00').stop).toBe(true)
+  })
+
+  it('names the sha nothing moved off, so the reason is checkable', () => {
+    const b = attempt(attempt('', 'stuck00').line, 'stuck00')
+    expect(attempt(b.line, 'stuck00').why).toContain('stuck00')
+  })
+
+  // The bug three reviewers rejected my first attempt at this for. It
+  // measured `git rev-list --count origin/main..HEAD`, which is ZERO the
+  // moment an agent merges its own work — so the most successful run
+  // possible scored as no progress, and a working request would have been
+  // held. A sha either moved or it did not, whatever main has since done.
+  it('counts a moved sha as progress even where the commit count would be 0', () => {
+    const a = attempt('', 'before1')
+    expect(attempt(a.line, 'after22').stale).toBe(0)
+  })
+
+  it('forgives a stale attempt once the next one commits something', () => {
+    const a = attempt('', 'stuck00')
+    const b = attempt(a.line, 'stuck00')
+    expect(b.stale).toBe(1)
+    expect(attempt(b.line, 'moved11').stale).toBe(0)
+  })
+
+  it('does not count the first attempt as stale for having no predecessor', () => {
+    expect(attempt('', '').stale).toBe(0)
+  })
+
+  it('survives a ledger somebody truncated or corrupted', () => {
+    expect(attempt('garbage', 'abc1234').stop).toBe(false)
+    expect(attempt('\n', 'abc1234').line).toBe('1 abc1234 0')
+  })
+})
+
+// What holding a request writes. The queue is `status: ready` in the live
+// request file and nothing else, so this edit is the only thing that
+// actually ends a resume loop — not launching an agent would simply be
+// claimed again on the next timer firing, 60 seconds later.
+describe('heldText', () => {
+  const READY = '---\nstatus: ready\nmerge: auto\n---\n\n# Title\n\nBody.\n'
+
+  it('turns the status the queue reads into hold', () => {
+    expect(statusOf(heldText(READY, 'six agents'))).toBe('hold')
+  })
+
+  it('is not buildable afterwards, which is the whole point', () => {
+    expect(buildable(heldText(READY, 'six agents'))).toBe(false)
+  })
+
+  it('leaves the other frontmatter alone', () => {
+    expect(mergeMode(heldText(READY, 'six agents'))).toBe('auto')
+  })
+
+  it('keeps the body, because that is the request', () => {
+    expect(heldText(READY, 'six agents')).toContain('# Title\n\nBody.')
+  })
+
+  it('puts the reason in the body, where the task page shows it', () => {
+    expect(heldText(READY, 'six agents and not finished')).toContain('six agents and not finished')
+  })
+
+  it('says how to let it run again', () => {
+    expect(heldText(READY, 'x')).toContain('status: ready')
+  })
+
+  it('gives a file with no frontmatter one, rather than leaving it buildable', () => {
+    const held = heldText('# Just prose\n', 'x')
+    expect([statusOf(held), buildable(held)]).toEqual(['hold', false])
+  })
+
+  it('holds a file whose frontmatter never had a status key', () => {
+    expect(statusOf(heldText('---\nmerge: ask\n---\n\nBody\n', 'x'))).toBe('hold')
+  })
+
+  it('leaves an already-held file held', () => {
+    expect(statusOf(heldText('---\nstatus: hold\n---\n\nBody\n', 'x'))).toBe('hold')
   })
 })
