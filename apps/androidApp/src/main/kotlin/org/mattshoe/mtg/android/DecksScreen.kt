@@ -945,6 +945,13 @@ private fun Colours(s: org.mattshoe.mtg.core.DeckStats) {
     }
 }
 
+/** One painted stretch of a ring: an ARGB colour and its sweep in degrees. */
+internal data class RingArc(val colour: Long, val sweep: Float)
+
+/** What a ring paints, in drawing order from twelve o'clock. */
+internal val RingArcs = androidx.compose.ui.semantics.SemanticsPropertyKey<List<RingArc>>("RingArcs")
+private var androidx.compose.ui.semantics.SemanticsPropertyReceiver.ringArcs by RingArcs
+
 /**
  * One colour split, as a ring. The web's `Pie`.
  *
@@ -975,25 +982,32 @@ private fun Ring(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
+        // What gets painted, in order: a colour and a sweep in degrees.
+        // Drawn from this list and published from it, so a test can
+        // read what the ring paints without pixels.
+        val arcs = bars.flatMap { bar ->
+            // A combination is a band of each of its colours, and
+            // the hairlines below fall only between slices.
+            val band = 360f * bar.value / total / bar.letters.size
+            bar.letters.map { letter -> RingArc(Design.pip(letter), band) }
+        }
         Box(Modifier.size(ring)) {
         Canvas(
             Modifier.size(ring)
-                .semantics { contentDescription = "$caption · $total — $told" },
+                .semantics {
+                    contentDescription = "$caption · $total — $told"
+                    ringArcs = arcs
+                },
         ) {
             var at = -90f
-            bars.forEach { bar ->
-                // A combination is a band of each of its colours, and
-                // the hairlines below fall only between slices.
-                val band = 360f * bar.value / total / bar.letters.size
-                bar.letters.forEach { letter ->
-                    drawArc(
-                        color = c(Design.pip(letter)),
-                        startAngle = at,
-                        sweepAngle = band,
-                        useCenter = true,
-                    )
-                    at += band
-                }
+            arcs.forEach { arc ->
+                drawArc(
+                    color = c(arc.colour),
+                    startAngle = at,
+                    sweepAngle = arc.sweep,
+                    useCenter = true,
+                )
+                at += arc.sweep
             }
             // A hairline on every boundary, so two neighbouring
             // slices are told apart by an edge and not only by their
