@@ -47,8 +47,8 @@ fun NewTaskScreen(
         Panel(head = "New task", note = "Say what you want changed. It becomes a request and builds like any other.") {
             Label("Title")
             Field(
-                value = task.title,
-                onValueChange = { onState(task.titled(it)) },
+                value = "",
+                onValueChange = { },
                 placeholder = "What should change, in a few words",
                 modifier = Modifier.testTag("new-task-title"),
             )

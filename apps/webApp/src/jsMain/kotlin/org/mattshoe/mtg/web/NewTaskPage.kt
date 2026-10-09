@@ -55,8 +55,7 @@ fun NewTaskPage(
                 Input(InputType.Text, attrs = {
                     id("new-task-title")
                     placeholder("What should change, in a few words")
-                    value(task.title)
-                    onInput { onState(task.titled(it.value)) }
+                    value("")
                 })
             }
 
