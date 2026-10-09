@@ -112,13 +112,21 @@ try {
     encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
   }))
 } catch { reference = undefined }
-// The commit being checked is the one that has to authorise a lowering.
+// The commits being checked are the ones that have to authorise a
+// lowering — all of them on the branch, not `log -1`. On a pull request
+// `actions/checkout` checks out a MERGE commit whose message is "Merge
+// <sha> into <sha>", so `log -1` reads GitHub's text and never the
+// author's. That is how the first version of this failed its own pull
+// request. `origin/main..HEAD` is the branch's own commits in both
+// places: locally HEAD is the commit, in CI it is the merge commit and
+// the range still walks the branch.
 let message = ''
-try {
-  message = execFileSync('git', ['log', '-1', '--format=%B'], {
-    encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
-  })
-} catch { /* no git log to read; nothing is authorised */ }
+for (const args of [['log', `${process.env.FLOOR_REF || 'origin/main'}..HEAD`, '--format=%B'], ['log', '-1', '--format=%B']]) {
+  try {
+    message = execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
+    if (message.trim()) break
+  } catch { /* try the next, then give up with nothing authorised */ }
+}
 const held = notLowered(reference, floors, message)
 if (!held.ok) {
   console.error('check-suite-floor: a committed floor is below main\'s —\n')

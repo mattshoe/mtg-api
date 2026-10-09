@@ -421,3 +421,30 @@ describe('authorised', () => {
     expect(notLowered({ shell: 139 }, {}, 'Floor-lowered: shell=128 why').ok).toBe(false)
   })
 })
+
+// Which commit message authorises a lowering.
+//
+// The first version of `authorised` read `git log -1`, and on a pull
+// request `actions/checkout` checks out a MERGE commit whose message is
+// "Merge <sha> into <sha>". So it read GitHub's text, never the author's,
+// and the change that introduced it failed its own pull request: `shared`
+// went red on "a committed floor is below main's" with the trailer sitting
+// right there in the commit.
+describe('where the authorisation is read from', () => {
+  const FLOORS = { shell: 139, worker: 892 }
+  const NOW = { shell: 128, worker: 880 }
+  const TRAILER = 'Strip it\n\nFloor-lowered: shell=128 worker=880 the tests went with the code\n'
+
+  it('is not satisfied by the merge commit GitHub builds for a pull request', () => {
+    expect(notLowered(FLOORS, NOW, 'Merge abc1234 into def5678').ok).toBe(false)
+  })
+
+  it('is satisfied by the branch\'s own commits, which is what CI now reads', () => {
+    expect(notLowered(FLOORS, NOW, TRAILER).ok).toBe(true)
+  })
+
+  it('finds the trailer however many commits of prose surround it', () => {
+    const many = `Another commit\n\nBody.\n\n${TRAILER}\nAn earlier one\n`
+    expect(authorised(many)).toEqual({ shell: 128, worker: 880 })
+  })
+})
