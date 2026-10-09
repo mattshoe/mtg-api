@@ -2,6 +2,11 @@ package org.mattshoe.mtg.android
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,12 +24,18 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -35,6 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import org.mattshoe.mtg.core.CardQueries
+import org.mattshoe.mtg.core.CardZoom
 import org.mattshoe.mtg.core.PeekCard
 import org.mattshoe.mtg.core.Design
 import org.mattshoe.mtg.core.Prices
@@ -65,6 +77,8 @@ fun CardCarousel(
     onSwipe: (Int) -> Unit,
     onDetails: () -> Unit,
     onTweak: (org.mattshoe.mtg.core.DeckCard, Tweak) -> Unit,
+    zoom: CardZoom = CardZoom(),
+    onZoom: (CardZoom) -> Unit = {},
 ) {
     if (cards.isEmpty()) return
     val index = at.coerceIn(0, cards.lastIndex)
@@ -121,8 +135,21 @@ fun CardCarousel(
                     // sideways" without a caption saying it.
                     contentPadding = PaddingValues(horizontal = 40.dp),
                     pageSpacing = 12.dp,
+                    // Matt: "swiping to the next card should only work
+                    // while fully zoomed out". One finger is a drag of
+                    // the art while zoomed, so the pager must not
+                    // also take it.
+                    userScrollEnabled = !zoom.zoomed,
                 ) { page ->
-                    CardFace(cards[page])
+                    // Clipped to the page, so a zoomed card does not
+                    // spill over its neighbours or the sheet.
+                    Box(Modifier.clipToBounds()) {
+                        if (page == index) {
+                            CardFace(cards[page], zoom, Modifier.pinchZoom(zoom, onZoom))
+                        } else {
+                            CardFace(cards[page])
+                        }
+                    }
                 }
             }
 
@@ -137,13 +164,59 @@ fun CardCarousel(
     }
 }
 
+/**
+ * Two fingers zoom, and one finger drags the art once zoomed.
+ *
+ * Hand-rolled over `awaitEachGesture` rather than
+ * `detectTransformGestures`, because that one takes a single-finger
+ * drag too, and zoomed out a single finger belongs to the pager. A
+ * change is only consumed when it is ours — two fingers down, or
+ * already zoomed — so a plain swipe still reaches the pager.
+ *
+ * The arithmetic is `CardZoom`'s, shared with the website.
+ */
+private fun Modifier.pinchZoom(zoom: CardZoom, onZoom: (CardZoom) -> Unit): Modifier = composed {
+    val now by rememberUpdatedState(zoom)
+    val tell by rememberUpdatedState(onZoom)
+    pointerInput(Unit) {
+        awaitEachGesture {
+            awaitFirstDown(requireUnconsumed = false)
+            var z = now
+            do {
+                val event = awaitPointerEvent()
+                val down = event.changes.count { it.pressed }
+                if (down >= 2 || z.zoomed) {
+                    val w = size.width.toFloat()
+                    val h = size.height.toFloat()
+                    val c = event.calculateCentroid(useCurrent = true)
+                    val pan = event.calculatePan()
+                    z = z.pinch(event.calculateZoom(), c.x - w / 2, c.y - h / 2, w, h)
+                        .pan(pan.x, pan.y, w, h)
+                    if (z != now) tell(z)
+                    event.changes.forEach { if (it.positionChanged()) it.consume() }
+                }
+            } while (event.changes.any { it.pressed })
+            z.settled().takeIf { it != now }?.let(tell)
+        }
+    }
+}
+
 /** One card, as big as the width allows. */
 @Composable
-private fun CardFace(card: PeekCard) {
+private fun CardFace(card: PeekCard, zoom: CardZoom = CardZoom(), zoomable: Modifier = Modifier) {
     val url = CardQueries.art(card.scryfallId, "normal")
     Box(
-        Modifier.fillMaxWidth()
+        zoomable.fillMaxWidth()
             .aspectRatio(Design.CARD_ASPECT)
+            // After the gesture's `pointerInput`, so the fingers are
+            // read against the card where it sits and not where the
+            // zoom has drawn it.
+            .graphicsLayer {
+                scaleX = zoom.scale
+                scaleY = zoom.scale
+                translationX = zoom.x
+                translationY = zoom.y
+            }
             // 4.75% of the width, which is what the stylesheet rounds
             // a card frame by.
             .clip(androidx.compose.foundation.shape.RoundedCornerShape(5))

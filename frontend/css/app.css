@@ -1693,6 +1693,15 @@ select.sort {
   padding: 16px 28px;
   min-height: 0;
 }
+/* Pinch zoom. Zoomed out, the browser keeps the sideways scroll and
+   hands two fingers to the page's own handler; zoomed in, the rail
+   stops scrolling and every finger is the card's, so one finger drags
+   the art. Clipped to the cell so a zoomed card does not spill over
+   its neighbours or the sheet. The phone's `pinchZoom` is the same. */
+.peek-card { touch-action: pan-x; overflow: hidden; }
+.peek-rail.zoomed { overflow-x: hidden; }
+.peek-rail.zoomed .peek-card { touch-action: none; cursor: grab; }
+
 .peek-card img {
   max-width: 100%; max-height: 100%;
   border-radius: 4.75% / 3.5%;
