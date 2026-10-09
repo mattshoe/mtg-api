@@ -131,14 +131,14 @@ describe('task status', () => {
   })
 
   it('every status Matt asked for is one the Worker takes', async () => {
-    for (const status of ['pending', 'in progress', 'blocked', 'paused', 'stopped', 'in review', 'merged', 'deployed', 'cancelled']) {
+    for (const status of ['pending', 'in progress', 'blocked', 'paused', 'in review', 'merged', 'deployed', 'cancelled']) {
       const r = await post('/tasks/status', { name: 'every-one', title: 'Every one', status })
       expect(r.status, status + ' was refused: ' + r.body.error).toBe(200)
     }
   })
 
-  it('there is no failing: red CI mid-run is still in review', async () => {
-    for (const status of ['failing', 'closed', 'building', 'queued', 'done']) {
+  it('there is no failing and no stopped: red CI is still in review, a dead agent is paused', async () => {
+    for (const status of ['failing', 'stopped', 'closed', 'building', 'queued', 'done']) {
       const r = await post('/tasks/status', { name: 'no-churn', title: 'No churn', status })
       expect(r.status, status + ' was taken, and Matt said there is no such state').toBe(400)
     }

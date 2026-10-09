@@ -408,15 +408,15 @@ describe('task status in D1', () => {
   // HOME, so nothing reaches the network: the log says what would have
   // been written, which is what proves the dispatcher asked.
 
-  it('writes building before the builder starts and what its pull request came to after', () => {
+  it('writes in progress before the builder starts and what its pull request came to after', () => {
     build({ requests: { 'a-thing.md': READY('A thing') } })
     box.stub('claude', BUILDER)
     box.stub('gh', `[ "$1 $2" = "pr list" ] && echo '[{"state":"MERGED","url":"https://github.com/x/y/pull/7"}]'\nexit 0`)
     run('dispatch.sh')
     const log = box.intakeLog()
-    expect(log).toContain('a-thing building was not written')
-    expect(log).toContain('a-thing done was not written')
-    expect(log.indexOf('a-thing building')).toBeLessThan(log.indexOf('a-thing finished'))
+    expect(log).toContain('a-thing in progress was not written')
+    expect(log).toContain('a-thing merged was not written')
+    expect(log.indexOf('a-thing in progress')).toBeLessThan(log.indexOf('a-thing finished'))
     const calls = box.log().split('\n')
     const claude = calls.findIndex((l) => l.startsWith('claude '))
     const asked = calls.findIndex((l) => /^gh pr list --head request\/a-thing-[0-9a-f]{7} --state all/.test(l))
