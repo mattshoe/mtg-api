@@ -119,62 +119,80 @@ class TasksParityTest {
         )
     }
 
+    private fun durations(row: String) = Regex("""(?<!\d)(\d+d \d+h|\d+h \d+m|\d+m)|just started""").findAll(row).map { it.value }.toList()
+
+    /**
+     * Matt: "Why does it say \"3m for 3m\" and \"17m for 7m\"?!?!?!" and
+     * "just show the total fucking time". One duration, since it was
+     * created; not since it started, not how long in this status.
+     */
     @Test
-    fun aRunningTaskSaysHowLongSinceItStarted() {
-        val now = Tasks.epochMillis("2026-10-08T12:20:00Z")!!
+    fun aLiveTaskShowsOneDurationTheTimeSinceItWasCreated() {
+        val now = Tasks.epochMillis("2026-10-08T09:17:00Z")!!
         val running = Tasks().loaded(
             listOf(
-                Task("request/b-2222222", "Building now", TaskStatus.IN_PROGRESS, null, startedAt = "2026-10-08T09:15:00Z"),
-                Task("request/a-1111111", "Older fix", TaskStatus.MERGED, "2026-10-08T11:00:00Z", startedAt = "2026-10-08T10:00:00Z"),
+                Task(
+                    "k1", "reconcile tells the truth", TaskStatus.IN_PROGRESS, null,
+                    startedAt = "2026-10-08T09:05:00Z", statusAt = "2026-10-08T09:10:00Z",
+                    createdAt = "2026-10-08T09:00:00Z",
+                ),
             ),
-        ).at(now).toggleDone()
+        ).at(now)
         shell(adminSettings(running))
         val row = rows("task").single().says()
-        assertTrue("3h 05m" in row, "the running task does not say how long it has been going: '$row'")
-        val done = rows("task-done").single().says()
-        assertTrue("2h 20m" !in done, "a finished task is still counting: '$done'")
+        assertEquals(listOf("17m"), durations(row), "the row should say one duration, 17m since it was created: '$row'")
+        assertTrue("for " !in row, "the row still says how long it has been in its status: '$row'")
     }
 
     /**
-     * Matt watched four stopped agents all say `building`. A paused row
-     * says why and for how long, and one in review names its pull
-     * request, so nobody has to ask.
+     * Matt: "drop the pr number and only show that on details!" A paused
+     * row still says why, and how long since it was created.
      */
     @Test
-    fun aPausedTaskSaysWhyAndForHowLongAndOneInReviewNamesItsPullRequest() {
+    fun aPausedTaskSaysWhyAndNoRowNamesItsPullRequest() {
         val now = Tasks.epochMillis("2026-10-08T12:00:00Z")!!
         val live = Tasks().loaded(
             listOf(
                 Task(
                     "k1", "Builder died", TaskStatus.PAUSED, null,
-                    statusAt = "2026-10-08T09:55:00Z", note = "agent crashed",
+                    statusAt = "2026-10-08T11:30:00Z", note = "agent crashed", createdAt = "2026-10-08T09:55:00Z",
                 ),
                 Task(
                     "k2", "Waiting on CI", TaskStatus.IN_REVIEW, null,
-                    pr = "https://github.com/mattshoe/mtg-api/pull/142",
+                    pr = "https://github.com/mattshoe/mtg-api/pull/142", createdAt = "2026-10-08T11:00:00Z",
                 ),
             ),
         ).at(now)
         shell(adminSettings(live))
         val rows = rows("task").map { it.says() }
         val paused = rows.singleOrNull { "Builder died" in it } ?: error("the paused task is not listed: $rows")
-        assertTrue("paused" in paused, "the paused task does not say paused: '$paused'")
-        assertTrue("for 2h 05m" in paused && "agent crashed" in paused, "the paused task does not say why or for how long: '$paused'")
+        assertTrue("paused" in paused && "agent crashed" in paused, "the paused task does not say why: '$paused'")
+        assertEquals(listOf("2h 05m"), durations(paused), "the paused task should say one duration since it was created: '$paused'")
         val review = rows.singleOrNull { "Waiting on CI" in it } ?: error("the task in review is not listed: $rows")
-        assertTrue("PR #142" in review, "the task in review does not name its pull request: '$review'")
+        assertTrue("PR" !in review && "142" !in review, "the task in review still names its pull request on the row: '$review'")
     }
 
-    /** Matt: "Done tasks should show how long they took, not a UTC timestamp". */
+    /**
+     * Matt: "Done tasks should show how long they took, not a UTC
+     * timestamp", and "are the completed ones going to show it too???"
+     * Created to finished, frozen, in the same place a live one counts.
+     */
     @Test
-    fun aDoneTaskSaysHowLongItTookNotWhen() {
+    fun aDoneTaskSaysHowLongItTookFromCreatedToFinished() {
         val finished = Tasks().loaded(
             listOf(
-                Task("request/a-1111111", "Older fix", TaskStatus.MERGED, "2026-10-08T13:05:00Z", startedAt = "2026-10-08T10:00:00Z"),
+                Task(
+                    "request/a-1111111", "Older fix", TaskStatus.MERGED, "2026-10-08T13:05:00Z",
+                    startedAt = "2026-10-08T11:00:00Z", createdAt = "2026-10-08T10:00:00Z",
+                    pr = "https://github.com/mattshoe/mtg-api/pull/142",
+                ),
             ),
-        ).toggleDone()
+        ).at(Tasks.epochMillis("2026-10-09T13:05:00Z")!!).toggleDone()
         shell(adminSettings(finished))
         val done = rows("task-done").single().says()
-        assertTrue("took 3h 05m" in done, "the done task does not say how long it took: '$done'")
+        assertTrue("took 3h 05m" in done, "the done task does not say how long it took from created to finished: '$done'")
+        assertEquals(listOf("3h 05m"), durations(done), "the done task should say one duration: '$done'")
         assertTrue("UTC" !in done && "2026-10-08" !in done, "the done task still shows when it finished: '$done'")
+        assertTrue("PR" !in done, "the done task still names its pull request on the row: '$done'")
     }
 }
