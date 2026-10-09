@@ -1161,7 +1161,9 @@ class MainActivity : ComponentActivity() {
 
     // ------------------------------------------------------------ files
 
-    private fun readFiles(uris: List<Uri>) {
+    internal fun sendTask() {}
+
+    internal fun readFiles(uris: List<Uri>) {
         scope.launch {
             val chunks = mutableListOf<String>()
             val names = mutableListOf<String>()

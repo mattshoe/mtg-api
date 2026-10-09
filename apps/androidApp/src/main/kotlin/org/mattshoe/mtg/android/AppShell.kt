@@ -126,6 +126,8 @@ fun AppShell(
     onFind: (String) -> Unit = {},
     onLookup: (String) -> Unit = {},
     onPickFile: () -> Unit = {},
+    /** Send on the New task screen. */
+    onSendTask: () -> Unit = {},
     onReuse: (HistoryEntry) -> Unit = {},
     onClearHistory: () -> Unit = {},
     onEditDeck: (String) -> Unit = {},
