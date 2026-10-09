@@ -110,9 +110,21 @@ class ColourPanelParityTest {
         .fetchSemanticsNodes().isNotEmpty()
 
     @Test
+    fun theColourRingsAreCalledManaProductionAndSourcesPerColour() {
+        // Matt: "Change the name of 'Exactly' to Mana Production" and
+        // "makes" to something more explanatory.
+        shell()
+        assertTrue(says("Needs · "), "the colour panel never drew, so this proves nothing")
+        assertTrue(!says("Exactly · "), "a ring is still captioned Exactly")
+        assertTrue(!says("Makes · "), "a ring is still captioned Makes")
+        assertTrue(says("Mana Production · "), "no ring is captioned Mana Production")
+        assertTrue(says("Sources per Colour · "), "no ring is captioned Sources per Colour")
+    }
+
+    @Test
     fun theColourPanelHasNoCaptionUnderTheRings() {
         shell()
-        assertTrue(says("Makes · "), "the colour panel never drew, so this proves nothing")
+        assertTrue(says("Sources per Colour · "), "the colour panel never drew, so this proves nothing")
         assertTrue(!says("Pips the deck asks for"), "the caption about pips is still under the rings")
         assertTrue(!says("Hybrid pips count for both halves"), "the hybrid sentence is still under the rings")
     }
@@ -150,8 +162,8 @@ class ColourPanelParityTest {
     fun needsAndMakesShareARowAndExactlyHasALineOfItsOwnBelowThem() {
         shell()
         val needs = ring("Needs")
-        val makes = ring("Makes")
-        val exactly = ring("Exactly")
+        val makes = ring("Sources per Colour")
+        val exactly = ring("Mana Production")
         assertEquals(needs.top, makes.top, "needs and makes are not in one row")
         assertTrue(
             exactly.top >= needs.bottom,
@@ -166,7 +178,7 @@ class ColourPanelParityTest {
         // three Islands, two Hallowed Fountains: white runs 0-180
         // degrees, blue 180-288 and WU 288-360.
         shell()
-        val ring = ring("Exactly")
+        val ring = ring("Mana Production")
         val cx = (ring.left + ring.right) / 2
         val cy = (ring.top + ring.bottom) / 2
         val spans = listOf(0.0 to 180.0, 180.0 to 288.0, 288.0 to 360.0)
@@ -221,7 +233,7 @@ class ColourPanelParityTest {
         // White F8F3E0 and blue 61A3DD mixed is ADCBDF.
         shell()
         val node = rule
-            .onNode(hasContentDescription("Exactly · ", substring = true), useUnmergedTree = true)
+            .onNode(hasContentDescription("Mana Production · ", substring = true), useUnmergedTree = true)
             .fetchSemanticsNode()
         val arcs = node.config.getOrNull(RingArcs)
         assertTrue(arcs != null, "the Exactly ring says nothing about what it paints")
@@ -266,7 +278,7 @@ class ColourPanelParityTest {
     fun theExactlyRingIsBigEnoughToReadItsNumbers() {
         // Matt: "You can make the chart bigger".
         shell()
-        val exactly = ring("Exactly")
+        val exactly = ring("Mana Production")
         val wide = (exactly.right - exactly.left).value
         assertTrue(wide >= 170f, "the Exactly ring is ${wide}dp across, no bigger than before")
     }
@@ -275,7 +287,7 @@ class ColourPanelParityTest {
     fun theExactlyRingIsBiggerThanTheOtherTwo() {
         shell()
         val needs = ring("Needs")
-        val exactly = ring("Exactly")
+        val exactly = ring("Mana Production")
         val wide = exactly.right - exactly.left
         val narrow = needs.right - needs.left
         assertTrue(
