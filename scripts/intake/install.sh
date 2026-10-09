@@ -39,7 +39,14 @@ if [ ! -x "\$DISPATCH" ]; then
     "\$(date '+%Y-%m-%d %H:%M:%S')" "\$DISPATCH" >> "\$LOGDIR/launchd.log"
   exit 0
 fi
-exec /bin/bash "\$DISPATCH"
+# Start a dispatcher and get out of the way. launchd will not run a second
+# copy of a job while the first is alive, and a dispatcher stays alive for
+# the whole build — so exec here meant StartInterval could not fire again
+# until the current task finished. One task at a time, and anything Matt
+# submitted from the app waited behind it. Observed: a dispatcher 22
+# minutes old while a freshly collected request sat at \`pending\`.
+nohup /bin/bash "\$DISPATCH" >> "\$LOGDIR/launchd.log" 2>&1 &
+exit 0
 RUNNER_EOF
 chmod +x "$RUNNER"
 
