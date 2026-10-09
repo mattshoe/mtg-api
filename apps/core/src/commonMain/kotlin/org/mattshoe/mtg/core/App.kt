@@ -446,9 +446,51 @@ data class AppState(
         View.ENTRY -> say(message, failed = true)
     }
 
-    fun refreshed(): AppState = this
-    val refreshing: Boolean get() = false
-    fun settled(): AppState = this
+    /**
+     * The page on screen, pulled down to refresh.
+     *
+     * Matt: "Every page should be able to pull to refresh". Marked as
+     * fetching here rather than by the shell, so the pull and the
+     * fetch it waits on are one write — `settled` runs on every write
+     * and would otherwise drop the pull before the fetch had started.
+     *
+     * The Library also forgets that its rows are current. The web's
+     * `loadFor` skips a search whose rows already answer the filters,
+     * which is right on the way back from a card and wrong here.
+     *
+     * Entry is a form and the server log has no loader yet, so a pull
+     * on either has nothing to wait for and ends at once.
+     */
+    fun refreshed(): AppState = when (view) {
+        View.ENTRY, View.LOGS -> this
+        View.CARD -> if (card == null) this else fetching().copy(pulled = view)
+        View.LIBRARY -> copy(library = library.copy(loadedFor = null)).fetching().copy(pulled = view)
+        else -> fetching().copy(pulled = view)
+    }
+
+    /** Whether a pull on this page is still waiting. The spinner reads this. */
+    val refreshing: Boolean get() = pulled == view && pageBusy
+
+    /** Whether the page on screen has a fetch in flight, whoever asked for it. */
+    private val pageBusy: Boolean
+        get() = when (view) {
+            View.LIBRARY -> library.busy
+            View.DECKS -> decks.busy
+            View.STATS -> stats.busy
+            View.LOGS -> logs.busy
+            View.ADMIN -> people.busy
+            View.CARD -> card?.busy == true
+            View.ENTRY -> false
+        }
+
+    /**
+     * Let go of a pull once its fetch has landed, failed, or been left.
+     *
+     * Both shells run every write through this. Without it the pull
+     * outlives its answer, and the next search on the same page —
+     * a filter changed an hour later — spins as if it had been pulled.
+     */
+    fun settled(): AppState = if (pulled != null && !refreshing) copy(pulled = null) else this
 
     /**
      * A shared list opens the wizard with the list already in the box.
