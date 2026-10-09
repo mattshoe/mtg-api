@@ -70,6 +70,8 @@ data class AppState(
      * because nothing ever told the DOM which one it was drawing.
      */
     val toastFailed: Boolean = false,
+    /** The page a pull to refresh is waiting on. See [refreshed]. */
+    val pulled: View? = null,
 ) {
     val view: View get() = route.view
 
@@ -443,6 +445,10 @@ data class AppState(
         View.CARD -> copy(card = card?.failed(message))
         View.ENTRY -> say(message, failed = true)
     }
+
+    fun refreshed(): AppState = this
+    val refreshing: Boolean get() = false
+    fun settled(): AppState = this
 
     /**
      * A shared list opens the wizard with the list already in the box.
