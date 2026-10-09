@@ -25,18 +25,29 @@ class GitHubReleases internal constructor(private val http: HttpClient) {
         return Releases.decode(list(URL))
     }
 
-    /** Every intake request GitHub can see, and where it is. */
-    suspend fun tasks(): List<Task> {
+    /**
+     * Every intake request GitHub can see, where it is and when it
+     * started. [known] is the starts kept from earlier visits
+     * (`Tasks.knownStarts`), which are not asked about again.
+     */
+    suspend fun tasks(known: Map<String, String> = emptyMap()): List<Task> {
         val pulls = list(PULLS)
         val refs = list(REQUEST_REFS)
         val done = list(DONE)
         return Tasks.decode(pulls, refs, done).map { t ->
-            if (t.status.finished) t else t.copy(startedAt = startOf(t.ref))
+            t.copy(startedAt = known[t.ref] ?: startOf(t.ref))
         }
     }
 
     /**
-     * The branch's first commit, one ask per running task. A refusal
+     * The same, with the starts kept in [store] between visits: what
+     * both shells call, so GitHub is asked about a done task once.
+     */
+    suspend fun tasks(store: Store): List<Task> =
+        tasks(Tasks.knownStarts(store)).also { Tasks.saveStarts(store, it) }
+
+    /**
+     * The branch's first commit, one ask per task not already known. A refusal
      * leaves the start unknown rather than losing the whole list.
      */
     private suspend fun startOf(ref: String): String? = try {

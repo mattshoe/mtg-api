@@ -873,7 +873,7 @@ class MainActivity : ComponentActivity() {
         app = app.copy(tasks = app.tasks.loading())
         model.tasksJob = scope.launch {
             app = try {
-                val found = github.tasks()
+                val found = github.tasks(store)
                 app.copy(tasks = app.tasks.loaded(found).at(System.currentTimeMillis()))
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e

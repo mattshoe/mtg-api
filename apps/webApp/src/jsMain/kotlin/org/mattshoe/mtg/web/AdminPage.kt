@@ -140,7 +140,7 @@ private fun TaskRow(task: Task, marker: String, now: Long) {
     }) {
         Div(attrs = { classes("task-what") }) {
             Span(attrs = { classes("task-title") }) { Text(task.title) }
-            task.finished?.let { Span(attrs = { classes("muted", "small") }) { Text(it) } }
+            task.took?.let { Span(attrs = { classes("muted", "small") }) { Text(it) } }
             task.elapsed(now)?.let { Span(attrs = { classes("muted", "small") }) { Text(it) } }
         }
         Span(attrs = { classes("tag", "mini") }) { Text(task.status.word) }

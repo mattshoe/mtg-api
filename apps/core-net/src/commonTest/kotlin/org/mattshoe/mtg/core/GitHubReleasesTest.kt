@@ -71,27 +71,64 @@ class GitHubReleasesTest {
         assertTrue(urls.any { it == "https://api.github.com/repos/mattshoe/mtg-api/contents/requests/done" }, urls.toString())
     }
 
+    /**
+     * A done task needs its start too, to say how long it took. One
+     * already kept from an earlier visit is not asked about again.
+     */
     @Test
-    fun aRunningTaskIsStartedAtItsBranchsFirstCommitAndAFinishedOneIsNotAsked() = runTest {
+    fun everyTaskIsStartedAtItsBranchsFirstCommitAndAKnownStartIsNotAskedAgain() = runTest {
         val found = routed(
             "/pulls" to """[{"title":"Shipped","state":"closed","head":{"ref":"request/shipped-1234567"},
                 "merged_at":"2026-01-02T00:00:00Z","closed_at":"2026-01-02T00:00:00Z"},
+                {"title":"Kept","state":"closed","head":{"ref":"request/kept-5556667"},
+                "merged_at":"2026-01-03T00:00:00Z","closed_at":"2026-01-03T00:00:00Z"},
                 {"title":"Waiting","state":"open","head":{"ref":"request/waiting-1112223"},
                 "merged_at":null,"closed_at":null}]""",
             "/git/matching-refs/heads/request/" to """[{"ref":"refs/heads/request/shipped-1234567"},
+                {"ref":"refs/heads/request/kept-5556667"},
                 {"ref":"refs/heads/request/waiting-1112223"},{"ref":"refs/heads/request/going-7654321"}]""",
-            "/contents/requests/done" to """[{"name":"shipped.md","type":"file"}]""",
+            "/contents/requests/done" to """[{"name":"shipped.md","type":"file"},{"name":"kept.md","type":"file"}]""",
+            "/compare/main...request/shipped-1234567" to
+                """{"commits":[{"commit":{"author":{"date":"2026-01-01T20:00:00Z"}}}]}""",
             "/compare/main...request/waiting-1112223" to
                 """{"commits":[{"commit":{"author":{"date":"2026-10-08T08:00:00Z"}}}]}""",
             "/compare/main...request/going-7654321" to
                 """{"commits":[{"commit":{"author":{"date":"2026-10-08T09:15:00Z"}}}]}""",
-        ).tasks()
+        ).tasks(known = mapOf("request/kept-5556667" to "2026-01-02T21:00:00Z"))
         assertEquals(
-            listOf("Shipped" to null, "Waiting" to "2026-10-08T08:00:00Z", "going" to "2026-10-08T09:15:00Z"),
+            listOf(
+                "Shipped" to "2026-01-01T20:00:00Z",
+                "Kept" to "2026-01-02T21:00:00Z",
+                "Waiting" to "2026-10-08T08:00:00Z",
+                "going" to "2026-10-08T09:15:00Z",
+            ),
             found.map { it.title to it.startedAt },
         )
         val urls = seen.map { it.url.toString() }
-        assertTrue(urls.none { "shipped" in it && "/compare/" in it }, "a finished task's branch was compared: $urls")
+        assertTrue(urls.none { "kept" in it && "/compare/" in it }, "a kept start was asked for again: $urls")
+    }
+
+    /**
+     * What both shells do on every visit to Admin Settings: the second
+     * visit asks GitHub nothing about a task that was done at the first.
+     */
+    @Test
+    fun aDoneTasksStartIsAskedOnceAcrossVisits() = runTest {
+        val store = Store.inMemory()
+        val github = routed(
+            "/pulls" to """[{"title":"Shipped","state":"closed","head":{"ref":"request/shipped-1234567"},
+                "merged_at":"2026-01-02T00:00:00Z","closed_at":"2026-01-02T00:00:00Z"}]""",
+            "/git/matching-refs/heads/request/" to """[{"ref":"refs/heads/request/shipped-1234567"}]""",
+            "/contents/requests/done" to """[{"name":"shipped.md","type":"file"}]""",
+            "/compare/main...request/shipped-1234567" to
+                """{"commits":[{"commit":{"author":{"date":"2026-01-01T20:00:00Z"}}}]}""",
+        )
+        github.tasks(store)
+        seen.clear()
+        val again = github.tasks(store)
+        assertEquals("took 4h 00m", again.single().took)
+        val urls = seen.map { it.url.toString() }
+        assertTrue(urls.none { "/compare/" in it }, "the second visit asked for a start it already had: $urls")
     }
 
     @Test
