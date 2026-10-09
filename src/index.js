@@ -292,7 +292,7 @@ const INDEX = {
     'GET /tasks/inbox': 'the tasks the laptop has not collected yet, files included; admin only',
     'POST /tasks/inbox/received': '{"keys":["..."],"names":{"<key>":"<request file>"}} — the laptop has written these; admin only',
     'GET /tasks': 'every task, newest first, with its status; admin only',
-    'POST /tasks/status': '{"key" or "name","status","note"?,"title"?,"pr"?} — one transition, written by whoever caused it; admin only',
+    'POST /tasks/status': '{"key" or "name","status","note"?,"title"?,"pr"?,"started_at"?,"finished_at"?} — one transition, written by whoever caused it; the times only fill a task that never had a start; admin only',
     'GET /releases': 'GitHub\'s release list, kept by the Worker for a few minutes',
     'GET /logs': '?min=info&q=&event=&status=error&since=24&limit=100 — admin only',
     'POST /logs/client': '{"level":"info","message":"...","detail":{...}} — admin only',
