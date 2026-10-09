@@ -109,10 +109,49 @@ class TasksTest {
         assertFalse(s.toggleDone().toggleDone().showDone)
     }
 
+    /**
+     * Matt: "Done tasks should show how long they took, not a UTC
+     * timestamp". From the branch's first commit to the merge, or the
+     * close, in the same words a running one counts in.
+     */
     @Test
-    fun aFinishedTaskSaysWhenToTheMinute() {
-        assertEquals("2026-10-03 12:30 UTC", decoded().single { it.title == "Merged two" }.finished)
-        assertNull(decoded().single { it.title == "Waiting on CI" }.finished)
+    fun aFinishedTaskSaysHowLongItTook() {
+        val shipped = Task("request/x-1234567", "Shipped", TaskStatus.DONE, "2026-10-08T13:05:00Z", startedAt = "2026-10-08T10:00:00Z")
+        assertEquals("took 3h 05m", shipped.took)
+        val dropped = Task("request/y-1234567", "Dropped", TaskStatus.CLOSED, "2026-10-08T10:12:00Z", startedAt = "2026-10-08T10:00:00Z")
+        assertEquals("took 12m", dropped.took)
+    }
+
+    @Test
+    fun aTaskWithNoKnownStartOrStillGoingSaysNothingAboutHowLongItTook() {
+        assertNull(Task("request/x-1234567", "Shipped", TaskStatus.DONE, "2026-10-08T11:00:00Z").took)
+        assertNull(Task("request/x-1234567", "Going", TaskStatus.BUILDING, null, startedAt = "2026-10-08T10:00:00Z").took)
+    }
+
+    /**
+     * A finished task's start never changes, and GitHub allows sixty
+     * unsigned asks an hour. Kept between launches, every done task is
+     * asked about once rather than on every visit to Admin Settings.
+     */
+    @Test
+    fun aFinishedTasksStartIsKeptBetweenLaunchesAndARunningOnesIsNot() {
+        val store = Store.inMemory()
+        Tasks.saveStarts(
+            store,
+            listOf(
+                Task("request/x-1234567", "Shipped", TaskStatus.DONE, "2026-10-08T11:00:00Z", startedAt = "2026-10-08T10:00:00Z"),
+                Task("request/y-1234567", "Going", TaskStatus.BUILDING, null, startedAt = "2026-10-08T09:00:00Z"),
+                Task("request/z-1234567", "Unknown", TaskStatus.DONE, "2026-10-08T11:00:00Z"),
+            ),
+        )
+        assertEquals(mapOf("request/x-1234567" to "2026-10-08T10:00:00Z"), Tasks.knownStarts(store))
+    }
+
+    @Test
+    fun nothingKeptOrSomethingUnreadableIsNoKnownStarts() {
+        assertEquals(emptyMap(), Tasks.knownStarts(Store.inMemory()))
+        val store = Store.inMemory().apply { put("task-starts", "not json") }
+        assertEquals(emptyMap(), Tasks.knownStarts(store))
     }
 
     @Test
