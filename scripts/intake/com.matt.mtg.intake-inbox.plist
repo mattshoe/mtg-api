@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  A template, like com.matt.mtg.intake.plist. `install.sh` substitutes the
+  placeholders and writes the result to ~/Library/LaunchAgents.
+
+  Collects the tasks written in the app (Admin Settings, New task) from the
+  Worker's inbox into requests/. Writing a request file is what fires the
+  other job, so this one only fetches and writes and never dispatches.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.matt.mtg.intake-inbox</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>@NODE@</string>
+    <string>@REPO@/scripts/intake/inbox.mjs</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>@REPO@</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>@PATH@</string>
+  </dict>
+
+  <key>StandardOutPath</key>
+  <string>@LOGDIR@/inbox.log</string>
+  <key>StandardErrorPath</key>
+  <string>@LOGDIR@/inbox.log</string>
+
+  <!-- Every five minutes. A task sent from a phone waits at most that long
+       before it is a request file. -->
+  <key>StartInterval</key>
+  <integer>300</integer>
+  <key>RunAtLoad</key>
+  <true/>
+</dict>
+</plist>

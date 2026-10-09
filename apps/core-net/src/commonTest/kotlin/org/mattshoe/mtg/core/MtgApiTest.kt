@@ -162,4 +162,33 @@ class MtgApiTest {
         assertEquals("u1am0g42", sent["collection"]!!.jsonPrimitive.content)
         assertNull(sent["owner"], "the retired owner field still goes up")
     }
+
+    @Test
+    fun aNewTaskGoesUpWithItsFilesAndComesBackAsAKey() = runTest {
+        val key = api(body = """{"key":"ab12cd34","files":1}""").sendTask(
+            "0.abc",
+            NewTask().titled("Bigger buttons").described("Too small")
+                .attach(listOf(TaskFile("shot.png", "image/png", 5, "aGVsbG8="))),
+        )
+        assertEquals("ab12cd34", key)
+        val req = seen.single()
+        assertEquals("/tasks", req.url.encodedPath)
+        assertEquals("Bearer 0.abc", req.headers[HttpHeaders.Authorization])
+        val sent = Json.parseToJsonElement(req.bodyText()).jsonObject
+        assertEquals("Bigger buttons", sent["title"]!!.jsonPrimitive.content)
+        assertEquals("Too small", sent["details"]!!.jsonPrimitive.content)
+        val file = (sent["files"] as kotlinx.serialization.json.JsonArray).single().jsonObject
+        assertEquals("shot.png", file["name"]!!.jsonPrimitive.content)
+        assertEquals("image/png", file["type"]!!.jsonPrimitive.content)
+        assertEquals("aGVsbG8=", file["data"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun aRefusedTaskSaysWhatTheServerSaid() = runTest {
+        val e = assertFailsWith<ApiFailure> {
+            api(HttpStatusCode.BadRequest, """{"error":"shot.png is over 1.5 MB"}""")
+                .sendTask("0.abc", NewTask().titled("x").described("y"))
+        }
+        assertEquals("shot.png is over 1.5 MB", e.message)
+    }
 }

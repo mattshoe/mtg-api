@@ -1760,6 +1760,16 @@ select.sort {
   color: var(--text-2); font: inherit; font-weight: 600; text-align: left; cursor: pointer;
 }
 
+/* Admin Settings' New task page: a title, the details, files, Send. */
+.new-task { max-width: 680px; }
+.new-task-lede { margin-bottom: 14px; }
+.new-task textarea.prose { font-family: inherit; font-size: 14px; line-height: 1.5; min-height: 150px; }
+.new-task .dropzone { margin-bottom: 6px; }
+.task-file { display: flex; align-items: center; gap: 9px; padding: 6px 4px; }
+.task-file + .task-file { border-top: 1px solid var(--line); }
+.task-file-name { flex: 1; min-width: 0; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.new-task-actions { margin-top: 16px; }
+
 /* One account's own page: a big face, their name, their address. */
 .person-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
 .person-face {

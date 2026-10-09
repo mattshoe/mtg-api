@@ -45,6 +45,8 @@ const COPY = [
   'scripts/intake/install.sh',
   'scripts/intake/uninstall.sh',
   'scripts/intake/com.matt.mtg.intake.plist',
+  'scripts/intake/com.matt.mtg.intake-inbox.plist',
+  'scripts/intake/inbox.mjs',
   'scripts/guard.mjs',
   'scripts/check-test-count.mjs',
   'test/suite-floors.json',
@@ -329,6 +331,7 @@ describe('the switches', () => {
     expect(r.status).toBe(0)
     expect(existsSync(box.path('.intake/disabled'))).toBe(true)
     expect(box.log()).toContain('launchctl bootout')
+    expect(box.log()).toContain('com.matt.mtg.intake-inbox')
   })
 
   it('is the only thing holding it back — without it, the hook dispatches', () => {
@@ -816,6 +819,17 @@ describe('installing the watcher', () => {
     const i = install()
     expect(i.status).toBe(0)
     expect(existsSync(box.path('.intake/enabled'))).toBe(true)
+  })
+
+  it('installs a second job that collects tasks sent from the app every five minutes', () => {
+    const i = install()
+    expect(i.status).toBe(0)
+    const plist = join(box.root, 'Library/LaunchAgents/com.matt.mtg.intake-inbox.plist')
+    const inbox = readFileSync(plist, 'utf8')
+    expect(inbox).not.toMatch(/@[A-Z]+@/)
+    expect(inbox).toMatch(/<key>StartInterval<\/key>\s*<integer>300<\/integer>/)
+    expect(inbox).toContain(`${box.repo}/scripts/intake/inbox.mjs`)
+    expect(box.log()).toContain(`launchctl load ${plist}`)
   })
 
   it('turns the off switch back off, because installing is when that happens', () => {

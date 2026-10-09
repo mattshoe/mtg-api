@@ -15,6 +15,9 @@
 //   POST /admin       password in, admin token out
 //   GET  /admin/users every account and its role (admin)
 //   POST /admin/role  hand the admin role out, or take it back (admin)
+//   POST /tasks       a new task, from Admin Settings (admin)
+//   GET  /tasks/inbox the tasks the laptop has not collected (admin)
+//   POST /tasks/inbox/received  the laptop has them (admin)
 //   GET  /maintenance last run of the daily job
 //   POST /maintenance run it now (admin)
 //   GET  /logs        the request log (admin)
@@ -37,6 +40,7 @@ import { lookupPrices } from './prices.js';
 import { runMaintenance, CRON_TASKS } from './maintenance.js';
 import { newEntry, writeEntry, buildLogQuery, logStats } from './log.js';
 import { keyFrom, claim, remember, release } from './idempotency.js';
+import { newTask, inbox, received } from './tasks.js';
 
 /**
  * May this caller change that collection, and if not, why not.
@@ -274,6 +278,9 @@ const INDEX = {
     'POST /admin': '{"password":"..."} -> {"token":"...","expires_at":null}',
     'GET /admin/users': 'every account, its role and the key its collection is shared by — admin only',
     'POST /admin/role': '{"key":"...","role":"user|admin"} — hands the admin role out or takes it back; admin only',
+    'POST /tasks': '{"title":"...","details":"...","files":[{"name","type","data":"<base64>"}]} — a new task for the intake; admin only',
+    'GET /tasks/inbox': 'the tasks the laptop has not collected yet, files included; admin only',
+    'POST /tasks/inbox/received': '{"keys":["..."]} — the laptop has written these; admin only',
     'GET /logs': '?min=info&q=&event=&status=error&since=24&limit=100 — admin only',
     'POST /logs/client': '{"level":"info","message":"...","detail":{...}} — admin only',
     'GET /logs/stats': 'counts, slowest routes, retention — admin only',
@@ -292,11 +299,13 @@ const PENDING_COOKIE = 'mtg_oauth';
 const safeJson = (text) => { try { return JSON.parse(text); } catch { return null; } };
 
 /**
- * Does this statement go near the log table? Checked against the SQL with
- * string literals blanked, so a card named "Logs" cannot trip it. A false
- * positive only means someone is asked for a token they already have.
+ * Does this statement go near the log table, or a task somebody wrote?
+ * Checked against the SQL with string literals blanked, so a card named
+ * "Logs" cannot trip it. A false positive only means someone is asked for
+ * a token they already have.
  */
-const touchesLogs = (sql) => typeof sql === 'string' && /\blogs\b/i.test(stripLiterals(sql));
+const touchesLogs = (sql) => typeof sql === 'string'
+  && /\b(logs|task_inbox|task_files)\b/i.test(stripLiterals(sql));
 
 export default {
   /** Cloudflare Cron Trigger. Nothing has to be awake for this to run. */
@@ -730,6 +739,33 @@ async function route(request, env, ctx, entry) {
         return json({ error: out.error }, out.status);
       }
       return json(out);
+    }
+
+    /**
+     * A new task, from Admin Settings, and the inbox the laptop
+     * collects them from. Admin only, every one: a task is a change to
+     * the app itself.
+     */
+    if (path === '/tasks' || path === '/tasks/inbox' || path === '/tasks/inbox/received') {
+      const wants = path === '/tasks/inbox' ? 'GET' : 'POST';
+      if (method !== wants) return notAllowed(wants);
+      const who = await whoAmI(env, request, verifyToken);
+      if (!who.operator && who.user?.role !== 'admin') {
+        return who.user
+          ? json({ error: 'that needs the admin role' }, 403)
+          : denied('that needs the admin role');
+      }
+      entry.admin = true;
+      if (path === '/tasks/inbox') return json({ tasks: await inbox(env.DB) });
+      const { body, error } = await readJson(request);
+      if (error) return json({ error }, 400);
+      entry.write = true;
+      const out = path === '/tasks'
+        ? await newTask(env.DB, who.user?.id ?? null, body)
+        : await received(env.DB, body.keys);
+      entry.detail = path === '/tasks' ? { title: body.title, files: out.body.files } : { keys: body.keys };
+      if (out.status >= 400) entry.message = out.body.error;
+      return send(out);
     }
 
     if (path === '/admin/sql') {
