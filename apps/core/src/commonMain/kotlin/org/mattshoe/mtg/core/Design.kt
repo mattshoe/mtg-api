@@ -68,7 +68,8 @@ object Design {
         else -> C
     }
 
-    fun css(argb: Long): String = ""
+    /** `#RRGGBB`, for a colour the stylesheet has no property for. */
+    fun css(argb: Long): String = "#" + (argb and 0xFFFFFF).toString(16).uppercase().padStart(6, '0')
 
     // ------------------------------------------------------- mixtures
     //
