@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { outcome, titleOf, report, reconcile } from '../scripts/intake/task-status.mjs'
+import { outcome, titleOf, report, reconcile, requestOfBranch } from '../scripts/intake/task-status.mjs'
 
 /**
  * The dispatcher's half of "task status lives in D1".
@@ -150,12 +150,12 @@ describe('reconcile tells the truth', () => {
 
   it('a request filed under done/ is never cancelled: done by hand, it is merged', () => {
     expect(reconcile(seen({ filed: ['admin-role'], rows: [row('admin-role', 'cancelled', { note: 'request withdrawn' })] })))
-      .toEqual([{ name: 'admin-role', status: 'merged', note: 'filed under done/ with no pull request' }])
+      .toEqual([{ name: 'admin-role', status: 'merged' }])
   })
 
   it('a request filed under done/ while its row still says pending is merged', () => {
     expect(reconcile(seen({ filed: ['by-hand'], rows: [row('by-hand', 'pending')] })))
-      .toEqual([{ name: 'by-hand', status: 'merged', note: 'filed under done/ with no pull request' }])
+      .toEqual([{ name: 'by-hand', status: 'merged' }])
   })
 
   it('a worktree with no agent and no row gets one, paused, saying the agent stopped', () => {
@@ -187,6 +187,12 @@ describe('reconcile tells the truth', () => {
     expect(reconcile(seen({
       filed: ['shipped'], prs, rows: [row('shipped', 'merged', { started_at: '2026-10-08T08:00:00Z' })],
     }))).toEqual([])
+  })
+
+  it('a branch the dispatcher made names its request, and any other branch names none', () => {
+    expect(requestOfBranch('request/task-details-page-da60d2b')).toBe('task-details-page')
+    expect(requestOfBranch('request/task-details-page-0000000')).toBeNull()
+    expect(requestOfBranch('recover/card-page-shows-everything')).toBeNull()
   })
 
   it('what a merged pull request settles to carries its times', () => {
