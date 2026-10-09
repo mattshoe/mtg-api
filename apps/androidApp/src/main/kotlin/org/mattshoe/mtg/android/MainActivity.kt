@@ -346,6 +346,11 @@ class MainActivity : ComponentActivity() {
     /** The opening fetch for whatever the route names. */
     internal fun loadForTesting() = loadFor(app)
 
+    /** A pull to refresh, for a test that cannot drag a finger. */
+    internal fun refreshForTesting() = refresh()
+
+    private fun refresh() {}
+
     /** The token load, so a test can wait for it instead of sleeping. */
     internal val tokensJob: Job? get() = model.tokensJob
     internal val releasesJob: Job? get() = model.releasesJob
