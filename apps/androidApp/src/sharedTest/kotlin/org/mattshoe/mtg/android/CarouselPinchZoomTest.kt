@@ -55,6 +55,42 @@ class CarouselPinchZoomTest {
 
     private lateinit var held: androidx.compose.runtime.MutableState<AppState>
 
+    /**
+     * A test in this class that stalls writes every thread's stack
+     * into `build/test-order.log`, which CI uploads.
+     *
+     * The first two CI runs of this class hung the screens task until
+     * its 12-minute timeout, and a hung test leaves no XML and no
+     * trace of where it stopped.
+     */
+    private var watchdog: java.util.Timer? = null
+
+    @org.junit.Before
+    fun watch() {
+        val name = javaClass.simpleName
+        watchdog = java.util.Timer(true).apply {
+            schedule(
+                object : java.util.TimerTask() {
+                    override fun run() {
+                        val dump = StringBuilder("STALLED $name, every thread:\n")
+                        Thread.getAllStackTraces().forEach { (t, frames) ->
+                            dump.append("  thread ").append(t.name).append('\n')
+                            frames.take(40).forEach { dump.append("    at ").append(it).append('\n') }
+                        }
+                        runCatching { java.io.File("build/test-order.log").appendText(dump.toString()) }
+                        println(dump)
+                    }
+                },
+                90_000L,
+            )
+        }
+    }
+
+    @org.junit.After
+    fun stopWatching() {
+        watchdog?.cancel()
+    }
+
     private fun card(name: String) = DeckCard(
         name = name,
         qty = 1,
@@ -106,11 +142,14 @@ class CarouselPinchZoomTest {
 
     private fun spread() {
         rule.onNodeWithTag("carousel-pager").performTouchInput {
+            // Inside the card, as fractions of it: Robolectric's
+            // screen is narrow, and a finger off the window is not a
+            // finger on the card.
             pinch(
-                start0 = center + Offset(-20f, 0f),
-                end0 = center + Offset(-160f, 0f),
-                start1 = center + Offset(20f, 0f),
-                end1 = center + Offset(160f, 0f),
+                start0 = center + Offset(-width * 0.05f, 0f),
+                end0 = center + Offset(-width * 0.3f, 0f),
+                start1 = center + Offset(width * 0.05f, 0f),
+                end1 = center + Offset(width * 0.3f, 0f),
             )
         }
         rule.waitForIdle()
@@ -119,10 +158,10 @@ class CarouselPinchZoomTest {
     private fun squeeze() {
         rule.onNodeWithTag("carousel-pager").performTouchInput {
             pinch(
-                start0 = center + Offset(-200f, 0f),
-                end0 = center + Offset(-5f, 0f),
-                start1 = center + Offset(200f, 0f),
-                end1 = center + Offset(5f, 0f),
+                start0 = center + Offset(-width * 0.35f, 0f),
+                end0 = center + Offset(-2f, 0f),
+                start1 = center + Offset(width * 0.35f, 0f),
+                end1 = center + Offset(2f, 0f),
             )
         }
         rule.waitForIdle()
