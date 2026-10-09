@@ -208,11 +208,18 @@ data class AppState(
         get() = if (view != View.ADMIN || route.rest.isBlank()) null
         else people.rows.firstOrNull { it.key == route.rest }
 
-    val writingTask: Boolean get() = false
+    /** On Admin Settings' New task page, `#/admin/new-task`. */
+    val writingTask: Boolean get() = view == View.ADMIN && route.rest == NewTask.ROUTE
 
-    fun startingATask(): AppState = this
+    /** The New task button. Landing still checks the role. */
+    fun startingATask(): AppState = navigate(Route(View.ADMIN, NewTask.ROUTE))
 
-    fun taskSent(): AppState = this
+    /** Sent: back to Admin Settings with an empty form, saying where it went. */
+    fun taskSent(): AppState {
+        val title = newTask.title.trim()
+        return copy(newTask = NewTask()).navigate(Route(View.ADMIN))
+            .say("Task sent: $title. It is a request within five minutes.")
+    }
 
     /** Look at somebody's collection. Theirs or anybody's. */
     fun browsing(key: String): AppState = copy(resolvedCollection = key)
@@ -561,6 +568,9 @@ data class AppState(
         // to put the address back too, or the screen says list and
         // the address still says deck.
         decks.openKey != null -> navigate(Route(View.DECKS))
+        // The task page is a page of Admin Settings, so back is Admin
+        // Settings — the same as its own Cancel.
+        writingTask -> navigate(Route(View.ADMIN))
         // Inside the entry wizard, Back is a step and not an exit.
         // It had never heard of the wizard, so the gesture went
         // straight from step four to the Library and whatever was

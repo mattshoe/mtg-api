@@ -295,6 +295,9 @@ class MtgApi internal constructor(
         val was: String = "",
     )
 
+    /** A new task, from Admin Settings. The key it was filed under. */
+    suspend fun sendTask(session: String, task: NewTask): String = ""
+
     /** Rename a deck. Its key, and so its address, stays where it is. */
     suspend fun renameDeck(token: String, key: String, name: String): Renamed {
         val res = http.post("$base/decks/rename") {
