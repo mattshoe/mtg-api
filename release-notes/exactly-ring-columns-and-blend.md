@@ -1,0 +1,1 @@
+A two-colour slice in the deck page's colour rings is one colour now, the two mixed, so Izzet is a blue-red purple instead of a stripe of blue and a stripe of red. The table under the Exactly ring lines its columns up on the phone.

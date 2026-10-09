@@ -1160,6 +1160,145 @@ class AppDriverTest {
         waitFor("the list to ask GitHub again") { tasksAsked == 2 }
     }
 
+    // -------------------------------------------------- pull to refresh
+
+    /**
+     * A thumb on the page, dragged straight down from [fromY] to [toY].
+     *
+     * Real `Touch` objects through the real document, which is where a
+     * phone's touches arrive. A pointer event would not do: the browser
+     * cancels the pointer the moment it decides the drag is a scroll.
+     */
+    private fun drag(fromY: Double, toY: Double) {
+        val target = document.body!!
+        fun touch(y: Double): dynamic {
+            val init: dynamic = js("({})")
+            init.identifier = 1
+            init.target = target
+            init.clientX = 120.0
+            init.clientY = y
+            init.pageX = 120.0
+            init.pageY = y
+            return js("new Touch(init)")
+        }
+        fun fire(type: String, y: Double, live: Boolean) {
+            val t = touch(y)
+            val init: dynamic = js("({})")
+            init.bubbles = true
+            init.cancelable = true
+            init.touches = if (live) arrayOf(t) else arrayOf()
+            init.targetTouches = init.touches
+            init.changedTouches = arrayOf(t)
+            target.dispatchEvent(js("new TouchEvent(type, init)"))
+        }
+        fire("touchstart", fromY, live = true)
+        val steps = 8
+        for (i in 1..steps) fire("touchmove", fromY + (toY - fromY) * i / steps, live = true)
+        fire("touchend", toY, live = false)
+    }
+
+    /** The whole height of a pull, well past the point it fires. */
+    private fun pullDown() = drag(60.0, 460.0)
+
+    @Test
+    fun pullingTheLibraryDownSearchesAgain() = runTest {
+        val view = mount("#/search", token = "t")
+        waitFor("the grid") { view.all("div.card").isNotEmpty() }
+        settle()
+        val before = searches
+        pullDown()
+        waitFor("a second search after the pull (was $before)") { searches > before }
+    }
+
+    @Test
+    fun aNudgeIsNotAPull() = runTest {
+        val view = mount("#/search", token = "t")
+        waitFor("the grid") { view.all("div.card").isNotEmpty() }
+        settle()
+        val before = searches
+        drag(60.0, 90.0)
+        rest(600)
+        assertEquals(before, searches, "a thirty pixel nudge refreshed the page")
+    }
+
+    @Test
+    fun pullingAnOpenDeckDownAsksForItsCardsAgain() = runTest {
+        mount("#/decks/alela", token = "t")
+        waitFor("the deck's cards") { sent.any { "FROM deck_cards dc" in it } }
+        settle()
+        val before = sent.count { "FROM deck_cards dc" in it }
+        pullDown()
+        waitFor("the deck's cards asked for again") { sent.count { "FROM deck_cards dc" in it } > before }
+    }
+
+    @Test
+    fun pullingTheDeckListDownAsksForTheDecksAgain() = runTest {
+        val view = mount("#/decks", token = "t")
+        waitFor("the deck list") { view.has("Fairy Deck") || view.textContent.orEmpty().contains("Fairy Deck") }
+        settle()
+        val before = sent.count { "FROM decks d" in it }
+        pullDown()
+        waitFor("the decks asked for again") { sent.count { "FROM decks d" in it } > before }
+    }
+
+    @Test
+    fun pullingACardDownAsksForTheCardAgain() = runTest {
+        mount("#/card/sol+ring")
+        waitFor("the card") { document.body!!.textContent.orEmpty().contains("Sol Ring") }
+        settle()
+        val before = sent.count { "FROM card_faces cf" in it }
+        pullDown()
+        waitFor("the card asked for again") { sent.count { "FROM card_faces cf" in it } > before }
+    }
+
+    @Test
+    fun pullingStatsDownAsksForTheTotalsAgain() = runTest {
+        mount("#/stats", token = "t")
+        waitFor("signed in and on stats") { window.location.hash.endsWith("/stats") }
+        settle()
+        val before = sent.size
+        pullDown()
+        waitFor("anything asked after the pull on Stats (was $before)") { sent.size > before }
+    }
+
+    @Test
+    fun pullingAdminSettingsDownAsksForThePeopleAgain() = runTest {
+        role = "admin"
+        val root = mount("#/admin")
+        waitFor("a task on Admin Settings") { root.all("[data-task]").isNotEmpty() }
+        settle()
+        val before = tasksAsked
+        pullDown()
+        waitFor("Admin Settings asked again after the pull") { tasksAsked > before }
+    }
+
+    @Test
+    fun aPullSpinsUntilTheAnswerLands() = runTest {
+        // The real cascade, so "visible" is what the stylesheet says.
+        Stylesheet.load()
+        waitFor("the stylesheet") { Stylesheet.applied() }
+        val view = mount("#/search", token = "t")
+        waitFor("the grid") { view.all("div.card").isNotEmpty() }
+        settle()
+        pullDown()
+        // The search is debounced by 250ms, so for a moment after the
+        // finger lifts the page is waiting and should say so.
+        val spinner = document.querySelector("[data-pull]") as? HTMLElement
+            ?: error("no pull indicator on the page at all")
+        // A frame for the composition to catch up, and no more: the
+        // search lands 250ms after the finger lifts.
+        waitFor("the finger lifted on a pull and nothing says the page is refreshing", upTo = 240) {
+            spinner.getAttribute("data-refreshing") == "true"
+        }
+        assertTrue(
+            window.getComputedStyle(spinner).opacity.toDouble() > 0.0,
+            "the pull indicator is refreshing and invisible",
+        )
+        waitFor("the spinner to go once the rows land") {
+            spinner.getAttribute("data-refreshing") == "false"
+        }
+    }
+
     /**
      * The running task counts from its branch's first commit to the
      * browser's own clock. `TasksPanelTest` hands the page a `now`;

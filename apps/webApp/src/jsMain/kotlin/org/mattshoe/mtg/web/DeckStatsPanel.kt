@@ -12,6 +12,7 @@ import org.jetbrains.compose.web.dom.Tr
 import org.jetbrains.compose.web.dom.Text
 import org.mattshoe.mtg.core.Bar
 import org.mattshoe.mtg.core.DeckStats
+import org.mattshoe.mtg.core.Design
 import org.mattshoe.mtg.core.Pip
 import org.mattshoe.mtg.core.Prices
 import org.mattshoe.mtg.core.RingSlice
@@ -224,15 +225,13 @@ private fun Pie(caption: String, bars: List<Bar>, numbered: List<RingSlice> = em
     val total = bars.sumOf { it.value }
     if (total <= 0) return
     var at = 0.0
-    // A combination is a band of each of its colours.
-    val stops = bars.flatMap { bar ->
-        val band = (bar.value * 100.0) / total / bar.letters.size
-        bar.letters.map { letter ->
-            val from = at
-            at += band
-            "var(--${letter.lowercase()}) ${from}% ${at}%"
-        }
-    }.joinToString(", ")
+    // A combination is one colour, its colours mixed: `Bar.fill`.
+    val stops = bars.joinToString(", ") { bar ->
+        val from = at
+        at += (bar.value * 100.0) / total
+        val paint = bar.letters.singleOrNull()?.let { "var(--${it.lowercase()})" } ?: Design.css(bar.fill)
+        "$paint ${from}% ${at}%"
+    }
     Div(attrs = {
         classes("pie-set")
         if (wide) classes("wide")
