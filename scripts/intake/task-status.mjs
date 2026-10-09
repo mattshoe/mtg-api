@@ -24,7 +24,7 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { join, basename, dirname } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { agentToken } from './inbox.mjs'
+import { writeToken } from './inbox.mjs'
 import { pending, buildable } from '../intake.mjs'
 
 const API = 'https://mtg-api.mattshoe81.workers.dev'
@@ -140,7 +140,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const name = basename(String(file || ''), '.md')
   const stamp = new Date().toTimeString().slice(0, 8)
   const say = (line) => console.log(`${stamp}  task-status: ${line}`)
-  const token = agentToken()
+  const token = await writeToken()
 
   let transition
   if (cmd === 'building') {
@@ -160,7 +160,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
       say(`could not ask gh about ${branch}: ${e.message}`)
     }
   } else if (cmd === 'reconcile') {
-    if (!token) say('no ~/.mtg-agent.env, so nothing was reconciled')
+    if (!token) say('no credential that may write task status, so nothing was reconciled')
     else {
       reconcileNow({ repo, token })
         .then((wrote) => wrote.forEach((t) => say(`${t.name} ${t.status}${t.note ? ` (${t.note})` : ''}`)))
@@ -171,7 +171,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     process.exit(2)
   }
 
-  if (transition && !token) say(`no ~/.mtg-agent.env, so ${name} ${transition.status} was not written`)
+  if (transition && !token) say(`no credential that may write task status, so ${name} ${transition.status} was not written`)
   else if (transition) {
     report(transition, { token })
       .then(() => say(`${name} ${transition.status}`))
