@@ -512,7 +512,7 @@ any other word with a 400.
 | paused | nothing is running and the work is kept — the reason says why |
 | in review | pull request open — CI running, red, green, whatever |
 | merged | landed on main |
-| deployed | live, the artifact verified |
+| deployed | live: every deploy run its merge set off (`pages`, `release`, `worker`) went green |
 | cancelled | withdrawn; it says so rather than disappearing |
 
 **Done**, collapsed by default and newest finished first: `merged`,
@@ -545,12 +545,12 @@ its `key` from the app or its request file's `name` from the laptop.
 | status | written by |
 |---|---|
 | pending | the Worker, on `POST /tasks` from New task; `task-status.mjs reconcile` for a ready request file with no row |
-| in progress | `dispatch.sh` → `task-status.mjs building`, just before it starts a builder |
-| in review, merged | `task-status.mjs settle` after the builder exits, from what its pull request came to |
-| paused | `settle` when the builder left no pull request, or its PR was closed unmerged; `reconcile` for a held request ("held by Matt") or an `in progress` row with no agent alive |
-| cancelled | `settle` or `reconcile` when the request file was withdrawn; anyone with the admin role writing it to the row |
+| in progress | `dispatch.sh` → `task-status.mjs building`, just before it starts a builder; `reconcile` for any worktree with an agent alive in it |
+| in review, merged | `task-status.mjs settle` after the builder exits, from what its pull request came to; `reconcile` from a request branch's pull request, and `merged` for anything under `requests/done/` on main or on the laptop, which is never read as cancelled. A merged row with no start takes its pull request's `createdAt` and `mergedAt`, so it can say how long it took |
+| paused | `settle` when the builder left no pull request, or its PR was closed unmerged; `reconcile` for a held request ("held by Matt") or a worktree with no agent alive |
+| cancelled | `settle` or `reconcile` when there is no request file anywhere, for a row, a worktree or a request branch; anyone with the admin role writing it to the row |
 | blocked | a builder that stops to ask Matt (see "When you are stuck" in `request-builder.md`), with what it needs in the note |
-| deployed | nothing yet: nothing in the intake checks the shipped artifact. Whoever verifies it writes it |
+| deployed | `reconcile`, from `gh run list` on main: every deploy run of the merge commit green. One still going or red leaves it `merged` with "deploying: the APK" or "deploy failed: the site"; a merge over fifteen minutes old that set off no deploy reads `merged`, "nothing to deploy". A green workflow is still not the artifact check under "Verifying a deploy for real" |
 
 Adding a state means: the word in `STATUSES` and in `TaskStatus` (with
 `finished` set right), a row in both tables here, and whichever script

@@ -130,6 +130,30 @@ describe('task status', () => {
     expect(tasks[0].finished_at).toMatch(/^\d{4}-\d\d-\d\dT/)
   })
 
+  it('a merged task that never had a start takes the pull request\'s own times, so it can say how long it took', async () => {
+    // Filed straight into done/, so it was merged with no start at all,
+    // and a done row with no start shows no duration.
+    await post('/tasks/status', { name: 'old-one', title: 'Old one', status: 'merged' })
+    await post('/tasks/status', {
+      name: 'old-one', status: 'merged', pr: 'https://github.com/mattshoe/mtg-api/pull/40',
+      started_at: '2026-10-01T10:00:00Z', finished_at: '2026-10-01T11:30:00Z',
+    })
+    expect((await getAs('/tasks')).body.tasks[0]).toMatchObject({
+      status: 'merged', started_at: '2026-10-01T10:00:00Z', finished_at: '2026-10-01T11:30:00Z',
+    })
+  })
+
+  it('a start the dispatcher wrote is never overwritten by a pull request\'s times', async () => {
+    await post('/tasks/status', { name: 'built', title: 'Built', status: 'in progress' })
+    const started = (await getAs('/tasks')).body.tasks[0].started_at
+    await post('/tasks/status', {
+      name: 'built', status: 'merged', started_at: '2020-01-01T00:00:00Z', finished_at: '2020-01-01T01:00:00Z',
+    })
+    const row = (await getAs('/tasks')).body.tasks[0]
+    expect(row.started_at).toBe(started)
+    expect(row.finished_at).not.toBe('2020-01-01T01:00:00Z')
+  })
+
   it('every status Matt asked for is one the Worker takes', async () => {
     for (const status of ['pending', 'in progress', 'blocked', 'paused', 'in review', 'merged', 'deployed', 'cancelled']) {
       const r = await post('/tasks/status', { name: 'every-one', title: 'Every one', status })
