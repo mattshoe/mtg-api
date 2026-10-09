@@ -968,6 +968,34 @@ describe('status.sh', () => {
     expect(out).toContain('none pending')
   })
 
+  it('names the request an agent is on, not just that one exists', () => {
+    // The dashboard's job is answering "what is happening" without opening
+    // anything. A count alone cannot do that.
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    const out = spawnSync('bash', [box.path('scripts/intake', 'status.sh')], {
+      encoding: 'utf8', cwd: box.repo,
+      env: { ...process.env, PATH: `${box.bin}:${process.env.PATH}`, HOME: box.root },
+    }).stdout
+    // Every live agent line carries an elapsed time and a request name.
+    for (const line of out.split('\n')) {
+      if (!/^ {4}\d/.test(line)) continue
+      expect(line).toMatch(/^ {4}[0-9:]+\s+\S+\.md$/)
+    }
+    expect(out).toContain('WORKTREES')
+  })
+
+  it('says plainly when intake.mjs cannot answer, instead of listing nothing', () => {
+    // An empty listing and a broken one must never look the same — the
+    // oldest bug in this system, and the dashboard is where it would hide.
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    box.stub('node', 'exit 9')
+    const out = spawnSync('bash', [box.path('scripts/intake', 'status.sh')], {
+      encoding: 'utf8', cwd: box.repo,
+      env: { ...process.env, PATH: `${box.bin}:${process.env.PATH}`, HOME: box.root },
+    }).stdout
+    expect(out).toMatch(/cannot be trusted|exited 9/)
+  })
+
   it('reports the dispatchers and agents that are actually running', () => {
     // This read `$STATE/lock`, a directory the dispatcher stopped creating
     // when it moved to lockf — so the dashboard said "nothing is
