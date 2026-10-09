@@ -15,30 +15,47 @@ import kotlin.test.assertTrue
  * default but still browsable, ordered by the time which they
  * completed, most recent first".
  *
- * A task is a row in D1 the dispatcher writes as it changes: queued
- * when it is sent, building when a builder starts, and what its pull
- * request came to when the builder stops. The app reads it from the
- * Worker and decides nothing about it from GitHub.
+ * A task is a row in D1 written as each transition happens: pending
+ * when it is sent, in progress when a builder starts, and what its pull
+ * request came to when the builder stops, with why. The app reads it
+ * from the Worker and decides nothing about it from GitHub.
  */
 class TasksTest {
 
     private fun quoted(s: String?) = if (s == null) "null" else "\"$s\""
 
-    private fun row(key: String, title: String, status: String, started: String? = null, finished: String? = null) =
-        """{"key":"$key","name":null,"title":"$title","status":"$status","pr":null,
+    private fun row(
+        key: String,
+        title: String,
+        status: String,
+        started: String? = null,
+        finished: String? = null,
+        statusAt: String? = null,
+        note: String? = null,
+        pr: String? = null,
+    ) =
+        """{"key":"$key","name":null,"title":"$title","status":"$status","pr":${quoted(pr)},
+            "status_at":${quoted(statusAt)},"note":${quoted(note)},
             "created_at":"2026-10-01T00:00:00.000Z",
             "started_at":${quoted(started)},"finished_at":${quoted(finished)}}"""
 
     private val body = listOf(
-        row("k1", "Merged one", "done", "2026-10-01T09:00:00.000Z", "2026-10-01T10:00:00.000Z"),
-        row("k2", "Merged two", "done", "2026-10-03T12:00:00.000Z", "2026-10-03T12:30:00.000Z"),
-        row("k3", "Given up", "closed", null, "2026-10-02T08:00:00.000Z"),
-        row("k4", "Waiting on CI", "in review", "2026-10-08T09:00:00.000Z"),
-        row("k5", "still going", "building", "2026-10-08T10:00:00.000Z"),
-        row("k6", "Sent from the phone", "queued"),
+        row("k1", "Merged one", "merged", "2026-10-01T09:00:00.000Z", "2026-10-01T10:00:00.000Z"),
+        row("k2", "Merged two", "deployed", "2026-10-03T12:00:00.000Z", "2026-10-03T12:30:00.000Z"),
+        row("k3", "Given up", "cancelled", null, "2026-10-02T08:00:00.000Z"),
+        row(
+            "k4", "Waiting on CI", "in review", "2026-10-08T09:00:00.000Z",
+            pr = "https://github.com/mattshoe/mtg-api/pull/142",
+        ),
+        row("k5", "still going", "in progress", "2026-10-08T10:00:00.000Z"),
+        row("k6", "Sent from the phone", "pending"),
         row("k7", "Never mind", "cancelled", null, "2026-10-04T08:00:00.000Z"),
-        row("k8", "Builder died", "stopped", "2026-10-07T08:00:00.000Z"),
-        row("k9", "On hold", "paused"),
+        row(
+            "k8", "Builder died", "paused", "2026-10-07T08:00:00.000Z",
+            statusAt = "2026-10-08T09:55:00.000Z", note = "agent crashed",
+        ),
+        row("k9", "On hold", "paused", note = "held by Matt"),
+        row("k10", "Needs Matt", "blocked", note = "needs the Cloudflare token"),
     ).joinToString(",", """{"tasks":[""", "]}")
 
     private fun decoded() = Tasks.decode(body)
@@ -47,18 +64,64 @@ class TasksTest {
 
     @Test
     fun eachTaskSaysWhereItIsInOneWord() {
-        assertEquals("done", statusOf("Merged one"))
-        assertEquals("closed", statusOf("Given up"))
+        assertEquals("merged", statusOf("Merged one"))
+        assertEquals("deployed", statusOf("Merged two"))
         assertEquals("in review", statusOf("Waiting on CI"))
-        assertEquals("building", statusOf("still going"))
+        assertEquals("in progress", statusOf("still going"))
+        assertEquals("blocked", statusOf("Needs Matt"))
     }
 
-    /** What GitHub could never show: a task nobody has started, and one called off. */
+    /** What GitHub could never show: a task nobody has started, one called off, and one whose agent died. */
     @Test
-    fun aTaskNotYetStartedIsQueuedAndOneCalledOffIsCancelled() {
-        assertEquals("queued", statusOf("Sent from the phone"))
+    fun aTaskNotYetStartedIsPendingAndOneCalledOffIsCancelled() {
+        assertEquals("pending", statusOf("Sent from the phone"))
         assertEquals("cancelled", statusOf("Never mind"))
-        assertEquals("stopped", statusOf("Builder died"))
+        assertEquals("paused", statusOf("Builder died"))
+    }
+
+    /** Matt's eight, and no `stopped`, `failing`, `building`, `queued`, `done` or `closed`. */
+    @Test
+    fun theStatusesAreMattsEightWords() {
+        assertEquals(
+            setOf("pending", "in progress", "blocked", "paused", "in review", "merged", "deployed", "cancelled"),
+            TaskStatus.entries.map { it.word }.toSet(),
+        )
+    }
+
+    /** "Done, collapsed by default ... merged, deployed, cancelled." Everything else is live. */
+    @Test
+    fun mergedDeployedAndCancelledAreDoneAndNothingElseIs() {
+        assertEquals(
+            setOf("merged", "deployed", "cancelled"),
+            TaskStatus.entries.filter { it.finished }.map { it.word }.toSet(),
+        )
+    }
+
+    /** "A row should answer the question without Matt having to ask me": why, and for how long. */
+    @Test
+    fun aPausedTaskSaysWhyAndHowLongItHasBeenPaused() {
+        val t = decoded().single { it.title == "Builder died" }
+        assertEquals("agent crashed", t.note)
+        assertEquals("for 2h 05m · agent crashed", t.detail(Tasks.epochMillis("2026-10-08T12:00:00Z")!!))
+    }
+
+    @Test
+    fun aTaskInReviewNamesItsPullRequest() {
+        val t = decoded().single { it.title == "Waiting on CI" }
+        assertEquals("https://github.com/mattshoe/mtg-api/pull/142", t.pr)
+        assertEquals("PR #142", t.detail(0))
+    }
+
+    @Test
+    fun aBlockedTaskSaysWhatItIsWaitingOn() {
+        assertEquals("needs the Cloudflare token", decoded().single { it.title == "Needs Matt" }.detail(0))
+    }
+
+    /** A finished task's clock has stopped; how long it took is `took`, not this. */
+    @Test
+    fun aFinishedTaskDoesNotCountHowLongItHasBeenFinished() {
+        val t = Task("k", "Shipped", TaskStatus.MERGED, "2026-10-08T11:00:00Z", statusAt = "2026-10-08T11:00:00Z")
+        assertNull(t.detail(Tasks.epochMillis("2026-10-09T11:00:00Z")!!))
     }
 
     /** Matt: four stopped tasks all read `building`. A held one says paused, and its clock does not run. */
@@ -84,11 +147,24 @@ class TasksTest {
         assertTrue(t.isEmpty())
     }
 
+    /** The ones that sit forever if nobody looks come first: blocked, then paused. */
     @Test
     fun doneTasksAreNewestFirstAndActiveOnesAreApart() {
         val s = Tasks().loaded(decoded())
-        assertEquals(listOf("Waiting on CI", "still going", "Builder died", "Sent from the phone"), s.active.map { it.title })
+        assertEquals(
+            listOf("Needs Matt", "Builder died", "On hold", "still going", "Waiting on CI", "Sent from the phone"),
+            s.active.map { it.title },
+        )
         assertEquals(listOf("Never mind", "Merged two", "Given up", "Merged one"), s.done.map { it.title })
+    }
+
+    /** Done is a consequence of the status: a paused task that resumes is live again. */
+    @Test
+    fun aTaskThatComesBackFromPausedIsLiveAgain() {
+        val paused = decoded().single { it.title == "Builder died" }
+        val s = Tasks().loaded(listOf(paused.copy(status = TaskStatus.IN_PROGRESS)))
+        assertEquals(listOf("Builder died"), s.active.map { it.title })
+        assertTrue(s.done.isEmpty())
     }
 
     @Test
@@ -106,24 +182,24 @@ class TasksTest {
      */
     @Test
     fun aFinishedTaskSaysHowLongItTook() {
-        val shipped = Task("k1", "Shipped", TaskStatus.DONE, "2026-10-08T13:05:00Z", startedAt = "2026-10-08T10:00:00Z")
+        val shipped = Task("k1", "Shipped", TaskStatus.MERGED, "2026-10-08T13:05:00Z", startedAt = "2026-10-08T10:00:00Z")
         assertEquals("took 3h 05m", shipped.took)
-        val dropped = Task("k2", "Dropped", TaskStatus.CLOSED, "2026-10-08T10:12:00Z", startedAt = "2026-10-08T10:00:00Z")
+        val dropped = Task("k2", "Dropped", TaskStatus.CANCELLED, "2026-10-08T10:12:00Z", startedAt = "2026-10-08T10:00:00Z")
         assertEquals("took 12m", dropped.took)
     }
 
     @Test
     fun aTaskWithNoKnownStartOrStillGoingSaysNothingAboutHowLongItTook() {
-        assertNull(Task("k1", "Shipped", TaskStatus.DONE, "2026-10-08T11:00:00Z").took)
-        assertNull(Task("k1", "Going", TaskStatus.BUILDING, null, startedAt = "2026-10-08T10:00:00Z").took)
+        assertNull(Task("k1", "Shipped", TaskStatus.MERGED, "2026-10-08T11:00:00Z").took)
+        assertNull(Task("k1", "Going", TaskStatus.IN_PROGRESS, null, startedAt = "2026-10-08T10:00:00Z").took)
     }
 
-    /** Only a task being worked on counts up: a stopped one would count forever. */
+    /** Only a task being worked on counts up: a paused one would count forever. */
     @Test
-    fun aStoppedOrQueuedTaskSaysNothingAboutTime() {
+    fun aPausedOrPendingTaskSaysNothingAboutTime() {
         val now = Tasks.epochMillis("2026-10-08T12:00:00Z")!!
-        assertNull(Task("k", "Died", TaskStatus.STOPPED, null, startedAt = "2026-10-08T10:00:00Z").elapsed(now))
-        assertNull(Task("k", "Waiting", TaskStatus.QUEUED, null, startedAt = "2026-10-08T10:00:00Z").elapsed(now))
+        assertNull(Task("k", "Died", TaskStatus.PAUSED, null, startedAt = "2026-10-08T10:00:00Z").elapsed(now))
+        assertNull(Task("k", "Waiting", TaskStatus.PENDING, null, startedAt = "2026-10-08T10:00:00Z").elapsed(now))
     }
 
     @Test
@@ -142,7 +218,7 @@ class TasksTest {
     @Test
     fun anActiveTaskSaysHowLongSinceItStarted() {
         val start = "2026-10-08T09:15:00Z"
-        val t = Task("k1", "Going", TaskStatus.BUILDING, null, startedAt = start)
+        val t = Task("k1", "Going", TaskStatus.IN_PROGRESS, null, startedAt = start)
         val at = Tasks.epochMillis(start)!!
         assertEquals("just started", t.elapsed(at + 30_000))
         assertEquals("12m", t.elapsed(at + 12 * 60_000))
@@ -153,9 +229,9 @@ class TasksTest {
     @Test
     fun aTaskWithNoKnownStartOrThatHasFinishedSaysNothingAboutTime() {
         val now = Tasks.epochMillis("2026-10-08T12:00:00Z")!!
-        assertNull(Task("k1", "Going", TaskStatus.BUILDING, null).elapsed(now))
+        assertNull(Task("k1", "Going", TaskStatus.IN_PROGRESS, null).elapsed(now))
         assertNull(
-            Task("k1", "Shipped", TaskStatus.DONE, "2026-10-08T11:00:00Z", startedAt = "2026-10-08T10:00:00Z")
+            Task("k1", "Shipped", TaskStatus.MERGED, "2026-10-08T11:00:00Z", startedAt = "2026-10-08T10:00:00Z")
                 .elapsed(now),
         )
     }
