@@ -32,6 +32,17 @@ say() { printf '%s  %s\n' "$(date '+%H:%M:%S')" "$1" >>"$LOG"; }
 # agent's own worktree.
 [ -d "$REPO/.git" ] || exit 0
 
+# The timer fires every minute and a dispatcher lives for its whole build, so
+# without a cap they accumulate — ten were alive at once, nine of them doing
+# nothing but waiting on the pick lock. `$$` is excluded by matching on pid,
+# not by grep -v on a string, because a pid is a prefix of other pids.
+MAX_DISPATCHERS="${INTAKE_MAX_DISPATCHERS:-4}"
+others=0
+for _p in $(pgrep -f 'intake/dispatch.sh' 2>/dev/null); do
+  [ "$_p" = "$$" ] || others=$((others + 1))
+done
+[ "$others" -ge "$MAX_DISPATCHERS" ] && exit 0
+
 mkdir -p "$STATE"
 
 # Every run puts D1 right about what this laptop can see: a dead agent is
@@ -153,9 +164,9 @@ if [ "${1:-}" = "--claim" ]; then claim; exit $?; fi
 # the claim unlocked and say so: two dispatchers would then have to collide
 # inside the same few seconds, and each still refuses a worktree that exists.
 if [ -x /usr/bin/lockf ]; then
-  got="$(/usr/bin/lockf -k -t 120 "$STATE/pick.lock" "$0" --claim)"; rc=$?
+  got="$(/usr/bin/lockf -k -t 10 "$STATE/pick.lock" "$0" --claim)"; rc=$?
 elif command -v flock >/dev/null 2>&1; then
-  got="$(flock -w 120 "$STATE/pick.lock" "$0" --claim)"; rc=$?
+  got="$(flock -w 10 "$STATE/pick.lock" "$0" --claim)"; rc=$?
 else
   say "no lockf and no flock; claiming without a lock"
   got="$("$0" --claim)"; rc=$?
@@ -164,6 +175,7 @@ fi
 case "$rc" in
   0) : ;;
   2) exit 0 ;;                      # nothing to claim, which is normal
+  75|73) exit 0 ;;                  # the lock timed out: another tick is picking
   *) tell "intake stopped: it could not read the queue"; exit 1 ;;
 esac
 [ -n "$got" ] || exit 0
@@ -199,6 +211,26 @@ else, and carry on from there. Do not start over and do not discard what is
 there without reading it."
 fi
 
+# How much was on the branch before this agent ran. If it is the same
+# afterwards, the agent produced nothing, and the usual reason is that it
+# backgrounded a build and ended its turn expecting to be woken — which
+# headless `claude -p` never does. Four runs of one request did exactly
+# that, each re-reading the whole repository first.
+# Warm the worktree before the agent touches it. A cold Kotlin worktree
+# compiles for ten-plus minutes, the agent's Bash tool caps a command at ten,
+# so the agent backgrounds the build and ends its turn waiting for it — and
+# headless `claude -p` has no next turn, so it dies and gets resumed, having
+# produced nothing. Instructions did not stop that happening four times in a
+# row; removing the reason does. The Gradle cache is shared, so this is paid
+# once and the agent's own runs are warm.
+if [ -x "$tree/apps/gradlew" ] && [ "${INTAKE_WARM:-1}" = "1" ]; then
+  say "warming $name so its first build is not a cold compile"
+  ( cd "$tree" && ./apps/gradlew -p apps :core:compileKotlinJvm --quiet ) >>"$LOG" 2>&1 \
+    || say "warming $name did not finish; its first build will be cold"
+fi
+
+BEFORE_COMMITS="$(git -C "$tree" rev-list --count "$BASE"..HEAD 2>/dev/null || echo 0)"
+
 say "building $name on $branch${resumed:+ (resuming)}"
 # Task status lives in D1 and this is the thing that sees it change: a
 # builder starting here, and its pull request coming to something when it
@@ -231,5 +263,33 @@ Commit and push BEFORE your first test run, and after every part that passes. No
   --output-format stream-json --verbose --include-partial-messages \
   >>"$STATE/$name.log" 2>&1
 
-say "$name finished ($?) — its pull request, if it opened one, is the agent's own"
+code=$?
+AFTER_COMMITS="$(git -C "$tree" rev-list --count "$BASE"..HEAD 2>/dev/null || echo 0)"
+STALL="$STATE/$name.no-progress"
+
+if [ "$AFTER_COMMITS" -gt "$BEFORE_COMMITS" ]; then
+  rm -f "$STALL"
+else
+  n=$(( $(cat "$STALL" 2>/dev/null || echo 0) + 1 ))
+  printf '%s\n' "$n" > "$STALL"
+  say "$name produced no commit this run ($n in a row)"
+  if [ "$n" -ge "${INTAKE_MAX_NO_PROGRESS:-2}" ]; then
+    # Stop paying to restart something that is not moving. A paused request
+    # keeps its worktree and says why, which is a thing Matt can look at —
+    # unlike a loop that re-reads the repository every few minutes forever.
+    python3 - "$REPO/requests/$file" <<'PYEOF' 2>/dev/null || true
+import re, sys
+p = sys.argv[1]
+s = open(p).read()
+s = re.sub(r'^status:.*$', 'status: hold', s, count=1, flags=re.M)
+open(p, 'w').write(s)
+PYEOF
+    rm -f "$STALL"
+    tell "$name made no progress $n runs running and is paused — its agent keeps ending its turn without committing"
+    node "$REPO/scripts/intake/task-status.mjs" settle "$file" "$branch" >>"$LOG" 2>&1 || true
+    exit 0
+  fi
+fi
+
+say "$name finished ($code) — its pull request, if it opened one, is the agent's own"
 node "$REPO/scripts/intake/task-status.mjs" settle "$file" "$branch" >>"$LOG" 2>&1 || true
