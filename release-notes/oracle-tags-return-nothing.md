@@ -1,0 +1,1 @@
+Oracle tags work on the live site and the phone now. Filtering by blink, or otag:blink, finds the flicker cards, and the same for every other alias and parent tag, without waiting for the nightly job.
