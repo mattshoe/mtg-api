@@ -11,7 +11,7 @@
 // too — it used to re-implement `triaged` and `needs-matt` with grep, and
 // the two implementations disagreed.
 
-import { readFileSync, readdirSync } from 'node:fs'
+import { readFileSync, readdirSync, writeFileSync, rmSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { join, basename } from 'node:path'
 
@@ -198,6 +198,84 @@ export const REQUIRED = [
   'scripts/intake/deny-bash.mjs',
 ]
 
+/**
+ * How many agents one request may consume before it needs Matt.
+ *
+ * `remove-task-title` ran SEVEN times in four hours. Each run read the
+ * whole worktree from cold, did a little, backgrounded an Android suite it
+ * could not outlive, and died — and because a stopped agent leaves a
+ * worktree behind, the next tick resumed it and did the same. Nothing in
+ * the system had any notion of "this has been tried enough".
+ *
+ * Six is not a tuned number, it is a ceiling: a request that six separate
+ * agent lifetimes have not finished is not going to be finished by a
+ * seventh, and Matt would rather be told than keep paying for it.
+ */
+export const MAX_ATTEMPTS = 6
+
+/**
+ * How many attempts in a row may end with the branch exactly where it
+ * started.
+ *
+ * This is the faster trip-wire, and it is the one that catches a true
+ * wedge — an agent that cannot even reach a commit. Two is enough: one
+ * agent committing nothing is a bad run, two in a row is the system.
+ */
+export const MAX_STALE = 2
+
+/**
+ * Whether another agent may be spent on this request.
+ *
+ * `line` is the request's ledger — `<attempts> <head> <stale>`, or '' the
+ * first time. `head` is the worktree's HEAD **right now**, before this
+ * attempt runs, so it is the previous attempt's result.
+ *
+ * Progress is a CHANGED HEAD SHA and nothing else. My first attempt at
+ * this measured `git rev-list --count origin/main..HEAD` instead, which
+ * three reviewers rejected for the same reason: that count goes to zero
+ * the moment an agent merges its own work, so the most successful run
+ * possible scored as no progress at all. A sha either moved or it did not,
+ * whatever main has since done.
+ */
+export function attempt(line, head, { max = MAX_ATTEMPTS, maxStale = MAX_STALE } = {}) {
+  const [n0, last = '', s0] = String(line ?? '').trim().split(/\s+/)
+  const n = (Number(n0) || 0) + 1
+  const sha = String(head ?? '').trim()
+  // No ledger means nothing has been tried, which is not a stale attempt.
+  const stale = (!last || last !== sha) ? 0 : (Number(s0) || 0) + 1
+  if (stale >= maxStale) {
+    return { stop: true, n, stale, why: `${stale} agents in a row left it at ${sha.slice(0, 7) || 'no commit'}` }
+  }
+  if (n > max) {
+    return { stop: true, n, stale, why: `${n - 1} agents have worked on this and it is not finished` }
+  }
+  return { stop: false, n, stale, line: `${n} ${sha} ${stale}` }
+}
+
+/**
+ * The request file, held, with the reason where the next reader sees it.
+ *
+ * The dispatcher cannot simply stop spending agents on a wedged request:
+ * the next timer firing would claim it again, because the queue is decided
+ * from `status: ready` in this very file. Holding the file is the only
+ * thing that actually ends the loop — and the reason goes in the body
+ * because the body is what Admin Settings shows on the task's own page, so
+ * Matt reads why without opening anything.
+ *
+ * Done in node rather than `sed -i` on purpose: BSD sed wants `-i ''` and
+ * GNU sed treats that as a filename, and dispatch.sh is exercised on both.
+ */
+export function heldText(text, reason) {
+  const t = normalise(text)
+  const note = `\n\n> Held by the dispatcher: ${reason}. Nothing is running on it and\n> its work is kept. Set \`status: ready\` to let agents pick it up again.\n`
+  const fm = frontmatter(t)
+  if (!fm) return `---\nstatus: hold\n---\n\n${t.replace(/^\n+/, '')}${note}`
+  const held = /^status:.*$/m.test(fm)
+    ? fm.replace(/^status:.*$/m, 'status: hold')
+    : `status: hold\n${fm}`
+  return `---\n${held}\n---${t.slice(4 + fm.length + 4)}${note}`
+}
+
 /** Whether a changed path is a request, for the PostToolUse hook. */
 export function hookFires(path) {
   if (!path) return false
@@ -249,12 +327,36 @@ if (process.argv[1] && process.argv[1].endsWith('intake.mjs')) {
     const v = equipped(present)
     if (!v.ok) console.error(`missing: ${v.missing.join(', ')}`)
     process.exit(v.ok ? 0 : 1)
+  } else if (cmd === 'attempt') {
+    // `arg` is the ledger file and the next argument the worktree's HEAD.
+    // Exits 0 to go ahead, having recorded this attempt, and 3 to stop,
+    // having removed the ledger so that un-holding the request starts it
+    // over with a full allowance.
+    const ledger = arg || ''
+    const head = process.argv[4] || ''
+    let line = ''
+    try { line = readFileSync(ledger, 'utf8') } catch { /* the first attempt */ }
+    const v = attempt(line, head)
+    if (v.stop) {
+      console.error(v.why)
+      try { rmSync(ledger) } catch { /* never existed */ }
+      process.exit(3)
+    }
+    writeFileSync(ledger, `${v.line}\n`)
+    console.log(`attempt ${v.n} of ${MAX_ATTEMPTS}`)
+  } else if (cmd === 'hold') {
+    // `arg` is the request file and the rest of the argv the reason.
+    const reason = process.argv.slice(4).join(' ') || 'it needs you'
+    const path = join(dir, arg || '')
+    writeFileSync(path, heldText(readFileSync(path, 'utf8'), reason))
+    console.log(`held ${arg}: ${reason}`)
   } else if (cmd === 'fires') {
     process.exit(hookFires(arg) ? 0 : 1)
   } else {
     console.error(
       'usage: intake.mjs pending|buildable|held|state [f]|'
-      + 'branch <f>|merge <f>|equipped <tree>|fires <path>',
+      + 'branch <f>|merge <f>|equipped <tree>|attempt <ledger> <head>|'
+      + 'hold <f> <reason>|fires <path>',
     )
     process.exit(2)
   }

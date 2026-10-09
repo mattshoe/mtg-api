@@ -150,8 +150,10 @@ between finished and the two quotes above.
    `apps/webApp/src/jsTest/` for the browser,
    `apps/androidApp/src/sharedTest/` for the phone. A `:core` test alone
    does not prove either shell renders it.
-3. Did **both** suites run green — `npm run test:web` *and*
-   `npm run test:screens` — read off the `BUILD SUCCESSFUL` line?
+3. Did the web suite run green — `npm run test:web`, read off the
+   `BUILD SUCCESSFUL` line — and did CI's `android` job go green on the
+   pushed branch? The screens suite is CI's; see below for why you cannot
+   run it.
 4. Does the PR body say, in words, what the change looks like on each
    platform?
 
@@ -330,7 +332,7 @@ and say plainly in the commit that it is otherwise unproven.
 
 ### 4. Read the BUILD line, never the exit code
 
-`npm run test:screens` has exited 0 over `BUILD FAILED`. A killed Gradle
+A Gradle run has exited 0 over `BUILD FAILED`. A killed Gradle
 test task leaves the **previous** run's XML on disk, so anything reading
 that directory reports a run that never happened — this repo has
 reported "356 tests, 0 failures" out of nothing, and caught three agents
@@ -405,8 +407,17 @@ and the dex grep under "Verifying a deploy for real".
 | worker | `npm test` | ~40s |
 | shared core | `npm run test:core` | ~1m |
 | web, real browser | `npm run test:web` | ~2m30s |
-| Android screens, JVM | `npm run test:screens` | ~3m30s |
-| Android screens, device | `npm run test:android` | ~23m |
+| one Compose screen test | `:androidApp:testDebugUnitTest --tests 'YourTest'` | seconds |
+
+**The Android screens suite is CI's, not yours.** `npm run test:screens`
+compiles the whole worktree from cold and `guard.mjs` allows it twenty
+minutes; your Bash tool stops any command at ten and that cannot be
+raised. So the suite cannot finish in the foreground, and backgrounding it
+is banned, which leaves no way to run it. Seven agent runs on one request
+died in four hours proving that, each one ending "waiting on the Android
+red run". Run **your own test** by name — `--tests 'YourTest'`, seconds —
+then push and read CI's `android` job. That is the only way that suite
+runs.
 **`npm run test:core` is not what CI runs.** It is only
 `:core:jvmTest`. CI's `shared` job runs four tasks plus coverage, and
 the gap has shipped a red build:
@@ -547,9 +558,9 @@ its `key` from the app or its request file's `name` from the laptop.
 | pending | the Worker, on `POST /tasks` from New task; `task-status.mjs reconcile` for a ready request file with no row |
 | in progress | `dispatch.sh` → `task-status.mjs building`, just before it starts a builder; `reconcile` for any worktree with an agent alive in it |
 | in review, merged | `task-status.mjs settle` after the builder exits, from what its pull request came to; `reconcile` from a request branch's pull request, and `merged` for anything under `requests/done/` on main or on the laptop, which is never read as cancelled. A merged row with no start takes its pull request's `createdAt` and `mergedAt`, so it can say how long it took |
-| paused | `settle` when the builder left no pull request, or its PR was closed unmerged; `reconcile` for a held request ("held by Matt") or a worktree with no agent alive |
+| paused | `settle` when the builder left no pull request, or its PR was closed unmerged; `reconcile` for a held request ("held by Matt") unless the row already says `blocked` or a worktree with no agent alive |
 | cancelled | `settle` or `reconcile` when there is no request file anywhere, for a row, a worktree or a request branch; anyone with the admin role writing it to the row |
-| blocked | a builder that stops to ask Matt (see "When you are stuck" in `request-builder.md`), with what it needs in the note |
+| blocked | a builder that stops to ask Matt (see "When you are stuck" in `request-builder.md`), with what it needs in the note; `dispatch.sh` → `task-status.mjs blocked` when it stops spending agents on a request — six of them, or two in a row that reach no commit — with the count in the note. `reconcile` leaves a `blocked` row alone, because it is a held row that has a reason and "held by Matt" would be a lie |
 | deployed | `reconcile`, from `gh run list` on main: every deploy run of the merge commit green. One still going or red leaves it `merged` with "deploying: the APK" or "deploy failed: the site"; a merge over fifteen minutes old that set off no deploy reads `merged`, "nothing to deploy". A green workflow is still not the artifact check under "Verifying a deploy for real" |
 
 Adding a state means: the word in `STATUSES` and in `TaskStatus` (with
@@ -725,7 +736,7 @@ suites, and each is minutes:
 
 | command | what it is | when |
 |---|---|---|
-| `npm run test:screens` | Compose screens on the JVM, ~9 min | once, at the end |
+| `npm run test:screens` | Compose screens on the JVM, 12-20 min cold | CI only — it does not fit in your Bash tool |
 | `npm run test:web` | a real browser, ~2 min | once, at the end |
 | `npm run test:android` | the emulator, ~17 min | CI only |
 | `npm test` | the whole Worker suite, ~1 min | once, at the end |
@@ -788,8 +799,8 @@ npx vitest run test/thing.test.js -t 'the one case'
 ```
 
 **What you run once, at the end, before the pull request:** `npm test` and
-`npm run test:screens` and `npm run test:web` — only the ones your diff
-actually reaches. Then push and let CI do the rest. CI is 7m39s; it is not
+`npm run test:web` — only the ones your diff actually reaches. Never the
+Android screens suite; it is CI's. Then push and let CI do the rest. CI is 7m39s; it is not
 worth reproducing on a laptop.
 
 **Never background a command and poll its output.** Not a suite, not a build,

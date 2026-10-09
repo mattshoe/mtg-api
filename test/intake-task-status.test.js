@@ -90,6 +90,16 @@ describe('what the dispatcher puts right on every run', () => {
   const row = (name, status) => ({ key: 'k-' + name, name, status })
   const seen = (over = {}) => ({ rows: [], ready: [], held: [], filed: [], stalled: [], ...over })
 
+  // The dispatcher holds a wedged request itself now, after six agents or
+  // two in a row that reach no commit, and writes `blocked` with the
+  // reason. Reconcile used to overwrite that on the very next run with a
+  // note that was a lie — Matt had not held it, the dispatcher had, and
+  // the row stopped saying which.
+  it('leaves a blocked row alone, because that is a held one with a reason', () => {
+    expect(reconcile(seen({ held: ['card-page'], rows: [row('card-page', 'blocked')] })))
+      .toEqual([])
+  })
+
   it('a request held back from building is paused, held by Matt', () => {
     expect(reconcile(seen({ held: ['card-page'], rows: [row('card-page', 'pending')] })))
       .toEqual([{ name: 'card-page', status: 'paused', note: 'held by Matt' }])

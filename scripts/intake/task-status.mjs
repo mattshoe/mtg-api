@@ -169,7 +169,15 @@ function truth(name, now, { ready, held, filed, stalled, alive, prs, runs, at })
     if (landed) return null
     return o
   }
-  if (isHeld) return FINISHED.has(now) ? null : { status: 'paused', note: 'held by Matt' }
+  // A held request reads `paused (held by Matt)` — unless something already
+  // said `blocked`, which is a held request with a REASON. The dispatcher
+  // writes that when it stops spending agents on a wedged task, and this
+  // branch used to overwrite it on the very next tick with a note that was
+  // a lie: Matt had not held it, the dispatcher had.
+  if (isHeld) {
+    if (now === 'blocked') return null
+    return FINISHED.has(now) ? null : { status: 'paused', note: 'held by Matt' }
+  }
   if (isReady) {
     if (FINISHED.has(now) || now === 'in review' || now === 'blocked') return null
     if (stalled.includes(name)) return now === 'paused' ? null : { status: 'paused', note: STOPPED }
@@ -289,6 +297,10 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     let text = ''
     try { text = readFileSync(join(repo, 'requests', `${name}.md`), 'utf8') } catch { /* gone */ }
     transition = started(name, text)
+  } else if (cmd === 'blocked') {
+    // `blocked` is the vocabulary's word for "it needs Matt, or something
+    // it depends on — say which", so the reason is not optional.
+    transition = { name, status: 'blocked', note: process.argv.slice(4).join(' ') || 'it needs you' }
   } else if (cmd === 'settle') {
     let prs = []
     try {
@@ -309,7 +321,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
         .catch((e) => say(e.message))
     }
   } else {
-    console.error('usage: task-status.mjs building <file> | settle <file> <branch> | reconcile')
+    console.error('usage: task-status.mjs building <file> | blocked <file> <reason> | settle <file> <branch> | reconcile')
     process.exit(2)
   }
 
