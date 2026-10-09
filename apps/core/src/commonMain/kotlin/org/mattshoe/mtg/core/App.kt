@@ -698,6 +698,20 @@ data class AppState(
         complete = complete.copy(term = f.q, items = emptyList(), open = false),
     )
 
+    /**
+     * The Library changed by anything other than the name box — a
+     * filter, the sort, the pager, "Reset everything".
+     *
+     * The box is bound to `complete.term`, so when the name in the
+     * filters moves the box has to move with it. Reset only cleared
+     * `filters.q`, and the old name sat above an unfiltered grid.
+     */
+    fun filtered(next: Library): AppState = copy(
+        library = next,
+        complete = if (next.filters.q == complete.term) complete
+        else complete.copy(term = next.filters.q, items = emptyList(), open = false),
+    )
+
     fun typedCardName(c: Completion): AppState = copy(
         complete = c,
         library = library.where(library.filters.copy(q = c.term)),

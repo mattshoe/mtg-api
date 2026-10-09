@@ -208,6 +208,18 @@ class LibraryDriverTest {
         assertEquals("", app.state.library.filters.q)
     }
 
+    @Test
+    fun resetEverythingEmptiesTheNameBox() = runTest {
+        val app = mount()
+        settle()
+        app.typeInto("Card name", "bolt")
+        settle()
+        app.button("Reset everything").click()
+        settle()
+        assertEquals("", app.state.library.filters.q, "reset left the name in the search")
+        assertEquals("", app.input("Card name").value, "reset cleared the search and left the name in the box")
+    }
+
     // ------------------------------------------------------ the top row
 
     @Test
