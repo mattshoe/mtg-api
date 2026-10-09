@@ -145,6 +145,20 @@ class TaskDetailParityTest {
         assertEquals(TaskDetail.NO_TEXT, texts("task-detail-body").joinToString(" "))
     }
 
+    /** Matt: "the time values on task details should show local time not utc". */
+    @Test
+    fun theTimeATaskWasSentIsThePhonesOwnClock() {
+        val was = java.util.TimeZone.getDefault()
+        java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("America/New_York"))
+        try {
+            shell(opened)
+            val facts = texts("task-detail-fact")
+            assertTrue("Sent 2026-10-08 06:00" in facts, "Sent is not New York's 06:00 for 10:00 UTC: $facts")
+        } finally {
+            java.util.TimeZone.setDefault(was)
+        }
+    }
+
     @Test
     fun backOnATasksPageIsAdminSettings() {
         shell(opened)

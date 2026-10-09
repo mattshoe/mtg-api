@@ -1236,6 +1236,12 @@ class AppDriverTest {
         val facts = document.querySelectorAll("[data-task-detail-fact]").let { l -> (0 until l.length).map { l.item(it)?.textContent.orEmpty() } }
         assertTrue(facts.any { "Why" in it && "CI running" in it }, "why it is in review is not on the page: $facts")
         assertTrue(facts.any { "requests/task-status-in-the-app.md" in it }, "the request file is not named: $facts")
+        // Matt: "the time values on task details should show local time
+        // not utc". The browser's own clock, read here independently.
+        val sent = kotlin.js.Date("2026-10-08T09:00:00.000Z")
+        fun two(n: Int) = n.toString().padStart(2, '0')
+        val local = "${sent.getFullYear()}-${two(sent.getMonth() + 1)}-${two(sent.getDate())} ${two(sent.getHours())}:${two(sent.getMinutes())}"
+        assertTrue("Sent$local" in facts, "Sent is not the browser's local time $local: $facts")
         waitFor("the picture sent with the task") {
             val img = document.querySelector("[data-task-detail-image]") as? org.w3c.dom.HTMLImageElement
             img != null && img.complete && img.naturalWidth > 0
