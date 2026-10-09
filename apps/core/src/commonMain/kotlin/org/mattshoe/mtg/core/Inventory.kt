@@ -767,19 +767,18 @@ object Inventory {
         // ---------------------------------------------------------- share
         Feature(Area.SHARE, "Receive a shared file from another Android app", "SharedFile.kt", logic = true, done = true,
             tests = listOf(
-                "testReadsACsvSharedAsAContentUri", "testReadsAPlainDecklist", "testReadsSeveralFilesAtOnce",
-                "testOpenWithIsReadTheSameWay", "testSharedTextIsTakenToo", "testALargeExportSurvivesIntact",
-                "testTheManifestClaimsAFileShare", "testASharedCsvArrivesOnScreen",
+                "aShareIsOfferedToTheWholeAppAndNothingElse", "aSharedFileOpensTheAppWithTheListInTheEntryBox",
+                "aShareReachesTheAppThatIsAlreadyOpen", "severalFilesSharedAtOnceAllArrive",
+                "sharedTextWithNoFileIsTakenToo", "aLargeExportArrivesIntact",
             )),
         Feature(Area.SHARE, "Read it whatever its declared MIME type", "SharedFile.kt", logic = true, done = true,
             tests = listOf(
-                "testReadsAFileWhateverItsDeclaredTypeIs", "testOpenWithIsReadTheSameWay",
-                "testTheManifestClaimsAFileShare",
+                "aSharedFileIsReadWhateverTypeItClaims",
             )),
         Feature(Area.SHARE, "Say what arrived when nothing usable did", "SharedFile.kt", logic = true, done = true,
             tests = listOf(
-                "testABareLinkIsNotACardList", "testBinaryIsRefusedAndSaysSo",
-                "testAnEmptyShareIsReportedRatherThanIgnored", "testABinaryShareSaysWhatWasWrongInsteadOfGoingQuiet",
+                "aBareLinkIsNotTakenForACardList", "aBinaryShareSaysWhatWasWrong",
+                "anEmptyShareIsReportedRatherThanIgnored",
                 "textIsTextAndBinaryIsNot", "aFewOddCharactersAreStillText",
             )),
     )
