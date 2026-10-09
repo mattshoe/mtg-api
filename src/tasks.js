@@ -160,15 +160,25 @@ export async function setStatus(db, body) {
     ).bind(newKey(), title, now, name).run();
   }
   const note = body.note ? String(body.note).slice(0, 500) : null;
+  // A task that was never seen starting (filed straight into done/, or
+  // finished before status lived here) may be given its pull request's
+  // own times, so a done row can say how long it took. Only where it has
+  // no start: a start the dispatcher wrote is never replaced.
+  const iso = (v) => (/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z$/.test(String(v ?? '')) ? String(v) : null);
   await db.prepare(
     `UPDATE task_inbox SET
             status_at = CASE WHEN status = ?2 THEN COALESCE(status_at, ?4) ELSE ?4 END,
             status = ?2,
             note = ?6,
             pr = COALESCE(?3, pr),
-            started_at = CASE WHEN ?2 = 'in progress' THEN COALESCE(started_at, ?4) ELSE started_at END,
-            finished_at = CASE WHEN ?5 THEN COALESCE(finished_at, ?4) ELSE NULL END
+            started_at = CASE WHEN ?2 = 'in progress' THEN COALESCE(started_at, ?4) ELSE COALESCE(started_at, ?7) END,
+            finished_at = CASE WHEN NOT ?5 THEN NULL
+                               WHEN started_at IS NULL AND ?7 IS NOT NULL AND ?8 IS NOT NULL THEN ?8
+                               ELSE COALESCE(finished_at, ?4) END
       WHERE ${where}`,
-  ).bind(key ?? name, status, body.pr ? String(body.pr) : null, now, FINISHED.has(status) ? 1 : 0, note).run();
+  ).bind(
+    key ?? name, status, body.pr ? String(body.pr) : null, now, FINISHED.has(status) ? 1 : 0, note,
+    iso(body.started_at), iso(body.finished_at),
+  ).run();
   return { status: 200, body: { status } };
 }
