@@ -40,6 +40,43 @@ const STOPPED = 'the agent stopped; its work is kept in the worktree'
 const WITHDRAWN = 'request withdrawn'
 const FINISHED = new Set(['merged', 'deployed', 'cancelled'])
 
+/** The workflows a merge to main deploys with, by path, and what each puts live. */
+const DEPLOYS = { pages: 'the site', release: 'the APK', worker: 'the API' }
+/** How long a merge may go with no deploy run before nothing is coming. */
+const SETTLE_MS = 15 * 60 * 1000
+
+/**
+ * Where a merge's deploy is, from the `gh run list` runs on main: every
+ * deploy run of its merge commit green is `deployed`, and anything else
+ * stays `merged` with a note saying which is still going or which
+ * failed. A run cancelled for a newer one of the same workflow that went
+ * green is live all the same, since that one carried it. A merge more
+ * than fifteen minutes old that set off no deploy at all says so. Null
+ * where the runs cannot tell: none were asked for, the merge is older
+ * than every run seen, or it is too new for its runs to have started.
+ */
+export function deployment(pr, { runs, now } = {}) {
+  const sha = pr?.mergeCommit?.oid
+  if (!runs || !sha) return null
+  const mine = runs.filter((r) => r.headSha === sha && DEPLOYS[r.workflowName])
+  if (!mine.length) {
+    const oldest = runs.reduce((a, r) => (r.createdAt < a ? r.createdAt : a), '9999')
+    const age = Date.parse(now ?? new Date().toISOString()) - Date.parse(pr.mergedAt)
+    if (!(pr.mergedAt >= oldest) || !(age > SETTLE_MS)) return null
+    return { status: 'merged', note: 'nothing to deploy: no deploy ran for this merge' }
+  }
+  const live = (r) => r.conclusion === 'success' || r.conclusion === 'skipped'
+    || (r.conclusion === 'cancelled'
+      && runs.some((n) => n.workflowName === r.workflowName && n.createdAt > r.createdAt && live(n)))
+  const what = (rs) => Object.keys(DEPLOYS).filter((w) => rs.some((r) => r.workflowName === w))
+    .map((w) => DEPLOYS[w]).join(', ')
+  const going = mine.filter((r) => r.status !== 'completed')
+  const failed = mine.filter((r) => r.status === 'completed' && !live(r))
+  if (failed.length) return { status: 'merged', note: `deploy failed: ${what(failed)}` }
+  if (going.length) return { status: 'merged', note: `deploying: ${what(going)}` }
+  return { status: 'deployed', note: `live: ${what(mine)}` }
+}
+
 /**
  * `gh pr list --json state,url` for one branch in, the status to write
  * out. A builder that ended with nothing to show is paused, not
@@ -81,7 +118,7 @@ export function outcome(prs, { withdrawn = false } = {}) {
  * collected yet, and is left alone.
  */
 export function reconcile({
-  rows = [], ready = [], held = [], filed = [], stalled = [], alive = [], prs = {}, branches = [],
+  rows = [], ready = [], held = [], filed = [], stalled = [], alive = [], prs = {}, branches = [], runs, now,
 }) {
   const byName = new Map(rows.filter((r) => r.name).map((r) => [r.name, r]))
   const names = new Set([
@@ -90,22 +127,36 @@ export function reconcile({
   const out = []
   for (const name of names) {
     const row = byName.get(name)
-    const t = truth(name, row?.status, { ready, held, filed, stalled, alive, prs: prs[name] || [] })
-    if (!t) continue
+    const found = truth(name, row?.status, { ready, held, filed, stalled, alive, prs: prs[name] || [], runs, at: now })
+    if (!found) continue
+    const { deploy, ...t } = found
     const backfill = t.started_at && !row?.started_at
-    if (row?.status === t.status && !backfill) continue
+    // Where the deploy is lives in the note, so a changed note is a change.
+    const moved = deploy && (row?.note ?? undefined) !== t.note
+    if (row?.status === t.status && !backfill && !moved) continue
     out.push({ name, ...t })
   }
   return out
 }
 
+/**
+ * A merged pull request's row: how far its deploy got where the runs can
+ * tell, and otherwise merged, or deployed if somebody already said so.
+ */
+function shipped(pr, now, deploys) {
+  const d = deployment(pr, deploys)
+  if (d) return { ...outcome([pr]), ...d, deploy: true }
+  return { ...outcome([pr]), status: now === 'deployed' ? now : 'merged' }
+}
+
 /** What one task's row should say, or null to leave it as it is. */
-function truth(name, now, { ready, held, filed, stalled, alive, prs }) {
+function truth(name, now, { ready, held, filed, stalled, alive, prs, runs, at }) {
   const merged = prs.find((p) => p.state === 'MERGED')
   const landed = now === 'merged' || now === 'deployed'
+  const deploys = { runs, now: at }
   // Filed under done/ is the strongest evidence there is that it finished.
   if (filed.includes(name)) {
-    if (merged) return { ...outcome([merged]), status: landed ? now : 'merged' }
+    if (merged) return shipped(merged, now, deploys)
     return landed ? null : { status: 'merged' }
   }
   if (alive.includes(name)) return now === 'blocked' ? null : { status: 'in progress' }
@@ -113,8 +164,9 @@ function truth(name, now, { ready, held, filed, stalled, alive, prs }) {
   const isHeld = held.includes(name)
   if (merged || prs.some((p) => p.state === 'OPEN')) {
     const o = outcome(prs, { withdrawn: !isReady && !isHeld })
-    if (landed) return o.status === 'merged' ? { ...o, status: now } : null
     if (now === 'blocked' || now === 'cancelled') return null
+    if (o.status === 'merged') return shipped(merged, now, deploys)
+    if (landed) return null
     return o
   }
   if (isHeld) return FINISHED.has(now) ? null : { status: 'paused', note: 'held by Matt' }
@@ -190,13 +242,20 @@ async function reconcileNow({ repo, token, base = API }) {
   const prs = {}
   try {
     const all = JSON.parse(execFileSync('gh', ['pr', 'list', '--state', 'all', '--limit', '500',
-      '--json', 'headRefName,state,url,createdAt,mergedAt'], { cwd: repo, encoding: 'utf8' }))
+      '--json', 'headRefName,state,url,createdAt,mergedAt,mergeCommit'], { cwd: repo, encoding: 'utf8' }))
     for (const p of all) {
       const n = requestOfBranch(p.headRefName)
       if (n) (prs[n] ||= []).push(p)
     }
   } catch { /* gh unavailable: the rest still stands */ }
-  const wrote = reconcile({ rows, ready, held, filed, stalled, alive, prs, branches })
+  // What every merge to main set off, so a merged row can say whether it
+  // went live. Left undefined when gh cannot say, which leaves them be.
+  let runs
+  try {
+    runs = JSON.parse(execFileSync('gh', ['run', 'list', '--branch', 'main', '--event', 'push', '--limit', '300',
+      '--json', 'headSha,workflowName,status,conclusion,createdAt'], { cwd: repo, encoding: 'utf8' }))
+  } catch { /* no deploy runs to read */ }
+  const wrote = reconcile({ rows, ready, held, filed, stalled, alive, prs, branches, runs })
   for (const t of wrote) await report(t, { token, base })
   return wrote
 }
