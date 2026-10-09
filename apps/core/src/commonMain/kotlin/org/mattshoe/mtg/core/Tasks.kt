@@ -37,9 +37,33 @@ data class Task(
     val status: TaskStatus,
     /** `merged_at` or `closed_at`, as it came. Sorts as text because it is ISO. */
     val finishedAt: String?,
+    /**
+     * The branch's first commit, as GitHub gave it. GitHub keeps no
+     * record of when a branch was made, and a builder commits before
+     * its first test run, so this is as near the start as it can see.
+     */
+    val startedAt: String? = null,
 ) {
     /** `2026-10-03 12:30 UTC`, as GitHub gave it, and said so. */
     val finished: String? get() = finishedAt?.take(16)?.replace('T', ' ')?.plus(" UTC")
+
+    /**
+     * Matt: "show the elapsed time since the task started". Only while
+     * it is still going: a finished one would count up forever.
+     */
+    fun elapsed(now: Long): String? {
+        if (status.finished) return null
+        val start = startedAt?.let { Tasks.epochMillis(it) } ?: return null
+        val minutes = ((now - start) / 60_000).coerceAtLeast(0)
+        val hours = minutes / 60
+        val days = hours / 24
+        return when {
+            minutes < 1 -> "just started"
+            hours < 1 -> "${minutes}m"
+            days < 1 -> "${hours}h ${(minutes % 60).toString().padStart(2, '0')}m"
+            else -> "${days}d ${hours % 24}h"
+        }
+    }
 }
 
 /** The tasks panel on Admin Settings. */
@@ -49,6 +73,8 @@ data class Tasks(
     val error: String? = null,
     /** Matt: "I want the done ones minimized by default but still browsable". */
     val showDone: Boolean = false,
+    /** Millis since the epoch, off the shell's clock, for `Task.elapsed` to count to. */
+    val now: Long = 0,
 ) {
     val active: List<Task> get() = rows.filterNot { it.status.finished }
         .sortedWith(compareBy<Task> { it.status.ordinal }.thenBy { it.title.lowercase() })
@@ -57,6 +83,8 @@ data class Tasks(
     val done: List<Task> get() = rows.filter { it.status.finished }.sortedByDescending { it.finishedAt.orEmpty() }
 
     fun toggleDone() = copy(showDone = !showDone)
+
+    fun at(now: Long) = copy(now = now)
 
     fun loading() = copy(busy = true, error = null)
 
@@ -114,6 +142,36 @@ data class Tasks(
             fromPulls + building
         } catch (e: Exception) {
             emptyList()
+        }
+
+        /**
+         * When a branch's first commit was made, out of GitHub's compare
+         * of `main...<branch>`, which lists commits oldest first.
+         * Anything else — nothing ahead, a refusal — is not known.
+         */
+        fun firstCommitAt(compare: String): String? = try {
+            val commits = json.parseToJsonElement(compare).jsonObject["commits"] as? JsonArray
+            commits?.firstOrNull()?.jsonObject?.get("commit")?.jsonObject
+                ?.get("author")?.jsonObject?.let { str(it, "date") }
+        } catch (e: Exception) {
+            null
+        }
+
+        private val ISO = Regex("""(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?Z""")
+
+        /** GitHub's `2026-10-08T09:15:00Z` as millis since the epoch. Always UTC, so no library. */
+        fun epochMillis(iso: String): Long? {
+            val f = ISO.matchEntire(iso)?.groupValues?.drop(1)?.map { it.toLong() } ?: return null
+            val (y, mo, d) = f
+            val (h, mi, se) = f.drop(3)
+            // Days from civil, Howard Hinnant's algorithm.
+            val yy = if (mo <= 2) y - 1 else y
+            val era = (if (yy >= 0) yy else yy - 399) / 400
+            val yoe = yy - era * 400
+            val doy = (153 * (if (mo > 2) mo - 3 else mo + 9) + 2) / 5 + d - 1
+            val doe = yoe * 365 + yoe / 4 - yoe / 100 + doy
+            val days = era * 146097 + doe - 719468
+            return ((days * 24 + h) * 60 + mi) * 60_000 + se * 1000
         }
 
         private fun array(body: String): JsonArray =
