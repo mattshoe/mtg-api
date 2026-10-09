@@ -8,16 +8,21 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 /**
- * Where a task is, in one word, as the Worker has it in D1. Active
- * ones list in this order; `running` is whether the clock is counting.
+ * Where a task is, in Matt's words, as whoever caused it wrote it to D1
+ * when it happened. Live ones list in this order, the ones that sit
+ * forever if nobody looks first; `finished` is Done, collapsed by
+ * default; `running` is whether the clock since the start is counting.
+ * There is no `stopped` (that is `paused` with a reason) and no
+ * `failing` (red CI mid-run is still `in review`).
  */
 enum class TaskStatus(val word: String, val finished: Boolean, val running: Boolean = false) {
+    BLOCKED("blocked", false),
+    PAUSED("paused", false),
+    IN_PROGRESS("in progress", false, running = true),
     IN_REVIEW("in review", false, running = true),
-    BUILDING("building", false, running = true),
-    STOPPED("stopped", false),
-    QUEUED("queued", false),
-    DONE("done", true),
-    CLOSED("closed", true),
+    PENDING("pending", false),
+    MERGED("merged", true),
+    DEPLOYED("deployed", true),
     CANCELLED("cancelled", true),
     ;
 
@@ -46,7 +51,24 @@ data class Task(
     val finishedAt: String?,
     /** When a builder first started on it. */
     val startedAt: String? = null,
+    /** When it entered this status. */
+    val statusAt: String? = null,
+    /** The detail of this status: why it is paused or blocked, the last thing that happened. */
+    val note: String? = null,
+    /** Its pull request's address, once it has one. */
+    val pr: String? = null,
 ) {
+    /**
+     * The row's second line, so it answers "what is going on with this"
+     * without asking: how long in this status while it is live, why,
+     * and which pull request.
+     */
+    fun detail(now: Long): String? = listOfNotNull(
+        if (status.finished) null else statusAt?.let { Tasks.epochMillis(it) }?.let { "for " + between(it, now) },
+        note,
+        pr?.substringAfterLast('/')?.takeIf { n -> n.isNotEmpty() && n.all { it.isDigit() } }?.let { "PR #$it" },
+    ).joinToString(" · ").ifEmpty { null }
+
     /**
      * Matt: "Done tasks should show how long they took, not a UTC
      * timestamp". Start to finish; unknown for one never started.
@@ -59,13 +81,17 @@ data class Task(
 
     /**
      * Matt: "show the elapsed time since the task started". Only while
-     * it is being worked on: a finished or stopped one would count up
+     * it is being worked on: a finished or paused one would count up
      * forever.
      */
     fun elapsed(now: Long): String? = if (status.running) span(now) else null
 
     private fun span(to: Long): String? {
         val start = startedAt?.let { Tasks.epochMillis(it) } ?: return null
+        return between(start, to)
+    }
+
+    private fun between(start: Long, to: Long): String {
         val minutes = ((to - start) / 60_000).coerceAtLeast(0)
         val hours = minutes / 60
         val days = hours / 24
@@ -123,6 +149,9 @@ data class Tasks(
                     status = status,
                     finishedAt = str(o, "finished_at"),
                     startedAt = str(o, "started_at"),
+                    statusAt = str(o, "status_at"),
+                    note = str(o, "note"),
+                    pr = str(o, "pr"),
                 )
             }
         } catch (e: Exception) {
