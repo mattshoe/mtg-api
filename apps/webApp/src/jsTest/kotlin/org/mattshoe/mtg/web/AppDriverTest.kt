@@ -1027,16 +1027,14 @@ class AppDriverTest {
     /**
      * `adminSettingsLoadsTheTasksOnEveryVisitToTheList` went red on CI
      * twice with "the first visit should ask GitHub once. Expected <1>,
-     * actual <2>". The test before it left `/auth/me` unanswered at
-     * unmount; the answer landed in the next test's app, which loaded
-     * the page again through the next test's network.
+     * actual <2>". The test before it unmounted with loads launched and
+     * not yet run; they ran afterwards, reading `github` when they got
+     * round to it — by then the next test's client.
      */
     @Test
     fun anUnmountedAppStopsLoading() = runTest {
         role = "admin"
-        whoAmIMs = 400
         mount("#/admin")
-        settle()
         MtgApp.unmount()
         val before = tasksAsked
         rest(800)
