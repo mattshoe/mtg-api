@@ -39,6 +39,8 @@ data class Bar(val label: String, val value: Int, val note: String = "") {
         get() = Pip.entries.firstOrNull { it.label == label }?.let { listOf(it.letter) }
             ?: label.map { it.toString() }.filter { Pip.of(it) != null }.ifEmpty { listOf("C") }
 
+    val fill: Long get() = 0L
+
     /** How wide to draw it, given the tallest bar beside it. */
     fun share(most: Int): Int = if (most <= 0) 0 else ((value * 100.0) / most).roundToInt()
 }

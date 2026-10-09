@@ -68,6 +68,8 @@ object Design {
         else -> C
     }
 
+    fun css(argb: Long): String = ""
+
     // ------------------------------------------------------- mixtures
     //
     // `color-mix(in srgb, A P%, B)` appears four times in `app.css`
