@@ -141,12 +141,13 @@ class TasksTest {
     }
 
     @Test
-    fun theStartAndFinishAreWhatTheWorkerWrote() {
+    fun theCreationStartAndFinishAreWhatTheWorkerWrote() {
         val t = decoded().single { it.title == "Merged one" }
         assertEquals("k1", t.key)
         assertEquals("2026-10-01T09:00:00.000Z", t.startedAt)
         assertEquals("2026-10-01T10:00:00.000Z", t.finishedAt)
-        assertEquals("took 1h 00m", t.took)
+        assertEquals("2026-10-01T00:00:00.000Z", t.createdAt)
+        assertEquals("took 10h 00m", t.took)
     }
 
     @Test
