@@ -503,7 +503,9 @@ class AppDriverTest {
         val nav = window.navigator.asDynamic()
         val stub = js("({})")
         stub.writeText = { text: String -> copied += text; Promise.resolve(Unit) }
-        js("Object").defineProperty(nav, "clipboard", js("({configurable: true})").also { it.value = stub })
+        val descriptor = js("({configurable: true})")
+        descriptor.value = stub
+        js("Object").defineProperty(nav, "clipboard", descriptor)
         try {
             val view = mount("#/decks/alela")
             waitFor("the deck") { view.textContent.orEmpty().contains("Sol Ring") }
