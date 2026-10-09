@@ -105,36 +105,63 @@ describe('tasks', () => {
 describe('task status', () => {
   const getAs = async (path, token) => call(path, { method: 'GET', token: token ?? await mattSession() })
 
-  it('a task sent from the app is queued, and the list says so', async () => {
+  it('a task sent from the app is pending, and the list says so and since when', async () => {
     const { key } = (await post('/tasks', { title: 'Bigger buttons', details: 'x' })).body
     const r = await getAs('/tasks')
     expect(r.status).toBe(200)
-    expect(r.body.tasks).toEqual([expect.objectContaining({ key, title: 'Bigger buttons', status: 'queued' })])
+    expect(r.body.tasks).toEqual([expect.objectContaining({ key, title: 'Bigger buttons', status: 'pending' })])
+    expect(r.body.tasks[0].status_at).toMatch(/^\d{4}-\d\d-\d\dT/)
   })
 
-  it('the dispatcher writes building then done, and the start survives the finish', async () => {
-    const b = await post('/tasks/status', { name: 'deck-colours', title: 'Deck colours', status: 'building' })
+  it('the dispatcher writes in progress then merged, and the start survives the finish', async () => {
+    const b = await post('/tasks/status', { name: 'deck-colours', title: 'Deck colours', status: 'in progress' })
     expect(b.status).toBe(200)
     const started = (await getAs('/tasks')).body.tasks[0]
-    expect(started).toMatchObject({ name: 'deck-colours', title: 'Deck colours', status: 'building' })
+    expect(started).toMatchObject({ name: 'deck-colours', title: 'Deck colours', status: 'in progress' })
     expect(started.started_at).toMatch(/^\d{4}-\d\d-\d\dT/)
     expect(started.finished_at).toBeNull()
 
-    await post('/tasks/status', { name: 'deck-colours', status: 'done', pr: 'https://github.com/mattshoe/mtg-api/pull/9' })
+    await post('/tasks/status', { name: 'deck-colours', status: 'merged', pr: 'https://github.com/mattshoe/mtg-api/pull/9' })
     const tasks = (await getAs('/tasks')).body.tasks
     expect(tasks).toHaveLength(1)
     expect(tasks[0]).toMatchObject({
-      status: 'done', started_at: started.started_at, pr: 'https://github.com/mattshoe/mtg-api/pull/9',
+      status: 'merged', started_at: started.started_at, pr: 'https://github.com/mattshoe/mtg-api/pull/9',
     })
     expect(tasks[0].finished_at).toMatch(/^\d{4}-\d\d-\d\dT/)
   })
 
-  it('a task from the app is one row from sending to done, not a second one', async () => {
+  it('every status Matt asked for is one the Worker takes', async () => {
+    for (const status of ['pending', 'in progress', 'blocked', 'paused', 'stopped', 'in review', 'failing', 'merged', 'deployed', 'cancelled']) {
+      const r = await post('/tasks/status', { name: 'every-one', title: 'Every one', status })
+      expect(r.status, status + ' was refused: ' + r.body.error).toBe(200)
+    }
+  })
+
+  it('the detail rides with the status: why it is blocked, which job is red, and it goes with the state', async () => {
+    await post('/tasks/status', { name: 'needs-matt', title: 'Needs Matt', status: 'blocked', note: 'merge: ask, waiting on Matt to merge #12' })
+    expect((await getAs('/tasks')).body.tasks[0]).toMatchObject({ status: 'blocked', note: 'merge: ask, waiting on Matt to merge #12' })
+    await post('/tasks/status', { name: 'needs-matt', status: 'failing', pr: 'https://github.com/mattshoe/mtg-api/pull/12', note: 'android is red' })
+    expect((await getAs('/tasks')).body.tasks[0]).toMatchObject({ status: 'failing', note: 'android is red' })
+    await post('/tasks/status', { name: 'needs-matt', status: 'merged' })
+    expect((await getAs('/tasks')).body.tasks[0]).toMatchObject({ status: 'merged', note: null })
+  })
+
+  it('the time in a state is when it entered that state, and writing the same state again does not reset it', async () => {
+    await post('/tasks/status', { name: 'clock', title: 'Clock', status: 'in review' })
+    expect((await getAs('/tasks')).body.tasks[0].status_at).toMatch(/^\d{4}-/)
+    await sql("UPDATE task_inbox SET status_at = '2026-01-01T00:00:00.000Z'")
+    await post('/tasks/status', { name: 'clock', status: 'in review', note: 'still waiting on CI' })
+    expect((await getAs('/tasks')).body.tasks[0]).toMatchObject({ status_at: '2026-01-01T00:00:00.000Z', note: 'still waiting on CI' })
+    await post('/tasks/status', { name: 'clock', status: 'failing' })
+    expect((await getAs('/tasks')).body.tasks[0].status_at).not.toBe('2026-01-01T00:00:00.000Z')
+  })
+
+  it('a task from the app is one row from sending to merged, not a second one', async () => {
     const { key } = (await post('/tasks', { title: 'One row', details: 'x' })).body
     await post('/tasks/inbox/received', { keys: [key], names: { [key]: 'one-row' } })
-    await post('/tasks/status', { name: 'one-row', title: 'One row', status: 'building' })
+    await post('/tasks/status', { name: 'one-row', title: 'One row', status: 'in progress' })
     const tasks = (await getAs('/tasks')).body.tasks
-    expect(tasks).toEqual([expect.objectContaining({ key, name: 'one-row', status: 'building' })])
+    expect(tasks).toEqual([expect.objectContaining({ key, name: 'one-row', status: 'in progress' })])
   })
 
   it('a cancelled task is never collected', async () => {
@@ -144,7 +171,7 @@ describe('task status', () => {
     expect((await getAs('/tasks')).body.tasks[0].status).toBe('cancelled')
   })
 
-  it('a request held back is paused, and nothing about that reads as building', async () => {
+  it('a request held back is paused, and nothing about that reads as in progress', async () => {
     expect((await post('/tasks/status', { name: 'held-one', title: 'Held one', status: 'paused' })).status).toBe(200)
     const [t] = (await getAs('/tasks')).body.tasks
     expect(t).toMatchObject({ name: 'held-one', status: 'paused', started_at: null, finished_at: null })
@@ -154,7 +181,7 @@ describe('task status', () => {
     const r = await post('/tasks/status', { name: 'x', title: 'X', status: 'nearly' })
     expect(r.status).toBe(400)
     expect(r.body.error).toMatch(/^no such status: nearly/)
-    const n = await post('/tasks/status', { status: 'building' })
+    const n = await post('/tasks/status', { status: 'in progress' })
     expect(n.status).toBe(400)
     expect(n.body.error).toBe('which task: a key or a name')
     expect(await sql('SELECT * FROM task_inbox')).toEqual([])
@@ -165,7 +192,7 @@ describe('task status', () => {
     const token = await newSession(env.DB, u.id)
     expect((await getAs('/tasks', token)).status).toBe(403)
     expect((await call('/tasks', { method: 'GET' })).status).toBe(401)
-    expect((await postAs('/tasks/status', { name: 'x', title: 'X', status: 'building' }, token)).status).toBe(403)
+    expect((await postAs('/tasks/status', { name: 'x', title: 'X', status: 'in progress' }, token)).status).toBe(403)
     expect(await sql('SELECT * FROM task_inbox')).toEqual([])
   })
 })
