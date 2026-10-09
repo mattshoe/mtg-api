@@ -41,3 +41,26 @@ available — the request file and its status, the worktree, whether a process
 is alive on it, the branch, the pull request and whether it merged, and
 `requests/done/` — and never emit a status it cannot justify from one of
 those.
+
+**5. `deployed` is a status nothing writes.** Matt: "What the fuck is the
+deployed status of nothing fucking uses it?!?!" He is right — it is in the
+vocabulary, the UI counts it as finished, and no code path ever sets it.
+Every task stops at `merged`.
+
+Make it real rather than removing it, because "done means deployed on both
+platforms" is already a hard requirement in `.claude/skills/mtg/SKILL.md`
+and this is the only place it could ever be visible.
+
+A merge triggers `pages.yml` (the site), `release.yml` (the APK) and
+`worker.yml` (the API), on paths. So after a task merges, something has to
+watch the deploy runs for that merge commit and move the row to `deployed`
+when they finish — and say so when one fails, rather than leaving the row at
+`merged` forever with no explanation.
+
+A task whose change triggers no deploy at all — a test-only or
+documentation-only change — must not sit at `merged` waiting for a deploy
+that will never run. Decide what that case reads as and make it say that.
+
+If, having tried, writing `deployed` honestly is not possible, then delete
+the status and say why in the pull request. A word in the vocabulary that
+nothing can produce is worse than not having it.
