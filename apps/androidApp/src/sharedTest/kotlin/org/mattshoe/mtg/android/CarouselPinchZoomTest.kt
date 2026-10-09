@@ -74,8 +74,11 @@ class CarouselPinchZoomTest {
                     override fun run() {
                         val dump = StringBuilder("STALLED $name, every thread:\n")
                         Thread.getAllStackTraces().forEach { (t, frames) ->
+                            if ("Main Thread" !in t.name) return@forEach
                             dump.append("  thread ").append(t.name).append('\n')
-                            frames.take(40).forEach { dump.append("    at ").append(it).append('\n') }
+                            frames.filterNot { "java.lang.invoke" in it.className }
+                                .take(400)
+                                .forEach { dump.append("    at ").append(it).append('\n') }
                         }
                         runCatching { java.io.File("build/test-order.log").appendText(dump.toString()) }
                         println(dump)
