@@ -5,11 +5,16 @@ import org.jetbrains.compose.web.dom.Div
 import org.jetbrains.compose.web.dom.H2
 import org.jetbrains.compose.web.dom.H3
 import org.jetbrains.compose.web.dom.Span
+import org.jetbrains.compose.web.dom.Table
+import org.jetbrains.compose.web.dom.Tbody
+import org.jetbrains.compose.web.dom.Td
+import org.jetbrains.compose.web.dom.Tr
 import org.jetbrains.compose.web.dom.Text
 import org.mattshoe.mtg.core.Bar
 import org.mattshoe.mtg.core.DeckStats
 import org.mattshoe.mtg.core.Pip
 import org.mattshoe.mtg.core.Prices
+import org.mattshoe.mtg.core.RingSlice
 
 /**
  * What the deck is made of, drawn.
@@ -162,7 +167,7 @@ private fun Colours(s: DeckStats) {
         // Makes again, with a dual as its own slice rather than a
         // point in each colour's total. On a line of its own and
         // bigger, because it has the most slices to tell apart.
-        Pie("Exactly", s.combos, wide = true)
+        Pie("Exactly", s.combos, numbered = s.exactly)
     }
     if (s.unsupported.isNotEmpty()) {
         Div(attrs = { classes("sub") }) {
@@ -214,7 +219,8 @@ private fun Bars(bars: List<Bar>, total: Int) {
  * `conic-gradient`, so the chart is one CSS property and no script.
  */
 @Composable
-private fun Pie(caption: String, bars: List<Bar>, wide: Boolean = false) {
+private fun Pie(caption: String, bars: List<Bar>, numbered: List<RingSlice> = emptyList()) {
+    val wide = numbered.isNotEmpty()
     val total = bars.sumOf { it.value }
     if (total <= 0) return
     var at = 0.0
@@ -238,8 +244,40 @@ private fun Pie(caption: String, bars: List<Bar>, wide: Boolean = false) {
                 "title",
                 bars.joinToString(", ") { "${it.label} ${(it.value * 100) / total}%" },
             )
-        }) {}
+        }) {
+            // Each slice's number on the slice itself, over a dark
+            // disc so it reads on any colour. Matt: "It's not at all
+            // clear which slice is which in the exactly chart."
+            numbered.forEach { slice ->
+                val (x, y) = slice.at(0.62)
+                Span(attrs = {
+                    classes("slice-no")
+                    style {
+                        property("left", "${x * 100}%")
+                        property("top", "${y * 100}%")
+                    }
+                }) { Text("${slice.number}") }
+            }
+        }
         Span(attrs = { classes("pie-cap") }) { Text("$caption · $total") }
+        if (wide) {
+            // The legend, as a table: the number on the slice, its
+            // symbols, its name and how many cards.
+            Table(attrs = { classes("pie-table") }) {
+                Tbody {
+                    numbered.forEach { slice ->
+                        Tr {
+                            Td(attrs = { classes("no") }) { Text("${slice.number}") }
+                            Td(attrs = { classes("syms") }) { slice.bar.letters.forEach { ManaPip(it, "sm") } }
+                            Td { Text(slice.name) }
+                            Td(attrs = { classes("num") }) { Text("${slice.bar.value}") }
+                            Td(attrs = { classes("num") }) { Text("${slice.percent}%") }
+                        }
+                    }
+                }
+            }
+            return@Div
+        }
         Div(attrs = { classes("pie-key") }) {
             bars.forEach { bar ->
                 // Every colour of a combination keyed by its symbol,

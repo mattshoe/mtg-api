@@ -338,19 +338,93 @@ class DeckStatsLayoutTest {
             .firstOrNull { it.querySelector(".pie-cap")?.textContent.orEmpty().startsWith("Exactly") }
         assertTrue(set != null, "there is no Exactly ring at all")
         assertEquals("Exactly · 10", set.querySelector(".pie-cap")?.textContent)
-        // Every slice is named by its symbols, so a dual reads {U}{R}
-        // rather than being told apart by hue.
-        val keys = set.all(".pie-key .k").map { k ->
-            k.all("img.mana-sym").joinToString("") { it.getAttribute("alt").orEmpty() } +
-                " " + k.textContent.orEmpty().trim()
-        }
-        assertEquals(listOf("{U} 30%", "{R} 50%", "{U}{R} 20%"), keys, "the key should name each exact combination")
         val title = set.querySelector(".pie")?.getAttribute("title").orEmpty()
         assertEquals("U 30%, R 50%, UR 20%", title)
         // The UR slice runs 80% to 100%, and is drawn as a band of
         // blue and a band of red rather than a colour of its own.
         val bg = set.querySelector(".pie")?.getAttribute("style").orEmpty()
         assertTrue(bg.contains("var(--u) 80% 90%") && bg.contains("var(--r) 90% 100%"), "the UR slice is not drawn in its two colours: $bg")
+    }
+
+    /** Five Mountains, three Islands, two Steam Vents, drawn. */
+    private suspend fun izzet(): HTMLElement {
+        val frame = document.createElement("div") as HTMLElement
+        frame.style.width = "900px"
+        document.body!!.appendChild(frame)
+        roots += frame
+        val cards = listOf(
+            card("Mountain", "Basic Land — Mountain", null, 0.0, qty = 5, produces = "R"),
+            card("Island", "Basic Land — Island", null, 0.0, qty = 3, produces = "U"),
+            card("Steam Vents", "Land", null, 0.0, qty = 2, produces = "UR"),
+        )
+        renderComposable(root = frame) { DeckStatsPanel(DeckAnalysis.of(cards)) }
+        settle()
+        return frame
+    }
+
+    @Test
+    fun everyExactlySliceHasItsNumberDrawnInsideIt() = runTest {
+        // Matt: "It's not at all clear which slice is which in the
+        // exactly chart" and "put symbols on the slices". Blue runs
+        // 0-108 degrees, red 108-288, and UR 288-360 — a band of blue
+        // then red, so its blue half sits against nothing that says
+        // it is not more red. The number on it does.
+        assertTrue(styled(), "app.css never loaded, so the layout proves nothing")
+        val frame = izzet()
+        val pie = frame.all("div.pie-set.wide .pie").singleOrNull()
+        assertTrue(pie != null, "there is no Exactly ring at all")
+        val box = pie.getBoundingClientRect()
+        val cx = box.left + box.width / 2
+        val cy = box.top + box.height / 2
+        val marks = pie.all(".slice-no")
+        assertEquals(listOf("1", "2", "3"), marks.map { it.textContent.orEmpty().trim() }, "the slices are not numbered on the ring")
+        val spans = listOf(0.0 to 108.0, 108.0 to 288.0, 288.0 to 360.0)
+        marks.zip(spans).forEach { (mark, span) ->
+            val r = mark.getBoundingClientRect()
+            val dx = r.left + r.width / 2 - cx
+            val dy = r.top + r.height / 2 - cy
+            val angle = (kotlin.math.atan2(dx, -dy) * 180 / kotlin.math.PI + 360) % 360
+            assertTrue(
+                angle > span.first && angle < span.second,
+                "slice ${mark.textContent}'s number sits at $angle degrees, outside its slice ${span.first}-${span.second}",
+            )
+            assertTrue(
+                kotlin.math.sqrt(dx * dx + dy * dy) < box.width / 2,
+                "slice ${mark.textContent}'s number is off the ring",
+            )
+        }
+    }
+
+    @Test
+    fun aTableUnderTheExactlyRingSaysWhatEachNumberIs() = runTest {
+        // Matt: "This needs a better legend ... perhaps a table".
+        val frame = izzet()
+        val rows = frame.all("div.pie-set.wide table.pie-table tr").map { tr ->
+            tr.all("td").joinToString(" | ") { td ->
+                td.all("img.mana-sym").joinToString("") { it.getAttribute("alt").orEmpty() } +
+                    td.textContent.orEmpty().trim()
+            }
+        }
+        assertEquals(
+            listOf(
+                "1 | {U} | Mono-blue | 3 | 30%",
+                "2 | {R} | Mono-red | 5 | 50%",
+                "3 | {U}{R} | Izzet | 2 | 20%",
+            ),
+            rows,
+            "the Exactly ring has no table naming each numbered slice",
+        )
+    }
+
+    @Test
+    fun theExactlyRingIsBigEnoughToReadItsNumbers() = runTest {
+        // Matt: "You can make the chart bigger".
+        assertTrue(styled(), "app.css never loaded, so the layout proves nothing")
+        val frame = render(900)
+        settle()
+        val exactly = frame.ring("Exactly")
+        assertTrue(exactly != null, "there is no Exactly ring at all")
+        assertTrue(exactly.width >= 170, "the Exactly ring is ${exactly.width}px across, no bigger than before")
     }
 
     @Test

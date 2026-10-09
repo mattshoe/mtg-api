@@ -967,7 +967,22 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
 .pies { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 14px; }
 .pie-set { display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0; }
 .pie-set.wide { grid-column: 1 / -1; }
-.pie-set.wide .pie { width: 120px; height: 120px; }
+.pie-set.wide .pie { width: 180px; height: 180px; position: relative; }
+/* The Exactly ring's numbers, one per slice, and the table that says
+   what each is. A number on a dark disc reads on every colour, which a
+   hue never does for this collection's owner. */
+.slice-no {
+  position: absolute; transform: translate(-50%, -50%);
+  min-width: 20px; height: 20px; padding: 0 4px; border-radius: 10px;
+  display: grid; place-items: center;
+  font: 700 11px/1 var(--mono); color: #fff; background: rgba(10,12,16,.82);
+}
+.pie-table { border-collapse: collapse; font-size: 12px; color: var(--text-2); margin-top: 4px; }
+.pie-table td { padding: 3px 6px; white-space: nowrap; }
+.pie-table tr + tr td { border-top: 1px solid var(--line); }
+.pie-table td.no { font: 700 11px/1 var(--mono); color: var(--text); text-align: center; }
+.pie-table td.syms { display: flex; gap: 2px; align-items: center; }
+.pie-table td.num { text-align: right; font-family: var(--mono); color: var(--text-3); }
 .pie {
   width: 76px; height: 76px; border-radius: 50%; flex: none;
   border: 1px solid var(--line-2);
