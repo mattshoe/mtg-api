@@ -107,7 +107,9 @@ class MainActivity : ComponentActivity() {
         get() = model.app
         set(value) {
             AdminToken.sync(store, model.app.admin, value.admin)
-            model.app = value
+            // Every write, so a pull lets go of its spinner the moment
+            // its page's fetch lands, whichever coroutine landed it.
+            model.app = value.settled()
         }
 
     // All on the ViewModel, so a rotation mid-request neither cancels
@@ -348,6 +350,18 @@ class MainActivity : ComponentActivity() {
     /** The opening fetch for whatever the route names. */
     internal fun loadForTesting() = loadFor(app)
 
+    /** A pull to refresh, for a test that cannot drag a finger. */
+    internal fun refreshForTesting() = refresh()
+
+    /**
+     * The page on screen, pulled down: asked for again, the way
+     * arriving on it asks. The web's `refresh` is the same two lines.
+     */
+    private fun refresh() {
+        app = app.refreshed()
+        loadFor(app)
+    }
+
     /** The token load, so a test can wait for it instead of sleeping. */
     internal val tokensJob: Job? get() = model.tokensJob
     internal val releasesJob: Job? get() = model.releasesJob
@@ -544,6 +558,7 @@ class MainActivity : ComponentActivity() {
                         },
                         onCommanderTyped = { c -> commanderTyped(c) },
                         onExit = { finish() },
+                        onRefresh = { refresh() },
                     )
                 }
             }
@@ -635,6 +650,16 @@ class MainActivity : ComponentActivity() {
                 loadReleases()
                 if (s.route.rest.isEmpty()) loadTasks()
             }
+
+            // A card reached by its address rather than by a tap that
+            // already fetched it — a pull, or back onto it. The web's
+            // `loadFor` has always had this branch; the phone only
+            // loaded a card from the tap that opened it.
+            View.CARD -> s.cardRef?.let { ref ->
+                app = app.fetching(View.CARD)
+                val label = app.card?.name ?: ref.nameNorm
+                intoPage(View.CARD) { loadCard(ref.nameNorm, label) }
+            } ?: Unit
 
             else -> Unit
         }

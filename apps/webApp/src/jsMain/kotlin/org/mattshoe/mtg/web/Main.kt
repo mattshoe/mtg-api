@@ -39,6 +39,7 @@ import org.mattshoe.mtg.core.Export
 import org.mattshoe.mtg.core.ExportTo
 import org.mattshoe.mtg.core.FacetQueries
 import org.mattshoe.mtg.core.FilterUrl
+import org.mattshoe.mtg.core.Pull
 import org.mattshoe.mtg.core.Found
 import org.mattshoe.mtg.core.HistoryEntry
 import org.mattshoe.mtg.core.Load
@@ -124,7 +125,10 @@ object MtgApp {
      */
     private var app: AppState
         get() = held
-        set(value) {
+        set(written) {
+            // Every write, so a pull lets go of its spinner the moment
+            // its page's fetch lands, whichever coroutine landed it.
+            val value = written.settled()
             val was = held
             held = value
             // Every write lands here, so the token in `localStorage`
@@ -175,6 +179,16 @@ object MtgApp {
     }
 
     private var listening = false
+
+    /**
+     * Where a finger pulling the page down started, or null when no
+     * pull is under way — a second finger, a page scrolled away from
+     * the top, or an overlay on top all mean the drag is not a pull.
+     */
+    private var pullFrom: Double? = null
+
+    /** How far that finger has gone, for the indicator to follow. */
+    private var pullDy by mutableStateOf(0.0)
     /**
      * Long enough to finish a word, short enough that a toggle feels
      * immediate. Every filter change asks for a search and a text
@@ -211,6 +225,8 @@ object MtgApp {
 
         composition = renderComposable(root = root) {
             val state = app
+
+            PullIndicator(travel = Pull.travel(pullDy), refreshing = state.refreshing)
 
             // Every overlay that opens pushes a history entry, so the
             // back gesture dismisses what is on top instead of
@@ -408,9 +424,55 @@ object MtgApp {
 
     // ------------------------------------------------------- listeners
 
+    /**
+     * The page on screen, pulled down: asked for again, the way
+     * arriving on it asks. The phone's `refresh` is the same two lines.
+     */
+    private fun refresh() {
+        app = app.refreshed()
+        loadFor(app)
+    }
+
     private fun listen() {
         if (listening) return
         listening = true
+
+        // Pull to refresh, on every page. Matt: "Every page should be
+        // able to pull to refresh". Installed from a standalone home
+        // screen app, which is how the site is used on a phone, the
+        // browser offers no pull of its own — and in a tab its own
+        // pull reloads the whole app — so `app.css` turns that off and
+        // this is the one pull there is. Touch events and not pointer
+        // events: the browser cancels a pointer as soon as it decides
+        // the drag is a scroll, which a pull down from the top is.
+        val passive: dynamic = js("({passive: true})")
+        window.addEventListener("touchstart", { raw ->
+            val touches = raw.asDynamic().touches
+            pullDy = 0.0
+            pullFrom = if (touches.length == 1 && window.scrollY <= 0.0 && app.overlays.stack.isEmpty()) {
+                (touches[0].clientY as Number).toDouble()
+            } else {
+                null
+            }
+        }, passive)
+        window.addEventListener("touchmove", { raw ->
+            val from = pullFrom ?: return@addEventListener
+            val touches = raw.asDynamic().touches
+            if (touches.length != 1) {
+                pullFrom = null
+                pullDy = 0.0
+                return@addEventListener
+            }
+            pullDy = (touches[0].clientY as Number).toDouble() - from
+        }, passive)
+        listOf("touchend", "touchcancel").forEach { name ->
+            window.addEventListener(name, {
+                val fires = name == "touchend" && pullFrom != null && Pull.fires(pullDy)
+                pullFrom = null
+                pullDy = 0.0
+                if (fires) refresh()
+            }, passive)
+        }
 
         window.addEventListener("keydown", { raw ->
             val e = raw as KeyboardEvent

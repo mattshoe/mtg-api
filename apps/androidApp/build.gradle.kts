@@ -8,10 +8,10 @@ plugins {
 
 // The app. Not "the Compose rewrite" any more — this is what ships.
 //
-// It carries :app's applicationId and is signed with the same key, so
-// it upgrades the share-only build in place rather than sitting next to
-// it. :app stays in the repo as the rollback: it still builds, and
-// installing its APK puts the old one back.
+// It carries the share-only build's applicationId and is signed with
+// the same key, so it upgraded that build in place. That build is gone
+// from the repo: with the id taken it could never be installed again,
+// so it was never the rollback it claimed to be.
 android {
     namespace = "org.mattshoe.mtg.android"
     compileSdk = 35
@@ -28,8 +28,8 @@ android {
     }
     // Kept outside the repo, in ~/.mtg-android.env, so the key and its
     // password are never in git. Android refuses to upgrade an app
-    // signed with a different key, so this has to be the same one :app
-    // was signed with.
+    // signed with a different key, so this has to be the same one the
+    // share-only build was signed with.
     val creds = file(System.getProperty("user.home") + "/.mtg-android.env")
         .takeIf { it.exists() }
         ?.readLines()

@@ -146,4 +146,87 @@ class ShareReachesTheAppTest {
         assertEquals("1 Sol Ring", state.newDeck.list, "the picked file did not reach the deck wizard")
         assertTrue(state.entry.list.isEmpty(), "the picked file went into the entry box behind the wizard")
     }
+
+    // What `:app`'s device tests proved about a share, proved again on
+    // the app that ships. `:app` could never be installed beside this
+    // one, so its tests were proving a build nobody could run.
+
+    private fun bytes(name: String, content: ByteArray): Uri {
+        val uri = Uri.parse("content://com.manabox.files/$name")
+        shadowOf(context.contentResolver).registerInputStream(uri, ByteArrayInputStream(content))
+        return uri
+    }
+
+    @Test
+    fun aSharedFileIsReadWhateverTypeItClaims() {
+        val csv = "Name,Quantity\nSol Ring,1"
+        val share = Intent(Intent.ACTION_SEND).apply {
+            type = "application/octet-stream"
+            putExtra(Intent.EXTRA_STREAM, file("manabox.csv", csv))
+        }
+        val state = launch(share).get().stateForTesting()
+        assertEquals(csv, state.entry.list, "a text file labelled octet-stream was thrown away for its label")
+    }
+
+    @Test
+    fun severalFilesSharedAtOnceAllArrive() {
+        val share = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+            type = "text/plain"
+            putParcelableArrayListExtra(
+                Intent.EXTRA_STREAM,
+                arrayListOf(file("one.txt", "1 Sol Ring"), file("two.txt", "1 Arcane Signet")),
+            )
+        }
+        val state = launch(share).get().stateForTesting()
+        assertEquals("1 Sol Ring\n1 Arcane Signet", state.entry.list, "only some of the shared files arrived")
+    }
+
+    @Test
+    fun sharedTextWithNoFileIsTakenToo() {
+        val share = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, "4 Lightning Bolt")
+        }
+        val state = launch(share).get().stateForTesting()
+        assertEquals("4 Lightning Bolt", state.entry.list, "text shared without a file was dropped")
+    }
+
+    @Test
+    fun aLargeExportArrivesIntact() {
+        val rows = (1..4000).joinToString("\n") { "1 Card Number $it" }
+        val state = launch(shareOf(file("big.txt", rows))).get().stateForTesting()
+        assertEquals(4000, state.entry.list.lines().size, "a 4,000 row export lost rows on the way in")
+        assertEquals(rows, state.entry.list, "a 4,000 row export arrived altered")
+    }
+
+    @Test
+    fun aBareLinkIsNotTakenForACardList() {
+        val share = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, "https://manabox.app/decks/abc123")
+        }
+        val state = launch(share).get().stateForTesting()
+        assertEquals("", state.entry.list, "a shared link went into the entry box as if it were cards")
+        assertTrue(state.toastFailed, "a share with nothing usable in it was not reported as a failure")
+    }
+
+    @Test
+    fun aBinaryShareSaysWhatWasWrong() {
+        val png = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0, 0, 0, 0x0D, 0, 0, 0, 0)
+        val share = Intent(Intent.ACTION_SEND).apply {
+            type = "image/png"
+            putExtra(Intent.EXTRA_STREAM, bytes("photo.png", png))
+        }
+        val state = launch(share).get().stateForTesting()
+        assertEquals("", state.entry.list, "binary went into the entry box")
+        assertTrue(state.toastFailed, "a binary share was not reported as a failure")
+        assertEquals("photo.png is not text", state.toast, "a binary share went quiet about what was wrong")
+    }
+
+    @Test
+    fun anEmptyShareIsReportedRatherThanIgnored() {
+        val state = launch(Intent(Intent.ACTION_SEND).setType("text/plain")).get().stateForTesting()
+        assertTrue(state.toastFailed, "an empty share was not reported as a failure")
+        assertEquals("the share arrived with no file and no text in it.", state.toast)
+    }
 }

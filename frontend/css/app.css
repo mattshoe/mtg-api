@@ -61,6 +61,11 @@ img, svg, video { max-width: 100%; }
 
 html, body { height: 100%; }
 
+/* The browser's own pull reloads the whole app, in a tab. The app has
+   its own, which refreshes the page on screen and nothing else, and
+   two pulls answering one thumb is one too many. See `.pull`. */
+html { overscroll-behavior-y: contain; }
+
 body {
   margin: 0;
   background: var(--bg);
@@ -639,6 +644,20 @@ td.mono { font-family: var(--mono); font-size: 12.5px; }
   animation: spin .6s linear infinite; display: inline-block;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* Pull to refresh: a circle that comes down under the bar with the
+   finger, and spins there until the pulled page has its answer. Above
+   the page and below every overlay, and never in the way of a tap. */
+.pull {
+  position: fixed; left: 50%; top: calc(var(--topbar-h) - 40px); z-index: 41;
+  width: 36px; height: 36px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--bg-3); border: 1px solid var(--line-2); box-shadow: var(--shadow);
+  opacity: 0; pointer-events: none; transition: opacity .15s;
+}
+.pull.shown { opacity: 1; }
+.pull .spinner { width: 18px; height: 18px; }
+.pull:not([data-refreshing="true"]) .spinner { animation: none; }
 
 .err {
   background: color-mix(in srgb, var(--bad) 12%, transparent);
