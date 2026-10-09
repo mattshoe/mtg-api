@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -985,12 +986,8 @@ private fun Ring(
         // What gets painted, in order: a colour and a sweep in degrees.
         // Drawn from this list and published from it, so a test can
         // read what the ring paints without pixels.
-        val arcs = bars.flatMap { bar ->
-            // A combination is a band of each of its colours, and
-            // the hairlines below fall only between slices.
-            val band = 360f * bar.value / total / bar.letters.size
-            bar.letters.map { letter -> RingArc(Design.pip(letter), band) }
-        }
+        // A combination is one colour, its colours mixed: `Bar.fill`.
+        val arcs = bars.map { bar -> RingArc(bar.fill, 360f * bar.value / total) }
         Box(Modifier.size(ring)) {
         Canvas(
             Modifier.size(ring)
@@ -1049,25 +1046,41 @@ private fun Ring(
         if (numbered.isNotEmpty()) {
             // The legend, as a table: the number on the slice, its
             // symbols, its name and how many cards. The web's `.pie-table`.
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            // Matt: "The table columns don't line up". Every column
+            // but the name is one fixed width on every row, the symbols
+            // as wide as the most any row has, and the name takes what
+            // is left of the widest row, so a row with two symbols
+            // pushes nothing along. Counts and shares end flush, as the
+            // web's `td.num` does.
+            val most = numbered.maxOf { it.bar.letters.size }
+            val symbols = 14.dp * most + 2.dp * (most - 1)
+            Column(
+                Modifier.width(androidx.compose.foundation.layout.IntrinsicSize.Max),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
                 numbered.forEach { slice ->
                     Row(
-                        Modifier.testTag("exactly-row-${slice.number}")
+                        Modifier.fillMaxWidth()
+                            .testTag("exactly-row-${slice.number}")
                             .semantics(mergeDescendants = true) {},
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Line("${slice.number}", Ink, Design.TINY, FontWeight.Bold, Modifier.widthIn(min = 14.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Line("${slice.number}", Ink, Design.TINY, FontWeight.Bold, Modifier.width(14.dp))
+                        Row(Modifier.width(symbols), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                             slice.bar.letters.forEach { letter ->
                                 val letters = slice.bar.letters
                                 val tag = if (letters.size == 1) "pip-$caption-$letter" else "pip-$caption-${slice.bar.label}-$letter"
                                 PipDot(letter, 14.dp, 9.sp, tag)
                             }
                         }
-                        Line(slice.name, Ink2, Design.TINY, modifier = Modifier.widthIn(min = 90.dp))
-                        Line("${slice.bar.value}", Ink3, Design.TINY, modifier = Modifier.widthIn(min = 22.dp))
-                        Line("${slice.percent}%", Ink3, Design.TINY)
+                        Line(slice.name, Ink2, Design.TINY, modifier = Modifier.weight(1f))
+                        Box(Modifier.width(28.dp), contentAlignment = Alignment.CenterEnd) {
+                            Line("${slice.bar.value}", Ink3, Design.TINY, tabularNums = true)
+                        }
+                        Box(Modifier.width(36.dp), contentAlignment = Alignment.CenterEnd) {
+                            Line("${slice.percent}%", Ink3, Design.TINY, tabularNums = true)
+                        }
                     }
                 }
             }

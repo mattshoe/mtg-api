@@ -241,7 +241,9 @@ class ColourPanelParityTest {
         val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
         node.config[androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult].action?.invoke(layouts)
         val layout = layouts.single()
-        val left = node.boundsInRoot.left
+        // Not `boundsInRoot`: the panel is below the fold, where the
+        // clipped bounds are all zero.
+        val left = node.positionInRoot.x
         return (left + layout.getLineLeft(0)) to (left + layout.getLineRight(0))
     }
 
