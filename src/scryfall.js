@@ -12,8 +12,14 @@ const UA = 'MattMTGCollectionAPI/1.0';
 const CHUNK = 75; // Scryfall's documented cap for /cards/collection
 
 // Scryfall asks for 50-100ms between requests and threatens a network block
-// for ignoring it. Firing rulings lookups in parallel gets you rate-limited
-// on the second card, so every call goes through the shared gate.
+// for ignoring it, so every call goes through the shared gate.
+//
+// There used to be a `rulings(id)` here, fetched per card while a deck or
+// an import was being written. Scryfall has no bulk rulings endpoint, so
+// that was one throttled request per new card inside one HTTP request, and
+// Matt: "FUCK THE RULINGS I DON'T CARE ABOUT THAT". Nothing fetches them
+// now. The `rulings` table keeps what it already has and `src/card.js`
+// still shows it.
 
 /** Injectable so tests never touch the network. */
 export function makeClient(fetchImpl = fetch, { minGapMs } = {}) {
@@ -83,15 +89,6 @@ export function makeClient(fetchImpl = fetch, { minGapMs } = {}) {
     },
 
     /** Rulings for one oracle card. Empty array rather than a throw on 404. */
-    async rulings(scryfallId) {
-      try {
-        const body = await call(`/cards/${scryfallId}/rulings`);
-        return body.data || [];
-      } catch (e) {
-        if (e.status === 404) return [];
-        throw e;
-      }
-    },
   };
 }
 
