@@ -175,7 +175,12 @@ jobs:
         if: always()
         with:
           name: screens-test-results
-          path: apps/androidApp/build/test-results/testDebugUnitTest/*.xml
+          # test-order.log as well: a hung test writes no XML, and a
+          # START with no END in this file is the only thing that
+          # names it. Without it a timed-out suite uploaded nothing.
+          path: |
+            apps/androidApp/build/test-results/testDebugUnitTest/*.xml
+            apps/androidApp/build/test-order.log
 
   # The app, on an actual Android, split across three emulators.
   #
