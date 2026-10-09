@@ -77,8 +77,13 @@ data class Task(
      */
     fun elapsed(now: Long): String? = if (status.finished) null else span(now)
 
+    /**
+     * From when it was created, or from its start if that is earlier:
+     * reconcile makes a row the first time it writes a status, so one
+     * filed after the fact was "created" after its pull request opened.
+     */
     private fun span(to: Long): String? {
-        val start = createdAt?.let { Tasks.epochMillis(it) } ?: return null
+        val start = listOfNotNull(createdAt, startedAt).mapNotNull { Tasks.epochMillis(it) }.minOrNull() ?: return null
         return between(start, to)
     }
 
