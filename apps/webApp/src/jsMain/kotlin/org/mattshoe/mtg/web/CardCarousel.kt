@@ -247,8 +247,9 @@ private fun DisposableEffectScope.pinchZoom(
 ): DisposableEffectResult {
     val down = LinkedHashMap<Int, Pair<Double, Double>>()
     // The card's own box, untransformed. The cell centres the card,
-    // so the cell's centre is the card's.
-    fun face(): HTMLElement = (el.firstElementChild as? HTMLElement) ?: el
+    // so the cell's centre is the card's. An image still loading has
+    // no size yet, and the cell stands in for it.
+    fun face(): HTMLElement = (el.firstElementChild as? HTMLElement)?.takeIf { it.offsetWidth > 0 } ?: el
     fun centre(): Pair<Double, Double> {
         val r = el.getBoundingClientRect()
         return (r.left + r.width / 2) to (r.top + r.height / 2)
