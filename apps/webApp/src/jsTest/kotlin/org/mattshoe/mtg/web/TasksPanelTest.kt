@@ -69,11 +69,11 @@ class TasksPanelTest {
 
     private val some = Tasks().loaded(
         listOf(
-            Task("request/a-1111111", "Older fix", TaskStatus.DONE, "2026-10-01T10:00:00Z"),
-            Task("request/b-2222222", "Building now", TaskStatus.BUILDING, null),
-            Task("request/c-3333333", "Newer fix", TaskStatus.DONE, "2026-10-05T18:45:00Z"),
+            Task("request/a-1111111", "Older fix", TaskStatus.MERGED, "2026-10-01T10:00:00Z"),
+            Task("request/b-2222222", "Building now", TaskStatus.IN_PROGRESS, null),
+            Task("request/c-3333333", "Newer fix", TaskStatus.MERGED, "2026-10-05T18:45:00Z"),
             Task("request/d-4444444", "Waiting on CI", TaskStatus.IN_REVIEW, null),
-            Task("request/e-5555555", "Given up", TaskStatus.CLOSED, "2026-10-03T09:00:00Z"),
+            Task("request/e-5555555", "Given up", TaskStatus.CANCELLED, "2026-10-03T09:00:00Z"),
         ),
     )
 
@@ -91,8 +91,8 @@ class TasksPanelTest {
         settle()
         val active = root.all("[data-task]").filter { it.shown() }.map { it.textContent.orEmpty() }
         assertEquals(2, active.size, "Admin Settings does not list the active tasks: ${root.textContent}")
-        assertTrue("Waiting on CI" in active[0] && "in review" in active[0], active[0])
-        assertTrue("Building now" in active[1] && "building" in active[1], active[1])
+        assertTrue("Building now" in active[0] && "in progress" in active[0], active[0])
+        assertTrue("Waiting on CI" in active[1] && "in review" in active[1], active[1])
         assertTrue(root.all("[data-task-done]").none { it.shown() }, "the done tasks are not minimised by default")
 
         val toggle = root.all("[data-tasks-toggle]").singleOrNull()
@@ -104,8 +104,8 @@ class TasksPanelTest {
         val done = root.all("[data-task-done]").filter { it.shown() }.map { it.textContent.orEmpty() }
         assertEquals(3, done.size, "pressing Done did not show the finished tasks: $done")
         assertTrue("Newer fix" in done[0], "newest is not first: $done")
-        assertTrue("Given up" in done[1] && "closed" in done[1], done[1])
-        assertTrue("Older fix" in done[2] && "done" in done[2], done[2])
+        assertTrue("Given up" in done[1] && "cancelled" in done[1], done[1])
+        assertTrue("Older fix" in done[2] && "merged" in done[2], done[2])
         assertTrue(held!!.value.tasks.showDone, "the app does not hold that the done list is open")
     }
 
@@ -122,8 +122,8 @@ class TasksPanelTest {
         val now = Tasks.epochMillis("2026-10-08T12:20:00Z")!!
         val running = Tasks().loaded(
             listOf(
-                Task("request/b-2222222", "Building now", TaskStatus.BUILDING, null, startedAt = "2026-10-08T09:15:00Z"),
-                Task("request/a-1111111", "Older fix", TaskStatus.DONE, "2026-10-08T11:00:00Z", startedAt = "2026-10-08T10:00:00Z"),
+                Task("request/b-2222222", "Building now", TaskStatus.IN_PROGRESS, null, startedAt = "2026-10-08T09:15:00Z"),
+                Task("request/a-1111111", "Older fix", TaskStatus.MERGED, "2026-10-08T11:00:00Z", startedAt = "2026-10-08T10:00:00Z"),
             ),
         ).at(now).toggleDone()
         val root = mount(adminSettings(running))
@@ -134,12 +134,42 @@ class TasksPanelTest {
         assertTrue("2h 20m" !in done, "a finished task is still counting: '$done'")
     }
 
+    /**
+     * Matt watched four stopped agents all say `building`. A paused row
+     * says why and for how long, and one in review names its pull
+     * request, so nobody has to ask.
+     */
+    @Test
+    fun aPausedTaskSaysWhyAndForHowLongAndOneInReviewNamesItsPullRequest() = runTest {
+        val now = Tasks.epochMillis("2026-10-08T12:00:00Z")!!
+        val live = Tasks().loaded(
+            listOf(
+                Task(
+                    "k1", "Builder died", TaskStatus.PAUSED, null,
+                    statusAt = "2026-10-08T09:55:00Z", note = "agent crashed",
+                ),
+                Task(
+                    "k2", "Waiting on CI", TaskStatus.IN_REVIEW, null,
+                    pr = "https://github.com/mattshoe/mtg-api/pull/142",
+                ),
+            ),
+        ).at(now)
+        val root = mount(adminSettings(live))
+        settle()
+        val rows = root.all("[data-task]").filter { it.shown() }.map { it.textContent.orEmpty() }
+        val paused = rows.singleOrNull { "Builder died" in it } ?: error("the paused task is not listed: $rows")
+        assertTrue("paused" in paused, "the paused task does not say paused: '$paused'")
+        assertTrue("for 2h 05m" in paused && "agent crashed" in paused, "the paused task does not say why or for how long: '$paused'")
+        val review = rows.singleOrNull { "Waiting on CI" in it } ?: error("the task in review is not listed: $rows")
+        assertTrue("PR #142" in review, "the task in review does not name its pull request: '$review'")
+    }
+
     /** Matt: "Done tasks should show how long they took, not a UTC timestamp". */
     @Test
     fun aDoneTaskSaysHowLongItTookNotWhen() = runTest {
         val finished = Tasks().loaded(
             listOf(
-                Task("request/a-1111111", "Older fix", TaskStatus.DONE, "2026-10-08T13:05:00Z", startedAt = "2026-10-08T10:00:00Z"),
+                Task("request/a-1111111", "Older fix", TaskStatus.MERGED, "2026-10-08T13:05:00Z", startedAt = "2026-10-08T10:00:00Z"),
             ),
         ).toggleDone()
         val root = mount(adminSettings(finished))
