@@ -63,6 +63,9 @@ class AppDriverTest {
     /** How many times the app asked GitHub for the request pull requests. */
     private var tasksAsked = 0
 
+    /** How long `/auth/me` takes to answer. CI is slower than a laptop. */
+    private var whoAmIMs = 0
+
     @BeforeTest
     fun stubTheNetwork() {
         writes.clear()
@@ -70,6 +73,7 @@ class AppDriverTest {
         sent.clear()
         role = "user"
         tasksAsked = 0
+        whoAmIMs = 0
         val engine = MockEngine { request ->
             if (request.method.value == "POST" && """"dry_run":false""" in
                 (request.body as? io.ktor.http.content.TextContent)?.text.orEmpty()
@@ -171,12 +175,11 @@ class AppDriverTest {
         if (realFetch == null) realFetch = window.asDynamic().fetch
         window.asDynamic().fetch = { url: dynamic, init: dynamic ->
             if ("$url".contains("/auth/me")) {
-                Promise.resolve(
-                    Response(
-                        """{"key":"e7de0cb1","name":"Matt","role":"$role"}""",
-                        ResponseInit(status = 200, headers = js("({'Content-Type':'application/json'})")),
-                    ),
+                val answer = Response(
+                    """{"key":"e7de0cb1","name":"Matt","role":"$role"}""",
+                    ResponseInit(status = 200, headers = js("({'Content-Type':'application/json'})")),
                 )
+                Promise<Response> { ok, _ -> window.setTimeout({ ok(answer) }, whoAmIMs) }
             } else {
                 realFetch!!(url, init)
             }
@@ -1119,6 +1122,10 @@ class AppDriverTest {
     @Test
     fun adminSettingsLoadsTheTasksOnEveryVisitToTheList() = runTest {
         role = "admin"
+        // Slow enough that the tasks are back before anybody knows who
+        // you are. That ordering asked GitHub twice on a cold load, and
+        // only CI was slow enough to show it.
+        whoAmIMs = 300
         val root = mount("#/admin")
         waitFor("a task on Admin Settings") { root.all("[data-task]").isNotEmpty() }
         val text = root.all("[data-task]").first().textContent.orEmpty()
