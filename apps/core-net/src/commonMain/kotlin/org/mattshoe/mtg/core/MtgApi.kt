@@ -299,7 +299,7 @@ class MtgApi internal constructor(
     private data class TaskFileBody(val name: String, val type: String, val data: String)
 
     @Serializable
-    private data class TaskRequest(val title: String, val details: String, val files: List<TaskFileBody>)
+    private data class TaskRequest(val details: String, val files: List<TaskFileBody>)
 
     @Serializable
     private data class TaskSent(val key: String = "")
@@ -315,7 +315,6 @@ class MtgApi internal constructor(
             header(Idempotency.HEADER, Idempotency.key())
             setBody(
                 TaskRequest(
-                    task.title.trim(),
                     task.details.trim(),
                     task.files.map { TaskFileBody(it.name, it.type, it.data) },
                 ),

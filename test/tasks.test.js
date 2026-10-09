@@ -87,13 +87,33 @@ describe('tasks', () => {
     expect(await sql('SELECT * FROM task_inbox')).toEqual([])
   })
 
-  it('a task needs a title and some details', async () => {
-    const r = await post('/tasks', { title: '  ', details: 'x' })
-    expect(r.status).toBe(400)
-    expect(r.body.error).toBe('a task needs a title')
-    const d = await post('/tasks', { title: 'Something', details: '' })
+  it('a task needs some details', async () => {
+    const d = await post('/tasks', { details: '  ' })
     expect(d.status).toBe(400)
     expect(d.body.error).toBe('say what the task is')
+  })
+
+  // Matt: "come up with your own fucking task titles just give me a way
+  // to enter the task details fuck the title field". The apps send the
+  // details and nothing else, and the Worker names the task from them.
+  it('a task sent with only its details is titled from its first sentence', async () => {
+    const r = await post('/tasks', { details: 'the buttons on the deck page are too small. I miss them all the time.' })
+    expect(r.status).toBe(200)
+    const t = await sql('SELECT title FROM task_inbox WHERE key = ?1', r.body.key)
+    expect(t[0].title).toBe('The buttons on the deck page are too small')
+  })
+
+  it('a long first sentence is cut to a title at a word, not mid-word', async () => {
+    const details = 'come up with your own fucking task titles just give me a way to enter the task details fuck the title field'
+    const r = await post('/tasks', { details })
+    const t = (await sql('SELECT title FROM task_inbox WHERE key = ?1', r.body.key))[0].title
+    expect(t).toBe('Come up with your own fucking task titles just give me a way')
+  })
+
+  it('a title an older app still sends is kept as it was typed', async () => {
+    const r = await post('/tasks', { title: 'Bigger buttons', details: 'They are too small.' })
+    const t = await sql('SELECT title FROM task_inbox WHERE key = ?1', r.body.key)
+    expect(t[0].title).toBe('Bigger buttons')
   })
 
   it('a file too big to keep is refused by name, and nothing is written', async () => {

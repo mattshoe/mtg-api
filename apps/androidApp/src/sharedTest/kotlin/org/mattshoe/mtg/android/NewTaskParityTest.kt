@@ -6,6 +6,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -85,26 +86,30 @@ class NewTaskParityTest {
         rule.waitForIdle()
         assertTrue(held!!.value.writingTask, "New task did not open its screen: ${held!!.value.route}")
         assertTrue(
-            rule.onAllNodes(hasTestTag("new-task-title")).fetchSemanticsNodes().isNotEmpty(),
-            "the New task screen has no title box",
+            rule.onAllNodes(hasTestTag("new-task-details")).fetchSemanticsNodes().isNotEmpty(),
+            "the New task screen has no details box",
+        )
+        // Matt: "fuck the title field". The details are the only box.
+        assertTrue(
+            rule.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().size == 1,
+            "the New task screen has more than the details to type in: " +
+                rule.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().map { it.says() },
         )
     }
 
     @Test
-    fun sendDoesNothingUntilThereIsATitleAndDetails() {
+    fun sendDoesNothingUntilThereAreDetailsAndThenGoesWithNothingElse() {
         shell(admin.startingATask())
         rule.onNodeWithTag("new-task-send").performScrollTo().performClick()
         rule.waitForIdle()
         assertEquals(0, sends, "Send went with nothing typed")
 
-        rule.onNodeWithTag("new-task-title").performTextInput("Bigger buttons")
         rule.onNodeWithTag("new-task-details").performTextInput("They are too small to hit.")
         rule.waitForIdle()
-        assertEquals("Bigger buttons", held!!.value.newTask.title)
         assertEquals("They are too small to hit.", held!!.value.newTask.details)
         rule.onNodeWithTag("new-task-send").performScrollTo().performClick()
         rule.waitForIdle()
-        assertEquals(1, sends, "Send did not go with a title and details typed")
+        assertEquals(1, sends, "Send did not go with only the details typed")
     }
 
     @Test

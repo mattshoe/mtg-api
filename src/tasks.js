@@ -24,13 +24,33 @@ function toBase64(bytes) {
   return btoa(out);
 }
 
+/** How long a title made from the details runs before it is cut at a word. */
+const MADE_TITLE = 60;
+
+/**
+ * A title made from the details: the first sentence of the first line,
+ * cut at a word, capital first. Matt: "come up with your own fucking
+ * task titles just give me a way to enter the task details fuck the
+ * title field". The laptop names the request file after it.
+ */
+export function titleFrom(details) {
+  const line = String(details).trim().split('\n')[0];
+  let t = line.split(/(?<=[.!?])\s/)[0].replace(/[.!?]+$/, '').replace(/\s+/g, ' ').trim();
+  if (t.length > MADE_TITLE) {
+    const cut = t.slice(0, MADE_TITLE + 1);
+    const space = cut.lastIndexOf(' ');
+    t = (space > 0 ? cut.slice(0, space) : cut.slice(0, MADE_TITLE)).replace(/[\s,;:-]+$/, '');
+  }
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
 /** The body checked and decoded, or the sentence that says what is wrong with it. */
 function read(body) {
-  const title = String(body.title ?? '').trim();
   const details = String(body.details ?? '').trim();
-  if (!title) return { error: 'a task needs a title' };
-  if (title.length > MAX_TITLE) return { error: `a title is ${MAX_TITLE} characters at most` };
   if (!details) return { error: 'say what the task is' };
+  // The apps send no title any more. One an older install still sends is kept.
+  const title = String(body.title ?? '').trim() || titleFrom(details);
+  if (title.length > MAX_TITLE) return { error: `a title is ${MAX_TITLE} characters at most` };
   if (details.length > MAX_DETAILS) return { error: `the details are ${MAX_DETAILS} characters at most` };
   const raw = body.files ?? [];
   if (!Array.isArray(raw)) return { error: 'files must be a list' };

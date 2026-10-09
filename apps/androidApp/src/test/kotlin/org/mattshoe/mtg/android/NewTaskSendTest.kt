@@ -104,17 +104,18 @@ class NewTaskSendTest {
 
         activity.setStateForTesting(
             activity.stateForTesting().let {
-                it.copy(newTask = it.newTask.titled("Bigger buttons").described("They are too small to hit."))
+                it.copy(newTask = it.newTask.described("Bigger buttons. They are too small to hit."))
             },
         )
         activity.sendTask()
         until(activity, "Send to land back on Admin Settings") { it.route == Route(View.ADMIN) }
 
         val body = sent.single()
-        assertTrue("Bigger buttons" in body && "They are too small to hit." in body, body)
+        assertTrue("Bigger buttons. They are too small to hit." in body, body)
+        assertTrue(""""title"""" !in body, "a title went up; the Worker makes its own: $body")
         assertTrue(""""data":"aGVsbG8="""" in body, "the file did not go up: $body")
         assertEquals(
-            "Task sent: Bigger buttons. It is a request within five minutes.",
+            "Task sent. It is a request within five minutes.",
             activity.stateForTesting().toast,
         )
     }

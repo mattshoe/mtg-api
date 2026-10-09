@@ -25,8 +25,8 @@ import org.mattshoe.mtg.core.NewTask
  *
  * Matt: "I want to be able to tap a "new task" button and get a simple
  * but attractive new screen where i can enter the details and upload
- * files". A title, the details, files, and Send. The rules — what is
- * required, how many files, how big — are `NewTask`'s.
+ * files". The details, files, and Send, no title: the Worker makes one
+ * from the details. The rules — what is required, how many files, how big — are `NewTask`'s.
  */
 @Composable
 fun NewTaskScreen(
@@ -45,14 +45,6 @@ fun NewTaskScreen(
         Ghost("← Admin Settings", enabled = !task.busy) { onCancel() }
 
         Panel(head = "New task", note = "Say what you want changed. It becomes a request and builds like any other.") {
-            Label("Title")
-            Field(
-                value = task.title,
-                onValueChange = { onState(task.titled(it)) },
-                placeholder = "What should change, in a few words",
-                modifier = Modifier.testTag("new-task-title"),
-            )
-
             Label("Details")
             Field(
                 value = task.details,

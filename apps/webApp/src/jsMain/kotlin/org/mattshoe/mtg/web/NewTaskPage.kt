@@ -1,14 +1,12 @@
 package org.mattshoe.mtg.web
 
 import androidx.compose.runtime.Composable
-import org.jetbrains.compose.web.attributes.InputType
 import org.jetbrains.compose.web.attributes.disabled
 import org.jetbrains.compose.web.attributes.placeholder
 import org.jetbrains.compose.web.attributes.rows
 import org.jetbrains.compose.web.dom.Button
 import org.jetbrains.compose.web.dom.Div
 import org.jetbrains.compose.web.dom.H2
-import org.jetbrains.compose.web.dom.Input
 import org.jetbrains.compose.web.dom.Label
 import org.jetbrains.compose.web.dom.Span
 import org.jetbrains.compose.web.dom.Text
@@ -22,7 +20,8 @@ import org.w3c.files.File
  *
  * Matt: "I want to be able to tap a "new task" button and get a simple
  * but attractive new screen where i can enter the details and upload
- * files". A title, the details, files, and Send. The rules — what is
+ * files". The details, files, and Send, no title: the Worker makes one
+ * from the details. The rules — what is
  * required, how many files, how big — are `NewTask`'s.
  */
 @Composable
@@ -48,16 +47,6 @@ fun NewTaskPage(
         Div(attrs = { classes("panel-body") }) {
             Div(attrs = { classes("muted", "small", "new-task-lede") }) {
                 Text("Say what you want changed. It becomes a request and builds like any other.")
-            }
-
-            Div(attrs = { classes("field") }) {
-                Label(forId = "new-task-title") { Text("Title") }
-                Input(InputType.Text, attrs = {
-                    id("new-task-title")
-                    placeholder("What should change, in a few words")
-                    value(task.title)
-                    onInput { onState(task.titled(it.value)) }
-                })
             }
 
             Div(attrs = { classes("field") }) {
