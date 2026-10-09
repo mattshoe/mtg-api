@@ -19,6 +19,8 @@
 //   POST /maintenance run it now (admin)
 //   GET  /logs        the request log (admin)
 //   GET  /logs/stats  headline numbers for it (admin)
+//   GET  /s/<route>   a shared link: Open Graph tags for that deck, card or
+//                     collection, then on to mtg.mattshoe.org/#/<route>
 //
 // Reading is open. Anything that writes needs an admin token — see admin.js.
 
@@ -37,6 +39,7 @@ import { lookupPrices } from './prices.js';
 import { runMaintenance, CRON_TASKS } from './maintenance.js';
 import { newEntry, writeEntry, buildLogQuery, logStats } from './log.js';
 import { keyFrom, claim, remember, release } from './idempotency.js';
+import { preview } from './preview.js';
 
 /**
  * May this caller change that collection, and if not, why not.
@@ -468,6 +471,13 @@ async function route(request, env, ctx, entry) {
       if (method !== 'GET') return notAllowed('GET');
       return json(await getSchema(env.DB));
     }
+
+  // A shared link. The route rides in the path because a fragment never
+  // reaches a server — see preview.js.
+  if (path === '/s' || path.startsWith('/s/')) {
+    if (method !== 'GET' && method !== 'HEAD') return notAllowed('GET');
+    return preview(env.DB, url.pathname.replace(/^\/s\/?/, ''), url.search);
+  }
 
   // The share body, parsed somewhere other than the phone.
   //

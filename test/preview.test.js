@@ -66,7 +66,7 @@ describe('GET /s/… — a shared link previews as the thing it points at', () =
     const r = await get('/s/card/sol+ring');
     expect(og(r.html, 'title')).toBe('Sol Ring');
     expect(og(r.html, 'description')).toContain('Artifact');
-    expect(og(r.html, 'description')).toMatch(/\d+ in the collection/);
+    expect(og(r.html, 'description')).toMatch(/\d+ owned/);
     expect(og(r.html, 'image')).toBe(
       'https://cards.scryfall.io/normal/front/2/d/2d47121d-8b90-4d28-9ffa-0a640b9dd611.jpg',
     );
