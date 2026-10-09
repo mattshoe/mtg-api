@@ -292,6 +292,8 @@ const INDEX = {
     'GET /logs/stats': 'counts, slowest routes, retention — admin only',
     'GET /maintenance': 'what the daily job did last',
     'POST /maintenance': 'run it now — needs admin; {"only":"orphans"} or {"all":true,"wait":true}',
+    'GET /s': '/s/<route> — a shared link: Open Graph tags for that deck, card or collection, then on to the site',
+    'GET /.well-known/assetlinks.json': 'lets Android open /s/ links in the app',
   },
   auth: 'Reads are open. Writes need Authorization: Bearer <token> from POST /admin.',
 };
