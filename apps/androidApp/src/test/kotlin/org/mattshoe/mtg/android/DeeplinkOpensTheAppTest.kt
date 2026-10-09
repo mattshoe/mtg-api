@@ -108,6 +108,30 @@ class DeeplinkOpensTheAppTest {
     }
 
     @Test
+    fun theSystemOffersThisAppTheLinksItShares() {
+        // A shared link is the Worker's preview page, so Discord can
+        // show the deck. Somebody tapping it on a phone with the app
+        // should be offered the app, not only a browser.
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val matches = context.packageManager.queryIntentActivities(
+            viewIntent("https://mtg-api.mattshoe81.workers.dev/s/decks/alela"),
+            PackageManager.MATCH_DEFAULT_ONLY,
+        )
+        assertTrue(
+            matches.any { it.activityInfo?.name == MainActivity::class.java.name },
+            "no activity in this app answers a shared preview link",
+        )
+    }
+
+    @Test
+    fun aSharedLinkOpensTheDeckItNames() {
+        val activity = launch(viewIntent("https://mtg-api.mattshoe81.workers.dev/s/c/k4yy0003/decks/alela"))
+        val state = activity.stateForTesting()
+        assertEquals(View.DECKS, state.view, "a shared deck link did not open the decks view")
+        assertEquals("alela", state.route.rest, "a shared deck link did not name the deck")
+    }
+
+    @Test
     fun aDeckLinkOpensTheDeckOnAColdStart() {
         val activity = launch(viewIntent("https://mtg.mattshoe.org/#/decks/alela"))
         val state = activity.stateForTesting()
