@@ -67,10 +67,15 @@ const MIGRATIONS = import.meta.glob('../migrations/*.sql', {
   eager: true,
 });
 
-/** Every migration from 0008 on, statement by statement, as wrangler runs them. */
+/**
+ * The tag_names migrations, 0008 and 0009, statement by statement, as
+ * wrangler runs them. Not every one after: this database came from
+ * schema.sql, which already has 0011's columns, and an ALTER TABLE does
+ * not replay.
+ */
 async function migrateFrom0008() {
   const files = Object.entries(MIGRATIONS)
-    .filter(([path]) => path.split('/').pop() >= '0008')
+    .filter(([path]) => ['0008', '0009'].some((n) => path.split('/').pop().startsWith(n)))
     .sort(([a], [b]) => a.localeCompare(b));
   for (const [, text] of files) {
     const body = text.split('\n').filter((l) => !l.trim().startsWith('--')).join('\n');

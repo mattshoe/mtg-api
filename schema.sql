@@ -354,8 +354,12 @@ CREATE TABLE sessions (
 );
 CREATE INDEX idx_sessions_user ON sessions(user_id);
 
--- New tasks, written in the app and collected by the laptop that
--- dispatches requests. See src/tasks.js and migrations/0010.
+-- Every task and where it is. Written in the app and collected by the
+-- laptop that dispatches requests, or written there straight into
+-- requests/, and either way its status is written here by the
+-- dispatcher as it changes. See src/tasks.js, migrations/0010 and 0011.
+-- The table kept its first name rather than be renamed under a live
+-- database: it is the inbox and the status board, one row per task.
 CREATE TABLE task_inbox (
   id           INTEGER PRIMARY KEY,
   key          TEXT NOT NULL UNIQUE,
@@ -363,8 +367,19 @@ CREATE TABLE task_inbox (
   details      TEXT NOT NULL,
   created_by   INTEGER REFERENCES users(id),
   created_at   TEXT NOT NULL,
-  received_at  TEXT
+  received_at  TEXT,
+  -- the request file's name, without .md, once there is one
+  name         TEXT,
+  status       TEXT NOT NULL DEFAULT 'pending',
+  -- when it entered that status, and the detail that goes with it:
+  -- why it is blocked, which CI job is red, the last thing that happened
+  status_at    TEXT,
+  note         TEXT,
+  pr           TEXT,
+  started_at   TEXT,
+  finished_at  TEXT
 );
+CREATE UNIQUE INDEX idx_task_inbox_name ON task_inbox(name);
 
 CREATE TABLE task_files (
   id        INTEGER PRIMARY KEY,
@@ -375,3 +390,12 @@ CREATE TABLE task_files (
   bytes     BLOB NOT NULL
 );
 CREATE INDEX idx_task_files_task ON task_files(task_id);
+
+-- GitHub's release list, as the Worker last had it. The release is the
+-- record; this is a copy so the app asks the Worker and not GitHub, and
+-- so a refusal from GitHub serves the last answer. One row.
+CREATE TABLE github_releases (
+  id          INTEGER PRIMARY KEY CHECK (id = 1),
+  body        TEXT NOT NULL,
+  fetched_at  TEXT NOT NULL
+);

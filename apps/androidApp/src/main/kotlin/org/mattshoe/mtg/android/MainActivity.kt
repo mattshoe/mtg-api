@@ -48,7 +48,6 @@ import org.mattshoe.mtg.core.RenameState
 import org.mattshoe.mtg.core.Route
 import org.mattshoe.mtg.core.Rows
 import org.mattshoe.mtg.core.Scryfall
-import org.mattshoe.mtg.core.GitHubReleases
 import org.mattshoe.mtg.core.Share
 import org.mattshoe.mtg.core.ShareWhat
 import org.mattshoe.mtg.core.SharedFile
@@ -79,7 +78,6 @@ class MainActivity : ComponentActivity() {
     // by the time the system builds this activity. See [Wiring].
     private var api = MtgApi(Wiring.apiBase ?: MtgApi.DEFAULT_BASE)
     private var scryfall = Scryfall()
-    private var github = GitHubReleases()
     private val prefs by lazy { getSharedPreferences("mtg", Context.MODE_PRIVATE) }
     private val store: Store by lazy { PrefsStore(prefs) }
     private var downloads: Downloads = MediaStoreDownloads(this)
@@ -141,11 +139,6 @@ class MainActivity : ComponentActivity() {
     /** The same seam for Scryfall, which the deck's tokens come from. */
     internal fun useScryfallForTesting(scryfall: Scryfall) {
         this.scryfall = scryfall
-    }
-
-    /** And for GitHub, which the release notes come from. */
-    internal fun useGitHubForTesting(github: GitHubReleases) {
-        this.github = github
     }
 
     /**
@@ -840,8 +833,8 @@ class MainActivity : ComponentActivity() {
     /**
      * The builds that shipped, for the release notes on Admin Settings.
      *
-     * Beside the people rather than after them: one is GitHub and the
-     * other is the Worker, and neither should wait on the other. Once
+     * Beside the people rather than after them: neither should wait on
+     * the other. From the Worker, which keeps GitHub's list. Once
      * per visit to the list; a person's page reuses what is there.
      * Sibling of the website's `loadReleases`.
      */
@@ -851,7 +844,7 @@ class MainActivity : ComponentActivity() {
         model.releasesJob = scope.launch {
             app = try {
                 // Asked first, then copied. See `loadPeople`.
-                val found = github.releases()
+                val found = api.releases()
                 app.copy(releases = app.releases.loaded(found))
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
@@ -869,11 +862,11 @@ class MainActivity : ComponentActivity() {
      * view and does not ask again. Sibling of the website's `loadTasks`.
      */
     private fun loadTasks() {
-        if (app.tasks.busy) return
+        if (app.tasks.busy || app.tasks.fresh) return
         app = app.copy(tasks = app.tasks.loading())
         model.tasksJob = scope.launch {
             app = try {
-                val found = github.tasks(store)
+                val found = api.tasks(token())
                 app.copy(tasks = app.tasks.loaded(found).at(System.currentTimeMillis()))
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e

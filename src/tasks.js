@@ -59,7 +59,7 @@ export async function newTask(db, userId, body) {
   const now = new Date().toISOString();
   const statements = [
     db.prepare(
-      'INSERT INTO task_inbox (key, title, details, created_by, created_at) VALUES (?1, ?2, ?3, ?4, ?5)',
+      'INSERT INTO task_inbox (key, title, details, created_by, created_at, status_at) VALUES (?1, ?2, ?3, ?4, ?5, ?5)',
     ).bind(key, t.title, t.details, userId, now),
     ...t.files.map((f, i) => db.prepare(
       `INSERT INTO task_files (task_id, position, name, type, bytes)
@@ -73,7 +73,7 @@ export async function newTask(db, userId, body) {
 /** Every task the laptop has not said it has, oldest first, with its files. */
 export async function inbox(db) {
   const { results: tasks = [] } = await db.prepare(
-    'SELECT id, key, title, details, created_at FROM task_inbox WHERE received_at IS NULL ORDER BY id',
+    "SELECT id, key, title, details, created_at FROM task_inbox WHERE received_at IS NULL AND status = 'pending' ORDER BY id",
   ).all();
   const out = [];
   for (const t of tasks) {
@@ -95,13 +95,80 @@ export async function inbox(db) {
  * The laptop has written these. Its files are dropped with it: they
  * are on disk now, and a blob kept here past that is only weight.
  */
-export async function received(db, keys) {
+export async function received(db, keys, names = {}) {
   if (!Array.isArray(keys)) return { status: 400, body: { error: 'keys must be a list' } };
   const now = new Date().toISOString();
+  // `names` is the request file each became, so the dispatcher's
+  // transitions, which only know the file, land on this same row.
   const statements = keys.flatMap((k) => [
     db.prepare('DELETE FROM task_files WHERE task_id = (SELECT id FROM task_inbox WHERE key = ?1)').bind(String(k)),
-    db.prepare('UPDATE task_inbox SET received_at = ?2 WHERE key = ?1 AND received_at IS NULL').bind(String(k), now),
+    db.prepare(
+      'UPDATE task_inbox SET received_at = ?2, name = COALESCE(?3, name) WHERE key = ?1 AND received_at IS NULL',
+    ).bind(String(k), now, names?.[k] ? String(names[k]) : null),
   ]);
   if (statements.length) await db.batch(statements);
   return { status: 200, body: { received: keys.length } };
+}
+
+/**
+ * Every status a task can have, in the words the app shows, which are
+ * Matt's. `in progress` is an agent alive on it this second and nothing
+ * else; `blocked` needs Matt or something it depends on; `paused` is
+ * nothing running with the work kept, whether held by Matt, rate limited,
+ * crashed or killed. The note says which. There is no `failing`: red CI
+ * mid-run is still `in review`. Each is written by whatever caused it,
+ * and a cancelled task is never collected.
+ */
+export const STATUSES = [
+  'pending', 'in progress', 'blocked', 'paused', 'in review', 'merged', 'deployed', 'cancelled',
+];
+const FINISHED = new Set(['merged', 'deployed', 'cancelled']);
+
+/** Every task, newest first, without its files. */
+export async function list(db) {
+  const { results = [] } = await db.prepare(
+    `SELECT key, name, title, status, status_at, note, pr, created_at, started_at, finished_at
+       FROM task_inbox ORDER BY id DESC`,
+  ).all();
+  return results;
+}
+
+/**
+ * One transition, written as it happens. A task is named by its `key`
+ * (sent from the app) or its request file's `name` (what the dispatcher
+ * knows). A name with no row yet is a request written straight into
+ * requests/, and gets one. The first `in progress` is the start, and a
+ * resumed build keeps it. `status_at` moves only when the status does;
+ * the note is the detail of this status and goes with it.
+ */
+export async function setStatus(db, body) {
+  const status = String(body.status ?? '');
+  if (!STATUSES.includes(status)) {
+    return { status: 400, body: { error: `no such status: ${status}; one of ${STATUSES.join(', ')}` } };
+  }
+  const key = body.key ? String(body.key) : null;
+  const name = body.name ? String(body.name) : null;
+  if (!key && !name) return { status: 400, body: { error: 'which task: a key or a name' } };
+  const now = new Date().toISOString();
+  const where = key ? 'key = ?1' : 'name = ?1';
+  const found = await db.prepare(`SELECT 1 FROM task_inbox WHERE ${where}`).bind(key ?? name).first();
+  if (!found) {
+    if (!name) return { status: 404, body: { error: `no task ${key}` } };
+    const title = String(body.title ?? '').trim() || name.replace(/-/g, ' ');
+    await db.prepare(
+      "INSERT INTO task_inbox (key, title, details, created_at, received_at, name, status_at) VALUES (?1, ?2, '', ?3, ?3, ?4, ?3)",
+    ).bind(newKey(), title, now, name).run();
+  }
+  const note = body.note ? String(body.note).slice(0, 500) : null;
+  await db.prepare(
+    `UPDATE task_inbox SET
+            status_at = CASE WHEN status = ?2 THEN COALESCE(status_at, ?4) ELSE ?4 END,
+            status = ?2,
+            note = ?6,
+            pr = COALESCE(?3, pr),
+            started_at = CASE WHEN ?2 = 'in progress' THEN COALESCE(started_at, ?4) ELSE started_at END,
+            finished_at = CASE WHEN ?5 THEN COALESCE(finished_at, ?4) ELSE NULL END
+      WHERE ${where}`,
+  ).bind(key ?? name, status, body.pr ? String(body.pr) : null, now, FINISHED.has(status) ? 1 : 0, note).run();
+  return { status: 200, body: { status } };
 }

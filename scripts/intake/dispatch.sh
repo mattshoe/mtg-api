@@ -34,6 +34,11 @@ say() { printf '%s  %s\n' "$(date '+%H:%M:%S')" "$1" >>"$LOG"; }
 
 mkdir -p "$STATE"
 
+# Every run puts D1 right about what this laptop can see: a dead agent is
+# paused rather than in progress forever, a held request paused, a
+# withdrawn one cancelled. It may not stop a build. See task-status.mjs.
+node "$REPO/scripts/intake/task-status.mjs" reconcile >>"$LOG" 2>&1 || true
+
 # Choosing a request and creating its worktree is the only part that needs
 # exclusivity, and it takes seconds. It runs behind `lockf`, so a dispatcher
 # that arrives at the same instant WAITS for its turn and then picks a
@@ -183,6 +188,10 @@ there without reading it."
 fi
 
 say "building $name on $branch${resumed:+ (resuming)}"
+# Task status lives in D1 and this is the thing that sees it change: a
+# builder starting here, and its pull request coming to something when it
+# exits. Neither write may stop a build. See scripts/intake/task-status.mjs.
+node "$REPO/scripts/intake/task-status.mjs" building "$file" >>"$LOG" 2>&1 || true
 # Not `exec`: that replaces this shell and the EXIT trap never runs, so the
 # lock would be held forever. Staying in the foreground also means the lock is
 # held for the whole build, which is the one-at-a-time rule.
@@ -211,3 +220,4 @@ Commit and push BEFORE your first test run, and after every part that passes. No
   >>"$STATE/$name.log" 2>&1
 
 say "$name finished ($?) — its pull request, if it opened one, is the agent's own"
+node "$REPO/scripts/intake/task-status.mjs" settle "$file" "$branch" >>"$LOG" 2>&1 || true
