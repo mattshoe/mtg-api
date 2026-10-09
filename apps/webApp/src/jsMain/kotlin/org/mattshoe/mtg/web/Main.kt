@@ -198,6 +198,9 @@ object MtgApp {
     private var searchJob: Job? = null
     private var lookupJob: Job? = null
     private var commanderJob: Job? = null
+
+    /** The minute tick that keeps a running task's elapsed time current. */
+    private var tasksClock: Job? = null
     private var findJob: Job? = null
     private var tweakJob: Job? = null
 
@@ -849,11 +852,19 @@ object MtgApp {
         scope.launch {
             app = try {
                 val found = github.tasks()
-                app.copy(tasks = app.tasks.loaded(found))
+                app.copy(tasks = app.tasks.loaded(found).at(kotlin.js.Date.now().toLong()))
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
                 app.copy(tasks = app.tasks.failed(e.message ?: "that did not work"))
+            }
+        }
+        tasksClock?.cancel()
+        tasksClock = scope.launch {
+            while (true) {
+                delay(60_000)
+                if (app.view != View.ADMIN || app.route.rest.isNotEmpty()) break
+                app = app.copy(tasks = app.tasks.at(kotlin.js.Date.now().toLong()))
             }
         }
     }

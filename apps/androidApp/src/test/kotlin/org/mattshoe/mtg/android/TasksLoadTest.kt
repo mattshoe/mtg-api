@@ -78,6 +78,9 @@ class TasksLoadTest {
                 path.contains("/git/matching-refs/heads/request") ->
                     """[{"ref":"refs/heads/request/task-status-in-the-app-22facff"}]"""
                 path.endsWith("/contents/requests/done") -> "[]"
+                // The branch's first commit, two hours and a half minute ago by the real clock.
+                path.contains("/compare/main...request/") ->
+                    """{"commits":[{"commit":{"author":{"date":"${java.time.Instant.now().minusSeconds(2 * 60 * 60 + 30)}"}}}]}"""
                 path.endsWith("/repos/mattshoe/mtg-api/releases") -> "[]"
                 path == "/admin/users" -> """{"users":[{"key":"t4pee71g","name":"Test","role":"user"}]}"""
                 path == "/auth/me" -> """{"key":"e7de0cb1","name":"Matt","role":"admin"}"""
@@ -119,5 +122,29 @@ class TasksLoadTest {
         activity.loadForTesting()
         settle(activity)
         assertEquals(2, asked, "coming back to the list did not ask for the tasks again")
+    }
+
+    /**
+     * The running task counts from its branch's first commit to the
+     * phone's own clock. `TasksParityTest` hands the screen a `now`;
+     * this is the app finding one for itself.
+     */
+    @Test
+    fun aRunningTaskCountsFromItsFirstCommitToNow() {
+        val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        context.getSharedPreferences("mtg", android.content.Context.MODE_PRIVATE)
+            .edit().putString(AdminToken.KEY, "t").commit()
+        val link = Intent(Intent.ACTION_VIEW, Uri.parse("https://mtg.mattshoe.org/#/admin"))
+        val built = Robolectric.buildActivity(MainActivity::class.java, link)
+        controller = built
+        val activity = built.get()
+        activity.useForTesting(MtgApi.withEngine("https://example.invalid", json()))
+        activity.useGitHubForTesting(GitHubReleases.withEngine(json()))
+        built.create().start().resume()
+        settle(activity)
+
+        val tasks = activity.stateForTesting().tasks
+        val task = tasks.rows.singleOrNull() ?: error("nothing loaded the tasks: $tasks")
+        assertEquals("2h 00m", task.elapsed(tasks.now), "the running task does not count from its first commit to now: $tasks")
     }
 }
