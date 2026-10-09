@@ -22,6 +22,7 @@
 // MTG_ADMIN_PASSWORD.
 //
 //     node scripts/tags.mjs [--dry-run] [--api URL] [--file PATH]
+//     node scripts/tags.mjs --migration migrations/NNNN_x.sql [--file PATH]
 
 import { createReadStream, readdirSync } from 'node:fs'
 import { createGunzip } from 'node:zlib'
@@ -62,6 +63,25 @@ export function tagNames(tags) {
 }
 
 const quote = (v) => (v === null || v === undefined ? 'NULL' : `'${String(v).replace(/'/g, "''")}'`)
+
+/**
+ * `tag_names` as a migration, so a deploy carries the tree and `otag:`
+ * does not wait on this machine's nightly. `--migration PATH` writes it.
+ * INSERT OR IGNORE, so it lands on top of whatever the nightly wrote.
+ */
+export function tagNamesMigration(tags) {
+  const rows = tagNames(tags).map(([n, t]) => `(${quote(n)},${quote(t)})`)
+  const out = [
+    '-- The tag tree for `otag:`, from the oracle-tags bulk file, written by',
+    '-- `node scripts/tags.mjs --migration`. 0008 made the table and only the',
+    '-- nightly filled it, so until that ran `otag:blink` found nothing.',
+    '-- The nightly still rewrites it whole; this is the floor a deploy brings.',
+  ]
+  for (let i = 0; i < rows.length; i += BATCH) {
+    out.push(`INSERT OR IGNORE INTO tag_names (name, tag) VALUES\n${rows.slice(i, i + BATCH).join(',\n')};`)
+  }
+  return out.join('\n') + '\n'
+}
 
 async function readBulk(file) {
   const tags = []
@@ -180,6 +200,11 @@ if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
     return i >= 0 ? args[i + 1] : undefined
   }
   const api = opt('--api') || process.env.MTG_API || 'https://mtg-api.mattshoe81.workers.dev'
+  if (opt('--migration')) {
+    const { writeFileSync } = await import('node:fs')
+    writeFileSync(opt('--migration'), tagNamesMigration(await readBulk(opt('--file') || newestBulk())))
+    process.exit(0)
+  }
   try {
     await run({
       api,
