@@ -110,12 +110,21 @@ class PullToRefreshTest {
         rule.waitForIdle()
     }
 
-    /** A thumb dragged from a third of the way down the screen to near the bottom. */
+    /**
+     * A thumb dragged from just below the middle of the screen to the
+     * bottom edge.
+     *
+     * Below the middle on purpose. It started a third of the way down
+     * once, which on Robolectric's 470dp screen is inside even a short
+     * page — and on an 808dp phone is under the Server Log's two lines,
+     * on blank space nothing scrolled, so the pull went nowhere. CI's
+     * emulator found it; this start finds it on the JVM.
+     */
     private fun pullDown() {
         rule.onRoot().performTouchInput {
             swipe(
-                start = Offset(centerX, height * 0.3f),
-                end = Offset(centerX, height * 0.95f),
+                start = Offset(centerX, height * 0.45f),
+                end = Offset(centerX, height - 1f),
                 durationMillis = 600,
             )
         }
