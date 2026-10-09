@@ -185,21 +185,24 @@ class TasksTest {
 
     /**
      * Matt: "Done tasks should show how long they took, not a UTC
-     * timestamp". From the start the dispatcher wrote to the finish, in
-     * the same words a running one counts in.
+     * timestamp", and "are the completed ones going to show it too???"
+     * Created to finished, frozen, in the same words a live one counts in.
      */
     @Test
-    fun aFinishedTaskSaysHowLongItTook() {
-        val shipped = Task("k1", "Shipped", TaskStatus.MERGED, "2026-10-08T13:05:00Z", startedAt = "2026-10-08T10:00:00Z")
+    fun aFinishedTaskSaysHowLongItTookFromCreatedToFinished() {
+        val shipped = Task(
+            "k1", "Shipped", TaskStatus.MERGED, "2026-10-08T13:05:00Z",
+            startedAt = "2026-10-08T11:00:00Z", createdAt = "2026-10-08T10:00:00Z",
+        )
         assertEquals("took 3h 05m", shipped.took)
-        val dropped = Task("k2", "Dropped", TaskStatus.CANCELLED, "2026-10-08T10:12:00Z", startedAt = "2026-10-08T10:00:00Z")
+        val dropped = Task("k2", "Dropped", TaskStatus.CANCELLED, "2026-10-08T10:12:00Z", createdAt = "2026-10-08T10:00:00Z")
         assertEquals("took 12m", dropped.took)
     }
 
     @Test
-    fun aTaskWithNoKnownStartOrStillGoingSaysNothingAboutHowLongItTook() {
+    fun aTaskWithNoKnownCreationOrStillGoingSaysNothingAboutHowLongItTook() {
         assertNull(Task("k1", "Shipped", TaskStatus.MERGED, "2026-10-08T11:00:00Z").took)
-        assertNull(Task("k1", "Going", TaskStatus.IN_PROGRESS, null, startedAt = "2026-10-08T10:00:00Z").took)
+        assertNull(Task("k1", "Going", TaskStatus.IN_PROGRESS, null, createdAt = "2026-10-08T10:00:00Z").took)
     }
 
     /** Every live task has an age, paused and pending as much as running. */
