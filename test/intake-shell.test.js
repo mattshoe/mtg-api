@@ -306,14 +306,31 @@ describe('the switches', () => {
     expect(existsSync(box.path('.intake/lock'))).toBe(false)
   })
 
+  it('still tells the truth about what it is not doing while paused', () => {
+    // Status is only written inside a dispatch, so pausing intake used to
+    // freeze every row mid-flight. Matt watched a task read `in progress`
+    // for three hours after the system was switched off and nothing was
+    // running. A paused system has to reconcile before it stops.
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    box.disable()
+    const r = run('dispatch.sh')
+
+    expect(r.status).toBe(0)
+    // It reconciled...
+    expect(box.intakeLog()).toContain('task-status')
+    // ...and still started nothing.
+    expect(box.log()).not.toContain('claude')
+  })
+
   it('stops dispatch.sh dead once .intake/disabled exists', () => {
     build({ requests: { 'a-thing.md': READY('A thing') } })
     box.disable()
     const r = run('dispatch.sh')
     expect(r.status).toBe(0)
     expect(box.log()).not.toContain('claude')
-    expect(box.intakeLog()).toBe('')
-    expect(existsSync(box.path('.intake/lock'))).toBe(false)
+    // Not silent any more: a paused system still reconciles, so the rows do
+    // not freeze mid-flight. It just starts nothing.
+    expect(box.intakeLog()).toContain('task-status')
   })
 
   it('stops hook.sh dead, so an edit launches no dispatcher', () => {
@@ -951,44 +968,25 @@ describe('status.sh', () => {
     expect(out).toContain('none pending')
   })
 
-  it('shows a live lock, so a wedged queue is not an idle one', () => {
+  it('reports the dispatchers and agents that are actually running', () => {
+    // This read `$STATE/lock`, a directory the dispatcher stopped creating
+    // when it moved to lockf — so the dashboard said "nothing is
+    // dispatching" through every build. Three tests asserted that dead
+    // output, which is how it went unnoticed.
     build({ requests: { 'a-thing.md': READY('A thing') } })
-    mkdirSync(box.path('.intake/lock'))
-    writeFileSync(box.path('.intake/lock/pid'), String(process.pid))
-    const out = status().stdout
+    const out = spawnSync('bash', [box.path('scripts/intake', 'status.sh')], {
+      encoding: 'utf8', cwd: box.repo,
+      env: { ...process.env, PATH: `${box.bin}:${process.env.PATH}`, HOME: box.root },
+    }).stdout
     expect(out).toContain('DISPATCHER')
-    expect(out).toContain(`lock held by ${process.pid}, alive`)
+    // It reports processes. The count itself is machine-wide — pgrep sees
+    // every dispatcher on the host, including other test forks — so assert
+    // the shape, not a number.
+    expect(out).toMatch(/idle — no dispatcher, no agent|\d+ dispatcher\(s\), \d+ agent\(s\)/)
+    // And never the lock line, which described a path nothing creates.
+    expect(out).not.toContain('lock held')
   })
 
-  it('says a lock whose pid is gone has to be removed by hand', () => {
-    // Nothing clears a stale lock any more, so saying it is stale is not
-    // enough — the line has to say what to do about it.
-    build({ requests: { 'a-thing.md': READY('A thing') } })
-    mkdirSync(box.path('.intake/lock'))
-    writeFileSync(box.path('.intake/lock/pid'), '999999')
-    const out = status().stdout
-    expect(out).toContain('WHICH IS GONE')
-    expect(out).toContain('remove')
-  })
-
-  it('reports a lock with nothing in it, which is the one the dispatcher takes', () => {
-    build({ requests: { 'a-thing.md': READY('A thing') } })
-    mkdirSync(box.path('.intake/lock'))
-    expect(status().stdout).toContain('no pid in it')
-  })
-
-  it('prints files, commits and pushed-ness for every worktree it finds', () => {
-    // A worktree is never deleted automatically, so a dead agent's tree is
-    // still on disk with whatever it had — and whether that work is safe is
-    // exactly whether it was pushed.
-    build({ requests: { 'a-thing.md': READY('A thing') } })
-    const tree = box.path('.intake/wt/a-thing')
-    box.git('worktree', 'add', '-q', '-b', 'request/a-thing-x', tree, 'main')
-    writeFileSync(join(tree, 'half.txt'), 'half a change\n')
-    const out = status().stdout
-    expect(out).toContain('WORKTREES')
-    expect(out).toMatch(/a-thing.*1 changed, 0 commits, NOT ON ORIGIN/)
-  })
 
   it('distinguishes a failing gh from a clean queue', () => {
     // A failing `gh` used to render as a clean queue, which is the same

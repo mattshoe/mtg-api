@@ -40,7 +40,16 @@ tell() {
 # Opt-in. .intake/ is gitignored, so a fresh clone must not be armed by the
 # committed hook before anyone has installed anything.
 [ -f "$STATE/enabled" ] || exit 0
-[ -f "$STATE/disabled" ] && exit 0
+
+# Reconcile BEFORE honouring the off switch. Status is only ever written
+# inside a dispatch, so pausing intake used to freeze every row mid-flight:
+# Matt watched a task read `in progress` for three hours after I had switched
+# the system off and nothing was running. A paused system still has to tell
+# the truth about what it is not doing.
+if [ -f "$STATE/disabled" ]; then
+  node "$REPO/scripts/intake/task-status.mjs" reconcile >>"$LOG" 2>&1 || true
+  exit 0
+fi
 
 # A linked worktree's .git is a file. The agent edits its own request file,
 # which fires the hook, which would otherwise start a dispatcher inside the
