@@ -1279,10 +1279,11 @@ class AppDriverTest {
         // finger lifts the page is waiting and should say so.
         val spinner = document.querySelector("[data-pull]") as? HTMLElement
             ?: error("no pull indicator on the page at all")
-        assertEquals(
-            "true", spinner.getAttribute("data-refreshing"),
-            "the finger lifted on a pull and nothing says the page is refreshing",
-        )
+        // A frame for the composition to catch up, and no more: the
+        // search lands 250ms after the finger lifts.
+        waitFor("the finger lifted on a pull and nothing says the page is refreshing", upTo = 240) {
+            spinner.getAttribute("data-refreshing") == "true"
+        }
         assertTrue(
             window.getComputedStyle(spinner).opacity.toDouble() > 0.0,
             "the pull indicator is refreshing and invisible",
