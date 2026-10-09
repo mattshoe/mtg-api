@@ -175,10 +175,10 @@ export function agentToken() {
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const repo = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
-  const token = agentToken()
+  const token = await writeToken()
   const stamp = new Date().toISOString().replace('T', ' ').slice(0, 19)
   if (!token) {
-    console.log(`${stamp}  inbox: no ~/.mtg-agent.env, so no tasks can be collected`)
+    console.log(`${stamp}  inbox: no credential that may read the inbox, so nothing was collected`)
   } else {
     collect({ repo, token })
       .then((got) => { if (got.length) console.log(`${stamp}  inbox: wrote ${got.join(', ')}`) })
