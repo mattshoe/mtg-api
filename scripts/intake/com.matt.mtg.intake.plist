@@ -52,6 +52,13 @@
   <!-- A task submitted from the app changes no file here, so WatchPaths
        never fires for it. Poll as well: a minute is the longest Matt waits
        between tapping Submit and an agent starting. -->
+  <!-- The runner starts a dispatcher and exits, so launchd considers the job
+       finished immediately. Without this it reaps the job's surviving
+       children at that moment and the dispatcher dies before it does
+       anything: the timer fired 25 times and the log never moved. -->
+  <key>AbandonProcessGroup</key>
+  <true/>
+
   <key>StartInterval</key>
   <integer>60</integer>
 
