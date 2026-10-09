@@ -47,6 +47,7 @@ const COPY = [
   'scripts/intake/com.matt.mtg.intake.plist',
   'scripts/intake/com.matt.mtg.intake-inbox.plist',
   'scripts/intake/inbox.mjs',
+  'scripts/intake/task-status.mjs',
   'scripts/guard.mjs',
   'scripts/check-test-count.mjs',
   'test/suite-floors.json',
@@ -397,6 +398,30 @@ describe('the lock', () => {
     expect(r.status).toBe(0)
     expect(box.intakeLog()).toContain('building a-thing')
     expect(existsSync(box.path('.intake/lock'))).toBe(false)
+  })
+})
+
+describe('task status in D1', () => {
+  // Matt: "The system is just looking at fucking branch names?!?!" The
+  // dispatcher is what starts a builder and sees it end, so it writes each
+  // transition to the task's row as it happens. No token in this box's
+  // HOME, so nothing reaches the network: the log says what would have
+  // been written, which is what proves the dispatcher asked.
+
+  it('writes building before the builder starts and what its pull request came to after', () => {
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    box.stub('claude', BUILDER)
+    box.stub('gh', `[ "$1 $2" = "pr list" ] && echo '[{"state":"MERGED","url":"https://github.com/x/y/pull/7"}]'\nexit 0`)
+    run('dispatch.sh')
+    const log = box.intakeLog()
+    expect(log).toContain('a-thing building was not written')
+    expect(log).toContain('a-thing done was not written')
+    expect(log.indexOf('a-thing building')).toBeLessThan(log.indexOf('a-thing finished'))
+    const calls = box.log().split('\n')
+    const claude = calls.findIndex((l) => l.startsWith('claude '))
+    const asked = calls.findIndex((l) => /^gh pr list --head request\/a-thing-[0-9a-f]{7} --state all/.test(l))
+    expect(claude, 'the builder never ran').toBeGreaterThanOrEqual(0)
+    expect(asked, 'gh was never asked what the pull request came to').toBeGreaterThan(claude)
   })
 })
 

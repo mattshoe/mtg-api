@@ -92,6 +92,7 @@ export async function collect({ repo, token, base = API, fetch = globalThis.fetc
   const taken = (n) => existsSync(join(requests, n)) || existsSync(join(requests, 'done', n))
   const written = []
   const keys = []
+  const names = {}
   for (const task of body.tasks || []) {
     const r = requestFor(task, { repo, taken })
     for (const f of r.files) {
@@ -103,13 +104,14 @@ export async function collect({ repo, token, base = API, fetch = globalThis.fetc
     writeFileSync(join(requests, r.name), r.text)
     written.push(r.name)
     keys.push(task.key)
+    names[task.key] = r.name.replace(/\.md$/, '')
   }
 
   if (keys.length) {
     const ack = await fetch(`${base}/tasks/inbox/received`, {
       method: 'POST',
       headers: { ...auth, 'content-type': 'application/json' },
-      body: JSON.stringify({ keys }),
+      body: JSON.stringify({ keys, names }),
     })
     if (!ack.ok) throw new Error(`wrote ${written.join(', ')} but the inbox did not take the receipt`)
   }
@@ -117,7 +119,7 @@ export async function collect({ repo, token, base = API, fetch = globalThis.fetc
 }
 
 /** The agent's token, from the file dispatch.sh reads it from. */
-function agentToken() {
+export function agentToken() {
   try {
     const env = readFileSync(join(homedir(), '.mtg-agent.env'), 'utf8')
     return /^MTG_AGENT_TOKEN=(.*)$/m.exec(env)?.[1]?.trim() || ''
