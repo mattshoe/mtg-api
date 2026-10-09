@@ -295,8 +295,34 @@ class MtgApi internal constructor(
         val was: String = "",
     )
 
-    /** A new task, from Admin Settings. The key it was filed under. */
-    suspend fun sendTask(session: String, task: NewTask): String = ""
+    @Serializable
+    private data class TaskFileBody(val name: String, val type: String, val data: String)
+
+    @Serializable
+    private data class TaskRequest(val title: String, val details: String, val files: List<TaskFileBody>)
+
+    @Serializable
+    private data class TaskSent(val key: String = "")
+
+    /**
+     * A new task, from Admin Settings, into the Worker's inbox. The key
+     * it was filed under. Admin only, server-side.
+     */
+    suspend fun sendTask(session: String, task: NewTask): String {
+        val res = http.post("$base/tasks") {
+            contentType(ContentType.Application.Json)
+            header("Authorization", "Bearer $session")
+            header(Idempotency.HEADER, Idempotency.key())
+            setBody(
+                TaskRequest(
+                    task.title.trim(),
+                    task.details.trim(),
+                    task.files.map { TaskFileBody(it.name, it.type, it.data) },
+                ),
+            )
+        }
+        return res.decode<TaskSent>().key
+    }
 
     /** Rename a deck. Its key, and so its address, stays where it is. */
     suspend fun renameDeck(token: String, key: String, name: String): Renamed {
