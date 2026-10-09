@@ -100,6 +100,9 @@ data class AppState(
             // library, and closing the deck here would throw its
             // cards away and re-read them on the way back.
             decks = if (landed.namesADeck || landed.view == View.CARD) decks else decks.close(),
+            // Landing where it already is is not a new visit to the
+            // task list; anywhere else is. See `Tasks.fresh`.
+            tasks = if (landed == route) tasks else tasks.stale(),
         )
     }
 
@@ -480,7 +483,7 @@ data class AppState(
         View.ENTRY, View.LOGS -> this
         View.CARD -> if (card == null) this else fetching().copy(pulled = view)
         View.LIBRARY -> copy(library = library.copy(loadedFor = null)).fetching().copy(pulled = view)
-        else -> fetching().copy(pulled = view)
+        else -> fetching().copy(pulled = view, tasks = tasks.stale())
     }
 
     /** Whether a pull on this page is still waiting. The spinner reads this. */

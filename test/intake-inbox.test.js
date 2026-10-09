@@ -64,7 +64,11 @@ describe('collecting tasks from the app', () => {
       ['POST', 'https://api.test/tasks/inbox/received'],
     ])
     expect(w.calls.every((c) => c.auth === 'Bearer t0k')).toBe(true)
-    expect(JSON.parse(w.calls[1].body)).toEqual({ keys: ['ab12cd34'] })
+    // The request file each became, so the dispatcher's transitions,
+    // which only know the file, land on the same row in D1.
+    expect(JSON.parse(w.calls[1].body)).toEqual({
+      keys: ['ab12cd34'], names: { ab12cd34: 'bigger-buttons-on-the-deck-page' },
+    })
   })
 
   it('never overwrites a request with the same name, live or done', async () => {

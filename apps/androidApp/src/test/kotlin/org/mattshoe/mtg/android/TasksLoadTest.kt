@@ -18,7 +18,6 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mattshoe.mtg.core.AdminToken
-import org.mattshoe.mtg.core.GitHubReleases
 import org.mattshoe.mtg.core.MtgApi
 import org.mattshoe.mtg.core.View
 import org.robolectric.Robolectric
@@ -29,7 +28,8 @@ import kotlin.test.assertTrue
 import org.mattshoe.mtg.core.Route
 
 /**
- * Admin Settings asks GitHub for the tasks on every visit to the list.
+ * Admin Settings asks the Worker for the tasks on every visit to the list,
+ * and nobody else: GitHub was asked from the phone at sixty an hour.
  *
  * Through the real `MainActivity`, for the reason `ReleasesLoadTest`
  * gives. Unlike release notes, a task's status changes minute to
@@ -68,20 +68,16 @@ class TasksLoadTest {
     private fun json() = HttpClient(
         MockEngine { request ->
             val path = request.url.encodedPath
+            if (request.url.host != "example.invalid") error("the app asked somebody other than the Worker: ${request.url}")
             val body = when {
-                path.endsWith("/repos/mattshoe/mtg-api/pulls") -> {
+                // Started two hours and a half minute ago by the real clock.
+                path == "/tasks" -> {
                     asked++
-                    """[{"title":"Task status in the app","state":"open",
-                        "head":{"ref":"request/task-status-in-the-app-22facff"},
-                        "merged_at":null,"closed_at":null}]"""
+                    """{"tasks":[{"key":"ab12cd34","name":"task-status-in-the-app","title":"Task status in the app",
+                        "status":"in review","pr":null,"created_at":"2026-10-08T09:00:00.000Z",
+                        "started_at":"${java.time.Instant.now().minusSeconds(2 * 60 * 60 + 30)}","finished_at":null}]}"""
                 }
-                path.contains("/git/matching-refs/heads/request") ->
-                    """[{"ref":"refs/heads/request/task-status-in-the-app-22facff"}]"""
-                path.endsWith("/contents/requests/done") -> "[]"
-                // The branch's first commit, two hours and a half minute ago by the real clock.
-                path.contains("/compare/main...request/") ->
-                    """{"commits":[{"commit":{"author":{"date":"${java.time.Instant.now().minusSeconds(2 * 60 * 60 + 30)}"}}}]}"""
-                path.endsWith("/repos/mattshoe/mtg-api/releases") -> "[]"
+                path == "/releases" -> "[]"
                 path == "/admin/users" -> """{"users":[{"key":"t4pee71g","name":"Test","role":"user"}]}"""
                 path == "/auth/me" -> """{"key":"e7de0cb1","name":"Matt","role":"admin"}"""
                 else -> """{"cols":[],"rows":[],"n":0}"""
@@ -92,6 +88,9 @@ class TasksLoadTest {
 
     @Test
     fun openingAdminSettingsLoadsTheTasksAndComingBackAsksAgain() {
+        // `Retry` runs this again on the same instance; a count carried
+        // over from a failed attempt would fail every one after it.
+        asked = 0
         val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
         context.getSharedPreferences("mtg", android.content.Context.MODE_PRIVATE)
             .edit().putString(AdminToken.KEY, "t").commit()
@@ -100,7 +99,6 @@ class TasksLoadTest {
         controller = built
         val activity = built.get()
         activity.useForTesting(MtgApi.withEngine("https://example.invalid", json()))
-        activity.useGitHubForTesting(GitHubReleases.withEngine(json()))
         built.create().start().resume()
         settle(activity)
 
@@ -111,12 +109,12 @@ class TasksLoadTest {
             tasks.rows.map { it.title to it.status.word },
             "nothing on Android loaded the tasks: $tasks",
         )
-        assertEquals(1, asked, "the first visit should ask GitHub once")
+        assertEquals(1, asked, "the first visit should ask the Worker once")
 
         activity.setStateForTesting(activity.stateForTesting().navigate(Route(View.ADMIN, "t4pee71g")))
         activity.loadForTesting()
         settle(activity)
-        assertEquals(1, asked, "opening one person asked GitHub for the tasks again")
+        assertEquals(1, asked, "opening one person asked for the tasks again")
 
         activity.setStateForTesting(activity.stateForTesting().navigate(Route(View.ADMIN)))
         activity.loadForTesting()
@@ -125,12 +123,12 @@ class TasksLoadTest {
     }
 
     /**
-     * The running task counts from its branch's first commit to the
+     * The running task counts from the start the dispatcher wrote to the
      * phone's own clock. `TasksParityTest` hands the screen a `now`;
      * this is the app finding one for itself.
      */
     @Test
-    fun aRunningTaskCountsFromItsFirstCommitToNow() {
+    fun aRunningTaskCountsFromItsStartToNow() {
         val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
         context.getSharedPreferences("mtg", android.content.Context.MODE_PRIVATE)
             .edit().putString(AdminToken.KEY, "t").commit()
@@ -139,12 +137,11 @@ class TasksLoadTest {
         controller = built
         val activity = built.get()
         activity.useForTesting(MtgApi.withEngine("https://example.invalid", json()))
-        activity.useGitHubForTesting(GitHubReleases.withEngine(json()))
         built.create().start().resume()
         settle(activity)
 
         val tasks = activity.stateForTesting().tasks
         val task = tasks.rows.singleOrNull() ?: error("nothing loaded the tasks: $tasks")
-        assertEquals("2h 00m", task.elapsed(tasks.now), "the running task does not count from its first commit to now: $tasks")
+        assertEquals("2h 00m", task.elapsed(tasks.now), "the running task does not count from its start to now: $tasks")
     }
 }

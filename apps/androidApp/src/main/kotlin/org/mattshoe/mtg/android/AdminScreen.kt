@@ -147,6 +147,7 @@ private fun TaskRow(task: Task, tag: String, now: Long) {
             Line(task.title, Ink, Design.BODY)
             task.took?.let { Line(it, Ink3, Design.MINI) }
             task.elapsed(now)?.let { Line(it, Ink3, Design.MINI) }
+            task.detail(now)?.let { Line(it, Ink3, Design.MINI) }
         }
         Tag(task.status.word)
     }

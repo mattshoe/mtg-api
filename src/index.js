@@ -18,6 +18,9 @@
 //   POST /tasks       a new task, from Admin Settings (admin)
 //   GET  /tasks/inbox the tasks the laptop has not collected (admin)
 //   POST /tasks/inbox/received  the laptop has them (admin)
+//   GET  /tasks       every task and where it is (admin)
+//   POST /tasks/status one transition, from the dispatcher (admin)
+//   GET  /releases    the release notes, GitHub's list as the Worker keeps it
 //   GET  /maintenance last run of the daily job
 //   POST /maintenance run it now (admin)
 //   GET  /logs        the request log (admin)
@@ -43,7 +46,8 @@ import { lookupPrices } from './prices.js';
 import { runMaintenance, CRON_TASKS } from './maintenance.js';
 import { newEntry, writeEntry, buildLogQuery, logStats } from './log.js';
 import { keyFrom, claim, remember, release } from './idempotency.js';
-import { newTask, inbox, received } from './tasks.js';
+import { newTask, inbox, received, list as taskList, setStatus } from './tasks.js';
+import { releases } from './releases.js';
 import { preview } from './preview.js';
 // The site's own file, bundled in, so the two hosts cannot disagree.
 import ASSET_LINKS from '../frontend/.well-known/assetlinks.json';
@@ -286,7 +290,10 @@ const INDEX = {
     'POST /admin/role': '{"key":"...","role":"user|admin"} — hands the admin role out or takes it back; admin only',
     'POST /tasks': '{"title":"...","details":"...","files":[{"name","type","data":"<base64>"}]} — a new task for the intake; admin only',
     'GET /tasks/inbox': 'the tasks the laptop has not collected yet, files included; admin only',
-    'POST /tasks/inbox/received': '{"keys":["..."]} — the laptop has written these; admin only',
+    'POST /tasks/inbox/received': '{"keys":["..."],"names":{"<key>":"<request file>"}} — the laptop has written these; admin only',
+    'GET /tasks': 'every task, newest first, with its status; admin only',
+    'POST /tasks/status': '{"key" or "name","status","note"?,"title"?,"pr"?} — one transition, written by whoever caused it; admin only',
+    'GET /releases': 'GitHub\'s release list, kept by the Worker for a few minutes',
     'GET /logs': '?min=info&q=&event=&status=error&since=24&limit=100 — admin only',
     'POST /logs/client': '{"level":"info","message":"...","detail":{...}} — admin only',
     'GET /logs/stats': 'counts, slowest routes, retention — admin only',
@@ -768,8 +775,15 @@ async function route(request, env, ctx, entry) {
      * collects them from. Admin only, every one: a task is a change to
      * the app itself.
      */
-    if (path === '/tasks' || path === '/tasks/inbox' || path === '/tasks/inbox/received') {
-      const wants = path === '/tasks/inbox' ? 'GET' : 'POST';
+    if (path === '/releases') {
+      if (method !== 'GET') return notAllowed('GET');
+      const r = await releases(env.DB, env.GITHUB_FETCH || fetch);
+      if (r.error) return json({ error: r.error }, 502);
+      return new Response(r.body, { headers: { 'content-type': 'application/json' } });
+    }
+
+    if (path === '/tasks' || path === '/tasks/inbox' || path === '/tasks/inbox/received' || path === '/tasks/status') {
+      const wants = path === '/tasks/inbox' || (path === '/tasks' && method === 'GET') ? 'GET' : 'POST';
       if (method !== wants) return notAllowed(wants);
       const who = await whoAmI(env, request, verifyToken);
       if (!who.operator && who.user?.role !== 'admin') {
@@ -779,13 +793,21 @@ async function route(request, env, ctx, entry) {
       }
       entry.admin = true;
       if (path === '/tasks/inbox') return json({ tasks: await inbox(env.DB) });
+      if (method === 'GET') return json({ tasks: await taskList(env.DB) });
       const { body, error } = await readJson(request);
       if (error) return json({ error }, 400);
       entry.write = true;
-      const out = path === '/tasks'
-        ? await newTask(env.DB, who.user?.id ?? null, body)
-        : await received(env.DB, body.keys);
-      entry.detail = path === '/tasks' ? { title: body.title, files: out.body.files } : { keys: body.keys };
+      let out;
+      if (path === '/tasks') {
+        out = await newTask(env.DB, who.user?.id ?? null, body);
+        entry.detail = { title: body.title, files: out.body.files };
+      } else if (path === '/tasks/status') {
+        out = await setStatus(env.DB, body);
+        entry.detail = { key: body.key, name: body.name, status: body.status };
+      } else {
+        out = await received(env.DB, body.keys, body.names);
+        entry.detail = { keys: body.keys };
+      }
       if (out.status >= 400) entry.message = out.body.error;
       return send(out);
     }

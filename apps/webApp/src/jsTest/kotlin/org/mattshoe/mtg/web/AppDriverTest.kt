@@ -13,7 +13,6 @@ import kotlinx.browser.window
 import kotlinx.coroutines.await
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
-import org.mattshoe.mtg.core.GitHubReleases
 import org.mattshoe.mtg.core.MtgApi
 import org.mattshoe.mtg.core.Scryfall
 import org.w3c.dom.HTMLButtonElement
@@ -60,8 +59,11 @@ class AppDriverTest {
     /** What `/auth/me` says the session is. Admin Settings needs `admin`. */
     private var role = "user"
 
-    /** How many times the app asked GitHub for the request pull requests. */
+    /** How many times the app asked the Worker for the tasks. */
     private var tasksAsked = 0
+
+    /** How many times the app asked GitHub for anything. It should never. */
+    private var askedGitHub = 0
 
     /** How long `/auth/me` takes to answer. CI is slower than a laptop. */
     private var whoAmIMs = 0
@@ -73,6 +75,7 @@ class AppDriverTest {
         sent.clear()
         role = "user"
         tasksAsked = 0
+        askedGitHub = 0
         whoAmIMs = 0
         val engine = MockEngine { request ->
             if (request.method.value == "POST" && """"dry_run":false""" in
@@ -119,25 +122,22 @@ class AppDriverTest {
                 request.url.encodedPath.endsWith("/cards/autocomplete") ->
                     """{"object":"catalog","total_values":2,"data":["Vesuva","Vesuvan Mist"]}"""
 
-                request.url.encodedPath.endsWith("/repos/mattshoe/mtg-api/releases") ->
+                request.url.host == "api.github.com" -> {
+                    askedGitHub++
+                    "[]"
+                }
+
+                request.url.encodedPath == "/releases" ->
                     """[{"tag_name":"android-v2.1.0-297","published_at":"2026-10-09T10:00:00Z",""" +
                         """"body":"Release notes in Admin Settings.\n\nBuilt from abc."}]"""
 
-                request.url.encodedPath.endsWith("/repos/mattshoe/mtg-api/pulls") -> {
+                // Started two hours and a half minute ago by the real clock.
+                request.url.encodedPath == "/tasks" && request.method.value == "GET" -> {
                     tasksAsked++
-                    """[{"title":"Task status in the app","state":"open",""" +
-                        """"head":{"ref":"request/task-status-in-the-app-22facff"},"merged_at":null,"closed_at":null}]"""
-                }
-
-                request.url.encodedPath.contains("/git/matching-refs/heads/request") ->
-                    """[{"ref":"refs/heads/request/task-status-in-the-app-22facff"}]"""
-
-                request.url.encodedPath.endsWith("/contents/requests/done") -> "[]"
-
-                // The branch's first commit, two hours and a half minute ago by the real clock.
-                request.url.encodedPath.contains("/compare/main...request/") -> {
                     val started = kotlin.js.Date(kotlin.js.Date.now() - (2 * 60 * 60 + 30) * 1000.0).toISOString()
-                    """{"commits":[{"commit":{"author":{"date":"$started"}}}]}"""
+                    """{"tasks":[{"key":"ab12cd34","name":"task-status-in-the-app","title":"Task status in the app",""" +
+                        """"status":"in review","pr":null,"created_at":"2026-10-08T09:00:00.000Z",""" +
+                        """"started_at":"$started","finished_at":null}]}"""
                 }
 
                 request.url.encodedPath == "/admin/users" -> """{"users":[]}"""
@@ -164,7 +164,6 @@ class AppDriverTest {
         MtgApp.useForTesting(
             MtgApi.withEngine("https://example.test", http),
             Scryfall.withEngine(http),
-            GitHubReleases.withEngine(http),
         )
         stubWhoAmI()
     }
@@ -1135,7 +1134,9 @@ class AppDriverTest {
     // ------------------------------------------------- release notes
 
     /**
-     * Opening Admin Settings asks GitHub for the builds and lists them.
+     * Opening Admin Settings asks the Worker for the builds and lists
+     * them. Not GitHub: the phone asked it at sixty an hour until the
+     * panel failed with "API rate limit exceeded".
      *
      * The shell tests hand the page a loaded `Releases`; this is the
      * part they cannot see, that anything ever loads one.
@@ -1149,13 +1150,14 @@ class AppDriverTest {
         }
         val text = root.all("[data-release]").first().textContent.orEmpty()
         assertTrue("2.1.0 (297)" in text && "Release notes in Admin Settings." in text, text)
+        assertEquals(0, askedGitHub, "the website asked GitHub itself")
     }
 
     /**
      * `adminSettingsLoadsTheTasksOnEveryVisitToTheList` went red on CI
-     * twice with "the first visit should ask GitHub once. Expected <1>,
+     * twice with "the first visit should ask once. Expected <1>,
      * actual <2>". The test before it unmounted with loads launched and
-     * not yet run; they ran afterwards, reading `github` when they got
+     * not yet run; they ran afterwards, reading the client when they got
      * round to it — by then the next test's client.
      */
     @Test
@@ -1171,8 +1173,9 @@ class AppDriverTest {
     // ------------------------------------------------------------ tasks
 
     /**
-     * Admin Settings asks GitHub for the tasks on every visit to the
-     * list, and opening one person does not.
+     * Admin Settings asks the Worker for the tasks on every visit to the
+     * list, and opening one person does not. The status is what D1 says,
+     * not what GitHub's branch names suggest.
      *
      * `TasksPanelTest` hands the page a loaded `Tasks`; this is the part
      * it cannot see. Sibling of Android's `TasksLoadTest`.
@@ -1184,15 +1187,16 @@ class AppDriverTest {
         waitFor("a task on Admin Settings") { root.all("[data-task]").isNotEmpty() }
         val text = root.all("[data-task]").first().textContent.orEmpty()
         assertTrue("Task status in the app" in text && "in review" in text, text)
-        assertEquals(1, tasksAsked, "the first visit should ask GitHub once")
+        assertEquals(1, tasksAsked, "the first visit should ask the Worker once")
+        assertEquals(0, askedGitHub, "the website asked GitHub itself")
 
         window.location.hash = "#/admin/t4pee71g"
         waitFor("one person's page") { window.location.hash.endsWith("/admin/t4pee71g") }
         settle()
-        assertEquals(1, tasksAsked, "opening one person asked GitHub for the tasks again")
+        assertEquals(1, tasksAsked, "opening one person asked for the tasks again")
 
         window.location.hash = "#/admin"
-        waitFor("the list to ask GitHub again") { tasksAsked == 2 }
+        waitFor("the list to ask again") { tasksAsked == 2 }
     }
 
     // --------------------------------------------------------- new task
@@ -1398,7 +1402,7 @@ class AppDriverTest {
     }
 
     /**
-     * The running task counts from its branch's first commit to the
+     * The running task counts from the start the dispatcher wrote to the
      * browser's own clock. `TasksPanelTest` hands the page a `now`;
      * this is the page finding one for itself.
      */
@@ -1408,6 +1412,6 @@ class AppDriverTest {
         val root = mount("#/admin")
         waitFor("a task on Admin Settings") { root.all("[data-task]").isNotEmpty() }
         val text = root.all("[data-task]").first().textContent.orEmpty()
-        assertTrue("2h 00m" in text, "the running task does not count from its first commit to now: '$text'")
+        assertTrue("2h 00m" in text, "the running task does not count from its start to now: '$text'")
     }
 }

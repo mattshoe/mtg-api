@@ -19,7 +19,6 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.mattshoe.mtg.core.AdminToken
 import org.mattshoe.mtg.core.AppState
-import org.mattshoe.mtg.core.GitHubReleases
 import org.mattshoe.mtg.core.MtgApi
 import org.mattshoe.mtg.core.Route
 import org.mattshoe.mtg.core.View
@@ -68,13 +67,14 @@ class NewTaskSendTest {
         MockEngine { request ->
             val path = request.url.encodedPath
             val body = when {
+                path == "/tasks" && request.method.value == "GET" -> """{"tasks":[]}"""
                 path == "/tasks" -> {
                     sent += (request.body as io.ktor.http.content.TextContent).text
                     """{"key":"ab12cd34","files":1}"""
                 }
                 path == "/auth/me" -> """{"key":"e7de0cb1","name":"Matt","role":"admin"}"""
                 path == "/admin/users" -> """{"users":[]}"""
-                path.contains("/repos/") -> "[]"
+                path == "/releases" -> "[]"
                 else -> """{"cols":[],"rows":[],"n":0}"""
             }
             respond(body, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
@@ -91,7 +91,6 @@ class NewTaskSendTest {
         controller = built
         val activity = built.get()
         activity.useForTesting(MtgApi.withEngine("https://example.invalid", client()))
-        activity.useGitHubForTesting(GitHubReleases.withEngine(client()))
         built.create().start().resume()
         until(activity, "the New task page") { it.writingTask && it.admin.account != null }
 

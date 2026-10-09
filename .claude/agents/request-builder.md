@@ -327,6 +327,44 @@ Specifically, stop and ask rather than guessing when:
 - the request contradicts something already in the code, and the code
   looks deliberate
 
+If you stop to ask, also mark the task `blocked` in D1, with what it
+needs, so Admin Settings says so instead of leaving it looking busy:
+
+```
+curl -s -X POST https://mtg-api.mattshoe81.workers.dev/tasks/status \
+  -H "Authorization: Bearer $MTG_API_TOKEN" -H 'content-type: application/json' \
+  -d '{"name":"<request name>","status":"blocked","note":"needs Matt: <what>"}'
+```
+
+## Task status lives in D1
+
+Your task's status is a row in D1, written when each transition happens
+by whoever caused it. It is **never** inferred from a branch name, a pull
+request, or anything on GitHub — that is how a paused task, a cancelled
+one and a dead one all came to read `building`. The dispatcher writes
+`in progress` before it starts you and, after you exit, what your pull
+request came to. You write `blocked` (above). The app reads `GET /tasks`
+from the Worker and nothing else: **no client calls api.github.com**,
+because unauthenticated it is 60 requests an hour per IP and both Admin
+Settings panels died of exactly that on Matt's phone.
+
+| status | what it means |
+|---|---|
+| pending | accepted, queued, nothing has started |
+| in progress | an agent is working on it RIGHT NOW, this second |
+| blocked | it needs Matt, or something it depends on — say which |
+| paused | nothing is running and the work is kept — the reason says why |
+| in review | pull request open — CI running, red, green, whatever |
+| merged | landed on main |
+| deployed | live, the artifact verified |
+| cancelled | withdrawn; it says so rather than disappearing |
+
+`merged`, `deployed` and `cancelled` collapse into Done; the other five
+are the live list. No `stopped` (that is `paused` with a reason) and no
+`failing` (red CI is still `in review`). Who writes each one, and what
+adding a state takes, is in the `mtg` skill under "Tasks: status lives in
+D1".
+
 ## Acting on the live API
 
 You have a service account. `MTG_API_TOKEN` is in your environment and it is a

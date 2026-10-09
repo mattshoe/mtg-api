@@ -4,51 +4,74 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 /**
- * Where a task is, in one word. Declared furthest first: a request
- * built twice is one task, at the furthest status any of its pull
- * requests reached.
+ * Where a task is, in Matt's words, as whoever caused it wrote it to D1
+ * when it happened. Live ones list in this order, the ones that sit
+ * forever if nobody looks first; `finished` is Done, collapsed by
+ * default; `running` is whether the clock since the start is counting.
+ * There is no `stopped` (that is `paused` with a reason) and no
+ * `failing` (red CI mid-run is still `in review`).
  */
-enum class TaskStatus(val word: String, val finished: Boolean) {
-    DONE("done", true),
-    IN_REVIEW("in review", false),
-    CLOSED("closed", true),
-    BUILDING("building", false),
+enum class TaskStatus(val word: String, val finished: Boolean, val running: Boolean = false) {
+    BLOCKED("blocked", false),
+    PAUSED("paused", false),
+    IN_PROGRESS("in progress", false, running = true),
+    IN_REVIEW("in review", false, running = true),
+    PENDING("pending", false),
+    MERGED("merged", true),
+    DEPLOYED("deployed", true),
+    CANCELLED("cancelled", true),
+    ;
+
+    companion object {
+        fun of(word: String): TaskStatus? = entries.firstOrNull { it.word == word }
+    }
 }
 
 /**
- * One intake request, as Admin Settings lists it.
+ * One task, as Admin Settings lists it.
  *
  * Matt: "I want to be able to see the status of ongoing tasks in the
  * app. Nothing too fancy just the literal status like hold or done or
- * whatever statuses you assign." A task is a `request/<slug>-<digest>`
- * branch (`branchFor` in `scripts/intake.mjs`) and the pull request its
- * builder opens from it. Held and queued requests live only on the
- * laptop that dispatches them, so GitHub cannot see them and neither
- * can this.
+ * whatever statuses you assign." It is a row in D1 (`task_inbox`) and
+ * the dispatcher on the laptop writes its status as it changes — see
+ * `scripts/intake/task-status.mjs`. It used to be inferred here from
+ * GitHub's branch names, which could not carry a task sent and not yet
+ * built, or one cancelled, and was asked unauthenticated from the phone.
  */
 data class Task(
-    /** The branch, `request/...`. */
-    val ref: String,
+    /** The row's key in D1. */
+    val key: String,
     val title: String,
     val status: TaskStatus,
-    /** `merged_at` or `closed_at`, as it came. Sorts as text because it is ISO. */
+    /** When it finished, as the Worker wrote it. Sorts as text because it is ISO. */
     val finishedAt: String?,
-    /**
-     * The branch's first commit, as GitHub gave it. GitHub keeps no
-     * record of when a branch was made, and a builder commits before
-     * its first test run, so this is as near the start as it can see.
-     */
+    /** When a builder first started on it. */
     val startedAt: String? = null,
+    /** When it entered this status. */
+    val statusAt: String? = null,
+    /** The detail of this status: why it is paused or blocked, the last thing that happened. */
+    val note: String? = null,
+    /** Its pull request's address, once it has one. */
+    val pr: String? = null,
 ) {
     /**
+     * The row's second line, so it answers "what is going on with this"
+     * without asking: how long in this status while it is live, why,
+     * and which pull request.
+     */
+    fun detail(now: Long): String? = listOfNotNull(
+        if (status.finished) null else statusAt?.let { Tasks.epochMillis(it) }?.let { "for " + between(it, now) },
+        note,
+        pr?.substringAfterLast('/')?.takeIf { n -> n.isNotEmpty() && n.all { it.isDigit() } }?.let { "PR #$it" },
+    ).joinToString(" · ").ifEmpty { null }
+
+    /**
      * Matt: "Done tasks should show how long they took, not a UTC
-     * timestamp". First commit to merge or close; unknown for one that
-     * finished before its start was kept and whose branch says nothing.
+     * timestamp". Start to finish; unknown for one never started.
      */
     val took: String? get() {
         if (!status.finished) return null
@@ -58,12 +81,17 @@ data class Task(
 
     /**
      * Matt: "show the elapsed time since the task started". Only while
-     * it is still going: a finished one would count up forever.
+     * it is being worked on: a finished or paused one would count up
+     * forever.
      */
-    fun elapsed(now: Long): String? = if (status.finished) null else span(now)
+    fun elapsed(now: Long): String? = if (status.running) span(now) else null
 
     private fun span(to: Long): String? {
         val start = startedAt?.let { Tasks.epochMillis(it) } ?: return null
+        return between(start, to)
+    }
+
+    private fun between(start: Long, to: Long): String {
         val minutes = ((to - start) / 60_000).coerceAtLeast(0)
         val hours = minutes / 60
         val days = hours / 24
@@ -85,6 +113,12 @@ data class Tasks(
     val showDone: Boolean = false,
     /** Millis since the epoch, off the shell's clock, for `Task.elapsed` to count to. */
     val now: Long = 0,
+    /**
+     * Asked and answered during this visit to the list, so a reload that
+     * lands on the same route (the one after sign-in) does not ask again.
+     * Leaving the list or pulling to refresh makes it stale.
+     */
+    val fresh: Boolean = false,
 ) {
     val active: List<Task> get() = rows.filterNot { it.status.finished }
         .sortedWith(compareBy<Task> { it.status.ordinal }.thenBy { it.title.lowercase() })
@@ -96,80 +130,45 @@ data class Tasks(
 
     fun at(now: Long) = copy(now = now)
 
-    fun loading() = copy(busy = true, error = null)
+    fun loading() = copy(busy = true, error = null, fresh = false)
 
-    fun loaded(found: List<Task>) = copy(rows = found, busy = false, error = null)
+    fun loaded(found: List<Task>) = copy(rows = found, busy = false, error = null, fresh = true)
+
+    fun stale() = copy(fresh = false)
 
     /** Nothing stale under an error, for the reason `People.failed` gives. */
-    fun failed(message: String) = copy(rows = emptyList(), busy = false, error = message)
+    fun failed(message: String) = copy(rows = emptyList(), busy = false, error = message, fresh = false)
 
     companion object {
         private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
-        private const val PREFIX = "request/"
-
-        /** The digest `branchFor` puts on the end. Branches from before it have none. */
-        private val DIGEST = Regex("""-[0-9a-f]{7}$""")
-
         /**
-         * GitHub's pull requests, `request/` refs and `requests/done/`
-         * listing in; one task per branch out.
-         *
-         * A branch is never deleted on merge, so one whose pull request
-         * has aged out of the list would read as building forever. A
-         * request filed under `done/` is finished, so its branch with no
-         * pull request left to say how is not shown at all.
-         *
-         * Anything unreadable — a rate-limit message is an object, not
-         * an array — is no tasks rather than a crash.
+         * The Worker's `GET /tasks` in, one task per row out. A status
+         * this build does not know is left out rather than guessed at,
+         * and anything unreadable is no tasks rather than a crash.
          */
-        fun decode(pulls: String, refs: String, done: String): List<Task> = try {
-            val filed = array(done).mapNotNull { str(it.jsonObject, "name") }
-                .filter { it.endsWith(".md") }
-                .map { slugOf(it.removeSuffix(".md")) }
-                .toSet()
-            val fromPulls = array(pulls).mapNotNull { row ->
+        fun decode(body: String): List<Task> = try {
+            ((json.parseToJsonElement(body) as? JsonObject)?.get("tasks") as? JsonArray).orEmpty().mapNotNull { row ->
                 val o = row.jsonObject
-                val ref = (o["head"] as? JsonObject)?.let { str(it, "ref") } ?: return@mapNotNull null
-                if (!ref.startsWith(PREFIX)) return@mapNotNull null
-                val merged = str(o, "merged_at")
-                val status = when {
-                    merged != null -> TaskStatus.DONE
-                    str(o, "state") == "open" -> TaskStatus.IN_REVIEW
-                    else -> TaskStatus.CLOSED
-                }
-                Task(ref, str(o, "title") ?: titleOf(ref), status, merged ?: str(o, "closed_at"))
+                val status = str(o, "status")?.let { TaskStatus.of(it) } ?: return@mapNotNull null
+                Task(
+                    key = str(o, "key").orEmpty(),
+                    title = str(o, "title").orEmpty(),
+                    status = status,
+                    finishedAt = str(o, "finished_at"),
+                    startedAt = str(o, "started_at"),
+                    statusAt = str(o, "status_at"),
+                    note = str(o, "note"),
+                    pr = str(o, "pr"),
+                )
             }
-                .groupBy { it.ref }
-                .map { (_, tries) ->
-                    tries.sortedWith(compareBy<Task> { it.status.ordinal }.thenByDescending { it.finishedAt.orEmpty() }).first()
-                }
-            val known = fromPulls.map { it.ref }.toSet()
-            val building = array(refs).mapNotNull { str(it.jsonObject, "ref")?.removePrefix("refs/heads/") }
-                .filter { it.startsWith(PREFIX) && it !in known }
-                .filterNot { DIGEST.replace(it.removePrefix(PREFIX), "") in filed }
-                .map { Task(it, titleOf(it), TaskStatus.BUILDING, null) }
-            fromPulls + building
         } catch (e: Exception) {
             emptyList()
         }
 
-        /**
-         * When a branch's first commit was made, out of GitHub's compare
-         * of `main...<branch>`, which lists commits oldest first.
-         * Anything else — nothing ahead, a refusal — is not known.
-         */
-        fun firstCommitAt(compare: String): String? = try {
-            val commits = json.parseToJsonElement(compare).jsonObject["commits"] as? JsonArray
-            commits?.firstOrNull()?.jsonObject?.get("commit")?.jsonObject
-                ?.get("author")?.jsonObject?.let { str(it, "date") }
-        } catch (e: Exception) {
-            null
-        }
-
         private val ISO = Regex("""(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?Z""")
 
-        /** GitHub's `2026-10-08T09:15:00Z` as millis since the epoch. Always UTC, so no library. */
+        /** `2026-10-08T09:15:00.123Z` as millis since the epoch, to the second. Always UTC, so no library. */
         fun epochMillis(iso: String): Long? {
             val f = ISO.matchEntire(iso)?.groupValues?.drop(1)?.map { it.toLong() } ?: return null
             val (y, mo, d) = f
@@ -184,44 +183,7 @@ data class Tasks(
             return ((days * 24 + h) * 60 + mi) * 60_000 + se * 1000
         }
 
-        private const val STARTS = "task-starts"
-
-        /**
-         * Every finished task's start, kept between launches. It never
-         * changes once the task is done, and GitHub allows sixty unsigned
-         * asks an hour, so each is asked about once rather than on every
-         * visit. A running one is asked again: it is one ask, not dozens.
-         */
-        fun saveStarts(store: Store, tasks: List<Task>) {
-            val kept = knownStarts(store) + tasks.mapNotNull { t ->
-                t.startedAt?.takeIf { t.status.finished }?.let { t.ref to it }
-            }
-            store.put(STARTS, JsonObject(kept.mapValues { JsonPrimitive(it.value) }).toString())
-        }
-
-        /** Branch to first commit, as kept. Nothing readable is nothing known. */
-        fun knownStarts(store: Store): Map<String, String> = try {
-            store.get(STARTS)?.let { json.parseToJsonElement(it).jsonObject }
-                ?.mapNotNull { (ref, at) -> (at as? JsonPrimitive)?.content?.let { ref to it } }
-                ?.toMap()
-                ?: emptyMap()
-        } catch (e: Exception) {
-            emptyMap()
-        }
-
-        private fun array(body: String): JsonArray =
-            (json.parseToJsonElement(body) as? JsonArray) ?: JsonArray(emptyList())
-
         private fun str(o: JsonObject, k: String) =
             o[k]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
-
-        private fun titleOf(ref: String) =
-            DIGEST.replace(ref.removePrefix(PREFIX), "").replace('-', ' ')
-
-        /** The slug half of `branchFor`, without the digest Kotlin has no sha1 for. */
-        private fun slugOf(name: String): String {
-            val slug = name.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')
-            return if (slug.length > 84) slug.take(84).trimEnd('-') else slug
-        }
     }
 }
