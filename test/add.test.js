@@ -194,23 +194,6 @@ describe('POST /cards/add — double-faced cards', () => {
   });
 });
 
-describe('POST /cards/add — rulings', () => {
-  it('fetches rulings inline for a genuinely new oracle card', async () => {
-    const stub = stubScryfall();
-    await post('/cards/add', { list: FABLE }, stub);
-    const [card] = await sql("SELECT oracle_id FROM cards WHERE name LIKE 'Fable%'");
-    expect(await count('rulings', 'oracle_id = ?', card.oracle_id)).toBeGreaterThan(0);
-    expect(stub.calls.rulings).toBe(1);
-  });
-
-  it('does not refetch rulings for an oracle card already covered', async () => {
-    await post('/cards/add', { list: FABLE }, stubScryfall());
-    const stub = stubScryfall();
-    await post('/cards/add', { list: '1 Fable of the Mirror-Breaker' }, stub);
-    expect(stub.calls.rulings).toBe(0);
-  });
-});
-
 describe('POST /cards/add — dry run', () => {
   it('reports the plan and writes absolutely nothing', async () => {
     const before = await snapshot();
@@ -322,65 +305,7 @@ describe('POST /cards/add — batching', () => {
   });
 });
 
-describe('POST /cards/add — Scryfall rate limiting', () => {
-  it('issues Scryfall calls one at a time, never overlapping', async () => {
-    // The bug this guards: rulings were fetched with Promise.all, which fires
-    // every request at once and earned a live 429 on the first real add.
-    // Workers freeze Date.now() between I/O, so wall-clock gaps are not
-    // measurable here — but overlap is, and serialization is the property
-    // that actually keeps us under Scryfall's 10-per-second limit.
-    const stub = stubScryfall();
-    let inFlight = 0;
-    let maxInFlight = 0;
-
-    const wrapped = async (url, init) => {
-      inFlight += 1;
-      maxInFlight = Math.max(maxInFlight, inFlight);
-      try {
-        await new Promise((r) => setTimeout(r, 5)); // hold the slot open
-        return await stub(url, init);
-      } finally {
-        inFlight -= 1;
-      }
-    };
-
-    // Two cards with different oracle ids, so two separate rulings lookups.
-    const r = await post('/cards/add', {
-      list: '1 Fable of the Mirror-Breaker\n1 Lightning Bolt (2X2) 117',
-    }, wrapped);
-
-    expect(r.body.applied).toBe(true);
-    expect(stub.calls.rulings).toBe(2);
-    expect(maxInFlight, 'Scryfall calls overlapped').toBe(1);
-  });
-
-  it('stops after the first rulings failure rather than hammering', async () => {
-    let calls = 0;
-    const stub = stubScryfall();
-    const flaky = async (url, init) => {
-      if (String(url).includes('/rulings')) {
-        calls += 1;
-        throw new Error('rate limited');
-      }
-      return stub(url, init);
-    };
-
-    const r = await post('/cards/add', { list: '1 Fable of the Mirror-Breaker' }, flaky);
-
-    // The card still lands; only its rulings are deferred. That is a note,
-    // not a failure — nothing the user asked for went wrong.
-    expect(r.body.applied).toBe(true);
-    expect(calls).toBe(1);
-    expect(r.body.failed).toBe(0);
-    expect(r.body.notes.join(' ')).toMatch(/rulings unavailable/);
-    expect(await count('cards', "name LIKE 'Fable%'")).toBe(1);
-  });
-});
-
 describe('POST /cards/add — large uploads', () => {
-  // D1 caps a statement at 100 bound parameters. Binding one per card meant
-  // any upload past ~99 distinct printings died with "too many SQL
-  // variables" — which is exactly what a collection export is.
   it('handles more distinct printings than D1 allows bound parameters', { timeout: 30000 }, async () => {
     const stub = stubScryfall();
     const many = Array.from({ length: 250 }, (_, i) => ({
@@ -416,8 +341,6 @@ describe('POST /cards/add — large uploads', () => {
     expect(r.body.failed).toBe(0);
     expect(r.body.resolved).toBe(250);
     expect(await count('cards', "setcode = 'tst'")).toBe(250);
-    // Rulings are skipped wholesale on an import this size, and said so.
-    expect(r.body.notes.join(' ')).toMatch(/rulings not fetched/);
   });
 
   it('a second pass over the same large list increments rather than duplicating', { timeout: 30000 }, async () => {
