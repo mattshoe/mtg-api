@@ -94,6 +94,9 @@ fun AppShell(
     onTweakFind: (String) -> Unit = {},
     onTweakPreview: () -> Unit = {},
     onTweakApply: () -> Unit = {},
+    /** Files picked on the New task page. */
+    onTaskFiles: (List<File>) -> Unit = {},
+    onSendTask: () -> Unit = {},
 ) {
     // The page underneath an overlay holds still. `overscroll-behavior`
     // on the overlay only stops the chaining once the overlay itself
@@ -159,11 +162,20 @@ fun AppShell(
 
         View.STATS -> StatsPage(state.stats)
 
-        View.ADMIN -> AdminPage(
+        View.ADMIN -> if (state.writingTask) {
+            NewTaskPage(
+                task = state.newTask,
+                onState = { onState(state.copy(newTask = it)) },
+                onFiles = onTaskFiles,
+                onSend = onSendTask,
+                onCancel = { onState(state.navigate(Route(View.ADMIN))) },
+            )
+        } else AdminPage(
             state = state.people,
             releases = state.releases,
             tasks = state.tasks,
             onToggleDone = { onState(state.copy(tasks = state.tasks.toggleDone())) },
+            onNewTask = { onState(state.startingATask()) },
             me = state.admin.account?.key,
             person = state.person,
             onSearch = { onState(state.copy(people = state.people.searching(it))) },

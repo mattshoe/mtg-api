@@ -6,7 +6,7 @@ import { defineConfig } from 'vitest/config'
 // than a second pool option.
 export default defineConfig({
   test: {
-    include: ['test/intake-shell.test.js', 'test/release-note.test.js', 'test/tags-script.test.js', 'test/next-version.test.js'],
+    include: ['test/intake-shell.test.js', 'test/intake-inbox.test.js', 'test/release-note.test.js', 'test/tags-script.test.js', 'test/next-version.test.js'],
     environment: 'node',
     // Each test builds its own git repo and temp dir, so they are
     // independent, but they fork `git` and `bash` a lot. Four at a time

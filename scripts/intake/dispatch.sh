@@ -61,9 +61,21 @@ claim() {
   # first failure would let a single request with a leftover branch — a
   # worktree removed by hand, say — block everything behind it, which is the
   # same wedge the skip above exists to prevent.
+  # What origin/main already has filed. The queue is decided from the LOCAL
+  # requests/ folder, and that folder lags main whenever an agent merges its
+  # own work — which is every time one succeeds. Twice now a finished request
+  # has been re-dispatched, and the agent then committed to a branch whose
+  # pull request had already merged, which Admin Settings reads as a task
+  # stuck in `building`. Ask main, not the laptop.
+  filed="$(git -C "$REPO" ls-tree --name-only "$BASE" requests/done/ 2>/dev/null | sed 's|requests/done/||')"
+
   file=''
   while IFS= read -r f; do
     [ -n "$f" ] || continue
+    if printf '%s\n' "$filed" | /usr/bin/grep -qxF "$f"; then
+      say "skipping ${f%.md}: already filed under requests/done on ${BASE}"
+      continue
+    fi
     wt="$STATE/wt/${f%.md}"
     # A worktree that exists means an agent had this request. If one is
     # still running there, leave it alone. If not, the agent stopped —
@@ -98,8 +110,13 @@ claim() {
   # — measured at 5 minutes, and one agent spent exactly that before it could
   # run a single test. A symlink makes it free. An agent that genuinely needs a
   # new dependency edits package.json and lets CI install it.
-  [ -d "$REPO/node_modules" ] && [ ! -e "$tree/node_modules" ] \
-    && ln -s "$REPO/node_modules" "$tree/node_modules"
+  if [ -d "$REPO/node_modules" ] && [ ! -e "$tree/node_modules" ]; then
+    ln -s "$REPO/node_modules" "$tree/node_modules"
+    # and keep it out of git: it showed up as untracked in a worktree, so
+    # `git add -A` would have committed a symlink to somebody's home.
+    printf 'node_modules
+' >> "$tree/.git/info/exclude" 2>/dev/null || true
+  fi
 
   # Hand over the LIVE request file, not the one the worktree was cut from.
   # Without this the agent reads main's copy: four requests sat at `status:

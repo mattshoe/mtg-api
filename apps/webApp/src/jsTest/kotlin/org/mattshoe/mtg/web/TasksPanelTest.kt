@@ -103,7 +103,7 @@ class TasksPanelTest {
 
         val done = root.all("[data-task-done]").filter { it.shown() }.map { it.textContent.orEmpty() }
         assertEquals(3, done.size, "pressing Done did not show the finished tasks: $done")
-        assertTrue("Newer fix" in done[0] && "2026-10-05 18:45" in done[0], "newest is not first: $done")
+        assertTrue("Newer fix" in done[0], "newest is not first: $done")
         assertTrue("Given up" in done[1] && "closed" in done[1], done[1])
         assertTrue("Older fix" in done[2] && "done" in done[2], done[2])
         assertTrue(held!!.value.tasks.showDone, "the app does not hold that the done list is open")
@@ -131,6 +131,21 @@ class TasksPanelTest {
         val row = root.all("[data-task]").singleOrNull { it.shown() }?.textContent.orEmpty()
         assertTrue("3h 05m" in row, "the running task does not say how long it has been going: '$row'")
         val done = root.all("[data-task-done]").singleOrNull { it.shown() }?.textContent.orEmpty()
-        assertTrue("2h 20m" !in done && "1h 00m" !in done, "a finished task is still counting: '$done'")
+        assertTrue("2h 20m" !in done, "a finished task is still counting: '$done'")
+    }
+
+    /** Matt: "Done tasks should show how long they took, not a UTC timestamp". */
+    @Test
+    fun aDoneTaskSaysHowLongItTookNotWhen() = runTest {
+        val finished = Tasks().loaded(
+            listOf(
+                Task("request/a-1111111", "Older fix", TaskStatus.DONE, "2026-10-08T13:05:00Z", startedAt = "2026-10-08T10:00:00Z"),
+            ),
+        ).toggleDone()
+        val root = mount(adminSettings(finished))
+        settle()
+        val done = root.all("[data-task-done]").singleOrNull { it.shown() }?.textContent.orEmpty()
+        assertTrue("took 3h 05m" in done, "the done task does not say how long it took: '$done'")
+        assertTrue("UTC" !in done && "2026-10-08" !in done, "the done task still shows when it finished: '$done'")
     }
 }

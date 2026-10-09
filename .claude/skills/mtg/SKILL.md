@@ -418,9 +418,10 @@ cd apps && ./gradlew --no-daemon :core:koverVerify
 ```
 
 Everything goes through `scripts/guard.mjs`, which kills the whole
-process group on timeout. Run long things in the background and read the
-output file. Do not hand-roll `until ... sleep` wait loops; they become
-orphans.
+process group on timeout. Run things in the FOREGROUND and let them
+finish. Do not background a run and poll its output, and do not
+hand-roll `until ... sleep` wait loops — both become orphans, and one
+cost an agent two hours.
 
 `forkEvery(1)` in `apps/androidApp/build.gradle.kts` is load-bearing and
 costs about five minutes. Do not raise it to make the suite faster —
@@ -667,3 +668,53 @@ for, and that is what CI is for after it.
 Parity still holds: a change to the website is a change to the phone in the
 same pull request, with a test on each side. That is about what you write, not
 about how often you run it.
+
+**Waiting on a build is the same mistake however you spell it.** These are all
+the same banned thing, and one agent burned an hour on the third:
+
+```
+cmd &                 then reading its output file
+caffeinate -w <pid>            # waiting on a pid is polling
+wait <pid>  /  while kill -0   # so is this
+until grep ... done            # and this
+ScheduleWakeup / Monitor       # you get no second turn; nothing wakes you
+```
+
+Run the command in the foreground and let it finish. If it is too slow to sit
+through, it is a functional suite and it belongs in the once-at-the-end pass
+or in CI — not in your cycle.
+
+## Commands you may not run locally. Ever.
+
+CI runs these. Running one yourself costs the minutes beside it and tells you
+nothing CI will not tell you for free.
+
+| never run locally | why | minutes |
+|---|---|---|
+| `./gradlew ... :androidApp:connectedDebugAndroidTest` | the emulator | ~17-23 |
+| `npm run test:android` | the same thing | ~17-23 |
+| `./gradlew ... :webApp:jsBrowserTest` | starts a real browser | ~4 |
+| `./gradlew ... --no-daemon ...` | a cold JVM every invocation | +20s each |
+| `:core:jvmTest :core:jsNodeTest :core-net:jvmTest :core-net:jsNodeTest :core:koverVerify` together | this is CI's `shared` job | ~4 |
+
+One agent ran the emulator suite, `jsBrowserTest`, the whole `shared` job four
+times with `--no-daemon`, and the Worker suite — inside its TDD cycle, for a
+two-file change. 26 minutes before it opened a pull request.
+
+**What you run in the cycle**, and nothing else:
+
+```
+./apps/gradlew -p apps :core:jvmTest --tests 'YourTest'
+./apps/gradlew -p apps :androidApp:testDebugUnitTest --tests 'YourTest'
+npx vitest run test/thing.test.js -t 'the one case'
+```
+
+**What you run once, at the end, before the pull request:** `npm test` and
+`npm run test:screens` and `npm run test:web` — only the ones your diff
+actually reaches. Then push and let CI do the rest. CI is 7m39s; it is not
+worth reproducing on a laptop.
+
+**Never background a command and poll its output.** Not a suite, not a build,
+not anything. Run it in the foreground and let it finish. One agent spent 55%
+of its run in polling loops and another twelve minutes reading its own
+background task files.

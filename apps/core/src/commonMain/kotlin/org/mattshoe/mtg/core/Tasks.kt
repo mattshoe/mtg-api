@@ -4,6 +4,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -44,17 +45,26 @@ data class Task(
      */
     val startedAt: String? = null,
 ) {
-    /** `2026-10-03 12:30 UTC`, as GitHub gave it, and said so. */
-    val finished: String? get() = finishedAt?.take(16)?.replace('T', ' ')?.plus(" UTC")
+    /**
+     * Matt: "Done tasks should show how long they took, not a UTC
+     * timestamp". First commit to merge or close; unknown for one that
+     * finished before its start was kept and whose branch says nothing.
+     */
+    val took: String? get() {
+        if (!status.finished) return null
+        val end = finishedAt?.let { Tasks.epochMillis(it) } ?: return null
+        return span(end)?.let { "took $it" }
+    }
 
     /**
      * Matt: "show the elapsed time since the task started". Only while
      * it is still going: a finished one would count up forever.
      */
-    fun elapsed(now: Long): String? {
-        if (status.finished) return null
+    fun elapsed(now: Long): String? = if (status.finished) null else span(now)
+
+    private fun span(to: Long): String? {
         val start = startedAt?.let { Tasks.epochMillis(it) } ?: return null
-        val minutes = ((now - start) / 60_000).coerceAtLeast(0)
+        val minutes = ((to - start) / 60_000).coerceAtLeast(0)
         val hours = minutes / 60
         val days = hours / 24
         return when {
@@ -172,6 +182,31 @@ data class Tasks(
             val doe = yoe * 365 + yoe / 4 - yoe / 100 + doy
             val days = era * 146097 + doe - 719468
             return ((days * 24 + h) * 60 + mi) * 60_000 + se * 1000
+        }
+
+        private const val STARTS = "task-starts"
+
+        /**
+         * Every finished task's start, kept between launches. It never
+         * changes once the task is done, and GitHub allows sixty unsigned
+         * asks an hour, so each is asked about once rather than on every
+         * visit. A running one is asked again: it is one ask, not dozens.
+         */
+        fun saveStarts(store: Store, tasks: List<Task>) {
+            val kept = knownStarts(store) + tasks.mapNotNull { t ->
+                t.startedAt?.takeIf { t.status.finished }?.let { t.ref to it }
+            }
+            store.put(STARTS, JsonObject(kept.mapValues { JsonPrimitive(it.value) }).toString())
+        }
+
+        /** Branch to first commit, as kept. Nothing readable is nothing known. */
+        fun knownStarts(store: Store): Map<String, String> = try {
+            store.get(STARTS)?.let { json.parseToJsonElement(it).jsonObject }
+                ?.mapNotNull { (ref, at) -> (at as? JsonPrimitive)?.content?.let { ref to it } }
+                ?.toMap()
+                ?: emptyMap()
+        } catch (e: Exception) {
+            emptyMap()
         }
 
         private fun array(body: String): JsonArray =

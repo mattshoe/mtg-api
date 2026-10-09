@@ -142,6 +142,8 @@ class AppDriverTest {
 
                 request.url.encodedPath == "/admin/users" -> """{"users":[]}"""
 
+                request.url.encodedPath == "/tasks" -> """{"key":"ab12cd34","files":1}"""
+
                 request.url.encodedPath == "/cards/validate" ->
                     """{"checked":1,"unknown":0,"ok":true,"cards":[],"bad":[],"suggestions":{}}"""
 
@@ -1189,6 +1191,69 @@ class AppDriverTest {
 
         window.location.hash = "#/admin"
         waitFor("the list to ask GitHub again") { tasksAsked == 2 }
+    }
+
+    // --------------------------------------------------------- new task
+
+    private fun field(css: String): HTMLElement =
+        document.querySelector(css) as? HTMLElement ?: error("nothing on the page matches $css")
+
+    private fun typeOnThePage(css: String, text: String) {
+        when (val box = field(css)) {
+            is org.w3c.dom.HTMLInputElement -> box.value = text
+            is org.w3c.dom.HTMLTextAreaElement -> box.value = text
+            else -> error("$css is not a box")
+        }
+        field(css).dispatchEvent(org.w3c.dom.events.Event("input", js("({bubbles: true})")))
+    }
+
+    /**
+     * Matt: "I want to be able to tap a "new task" button and get a
+     * simple but attractive new screen where i can enter the details and
+     * upload files". The real app: the button, its own page, a file
+     * read off disk, and what goes up to `/tasks`. Sibling of Android's
+     * `NewTaskSendTest`.
+     */
+    @Test
+    fun aNewTaskIsWrittenOnItsOwnPageAndSentWithItsFile() = runTest {
+        role = "admin"
+        val root = mount("#/admin")
+        waitFor("the New task button on Admin Settings") { root.has("New task") }
+        root.button("New task").click()
+        waitFor("the New task page") { document.querySelector("[data-new-task]") != null }
+        assertTrue(window.location.hash.endsWith("/admin/new-task"), "address is ${window.location.hash}")
+
+        val send = { root.button("Send task") }
+        assertTrue(send().disabled, "Send was live with nothing typed")
+        typeOnThePage("[data-new-task] input[type=text]", "Bigger buttons")
+        // A frame between the two boxes, as there is between a person's
+        // keystrokes in two different fields.
+        settle()
+        typeOnThePage("[data-new-task] textarea", "They are too small to hit.")
+        settle()
+        assertTrue(!send().disabled, "Send stayed dead with a title and details typed")
+
+        val input = field("[data-new-task] input[type=file]") as org.w3c.dom.HTMLInputElement
+        val picked: dynamic = js("new DataTransfer()")
+        picked.items.add(org.w3c.files.File(arrayOf("hello"), "shot.png", org.w3c.files.FilePropertyBag(type = "image/png")))
+        input.asDynamic().files = picked.files
+        input.dispatchEvent(org.w3c.dom.events.Event("change", js("({bubbles: true})")))
+        waitFor("shot.png listed on the page") {
+            root.all("[data-task-file]").any { "shot.png" in it.textContent.orEmpty() }
+        }
+
+        send().click()
+        waitFor("the task to go up") { sent.any { "Bigger buttons" in it } }
+        val body = sent.first { "Bigger buttons" in it }
+        assertTrue("They are too small to hit." in body, body)
+        assertTrue(
+            """"name":"shot.png"""" in body && """"data":"aGVsbG8="""" in body,
+            "the file did not go up: $body",
+        )
+        waitFor("back on Admin Settings") { window.location.hash.endsWith("/admin") }
+        waitFor("the toast") {
+            document.querySelector(".toast")?.textContent.orEmpty().contains("Task sent: Bigger buttons")
+        }
     }
 
     // -------------------------------------------------- pull to refresh

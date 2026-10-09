@@ -57,6 +57,8 @@ import org.mattshoe.mtg.core.Store
 import org.mattshoe.mtg.core.Table
 import org.mattshoe.mtg.core.Tweak
 import org.mattshoe.mtg.core.Upload
+import org.mattshoe.mtg.core.NewTask
+import org.mattshoe.mtg.core.TaskFile
 import org.mattshoe.mtg.core.View
 import org.mattshoe.mtg.core.query
 import java.time.Instant
@@ -490,6 +492,7 @@ class MainActivity : ComponentActivity() {
                         onFind = { term -> find(term) },
                         onLookup = { term -> lookup(term) },
                         onPickFile = { pickFiles.launch(arrayOf("*/*")) },
+                        onSendTask = { sendTask() },
                         onReuse = { e ->
                             app = app.copy(entry = app.history.reuse(e)).navigate(View.ENTRY)
                         },
@@ -870,7 +873,7 @@ class MainActivity : ComponentActivity() {
         app = app.copy(tasks = app.tasks.loading())
         model.tasksJob = scope.launch {
             app = try {
-                val found = github.tasks()
+                val found = github.tasks(store)
                 app.copy(tasks = app.tasks.loaded(found).at(System.currentTimeMillis()))
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
@@ -1194,7 +1197,54 @@ class MainActivity : ComponentActivity() {
 
     // ------------------------------------------------------------ files
 
-    private fun readFiles(uris: List<Uri>) {
+    /** Send the New task page. A refusal stays on the page with everything typed. */
+    internal fun sendTask() {
+        if (!app.newTask.canSend) return
+        app = app.copy(newTask = app.newTask.sending())
+        scope.launch {
+            app = try {
+                api.sendTask(token(), app.newTask)
+                app.taskSent().also { loadFor(it) }
+            } catch (e: Exception) {
+                val why = e.message ?: "that did not send"
+                app.copy(newTask = app.newTask.failed(why)).say(why, failed = true)
+            }
+        }
+    }
+
+    /**
+     * Files for the New task page, read whole as base64. One too big is
+     * handed on unread, so `NewTask.attach` refuses it by name.
+     */
+    private fun readTaskFiles(uris: List<Uri>) {
+        scope.launch {
+            val read = uris.mapNotNull { uri ->
+                val name = displayName(uri)
+                val bytes = runCatching {
+                    contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length }
+                }.getOrNull() ?: -1L
+                if (bytes > NewTask.MAX_BYTES) return@mapNotNull TaskFile(name, "", bytes, "")
+                val raw = runCatching { contentResolver.openInputStream(uri)?.use { it.readBytes() } }.getOrNull()
+                if (raw == null) {
+                    app = app.say("could not read $name", failed = true)
+                    return@mapNotNull null
+                }
+                val type = contentResolver.getType(uri) ?: "application/octet-stream"
+                TaskFile(name, type, raw.size.toLong(), java.util.Base64.getEncoder().encodeToString(raw))
+            }
+            app = app.copy(newTask = app.newTask.attach(read))
+        }
+    }
+
+    /** What the picker calls the file, rather than the last piece of its content URI. */
+    private fun displayName(uri: Uri): String = runCatching {
+        contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
+            ?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+    }.getOrNull() ?: uri.lastPathSegment?.substringAfterLast('/') ?: "file"
+
+    internal fun readFiles(uris: List<Uri>) {
+        // One picker for every box, and the New task page is one of them.
+        if (app.writingTask) return readTaskFiles(uris)
         scope.launch {
             val chunks = mutableListOf<String>()
             val names = mutableListOf<String>()
