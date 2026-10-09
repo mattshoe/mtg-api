@@ -114,7 +114,7 @@ Run a suite in the **foreground** and let it finish. It takes the minutes
 it takes. **Never background a build and never schedule anything.** You
 get one turn: see "Where your turn ends".
 
-**Read the BUILD line, never the exit code.** `npm run test:screens`
+**Read the BUILD line, never the exit code.** A Gradle run
 has exited 0 over `BUILD FAILED` more than once. Grep for
 `BUILD SUCCESSFUL`. A killed Gradle run leaves the previous run's XML
 on disk, so `rm -rf` the results directory before a run you intend to
@@ -190,7 +190,14 @@ which suite, which part — is the difference between "working" and
      a quarter of what CI's `shared` job runs, and that gap has shipped a
      red build
    - `npm run test:web`
-   - `npm run test:screens`
+
+   **Not** `npm run test:screens`. It compiles the whole worktree from
+   cold, `guard.mjs` allows it twenty minutes, and your Bash tool stops
+   any command at ten — a ceiling you cannot raise. So it cannot finish in
+   the foreground, and backgrounding it is banned, which leaves no way to
+   run it. Seven agent runs on one request died in four hours proving
+   that, each one ending "waiting on the Android red run". Run your own
+   test by name during the cycle and let CI's `android` job run the suite.
 
    Note the path: it is `./apps/gradlew`, not `./gradlew`. There is no
    `gradlew` at the repo root, and this line used to say there was — so
@@ -407,7 +414,7 @@ suites, and each is minutes:
 
 | command | what it is | when |
 |---|---|---|
-| `npm run test:screens` | Compose screens on the JVM, ~9 min | once, at the end |
+| `npm run test:screens` | Compose screens on the JVM, 12-20 min cold | CI only — it does not fit in your Bash tool |
 | `npm run test:web` | a real browser, ~2 min | once, at the end |
 | `npm run test:android` | the emulator, ~17 min | CI only |
 | `npm test` | the whole Worker suite, ~1 min | once, at the end |
@@ -470,8 +477,8 @@ npx vitest run test/thing.test.js -t 'the one case'
 ```
 
 **What you run once, at the end, before the pull request:** `npm test` and
-`npm run test:screens` and `npm run test:web` — only the ones your diff
-actually reaches. Then push and let CI do the rest. CI is 7m39s; it is not
+`npm run test:web` — only the ones your diff actually reaches. Never the
+Android screens suite; it is CI's. Then push and let CI do the rest. CI is 7m39s; it is not
 worth reproducing on a laptop.
 
 **Never background a command and poll its output.** Not a suite, not a build,

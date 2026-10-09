@@ -23,17 +23,20 @@ echo "SWITCHES"
 [ -f "$STATE/disabled" ] && echo "  OFF ($STATE/disabled exists — nothing will dispatch)"
 
 echo "DISPATCHER"
-if [ -d "$STATE/lock" ]; then
-  pid="$(cat "$STATE/lock/pid" 2>/dev/null)"
-  if [ -z "$pid" ]; then
-    echo "  lock held, no pid in it — a dispatcher is building, or died holding it"
-  elif kill -0 "$pid" 2>/dev/null; then
-    echo "  lock held by $pid, alive"
-  else
-    echo "  lock held by $pid, WHICH IS GONE — remove $STATE/lock to unwedge it"
-  fi
+# What is actually running, not what used to leave a lock behind. This read
+# "$STATE/lock", a directory the dispatcher stopped creating when it moved to
+# lockf on "$STATE/pick.lock" — so this section reported "nothing is
+# dispatching" through every build, which is the opposite of its job.
+live=$(pgrep -f 'intake/dispatch.sh' 2>/dev/null | wc -l | tr -d ' ')
+agents=$(pgrep -f 'claude -p' 2>/dev/null | wc -l | tr -d ' ')
+if [ "${live:-0}" -eq 0 ] && [ "${agents:-0}" -eq 0 ]; then
+  echo "  idle — no dispatcher, no agent"
 else
-  echo "  no lock, so nothing is dispatching"
+  echo "  ${live:-0} dispatcher(s), ${agents:-0} agent(s)"
+  pgrep -f 'claude -p' 2>/dev/null | while read -r ap; do
+    nm=$(ps -o command= -p "$ap" 2>/dev/null | /usr/bin/grep -o 'requests/[^ ]*\.md' | head -1)
+    [ -n "$nm" ] && printf '    %-9s %s\n' "$(ps -o etime= -p "$ap" | tr -d ' ')" "${nm#requests/}"
+  done
 fi
 
 states="$(node scripts/intake.mjs state 2>/dev/null)"

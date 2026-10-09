@@ -22,10 +22,34 @@ BASE="${INTAKE_BASE:-origin/main}"
 
 say() { printf '%s  %s\n' "$(date '+%H:%M:%S')" "$1" >>"$LOG"; }
 
+# Something Matt has to know about, as opposed to something merely recorded.
+#
+# This was called and never defined. `grep -rn 'tell()'` found nothing and
+# `git log -S` says it never existed, so every notification the dispatcher
+# has tried to send since #43 died as `tell: command not found` on a stderr
+# launchd throws away — nine times in the production log. The one path that
+# exists to reach Matt when the queue stops has never reached him.
+#
+# It writes to the log as well, so the reason survives even where the
+# desktop notification cannot be delivered.
+tell() {
+  say "NEEDS YOU: $1"
+  osascript -e "display notification \"$1\" with title \"mtg intake\"" >/dev/null 2>&1 || true
+}
+
 # Opt-in. .intake/ is gitignored, so a fresh clone must not be armed by the
 # committed hook before anyone has installed anything.
 [ -f "$STATE/enabled" ] || exit 0
-[ -f "$STATE/disabled" ] && exit 0
+
+# Reconcile BEFORE honouring the off switch. Status is only ever written
+# inside a dispatch, so pausing intake used to freeze every row mid-flight:
+# Matt watched a task read `in progress` for three hours after I had switched
+# the system off and nothing was running. A paused system still has to tell
+# the truth about what it is not doing.
+if [ -f "$STATE/disabled" ]; then
+  node "$REPO/scripts/intake/task-status.mjs" reconcile >>"$LOG" 2>&1 || true
+  exit 0
+fi
 
 # A linked worktree's .git is a file. The agent edits its own request file,
 # which fires the hook, which would otherwise start a dispatcher inside the
@@ -37,6 +61,12 @@ mkdir -p "$STATE"
 # Every run puts D1 right about what this laptop can see: a dead agent is
 # paused rather than in progress forever, a held request paused, a
 # withdrawn one cancelled. It may not stop a build. See task-status.mjs.
+# Anything Matt submitted from the app, turned into a request file before we
+# decide what is buildable. Without this a task submitted in the app sat at
+# `pending` forever: nothing polled the inbox, and launchd only fires on a
+# change under requests/ — which submitting from the app does not cause.
+node "$REPO/scripts/intake/inbox.mjs" >>"$LOG" 2>&1 || true
+
 node "$REPO/scripts/intake/task-status.mjs" reconcile >>"$LOG" 2>&1 || true
 
 # Choosing a request and creating its worktree is the only part that needs
@@ -74,6 +104,11 @@ claim() {
   # stuck in `building`. Ask main, not the laptop.
   filed="$(git -C "$REPO" ls-tree --name-only "$BASE" requests/done/ 2>/dev/null | sed 's|requests/done/||')"
 
+  # Two passes, fresh requests first. A request whose agent keeps dying has a
+  # worktree, and resuming it used to win the alphabetical race on every tick
+  # — so one failing task starved everything behind it. `remove-task-title`
+  # did exactly that while `search-reset-not-complete` sat at pending through
+  # seven timer firings.
   file=''
   while IFS= read -r f; do
     [ -n "$f" ] || continue
@@ -82,24 +117,7 @@ claim() {
       continue
     fi
     wt="$STATE/wt/${f%.md}"
-    # A worktree that exists means an agent had this request. If one is
-    # still running there, leave it alone. If not, the agent stopped —
-    # rate limited, killed, crashed — and the work is sitting in that
-    # tree. RESUME it rather than refusing: refusing meant the only way
-    # forward was a human deleting somebody's unpushed work by hand,
-    # which is not recovery, it is a wedge with a polite message.
-    if [ -e "$wt" ]; then
-      if pgrep -f "requests/${f}" >/dev/null 2>&1; then
-        say "skipping ${f%.md}: an agent is still working in $wt"
-        continue
-      fi
-      b="$(cd "$REPO" && node scripts/intake.mjs branch "$f")" || {
-        say "intake.mjs failed naming a branch for $f"; return 1
-      }
-      file="$f"; branch="$b"; tree="$wt"; resumed=yes
-      say "resuming ${f%.md} in $wt ($(git -C "$wt" status --porcelain 2>/dev/null | wc -l | tr -d ' ') uncommitted, $(git -C "$wt" rev-list --count "$BASE"..HEAD 2>/dev/null || echo 0) commits)"
-      break
-    fi
+    [ -e "$wt" ] && continue
     b="$(cd "$REPO" && node scripts/intake.mjs branch "$f")" || {
       say "intake.mjs failed naming a branch for $f"; return 1
     }
@@ -108,6 +126,24 @@ claim() {
     fi
     say "skipping ${f%.md}: no worktree on $b (the branch may already exist)"
   done < "$STATE/queue.$$"
+
+  # Only when nothing fresh is waiting, pick up where a stopped agent left off.
+  if [ -z "$file" ]; then
+    while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      printf '%s\n' "$filed" | /usr/bin/grep -qxF "$f" && continue
+      wt="$STATE/wt/${f%.md}"
+      [ -e "$wt" ] || continue
+      if pgrep -f "requests/${f}" >/dev/null 2>&1; then
+        say "skipping ${f%.md}: an agent is still working in $wt"
+        continue
+      fi
+      b="$(cd "$REPO" && node scripts/intake.mjs branch "$f")" || continue
+      file="$f"; branch="$b"; tree="$wt"; resumed=yes
+      say "resuming ${f%.md} in $wt ($(git -C "$wt" status --porcelain 2>/dev/null | wc -l | tr -d ' ') uncommitted, $(git -C "$wt" rev-list --count "$BASE"..HEAD 2>/dev/null || echo 0) commits)"
+      break
+    done < "$STATE/queue.$$"
+  fi
   rm -f "$STATE/queue.$$"
   [ -n "$file" ] || return 2
 
@@ -187,6 +223,40 @@ else, and carry on from there. Do not start over and do not discard what is
 there without reading it."
 fi
 
+# A request may not consume agent lifetimes without end.
+#
+# `remove-task-title` ran SEVEN agents in four hours. Each one read the
+# worktree from cold, did a little, backgrounded an Android suite it could
+# not outlive and died — and because a stopped agent leaves a worktree
+# behind, the next tick resumed it and did exactly the same. Nothing in the
+# system had any notion of "this has been tried enough", so the loop was
+# bounded only by Matt noticing.
+#
+# The bound itself, and the reason progress is measured as a changed HEAD
+# sha rather than a commit count, is `attempt()` in scripts/intake.mjs.
+# HEAD is read HERE, before the agent runs, so what it records is the
+# PREVIOUS attempt's result.
+#
+# It fails OPEN. A bound that cannot be read is a reason to say so, not a
+# reason to stop building.
+mkdir -p "$STATE/attempts"
+headnow="$(git -C "$tree" rev-parse HEAD 2>/dev/null || echo none)"
+why="$(cd "$REPO" && node scripts/intake.mjs attempt "$STATE/attempts/$name" "$headnow" 2>&1 >/dev/null)"
+case $? in
+  0) : ;;
+  3)
+    # Holding the LIVE request file is the only thing that ends the loop:
+    # the queue is `status: ready` in that file and nothing else, so an
+    # agent simply not being launched would be claimed again in 60 seconds.
+    (cd "$REPO" && node scripts/intake.mjs hold "$file" "$why") >>"$LOG" 2>&1 || true
+    node "$REPO/scripts/intake/task-status.mjs" blocked "$file" "$why" >>"$LOG" 2>&1 || true
+    say "holding $name: $why"
+    tell "$name needs you: $why"
+    exit 0
+    ;;
+  *) say "could not bound the attempts on $name; building anyway" ;;
+esac
+
 say "building $name on $branch${resumed:+ (resuming)}"
 # Task status lives in D1 and this is the thing that sees it change: a
 # builder starting here, and its pull request coming to something when it
@@ -208,7 +278,9 @@ env \
 
 It is yours end to end: build it test-first, open the pull request, wait for CI with \`gh pr checks <n> --watch --fail-fast\` (it blocks — do not use ScheduleWakeup or Monitor, you get no second turn), merge it on green unless the request says 'merge: ask', and move requests/$name.md into requests/done/ in your own commit.
 
-Run tests the way .claude/agents/request-builder.md says: one unit test at a time during the cycle, named, red then green. The functional suites — test:screens, test:web, test:android, npm test — run ONCE at the end, on what your diff reaches. Never in the cycle.
+Run tests the way .claude/agents/request-builder.md says: one unit test at a time during the cycle, named, red then green. The functional suites you may run — test:web and npm test — run ONCE at the end, on what your diff reaches. Never in the cycle.
+
+Do NOT run npm run test:screens or the whole :androidApp:testDebugUnitTest task, ever. A cold worktree compile takes 12 to 20 minutes and your Bash tool stops every command at 10, so it cannot finish in the foreground and backgrounding it is banned — seven agent runs on one request died in four hours doing exactly that. Run your own Android test by name with --tests 'YourTest' during the cycle, then push and read CI's android job.
 
 Never background a command and poll its output, and never background a suite. One agent spent 55% of its run inside polling loops and another spent twelve minutes reading its own background task files. Run it in the foreground and let it finish.
 

@@ -93,10 +93,26 @@ class TaskDetailTest {
                 "Why" to "CI running",
                 "Time so far" to "2h 05m",
                 "Request" to "requests/bigger-buttons.md",
-                "Sent" to "2026-10-08 10:00 UTC",
+                "Sent" to "2026-10-08 06:00",
             ),
-            TaskDetail.decode("q7w8e9r0", row).facts(now),
+            TaskDetail.decode("q7w8e9r0", row).facts(now, newYork),
         )
+    }
+
+    /** Eastern, as a phone in Ohio has it: four hours behind in summer, five in winter. */
+    private val newYork: (Long) -> Int = { ms -> if (ms < Tasks.epochMillis("2026-11-01T06:00:00Z")!!) -240 else -300 }
+
+    /** Matt: "the time values on task details should show local time not utc". */
+    @Test
+    fun theTimeATaskWasSentIsTheReadersOwnClockNotUtc() {
+        fun sent(iso: String, offset: (Long) -> Int) =
+            TaskDetail.decode("k", """{"key":"k","title":"t","status":"pending","created_at":"$iso"}""")
+                .facts(0, offset).toMap()["Sent"]
+        assertEquals("2026-10-08 06:00", sent("2026-10-08T10:00:00.000Z", newYork), "summer in Ohio is UTC-4")
+        assertEquals("2026-11-02 05:00", sent("2026-11-02T10:00:00.000Z", newYork), "after the clocks go back it is UTC-5")
+        assertEquals("2027-01-01 00:30", sent("2026-12-31T23:30:00.000Z") { 60 }, "an hour ahead crosses into the new year")
+        assertEquals("2026-03-01 23:00", sent("2026-03-02T04:00:00.000Z") { -300 }, "five hours behind goes back across the month")
+        assertEquals("2026-10-08 10:00", sent("2026-10-08T10:00:00.000Z") { 0 }, "at UTC it reads as it was sent")
     }
 
     @Test

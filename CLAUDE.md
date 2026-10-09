@@ -214,8 +214,12 @@ never happened, and caught three agents with it.
 | worker | `npm test` | ~40s |
 | shared core | `npm run test:core` | ~1m |
 | web, real browser | `npm run test:web` | ~2m30s |
-| Android screens, JVM | `npm run test:screens` | ~3m30s |
-| Android screens, device | `npm run test:android` | ~23m |
+| one Compose screen test | `./apps/gradlew -p apps :androidApp:testDebugUnitTest --tests 'YourTest'` | seconds |
+
+The whole Android screens suite is not on that list, on the JVM or on a
+device. Both are in the never-run-locally table below, and the reason is
+underneath it.
+
 Everything goes through `scripts/guard.mjs`, which kills the whole
 process group on timeout. Run things in the FOREGROUND and let them
 finish. Do not background a run and poll its output, and do not
@@ -271,10 +275,42 @@ nothing CI will not tell you for free.
 | `./gradlew ... :webApp:jsBrowserTest` | starts a real browser | ~4 |
 | `./gradlew ... --no-daemon ...` | a cold JVM every invocation | +20s each |
 | `:core:jvmTest :core:jsNodeTest :core-net:jvmTest :core-net:jsNodeTest :core:koverVerify` together | this is CI's `shared` job | ~4 |
+| `npm run test:screens` | the whole worktree compiles cold; this is what killed seven agents | ~12-20 |
+| `:androidApp:testDebugUnitTest` with no `--tests` | the same thing by its real name | ~12-20 |
 
 One agent ran the emulator suite, `jsBrowserTest`, the whole `shared` job four
 times with `--no-daemon`, and the Worker suite — inside its TDD cycle, for a
 two-file change. 26 minutes before it opened a pull request.
+
+### Why the whole screens suite is on that list
+
+Seven agent runs on one request, `remove-task-title`, died in four hours.
+Every one of them ended the same way, and the last line of each log says it:
+
+```
+The Android red run is a cold compile of the whole worktree.
+The Android red run is still in Gradle's configuration phase after 12 minutes.
+Waiting on the Android red run to finish, then I'll run it green.
+```
+
+An agent's Bash tool stops a command at **10 minutes** and that ceiling
+cannot be raised. `npm run test:screens` is `guard.mjs 1200` — twenty
+minutes of allowance — and on a worktree that has never been built it uses
+most of it, because every module compiles from nothing. So the suite
+cannot be run in the foreground, and the only other way to run it is to
+background it, which is banned for the reason above: there is no second
+turn, so the agent dies there and the request is resumed by the next one,
+from cold, forever.
+
+It is not a discipline problem. The command does not fit in the tool, and
+telling an agent to run it is telling it to die. CI runs the same suite on
+every pull request in its own job, `./gradlew :androidApp:testDebugUnitTest`,
+on a machine with no ten-minute ceiling.
+
+So: change Compose screens, run **your own test** by name in the cycle —
+`--tests 'YourTest'` is seconds and is not banned — then push and read the
+`android` job. If it is red, fix it and push again. One CI cycle is 7m39s
+and it is the only way that suite can be made to run at all.
 
 **What you run in the cycle**, and nothing else:
 
@@ -285,9 +321,10 @@ npx vitest run test/thing.test.js -t 'the one case'
 ```
 
 **What you run once, at the end, before the pull request:** `npm test` and
-`npm run test:screens` and `npm run test:web` — only the ones your diff
-actually reaches. Then push and let CI do the rest. CI is 7m39s; it is not
-worth reproducing on a laptop.
+`npm run test:web` — only the ones your diff actually reaches. Not the
+Android screens suite: CI runs that one, and the section above says why
+you cannot. Then push and let CI do the rest. CI is 7m39s; it is not worth
+reproducing on a laptop.
 
 **Never background a command and poll its output.** Not a suite, not a build,
 not anything. Run it in the foreground and let it finish. One agent spent 55%

@@ -54,7 +54,7 @@ fun TaskScreen(detail: TaskDetail, listed: Task?, now: Long, onBack: () -> Unit)
         Box(Modifier.testTag("task-detail-back")) { Ghost("← Admin Settings") { onBack() } }
 
         Panel(head = task?.title ?: "Task") {
-            detail.copy(task = task).facts(now).forEach { (label, value) ->
+            detail.copy(task = task).facts(now) { ms -> java.util.TimeZone.getDefault().getOffset(ms) / 60_000 }.forEach { (label, value) ->
                 Row(
                     Modifier.fillMaxWidth().padding(vertical = 3.dp)
                         .semantics(mergeDescendants = true) {}
