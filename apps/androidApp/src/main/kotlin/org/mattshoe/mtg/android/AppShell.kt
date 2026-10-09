@@ -151,6 +151,8 @@ fun AppShell(
     /** The new deck wizard's commander box, which has its own suggestions. */
     onCommanderTyped: (Completion) -> Unit = {},
     onExit: () -> Unit = {},
+    /** The page on screen, pulled down. See `AppState.refreshed`. */
+    onRefresh: () -> Unit = {},
 ) {
     var showFilters by remember { mutableStateOf(false) }
     // One hamburger at every width, so there is one behaviour to keep
