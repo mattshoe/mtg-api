@@ -191,4 +191,55 @@ class MtgApiTest {
         }
         assertEquals("shot.png is over 1.5 MB", e.message)
     }
+
+    /**
+     * Matt: "The system is just looking at fucking branch names?!?!"
+     * Every task and where it is comes from the Worker, which keeps it in
+     * D1 — not from GitHub, which the phone asked unauthenticated at
+     * sixty an hour until both panels failed at once.
+     */
+    @Test
+    fun tasksComeFromTheWorkerWithTheSession() = runTest {
+        val found = api(
+            body = """{"tasks":[{"key":"ab12cd34","name":"bigger-buttons","title":"Bigger buttons",
+                "status":"building","pr":null,"created_at":"2026-10-08T09:00:00.000Z",
+                "started_at":"2026-10-08T09:15:00.000Z","finished_at":null}]}""",
+        ).tasks("0.abc")
+        assertEquals(listOf("Bigger buttons" to "building"), found.map { it.title to it.status.word })
+        assertEquals("2026-10-08T09:15:00.000Z", found.single().startedAt)
+        val req = seen.single()
+        assertEquals("https://example.invalid/tasks", req.url.toString())
+        assertEquals("Bearer 0.abc", req.headers[HttpHeaders.Authorization])
+    }
+
+    @Test
+    fun aRefusedTaskListSaysWhatTheServerSaid() = runTest {
+        val e = assertFailsWith<ApiFailure> {
+            api(HttpStatusCode.Forbidden, """{"error":"that needs the admin role"}""").tasks("0.abc")
+        }
+        assertEquals("that needs the admin role", e.message)
+    }
+
+    @Test
+    fun releaseNotesComeFromTheWorkerNewestFirst() = runTest {
+        val found = api(
+            body = """[{"tag_name":"android-v2.1.0-1","published_at":"2026-01-01T00:00:00Z","body":"old"},
+                {"tag_name":"android-v2.1.0-2","published_at":"2026-01-02T00:00:00Z","body":"new"}]""",
+        ).releases()
+        assertEquals(listOf("new", "old"), found.map { it.note })
+        assertEquals("https://example.invalid/releases", seen.single().url.toString())
+    }
+
+    /**
+     * The Worker serves its last copy when GitHub refuses, and only says
+     * so when it has none. Read as "no releases" that would look like
+     * nothing ever shipped.
+     */
+    @Test
+    fun aRefusalIsAnErrorThatSaysWhyNotAnEmptyList() = runTest {
+        val e = assertFailsWith<ApiFailure> {
+            api(HttpStatusCode.BadGateway, """{"error":"API rate limit exceeded"}""").releases()
+        }
+        assertEquals("API rate limit exceeded", e.message)
+    }
 }
