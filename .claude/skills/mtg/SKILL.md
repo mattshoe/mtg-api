@@ -479,6 +479,82 @@ cd /tmp/v && unzip -q mtg-collection.apk 'classes*.dex' && grep -c -a 'YourNewSt
 curl -s https://mtg-api.mattshoe81.workers.dev/schema | head
 ```
 
+## Tasks: status lives in D1
+
+Admin Settings lists every task and where it is. That status is a row in
+D1 (`task_inbox`, the same table the New task button writes to), and it
+is written **when a transition happens, by whoever caused it**. It is
+never inferred from a branch name, a pull request, or anything else on
+GitHub. Inferring is how a paused task, a cancelled one and a dead one
+all came to read `building` — Matt watched four stopped agents still
+saying it — and how a view that could not carry "sent but not started"
+or "cancelled" got built against a request that said it must.
+
+**The app asks the Worker and only the Worker.** No client calls
+`api.github.com`. Unauthenticated it is 60 requests an hour per IP, and
+both Admin Settings panels died of exactly that on Matt's phone with "API
+rate limit exceeded". Tasks are `GET /tasks`; release notes are
+`GET /releases`, which the Worker fetches from GitHub and keeps
+(`src/releases.js`). If you need something new from GitHub in the app,
+it goes through the Worker the same way.
+
+### The statuses
+
+Matt's words, and only these. `TaskStatus` in `:core` (`Tasks.kt`) and
+`STATUSES` in `src/tasks.js` are the two copies, and the Worker refuses
+any other word with a 400.
+
+| status | what it means |
+|---|---|
+| pending | accepted, queued, nothing has started |
+| in progress | an agent is working on it RIGHT NOW, this second |
+| blocked | it needs Matt, or something it depends on — say which |
+| paused | nothing is running and the work is kept — the reason says why |
+| in review | pull request open — CI running, red, green, whatever |
+| merged | landed on main |
+| deployed | live, the artifact verified |
+| cancelled | withdrawn; it says so rather than disappearing |
+
+**Done**, collapsed by default and newest finished first: `merged`,
+`deployed`, `cancelled`. **The live list**, always visible: `pending`,
+`in progress`, `blocked`, `paused`, `in review`, with `blocked` and
+`paused` listed first because they are the ones that sit forever if
+nobody looks. Done is a consequence of the status (`TaskStatus.finished`),
+never a separate flag, so a task that leaves `paused` is live again.
+
+There is no `stopped`: "The fuck is the difference between paused and
+stopped then???" The difference was intent, which is a reason, so it is
+`paused` with a note — "held by Matt", "rate limited", "the agent
+stopped". There is no `failing`: red CI mid-run is the agent's problem
+and the task is `in review` until it merges or somebody stops it.
+
+Each row carries its detail with it: `status_at` (when it entered this
+status — a repeat write of the same status does not move it), `note`
+(why), `pr` (the pull request), `started_at`, `finished_at`.
+`Task.detail(now)` turns those into the row's second line on both shells,
+"for 2h 05m · agent crashed · PR #142".
+
+### Who writes each transition
+
+Everything goes through `POST /tasks/status` with
+`{"key" or "name", "status", "note"?, "pr"?}` (admin). A task is named by
+its `key` from the app or its request file's `name` from the laptop.
+
+| status | written by |
+|---|---|
+| pending | the Worker, on `POST /tasks` from New task; `task-status.mjs reconcile` for a ready request file with no row |
+| in progress | `dispatch.sh` → `task-status.mjs building`, just before it starts a builder |
+| in review, merged | `task-status.mjs settle` after the builder exits, from what its pull request came to |
+| paused | `settle` when the builder left no pull request, or its PR was closed unmerged; `reconcile` for a held request ("held by Matt") or an `in progress` row with no agent alive |
+| cancelled | `settle` or `reconcile` when the request file was withdrawn; anyone with the admin role writing it to the row |
+| blocked | a builder that stops to ask Matt (see "When you are stuck" in `request-builder.md`), with what it needs in the note |
+| deployed | nothing yet: nothing in the intake checks the shipped artifact. Whoever verifies it writes it |
+
+Adding a state means: the word in `STATUSES` and in `TaskStatus` (with
+`finished` set right), a row in both tables here, and whichever script
+causes it calling `POST /tasks/status`. Never a rule that works it out
+from GitHub.
+
 ## Accounts, roles and collections
 
 Two roles, `user` and `admin`. Every new account is a `user` and can
