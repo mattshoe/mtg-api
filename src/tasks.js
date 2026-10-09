@@ -59,7 +59,7 @@ export async function newTask(db, userId, body) {
   const now = new Date().toISOString();
   const statements = [
     db.prepare(
-      'INSERT INTO task_inbox (key, title, details, created_by, created_at) VALUES (?1, ?2, ?3, ?4, ?5)',
+      'INSERT INTO task_inbox (key, title, details, created_by, created_at, status_at) VALUES (?1, ?2, ?3, ?4, ?5, ?5)',
     ).bind(key, t.title, t.details, userId, now),
     ...t.files.map((f, i) => db.prepare(
       `INSERT INTO task_files (task_id, position, name, type, bytes)
@@ -73,7 +73,7 @@ export async function newTask(db, userId, body) {
 /** Every task the laptop has not said it has, oldest first, with its files. */
 export async function inbox(db) {
   const { results: tasks = [] } = await db.prepare(
-    "SELECT id, key, title, details, created_at FROM task_inbox WHERE received_at IS NULL AND status = 'queued' ORDER BY id",
+    "SELECT id, key, title, details, created_at FROM task_inbox WHERE received_at IS NULL AND status = 'pending' ORDER BY id",
   ).all();
   const out = [];
   for (const t of tasks) {
@@ -111,18 +111,24 @@ export async function received(db, keys, names = {}) {
 }
 
 /**
- * Every status a task can have, in the words the app shows. `queued`
- * until the dispatcher starts a builder; `stopped` is a builder that
- * ended with no pull request; `cancelled` is a write to the row, and a
- * cancelled task is never collected.
+ * Every status a task can have, in the words the app shows, which are
+ * Matt's. `in progress` is an agent alive on it this second and nothing
+ * else; `blocked` needs Matt or something it depends on, and the note
+ * says which; `stopped` is an agent that started and died; `failing` is
+ * a pull request whose CI is red; `closed` is one shut without merging.
+ * Each is written by whatever caused it, and a cancelled task is never
+ * collected.
  */
-export const STATUSES = ['queued', 'building', 'in review', 'done', 'closed', 'stopped', 'cancelled'];
-const FINISHED = new Set(['done', 'closed', 'cancelled']);
+export const STATUSES = [
+  'pending', 'in progress', 'blocked', 'paused', 'stopped',
+  'in review', 'failing', 'merged', 'deployed', 'closed', 'cancelled',
+];
+const FINISHED = new Set(['merged', 'deployed', 'closed', 'cancelled']);
 
 /** Every task, newest first, without its files. */
 export async function list(db) {
   const { results = [] } = await db.prepare(
-    `SELECT key, name, title, status, pr, created_at, started_at, finished_at
+    `SELECT key, name, title, status, status_at, note, pr, created_at, started_at, finished_at
        FROM task_inbox ORDER BY id DESC`,
   ).all();
   return results;
@@ -132,8 +138,9 @@ export async function list(db) {
  * One transition, written as it happens. A task is named by its `key`
  * (sent from the app) or its request file's `name` (what the dispatcher
  * knows). A name with no row yet is a request written straight into
- * requests/, and gets one. The first `building` is the start, and a
- * resumed build keeps it.
+ * requests/, and gets one. The first `in progress` is the start, and a
+ * resumed build keeps it. `status_at` moves only when the status does;
+ * the note is the detail of this status and goes with it.
  */
 export async function setStatus(db, body) {
   const status = String(body.status ?? '');
@@ -150,15 +157,19 @@ export async function setStatus(db, body) {
     if (!name) return { status: 404, body: { error: `no task ${key}` } };
     const title = String(body.title ?? '').trim() || name.replace(/-/g, ' ');
     await db.prepare(
-      "INSERT INTO task_inbox (key, title, details, created_at, received_at, name) VALUES (?1, ?2, '', ?3, ?3, ?4)",
+      "INSERT INTO task_inbox (key, title, details, created_at, received_at, name, status_at) VALUES (?1, ?2, '', ?3, ?3, ?4, ?3)",
     ).bind(newKey(), title, now, name).run();
   }
+  const note = body.note ? String(body.note).slice(0, 500) : null;
   await db.prepare(
-    `UPDATE task_inbox SET status = ?2,
+    `UPDATE task_inbox SET
+            status_at = CASE WHEN status = ?2 THEN COALESCE(status_at, ?4) ELSE ?4 END,
+            status = ?2,
+            note = ?6,
             pr = COALESCE(?3, pr),
-            started_at = CASE WHEN ?2 = 'building' THEN COALESCE(started_at, ?4) ELSE started_at END,
-            finished_at = CASE WHEN ?5 THEN ?4 ELSE NULL END
+            started_at = CASE WHEN ?2 = 'in progress' THEN COALESCE(started_at, ?4) ELSE started_at END,
+            finished_at = CASE WHEN ?5 THEN COALESCE(finished_at, ?4) ELSE NULL END
       WHERE ${where}`,
-  ).bind(key ?? name, status, body.pr ? String(body.pr) : null, now, FINISHED.has(status) ? 1 : 0).run();
+  ).bind(key ?? name, status, body.pr ? String(body.pr) : null, now, FINISHED.has(status) ? 1 : 0, note).run();
   return { status: 200, body: { status } };
 }

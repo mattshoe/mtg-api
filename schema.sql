@@ -370,7 +370,11 @@ CREATE TABLE task_inbox (
   received_at  TEXT,
   -- the request file's name, without .md, once there is one
   name         TEXT,
-  status       TEXT NOT NULL DEFAULT 'queued',
+  status       TEXT NOT NULL DEFAULT 'pending',
+  -- when it entered that status, and the detail that goes with it:
+  -- why it is blocked, which CI job is red, the last thing that happened
+  status_at    TEXT,
+  note         TEXT,
   pr           TEXT,
   started_at   TEXT,
   finished_at  TEXT
