@@ -18,7 +18,6 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mattshoe.mtg.core.AdminToken
-import org.mattshoe.mtg.core.GitHubReleases
 import org.mattshoe.mtg.core.MtgApi
 import org.mattshoe.mtg.core.View
 import org.robolectric.Robolectric
@@ -28,7 +27,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Opening Admin Settings on Android asks GitHub for the builds.
+ * Opening Admin Settings on Android asks the Worker for the builds, and
+ * nobody else: it keeps GitHub's list so the phone never asks GitHub.
  *
  * Through the real `MainActivity`, for the reason `DeckTokensLoadTest`
  * gives: `ReleaseNotesParityTest` hands the screen a loaded `Releases`
@@ -64,8 +64,9 @@ class ReleasesLoadTest {
 
     private fun json() = HttpClient(
         MockEngine { request ->
+            if (request.url.host != "example.invalid") error("the app asked somebody other than the Worker: " + request.url)
             val body = when {
-                request.url.encodedPath.endsWith("/repos/mattshoe/mtg-api/releases") ->
+                request.url.encodedPath == "/releases" ->
                     """[{"tag_name":"android-v2.1.0-297","published_at":"2026-10-09T10:00:00Z",
                         "body":"Release notes in Admin Settings.\n\nBuilt from abc."}]"""
                 request.url.encodedPath == "/admin/users" -> """{"users":[]}"""
@@ -95,7 +96,6 @@ class ReleasesLoadTest {
         controller = built
         val activity = built.get()
         activity.useForTesting(MtgApi.withEngine("https://example.invalid", json()))
-        activity.useGitHubForTesting(GitHubReleases.withEngine(json()))
         built.create().start().resume()
         settle(activity)
 

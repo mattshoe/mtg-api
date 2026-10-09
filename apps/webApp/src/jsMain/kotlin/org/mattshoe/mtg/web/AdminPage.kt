@@ -136,7 +136,7 @@ private fun TaskList(tasks: Tasks, onToggleDone: () -> Unit, onNewTask: () -> Un
 private fun TaskRow(task: Task, marker: String, now: Long) {
     Div(attrs = {
         classes("task")
-        attr(marker, task.ref)
+        attr(marker, task.key)
     }) {
         Div(attrs = { classes("task-what") }) {
             Span(attrs = { classes("task-title") }) { Text(task.title) }

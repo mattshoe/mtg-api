@@ -51,7 +51,6 @@ import org.mattshoe.mtg.core.RenameState
 import org.mattshoe.mtg.core.Route
 import org.mattshoe.mtg.core.Rows
 import org.mattshoe.mtg.core.Scryfall
-import org.mattshoe.mtg.core.GitHubReleases
 import org.mattshoe.mtg.core.Share
 import org.mattshoe.mtg.core.ShareWhat
 import org.mattshoe.mtg.core.StatsQueries
@@ -95,12 +94,9 @@ object MtgApp {
      */
     private var api = MtgApi()
     private var scryfall = Scryfall()
-    private var github = GitHubReleases()
-
-    internal fun useForTesting(api: MtgApi, scryfall: Scryfall, github: GitHubReleases = GitHubReleases()) {
+    internal fun useForTesting(api: MtgApi, scryfall: Scryfall) {
         this.api = api
         this.scryfall = scryfall
-        this.github = github
     }
 
     private val scope = CoroutineScope(Dispatchers.Main)
@@ -418,7 +414,7 @@ object MtgApp {
         // releases the page as the composition goes away.
         //
         // Work launched and not yet run would otherwise run anyway,
-        // against whatever `api` and `github` the next mount brought.
+        // against whatever `api` the next mount brought.
         scope.coroutineContext.cancelChildren()
     }
 
@@ -823,8 +819,8 @@ object MtgApp {
     /**
      * The builds that shipped, for the release notes on Admin Settings.
      *
-     * Beside the people rather than after them: one is GitHub and the
-     * other is the Worker, and neither should wait on the other. Once
+     * Beside the people rather than after them: neither should wait on
+     * the other. From the Worker, which keeps GitHub's list. Once
      * per visit to the list; a person's page reuses what is there.
      */
     private fun loadReleases() {
@@ -833,7 +829,7 @@ object MtgApp {
         scope.launch {
             app = try {
                 // Asked first, then copied. See `loadPeople`.
-                val found = github.releases()
+                val found = api.releases()
                 app.copy(releases = app.releases.loaded(found))
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
@@ -855,7 +851,7 @@ object MtgApp {
         app = app.copy(tasks = app.tasks.loading())
         scope.launch {
             app = try {
-                val found = github.tasks(store)
+                val found = api.tasks(token())
                 app.copy(tasks = app.tasks.loaded(found).at(kotlin.js.Date.now().toLong()))
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
