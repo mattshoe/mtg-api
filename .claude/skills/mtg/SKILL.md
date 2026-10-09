@@ -667,3 +667,18 @@ for, and that is what CI is for after it.
 Parity still holds: a change to the website is a change to the phone in the
 same pull request, with a test on each side. That is about what you write, not
 about how often you run it.
+
+**Waiting on a build is the same mistake however you spell it.** These are all
+the same banned thing, and one agent burned an hour on the third:
+
+```
+cmd &                 then reading its output file
+caffeinate -w <pid>            # waiting on a pid is polling
+wait <pid>  /  while kill -0   # so is this
+until grep ... done            # and this
+ScheduleWakeup / Monitor       # you get no second turn; nothing wakes you
+```
+
+Run the command in the foreground and let it finish. If it is too slow to sit
+through, it is a functional suite and it belongs in the once-at-the-end pass
+or in CI — not in your cycle.

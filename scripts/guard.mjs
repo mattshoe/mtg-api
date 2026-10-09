@@ -53,7 +53,11 @@ if (isGradle && process.env.INTAKE_NO_GRADLE_LOCK !== '1') {
   // `lockf` is BSD (macOS), `flock` is Linux. Use whichever exists and run
   // unlocked if neither does — CI builds one thing at a time anyway, and a
   // missing mutex must not stop a build.
-  const wait = String(Math.max(seconds, 1800));
+  // Five minutes, not thirty. A mutex you can sit behind for half an hour is
+  // a stall: one agent's long build becomes another agent's dead time. If the
+  // wait runs out, the build runs anyway and the two contend — slower than
+  // queueing, far better than stopping.
+  const wait = '300';
   if (existsSync('/usr/bin/lockf')) {
     // -k keeps the lock file, -t waits this long and then fails loudly
     // rather than running two builds at once.
