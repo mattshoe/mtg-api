@@ -159,6 +159,23 @@ claim() {
 ' >> "$tree/.git/info/exclude" 2>/dev/null || true
   fi
 
+  # The Android SDK path. Without it NO Gradle task touching :androidApp
+  # runs in a worktree — not the suite, not one test by name; it dies in
+  # sixteen seconds on "SDK location not found". It is gitignored, as it
+  # has to be, so it exists in the clone and in no worktree. All three live
+  # ones were missing it, which is why no agent could ever check its own
+  # Android work.
+  mkdir -p "$tree/apps" 2>/dev/null
+  cp "$REPO/apps/local.properties" "$tree/apps/local.properties" 2>/dev/null || true
+
+  # The same for the instructions. An agent reads CLAUDE.md and .claude/
+  # out of the tree it works in, so a worktree cut days ago hands it the
+  # law as it stood then. `remove-task-title` nearly died an eighth time
+  # on this: main had just banned the suite that killed its seven previous
+  # agents and its own worktree still said to run it.
+  cp "$REPO/CLAUDE.md" "$tree/CLAUDE.md" 2>/dev/null || true
+  cp -R "$REPO/.claude/." "$tree/.claude/" 2>/dev/null || true
+
   # Hand over the LIVE request file, not the one the worktree was cut from.
   # Without this the agent reads main's copy: four requests sat at `status:
   # hold` on main while the live files said `ready`, so every agent correctly
