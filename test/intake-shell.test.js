@@ -162,6 +162,24 @@ function build({ requests = {}, done = {}, enabled = true } = {}) {
       ? readFileSync(join(repo, '.intake/intake.log'), 'utf8') : ''),
     disable: () => writeFileSync(join(repo, '.intake/disabled'), ''),
     /**
+     * Put a file on origin/main WITHOUT the local checkout noticing.
+     *
+     * That gap is the whole point: the local requests/ folder lags main the
+     * moment an agent merges its own work, and the dispatcher decides the
+     * queue from the local folder.
+     */
+    commitOnBase: (rel, body) => {
+      const tmp = join(root, 'base-push')
+      spawnSync('git', ['clone', '-q', origin, tmp], { encoding: 'utf8' })
+      const g = (...a) => spawnSync('git', ['-C', tmp, ...a], { encoding: 'utf8' })
+      g('config', 'user.email', 'a@b'); g('config', 'user.name', 'a')
+      mkdirSync(dirname(join(tmp, rel)), { recursive: true })
+      writeFileSync(join(tmp, rel), body)
+      g('add', '-A'); g('commit', '-qm', `base: ${rel}`); g('push', '-q', 'origin', 'main')
+      rmSync(tmp, { recursive: true, force: true })
+      git('fetch', '-q', 'origin')
+    },
+    /**
      * Break the copied dispatcher, to prove an assertion is load-bearing.
      *
      * It THROWS when `from` is not in the script, and that is the whole
@@ -571,6 +589,23 @@ describe('a worktree that is already there', () => {
     run('dispatch.sh')
     const handed = join(box.repo, '.intake', 'wt', 'a-thing', 'requests', 'a-thing.md')
     expect(readFileSync(handed, 'utf8')).toContain('EDITED AFTER THE COMMIT')
+  })
+
+  it('will not rebuild a request main has already filed under done', () => {
+    // The queue is read from the local requests/ folder, which lags main the
+    // moment an agent merges its own work. Twice a finished request was
+    // re-dispatched and the agent committed onto a branch whose pull request
+    // had already merged — which Admin Settings shows as a task stuck in
+    // `building`, because a request branch with no open PR is what that means.
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    // main has it filed; the laptop has not noticed yet.
+    box.commitOnBase('requests/done/a-thing.md', 'Merged as #1.\n')
+
+    run('dispatch.sh')
+
+    expect(box.intakeLog()).toContain('already filed under requests/done')
+    expect(box.log()).not.toContain('claude')
+    expect(existsSync(join(box.repo, '.intake', 'wt', 'a-thing'))).toBe(false)
   })
 
   it('is resumed, not refused, once its agent has stopped', () => {
