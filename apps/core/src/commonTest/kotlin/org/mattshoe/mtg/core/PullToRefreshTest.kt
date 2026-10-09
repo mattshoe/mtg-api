@@ -87,4 +87,16 @@ class PullToRefreshTest {
         assertFalse(entry.refreshing, "a pull on Entry spins with nothing coming")
         assertNull(entry.pulled)
     }
+
+    @Test
+    fun aDragFiresAtTheSamePointAsThePhone() {
+        // The phone's PullToRefreshBox fires once its indicator, which
+        // moves at half the finger's speed, has travelled 80dp. The
+        // web has no PullToRefreshBox, so it asks this instead.
+        assertFalse(Pull.fires(30.0), "a thirty pixel nudge fires a refresh")
+        assertFalse(Pull.fires(150.0), "the web fires before the phone would")
+        assertTrue(Pull.fires(160.0), "a drag the phone would refresh on does nothing on the web")
+        assertEquals(40.0, Pull.travel(80.0), "the indicator does not trail the finger the way the phone's does")
+        assertEquals(0.0, Pull.travel(-50.0), "dragging up moves the indicator")
+    }
 }
