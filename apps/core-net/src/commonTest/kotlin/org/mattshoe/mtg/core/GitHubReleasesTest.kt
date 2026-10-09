@@ -72,6 +72,40 @@ class GitHubReleasesTest {
     }
 
     @Test
+    fun aRunningTaskIsStartedAtItsBranchsFirstCommitAndAFinishedOneIsNotAsked() = runTest {
+        val found = routed(
+            "/pulls" to """[{"title":"Shipped","state":"closed","head":{"ref":"request/shipped-1234567"},
+                "merged_at":"2026-01-02T00:00:00Z","closed_at":"2026-01-02T00:00:00Z"},
+                {"title":"Waiting","state":"open","head":{"ref":"request/waiting-1112223"},
+                "merged_at":null,"closed_at":null}]""",
+            "/git/matching-refs/heads/request/" to """[{"ref":"refs/heads/request/shipped-1234567"},
+                {"ref":"refs/heads/request/waiting-1112223"},{"ref":"refs/heads/request/going-7654321"}]""",
+            "/contents/requests/done" to """[{"name":"shipped.md","type":"file"}]""",
+            "/compare/main...request/waiting-1112223" to
+                """{"commits":[{"commit":{"author":{"date":"2026-10-08T08:00:00Z"}}}]}""",
+            "/compare/main...request/going-7654321" to
+                """{"commits":[{"commit":{"author":{"date":"2026-10-08T09:15:00Z"}}}]}""",
+        ).tasks()
+        assertEquals(
+            listOf("Shipped" to null, "Waiting" to "2026-10-08T08:00:00Z", "going" to "2026-10-08T09:15:00Z"),
+            found.map { it.title to it.startedAt },
+        )
+        val urls = seen.map { it.url.toString() }
+        assertTrue(urls.none { "shipped" in it && "/compare/" in it }, "a finished task's branch was compared: $urls")
+    }
+
+    @Test
+    fun aRefusedCompareLeavesTheStartUnknownButStillListsTheTask() = runTest {
+        val found = routed(
+            "/pulls" to "[]",
+            "/git/matching-refs/heads/request/" to """[{"ref":"refs/heads/request/going-7654321"}]""",
+            "/contents/requests/done" to "[]",
+            "/compare/" to """{"message":"API rate limit exceeded"}""",
+        ).tasks()
+        assertEquals(listOf("going" to null), found.map { it.title to it.startedAt })
+    }
+
+    @Test
     fun aRefusedTaskLoadIsAnErrorThatSaysWhy() = runTest {
         val e = assertFailsWith<IllegalStateException> {
             routed("" to """{"message":"API rate limit exceeded"}""", status = HttpStatusCode.Forbidden).tasks()

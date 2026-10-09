@@ -115,7 +115,7 @@ private fun TaskList(tasks: Tasks, onToggleDone: () -> Unit, onNewTask: () -> Un
             tasks.rows.isEmpty() -> Line("No tasks yet.", Ink3)
             else -> {
                 if (tasks.active.isEmpty()) Line("Nothing in progress.", Ink3)
-                tasks.active.forEach { TaskRow(it, "task") }
+                tasks.active.forEach { TaskRow(it, "task", tasks.now) }
                 Line(
                     (if (tasks.showDone) "▾ " else "▸ ") + "Done (${tasks.done.size})",
                     Ink,
@@ -127,14 +127,14 @@ private fun TaskList(tasks: Tasks, onToggleDone: () -> Unit, onNewTask: () -> Un
                         .padding(vertical = 12.dp)
                         .testTag("tasks-done-toggle"),
                 )
-                if (tasks.showDone) tasks.done.forEach { TaskRow(it, "task-done") }
+                if (tasks.showDone) tasks.done.forEach { TaskRow(it, "task-done", tasks.now) }
             }
         }
     }
 }
 
 @Composable
-private fun TaskRow(task: Task, tag: String) {
+private fun TaskRow(task: Task, tag: String, now: Long) {
     Row(
         Modifier.fillMaxWidth()
             .padding(vertical = 7.dp)
@@ -146,6 +146,7 @@ private fun TaskRow(task: Task, tag: String) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
             Line(task.title, Ink, Design.BODY)
             task.finished?.let { Line(it, Ink3, Design.MINI) }
+            task.elapsed(now)?.let { Line(it, Ink3, Design.MINI) }
         }
         Tag(task.status.word)
     }

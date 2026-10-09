@@ -340,10 +340,54 @@ class DeckStatsLayoutTest {
         assertEquals("Exactly · 10", set.querySelector(".pie-cap")?.textContent)
         val title = set.querySelector(".pie")?.getAttribute("title").orEmpty()
         assertEquals("U 30%, R 50%, UR 20%", title)
-        // The UR slice runs 80% to 100%, and is drawn as a band of
-        // blue and a band of red rather than a colour of its own.
-        val bg = set.querySelector(".pie")?.getAttribute("style").orEmpty()
-        assertTrue(bg.contains("var(--u) 80% 90%") && bg.contains("var(--r) 90% 100%"), "the UR slice is not drawn in its two colours: $bg")
+    }
+
+    @Test
+    fun aCombinationSliceIsOneBlendedColour() = runTest {
+        // Matt: "Slice 3 should be ONE COLOR. Not multiple colors. Do
+        // whatever the color mix of the 2 colors is, like purple". The
+        // UR slice runs 80% to 100%, and everything the browser paints
+        // there is blue and red mixed: 61A3DD and C47063 is 938AA0.
+        assertTrue(styled(), "app.css never loaded, so the computed style proves nothing")
+        val frame = izzet()
+        val pie = frame.all("div.pie-set.wide .pie").singleOrNull()
+        assertTrue(pie != null, "there is no Exactly ring at all")
+        val painted = window.getComputedStyle(pie).backgroundImage
+        val stops = Regex("""(rgba?\([^)]*\))((?:\s+[\d.]+%)+)""").findAll(painted).map { m ->
+            m.groupValues[1].replace(" ", "") to
+                Regex("""[\d.]+""").findAll(m.groupValues[2]).map { it.value.toDouble() }.toList()
+        }.toList()
+        assertTrue(stops.isNotEmpty(), "the ring paints no colour stops at all: $painted")
+        val inIzzet = stops.filter { (_, at) -> at.any { it > 80.0 } }.map { it.first }.distinct()
+        assertEquals(
+            listOf("rgb(147,138,160)"),
+            inIzzet,
+            "the Izzet slice is not painted one blend of blue and red: $painted",
+        )
+    }
+
+    @Test
+    fun theExactlyTablesColumnsLineUp() = runTest {
+        // Matt: "The table columns don't line up". Measured off the
+        // text the browser lays out, not the cells: a name starts at
+        // the same x on every row, and a count and a share end at the
+        // same x on every row, whatever symbols sit before them.
+        assertTrue(styled(), "app.css never loaded, so the layout proves nothing")
+        val frame = izzet()
+        val rows = frame.all("div.pie-set.wide table.pie-table tr")
+        assertEquals(3, rows.size, "the Exactly table has no rows, so this proves nothing")
+        fun text(td: HTMLElement): org.w3c.dom.DOMRect {
+            val range = document.createRange()
+            range.selectNodeContents(td)
+            return range.getBoundingClientRect()
+        }
+        val cells = rows.map { it.all("td") }
+        val names = cells.map { text(it[2]).left }
+        val counts = cells.map { text(it[3]).right }
+        val shares = cells.map { text(it[4]).right }
+        assertTrue(names.max() - names.min() < 1, "the names start at different places: $names")
+        assertTrue(counts.max() - counts.min() < 1, "the counts end at different places: $counts")
+        assertTrue(shares.max() - shares.min() < 1, "the shares end at different places: $shares")
     }
 
     /** Five Mountains, three Islands, two Steam Vents, drawn. */

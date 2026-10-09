@@ -118,4 +118,20 @@ class TasksParityTest {
             "the failure is not on screen",
         )
     }
+
+    @Test
+    fun aRunningTaskSaysHowLongSinceItStarted() {
+        val now = Tasks.epochMillis("2026-10-08T12:20:00Z")!!
+        val running = Tasks().loaded(
+            listOf(
+                Task("request/b-2222222", "Building now", TaskStatus.BUILDING, null, startedAt = "2026-10-08T09:15:00Z"),
+                Task("request/a-1111111", "Older fix", TaskStatus.DONE, "2026-10-08T11:00:00Z", startedAt = "2026-10-08T10:00:00Z"),
+            ),
+        ).at(now).toggleDone()
+        shell(adminSettings(running))
+        val row = rows("task").single().says()
+        assertTrue("3h 05m" in row, "the running task does not say how long it has been going: '$row'")
+        val done = rows("task-done").single().says()
+        assertTrue("2h 20m" !in done && "1h 00m" !in done, "a finished task is still counting: '$done'")
+    }
 }

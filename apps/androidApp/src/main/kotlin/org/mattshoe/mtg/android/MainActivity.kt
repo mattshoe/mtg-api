@@ -849,11 +849,19 @@ class MainActivity : ComponentActivity() {
         model.tasksJob = scope.launch {
             app = try {
                 val found = github.tasks()
-                app.copy(tasks = app.tasks.loaded(found))
+                app.copy(tasks = app.tasks.loaded(found).at(System.currentTimeMillis()))
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
                 app.copy(tasks = app.tasks.failed(e.message ?: "that did not work"))
+            }
+        }
+        model.tasksClock?.cancel()
+        model.tasksClock = scope.launch {
+            while (true) {
+                delay(60_000)
+                if (app.view != View.ADMIN || app.route.rest.isNotEmpty()) break
+                app = app.copy(tasks = app.tasks.at(System.currentTimeMillis()))
             }
         }
     }

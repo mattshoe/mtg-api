@@ -134,6 +134,12 @@ class AppDriverTest {
 
                 request.url.encodedPath.endsWith("/contents/requests/done") -> "[]"
 
+                // The branch's first commit, two hours and a half minute ago by the real clock.
+                request.url.encodedPath.contains("/compare/main...request/") -> {
+                    val started = kotlin.js.Date(kotlin.js.Date.now() - (2 * 60 * 60 + 30) * 1000.0).toISOString()
+                    """{"commits":[{"commit":{"author":{"date":"$started"}}}]}"""
+                }
+
                 request.url.encodedPath == "/admin/users" -> """{"users":[]}"""
 
                 request.url.encodedPath == "/tasks" -> """{"key":"ab12cd34","files":1}"""
@@ -1175,7 +1181,7 @@ class AppDriverTest {
      * simple but attractive new screen where i can enter the details and
      * upload files". The real app: the button, its own page, a file
      * read off disk, and what goes up to `/tasks`. Sibling of Android's
-     * `NewTaskJourneyTest`.
+     * `NewTaskSendTest`.
      */
     @Test
     fun aNewTaskIsWrittenOnItsOwnPageAndSentWithItsFile() = runTest {
@@ -1217,5 +1223,19 @@ class AppDriverTest {
         waitFor("the toast") {
             document.querySelector(".toast")?.textContent.orEmpty().contains("Task sent: Bigger buttons")
         }
+    }
+
+    /**
+     * The running task counts from its branch's first commit to the
+     * browser's own clock. `TasksPanelTest` hands the page a `now`;
+     * this is the page finding one for itself.
+     */
+    @Test
+    fun aRunningTaskOnAdminSettingsCountsFromItsFirstCommitToNow() = runTest {
+        role = "admin"
+        val root = mount("#/admin")
+        waitFor("a task on Admin Settings") { root.all("[data-task]").isNotEmpty() }
+        val text = root.all("[data-task]").first().textContent.orEmpty()
+        assertTrue("2h 00m" in text, "the running task does not count from its first commit to now: '$text'")
     }
 }

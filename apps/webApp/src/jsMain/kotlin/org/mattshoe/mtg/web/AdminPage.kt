@@ -116,7 +116,7 @@ private fun TaskList(tasks: Tasks, onToggleDone: () -> Unit, onNewTask: () -> Un
                 tasks.rows.isEmpty() -> Div(attrs = { classes("empty") }) { Text("No tasks yet.") }
                 else -> {
                     if (tasks.active.isEmpty()) Div(attrs = { classes("empty") }) { Text("Nothing in progress.") }
-                    tasks.active.forEach { TaskRow(it, "data-task") }
+                    tasks.active.forEach { TaskRow(it, "data-task", tasks.now) }
                     Button(attrs = {
                         classes("tasks-toggle")
                         attr("data-tasks-toggle", "")
@@ -125,7 +125,7 @@ private fun TaskList(tasks: Tasks, onToggleDone: () -> Unit, onNewTask: () -> Un
                     }) {
                         Text((if (tasks.showDone) "▾ " else "▸ ") + "Done (${tasks.done.size})")
                     }
-                    if (tasks.showDone) tasks.done.forEach { TaskRow(it, "data-task-done") }
+                    if (tasks.showDone) tasks.done.forEach { TaskRow(it, "data-task-done", tasks.now) }
                 }
             }
         }
@@ -133,7 +133,7 @@ private fun TaskList(tasks: Tasks, onToggleDone: () -> Unit, onNewTask: () -> Un
 }
 
 @Composable
-private fun TaskRow(task: Task, marker: String) {
+private fun TaskRow(task: Task, marker: String, now: Long) {
     Div(attrs = {
         classes("task")
         attr(marker, task.ref)
@@ -141,6 +141,7 @@ private fun TaskRow(task: Task, marker: String) {
         Div(attrs = { classes("task-what") }) {
             Span(attrs = { classes("task-title") }) { Text(task.title) }
             task.finished?.let { Span(attrs = { classes("muted", "small") }) { Text(it) } }
+            task.elapsed(now)?.let { Span(attrs = { classes("muted", "small") }) { Text(it) } }
         }
         Span(attrs = { classes("tag", "mini") }) { Text(task.status.word) }
     }

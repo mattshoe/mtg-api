@@ -215,6 +215,54 @@ class ColourPanelParityTest {
     }
 
     @Test
+    fun aCombinationSliceIsOneBlendedColour() {
+        // Matt: "Slice 3 should be ONE COLOR. Not multiple colors. Do
+        // whatever the color mix of the 2 colors is, like purple".
+        // White F8F3E0 and blue 61A3DD mixed is ADCBDF.
+        shell()
+        val node = rule
+            .onNode(hasContentDescription("Exactly · ", substring = true), useUnmergedTree = true)
+            .fetchSemanticsNode()
+        val arcs = node.config.getOrNull(RingArcs)
+        assertTrue(arcs != null, "the Exactly ring says nothing about what it paints")
+        assertEquals(
+            listOf(0xFFF8F3E0 to 180, 0xFF61A3DD to 108, 0xFFADCBDF to 72),
+            arcs.map { it.colour to kotlin.math.round(it.sweep).toInt() },
+            "the Azorius slice is not one blend of white and blue",
+        )
+    }
+
+    /** Where the glyphs of [text] start and end, inside table row [n]. */
+    private fun glyphs(n: Int, text: String): Pair<Float, Float> {
+        val node = rule.onNode(
+            hasText(text) and androidx.compose.ui.test.hasAnyAncestor(hasTestTag("exactly-row-$n")),
+            useUnmergedTree = true,
+        ).fetchSemanticsNode()
+        val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+        node.config[androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult].action?.invoke(layouts)
+        val layout = layouts.single()
+        // Not `boundsInRoot`: the panel is below the fold, where the
+        // clipped bounds are all zero.
+        val left = node.positionInRoot.x
+        return (left + layout.getLineLeft(0)) to (left + layout.getLineRight(0))
+    }
+
+    @Test
+    fun theExactlyTablesColumnsLineUp() {
+        // Matt: "The table columns don't line up". Read off the laid
+        // out glyphs: every name starts at one x, and every count and
+        // every share ends at one x, whether the row has one symbol
+        // before it or two.
+        shell()
+        val names = listOf(glyphs(1, "Mono-white"), glyphs(2, "Mono-blue"), glyphs(3, "Azorius")).map { it.first }
+        val counts = listOf(glyphs(1, "5"), glyphs(2, "3"), glyphs(3, "2")).map { it.second }
+        val shares = listOf(glyphs(1, "50%"), glyphs(2, "30%"), glyphs(3, "20%")).map { it.second }
+        assertTrue(names.max() - names.min() < 1f, "the names start at different places: $names")
+        assertTrue(counts.max() - counts.min() < 1f, "the counts end at different places: $counts")
+        assertTrue(shares.max() - shares.min() < 1f, "the shares end at different places: $shares")
+    }
+
+    @Test
     fun theExactlyRingIsBigEnoughToReadItsNumbers() {
         // Matt: "You can make the chart bigger".
         shell()
