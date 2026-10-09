@@ -126,4 +126,47 @@ class TasksTest {
         assertTrue(s.rows.isEmpty())
         assertEquals("offline", s.error)
     }
+
+    @Test
+    fun anActiveTaskSaysHowLongSinceItStarted() {
+        val start = "2026-10-08T09:15:00Z"
+        val t = Task("request/x-1234567", "Going", TaskStatus.BUILDING, null, startedAt = start)
+        val at = Tasks.epochMillis(start)!!
+        assertEquals("just started", t.elapsed(at + 30_000))
+        assertEquals("12m", t.elapsed(at + 12 * 60_000))
+        assertEquals("3h 05m", t.elapsed(at + (3 * 60 + 5) * 60_000L))
+        assertEquals("2d 4h", t.elapsed(at + ((2 * 24 + 4) * 60 + 59) * 60_000L))
+    }
+
+    @Test
+    fun aTaskWithNoKnownStartOrThatHasFinishedSaysNothingAboutTime() {
+        val now = Tasks.epochMillis("2026-10-08T12:00:00Z")!!
+        assertNull(Task("request/x-1234567", "Going", TaskStatus.BUILDING, null).elapsed(now))
+        assertNull(
+            Task("request/x-1234567", "Shipped", TaskStatus.DONE, "2026-10-08T11:00:00Z", startedAt = "2026-10-08T10:00:00Z")
+                .elapsed(now),
+        )
+    }
+
+    @Test
+    fun anIsoTimeFromGitHubIsReadAsMillisSinceTheEpoch() {
+        assertEquals(0L, Tasks.epochMillis("1970-01-01T00:00:00Z"))
+        assertEquals(1_791_450_900_000L, Tasks.epochMillis("2026-10-08T09:15:00Z"))
+        assertNull(Tasks.epochMillis("yesterday"))
+    }
+
+    @Test
+    fun theStartOfABranchIsItsFirstCommit() {
+        val compare = """{"status":"ahead","commits":[
+            {"commit":{"author":{"date":"2026-10-08T09:15:00Z"},"committer":{"date":"2026-10-08T09:16:00Z"}}},
+            {"commit":{"author":{"date":"2026-10-08T10:40:00Z"},"committer":{"date":"2026-10-08T10:40:00Z"}}}]}"""
+        assertEquals("2026-10-08T09:15:00Z", Tasks.firstCommitAt(compare))
+        assertNull(Tasks.firstCommitAt("""{"status":"identical","commits":[]}"""))
+        assertNull(Tasks.firstCommitAt("""{"message":"Not Found"}"""))
+    }
+
+    @Test
+    fun theTasksPanelKnowsWhatTimeItIs() {
+        assertEquals(42L, Tasks().at(42L).now)
+    }
 }
