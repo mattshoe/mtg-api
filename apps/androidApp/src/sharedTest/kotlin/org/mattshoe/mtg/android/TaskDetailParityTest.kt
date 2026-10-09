@@ -125,7 +125,7 @@ class TaskDetailParityTest {
         assertTrue("#72" in pull, "the pull request is not on the page: '$pull'")
         val facts = texts("task-detail-fact").joinToString(" | ")
         assertTrue("Status merged" in facts, "the status is not on the page: '$facts'")
-        assertTrue("Took 1h 55m" in facts, "how long it took is not on the page: '$facts'")
+        assertTrue("Took 2h 00m" in facts, "how long it took is not on the page: '$facts'")
         assertTrue("Request requests/bigger-buttons.md" in facts, "the request file is not named: '$facts'")
         val files = texts("task-detail-file").joinToString(" ")
         assertTrue("shot.png" in files, "the file is not listed: '$files'")

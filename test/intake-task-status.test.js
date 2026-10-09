@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { outcome, titleOf, started, report, reconcile } from '../scripts/intake/task-status.mjs'
+import { outcome, titleOf, started, report, reconcile, requestOfBranch } from '../scripts/intake/task-status.mjs'
 
 /**
  * The dispatcher's half of "task status lives in D1".
@@ -134,5 +134,161 @@ describe('what the dispatcher puts right on every run', () => {
 
   it('an agent at work is left alone', () => {
     expect(reconcile(seen({ ready: ['busy'], rows: [row('busy', 'in progress')] }))).toEqual([])
+  })
+})
+
+/**
+ * Matt, on the live list after #73 and #74: "Both of those are done
+ * already??!! And what hairbrush to the task details page?! And the
+ * fucking elapsed time is gone from the completed ones!!!" Four ways the
+ * list lied, each from reconcile looking at less than it could see.
+ */
+describe('reconcile tells the truth', () => {
+  const row = (name, status, more = {}) => ({ key: 'k-' + name, name, status, ...more })
+  const seen = (over = {}) => ({ rows: [], ready: [], held: [], filed: [], stalled: [], alive: [], prs: {}, branches: [], ...over })
+  const pr = (state, n, more = {}) => ({ state, url: 'https://github.com/mattshoe/mtg-api/pull/' + n, ...more })
+
+  it('a task with an agent alive on it is in progress, not pending', () => {
+    expect(reconcile(seen({ ready: ['card-page'], alive: ['card-page'], rows: [row('card-page', 'pending')] })))
+      .toEqual([{ name: 'card-page', status: 'in progress' }])
+  })
+
+  it('an agent alive on a task nobody has a row for gives it one, in progress', () => {
+    expect(reconcile(seen({ ready: ['charts'], alive: ['charts'] })))
+      .toEqual([{ name: 'charts', status: 'in progress' }])
+  })
+
+  it('a request filed under done/ is never cancelled: done by hand, it is merged', () => {
+    expect(reconcile(seen({ filed: ['admin-role'], rows: [row('admin-role', 'cancelled', { note: 'request withdrawn' })] })))
+      .toEqual([{ name: 'admin-role', status: 'merged' }])
+  })
+
+  it('a request filed under done/ while its row still says pending is merged', () => {
+    expect(reconcile(seen({ filed: ['by-hand'], rows: [row('by-hand', 'pending')] })))
+      .toEqual([{ name: 'by-hand', status: 'merged' }])
+  })
+
+  it('a worktree with no agent and no row gets one, paused, saying the agent stopped', () => {
+    expect(reconcile(seen({ ready: ['details'], stalled: ['details'], branches: ['details'] })))
+      .toEqual([{ name: 'details', status: 'paused', note: 'the agent stopped; its work is kept in the worktree' }])
+  })
+
+  it('a pull request nobody has a row for gives it one, at what the pull request came to', () => {
+    expect(reconcile(seen({ ready: ['open-one'], prs: { 'open-one': [pr('OPEN', 80)] } })))
+      .toEqual([{ name: 'open-one', status: 'in review', pr: 'https://github.com/mattshoe/mtg-api/pull/80' }])
+  })
+
+  it('a branch with no request file anywhere still has a row, and it says withdrawn', () => {
+    expect(reconcile(seen({ branches: ['orphan'] })))
+      .toEqual([{ name: 'orphan', status: 'cancelled', note: 'request withdrawn' }])
+  })
+
+  it('a merged task with no start is written again with its pull request\'s times', () => {
+    const prs = { shipped: [pr('MERGED', 71, { createdAt: '2026-10-08T09:00:00Z', mergedAt: '2026-10-08T10:15:00Z' })] }
+    expect(reconcile(seen({ filed: ['shipped'], prs, rows: [row('shipped', 'merged', { started_at: null })] })))
+      .toEqual([{
+        name: 'shipped', status: 'merged', pr: 'https://github.com/mattshoe/mtg-api/pull/71',
+        started_at: '2026-10-08T09:00:00Z', finished_at: '2026-10-08T10:15:00Z',
+      }])
+  })
+
+  it('a merged task that already has its start is left alone', () => {
+    const prs = { shipped: [pr('MERGED', 71, { createdAt: '2026-10-08T09:00:00Z', mergedAt: '2026-10-08T10:15:00Z' })] }
+    expect(reconcile(seen({
+      filed: ['shipped'], prs, rows: [row('shipped', 'merged', { started_at: '2026-10-08T08:00:00Z' })],
+    }))).toEqual([])
+  })
+
+  it('a branch the dispatcher made names its request, and any other branch names none', () => {
+    expect(requestOfBranch('request/task-details-page-da60d2b')).toBe('task-details-page')
+    expect(requestOfBranch('request/task-details-page-0000000')).toBeNull()
+    expect(requestOfBranch('recover/card-page-shows-everything')).toBeNull()
+  })
+
+  it('what a merged pull request settles to carries its times', () => {
+    expect(outcome([pr('MERGED', 5, { createdAt: '2026-10-08T09:00:00Z', mergedAt: '2026-10-08T10:00:00Z' })])).toEqual({
+      status: 'merged', pr: 'https://github.com/mattshoe/mtg-api/pull/5',
+      started_at: '2026-10-08T09:00:00Z', finished_at: '2026-10-08T10:00:00Z',
+    })
+  })
+})
+
+/**
+ * Matt: "What the fuck is the deployed status of nothing fucking uses
+ * it?!?!" A merge runs `pages`, `release` and `worker` on its merge
+ * commit, by path. Reconcile reads those runs and moves the row on: all
+ * of them green is deployed, one still going or one red says so on the
+ * merged row, and a merge nothing deployed says that instead of waiting.
+ */
+describe('deployed is written from the deploy runs of the merge commit', () => {
+  const row = (name, status, more = {}) => ({ key: 'k-' + name, name, status, started_at: '2026-10-09T08:00:00Z', ...more })
+  const seen = (over = {}) => ({
+    rows: [], ready: [], held: [], filed: [], stalled: [], alive: [], prs: {}, branches: [], now: '2026-10-09T12:00:00Z', ...over,
+  })
+  const merged = (n, sha, mergedAt = '2026-10-09T10:00:00Z') => ({
+    state: 'MERGED', url: 'https://github.com/mattshoe/mtg-api/pull/' + n,
+    createdAt: '2026-10-09T09:00:00Z', mergedAt, mergeCommit: { oid: sha },
+  })
+  const run = (workflowName, headSha, conclusion, createdAt = '2026-10-09T10:00:05Z') => ({
+    workflowName, headSha, createdAt, status: conclusion ? 'completed' : 'in_progress', conclusion: conclusion || '',
+  })
+  const times = { started_at: '2026-10-09T09:00:00Z', finished_at: '2026-10-09T10:00:00Z' }
+  const url = (n) => 'https://github.com/mattshoe/mtg-api/pull/' + n
+
+  it('a merge whose every deploy run went green is deployed, and says what went live', () => {
+    const runs = [run('pages', 'abc', 'success'), run('release', 'abc', 'success'), run('test', 'abc', 'failure')]
+    expect(reconcile(seen({ filed: ['shipped'], prs: { shipped: [merged(80, 'abc')] }, runs, rows: [row('shipped', 'merged')] })))
+      .toEqual([{ name: 'shipped', status: 'deployed', ...times, pr: url(80), note: 'live: the site, the APK' }])
+  })
+
+  it('a merge with a deploy still running stays merged, and says it is deploying', () => {
+    const runs = [run('worker', 'abc', 'success'), run('release', 'abc', null)]
+    expect(reconcile(seen({ filed: ['going'], prs: { going: [merged(81, 'abc')] }, runs, rows: [row('going', 'merged')] })))
+      .toEqual([{ name: 'going', status: 'merged', ...times, pr: url(81), note: 'deploying: the APK' }])
+  })
+
+  it('a merge whose deploy failed stays merged, and names the one that failed', () => {
+    const runs = [run('pages', 'abc', 'failure'), run('release', 'abc', 'success')]
+    expect(reconcile(seen({ filed: ['broke'], prs: { broke: [merged(82, 'abc')] }, runs, rows: [row('broke', 'merged')] })))
+      .toEqual([{ name: 'broke', status: 'merged', ...times, pr: url(82), note: 'deploy failed: the site' }])
+  })
+
+  it('a deploy cancelled for a newer one that went green counts as live', () => {
+    const runs = [
+      run('pages', 'new', 'success', '2026-10-09T10:05:00Z'),
+      run('pages', 'abc', 'cancelled'), run('release', 'abc', 'success'),
+    ]
+    expect(reconcile(seen({ filed: ['superseded'], prs: { superseded: [merged(83, 'abc')] }, runs, rows: [row('superseded', 'merged')] })))
+      .toEqual([{ name: 'superseded', status: 'deployed', ...times, pr: url(83), note: 'live: the site, the APK' }])
+  })
+
+  it('a merge that set off no deploy at all says so rather than waiting at merged forever', () => {
+    const runs = [run('release', 'other', 'success', '2026-10-09T07:00:00Z')]
+    expect(reconcile(seen({ filed: ['docs'], prs: { docs: [merged(84, 'abc')] }, runs, rows: [row('docs', 'merged')] })))
+      .toEqual([{ name: 'docs', status: 'merged', ...times, pr: url(84), note: 'nothing to deploy: no deploy ran for this merge' }])
+  })
+
+  it('a merge a minute old with no runs yet is not called undeployable', () => {
+    const runs = [run('release', 'other', 'success', '2026-10-09T07:00:00Z')]
+    const prs = { fresh: [merged(85, 'abc', '2026-10-09T11:59:00Z')] }
+    expect(reconcile(seen({ filed: ['fresh'], prs, runs, rows: [row('fresh', 'merged')] }))).toEqual([])
+  })
+
+  it('a merge older than every run reconcile could see is left as it is', () => {
+    const runs = [run('release', 'other', 'success', '2026-10-09T11:00:00Z')]
+    expect(reconcile(seen({ filed: ['ancient'], prs: { ancient: [merged(86, 'abc')] }, runs, rows: [row('ancient', 'merged')] }))).toEqual([])
+  })
+
+  it('a deployed row that already says so is not written again', () => {
+    const runs = [run('release', 'abc', 'success')]
+    expect(reconcile(seen({
+      filed: ['done'], prs: { done: [merged(87, 'abc')] }, runs, rows: [row('done', 'deployed', { note: 'live: the APK' })],
+    }))).toEqual([])
+  })
+
+  it('a merged pull request whose request is still in the folder is deployed all the same', () => {
+    const runs = [run('worker', 'abc', 'success'), run('release', 'abc', 'success')]
+    expect(reconcile(seen({ ready: ['unfiled'], prs: { unfiled: [merged(88, 'abc')] }, runs, rows: [row('unfiled', 'in review')] })))
+      .toEqual([{ name: 'unfiled', status: 'deployed', ...times, pr: url(88), note: 'live: the APK, the API' }])
   })
 })

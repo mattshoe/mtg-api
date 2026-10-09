@@ -63,10 +63,10 @@ data class TaskDetail(
         return listOfNotNull(
             "Status" to t.status.word,
             t.note?.let { "Why" to it },
+            // One total, as the row has it. Matt, on two: "just show the
+            // total fucking time!!!!"
             t.took?.let { "Took" to it.removePrefix("took ") },
-            t.elapsed(now)?.let { "Running" to it },
-            if (t.status.finished) null
-            else t.statusAt?.let { Tasks.epochMillis(it) }?.let { "In this status" to Tasks.span(it, now) },
+            t.elapsed(now)?.let { "Time so far" to it },
             name?.let { "Request" to "requests/$it.md" },
             createdAt?.let { shown(it) }?.let { "Sent" to it },
         )
@@ -108,6 +108,7 @@ data class TaskDetail(
                         statusAt = str(o, "status_at"),
                         note = str(o, "note"),
                         pr = str(o, "pr"),
+                        createdAt = str(o, "created_at"),
                     )
                 },
                 name = str(o, "name"),

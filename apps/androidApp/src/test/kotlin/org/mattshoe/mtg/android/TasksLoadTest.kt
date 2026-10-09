@@ -70,12 +70,12 @@ class TasksLoadTest {
             val path = request.url.encodedPath
             if (request.url.host != "example.invalid") error("the app asked somebody other than the Worker: ${request.url}")
             val body = when {
-                // Started two hours and a half minute ago by the real clock.
+                // Created two hours and a half minute ago by the real clock, started an hour after.
                 path == "/tasks" -> {
                     asked++
                     """{"tasks":[{"key":"ab12cd34","name":"task-status-in-the-app","title":"Task status in the app",
-                        "status":"in review","pr":null,"created_at":"2026-10-08T09:00:00.000Z",
-                        "started_at":"${java.time.Instant.now().minusSeconds(2 * 60 * 60 + 30)}","finished_at":null}]}"""
+                        "status":"in review","pr":null,"created_at":"${java.time.Instant.now().minusSeconds(2 * 60 * 60 + 30)}",
+                        "started_at":"${java.time.Instant.now().minusSeconds(60 * 60 + 30)}","finished_at":null}]}"""
                 }
                 path == "/releases" -> "[]"
                 path == "/admin/users" -> """{"users":[{"key":"t4pee71g","name":"Test","role":"user"}]}"""
@@ -123,12 +123,12 @@ class TasksLoadTest {
     }
 
     /**
-     * The running task counts from the start the dispatcher wrote to the
-     * phone's own clock. `TasksParityTest` hands the screen a `now`;
+     * The running task counts from when it was created to the phone's
+     * own clock. `TasksParityTest` hands the screen a `now`;
      * this is the app finding one for itself.
      */
     @Test
-    fun aRunningTaskCountsFromItsStartToNow() {
+    fun aRunningTaskCountsFromItsCreationToNow() {
         val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
         context.getSharedPreferences("mtg", android.content.Context.MODE_PRIVATE)
             .edit().putString(AdminToken.KEY, "t").commit()
@@ -142,6 +142,6 @@ class TasksLoadTest {
 
         val tasks = activity.stateForTesting().tasks
         val task = tasks.rows.singleOrNull() ?: error("nothing loaded the tasks: $tasks")
-        assertEquals("2h 00m", task.elapsed(tasks.now), "the running task does not count from its start to now: $tasks")
+        assertEquals("2h 00m", task.elapsed(tasks.now), "the running task does not count from its creation to now: $tasks")
     }
 }

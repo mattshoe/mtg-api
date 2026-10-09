@@ -178,16 +178,26 @@ export async function setStatus(db, body) {
   // The request file's text, for a task written on the laptop. One sent
   // from the app keeps what was typed into it.
   const details = body.details ? String(body.details).slice(0, MAX_DETAILS) : null;
+  // A task that was never seen starting (filed straight into done/, or
+  // finished before status lived here) may be given its pull request's
+  // own times, so a done row can say how long it took. Only where it has
+  // no start: a start the dispatcher wrote is never replaced.
+  const iso = (v) => (/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z$/.test(String(v ?? '')) ? String(v) : null);
   await db.prepare(
     `UPDATE task_inbox SET
-            details = CASE WHEN details = '' AND ?7 IS NOT NULL THEN ?7 ELSE details END,
+            details = CASE WHEN details = '' AND ?9 IS NOT NULL THEN ?9 ELSE details END,
             status_at = CASE WHEN status = ?2 THEN COALESCE(status_at, ?4) ELSE ?4 END,
             status = ?2,
             note = ?6,
             pr = COALESCE(?3, pr),
-            started_at = CASE WHEN ?2 = 'in progress' THEN COALESCE(started_at, ?4) ELSE started_at END,
-            finished_at = CASE WHEN ?5 THEN COALESCE(finished_at, ?4) ELSE NULL END
+            started_at = CASE WHEN ?2 = 'in progress' THEN COALESCE(started_at, ?4) ELSE COALESCE(started_at, ?7) END,
+            finished_at = CASE WHEN NOT ?5 THEN NULL
+                               WHEN started_at IS NULL AND ?7 IS NOT NULL AND ?8 IS NOT NULL THEN ?8
+                               ELSE COALESCE(finished_at, ?4) END
       WHERE ${where}`,
-  ).bind(key ?? name, status, body.pr ? String(body.pr) : null, now, FINISHED.has(status) ? 1 : 0, note, details).run();
+  ).bind(
+    key ?? name, status, body.pr ? String(body.pr) : null, now, FINISHED.has(status) ? 1 : 0, note,
+    iso(body.started_at), iso(body.finished_at), details,
+  ).run();
   return { status: 200, body: { status } };
 }

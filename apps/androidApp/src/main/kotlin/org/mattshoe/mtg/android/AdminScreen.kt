@@ -151,9 +151,8 @@ private fun TaskRow(task: Task, tag: String, now: Long, onOpen: (Task) -> Unit) 
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
             Line(task.title, Ink, Design.BODY)
-            task.took?.let { Line(it, Ink3, Design.MINI) }
-            task.elapsed(now)?.let { Line(it, Ink3, Design.MINI) }
-            task.detail(now)?.let { Line(it, Ink3, Design.MINI) }
+            (task.took ?: task.elapsed(now))?.let { Line(it, Ink3, Design.MINI) }
+            task.note?.let { Line(it, Ink3, Design.MINI) }
         }
         Tag(task.status.word)
         Line("›", Ink3, Design.BODY)

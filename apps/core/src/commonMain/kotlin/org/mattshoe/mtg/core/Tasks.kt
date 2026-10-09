@@ -11,15 +11,14 @@ import kotlinx.serialization.json.jsonPrimitive
  * Where a task is, in Matt's words, as whoever caused it wrote it to D1
  * when it happened. Live ones list in this order, the ones that sit
  * forever if nobody looks first; `finished` is Done, collapsed by
- * default; `running` is whether the clock since the start is counting.
- * There is no `stopped` (that is `paused` with a reason) and no
+ * default. There is no `stopped` (that is `paused` with a reason) and no
  * `failing` (red CI mid-run is still `in review`).
  */
-enum class TaskStatus(val word: String, val finished: Boolean, val running: Boolean = false) {
+enum class TaskStatus(val word: String, val finished: Boolean) {
     BLOCKED("blocked", false),
     PAUSED("paused", false),
-    IN_PROGRESS("in progress", false, running = true),
-    IN_REVIEW("in review", false, running = true),
+    IN_PROGRESS("in progress", false),
+    IN_REVIEW("in review", false),
     PENDING("pending", false),
     MERGED("merged", true),
     DEPLOYED("deployed", true),
@@ -55,23 +54,14 @@ data class Task(
     val statusAt: String? = null,
     /** The detail of this status: why it is paused or blocked, the last thing that happened. */
     val note: String? = null,
-    /** Its pull request's address, once it has one. */
+    /** Its pull request's address, once it has one. For the details page, not the row. */
     val pr: String? = null,
+    /** When it was sent: the one clock the row counts from. */
+    val createdAt: String? = null,
 ) {
     /**
-     * The row's second line, so it answers "what is going on with this"
-     * without asking: how long in this status while it is live, why,
-     * and which pull request.
-     */
-    fun detail(now: Long): String? = listOfNotNull(
-        if (status.finished) null else statusAt?.let { Tasks.epochMillis(it) }?.let { "for " + between(it, now) },
-        note,
-        pr?.substringAfterLast('/')?.takeIf { n -> n.isNotEmpty() && n.all { it.isDigit() } }?.let { "PR #$it" },
-    ).joinToString(" · ").ifEmpty { null }
-
-    /**
      * Matt: "Done tasks should show how long they took, not a UTC
-     * timestamp". Start to finish; unknown for one never started.
+     * timestamp". Created to finished, frozen.
      */
     val took: String? get() {
         if (!status.finished) return null
@@ -80,14 +70,20 @@ data class Task(
     }
 
     /**
-     * Matt: "show the elapsed time since the task started". Only while
-     * it is being worked on: a finished or paused one would count up
-     * forever.
+     * Matt: "Why does it say \"3m for 3m\" and \"17m for 7m\"?!?!?!" and
+     * "just show the total fucking time!!!!" How long since it was
+     * created, for every live task, whatever status it is in. A
+     * finished one says `took` instead.
      */
-    fun elapsed(now: Long): String? = if (status.running) span(now) else null
+    fun elapsed(now: Long): String? = if (status.finished) null else span(now)
 
+    /**
+     * From when it was created, or from its start if that is earlier:
+     * reconcile makes a row the first time it writes a status, so one
+     * filed after the fact was "created" after its pull request opened.
+     */
     private fun span(to: Long): String? {
-        val start = startedAt?.let { Tasks.epochMillis(it) } ?: return null
+        val start = listOfNotNull(createdAt, startedAt).mapNotNull { Tasks.epochMillis(it) }.minOrNull() ?: return null
         return between(start, to)
     }
 
@@ -150,6 +146,7 @@ data class Tasks(
                     statusAt = str(o, "status_at"),
                     note = str(o, "note"),
                     pr = str(o, "pr"),
+                    createdAt = str(o, "created_at"),
                 )
             }
         } catch (e: Exception) {
