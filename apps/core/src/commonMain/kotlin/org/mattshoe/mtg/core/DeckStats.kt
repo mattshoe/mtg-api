@@ -31,13 +31,28 @@ data class Bar(val label: String, val value: Int, val note: String = "") {
     /**
      * The colours to draw it in, as WUBRG letters.
      *
-     * A colour bar is labelled "Red" and a combination bar "UR"; a
-     * ring draws either from this, and a combination is one band per
-     * colour rather than a hue of its own nobody could name.
+     * A colour bar is labelled "Red" and a combination bar "UR". The
+     * legend draws a symbol for each; the ring draws [fill].
      */
     val letters: List<String>
         get() = Pip.entries.firstOrNull { it.label == label }?.let { listOf(it.letter) }
             ?: label.map { it.toString() }.filter { Pip.of(it) != null }.ifEmpty { listOf("C") }
+
+    /**
+     * The one colour a ring draws this slice in: its colours mixed.
+     *
+     * Matt: "Slice 3 should be ONE COLOR. Not multiple colors. Do
+     * whatever the color mix of the 2 colors is". UR was a band of
+     * blue then a band of red, which read as two slices. Each channel
+     * averaged at its sRGB value, rounded, as `color-mix` does.
+     */
+    val fill: Long
+        get() {
+            val colours = letters.map { Design.pip(it) }
+            fun channel(shift: Int): Long =
+                (colours.sumOf { (it shr shift) and 0xFF }.toDouble() / colours.size).roundToInt().toLong()
+            return (0xFFL shl 24) or (channel(16) shl 16) or (channel(8) shl 8) or channel(0)
+        }
 
     /** How wide to draw it, given the tallest bar beside it. */
     fun share(most: Int): Int = if (most <= 0) 0 else ((value * 100.0) / most).roundToInt()
