@@ -56,6 +56,8 @@ import org.mattshoe.mtg.core.ShareWhat
 import org.mattshoe.mtg.core.StatsQueries
 import org.mattshoe.mtg.core.Store
 import org.mattshoe.mtg.core.Upload
+import org.mattshoe.mtg.core.NewTask
+import org.mattshoe.mtg.core.TaskFile
 import org.mattshoe.mtg.core.View
 import org.mattshoe.mtg.core.query
 import org.w3c.dom.HTMLAnchorElement
@@ -356,6 +358,8 @@ object MtgApp {
                         { app.copy(newDeck = app.newDeck.working("Creating…")) },
                     ) { createDeck(app) }
                 },
+                onTaskFiles = { files -> readTaskFiles(files) },
+                onSendTask = { sendTask() },
             )
         }
     }
@@ -1155,6 +1159,49 @@ object MtgApp {
             }
             if (chunks.isEmpty()) return@launch
             app = app.uploaded(names, chunks.joinToString("\n"))
+        }
+    }
+
+    /**
+     * Files for the New task page, read whole as base64. One too big
+     * is handed on unread, so `NewTask.attach` refuses it by name.
+     */
+    private fun readTaskFiles(files: List<File>) {
+        if (files.isEmpty()) return
+        scope.launch {
+            val read = mutableListOf<TaskFile>()
+            for (f in files) {
+                val bytes = (f.size as Number).toLong()
+                val data = if (bytes > NewTask.MAX_BYTES) "" else readBase64(f)
+                if (data == null) {
+                    app = app.say("could not read ${f.name}", failed = true)
+                    continue
+                }
+                read += TaskFile(f.name, f.type.ifBlank { "application/octet-stream" }, bytes, data)
+            }
+            app = app.copy(newTask = app.newTask.attach(read))
+        }
+    }
+
+    private suspend fun readBase64(file: File): String? = suspendCancellableCoroutine { cont ->
+        val reader = FileReader()
+        reader.onload = { cont.resume((reader.result as? String)?.substringAfter("base64,", "")) }
+        reader.onerror = { cont.resume(null) }
+        reader.readAsDataURL(file)
+    }
+
+    /** Send it. A refusal stays on the page with everything typed. */
+    private fun sendTask() {
+        if (!app.newTask.canSend) return
+        app = app.copy(newTask = app.newTask.sending())
+        scope.launch {
+            app = try {
+                api.sendTask(token(), app.newTask)
+                app.taskSent().also { loadFor(it) }
+            } catch (e: Exception) {
+                val why = e.message ?: "that did not send"
+                app.copy(newTask = app.newTask.failed(why)).say(why, failed = true)
+            }
         }
     }
 

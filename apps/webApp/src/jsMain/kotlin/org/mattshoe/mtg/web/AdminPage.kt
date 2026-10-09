@@ -39,6 +39,8 @@ fun AdminPage(
     releases: Releases = Releases(),
     tasks: Tasks = Tasks(),
     onToggleDone: () -> Unit = {},
+    /** The New task button, which opens its own page. */
+    onNewTask: () -> Unit = {},
     onSearch: (String) -> Unit = {},
     onOpen: (Person) -> Unit = {},
     onSetRole: (Person, String) -> Unit = { _, _ -> },
@@ -49,7 +51,7 @@ fun AdminPage(
             PersonPage(state, person, me, onSetRole, onBack)
         } else {
             Everybody(state, onSearch, onOpen)
-            TaskList(tasks, onToggleDone)
+            TaskList(tasks, onToggleDone, onNewTask)
             ReleaseNotes(releases)
         }
     }
@@ -96,10 +98,15 @@ private fun Everybody(state: People, onSearch: (String) -> Unit, onOpen: (Person
  * first". Sibling of Android's `TaskList`.
  */
 @Composable
-private fun TaskList(tasks: Tasks, onToggleDone: () -> Unit) {
+private fun TaskList(tasks: Tasks, onToggleDone: () -> Unit, onNewTask: () -> Unit) {
     Div(attrs = { classes("panel") }) {
         Div(attrs = { classes("panel-head") }) {
             H2 { Text("Tasks") }
+            // Matt: "I want to be able to tap a "new task" button".
+            Button(attrs = {
+                classes("btn", "sm", "primary")
+                onClick { onNewTask() }
+            }) { Text("New task") }
         }
         Div(attrs = { classes("panel-body") }) {
             when {

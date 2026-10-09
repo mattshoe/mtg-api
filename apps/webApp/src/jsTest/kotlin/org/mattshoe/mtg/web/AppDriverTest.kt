@@ -1189,6 +1189,9 @@ class AppDriverTest {
         val send = { root.button("Send task") }
         assertTrue(send().disabled, "Send was live with nothing typed")
         typeOnThePage("[data-new-task] input[type=text]", "Bigger buttons")
+        // A frame between the two boxes, as there is between a person's
+        // keystrokes in two different fields.
+        settle()
         typeOnThePage("[data-new-task] textarea", "They are too small to hit.")
         settle()
         assertTrue(!send().disabled, "Send stayed dead with a title and details typed")
@@ -1196,7 +1199,7 @@ class AppDriverTest {
         val input = field("[data-new-task] input[type=file]") as org.w3c.dom.HTMLInputElement
         val picked: dynamic = js("new DataTransfer()")
         picked.items.add(org.w3c.files.File(arrayOf("hello"), "shot.png", org.w3c.files.FilePropertyBag(type = "image/png")))
-        input.files = picked.files
+        input.asDynamic().files = picked.files
         input.dispatchEvent(org.w3c.dom.events.Event("change", js("({bubbles: true})")))
         waitFor("shot.png listed on the page") {
             root.all("[data-task-file]").any { "shot.png" in it.textContent.orEmpty() }
