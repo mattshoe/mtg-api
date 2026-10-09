@@ -202,10 +202,10 @@ class MtgApiTest {
     fun tasksComeFromTheWorkerWithTheSession() = runTest {
         val found = api(
             body = """{"tasks":[{"key":"ab12cd34","name":"bigger-buttons","title":"Bigger buttons",
-                "status":"building","pr":null,"created_at":"2026-10-08T09:00:00.000Z",
+                "status":"in progress","pr":null,"created_at":"2026-10-08T09:00:00.000Z",
                 "started_at":"2026-10-08T09:15:00.000Z","finished_at":null}]}""",
         ).tasks("0.abc")
-        assertEquals(listOf("Bigger buttons" to "building"), found.map { it.title to it.status.word })
+        assertEquals(listOf("Bigger buttons" to "in progress"), found.map { it.title to it.status.word })
         assertEquals("2026-10-08T09:15:00.000Z", found.single().startedAt)
         val req = seen.single()
         assertEquals("https://example.invalid/tasks", req.url.toString())
