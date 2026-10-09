@@ -131,17 +131,24 @@ describe('task status', () => {
   })
 
   it('every status Matt asked for is one the Worker takes', async () => {
-    for (const status of ['pending', 'in progress', 'blocked', 'paused', 'stopped', 'in review', 'failing', 'merged', 'deployed', 'cancelled']) {
+    for (const status of ['pending', 'in progress', 'blocked', 'paused', 'stopped', 'in review', 'merged', 'deployed', 'cancelled']) {
       const r = await post('/tasks/status', { name: 'every-one', title: 'Every one', status })
       expect(r.status, status + ' was refused: ' + r.body.error).toBe(200)
+    }
+  })
+
+  it('there is no failing: red CI mid-run is still in review', async () => {
+    for (const status of ['failing', 'closed', 'building', 'queued', 'done']) {
+      const r = await post('/tasks/status', { name: 'no-churn', title: 'No churn', status })
+      expect(r.status, status + ' was taken, and Matt said there is no such state').toBe(400)
     }
   })
 
   it('the detail rides with the status: why it is blocked, which job is red, and it goes with the state', async () => {
     await post('/tasks/status', { name: 'needs-matt', title: 'Needs Matt', status: 'blocked', note: 'merge: ask, waiting on Matt to merge #12' })
     expect((await getAs('/tasks')).body.tasks[0]).toMatchObject({ status: 'blocked', note: 'merge: ask, waiting on Matt to merge #12' })
-    await post('/tasks/status', { name: 'needs-matt', status: 'failing', pr: 'https://github.com/mattshoe/mtg-api/pull/12', note: 'android is red' })
-    expect((await getAs('/tasks')).body.tasks[0]).toMatchObject({ status: 'failing', note: 'android is red' })
+    await post('/tasks/status', { name: 'needs-matt', status: 'in review', pr: 'https://github.com/mattshoe/mtg-api/pull/12', note: 'CI running, android is red' })
+    expect((await getAs('/tasks')).body.tasks[0]).toMatchObject({ status: 'in review', note: 'CI running, android is red' })
     await post('/tasks/status', { name: 'needs-matt', status: 'merged' })
     expect((await getAs('/tasks')).body.tasks[0]).toMatchObject({ status: 'merged', note: null })
   })
@@ -152,7 +159,7 @@ describe('task status', () => {
     await sql("UPDATE task_inbox SET status_at = '2026-01-01T00:00:00.000Z'")
     await post('/tasks/status', { name: 'clock', status: 'in review', note: 'still waiting on CI' })
     expect((await getAs('/tasks')).body.tasks[0]).toMatchObject({ status_at: '2026-01-01T00:00:00.000Z', note: 'still waiting on CI' })
-    await post('/tasks/status', { name: 'clock', status: 'failing' })
+    await post('/tasks/status', { name: 'clock', status: 'merged' })
     expect((await getAs('/tasks')).body.tasks[0].status_at).not.toBe('2026-01-01T00:00:00.000Z')
   })
 
