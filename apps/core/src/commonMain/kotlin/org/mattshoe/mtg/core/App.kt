@@ -698,6 +698,12 @@ data class AppState(
         complete = complete.copy(term = f.q, items = emptyList(), open = false),
     )
 
+    /**
+     * The Library changed by anything other than the name box — a
+     * filter, the sort, the pager, "Reset everything".
+     */
+    fun filtered(next: Library): AppState = copy(library = next)
+
     fun typedCardName(c: Completion): AppState = copy(
         complete = c,
         library = library.where(library.filters.copy(q = c.term)),
