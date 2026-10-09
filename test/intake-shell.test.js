@@ -1189,3 +1189,46 @@ describe('a request that keeps dying', () => {
     expect(readFileSync(box.path('requests/a-thing.md'), 'utf8')).toContain('status: ready')
   })
 })
+
+// What a worktree is handed, beyond the request file.
+//
+// Two things an agent cannot work without and cannot get for itself.
+describe('what a worktree is handed', () => {
+  it('gets the Android SDK path, or no Android task can run in it at all', () => {
+    // `apps/local.properties` is gitignored, as it has to be, so it exists
+    // in the clone and in no worktree cut from it. All three live worktrees
+    // were missing it: any Gradle task touching :androidApp died in sixteen
+    // seconds on "SDK location not found", so the narrow `--tests` run the
+    // instructions send agents to was never available to them either.
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    mkdirSync(box.path('apps'), { recursive: true })
+    writeFileSync(box.path('apps/local.properties'), 'sdk.dir=/the/clone\n')
+
+    run('dispatch.sh')
+
+    expect(readFileSync(join(box.repo, '.intake/wt/a-thing/apps/local.properties'), 'utf8'))
+      .toContain('sdk.dir=/the/clone')
+  })
+
+  it('gets the instructions as they are now, not as its branch was cut', () => {
+    // An agent reads CLAUDE.md out of the tree it works in.
+    // `remove-task-title` nearly died an eighth time on this: main had just
+    // banned the suite that killed its seven previous agents, and its own
+    // worktree still said to run it.
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    writeFileSync(box.path('CLAUDE.md'), '# the law\n\nNever run the screens suite locally.\n')
+
+    run('dispatch.sh')
+
+    expect(readFileSync(join(box.repo, '.intake/wt/a-thing/CLAUDE.md'), 'utf8'))
+      .toContain('Never run the screens suite')
+  })
+
+  it('builds anyway when the clone has no SDK path, because most requests are not Android', () => {
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+
+    run('dispatch.sh')
+
+    expect(box.log()).toContain('claude')
+  })
+})
