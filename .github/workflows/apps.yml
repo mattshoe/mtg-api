@@ -151,7 +151,7 @@ jobs:
 
       - name: It compiles
         working-directory: apps
-        run: ./gradlew :androidApp:assembleDebug :app:assembleDebug
+        run: ./gradlew :androidApp:assembleDebug
 
       - name: Screens, on the JVM
         working-directory: apps
@@ -244,8 +244,6 @@ jobs:
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           working-directory: apps
-          # :app's LiveApiTest needs a token it is not given here, so
-          # it skips itself. Nothing in CI touches the real database.
           script: >-
             ./gradlew :androidApp:connectedDebugAndroidTest
             -Pandroid.testInstrumentationRunnerArguments.numShards=${{ strategy.job-total }}

@@ -17,7 +17,6 @@ androidApp/    Compose UI on core. applicationId .share.next, so it sits
                beside the shipping app rather than replacing it.
 webApp/        Compose HTML on core. Real DOM, no canvas.
 
-app/           The app that ships. Untouched.
 sender/        The ManaBox stand-in for tests. Untouched.
 ```
 
