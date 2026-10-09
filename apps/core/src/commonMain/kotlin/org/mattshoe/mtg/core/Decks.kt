@@ -105,7 +105,7 @@ enum class PeekOf { DECK, LIBRARY }
  * well as over a deck and a deck left loaded from an earlier visit
  * would otherwise be what the Library's carousel showed.
  */
-data class Peek(val at: Int = -1, val of: PeekOf = PeekOf.DECK) {
+data class Peek(val at: Int = -1, val of: PeekOf = PeekOf.DECK, val zoom: CardZoom = CardZoom()) {
     val open: Boolean get() = at >= 0
 }
 

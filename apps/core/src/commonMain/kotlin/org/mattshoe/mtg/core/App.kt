@@ -323,6 +323,8 @@ data class AppState(
         return copy(peek = peek.copy(at = index.coerceIn(0, run.lastIndex)))
     }
 
+    fun peekZoom(zoom: CardZoom): AppState = this
+
     private fun runFor(of: PeekOf): List<DeckCard> = when (of) {
         PeekOf.DECK -> decks.pageOrder
         // Sized only; the Library's own rows are mapped in `peekRun`.
