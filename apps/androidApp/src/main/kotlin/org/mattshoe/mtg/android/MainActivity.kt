@@ -862,7 +862,7 @@ class MainActivity : ComponentActivity() {
      * view and does not ask again. Sibling of the website's `loadTasks`.
      */
     private fun loadTasks() {
-        if (app.tasks.busy) return
+        if (app.tasks.busy || app.tasks.fresh) return
         app = app.copy(tasks = app.tasks.loading())
         model.tasksJob = scope.launch {
             app = try {

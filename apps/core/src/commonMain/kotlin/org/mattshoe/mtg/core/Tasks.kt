@@ -113,6 +113,12 @@ data class Tasks(
     val showDone: Boolean = false,
     /** Millis since the epoch, off the shell's clock, for `Task.elapsed` to count to. */
     val now: Long = 0,
+    /**
+     * Asked and answered during this visit to the list, so a reload that
+     * lands on the same route (the one after sign-in) does not ask again.
+     * Leaving the list or pulling to refresh makes it stale.
+     */
+    val fresh: Boolean = false,
 ) {
     val active: List<Task> get() = rows.filterNot { it.status.finished }
         .sortedWith(compareBy<Task> { it.status.ordinal }.thenBy { it.title.lowercase() })
@@ -124,12 +130,14 @@ data class Tasks(
 
     fun at(now: Long) = copy(now = now)
 
-    fun loading() = copy(busy = true, error = null)
+    fun loading() = copy(busy = true, error = null, fresh = false)
 
-    fun loaded(found: List<Task>) = copy(rows = found, busy = false, error = null)
+    fun loaded(found: List<Task>) = copy(rows = found, busy = false, error = null, fresh = true)
+
+    fun stale() = copy(fresh = false)
 
     /** Nothing stale under an error, for the reason `People.failed` gives. */
-    fun failed(message: String) = copy(rows = emptyList(), busy = false, error = message)
+    fun failed(message: String) = copy(rows = emptyList(), busy = false, error = message, fresh = false)
 
     companion object {
         private val json = Json { ignoreUnknownKeys = true; isLenient = true }

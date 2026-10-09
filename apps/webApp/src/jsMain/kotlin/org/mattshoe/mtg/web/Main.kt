@@ -847,7 +847,7 @@ object MtgApp {
      * view and does not ask again. Sibling of Android's `loadTasks`.
      */
     private fun loadTasks() {
-        if (app.tasks.busy) return
+        if (app.tasks.busy || app.tasks.fresh) return
         app = app.copy(tasks = app.tasks.loading())
         scope.launch {
             app = try {

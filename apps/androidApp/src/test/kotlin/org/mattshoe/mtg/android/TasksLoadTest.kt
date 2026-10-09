@@ -88,6 +88,9 @@ class TasksLoadTest {
 
     @Test
     fun openingAdminSettingsLoadsTheTasksAndComingBackAsksAgain() {
+        // `Retry` runs this again on the same instance; a count carried
+        // over from a failed attempt would fail every one after it.
+        asked = 0
         val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
         context.getSharedPreferences("mtg", android.content.Context.MODE_PRIVATE)
             .edit().putString(AdminToken.KEY, "t").commit()
