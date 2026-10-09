@@ -126,3 +126,73 @@ describe('what the dispatcher puts right on every run', () => {
     expect(reconcile(seen({ ready: ['busy'], rows: [row('busy', 'in progress')] }))).toEqual([])
   })
 })
+
+/**
+ * Matt, on the live list after #73 and #74: "Both of those are done
+ * already??!! And what hairbrush to the task details page?! And the
+ * fucking elapsed time is gone from the completed ones!!!" Four ways the
+ * list lied, each from reconcile looking at less than it could see.
+ */
+describe('reconcile tells the truth', () => {
+  const row = (name, status, more = {}) => ({ key: 'k-' + name, name, status, ...more })
+  const seen = (over = {}) => ({ rows: [], ready: [], held: [], filed: [], stalled: [], alive: [], prs: {}, branches: [], ...over })
+  const pr = (state, n, more = {}) => ({ state, url: 'https://github.com/mattshoe/mtg-api/pull/' + n, ...more })
+
+  it('a task with an agent alive on it is in progress, not pending', () => {
+    expect(reconcile(seen({ ready: ['card-page'], alive: ['card-page'], rows: [row('card-page', 'pending')] })))
+      .toEqual([{ name: 'card-page', status: 'in progress' }])
+  })
+
+  it('an agent alive on a task nobody has a row for gives it one, in progress', () => {
+    expect(reconcile(seen({ ready: ['charts'], alive: ['charts'] })))
+      .toEqual([{ name: 'charts', status: 'in progress' }])
+  })
+
+  it('a request filed under done/ is never cancelled: done by hand, it is merged', () => {
+    expect(reconcile(seen({ filed: ['admin-role'], rows: [row('admin-role', 'cancelled', { note: 'request withdrawn' })] })))
+      .toEqual([{ name: 'admin-role', status: 'merged', note: 'filed under done/ with no pull request' }])
+  })
+
+  it('a request filed under done/ while its row still says pending is merged', () => {
+    expect(reconcile(seen({ filed: ['by-hand'], rows: [row('by-hand', 'pending')] })))
+      .toEqual([{ name: 'by-hand', status: 'merged', note: 'filed under done/ with no pull request' }])
+  })
+
+  it('a worktree with no agent and no row gets one, paused, saying the agent stopped', () => {
+    expect(reconcile(seen({ ready: ['details'], stalled: ['details'], branches: ['details'] })))
+      .toEqual([{ name: 'details', status: 'paused', note: 'the agent stopped; its work is kept in the worktree' }])
+  })
+
+  it('a pull request nobody has a row for gives it one, at what the pull request came to', () => {
+    expect(reconcile(seen({ ready: ['open-one'], prs: { 'open-one': [pr('OPEN', 80)] } })))
+      .toEqual([{ name: 'open-one', status: 'in review', pr: 'https://github.com/mattshoe/mtg-api/pull/80' }])
+  })
+
+  it('a branch with no request file anywhere still has a row, and it says withdrawn', () => {
+    expect(reconcile(seen({ branches: ['orphan'] })))
+      .toEqual([{ name: 'orphan', status: 'cancelled', note: 'request withdrawn' }])
+  })
+
+  it('a merged task with no start is written again with its pull request\'s times', () => {
+    const prs = { shipped: [pr('MERGED', 71, { createdAt: '2026-10-08T09:00:00Z', mergedAt: '2026-10-08T10:15:00Z' })] }
+    expect(reconcile(seen({ filed: ['shipped'], prs, rows: [row('shipped', 'merged', { started_at: null })] })))
+      .toEqual([{
+        name: 'shipped', status: 'merged', pr: 'https://github.com/mattshoe/mtg-api/pull/71',
+        started_at: '2026-10-08T09:00:00Z', finished_at: '2026-10-08T10:15:00Z',
+      }])
+  })
+
+  it('a merged task that already has its start is left alone', () => {
+    const prs = { shipped: [pr('MERGED', 71, { createdAt: '2026-10-08T09:00:00Z', mergedAt: '2026-10-08T10:15:00Z' })] }
+    expect(reconcile(seen({
+      filed: ['shipped'], prs, rows: [row('shipped', 'merged', { started_at: '2026-10-08T08:00:00Z' })],
+    }))).toEqual([])
+  })
+
+  it('what a merged pull request settles to carries its times', () => {
+    expect(outcome([pr('MERGED', 5, { createdAt: '2026-10-08T09:00:00Z', mergedAt: '2026-10-08T10:00:00Z' })])).toEqual({
+      status: 'merged', pr: 'https://github.com/mattshoe/mtg-api/pull/5',
+      started_at: '2026-10-08T09:00:00Z', finished_at: '2026-10-08T10:00:00Z',
+    })
+  })
+})
