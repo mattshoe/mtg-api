@@ -26,24 +26,23 @@ data class TaskFile(val name: String, val type: String, val bytes: Long, val dat
  *
  * Matt: "I want to be able to tap a "new task" button and get a simple
  * but attractive new screen where i can enter the details and upload
- * files". A title, the details, and files. Sending writes it to the
- * Worker's inbox, and the laptop that dispatches collects it into
- * `requests/` within five minutes (`scripts/intake/inbox.mjs`), where it
+ * files". The details and files, and no title: "come up with your own
+ * fucking task titles just give me a way to enter the task details fuck
+ * the title field". The Worker names it (`titleFrom` in `src/tasks.js`).
+ * Sending writes it to the Worker's inbox, and the laptop that
+ * dispatches collects it into `requests/` within five minutes (`scripts/intake/inbox.mjs`), where it
  * builds like any request Matt asked for in conversation.
  *
  * The limits are the Worker's (`src/tasks.js`), said here first so a
  * file that would be refused is refused before it is uploaded.
  */
 data class NewTask(
-    val title: String = "",
     val details: String = "",
     val files: List<TaskFile> = emptyList(),
     val busy: Boolean = false,
     val error: String? = null,
 ) {
-    val canSend: Boolean get() = !busy && title.isNotBlank() && details.isNotBlank()
-
-    fun titled(text: String) = copy(title = text.take(MAX_TITLE))
+    val canSend: Boolean get() = !busy && details.isNotBlank()
 
     fun described(text: String) = copy(details = text)
 
@@ -76,6 +75,5 @@ data class NewTask(
         const val ROUTE = "new-task"
         const val MAX_FILES = 5
         const val MAX_BYTES = 1_500_000L
-        const val MAX_TITLE = 120
     }
 }

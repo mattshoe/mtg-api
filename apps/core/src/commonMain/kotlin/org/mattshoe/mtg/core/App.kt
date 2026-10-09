@@ -222,11 +222,8 @@ data class AppState(
     fun startingATask(): AppState = navigate(Route(View.ADMIN, NewTask.ROUTE))
 
     /** Sent: back to Admin Settings with an empty form, saying where it went. */
-    fun taskSent(): AppState {
-        val title = newTask.title.trim()
-        return copy(newTask = NewTask()).navigate(Route(View.ADMIN))
-            .say("Task sent: $title. It is a request within five minutes.")
-    }
+    fun taskSent(): AppState = copy(newTask = NewTask()).navigate(Route(View.ADMIN))
+        .say("Task sent. It is a request within five minutes.")
 
     /** Look at somebody's collection. Theirs or anybody's. */
     fun browsing(key: String): AppState = copy(resolvedCollection = key)
