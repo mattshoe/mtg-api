@@ -316,16 +316,27 @@ data class AppState(
             PeekOf.LIBRARY,
         )
 
-    /** A swipe. Clamped, because a carousel has two ends. */
+    /**
+     * A swipe. Clamped, because a carousel has two ends, and refused
+     * while the card is zoomed: Matt, "swiping to the next card should
+     * only work while fully zoomed out".
+     */
     fun peekTo(index: Int): AppState {
         val run = runFor(peek.of)
-        if (run.isEmpty() || !peek.open) return this
+        if (run.isEmpty() || !peek.open || peek.zoom.zoomed) return this
         return copy(peek = peek.copy(at = index.coerceIn(0, run.lastIndex)))
     }
 
-    fun peekZoom(zoom: CardZoom): AppState = this
+    /** Fingers on the card on show. See [CardZoom]. */
+    fun peekZoom(zoom: CardZoom): AppState =
+        if (!peek.open) this else copy(peek = peek.copy(zoom = zoom))
 
-    val historyDepth: Int get() = overlays.historyDepth
+    /**
+     * How many history entries the website should be holding: one per
+     * overlay, and one more for a zoomed carousel card, so the
+     * browser's back zooms out before it closes anything.
+     */
+    val historyDepth: Int get() = overlays.historyDepth + if (peek.zoom.zoomed) 1 else 0
 
     private fun runFor(of: PeekOf): List<DeckCard> = when (of) {
         PeekOf.DECK -> decks.pageOrder
@@ -569,6 +580,10 @@ data class AppState(
      */
     fun dismissTop(): AppState? {
         val top = overlays.top ?: return null
+        // Matt: "tapping back should fully zoom out". A zoomed card
+        // comes back to the whole card first, and the next press
+        // closes the carousel.
+        if (top == Overlay.CARD_PEEK && peek.zoom.zoomed) return copy(peek = peek.copy(zoom = CardZoom()))
         return copy(overlays = overlays.pop()).forget(top)
     }
 
