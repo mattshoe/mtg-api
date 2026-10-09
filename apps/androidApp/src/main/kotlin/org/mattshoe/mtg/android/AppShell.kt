@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
@@ -101,6 +102,7 @@ import kotlin.math.roundToInt
  * admin screen reachable after locking, or make the back gesture mean
  * something different.
  */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun AppShell(
     state: AppState,
@@ -287,7 +289,18 @@ fun AppShell(
             // its own. Without a weight here the screens claim the whole
             // column and the bar measures zero — present in the tree,
             // invisible on the phone.
-            Box(Modifier.weight(1f)) {
+            //
+            // Every page pulls down to refresh, from one place rather
+            // than one per screen, so a page added later gets it too.
+            // Matt: "Every page should be able to pull to refresh".
+            // The spinner is `AppState.refreshing`, which is only a
+            // pull that is still waiting — not every load, or opening
+            // any page would spin at the top as if it had been pulled.
+            PullToRefreshBox(
+                isRefreshing = state.refreshing,
+                onRefresh = onRefresh,
+                modifier = Modifier.weight(1f),
+            ) {
                 when (state.view) {
                     View.LIBRARY -> LibraryScreen(
                         state = state.library,
