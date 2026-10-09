@@ -5,6 +5,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -154,6 +157,70 @@ class ColourPanelParityTest {
             exactly.top >= needs.bottom,
             "the Exactly ring starts at ${exactly.top}, beside needs and makes rather than below them (they end at ${needs.bottom})",
         )
+    }
+
+    @Test
+    fun everyExactlySliceHasItsNumberDrawnInsideIt() {
+        // Matt: "It's not at all clear which slice is which in the
+        // exactly chart" and "put symbols on the slices". Five Plains,
+        // three Islands, two Hallowed Fountains: white runs 0-180
+        // degrees, blue 180-288 and WU 288-360.
+        shell()
+        val ring = ring("Exactly")
+        val cx = (ring.left + ring.right) / 2
+        val cy = (ring.top + ring.bottom) / 2
+        val spans = listOf(0.0 to 180.0, 180.0 to 288.0, 288.0 to 360.0)
+        spans.forEachIndexed { i, span ->
+            val n = i + 1
+            val found = rule.onAllNodes(hasTestTag("slice-no-$n"), useUnmergedTree = true).fetchSemanticsNodes()
+            assertTrue(found.isNotEmpty(), "slice $n has no number drawn on the ring")
+            val mark = rule.onNode(hasTestTag("slice-no-$n"), useUnmergedTree = true).getUnclippedBoundsInRoot()
+            val dx = ((mark.left + mark.right) / 2 - cx).value.toDouble()
+            val dy = ((mark.top + mark.bottom) / 2 - cy).value.toDouble()
+            val angle = (kotlin.math.atan2(dx, -dy) * 180 / kotlin.math.PI + 360) % 360
+            assertTrue(
+                angle > span.first && angle < span.second,
+                "slice $n's number sits at $angle degrees, outside its slice ${span.first}-${span.second}",
+            )
+            assertTrue(
+                kotlin.math.sqrt(dx * dx + dy * dy) < (ring.right - ring.left).value / 2,
+                "slice $n's number is off the ring",
+            )
+        }
+    }
+
+    @Test
+    fun aTableUnderTheExactlyRingSaysWhatEachNumberIs() {
+        // Matt: "This needs a better legend ... perhaps a table".
+        shell()
+        val rows = (1..3).map { n ->
+            val found = rule.onAllNodes(hasTestTag("exactly-row-$n"), useUnmergedTree = false).fetchSemanticsNodes()
+            assertTrue(found.isNotEmpty(), "the Exactly ring has no table row for slice $n")
+            found.single().config.getOrNull(SemanticsProperties.Text)
+                .orEmpty().joinToString(" | ") { it.text }
+        }
+        assertEquals(
+            listOf(
+                // The letter under each symbol is read out with it.
+                "1 | W | Mono-white | 5 | 50%",
+                "2 | U | Mono-blue | 3 | 30%",
+                "3 | W | U | Azorius | 2 | 20%",
+            ),
+            rows,
+        )
+        assertTrue(
+            rule.onAllNodes(hasTestTag("pip-Exactly-WU-U"), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty(),
+            "the Azorius row does not show its symbols",
+        )
+    }
+
+    @Test
+    fun theExactlyRingIsBigEnoughToReadItsNumbers() {
+        // Matt: "You can make the chart bigger".
+        shell()
+        val exactly = ring("Exactly")
+        val wide = (exactly.right - exactly.left).value
+        assertTrue(wide >= 170f, "the Exactly ring is ${wide}dp across, no bigger than before")
     }
 
     @Test

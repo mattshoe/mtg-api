@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.size
@@ -933,8 +934,9 @@ private fun Colours(s: org.mattshoe.mtg.core.DeckStats) {
     }
     // Makes again, with a dual as its own slice rather than a point in
     // each colour's total. On a line of its own and bigger, because it
-    // has the most slices to tell apart. The web's `.pie-set.wide`.
-    Ring("Exactly", s.combos, Modifier.fillMaxWidth().padding(top = 10.dp), ring = 120.dp)
+    // has the most slices to tell apart. The web's `.pie-set.wide`:
+    // every slice numbered, and a table saying what each number is.
+    Ring("Exactly", s.combos, Modifier.fillMaxWidth().padding(top = 10.dp), ring = 180.dp, numbered = s.exactly)
     // The web's `.sub`, in the caption grey rather than amber: amber
     // said "wrong" in the one channel this collection's owner cannot
     // see anyway, and the sentence itself is what carries it.
@@ -958,6 +960,7 @@ private fun Ring(
     bars: List<Bar>,
     modifier: Modifier = Modifier,
     ring: androidx.compose.ui.unit.Dp = 76.dp,
+    numbered: List<org.mattshoe.mtg.core.RingSlice> = emptyList(),
 ) {
     val total = bars.sumOf { it.value }
     // Nothing to split: a colourless deck has no colour chart.
@@ -972,6 +975,7 @@ private fun Ring(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
+        Box(Modifier.size(ring)) {
         Canvas(
             Modifier.size(ring)
                 .semantics { contentDescription = "$caption · $total — $told" },
@@ -1009,7 +1013,52 @@ private fun Ring(
                 at += 360f * bar.value / total
             }
         }
+            // Each slice's number on the slice itself, over a dark
+            // disc so it reads on any colour. The web's `.slice-no`.
+            numbered.forEach { slice ->
+                val (x, y) = slice.at(0.62)
+                Box(
+                    Modifier
+                        // Its centre on the point, as the web's
+                        // `translate(-50%, -50%)` does.
+                        .offset(ring * x.toFloat() - 10.dp, ring * y.toFloat() - 10.dp)
+                        .size(20.dp)
+                        .background(androidx.compose.ui.graphics.Color(0xD10A0C10), CircleShape)
+                        .testTag("slice-no-${slice.number}"),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Line("${slice.number}", androidx.compose.ui.graphics.Color.White, Design.TINY, FontWeight.Bold)
+                }
+            }
+        }
         Line("$caption · $total", Ink3, Design.TINY, FontWeight.SemiBold)
+        if (numbered.isNotEmpty()) {
+            // The legend, as a table: the number on the slice, its
+            // symbols, its name and how many cards. The web's `.pie-table`.
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                numbered.forEach { slice ->
+                    Row(
+                        Modifier.testTag("exactly-row-${slice.number}")
+                            .semantics(mergeDescendants = true) {},
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Line("${slice.number}", Ink, Design.TINY, FontWeight.Bold, Modifier.widthIn(min = 14.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                            slice.bar.letters.forEach { letter ->
+                                val letters = slice.bar.letters
+                                val tag = if (letters.size == 1) "pip-$caption-$letter" else "pip-$caption-${slice.bar.label}-$letter"
+                                PipDot(letter, 14.dp, 9.sp, tag)
+                            }
+                        }
+                        Line(slice.name, Ink2, Design.TINY, modifier = Modifier.widthIn(min = 90.dp))
+                        Line("${slice.bar.value}", Ink3, Design.TINY, modifier = Modifier.widthIn(min = 22.dp))
+                        Line("${slice.percent}%", Ink3, Design.TINY)
+                    }
+                }
+            }
+            return@Column
+        }
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(3.dp),

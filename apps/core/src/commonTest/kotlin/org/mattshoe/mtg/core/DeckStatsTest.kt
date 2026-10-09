@@ -559,4 +559,44 @@ class DeckStatsTest {
         assertEquals(listOf("C"), Bar("Colourless", 1).letters)
         assertEquals(listOf("C"), Bar("C", 1).letters)
     }
+
+    // ------------------------------- the Exactly ring's legend
+
+    @Test
+    fun everyExactlySliceIsNumberedAndNamedInTheOrderItIsDrawn() {
+        // Matt: "It's not at all clear which slice is which in the
+        // exactly chart." Each slice gets a number drawn on it and a
+        // row in a table, and the two have to agree.
+        val deck = listOf(
+            card("Mountain", type = "Basic Land — Mountain", cost = null, cmc = 0.0, qty = 5, produces = "R", ci = "R"),
+            card("Island", type = "Basic Land — Island", cost = null, cmc = 0.0, qty = 3, produces = "U", ci = "U"),
+            card("Steam Vents", type = "Land", cost = null, cmc = 0.0, qty = 2, produces = "UR", ci = "UR"),
+            card("Sol Ring", type = "Artifact", cost = "{1}", cmc = 1.0, qty = 2, produces = "C", ci = ""),
+        )
+        val slices = DeckAnalysis.of(deck).exactly
+        assertEquals(listOf(1, 2, 3, 4), slices.map { it.number })
+        assertEquals(listOf("U", "R", "UR", "C"), slices.map { it.bar.label })
+        assertEquals(listOf("Mono-blue", "Mono-red", "Izzet", "Colourless"), slices.map { it.name })
+        assertEquals(listOf(25, 42, 17, 17), slices.map { it.percent })
+    }
+
+    @Test
+    fun aSliceNumberSitsInsideItsOwnSlice() {
+        // Three of twelve, then nine: the first slice runs from twelve
+        // o'clock to three, so its middle is half past one.
+        val slices = RingSlice.of(listOf(Bar("U", 3), Bar("R", 9)))
+        assertEquals(45.0, slices[0].middle, 0.001)
+        assertEquals(225.0, slices[1].middle, 0.001)
+        // Clockwise from twelve, in a box measured from the top left:
+        // 45 degrees is up and to the right of the centre.
+        val (x, y) = slices[0].at(0.6)
+        assertTrue(x > 0.5 && y < 0.5, "the first slice's number is at $x,$y, not in the top right quarter")
+        assertEquals(0.5 + 0.3 * kotlin.math.sin(kotlin.math.PI / 4), x, 0.001)
+    }
+
+    @Test
+    fun anEmptyRingHasNoSlices() {
+        assertEquals(emptyList(), RingSlice.of(emptyList()))
+        assertEquals(emptyList(), RingSlice.of(listOf(Bar("U", 0))))
+    }
 }
