@@ -1,8 +1,11 @@
 package org.mattshoe.mtg.core
 
+import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.round
 import kotlin.math.roundToInt
+import kotlin.math.sin
 
 /**
  * A mana value, as text — "2", never "2.0".
@@ -38,6 +41,46 @@ data class Bar(val label: String, val value: Int, val note: String = "") {
 
     /** How wide to draw it, given the tallest bar beside it. */
     fun share(most: Int): Int = if (most <= 0) 0 else ((value * 100.0) / most).roundToInt()
+}
+
+/**
+ * One slice of a ring, with the number it is labelled by.
+ *
+ * Matt: "It's not at all clear which slice is which in the exactly
+ * chart." A combination is drawn as a band of each of its colours, so
+ * a UR slice beside a U one is blue running into blue. The number on
+ * the slice and the same number in the table are what tell them apart.
+ *
+ * [middle] is in degrees clockwise from twelve o'clock, which is where
+ * both shells start drawing.
+ */
+data class RingSlice(val number: Int, val bar: Bar, val percent: Int, val middle: Double) {
+    /** "Izzet", "Mono-red", "Colourless". */
+    val name: String get() = bar.note.ifEmpty { bar.label }
+
+    /**
+     * Where to put the number, as fractions of the ring's box from its
+     * top left: [radius] is a fraction of the ring's radius.
+     */
+    fun at(radius: Double): Pair<Double, Double> {
+        val rad = middle * PI / 180
+        return (0.5 + radius / 2 * sin(rad)) to (0.5 - radius / 2 * cos(rad))
+    }
+
+    companion object {
+        fun of(bars: List<Bar>): List<RingSlice> {
+            val drawn = bars.filter { it.value > 0 }
+            val total = drawn.sumOf { it.value }
+            if (total <= 0) return emptyList()
+            var at = 0.0
+            return drawn.mapIndexed { i, bar ->
+                val sweep = 360.0 * bar.value / total
+                val slice = RingSlice(i + 1, bar, ((bar.value * 100.0) / total).roundToInt(), at + sweep / 2)
+                at += sweep
+                slice
+            }
+        }
+    }
 }
 
 /**
@@ -152,6 +195,13 @@ data class DeckStats(
      * a card that sits in hand, and it is invisible in either chart
      * on its own.
      */
+    /**
+     * The Exactly ring's slices, numbered. The number is drawn on the
+     * slice and again in the table under it, so which slice is which
+     * never rests on telling two colours apart.
+     */
+    val exactly: List<RingSlice> get() = RingSlice.of(combos)
+
     val unsupported: List<String>
         get() = Pip.COLOURS.mapNotNull { pip ->
             val wants = pips.firstOrNull { it.label == pip.label }?.value ?: 0
