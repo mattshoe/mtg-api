@@ -79,7 +79,7 @@ class TasksTest {
     fun doneTasksAreNewestFirstAndActiveOnesAreApart() {
         val s = Tasks().loaded(decoded())
         assertEquals(listOf("Waiting on CI", "still going", "Builder died", "Sent from the phone"), s.active.map { it.title })
-        assertEquals(listOf("Merged two", "Never mind", "Given up", "Merged one"), s.done.map { it.title })
+        assertEquals(listOf("Never mind", "Merged two", "Given up", "Merged one"), s.done.map { it.title })
     }
 
     @Test

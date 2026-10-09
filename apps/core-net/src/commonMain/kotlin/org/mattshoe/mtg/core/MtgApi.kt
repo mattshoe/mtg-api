@@ -324,6 +324,29 @@ class MtgApi internal constructor(
         return res.decode<TaskSent>().key
     }
 
+    /**
+     * Every task and where it is, as D1 has it. Admin only, server-side.
+     * Not GitHub: see `Tasks.decode`.
+     */
+    suspend fun tasks(session: String): List<Task> {
+        val res = http.get("$base/tasks") { header("Authorization", "Bearer $session") }
+        val text = res.bodyAsText()
+        if (!res.status.isSuccess()) throw ApiFailure(errorIn(text, res.status))
+        return Tasks.decode(text)
+    }
+
+    /**
+     * The builds that shipped, newest first. GitHub's release list, as
+     * the Worker keeps it: it serves its last copy when GitHub refuses
+     * and says why only when it has none.
+     */
+    suspend fun releases(): List<Release> {
+        val res = http.get("$base/releases")
+        val text = res.bodyAsText()
+        if (!res.status.isSuccess()) throw ApiFailure(errorIn(text, res.status))
+        return Releases.decode(text)
+    }
+
     /** Rename a deck. Its key, and so its address, stays where it is. */
     suspend fun renameDeck(token: String, key: String, name: String): Renamed {
         val res = http.post("$base/decks/rename") {
