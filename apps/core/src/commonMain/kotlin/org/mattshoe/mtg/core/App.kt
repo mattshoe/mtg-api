@@ -50,6 +50,8 @@ data class AppState(
     val releases: Releases = Releases(),
     /** Intake requests and where each one is, for Admin Settings. */
     val tasks: Tasks = Tasks(),
+    /** The task being written on Admin Settings' New task page. */
+    val newTask: NewTask = NewTask(),
     /** What is on top, and therefore what back closes. */
     val overlays: Overlays = Overlays(),
     /** Set when a share arrived and has not been used yet. */
@@ -205,6 +207,12 @@ data class AppState(
     val person: Person?
         get() = if (view != View.ADMIN || route.rest.isBlank()) null
         else people.rows.firstOrNull { it.key == route.rest }
+
+    val writingTask: Boolean get() = false
+
+    fun startingATask(): AppState = this
+
+    fun taskSent(): AppState = this
 
     /** Look at somebody's collection. Theirs or anybody's. */
     fun browsing(key: String): AppState = copy(resolvedCollection = key)
