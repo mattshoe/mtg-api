@@ -30,7 +30,23 @@ class GitHubReleases internal constructor(private val http: HttpClient) {
         val pulls = list(PULLS)
         val refs = list(REQUEST_REFS)
         val done = list(DONE)
-        return Tasks.decode(pulls, refs, done)
+        return Tasks.decode(pulls, refs, done).map { t ->
+            if (t.status.finished) t else t.copy(startedAt = startOf(t.ref))
+        }
+    }
+
+    /**
+     * The branch's first commit, one ask per running task. A refusal
+     * leaves the start unknown rather than losing the whole list.
+     */
+    private suspend fun startOf(ref: String): String? = try {
+        Tasks.firstCommitAt(
+            plainGet(http, "$REPO/compare/main...$ref", accept = "application/vnd.github+json", userAgent = USER_AGENT),
+        )
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        null
     }
 
     private suspend fun list(url: String): String {
