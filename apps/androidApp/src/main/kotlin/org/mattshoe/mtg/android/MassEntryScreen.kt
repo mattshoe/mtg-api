@@ -154,8 +154,7 @@ private fun ListStep(
     onPickFile: () -> Unit,
 ) {
     val kind = if (s.isCsv) " · CSV" else ""
-    val over = if (s.overLimit) " — over the ${MassEntry.MAX_CARDS} line limit" else ""
-    Panel(head = s.direction!!.question, note = "${s.tally.lines} lines$kind$over") {
+    Panel(head = s.direction!!.question, note = "${s.tally.lines} lines$kind") {
         OutlinedTextField(
             value = s.list,
             onValueChange = { onState(s.type(it)) },
