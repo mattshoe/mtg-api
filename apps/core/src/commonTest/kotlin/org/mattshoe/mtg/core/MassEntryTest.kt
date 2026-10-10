@@ -44,13 +44,24 @@ class MassEntryTest {
         assertEquals(Step.LIST, s.goTo(Step.REVIEW).step)
     }
 
+    /**
+     * This asserted the opposite until Matt updated the app and hit a
+     * 1,000 line limit that had already been taken out of the Worker.
+     *
+     * `overLimit` was `cardCount > 1000` in :core and it disabled Continue,
+     * so the app refused the list before anything was sent. The constant
+     * beside it called itself "the API's own cap on one call" — true when
+     * written, false the moment that cap came out of the server, and
+     * nothing made the two agree. A client must not hold its own copy of a
+     * server rule.
+     */
     @Test
-    fun anOversizeListGoesNoFurther() {
-        val huge = (1..MassEntry.MAX_CARDS + 1).joinToString("\n") { "1 Card $it" }
+    fun anEnormousListIsNotRefusedByTheApp() {
+        val huge = (1..5000).joinToString("\n") { "1 Card $it" }
         val s = MassEntry().choose(Direction.ADD).type(huge)
-        assertTrue(s.overLimit)
-        assertFalse(s.canLeaveList)
-        assertEquals(Step.LIST, s.goTo(Step.REVIEW).step)
+        assertEquals(5000, s.cardCount)
+        assertTrue(s.canLeaveList, "the app refused a 5000 line list on its own")
+        assertEquals(Step.REVIEW, s.goTo(Step.REVIEW).step)
     }
 
     @Test

@@ -167,8 +167,7 @@ private fun ListStep(
     onFiles: (List<File>) -> Unit,
 ) {
     val kind = if (s.isCsv) " · CSV" else ""
-    val over = if (s.overLimit) " — over the ${MassEntry.MAX_CARDS} line limit" else ""
-    Panel(s.direction!!.question, note = "${s.tally.lines} lines$kind$over") {
+    Panel(s.direction!!.question, note = "${s.tally.lines} lines$kind") {
         TextArea(value = s.list, attrs = {
             classes("field")
             rows(14)

@@ -66,7 +66,6 @@ data class MassEntry(
      * that is worth a word before it happens.
      */
     val unsaved: Boolean get() = result == null && (list.isNotBlank() || preview != null)
-    val overLimit: Boolean get() = cardCount > MAX_CARDS
 
     // ---------------------------------------------------------- the gates
     //
@@ -92,8 +91,21 @@ data class MassEntry(
      */
     val canContinue: Boolean get() = canLeaveWhich || startingADeck
 
-    /** A list has to be a list, and not an enormous one. */
-    val canLeaveList: Boolean get() = canLeaveWhich && cardCount > 0 && !overLimit
+    /**
+     * A list has to be a list. Its length is not this screen's business.
+     *
+     * There was an `overLimit` here, `cardCount > 1000`, and it disabled
+     * Continue — so the app refused the list before anything was sent. The
+     * constant beside it said "the API's own cap on one call", which was
+     * true when it was written and stopped being true when that cap was
+     * removed from the Worker. Matt updated the app and hit the limit
+     * anyway, because the limit he hit was this one.
+     *
+     * A client must not carry its own copy of a server rule. If the Worker
+     * ever refuses a list for its size it will say so, and `error` shows
+     * what it said.
+     */
+    val canLeaveList: Boolean get() = canLeaveWhich && cardCount > 0
 
     /**
      * A list, and nothing already in flight.
@@ -209,9 +221,6 @@ data class MassEntry(
     fun again() = MassEntry(list = "")
 
     companion object {
-        /** The API's own cap on one call. */
-        const val MAX_CARDS = 1000
-
         /** A share arrives as a list nobody has said anything about yet. */
         fun fromShare(text: String) = MassEntry(list = text)
     }
