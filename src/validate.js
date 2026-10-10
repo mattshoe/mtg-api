@@ -11,7 +11,8 @@
 import { parseList, normalize } from './parse.js';
 import { makeClient } from './scryfall.js';
 
-const MAX_NAMES = 1000;
+// No limit here either: this is the check the app runs before an import, so
+// a cap on it is a cap on the import. See the note in `src/cards.js`.
 // Scryfall takes 75 identifiers per call; the suggestion lookups after it
 // are one call each, so only so many are worth making.
 const MAX_SUGGESTIONS = 12;
@@ -73,9 +74,6 @@ export async function validateNames(db, body, fetchImpl) {
   }
 
   if (!names.length) return { status: 400, body: { error: 'nothing to check' } };
-  if (names.length > MAX_NAMES) {
-    return { status: 400, body: { error: `${names.length} names is over the ${MAX_NAMES} limit` } };
-  }
 
   // One entry per distinct name, in the order first written.
   const byKey = new Map();
