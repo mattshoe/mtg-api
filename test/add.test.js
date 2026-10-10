@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { env } from 'cloudflare:test';
 import { post, sql, exec, count, snapshot, stubScryfall } from './helpers.js';
 import { KAYLA } from './helpers.js';
 
@@ -419,5 +420,74 @@ describe('POST /cards/add — large uploads', () => {
     expect(await count('cards', "setcode = 'tst'")).toBe(150);
     const qtys = await sql("SELECT DISTINCT qty FROM cards WHERE setcode = 'tst'");
     expect(qtys).toEqual([{ qty: 2 }]);
+  });
+});
+
+// Rows go in many at a time, not one statement each.
+//
+// Matt, importing 1,099 cards: "The insertion algorithm should not require
+// 10,000 fucking statements!!!" He was right. Every row was its own
+// INSERT — nine a card — and 1,100 cards came to 12,100 statements across
+// 25 batches, every one of them a round trip inside the request his phone
+// was waiting on.
+//
+// SQLite takes `INSERT INTO t VALUES (...),(...),(...)`. The only ceiling
+// is D1's 100 bound parameters per query, so a row costing p parameters
+// packs floor(100/p) to a statement. Same import, same rows: 4,185
+// statements in 9 batches.
+describe('POST /cards/add — rows are batched into statements', () => {
+  const many = (n) => Array.from({ length: n }, (_, i) => ({
+    id: `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
+    name: `Packed Card ${i}`, set: 'tst', collector_number: String(i),
+    type_line: 'Artifact',
+    oracle_id: `11111111-0000-4000-8000-${String(i).padStart(12, '0')}`,
+    finishes: ['nonfoil'], colors: [], color_identity: [], keywords: [], games: ['paper'],
+    legalities: { commander: 'legal', modern: 'legal', legacy: 'legal' },
+    prices: { usd: '0.10' },
+  }));
+
+  const wideStub = (cards) => {
+    const stub = stubScryfall();
+    const byName = new Map(cards.map((c) => [c.name.toLowerCase(), c]));
+    return async (url, init) => {
+      if (new URL(url).pathname === '/cards/collection') {
+        const { identifiers } = JSON.parse(init.body);
+        return Response.json({
+          data: identifiers.map((i) => byName.get(String(i.name || '').toLowerCase())).filter(Boolean),
+          not_found: [],
+        });
+      }
+      return stub(url, init);
+    };
+  };
+
+  it('spends far fewer statements than it writes rows', { timeout: 120000 }, async () => {
+    const cards = many(200);
+    let stmts = 0;
+    const real = env.DB.batch.bind(env.DB);
+    env.DB.batch = (arr) => { stmts += arr.length; return real(arr); };
+    try {
+      const r = await post('/cards/add', { list: cards.map((c) => `1 ${c.name}`).join('\n') }, wideStub(cards));
+      expect(r.body.applied).toBe(true);
+      expect(await count('cards', "setcode = 'tst'")).toBe(200);
+      // One statement per card would be 200 on its own, and every card
+      // writes a card row, three legalities, a price, a search row and
+      // more. Unbatched this import is 2,200; the cap is deliberately far
+      // below that and far above what batching actually produces (760),
+      // so it fails on a regression rather than on a tweak.
+      expect(stmts, `${stmts} statements for 200 cards`).toBeLessThan(1200);
+    } finally {
+      env.DB.batch = real;
+    }
+  });
+
+  // The budget is not negotiable: D1 refuses a query with more than 100
+  // bound parameters, and test/setup.js throws on one. A grouper that
+  // packed by row count rather than parameter count would sail past it.
+  it('never exceeds D1\'s bound parameter limit while packing', { timeout: 120000 }, async () => {
+    const cards = many(120);
+    const r = await post('/cards/add', { list: cards.map((c) => `1 ${c.name}`).join('\n') }, wideStub(cards));
+    expect(r.status, r.body?.error).toBe(200);
+    expect(r.body.applied).toBe(true);
   });
 });
