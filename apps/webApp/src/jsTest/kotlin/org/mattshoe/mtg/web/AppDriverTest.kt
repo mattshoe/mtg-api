@@ -383,6 +383,61 @@ class AppDriverTest {
         }
     }
 
+    /**
+     * Matt: "tapping back should fully zoom out". On the website back
+     * is the browser's, so a zoom has to be a history entry of its
+     * own or the first back closes the carousel under it.
+     */
+    @Test
+    fun backZoomsTheCarouselOutBeforeItClosesIt() = runTest {
+        val view = mount("#/decks/alela")
+        settle()
+        waitFor("the deck") { view.textContent.orEmpty().contains("Sol Ring") }
+        view.all("div.deck-line, a.deck-line").first { it.textContent.orEmpty().contains("Sol Ring") }.click()
+        waitFor("the carousel") { document.querySelector(".peek-scrim") != null }
+        settle()
+        val rail = document.querySelector(".peek-rail") as HTMLElement
+        val cell = rail.all(".peek-card").first { cell ->
+            val r = cell.getBoundingClientRect()
+            val box = rail.getBoundingClientRect()
+            r.left >= box.left - 2 && r.right <= box.right + 2
+        }
+        val face = cell.firstElementChild as HTMLElement
+        fun scale(): String = window.getComputedStyle(face).transform
+
+        val r = cell.getBoundingClientRect()
+        val cx = r.left + r.width / 2
+        val cy = r.top + r.height / 2
+        fun finger(type: String, id: Int, x: Double) = cell.dispatchEvent(
+            org.w3c.dom.pointerevents.PointerEvent(
+                type,
+                org.w3c.dom.pointerevents.PointerEventInit(
+                    pointerId = id, pointerType = "touch", isPrimary = id == 1,
+                    clientX = x.toInt(), clientY = cy.toInt(), bubbles = true, cancelable = true,
+                ),
+            ),
+        )
+        finger("pointerdown", 1, cx - 20)
+        finger("pointerdown", 2, cx + 20)
+        for (i in 1..6) {
+            finger("pointermove", 1, cx - 20 - 20.0 * i)
+            finger("pointermove", 2, cx + 20 + 20.0 * i)
+        }
+        finger("pointerup", 1, cx - 140)
+        finger("pointerup", 2, cx + 140)
+        settle()
+        assertTrue(scale() != "none", "the spread did not zoom the card, so this proves nothing about back")
+
+        window.history.back()
+        settle()
+        assertTrue(document.querySelector(".peek-scrim") != null, "back closed the carousel instead of zooming out")
+        assertEquals("none", scale(), "back left the card zoomed")
+
+        window.history.back()
+        waitFor("the carousel to close") { document.querySelector(".peek-scrim") == null }
+        assertTrue(hash().startsWith("#/decks/alela"), "the second back left the deck: ${hash()}")
+    }
+
     @Test
     fun aCardFromADeckGoesBackToThatDeck() = runTest {
         val view = mount("#/decks/alela")

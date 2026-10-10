@@ -308,6 +308,8 @@ fun AppShell(
             // overlay to account for, and the phone does not.
             onDetails = { state.peeked?.let(onOpenPeeked) },
             onTweak = { card, how -> onTweak(card, how) },
+            zoom = state.peek.zoom,
+            onZoom = { onState(state.peekZoom(it)) },
         )
     }
 

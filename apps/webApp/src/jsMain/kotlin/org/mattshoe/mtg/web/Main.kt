@@ -236,8 +236,11 @@ object MtgApp {
             // second one — and Close then popped back to an address
             // that still said `card=`, which the hashchange after it
             // dutifully reopened.
-            LaunchedEffect(state.overlays.historyDepth) {
-                OverlayHistory.sync(state.overlays.historyDepth)
+            // `state.historyDepth` and not the overlays' own: a zoomed
+            // carousel card is an entry too, so the browser's back
+            // zooms it out before it closes anything.
+            LaunchedEffect(state.historyDepth) {
+                OverlayHistory.sync(state.historyDepth)
             }
 
             AppShell(
