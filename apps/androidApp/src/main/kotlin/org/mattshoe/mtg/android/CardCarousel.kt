@@ -185,7 +185,9 @@ private fun Modifier.pinchZoom(zoom: CardZoom, onZoom: (CardZoom) -> Unit): Modi
             do {
                 val event = awaitPointerEvent()
                 val down = event.changes.count { it.pressed }
-                if (down >= 2 || z.zoomed) {
+                // `down > 0`: the event where the last finger lifts
+                // has no centre, and Compose says so with NaN.
+                if (down > 0 && (down >= 2 || z.zoomed)) {
                     val w = size.width.toFloat()
                     val h = size.height.toFloat()
                     val c = event.calculateCentroid(useCurrent = true)

@@ -28,7 +28,9 @@ data class CardZoom(val scale: Float = 1f, val x: Float = 0f, val y: Float = 0f)
      * a pinch feel like it is holding the picture.
      */
     fun pinch(factor: Float, cx: Float, cy: Float, width: Float, height: Float): CardZoom {
-        if (factor.isNaN() || factor <= 0f) return this
+        // NaN is what a gesture reports for the centre of no fingers,
+        // on the event where the last one lifts.
+        if (!factor.isFinite() || factor <= 0f || !cx.isFinite() || !cy.isFinite()) return this
         val next = (scale * factor).coerceIn(1f, MAX)
         val k = next / scale
         return CardZoom(next, cx - k * (cx - x), cy - k * (cy - y)).clamped(width, height)
@@ -36,7 +38,7 @@ data class CardZoom(val scale: Float = 1f, val x: Float = 0f, val y: Float = 0f)
 
     /** One finger dragged by [dx], [dy]. Nothing to move while zoomed out. */
     fun pan(dx: Float, dy: Float, width: Float, height: Float): CardZoom =
-        copy(x = x + dx, y = y + dy).clamped(width, height)
+        if (!dx.isFinite() || !dy.isFinite()) this else copy(x = x + dx, y = y + dy).clamped(width, height)
 
     /**
      * The fingers came off. A hair of zoom is let go of entirely,

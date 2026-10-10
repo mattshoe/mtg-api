@@ -115,6 +115,16 @@ class CardZoomTest {
     }
 
     @Test
+    fun fingersWithNoPositionLeaveTheZoomAlone() {
+        // Compose reports the centre of no fingers as NaN on the event
+        // where the last one lifts. On the emulator that NaN went into
+        // the zoom and the art vanished.
+        val z = CardZoom().pinch(2f, 0f, 0f, w, h)
+        assertEquals(z, z.pinch(1f, Float.NaN, Float.NaN, w, h), "a pinch about nowhere moved the art")
+        assertEquals(z, z.pan(Float.NaN, Float.NaN, w, h), "a drag of nothing moved the art")
+    }
+
+    @Test
     fun aDragDoesNothingZoomedOut() {
         assertEquals(CardZoom(), CardZoom().pan(50f, 50f, w, h))
     }
