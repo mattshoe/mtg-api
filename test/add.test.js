@@ -338,11 +338,14 @@ describe('POST /cards/add — batching', () => {
     expect(stub.calls.identifiers).toHaveLength(80);
   });
 
-  it('refuses an absurdly long list outright', async () => {
+  // This used to assert that 1,001 lines were refused outright. Matt:
+  // "THERE IS NO FUCKING LIMIT." He is right — the cap was a number from
+  // the first commit with nothing written beside it, and what it hid was
+  // `SQLITE_TOOBIG` from the id lookups. See test/import-size.test.js.
+  it('does not refuse a long list for being long', async () => {
     const list = Array.from({ length: 1001 }, (_, i) => `1 Card ${i}`).join('\n');
     const r = await post('/cards/add', { list }, stubScryfall());
-    expect(r.status).toBe(400);
-    expect(r.body.error).toMatch(/too many lines/);
+    expect(r.status, 'a long list must not be refused for its length').not.toBe(400);
   });
 });
 
