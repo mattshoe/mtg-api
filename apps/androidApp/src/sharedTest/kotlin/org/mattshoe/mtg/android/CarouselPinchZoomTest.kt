@@ -7,9 +7,6 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pinch
 import androidx.compose.ui.test.swipe
@@ -120,7 +117,13 @@ class CarouselPinchZoomTest {
             MaterialTheme(colorScheme = darkColorScheme()) {
                 Surface {
                     held = androidx.compose.runtime.remember {
-                        androidx.compose.runtime.mutableStateOf(onADeck())
+                        // Opened through the state rather than a tap on
+                        // the row: the tap is `DeckCardCarouselParityTest`'s
+                        // claim, and scrolling the deck to the row hung
+                        // this class on CI in a scroll animation that
+                        // never settled, before any finger touched the
+                        // card.
+                        androidx.compose.runtime.mutableStateOf(onADeck().peekAt(1))
                     }
                     AppShell(
                         state = held.value,
@@ -133,10 +136,6 @@ class CarouselPinchZoomTest {
                 }
             }
         }
-        rule.waitForIdle()
-        val row = rule.onNodeWithText("Cultivate")
-        runCatching { row.performScrollTo() }
-        row.performClick()
         rule.waitForIdle()
         assertEquals("Cultivate", held.value.peeked?.title, "the carousel did not open on Cultivate")
     }
