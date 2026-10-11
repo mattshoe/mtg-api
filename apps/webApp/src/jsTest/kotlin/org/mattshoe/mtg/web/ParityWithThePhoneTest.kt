@@ -209,7 +209,8 @@ class ParityWithThePhoneTest {
         peek()
         assertTrue(says("M3C · 409"), "the sheet does not say which printing it is")
         assertTrue(says("$1.75"), "the sheet does not say what it is worth")
-        assertTrue(says("1× in deck"), "the sheet does not say how many the deck wants")
+        // How many the deck wants is the stepper's to say, and only
+        // the stepper's: see `CountStepperTest`.
         assertTrue(says("2 of 3"), "nothing says where in the deck this is")
         assertNotNull(button("Full details"), "no way through to the card's own page")
     }
@@ -228,10 +229,12 @@ class ParityWithThePhoneTest {
 
     @Test
     fun theSheetChangesTheDeck() = runTest {
+        // Count and Remove are the stepper's now; Swap is the one
+        // change it cannot make.
         peek()
-        assertNotNull(button("Count")).click()
+        assertNotNull(button("Swap")).click()
         settle()
-        assertEquals(Tweak.QUANTITY, tweaked?.second)
+        assertEquals(Tweak.SWAP, tweaked?.second)
         assertEquals("Cultivate", tweaked?.first?.name)
     }
 
@@ -292,7 +295,8 @@ class ParityWithThePhoneTest {
         settle()
         (document.querySelectorAll("div.card")[0] as HTMLElement).click()
         settle()
-        assertTrue(says("2 owned"), "the sheet does not say how many you own")
+        // How many you own is the stepper's to say: "- 2 + owned".
+        assertTrue("2 owned" !in sheetSays(), "the sheet says how many you own beside the stepper as well")
         assertTrue(says("1 free"), "the sheet does not say how many are spare")
         assertNotNull(button("Full details"), "no way through to the card's own page")
         // Admin is on and there is still no deck to change.
