@@ -214,6 +214,15 @@ which suite, which part — is the difference between "working" and
    and Admin Settings lists it. Its `bump:` frontmatter sets the
    version: `minor` for something new, `major` for something taken
    away, nothing for a patch. See `release-notes/README.md`.
+
+   Then write `summaries/<name>.md`, which is what Matt reads as the
+   Summary on the done task's page. A bug says `What was wrong:`, `Why:`
+   and `Fix:`, or `Could not reproduce:` and what you tried. A feature
+   says `What was built:`, `Choices:` and `Liberties:`. Plain labelled
+   lines, no markdown. The release note alone was "the summary doesn't
+   contain any useful information". `test/summaries.test.js` fails CI
+   for a request filed under `requests/done/` without one. See
+   `summaries/README.md`.
 6. Walk the parity check from the skill. If the diff is one-sided and
    you cannot justify it in the PR body, you are not finished.
 7. Move `requests/<name>.md` into `requests/done/` in a commit of its
