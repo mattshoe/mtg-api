@@ -125,13 +125,16 @@ data class PeekTag(val text: String, val bad: Boolean = false) {
          * number for, so a missing line can only ever be a bug.
          */
         fun edhrec(rank: Long?): PeekTag =
-            PeekTag(rank?.let { "EDHREC #${grouped(it)}" } ?: "EDHREC unranked")
+            PeekTag(rank?.let { "EDHREC #${grouped(it)} of all cards" } ?: "EDHREC unranked")
 
-        /** 1234 as 1,234. No `String.format` in common code. */
-        private fun grouped(n: Long): String =
-            n.toString().reversed().chunked(3).joinToString(",").reversed()
+        /** Its place among commanders, the number EDHREC's commander page leads with. */
+        fun commander(rank: Long): PeekTag = PeekTag("Commander #${grouped(rank)} on EDHREC")
     }
 }
+
+/** 1234 as 1,234. No `String.format` in common code. */
+internal fun grouped(n: Long): String =
+    n.toString().reversed().chunked(3).joinToString(",").reversed()
 
 /**
  * One card, as the carousel's sheet needs it.

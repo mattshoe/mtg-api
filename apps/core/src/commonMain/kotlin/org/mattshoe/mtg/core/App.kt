@@ -78,6 +78,8 @@ data class AppState(
     val toastFailed: Boolean = false,
     /** The page a pull to refresh is waiting on. See [refreshed]. */
     val pulled: View? = null,
+    /** Commanders' ranks among commanders, from EDHREC. See `CommanderRank.kt`. */
+    val commanderRanks: CommanderRanks = CommanderRanks(),
 ) {
     val view: View get() = route.view
 
@@ -378,6 +380,7 @@ data class AppState(
                         // The one bad fact a deck row can state: the
                         // deck wants more than the collection holds.
                         PeekTag("${card.owned} owned", bad = card.short > 0),
+                        commanderRanks[card.shown]?.rank?.let { PeekTag.commander(it) },
                         PeekTag.edhrec(card.edhrecRank),
                     ),
                     inDeck = card,
@@ -397,6 +400,7 @@ data class AppState(
                     tags = listOfNotNull(
                         PeekTag("${row.qty} owned").takeUnless { stepped },
                         row.free?.let { PeekTag("$it free") },
+                        commanderRanks[row.fullName]?.rank?.let { PeekTag.commander(it) },
                         PeekTag.edhrec(row.edhrecRank),
                     ),
                     stepped = stepped,

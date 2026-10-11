@@ -86,7 +86,7 @@ class CardDetailsParityTest {
     fun everyFieldTheDatabaseHasIsOnThePage() {
         open(signet())
         assertTrue(seen("Details"), "the section has no heading")
-        assertTrue(beside("EDHREC rank", "#3"), "no EDHREC rank beside its label")
+        assertTrue(beside("EDHREC rank", "#3 of all cards"), "no EDHREC rank beside its label")
         assertTrue(beside("Mana value", "2"), "no mana value beside its label")
         assertTrue(beside("Produces", "White, Blue, Black, Red, Green"), "nothing says what it taps for")
         assertTrue(beside("Rarity", "Common"), "no rarity")

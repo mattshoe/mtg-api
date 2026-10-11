@@ -224,7 +224,7 @@ class ParityWithThePhoneTest {
         // Matt: "I asked to have the edhrec rank of every card on its
         // 'bottom sheet' thingy on the carousel. It's still missing."
         peek()
-        assertTrue("EDHREC #412" in sheetSays(), "the deck's sheet has no EDHREC rank: ${sheetSays()}")
+        assertTrue("EDHREC #412 of all cards" in sheetSays(), "the deck's sheet has no EDHREC rank: ${sheetSays()}")
     }
 
     @Test
@@ -311,7 +311,7 @@ class ParityWithThePhoneTest {
         settle()
         (document.querySelectorAll("div.card")[0] as HTMLElement).click()
         settle()
-        assertTrue("EDHREC #1,234" in sheetSays(), "the Library's sheet has no EDHREC rank: ${sheetSays()}")
+        assertTrue("EDHREC #1,234 of all cards" in sheetSays(), "the Library's sheet has no EDHREC rank: ${sheetSays()}")
     }
 
     @Test

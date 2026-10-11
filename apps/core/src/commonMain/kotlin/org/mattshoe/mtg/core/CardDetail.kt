@@ -235,7 +235,11 @@ data class Fact(val label: String, val value: String)
  * page. Printing-level columns come off the newest printing, the same
  * one [CardQueries.face] reads the flavour text off.
  */
-data class CardFacts(val raw: Map<String, String> = emptyMap()) {
+data class CardFacts(
+    val raw: Map<String, String> = emptyMap(),
+    /** Its place among commanders, from EDHREC, once asked. See `CommanderRank.kt`. */
+    val commander: Long? = null,
+) {
 
     private fun text(col: String): String? = raw[col]?.trim()?.takeIf { it.isNotEmpty() }
 
@@ -253,12 +257,15 @@ data class CardFacts(val raw: Map<String, String> = emptyMap()) {
 
     val lines: List<Fact>
         get() {
-            if (raw.isEmpty()) return emptyList()
+            if (raw.isEmpty() && commander == null) return emptyList()
             val out = mutableListOf<Fact>()
             fun add(label: String, value: String?) {
                 if (!value.isNullOrBlank()) out += Fact(label, value)
             }
-            add("EDHREC rank", text("edhrec_rank")?.toDoubleOrNull()?.toLong()?.let { "#$it" })
+            // First, because for a commander it is the number EDHREC's
+            // own page leads with. The one below is every card's.
+            add("Commander rank", commander?.let { "#${grouped(it)} on EDHREC" })
+            add("EDHREC rank", text("edhrec_rank")?.toDoubleOrNull()?.toLong()?.let { "#${grouped(it)} of all cards" })
             add("Mana value", text("cmc")?.toDoubleOrNull()?.let {
                 if (it == kotlin.math.floor(it)) it.toLong().toString() else it.toString()
             })
