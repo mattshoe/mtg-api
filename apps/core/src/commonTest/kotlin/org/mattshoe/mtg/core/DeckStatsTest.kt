@@ -641,4 +641,68 @@ class SliceFillTest {
             ColourRing.entries.map { it.caption },
         )
     }
+
+    // ------------------------------------------------- creature types
+
+    @Test
+    fun aHumanWarriorCountsOnceAsHumanAndOnceAsWarrior() {
+        // Matt: "a human warrior would add 1 to human and 1 to warrior.
+        // There would be no 'human warrior' type".
+        val s = DeckAnalysis.of(listOf(card("Fighter", type = "Creature — Human Warrior")))
+        assertEquals(listOf(Bar("Human", 1), Bar("Warrior", 1)), s.creatureTypes)
+    }
+
+    @Test
+    fun creatureTypesAreCountedByCopiesMostCommonFirst() {
+        val s = DeckAnalysis.of(
+            listOf(
+                card("Elf Druid", type = "Creature — Elf Druid", qty = 1),
+                card("Elf Warrior", type = "Creature — Elf Warrior", qty = 2),
+                card("Human Warrior", type = "Creature — Human Warrior", qty = 3),
+            ),
+        )
+        assertEquals(
+            listOf(Bar("Warrior", 5), Bar("Elf", 3), Bar("Human", 3), Bar("Druid", 1)),
+            s.creatureTypes,
+            "not most-first, ties alphabetical",
+        )
+        assertEquals(6, s.creatures, "six creature cards carry a type")
+    }
+
+    @Test
+    fun onlyCreatureAndKindredSubtypesAreCreatureTypes() {
+        val s = DeckAnalysis.of(
+            listOf(
+                card("Forest", type = "Basic Land — Forest", cost = null, cmc = 0.0),
+                card("Sword", type = "Artifact — Equipment"),
+                card("Rite", type = "Kindred Sorcery — Goblin"),
+                card("Old Rite", type = "Tribal Instant — Elf"),
+                card("Vehicle", type = "Artifact Creature — Construct"),
+                card("Spirit", type = "Legendary Enchantment Creature — Spirit"),
+                card("Unknown", type = null),
+            ),
+        )
+        assertEquals(
+            listOf("Construct", "Elf", "Goblin", "Spirit"),
+            s.creatureTypes.map { it.label },
+            "a land, an equipment or an unknown card leaked into the creature types",
+        )
+    }
+
+    @Test
+    fun aTwoFacedCardCountsEachOfItsTypesOnce() {
+        // Both faces Human: one Human, not two.
+        val s = DeckAnalysis.of(
+            listOf(
+                card("Delver", type = "Creature — Human Wizard // Creature — Human Insect"),
+                card("Adventurer", type = "Creature — Elf Rogue // Sorcery — Adventure"),
+            ),
+        )
+        assertEquals(
+            listOf(
+                Bar("Elf", 1), Bar("Human", 1), Bar("Insect", 1), Bar("Rogue", 1), Bar("Wizard", 1),
+            ),
+            s.creatureTypes,
+        )
+    }
 }
