@@ -299,7 +299,7 @@ describe('a done task\'s summary', () => {
     const asked = []
     const impl = async (url) => {
       asked.push(String(url))
-      const hit = Object.entries(files).find(([name]) => String(url).endsWith(`/release-notes/${name}.md`))
+      const hit = Object.entries(files).find(([path]) => String(url).endsWith(`/${path}.md`))
       return hit ? new Response(hit[1]) : new Response('404: Not Found', { status: 404 })
     }
     return { impl, asked }
@@ -307,18 +307,38 @@ describe('a done task\'s summary', () => {
 
   const keyOf = async (name) => (await sql('SELECT key FROM task_inbox WHERE name = ?1', name))[0].key
 
-  it('a merged task carries the release note it shipped with, without its frontmatter', async () => {
+  it('a merged task with no writeup carries the release note it shipped with, without its frontmatter', async () => {
     await post('/tasks/status', { name: 'deck-colours', title: 'Deck colours', status: 'deployed', note: 'live: the site, the APK' })
-    const gh = github({ 'deck-colours': '---\nbump: minor\n---\nDeck colours show on the deck page. Website and Android.\n' })
+    const gh = github({ 'release-notes/deck-colours': '---\nbump: minor\n---\nDeck colours show on the deck page. Website and Android.\n' })
     const r = await call(`/tasks/${await keyOf('deck-colours')}`, { method: 'GET', token: await mattSession(), githubFetch: gh.impl })
     expect(r.body.summary, 'no summary on a deployed task').toBe('Deck colours show on the deck page. Website and Android.')
-    expect(gh.asked).toEqual(['https://raw.githubusercontent.com/mattshoe/mtg-api/main/release-notes/deck-colours.md'])
+    expect(gh.asked).toEqual([
+      'https://raw.githubusercontent.com/mattshoe/mtg-api/main/summaries/deck-colours.md',
+      'https://raw.githubusercontent.com/mattshoe/mtg-api/main/release-notes/deck-colours.md',
+    ])
+  })
+
+  // Matt: "the summary doesn't contain any useful information. for bugs i
+  // want to know what was wrong or what was fixed or why something was
+  // broken or whether it was unreproduceable etc. for features i want a
+  // very high level summary of what was implemented, liberties taken,
+  // design choices". The release note is one changelog line; the writeup
+  // in summaries/ is the builder's account of the work.
+  it('a done task shows the writeup its builder filed in summaries/, not the one-line release note', async () => {
+    await post('/tasks/status', { name: 'swap-glitch', title: 'Swap glitch', status: 'merged' })
+    const writeup = 'Bug. Swapping got glitchier every time.\n\nWhat was wrong: closing the sheet restored the whole app.\n\nFix: it restores the sheet only.'
+    const gh = github({
+      'summaries/swap-glitch': '---\nkind: bug\n---\n' + writeup + '\n',
+      'release-notes/swap-glitch': 'Swapping cards no longer gets glitchy.\n',
+    })
+    const r = await call(`/tasks/${await keyOf('swap-glitch')}`, { method: 'GET', token: await mattSession(), githubFetch: gh.impl })
+    expect(r.body.summary, 'the summary is the one-line release note, not the builder\'s writeup').toBe(writeup)
   })
 
   it('a live task asks nobody and has no summary, and a done one with no note says nothing', async () => {
     await post('/tasks/status', { name: 'still-going', title: 'Still going', status: 'in review' })
     await post('/tasks/status', { name: 'never-noted', title: 'Never noted', status: 'cancelled' })
-    const gh = github({ 'still-going': 'Should not be read.' })
+    const gh = github({ 'release-notes/still-going': 'Should not be read.', 'summaries/still-going': 'Nor this.' })
     const going = await call(`/tasks/${await keyOf('still-going')}`, { method: 'GET', token: await mattSession(), githubFetch: gh.impl })
     expect(going.body.summary).toBeNull()
     expect(gh.asked, 'a task still in review asked GitHub for a note').toEqual([])
