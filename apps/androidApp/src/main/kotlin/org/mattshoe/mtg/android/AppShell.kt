@@ -43,6 +43,11 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.mattshoe.mtg.core.AppState
+import org.mattshoe.mtg.core.CountWrite
+import org.mattshoe.mtg.core.cardStep
+import org.mattshoe.mtg.core.cardStepper
+import org.mattshoe.mtg.core.peekStep
+import org.mattshoe.mtg.core.peekStepper
 import org.mattshoe.mtg.core.TaskDetail
 import org.mattshoe.mtg.core.openTask
 import org.mattshoe.mtg.core.openTaskKey
@@ -152,6 +157,8 @@ fun AppShell(
     onTweakFind: (String) -> Unit = {},
     onTweakPreview: () -> Unit = {},
     onTweakApply: () -> Unit = {},
+    /** Plus or minus under a card. `:core` has already worked out what to send. */
+    onCount: (CountWrite) -> Unit = {},
     /** The deck, as a link or as a list, copied or downloaded. */
     onShare: (ShareWhat, ExportTo) -> Unit = { _, _ -> },
     /** Hand over a link to the open card. The website's `CardPage` has always had one. */
