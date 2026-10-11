@@ -156,7 +156,7 @@ class TaskDetailLoadTest {
         controller = built
         val activity = built.get()
         activity.useForTesting(MtgApi.withEngine("https://example.invalid", client()))
-        built.create().start().resume()
+        built.create().start().resume().visible()
 
         until(activity, "the task list") { it.tasks.rows.isNotEmpty() }
         compose.onNodeWithTag("tasks-done-toggle").performScrollTo().performClick()
