@@ -114,8 +114,16 @@ fun CardCarousel(
         // where the finger left it; the effect below only moves the
         // pager when something else moved the state, so a swipe does
         // not fight the thing it just caused.
+        //
+        // The latest `at` and `onSwipe`, never the first frame's. This
+        // effect outlives every frame after it, and `onSwipe` writes a
+        // whole `AppState` — so the first frame's wrote back the state
+        // as it was when the carousel opened, and after a swap that put
+        // the old deck back on screen for the next swap to plan against.
+        val now by rememberUpdatedState(index)
+        val swiped by rememberUpdatedState(onSwipe)
         LaunchedEffect(pager) {
-            snapshotFlow { pager.currentPage }.collect { page -> if (page != at) onSwipe(page) }
+            snapshotFlow { pager.currentPage }.collect { page -> if (page != now) swiped(page) }
         }
         LaunchedEffect(index) {
             if (pager.currentPage != index) pager.scrollToPage(index)

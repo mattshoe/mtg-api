@@ -56,6 +56,15 @@ fun CardCarousel(
     val index = at.coerceIn(0, cards.size - 1)
     val card = cards[index]
     val rail = remember { arrayOfNulls<HTMLElement>(1) }
+    // Read by the scroll listener, which is attached once in `ref` and
+    // outlives every frame after it. Handing it `at` and `onSwipe`
+    // directly kept the first frame's, and `onSwipe` writes a whole
+    // `AppState` — the one from when the carousel opened, which after
+    // a swap is the deck before the swap.
+    val now = remember { intArrayOf(index) }
+    val swiped = remember { arrayOf(onSwipe) }
+    now[0] = index
+    swiped[0] = onSwipe
 
     Div(attrs = {
         classes("peek-scrim")
@@ -84,7 +93,7 @@ fun CardCarousel(
                         val width = el.clientWidth
                         if (width > 0) {
                             val landed = kotlin.math.round(el.scrollLeft / width).toInt()
-                            if (landed != at) onSwipe(landed)
+                            if (landed != now[0]) swiped[0](landed)
                         }
                     }, 80)
                 }
