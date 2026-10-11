@@ -49,6 +49,7 @@ import org.mattshoe.mtg.core.Design
 import org.mattshoe.mtg.core.Face
 import org.mattshoe.mtg.core.Legality
 import org.mattshoe.mtg.core.Prices
+import org.mattshoe.mtg.core.Stepper
 
 /**
  * One card, opened. Sibling of `CardPage` on the web.
@@ -82,12 +83,15 @@ fun CardSheet(
      * obviously the point.
      */
     onShare: () -> Unit = {},
+    /** "- 3 +": how many of it the collection being read holds. Null when it is not yours. */
+    stepper: Stepper? = null,
+    onCount: (Int) -> Unit = {},
     // Last, so `CardSheet(card) {}` still means "and this is how you
     // leave it" — which is how every caller and every test writes it.
     onClose: () -> Unit,
 ) {
     Column(
-        Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
+        Modifier.fillMaxWidth().testTag("card-sheet").verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(
@@ -107,7 +111,7 @@ fun CardSheet(
         when {
             card.busy -> Text("Loading…")
             card.error != null -> Text(card.error!!)
-            else -> Body(card)
+            else -> Body(card, stepper, onCount)
         }
         // Outside the `when`, the same as the web: stepping along a
         // deck still works while the next card is loading, which is
@@ -165,7 +169,7 @@ private fun Facts(card: CardDetail) {
 }
 
 @Composable
-private fun Body(card: CardDetail) {
+private fun Body(card: CardDetail, stepper: Stepper?, onCount: (Int) -> Unit) {
     // The scan, the same picture the web page puts at the top. A card
     // page without the card on it is a list of numbers.
     CardQueries.art(card.printings.firstOrNull()?.scryfallId)?.let { url ->
@@ -187,9 +191,16 @@ private fun Body(card: CardDetail) {
         }
     }
 
+    // How many you have, as "- 3 +" under the picture. Matt asked for
+    // it here by name: "toggle the amount of a given card on the
+    // carousel and on the card details". The rest of the page still
+    // says nothing about who owns it.
+    stepper?.let {
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { CountStepper(it, onCount) }
+    }
+
     // What the card actually says, then everything else the database
-    // has on it. Nothing about who owns it or how many: Matt does not
-    // want ownership on this page. Which decks want it stays.
+    // has on it. Which decks want it stays.
     card.faces.forEach { FacePanel(it, named = card.faces.size > 1) }
 
     Facts(card)

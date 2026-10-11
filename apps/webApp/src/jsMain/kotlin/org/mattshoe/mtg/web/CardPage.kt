@@ -18,6 +18,7 @@ import org.mattshoe.mtg.core.CardQueries
 import org.mattshoe.mtg.core.Face
 import org.mattshoe.mtg.core.Printing
 import org.mattshoe.mtg.core.Prices
+import org.mattshoe.mtg.core.Stepper
 
 /**
  * One card, as its own page.
@@ -30,8 +31,9 @@ import org.mattshoe.mtg.core.Prices
  * questions any more.
  *
  * Sibling of `CardSheet` on Android. Both are handed a `CardDetail`.
- * It says nothing about who owns the card or how many: Matt does not
- * want ownership here. Which decks want it stays.
+ * Which decks want it stays, and "- 3 +" under the picture says how
+ * many of it the collection being read holds — Matt asked for that
+ * here by name. Nothing else on the page is about ownership.
  */
 @Composable
 fun CardPage(
@@ -44,6 +46,9 @@ fun CardPage(
     /** "7 of 99", when the card is part of a deck. */
     place: String? = null,
     onStep: (DeckCard) -> Unit = {},
+    /** "- 3 +": how many of it the collection being read holds. Null when it is not yours. */
+    stepper: Stepper? = null,
+    onCount: (Int) -> Unit = {},
 ) {
     Div(attrs = { classes("wrap") }) {
         Div(attrs = { classes("page-head") }) {
@@ -89,7 +94,7 @@ fun CardPage(
             when {
                 card.busy -> Div(attrs = { classes("empty") }) { Text("Loading…") }
                 card.error != null -> Div(attrs = { classes("err") }) { Text(card.error!!) }
-                else -> Body(card)
+                else -> Body(card, stepper, onCount)
             }
             if (place != null) Steps(previous, next, place, onStep)
         }
@@ -161,13 +166,16 @@ private fun FacePanel(face: Face, named: Boolean) {
 }
 
 @Composable
-private fun Body(card: CardDetail) {
+private fun Body(card: CardDetail, stepper: Stepper?, onCount: (Int) -> Unit) {
     CardQueries.art(card.printings.firstOrNull()?.scryfallId)?.let { url ->
         // `card-scan`, not `card-art`. The latter is the grid tile's
         // wrapper and sets no width at all, so Scryfall's 745px scan
         // rendered at 745px and ran off the side of a phone.
         Img(src = url, alt = card.name, attrs = { classes("card-scan") })
     }
+
+    // How many you have, as "- 3 +" under the picture.
+    stepper?.let { CountStepper(it, onCount) }
 
     // What the card actually says. Everything under it is about the
     // collection; this is the card.

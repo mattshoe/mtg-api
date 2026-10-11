@@ -26,6 +26,11 @@ import org.mattshoe.mtg.core.CardDetail
 import org.mattshoe.mtg.core.Completion
 import org.mattshoe.mtg.core.DeckCard
 import org.mattshoe.mtg.core.DeckTweak
+import org.mattshoe.mtg.core.CountWrite
+import org.mattshoe.mtg.core.cardStep
+import org.mattshoe.mtg.core.cardStepper
+import org.mattshoe.mtg.core.peekStep
+import org.mattshoe.mtg.core.peekStepper
 import org.mattshoe.mtg.core.Tweak
 import org.mattshoe.mtg.core.ExportTo
 import org.mattshoe.mtg.core.Found
@@ -98,6 +103,8 @@ fun AppShell(
     onTweakFind: (String) -> Unit = {},
     onTweakPreview: () -> Unit = {},
     onTweakApply: () -> Unit = {},
+    /** Plus or minus under a card. `:core` has already worked out what to send. */
+    onCount: (CountWrite) -> Unit = {},
     /** Files picked on the New task page. */
     onTaskFiles: (List<File>) -> Unit = {},
     onSendTask: () -> Unit = {},
@@ -207,6 +214,8 @@ fun AppShell(
             next = state.nextCard,
             place = state.cardPlace,
             onStep = { c -> onOpenNamed(c.name, c.nameNorm, "") },
+            stepper = state.cardStepper,
+            onCount = { by -> state.cardStep(by)?.let(onCount) },
         )
 
         View.ENTRY -> MassEntryPage(
@@ -311,6 +320,8 @@ fun AppShell(
             onTweak = { card, how -> onTweak(card, how) },
             zoom = state.peek.zoom,
             onZoom = { onState(state.peekZoom(it)) },
+            stepper = state.peekStepper,
+            onCount = { by -> state.peekStep(by)?.let(onCount) },
         )
     }
 

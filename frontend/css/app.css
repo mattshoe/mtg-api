@@ -1731,6 +1731,17 @@ select.sort {
 .peek-tags { display: flex; gap: 8px; flex-wrap: wrap; }
 .peek-acts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 
+/* "- 3 +" under a card: minus, the number, plus, and what the number
+   counts. Square buttons big enough for a thumb. */
+.stepper { display: flex; align-items: center; gap: 8px; }
+.stepper .btn {
+  width: 40px; height: 40px; min-width: 40px; padding: 0;
+  display: inline-grid; place-items: center;
+  font-size: 20px; line-height: 1;
+}
+.step-count { min-width: 2ch; text-align: center; font-size: 18px; font-weight: 600; color: var(--text); }
+.card-page .stepper { justify-content: center; margin: 4px 0 8px; }
+
 /* What the colours are called — Azorius, Jund, Mono-red — beside the
    pips that say which they are. */
 .guild { color: var(--text-2); font-size: 12px; font-weight: 600; white-space: nowrap; }

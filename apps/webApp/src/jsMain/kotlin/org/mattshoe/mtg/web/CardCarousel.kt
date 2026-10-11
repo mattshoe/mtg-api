@@ -17,6 +17,7 @@ import org.mattshoe.mtg.core.CardZoom
 import org.mattshoe.mtg.core.DeckCard
 import org.mattshoe.mtg.core.PeekCard
 import org.mattshoe.mtg.core.Prices
+import org.mattshoe.mtg.core.Stepper
 import org.mattshoe.mtg.core.Tweak
 import org.w3c.dom.HTMLElement
 import org.w3c.dom.events.Event
@@ -47,6 +48,9 @@ fun CardCarousel(
     onTweak: (DeckCard, Tweak) -> Unit,
     zoom: CardZoom = CardZoom(),
     onZoom: (CardZoom) -> Unit = {},
+    /** "- 3 +" for the card on show, or null when there is nothing you may change. */
+    stepper: Stepper? = null,
+    onCount: (Int) -> Unit = {},
 ) {
     if (cards.isEmpty()) return
     val index = at.coerceIn(0, cards.size - 1)
@@ -117,7 +121,7 @@ fun CardCarousel(
             onDispose { }
         }
 
-        Sheet(card, place, admin, index, cards.size, zoom.zoomed, onSwipe, onDetails, onTweak)
+        Sheet(card, place, admin, index, cards.size, zoom.zoomed, onSwipe, onDetails, onTweak, stepper, onCount)
     }
 }
 
@@ -176,6 +180,8 @@ private fun Sheet(
     onSwipe: (Int) -> Unit,
     onDetails: () -> Unit,
     onTweak: (DeckCard, Tweak) -> Unit,
+    stepper: Stepper?,
+    onCount: (Int) -> Unit,
 ) {
     Div(attrs = { classes("peek-sheet") }) {
         Div(attrs = { classes("peek-head") }) {
@@ -203,6 +209,10 @@ private fun Sheet(
                 Span(attrs = { classes("tag"); if (tag.bad) classes("bad") }) { Text(tag.text) }
             }
         }
+
+        // Over a deck it is the deck's count, anywhere else the
+        // collection's. `:core` decided which.
+        stepper?.let { CountStepper(it, onCount) }
 
         Div(attrs = { classes("peek-acts") }) {
             // Arrows as well as the swipe: a mouse has no swipe, and
