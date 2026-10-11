@@ -221,6 +221,22 @@ class MtgApiTest {
     }
 
     @Test
+    fun aCommandersRankComesFromTheWorkerByName() = runTest {
+        val found = api(
+            body = """{"name":"Teysa Karlov","slug":"teysa-karlov","rank":58,"decks":21728}""",
+        ).commanderRank("Teysa Karlov")
+        assertEquals(CommanderRank(58, 21728), found)
+        assertEquals("https://example.invalid/edhrec/commander?name=Teysa+Karlov", seen.single().url.toString())
+    }
+
+    @Test
+    fun aCardEdhrecHasNoCommanderPageForIsUnranked() = runTest {
+        val found = api(body = """{"name":"Sol Ring","slug":"sol-ring","rank":null,"decks":null}""")
+            .commanderRank("Sol Ring")
+        assertEquals(CommanderRank(null, null), found)
+    }
+
+    @Test
     fun releaseNotesComeFromTheWorkerNewestFirst() = runTest {
         val found = api(
             body = """[{"tag_name":"android-v2.1.0-1","published_at":"2026-01-01T00:00:00Z","body":"old"},
