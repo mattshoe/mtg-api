@@ -126,22 +126,61 @@ class CountStepperTest {
         val m = minus.getBoundingClientRect()
         val n = number.getBoundingClientRect()
         val p = plus.getBoundingClientRect()
-        assertTrue(m.width >= 32 && m.height >= 32, "minus is ${m.width}x${m.height}, too small to press")
-        assertTrue(p.width >= 32 && p.height >= 32, "plus is ${p.width}x${p.height}, too small to press")
+        // The size of every other button beside it, which is what Matt
+        // asked for; `.btn.sm` on a desktop is the smallest that gets.
+        assertTrue(m.width >= 24 && m.height >= 24, "minus is ${m.width}x${m.height}, too small to press")
+        assertTrue(p.width >= 24 && p.height >= 24, "plus is ${p.width}x${p.height}, too small to press")
         assertTrue(m.right <= n.left + 0.5, "minus (right ${m.right}) is not left of the number (left ${n.left})")
         assertTrue(n.right <= p.left + 0.5, "the number (right ${n.right}) is not left of plus (left ${p.left})")
         val mid = { r: org.w3c.dom.DOMRect -> r.top + r.height / 2 }
         assertTrue(kotlin.math.abs(mid(m) - mid(p)) < 2, "minus and plus are not on one line")
     }
 
-    @Test
-    fun theDecksCarouselStepsTheDecksCountWithRealButtons() = runTest {
+    private suspend fun openSolRing() {
         mount(onADeck())
         document.querySelectorAll(".deck-line").let { l -> (0 until l.length).map { l[it] as HTMLElement } }
             .first { it.textContent?.contains("Sol Ring") == true }
             .click()
         settle()
         assertEquals("Sol Ring", held.value.peeked?.title, "the carousel did not open on Sol Ring")
+    }
+
+    private fun sheetButton(label: String): HTMLButtonElement? =
+        document.querySelectorAll(".peek-sheet button").let { l -> (0 until l.length).map { l[it] } }
+            .filterIsInstance<HTMLButtonElement>()
+            .firstOrNull { it.textContent?.trim() == label }
+
+    @Test
+    fun theCarouselsStepperIsNoTallerThanTheButtonsUnderIt() = runTest {
+        // Matt: "the plus minus view looks terrible why is it bigger
+        // than everything else?"
+        openSolRing()
+        val swap = assertNotNull(sheetButton("Swap"), "no Swap on the sheet").getBoundingClientRect()
+        listOf("minus" to ".step-minus", "plus" to ".step-plus").forEach { (name, sel) ->
+            val b = el(".peek-sheet .stepper $sel").getBoundingClientRect()
+            assertTrue(
+                kotlin.math.abs(b.height - swap.height) < 1,
+                "$name is ${b.height} tall and Swap beside it is ${swap.height}",
+            )
+        }
+    }
+
+    @Test
+    fun theCarouselSaysTheCountOnceAndSetsItOnce() = runTest {
+        // Matt: "why is there still s count button?!?! [...] same with
+        // remove?! same with the "1x in deck"?!?!?!"
+        openSolRing()
+        assertNotNull(sheetButton("Swap"), "Swap went too, and the stepper cannot swap")
+        listOf("Count", "Remove").forEach {
+            assertEquals(null, sheetButton(it), "the sheet still offers \"$it\" beside the stepper")
+        }
+        val said = el(".peek-sheet .peek-tags").textContent.orEmpty()
+        assertTrue("in deck" !in said, "the sheet still says how many beside the stepper: $said")
+    }
+
+    @Test
+    fun theDecksCarouselStepsTheDecksCountWithRealButtons() = runTest {
+        openSolRing()
 
         // 2 in the deck, 5 in the collection: the deck's number.
         assertLaidOutAsMinusCountPlus(".peek-sheet", "2")
