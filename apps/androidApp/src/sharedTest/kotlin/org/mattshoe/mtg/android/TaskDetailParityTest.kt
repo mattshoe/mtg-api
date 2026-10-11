@@ -145,6 +145,47 @@ class TaskDetailParityTest {
         assertEquals(TaskDetail.NO_TEXT, texts("task-detail-body").joinToString(" "))
     }
 
+    /**
+     * Matt: "on the task details page, for done requests i want to see a
+     * short succinct summary of changes made and result of the ticket".
+     * Sibling of the web's `aDoneTasksPageSaysWhatChangedAndHowItEnded`.
+     */
+    @Test
+    fun aDoneTasksPageSaysWhatChangedAndHowItEnded() {
+        shell(
+            opened.copy(
+                taskDetail = TaskDetail.decode(
+                    "ab12cd34",
+                    """{"key":"ab12cd34","title":"Bigger buttons","status":"deployed","note":"live: the site, the APK",
+                        "pr":"https://github.com/mattshoe/mtg-api/pull/72","details":"Too small.",
+                        "summary":"The deck page buttons are bigger. Website and Android.","files":[]}""",
+                ),
+            ),
+        )
+        val summary = rule.onAllNodes(hasTestTag("task-detail-summary")).fetchSemanticsNodes()
+        assertEquals(1, summary.size, "the done task's summary is not on the page")
+        assertEquals("The deck page buttons are bigger. Website and Android.", summary.single().says())
+        assertTrue(summary.single().size.height > 0, "the summary is on the page with no height")
+        assertEquals("Merged as #72 and deployed. live: the site, the APK", texts("task-detail-result").joinToString(" "))
+        val request = rule.onAllNodes(hasTestTag("task-detail-body")).fetchSemanticsNodes().single()
+        assertTrue(
+            summary.single().boundsInRoot.top < request.boundsInRoot.top,
+            "the summary is below the request, at ${summary.single().boundsInRoot.top} against ${request.boundsInRoot.top}",
+        )
+    }
+
+    /** A live task has nothing to summarise yet, so there is no summary on its page. */
+    @Test
+    fun aLiveTaskHasNoSummary() {
+        shell(
+            opened.copy(
+                taskDetail = TaskDetail.decode("ab12cd34", """{"key":"ab12cd34","title":"Old","status":"in review","details":"x","files":[]}"""),
+            ),
+        )
+        assertTrue(rule.onAllNodes(hasTestTag("task-detail-summary")).fetchSemanticsNodes().isEmpty(), "a live task shows a summary")
+        assertTrue(rule.onAllNodes(hasTestTag("task-detail-result")).fetchSemanticsNodes().isEmpty(), "a live task shows a result")
+    }
+
     /** Matt: "the time values on task details should show local time not utc". */
     @Test
     fun theTimeATaskWasSentIsThePhonesOwnClock() {
