@@ -1,0 +1,1 @@
+Swapping cards on a deck no longer gets glitchier the more you do it. Swiping the card carousel, or tapping outside the swap sheet, was quietly putting the whole app back the way it was when you opened them, deck list included, so the next swap was planned against the old list. Fixed on the phone and the website.
