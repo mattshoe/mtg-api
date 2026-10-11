@@ -124,6 +124,16 @@ fun AppState.peekStep(by: Int): CountWrite? {
     )
 }
 
+/**
+ * The deck changes the sheet under the carousel offers, in order.
+ *
+ * On the deck row rather than on `admin`: being admin in the Library
+ * still leaves nothing to count, swap or remove, because there is no
+ * deck.
+ */
+fun PeekCard.tweaks(admin: Boolean): List<Tweak> =
+    if (inDeck == null || !admin) emptyList() else listOf(Tweak.QUANTITY, Tweak.SWAP, Tweak.REMOVE)
+
 // ------------------------------------------------------- the card page
 
 /** The collection the card page is being read in, if it is yours to change. */
