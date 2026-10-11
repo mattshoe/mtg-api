@@ -159,6 +159,7 @@ fun AppShell(
             // button inside it. Same rule as the phone, and the rule
             // itself is `AppState.peekCard` in the shared core.
             onOpenCard = { card, _ -> onState(state.peekCard(card)) },
+            onTribe = { onState(state.peekTribe(it)) },
             onShare = onShareDeck,
             onAddCard = onAddCard,
             onTweak = onTweak,

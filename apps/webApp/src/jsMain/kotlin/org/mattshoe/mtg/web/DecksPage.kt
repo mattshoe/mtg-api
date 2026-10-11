@@ -37,6 +37,8 @@ fun DecksPage(
     /** Rename the open deck. Its key, and so its address, stays. */
     onRename: (Deck) -> Unit = {},
     onOpenCard: (DeckCard, String) -> Unit = { _, _ -> },
+    /** A creature type's bar: the carousel over the cards of that type. */
+    onTribe: (String) -> Unit = {},
     /** Maintenance, one card at a time, without leaving the page. */
     onAddCard: () -> Unit = {},
     onTweak: (DeckCard, Tweak?) -> Unit = { _, _ -> },
@@ -97,7 +99,7 @@ fun DecksPage(
             Banner(open, state)
 
             Div(attrs = { classes("stack") }) {
-                DeckStatsPanel(DeckAnalysis.of(state.cards), open.guild)
+                DeckStatsPanel(DeckAnalysis.of(state.cards), open.guild, onTribe)
                 // By type, in the order every deck list is written in,
                 // alphabetical inside each section. The grouping is in
                 // the core so the phone cannot sort it differently.

@@ -238,6 +238,8 @@ internal fun DeckDetailScreen(
     onAddCard: () -> Unit = {},
     onTweak: (DeckCard, Tweak?) -> Unit = { _, _ -> },
     onShare: (ShareWhat, ExportTo) -> Unit = { _, _ -> },
+    /** A creature type's bar: the carousel over the cards of that type. */
+    onTribe: (String) -> Unit = {},
 ) {
     Column(
         Modifier.fillMaxWidth()
@@ -297,7 +299,7 @@ internal fun DeckDetailScreen(
                 Btn("Disassemble", danger = true) { onDisassemble(open) }
             }
         }
-        DeckStatsPanel(DeckAnalysis.of(state.cards), state.open?.guild)
+        DeckStatsPanel(DeckAnalysis.of(state.cards), state.open?.guild, onTribe)
         if (admin) {
             Panel { Primary("+ Add a card", onClick = onAddCard) }
         }
@@ -704,7 +706,12 @@ private fun ShareMenu(
  * either platform is allowed.
  */
 @Composable
-internal fun DeckStatsPanel(s: org.mattshoe.mtg.core.DeckStats, guild: String? = null) {
+internal fun DeckStatsPanel(
+    s: org.mattshoe.mtg.core.DeckStats,
+    guild: String? = null,
+    /** A creature type's bar was tapped: the carousel over that type. */
+    onTribe: (String) -> Unit = {},
+) {
     Panel {
         Row(
             Modifier.fillMaxWidth(),
@@ -753,7 +760,7 @@ internal fun DeckStatsPanel(s: org.mattshoe.mtg.core.DeckStats, guild: String? =
     if (s.types.isNotEmpty()) Panel { Bars("Card types", s.types, s.totalCards) }
     // A Human Warrior is a bar each for Human and Warrior.
     if (s.creatureTypes.isNotEmpty()) {
-        Panel { Bars("Creature types", s.creatureTypes, s.creatures, s.creatureTypesNote, tag = "tribe") }
+        Panel { Bars("Creature types", s.creatureTypes, s.creatures, s.creatureTypesNote, tag = "tribe", onTap = onTribe) }
     }
     if (s.rarities.isNotEmpty()) Panel { Bars("Rarity", s.rarities, s.totalCards) }
 
@@ -1198,13 +1205,16 @@ private fun Bars(
     total: Int,
     note: String = "Of $total cards.",
     tag: String = "hbar",
+    onTap: ((String) -> Unit)? = null,
 ) {
     // `.stats-card > h3 { text-transform: uppercase }` on the web.
     Line(title.uppercase(), Ink3, Design.MINI, FontWeight.SemiBold)
     val most = bars.maxOfOrNull { it.value } ?: 0
     bars.forEach { bar ->
         Row(
-            Modifier.fillMaxWidth().padding(top = 6.dp),
+            Modifier.fillMaxWidth()
+                .then(if (onTap != null) Modifier.clickable { onTap(bar.label) } else Modifier)
+                .padding(top = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(9.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {

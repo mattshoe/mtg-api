@@ -397,6 +397,7 @@ fun AppShell(
                                 // that launch." The page is a button
                                 // inside it.
                                 onOpenCard = { card, _ -> onState(state.peekCard(card)) },
+                                onTribe = { onState(state.peekTribe(it)) },
                                 onAddCard = onAddCard,
                                 onTweak = onTweak,
                                 onShare = onShare,
