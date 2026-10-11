@@ -1,7 +1,7 @@
 package org.mattshoe.mtg.core
 
 /** "- 3 +" under a card. */
-data class Stepper(val count: Int, val busy: Boolean = false) {
+data class Stepper(val count: Int, val unit: String = "", val busy: Boolean = false) {
     val canTakeOne: Boolean get() = false
     val canAddOne: Boolean get() = false
 }
