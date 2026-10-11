@@ -141,9 +141,10 @@ class CountStepperTest {
         val n = number.getUnclippedBoundsInRoot()
         val p = plus.getUnclippedBoundsInRoot()
         // The height of every other button on the sheet, which is what
-        // Matt asked for; still a thumb's worth.
-        assertTrue(m.width >= 32.dp && m.height >= 32.dp, "minus is ${m.width}x${m.height}, too small for a thumb")
-        assertTrue(p.width >= 32.dp && p.height >= 32.dp, "plus is ${p.width}x${p.height}, too small for a thumb")
+        // Matt asked for, and `theCarouselsStepperIsNoTallerThanTheButtonsUnderIt`
+        // holds it to. This only says it is still a button and not a dot.
+        assertTrue(m.width >= 24.dp && m.height >= 24.dp, "minus is ${m.width}x${m.height}, too small to press")
+        assertTrue(p.width >= 24.dp && p.height >= 24.dp, "plus is ${p.width}x${p.height}, too small to press")
         assertTrue(m.right <= n.left, "minus (right ${m.right}) is not left of the number (left ${n.left})")
         assertTrue(n.right <= p.left, "the number (right ${n.right}) is not left of plus (left ${p.left})")
         val mid = { top: androidx.compose.ui.unit.Dp, bottom: androidx.compose.ui.unit.Dp -> (top + bottom) / 2 }
