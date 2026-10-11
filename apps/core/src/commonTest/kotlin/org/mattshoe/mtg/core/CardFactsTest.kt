@@ -42,7 +42,7 @@ class CardFactsTest {
     private fun said(label: String) = signet().lines.firstOrNull { it.label == label }?.value
 
     @Test
-    fun theRankIsOnThePage() = assertEquals("#3", said("EDHREC rank"))
+    fun theRankIsOnThePage() = assertEquals("#3 of all cards", said("EDHREC rank"))
 
     @Test
     fun theManaValueIsAWholeNumberWhenItIsOne() = assertEquals("2", said("Mana value"))
@@ -111,7 +111,7 @@ class CardFactsTest {
             if (q == CardQueries.facts("arcane signet")) cols to signetRows() else empty
         }
         val card = Load.cardDetail("arcane signet", "Arcane Signet", answers)
-        assertEquals("#3", card.facts.lines.firstOrNull { it.label == "EDHREC rank" }?.value, "the facts never reached the page")
+        assertEquals("#3 of all cards", card.facts.lines.firstOrNull { it.label == "EDHREC rank" }?.value, "the facts never reached the page")
         assertEquals("Arcane Signet", card.name)
     }
 
