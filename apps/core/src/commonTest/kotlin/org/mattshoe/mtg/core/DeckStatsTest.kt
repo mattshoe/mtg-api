@@ -599,48 +599,6 @@ class DeckStatsTest {
         assertEquals(emptyList(), RingSlice.of(emptyList()))
         assertEquals(emptyList(), RingSlice.of(listOf(Bar("U", 0))))
     }
-}
-
-class SliceFillTest {
-
-    @Test
-    fun aCombinationSliceIsOneColourTheMixOfItsColours() {
-        // Matt: "Slice 3 should be ONE COLOR. Not multiple colors. Do
-        // whatever the color mix of the 2 colors is, like purple".
-        // Blue 61A3DD and red C47063, averaged channel by channel.
-        assertEquals(0xFF938AA0, Bar("UR", 2).fill, "Izzet is not one blend of blue and red")
-    }
-
-    @Test
-    fun aSingleColourSliceIsThatColour() {
-        assertEquals(Design.U, Bar("U", 3).fill)
-        assertEquals(Design.R, Bar("Red", 3).fill)
-        assertEquals(Design.C, Bar("C", 3).fill)
-    }
-
-    @Test
-    fun aThreeColourSliceMixesAllThree() {
-        // W F8F3E0, U 61A3DD, B 5C5A6B: (248+97+92)/3 = 145.67 -> 146,
-        // (243+163+90)/3 = 165.33 -> 165, (224+221+107)/3 = 184.
-        assertEquals(0xFF92A5B8, Bar("WUB", 1).fill)
-    }
-
-    @Test
-    fun aFillIsWrittenAsCssHex() {
-        assertEquals("#938AA0", Design.css(0xFF938AA0))
-        assertEquals("#05000A", Design.css(0xFF05000A))
-    }
-
-    @Test
-    fun theColourRingsAreNeedsSourcesPerColourAndManaProduction() {
-        // Matt: "Change the name of 'Exactly' to Mana Production", and
-        // "makes" to something that says what it counts: each colour's
-        // sources, a dual counted once in each.
-        assertEquals(
-            listOf("Needs", "Sources per Colour", "Mana Production"),
-            ColourRing.entries.map { it.caption },
-        )
-    }
 
     // ------------------------------------------------- creature types
 
@@ -703,6 +661,48 @@ class SliceFillTest {
                 Bar("Elf", 1), Bar("Human", 1), Bar("Insect", 1), Bar("Rogue", 1), Bar("Wizard", 1),
             ),
             s.creatureTypes,
+        )
+    }
+}
+
+class SliceFillTest {
+
+    @Test
+    fun aCombinationSliceIsOneColourTheMixOfItsColours() {
+        // Matt: "Slice 3 should be ONE COLOR. Not multiple colors. Do
+        // whatever the color mix of the 2 colors is, like purple".
+        // Blue 61A3DD and red C47063, averaged channel by channel.
+        assertEquals(0xFF938AA0, Bar("UR", 2).fill, "Izzet is not one blend of blue and red")
+    }
+
+    @Test
+    fun aSingleColourSliceIsThatColour() {
+        assertEquals(Design.U, Bar("U", 3).fill)
+        assertEquals(Design.R, Bar("Red", 3).fill)
+        assertEquals(Design.C, Bar("C", 3).fill)
+    }
+
+    @Test
+    fun aThreeColourSliceMixesAllThree() {
+        // W F8F3E0, U 61A3DD, B 5C5A6B: (248+97+92)/3 = 145.67 -> 146,
+        // (243+163+90)/3 = 165.33 -> 165, (224+221+107)/3 = 184.
+        assertEquals(0xFF92A5B8, Bar("WUB", 1).fill)
+    }
+
+    @Test
+    fun aFillIsWrittenAsCssHex() {
+        assertEquals("#938AA0", Design.css(0xFF938AA0))
+        assertEquals("#05000A", Design.css(0xFF05000A))
+    }
+
+    @Test
+    fun theColourRingsAreNeedsSourcesPerColourAndManaProduction() {
+        // Matt: "Change the name of 'Exactly' to Mana Production", and
+        // "makes" to something that says what it counts: each colour's
+        // sources, a dual counted once in each.
+        assertEquals(
+            listOf("Needs", "Sources per Colour", "Mana Production"),
+            ColourRing.entries.map { it.caption },
         )
     }
 }
