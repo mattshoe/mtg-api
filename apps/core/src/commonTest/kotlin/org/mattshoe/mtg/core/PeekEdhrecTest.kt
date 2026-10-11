@@ -55,7 +55,7 @@ class PeekEdhrecTest {
     fun aDecksCarouselSaysTheCardsEdhrecRank() {
         val ring = deckCard("Sol Ring", 1L)
         val s = overADeck(ring).peekCard(ring)
-        assertTrue("EDHREC #1" in tags(s), "the deck's sheet has no EDHREC rank: ${tags(s)}")
+        assertTrue("EDHREC #1 of all cards" in tags(s), "the deck's sheet has no EDHREC rank: ${tags(s)}")
     }
 
     @Test
@@ -64,7 +64,7 @@ class PeekEdhrecTest {
         val s = AppState().navigate(View.LIBRARY)
             .let { it.copy(library = it.library.loaded(listOf(r), 1)) }
             .peekRow(r)
-        assertTrue("EDHREC #1,234" in tags(s), "the Library's sheet has no EDHREC rank: ${tags(s)}")
+        assertTrue("EDHREC #1,234 of all cards" in tags(s), "the Library's sheet has no EDHREC rank: ${tags(s)}")
     }
 
     @Test

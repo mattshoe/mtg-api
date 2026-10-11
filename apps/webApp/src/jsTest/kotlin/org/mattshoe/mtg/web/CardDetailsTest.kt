@@ -85,7 +85,7 @@ class CardDetailsTest {
         val page = open(signet())
         settle()
         val drawn = page.facts()
-        assertEquals("#3", drawn["EDHREC rank"], "no EDHREC rank on the page: $drawn")
+        assertEquals("#3 of all cards", drawn["EDHREC rank"], "no EDHREC rank on the page: $drawn")
         assertEquals("2", drawn["Mana value"], "no mana value: $drawn")
         assertEquals("White, Blue, Black, Red, Green", drawn["Produces"], "nothing says what it taps for: $drawn")
         assertEquals("Common", drawn["Rarity"], "no rarity: $drawn")

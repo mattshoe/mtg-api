@@ -354,6 +354,18 @@ class MtgApi internal constructor(
         return Releases.decode(text)
     }
 
+    /** A commander's place among commanders, as EDHREC says it, through the Worker. */
+    suspend fun commanderRank(name: String): CommanderRank {
+        val res = http.get("$base/edhrec/commander") { url.parameters.append("name", name) }
+        val text = res.bodyAsText()
+        if (!res.status.isSuccess()) throw ApiFailure(errorIn(text, res.status))
+        val found = json.decodeFromString(CommanderRankResponse.serializer(), text)
+        return CommanderRank(found.rank, found.decks)
+    }
+
+    @Serializable
+    private data class CommanderRankResponse(val rank: Long? = null, val decks: Long? = null)
+
     /** Rename a deck. Its key, and so its address, stays where it is. */
     suspend fun renameDeck(token: String, key: String, name: String): Renamed {
         val res = http.post("$base/decks/rename") {

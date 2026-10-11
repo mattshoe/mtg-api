@@ -23,6 +23,7 @@
 //   GET  /tasks/:key  one task, its details and its files, and a done one's
 //                     builder's writeup (or else release note) as its summary (admin)
 //   GET  /releases    the release notes, GitHub's list as the Worker keeps it
+//   GET  /edhrec/commander?name=  a commander's rank among commanders, from EDHREC
 //   GET  /maintenance last run of the daily job
 //   POST /maintenance run it now (admin)
 //   GET  /logs        the request log (admin)
@@ -50,6 +51,7 @@ import { newEntry, writeEntry, buildLogQuery, logStats } from './log.js';
 import { keyFrom, claim, remember, release } from './idempotency.js';
 import { newTask, inbox, received, list as taskList, setStatus, task as oneTask, summary as taskSummary } from './tasks.js';
 import { releases } from './releases.js';
+import { commanderRank } from './edhrec.js';
 import { preview } from './preview.js';
 // The site's own file, bundled in, so the two hosts cannot disagree.
 import ASSET_LINKS from '../frontend/.well-known/assetlinks.json';
@@ -297,6 +299,7 @@ const INDEX = {
     'POST /tasks/status': '{"key" or "name","status","note"?,"title"?,"pr"?,"started_at"?,"finished_at"?,"details"?} — one transition, written by whoever caused it; the times only fill a task that never had a start; details is the request file, kept only for a task with none; admin only',
     'GET /tasks/:key': 'one task, its details, status and files, collected or not, and for a done one the writeup its builder filed in summaries/, or else its release note, as summary; admin only',
     'GET /releases': 'GitHub\'s release list, kept by the Worker for a few minutes',
+    'GET /edhrec/commander': '?name=Teysa Karlov -> {"name","slug","rank":58,"decks":21728} — rank among commanders as EDHREC\'s commander page says it; null when EDHREC has no page',
     'GET /logs': '?min=info&q=&event=&status=error&since=24&limit=100 — admin only',
     'POST /logs/client': '{"level":"info","message":"...","detail":{...}} — admin only',
     'GET /logs/stats': 'counts, slowest routes, retention — admin only',
@@ -778,6 +781,16 @@ async function route(request, env, ctx, entry) {
      * collects them from. Admin only, every one: a task is a change to
      * the app itself.
      */
+    // A commander's rank among commanders, as EDHREC's own page says it.
+    if (path === '/edhrec/commander') {
+      if (method !== 'GET') return notAllowed('GET');
+      const name = url.searchParams.get('name')?.trim();
+      if (!name) return json({ error: 'name is required' }, 400);
+      const r = await commanderRank(name, env.EDHREC_FETCH || fetch);
+      if (r.error) return json({ error: r.error }, 502);
+      return json(r);
+    }
+
     if (path === '/releases') {
       if (method !== 'GET') return notAllowed('GET');
       const r = await releases(env.DB, env.GITHUB_FETCH || fetch);

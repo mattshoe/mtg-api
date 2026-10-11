@@ -216,7 +216,7 @@ class DeckCardCarouselParityTest {
         // Matt: "I asked to have the edhrec rank of every card on its
         // 'bottom sheet' thingy on the carousel. It's still missing."
         peeking()
-        assertTrue(onTheSheet("EDHREC #412"), "the deck's sheet has no EDHREC rank")
+        assertTrue(onTheSheet("EDHREC #412 of all cards"), "the deck's sheet has no EDHREC rank")
     }
 
     @Test
@@ -376,7 +376,7 @@ class DeckCardCarouselParityTest {
         rule.onNodeWithTag("library").performScrollToNode(hasTestTag("card-tile"))
         rule.onAllNodes(hasTestTag("card-tile")).onFirst().performClick()
         rule.waitForIdle()
-        assertTrue(onTheSheet("EDHREC #1,234"), "the Library's sheet has no EDHREC rank")
+        assertTrue(onTheSheet("EDHREC #1,234 of all cards"), "the Library's sheet has no EDHREC rank")
     }
 
     // ------------------------------------------------------- getting out
