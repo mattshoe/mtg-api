@@ -167,11 +167,10 @@ class TaskDetailParityTest {
         assertEquals("The deck page buttons are bigger. Website and Android.", summary.single().says())
         assertTrue(summary.single().size.height > 0, "the summary is on the page with no height")
         assertEquals("Merged as #72 and deployed. live: the site, the APK", texts("task-detail-result").joinToString(" "))
-        val request = rule.onAllNodes(hasTestTag("task-detail-body")).fetchSemanticsNodes().single()
-        assertTrue(
-            summary.single().boundsInRoot.top < request.boundsInRoot.top,
-            "the summary is below the request, at ${summary.single().boundsInRoot.top} against ${request.boundsInRoot.top}",
-        )
+        // Unclipped: on a 470dp screen both sit below the scroll's fold, where clipped bounds are empty.
+        val summaryTop = summary.single().positionInRoot.y
+        val requestTop = rule.onAllNodes(hasTestTag("task-detail-body")).fetchSemanticsNodes().single().positionInRoot.y
+        assertTrue(summaryTop < requestTop, "the summary is below the request, at $summaryTop against $requestTop")
     }
 
     /** A live task has nothing to summarise yet, so there is no summary on its page. */
