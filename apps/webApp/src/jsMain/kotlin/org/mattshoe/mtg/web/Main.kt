@@ -33,6 +33,10 @@ import org.mattshoe.mtg.core.Completion
 import org.mattshoe.mtg.core.DeckCard
 import org.mattshoe.mtg.core.DeckEditState
 import org.mattshoe.mtg.core.DeckQueries
+import org.mattshoe.mtg.core.CountWrite
+import org.mattshoe.mtg.core.PeekOf
+import org.mattshoe.mtg.core.countingDone
+import org.mattshoe.mtg.core.countingStarted
 import org.mattshoe.mtg.core.DeckTweak
 import org.mattshoe.mtg.core.Tweak
 import org.mattshoe.mtg.core.DisassembleState
@@ -327,6 +331,7 @@ object MtgApp {
                 onEditDeck = { key -> editDeck(key) },
                 onAddCard = { startTweak(null, Tweak.ADD) },
                 onTweak = { card, kind -> startTweak(card, kind) },
+                onCount = { write -> count(write) },
                 onTweakState = { next -> app = app.copy(deckTweak = next) },
                 onTweakFind = { term -> findForTweak(term) },
                 onTweakPreview = {
@@ -1386,6 +1391,37 @@ object MtgApp {
                 .say(t.summary + if (plan.buying > 0) " — ${plan.buying} bought" else "")
         } catch (ex: ApiFailure) {
             app.copy(deckTweak = app.deckTweak?.failed(ex.message ?: "that did not work"))
+        }
+    }
+
+    /**
+     * Plus or minus under a card, straight to the server.
+     *
+     * No preview: one copy either way is the whole change, and the
+     * number on screen is the confirmation. Then the thing on screen
+     * is read again in place — the deck's rows, the Library's rows or
+     * the card — rather than through `openDeck`, which navigates and
+     * would shut the carousel under your thumb.
+     */
+    private fun count(write: CountWrite) {
+        claim(!app.counting, { app.countingStarted() }) {
+            try {
+                when (write) {
+                    is CountWrite.DeckList -> {
+                        api.setDeckList(token(), write.deck, write.commander, write.list, dryRun = false)
+                        val r = api.query(DeckQueries.cards(write.deck))
+                        app = app.copy(decks = app.decks.opened(write.deck, DeckQueries.decodeCards(r.cols, r.rows)))
+                    }
+                    is CountWrite.Cards -> {
+                        api.cards(token(), write.direction, write.collection, write.line, dryRun = false)
+                        if (app.peek.open && app.peek.of == PeekOf.LIBRARY) app = search(app)
+                        app.card?.takeIf { app.view == View.CARD }?.let { c -> app = loadCard(c.nameNorm, c.name) }
+                    }
+                }
+                app.countingDone().say(write.summary)
+            } catch (e: Exception) {
+                app.countingDone().say(e.message ?: "that did not work", failed = true)
+            }
         }
     }
 

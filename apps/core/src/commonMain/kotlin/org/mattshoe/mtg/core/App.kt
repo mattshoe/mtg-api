@@ -30,6 +30,8 @@ data class AppState(
     val deckTweak: DeckTweak? = null,
     val disassemble: DisassembleState? = null,
     val rename: RenameState? = null,
+    /** A plus or a minus is on its way to the server. See `CountStep.kt`. */
+    val counting: Boolean = false,
     /** Where the card carousel is over an open deck. See [peekAt]. */
     val peek: Peek = Peek(),
     /**
