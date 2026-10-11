@@ -1,0 +1,3 @@
+What was wrong: The plus and minus under a card were bigger than every other button on the sheet, and the carousel still had a Count button, a Remove button and a "1x in deck" tag saying the same thing as the stepper.
+Why: The stepper was built with its own oversized square buttons, and the sheet's older buttons and tags were left in place beside it.
+Fix: Plus and minus are the same small button as Swap and Full details now, card page included. Wherever the stepper shows the count, the carousel drops the count tag and the Count and Remove buttons, so it's Full details and Swap. Minus to zero takes the card out. In the Library the "N owned" tag goes for the same reason. A commander, or a deck that isn't yours, has no stepper and keeps all three. Phone and website.
