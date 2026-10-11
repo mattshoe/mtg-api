@@ -213,6 +213,8 @@ fun AppShell(
             next = state.nextCard,
             place = state.cardPlace,
             onStep = { c -> onOpenNamed(c.name, c.nameNorm, "") },
+            stepper = state.cardStepper,
+            onCount = { by -> state.cardStep(by)?.let(onCount) },
         )
 
         View.ENTRY -> MassEntryPage(
@@ -317,6 +319,8 @@ fun AppShell(
             onTweak = { card, how -> onTweak(card, how) },
             zoom = state.peek.zoom,
             onZoom = { onState(state.peekZoom(it)) },
+            stepper = state.peekStepper,
+            onCount = { by -> state.peekStep(by)?.let(onCount) },
         )
     }
 

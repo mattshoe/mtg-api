@@ -462,6 +462,8 @@ fun AppShell(
                         // the route, so this link is the same whichever
                         // way the card was reached.
                         onShare = { onShareCard(Share.link(state)) },
+                        stepper = state.cardStepper,
+                        onCount = { by -> state.cardStep(by)?.let(onCount) },
                     )
 
                     // Two screens under one `View`, the way DECKS
@@ -569,6 +571,8 @@ fun AppShell(
                 onTweak = { card, how -> onTweak(card, how) },
                 zoom = state.peek.zoom,
                 onZoom = { onState(state.peekZoom(it)) },
+                stepper = state.peekStepper,
+                onCount = { by -> state.peekStep(by)?.let(onCount) },
             )
         }
     }

@@ -50,6 +50,7 @@ import org.mattshoe.mtg.core.CardZoom
 import org.mattshoe.mtg.core.PeekCard
 import org.mattshoe.mtg.core.Design
 import org.mattshoe.mtg.core.Prices
+import org.mattshoe.mtg.core.Stepper
 import org.mattshoe.mtg.core.Tweak
 
 /**
@@ -79,6 +80,9 @@ fun CardCarousel(
     onTweak: (org.mattshoe.mtg.core.DeckCard, Tweak) -> Unit,
     zoom: CardZoom = CardZoom(),
     onZoom: (CardZoom) -> Unit = {},
+    /** "- 3 +" for the card on show, or null when there is nothing you may change. */
+    stepper: Stepper? = null,
+    onCount: (Int) -> Unit = {},
 ) {
     if (cards.isEmpty()) return
     val index = at.coerceIn(0, cards.lastIndex)
@@ -159,6 +163,8 @@ fun CardCarousel(
                 admin = admin,
                 onDetails = onDetails,
                 onTweak = onTweak,
+                stepper = stepper,
+                onCount = onCount,
             )
         }
     }
@@ -263,6 +269,8 @@ private fun CardSheet(
     admin: Boolean,
     onDetails: () -> Unit,
     onTweak: (org.mattshoe.mtg.core.DeckCard, Tweak) -> Unit,
+    stepper: Stepper?,
+    onCount: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -314,6 +322,10 @@ private fun CardSheet(
             // decision.
             card.tags.forEach { Tag(it.text, if (it.bad) Bad else Ink2) }
         }
+
+        // Over a deck it is the deck's count, anywhere else the
+        // collection's. `:core` decided which.
+        stepper?.let { CountStepper(it, onCount) }
 
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
