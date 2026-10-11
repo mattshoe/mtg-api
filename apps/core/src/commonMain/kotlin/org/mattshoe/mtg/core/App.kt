@@ -309,6 +309,9 @@ data class AppState(
     fun peekCard(card: DeckCard): AppState =
         peekAt(decks.pageOrder.indexOfFirst { it.nameNorm == card.nameNorm }, PeekOf.DECK)
 
+    /** A bar in the deck's Creature types chart: the carousel over that type alone. */
+    fun peekTribe(type: String): AppState = this
+
     /** The Library tile that was tapped, by the row behind it. */
     fun peekRow(row: CardRow): AppState =
         peekAt(
