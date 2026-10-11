@@ -557,7 +557,9 @@ class DecksParityTest {
         Parity.check(
             Parity.Fact("the heading counts them") { tagBeside("TOKENS") == "3" },
             Parity.Fact("two Birds and a Clue") {
-                howMany("Bird") == 2 && says("Clue")
+                // Three: the two tokens and the Bird bar in Creature
+                // types, from the card in the list that is a Bird.
+                howMany("Bird") == 3 && says("Clue")
             },
             Parity.Fact("each says what kind of token it is, without the 'Token '") {
                 // Three: the two tokens and the card in the list that
