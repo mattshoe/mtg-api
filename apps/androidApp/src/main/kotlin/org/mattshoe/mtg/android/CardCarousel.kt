@@ -52,6 +52,7 @@ import org.mattshoe.mtg.core.Design
 import org.mattshoe.mtg.core.Prices
 import org.mattshoe.mtg.core.Stepper
 import org.mattshoe.mtg.core.Tweak
+import org.mattshoe.mtg.core.tweaks
 
 /**
  * The deck's cards, as something you swipe through.
@@ -265,7 +266,7 @@ private fun CardFace(card: PeekCard, zoom: CardZoom = CardZoom(), zoomable: Modi
  * navigate to the full details [...] should also let you change
  * count, swap the card, remove it etc."
  *
- * So: four facts and four buttons. Everything else about the card —
+ * So: a few facts and a few buttons. Everything else about the card —
  * the printings, the rulings, the legalities, which decks it is in —
  * is behind "Full details", which is the card's own page and already
  * exists.
@@ -340,13 +341,17 @@ private fun CardSheet(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Primary("Full details", onClick = onDetails)
-            // On the deck row rather than on `admin`: being admin in
-            // the Library still leaves nothing to count, swap or
-            // remove, because there is no deck.
-            card.inDeck?.takeIf { admin }?.let { row ->
-                Btn("Count") { onTweak(row, Tweak.QUANTITY) }
-                Btn("Swap") { onTweak(row, Tweak.SWAP) }
-                Btn("Remove", danger = true) { onTweak(row, Tweak.REMOVE) }
+            // Which ones is `:core`'s: none in the Library, and no
+            // Count or Remove where the stepper already does both.
+            card.inDeck?.let { row ->
+                card.tweaks(admin).forEach { how ->
+                    when (how) {
+                        Tweak.QUANTITY -> Btn("Count") { onTweak(row, how) }
+                        Tweak.SWAP -> Btn("Swap") { onTweak(row, how) }
+                        Tweak.REMOVE -> Btn("Remove", danger = true) { onTweak(row, how) }
+                        Tweak.ADD -> Unit
+                    }
+                }
             }
         }
     }

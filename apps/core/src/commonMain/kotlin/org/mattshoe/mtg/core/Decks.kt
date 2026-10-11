@@ -157,6 +157,11 @@ data class PeekCard(
     val price: Double?,
     val tags: List<PeekTag>,
     val inDeck: DeckCard? = null,
+    /**
+     * The stepper under the carousel counts this card, so nothing else
+     * on the sheet says or sets that number. See [tweaks].
+     */
+    val stepped: Boolean = false,
 )
 
 data class DeckCard(

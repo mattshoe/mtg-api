@@ -140,8 +140,11 @@ class CountStepperTest {
         val m = minus.getUnclippedBoundsInRoot()
         val n = number.getUnclippedBoundsInRoot()
         val p = plus.getUnclippedBoundsInRoot()
-        assertTrue(m.width >= 40.dp && m.height >= 40.dp, "minus is ${m.width}x${m.height}, too small for a thumb")
-        assertTrue(p.width >= 40.dp && p.height >= 40.dp, "plus is ${p.width}x${p.height}, too small for a thumb")
+        // The height of every other button on the sheet, which is what
+        // Matt asked for, and `theCarouselsStepperIsNoTallerThanTheButtonsUnderIt`
+        // holds it to. This only says it is still a button and not a dot.
+        assertTrue(m.width >= 24.dp && m.height >= 24.dp, "minus is ${m.width}x${m.height}, too small to press")
+        assertTrue(p.width >= 24.dp && p.height >= 24.dp, "plus is ${p.width}x${p.height}, too small to press")
         assertTrue(m.right <= n.left, "minus (right ${m.right}) is not left of the number (left ${n.left})")
         assertTrue(n.right <= p.left, "the number (right ${n.right}) is not left of plus (left ${p.left})")
         val mid = { top: androidx.compose.ui.unit.Dp, bottom: androidx.compose.ui.unit.Dp -> (top + bottom) / 2 }
@@ -151,8 +154,7 @@ class CountStepperTest {
         )
     }
 
-    @Test
-    fun theDecksCarouselStepsTheDecksCountWithRealButtons() {
+    private fun openSolRing() {
         shell(onADeck())
         rule.onNode(hasText("Sol Ring") and hasAnyAncestor(hasTestTag("deck-detail"))).let {
             runCatching { it.performScrollTo() }
@@ -160,6 +162,46 @@ class CountStepperTest {
         }
         rule.waitForIdle()
         assertEquals("Sol Ring", held.value.peeked?.title, "the carousel did not open on Sol Ring")
+    }
+
+    private fun onTheSheet(text: String, substring: Boolean = false) = rule.onAllNodes(
+        hasText(text, substring = substring) and hasAnyAncestor(hasTestTag("carousel-sheet")),
+        useUnmergedTree = true,
+    ).fetchSemanticsNodes().isNotEmpty()
+
+    @Test
+    fun theCarouselsStepperIsNoTallerThanTheButtonsUnderIt() {
+        // Matt: "the plus minus view looks terrible why is it bigger
+        // than everything else?"
+        openSolRing()
+        val swap = rule.onNode(
+            hasText("Swap") and hasAnyAncestor(hasTestTag("carousel-sheet")),
+            useUnmergedTree = true,
+        ).getUnclippedBoundsInRoot()
+        listOf("minus" to "step-minus", "plus" to "step-plus").forEach { (name, tag) ->
+            val b = part(tag, "carousel-sheet").getUnclippedBoundsInRoot()
+            assertTrue(
+                kotlin.math.abs((b.height - swap.height).value) < 1f,
+                "$name is ${b.height} tall and Swap beside it is ${swap.height}",
+            )
+        }
+    }
+
+    @Test
+    fun theCarouselSaysTheCountOnceAndSetsItOnce() {
+        // Matt: "why is there still s count button?!?! [...] same with
+        // remove?! same with the "1x in deck"?!?!?!"
+        openSolRing()
+        assertTrue(onTheSheet("Swap"), "Swap went too, and the stepper cannot swap")
+        listOf("Count", "Remove").forEach {
+            assertTrue(!onTheSheet(it), "the sheet still offers \"$it\" beside the stepper")
+        }
+        assertTrue(!onTheSheet("× in deck", substring = true), "the sheet still says how many beside the stepper")
+    }
+
+    @Test
+    fun theDecksCarouselStepsTheDecksCountWithRealButtons() {
+        openSolRing()
 
         // 2 in the deck, 5 in the collection: the deck's number.
         assertLaidOutAsMinusCountPlus("carousel-sheet", "2")

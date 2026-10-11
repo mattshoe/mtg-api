@@ -199,7 +199,8 @@ class DeckCardCarouselParityTest {
     fun theSheetSaysTheBasicsAndNothingMore() {
         peeking()
         assertTrue(says("M3C · 409 · $1.75"), "the sheet does not say the printing and the value")
-        assertTrue(says("1× in deck"), "the sheet does not say how many the deck wants")
+        // How many the deck wants is the stepper's to say, and only
+        // the stepper's: see `CountStepperTest`.
         assertTrue(says("3 owned"), "the sheet does not say how many you have")
         // The card's own page is where the rest lives.
         assertTrue(!says("Rulings"), "the sheet is trying to be the card page")
@@ -238,19 +239,12 @@ class DeckCardCarouselParityTest {
 
     @Test
     fun theSheetChangesTheDeck() {
-        peeking()
-        tap("Count")
-        assertEquals(Tweak.QUANTITY, tweaked?.second)
-        assertEquals("Cultivate", tweaked?.first?.name)
-    }
-
-    @Test
-    fun theSheetSwapsAndRemoves() {
+        // Count and Remove are the stepper's now; Swap is the one
+        // change it cannot make.
         peeking()
         tap("Swap")
         assertEquals(Tweak.SWAP, tweaked?.second)
-        tap("Remove")
-        assertEquals(Tweak.REMOVE, tweaked?.second)
+        assertEquals("Cultivate", tweaked?.first?.name)
     }
 
     @Test
@@ -361,7 +355,8 @@ class DeckCardCarouselParityTest {
         rule.onNodeWithTag("library").performScrollToNode(hasTestTag("card-tile"))
         rule.onAllNodes(hasTestTag("card-tile")).onFirst().performClick()
         rule.waitForIdle()
-        assertTrue(says("2 owned"), "the sheet does not say how many you own")
+        // How many you own is the stepper's to say: "- 2 + owned".
+        assertTrue(!onTheSheet("2 owned"), "the sheet says how many you own beside the stepper as well")
         assertTrue(says("1 free"), "the sheet does not say how many are spare")
         assertTrue(says("Full details"), "no way through to the card's own page")
         // Admin is on and there is still no deck to change.

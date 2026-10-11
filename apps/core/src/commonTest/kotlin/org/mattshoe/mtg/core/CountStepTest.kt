@@ -178,4 +178,52 @@ class CountStepTest {
         assertFalse(stepper.canTakeOne, "minus still presses while the last one is in flight")
         assertNull(s.peekStep(+1))
     }
+
+    // ------------------------------------------------- said once
+
+    // Matt: "why is there still s count button?!?! DON'T YOU THINK
+    // THAT'S A LITTLE FUCKING REDUNDANT?! same with remove?! same
+    // with the "1x in deck"?!?!?!" Wherever the stepper shows the
+    // number, nothing else on the sheet says it or sets it again.
+
+    @Test
+    fun aDeckYouCanStepDoesNotAlsoSayHowManyAreInIt() {
+        val ring = deckCard("Sol Ring", qty = 2, owned = 5)
+        val c = assertNotNull(overADeck(ring).peekCard(ring).peeked)
+        assertFalse(c.tags.any { "in deck" in it.text }, "the sheet still says it beside the stepper: ${c.tags}")
+        assertTrue(c.tags.any { it.text == "5 owned" }, "the collection's count went too: ${c.tags}")
+    }
+
+    @Test
+    fun aDeckYouCanStepOffersSwapAndNotCountOrRemove() {
+        val ring = deckCard("Sol Ring", qty = 2, owned = 5)
+        val c = assertNotNull(overADeck(ring).peekCard(ring).peeked)
+        assertEquals(listOf(Tweak.SWAP), c.tweaks(admin = true), "the sheet repeats what the stepper does")
+    }
+
+    @Test
+    fun aCommanderHasNoStepperSoKeepsItsCountAndItsButtons() {
+        val alela = deckCard("Alela, Artful Provocateur", qty = 1, owned = 1, role = "commander")
+        val c = assertNotNull(overADeck(alela).peekCard(alela).peeked)
+        assertTrue(c.tags.any { it.text == "1× in deck" }, "nothing says how many: ${c.tags}")
+        assertEquals(listOf(Tweak.QUANTITY, Tweak.SWAP, Tweak.REMOVE), c.tweaks(admin = true))
+    }
+
+    @Test
+    fun somebodyElsesDeckKeepsItsCountAndItsButtons() {
+        val kayla = Admin().signIn(Account(key = "k4yy0003"), "t")
+        val ring = deckCard("Sol Ring", qty = 2, owned = 5)
+        val c = assertNotNull(overADeck(ring, admin = kayla).peekCard(ring).peeked)
+        assertTrue(c.tags.any { it.text == "2× in deck" }, "no stepper and nothing says how many: ${c.tags}")
+        assertEquals(listOf(Tweak.QUANTITY, Tweak.SWAP, Tweak.REMOVE), c.tweaks(admin = true))
+        assertEquals(emptyList(), c.tweaks(admin = false), "a locked app is offered changes")
+    }
+
+    @Test
+    fun aLibraryYouCanStepDoesNotAlsoSayHowManyYouOwn() {
+        val c = assertNotNull(inTheLibrary(row("Sol Ring", qty = 3)).peeked)
+        assertFalse(c.tags.any { "owned" in it.text }, "the sheet still says it beside the stepper: ${c.tags}")
+        assertTrue(c.tags.any { it.text == "1 free" }, "how many are spare went too: ${c.tags}")
+        assertEquals(emptyList(), c.tweaks(admin = true), "the Library has no deck to change")
+    }
 }

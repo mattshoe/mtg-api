@@ -19,6 +19,7 @@ import org.mattshoe.mtg.core.PeekCard
 import org.mattshoe.mtg.core.Prices
 import org.mattshoe.mtg.core.Stepper
 import org.mattshoe.mtg.core.Tweak
+import org.mattshoe.mtg.core.tweaks
 import org.w3c.dom.HTMLElement
 import org.w3c.dom.events.Event
 import org.w3c.dom.pointerevents.PointerEvent
@@ -163,7 +164,7 @@ private fun CardFace(card: PeekCard, zoom: CardZoom? = null, onZoom: (CardZoom) 
 }
 
 /**
- * The sheet under the carousel: four facts and four buttons.
+ * The sheet under the carousel: a few facts and a few buttons.
  *
  * Everything else about the card — the printings, the rulings, the
  * legalities, which decks it is in — is behind "Full details", which
@@ -235,18 +236,22 @@ private fun Sheet(
                 classes("btn", "sm", "primary")
                 onClick { onDetails() }
             }) { Text("Full details") }
-            // On the deck row rather than on `admin`: being admin in
-            // the Library still leaves nothing to count, swap or
-            // remove, because there is no deck.
-            card.inDeck?.takeIf { admin }?.let { row ->
-                Button(attrs = { classes("btn", "sm"); onClick { onTweak(row, Tweak.QUANTITY) } }) {
-                    Text("Count")
-                }
-                Button(attrs = { classes("btn", "sm"); onClick { onTweak(row, Tweak.SWAP) } }) {
-                    Text("Swap")
-                }
-                Button(attrs = { classes("btn", "sm", "danger"); onClick { onTweak(row, Tweak.REMOVE) } }) {
-                    Text("Remove")
+            // Which ones is `:core`'s: none in the Library, and no
+            // Count or Remove where the stepper already does both.
+            card.inDeck?.let { row ->
+                card.tweaks(admin).forEach { how ->
+                    when (how) {
+                        Tweak.QUANTITY -> Button(attrs = { classes("btn", "sm"); onClick { onTweak(row, how) } }) {
+                            Text("Count")
+                        }
+                        Tweak.SWAP -> Button(attrs = { classes("btn", "sm"); onClick { onTweak(row, how) } }) {
+                            Text("Swap")
+                        }
+                        Tweak.REMOVE -> Button(attrs = { classes("btn", "sm", "danger"); onClick { onTweak(row, how) } }) {
+                            Text("Remove")
+                        }
+                        Tweak.ADD -> Unit
+                    }
                 }
             }
         }
