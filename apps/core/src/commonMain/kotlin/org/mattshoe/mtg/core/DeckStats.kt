@@ -297,7 +297,7 @@ object DeckAnalysis {
      * kindred. Both faces of a Human Wizard // Human Insect are one
      * Human; the Adventure half of an Elf Rogue is not a type.
      */
-    private fun creatureTypesOf(c: DeckCard): Set<String> =
+    fun creatureTypesOf(c: DeckCard): Set<String> =
         c.knownTypeLine.orEmpty().split("//").flatMap { face ->
             val (types, subtypes) = face.split("—").let { it[0] to it.getOrNull(1).orEmpty() }
             val words = types.split(" ")
