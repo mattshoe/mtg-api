@@ -206,6 +206,8 @@ data class DeckStats(
     val unpriced: Int,
     val missing: Int,
     val identity: String,
+    val creatureTypes: List<Bar> = emptyList(),
+    val creatures: Int = 0,
 ) {
     val hasCurve: Boolean get() = curve.any { it.value > 0 }
 
