@@ -163,7 +163,11 @@ class AppDriverTest {
                     val started = kotlin.js.Date(kotlin.js.Date.now() - (60 * 60 + 30) * 1000.0).toISOString()
                     """{"tasks":[{"key":"ab12cd34","name":"task-status-in-the-app","title":"Task status in the app",""" +
                         """"status":"in review","pr":null,"created_at":"$created",""" +
-                        """"started_at":"$started","finished_at":null}]}"""
+                        """"started_at":"$started","finished_at":null},""" +
+                        """{"key":"ef56gh78","name":"bigger-buttons","title":"Bigger buttons","status":"deployed",""" +
+                        """"note":"live: the site, the APK","pr":"https://github.com/mattshoe/mtg-api/pull/72",""" +
+                        """"created_at":"2026-10-08T09:00:00.000Z","started_at":"2026-10-08T09:05:00.000Z",""" +
+                        """"finished_at":"2026-10-08T10:00:00.000Z"}]}"""
                 }
 
                 request.url.encodedPath == "/admin/users" -> """{"users":[]}"""
@@ -1393,6 +1397,24 @@ class AppDriverTest {
         val requestTop = (document.querySelector("[data-task-detail-body]") as HTMLElement).getBoundingClientRect().top
         assertTrue(summaryTop < requestTop, "the summary is below the request, at $summaryTop against $requestTop")
         assertEquals(0, askedGitHub, "the website asked GitHub itself")
+    }
+
+    /**
+     * Matt: "i can't tap done tasks to look at the details". The real
+     * app: Admin Settings, Done opened, the done row pressed.
+     */
+    @Test
+    fun tappingADoneTaskOpensItsPage() = runTest {
+        role = "admin"
+        val root = mount("#/admin")
+        waitFor("a task on Admin Settings") { root.all("[data-task]").isNotEmpty() }
+        (root.querySelector("[data-tasks-toggle]") as HTMLElement).click()
+        waitFor("the done task in the list") { root.all("[data-task-done]").isNotEmpty() }
+        (root.all("[data-task-done]").first() as HTMLElement).click()
+        waitFor("the done task's page, at ${window.location.hash}") {
+            document.querySelector("[data-task-detail-summary]") != null
+        }
+        assertTrue(window.location.hash.endsWith("/admin/task/ef56gh78"), "address is ${window.location.hash}")
     }
 
     // --------------------------------------------------------- new task
