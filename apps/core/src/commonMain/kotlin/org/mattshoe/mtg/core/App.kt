@@ -311,6 +311,18 @@ data class AppState(
     fun peekCard(card: DeckCard): AppState =
         peekAt(decks.pageOrder.indexOfFirst { it.nameNorm == card.nameNorm }, PeekOf.DECK)
 
+    /**
+     * A bar in the deck's Creature types chart: the carousel over that
+     * type alone, in page order, from the first.
+     *
+     * Matt: "tapping a 'human' bar would bring up a carousel with all
+     * human creatures".
+     */
+    fun peekTribe(type: String): AppState {
+        if (runFor(PeekOf.DECK, type).isEmpty()) return this
+        return opening(Overlay.CARD_PEEK).copy(peek = Peek(0, PeekOf.DECK, tribe = type))
+    }
+
     /** The Library tile that was tapped, by the row behind it. */
     fun peekRow(row: CardRow): AppState =
         peekAt(
@@ -324,7 +336,7 @@ data class AppState(
      * only work while fully zoomed out".
      */
     fun peekTo(index: Int): AppState {
-        val run = runFor(peek.of)
+        val run = runFor(peek.of, peek.tribe)
         if (run.isEmpty() || !peek.open || peek.zoom.zoomed) return this
         return copy(peek = peek.copy(at = index.coerceIn(0, run.lastIndex)))
     }
@@ -340,8 +352,9 @@ data class AppState(
      */
     val historyDepth: Int get() = overlays.historyDepth + if (peek.zoom.zoomed) 1 else 0
 
-    private fun runFor(of: PeekOf): List<DeckCard> = when (of) {
-        PeekOf.DECK -> decks.pageOrder
+    private fun runFor(of: PeekOf, tribe: String? = null): List<DeckCard> = when (of) {
+        PeekOf.DECK -> tribe?.let { t -> decks.pageOrder.filter { t in DeckAnalysis.creatureTypesOf(it) } }
+            ?: decks.pageOrder
         // Sized only; the Library's own rows are mapped in `peekRun`.
         PeekOf.LIBRARY -> library.rows.map { DeckCard(it.name, 0, null, 0, it.nameNorm) }
     }
@@ -349,7 +362,7 @@ data class AppState(
     /** Every card the carousel can reach from here, in the order it draws them. */
     val peekRun: List<PeekCard>
         get() = when (peek.of) {
-            PeekOf.DECK -> decks.pageOrder.map { card ->
+            PeekOf.DECK -> runFor(PeekOf.DECK, peek.tribe).map { card ->
                 PeekCard(
                     title = card.shown,
                     nameNorm = card.nameNorm,

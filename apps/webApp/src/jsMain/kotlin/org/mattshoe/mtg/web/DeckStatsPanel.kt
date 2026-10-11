@@ -27,7 +27,12 @@ import org.mattshoe.mtg.core.RingSlice
  * bundle and the page is not allowed to fetch one anyway.
  */
 @Composable
-fun DeckStatsPanel(s: DeckStats, guild: String? = null) {
+fun DeckStatsPanel(
+    s: DeckStats,
+    guild: String? = null,
+    /** A creature type's bar was tapped: the carousel over that type. */
+    onTribe: (String) -> Unit = {},
+) {
     Div(attrs = { classes("panel") }) {
         Div(attrs = { classes("panel-head") }) {
             H2 { Text("The deck at a glance") }
@@ -57,7 +62,7 @@ fun DeckStatsPanel(s: DeckStats, guild: String? = null) {
             if (s.types.isNotEmpty()) card("Card types") { Bars(s.types, s.totalCards) }
             // A Human Warrior is a bar each for Human and Warrior.
             if (s.creatureTypes.isNotEmpty()) {
-                card("Creature types") { Bars(s.creatureTypes, s.creatures, s.creatureTypesNote) }
+                card("Creature types") { Bars(s.creatureTypes, s.creatures, s.creatureTypesNote, onTap = onTribe) }
             }
             if (s.rarities.isNotEmpty()) card("Rarity") { Bars(s.rarities, s.totalCards) }
         }
@@ -200,11 +205,23 @@ private fun track(n: Int, most: Int, pip: Pip, what: String, faded: Boolean) {
 }
 
 @Composable
-private fun Bars(bars: List<Bar>, total: Int, note: String = "Of $total cards.") {
+private fun Bars(
+    bars: List<Bar>,
+    total: Int,
+    note: String = "Of $total cards.",
+    onTap: ((String) -> Unit)? = null,
+) {
     val most = bars.maxOfOrNull { it.value } ?: 0
     bars.forEach { bar ->
         val share = if (total <= 0) 0 else (bar.value * 100) / total
-        Div(attrs = { classes("hbar"); attr("title", "${bar.value} of $total") }) {
+        Div(attrs = {
+            classes("hbar")
+            attr("title", "${bar.value} of $total")
+            onTap?.let { tap ->
+                classes("tap")
+                onClick { tap(bar.label) }
+            }
+        }) {
             Span(attrs = { classes("k") }) { Text(bar.label) }
             Div(attrs = { classes("rail") }) {
                 Div(attrs = { classes("fill"); style { property("width", "${bar.share(most)}%") } }) {}

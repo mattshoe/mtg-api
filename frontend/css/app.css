@@ -1026,6 +1026,7 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
 /* Anything counted against a total: types, rarity. */
 .hbar { display: grid; grid-template-columns: minmax(64px, auto) 1fr 34px; gap: 9px; align-items: center; font-size: 12.5px; }
 .hbar + .hbar { margin-top: 7px; }
+.hbar.tap { cursor: pointer; }
 .hbar .k { color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hbar .rail { height: 8px; background: var(--bg-3); border-radius: 4px; overflow: hidden; }
 .hbar .fill { height: 100%; background: var(--accent); border-radius: 4px; opacity: .8; }
