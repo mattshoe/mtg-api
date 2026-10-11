@@ -89,7 +89,7 @@ class DeckStatsLayoutTest {
         val titles = frame.all("div.stats-card h3").map { it.textContent.orEmpty() }
         // Tokens are real cards below the deck list now, not a
         // guess from the rules text in a panel up here.
-        assertEquals(listOf("Mana curve", "Colour", "Card types", "Rarity"), titles)
+        assertEquals(listOf("Mana curve", "Colour", "Card types", "Creature types", "Rarity"), titles)
         assertTrue(frame.all("div.figure").size >= 5, "no headline numbers")
     }
 
