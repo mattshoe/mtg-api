@@ -129,6 +129,29 @@ export async function task(db, key) {
   return { ...row, files: files.map((f) => ({ name: f.name, type: f.type, data: toBase64(f.bytes) })) };
 }
 
+/** Where main keeps a request's release note, which is public and not GitHub's rate-limited API. */
+const NOTES = 'https://raw.githubusercontent.com/mattshoe/mtg-api/main/release-notes/';
+
+/**
+ * What a done task changed, in the words its builder wrote for the
+ * release: `release-notes/<request name>.md` on main, frontmatter off.
+ * Matt: "for done requests i want to see a short succinct summary of
+ * changes made and result of the ticket". Null for a live task, one
+ * with no request file, one that shipped no note, or GitHub not
+ * answering: the page is still the page without it.
+ */
+export async function summary(row, fetchImpl) {
+  if (!FINISHED.has(row.status) || !/^[a-z0-9-]+$/.test(row.name ?? '')) return null;
+  try {
+    const res = await fetchImpl(`${NOTES}${row.name}.md`, { headers: { 'user-agent': 'mtg-api (mattshoe/mtg-api)' } });
+    if (!res.ok) return null;
+    const text = (await res.text()).replace(/\r\n/g, '\n').replace(/^---\n[\s\S]*?\n---\n/, '').trim();
+    return text || null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * The laptop has written these. Their files stay: the task's own page
  * shows them, and the laptop's copy is on a machine the app cannot reach.

@@ -32,6 +32,11 @@ data class TaskDetail(
     val details: String? = null,
     val createdAt: String? = null,
     val files: List<TaskFile> = emptyList(),
+    /**
+     * What a done task changed: the release note its builder wrote, which
+     * the Worker reads off main for a finished task and nothing else.
+     */
+    val summary: String? = null,
 ) {
     /** The request as Matt wrote it: no frontmatter, no heading, no paths on the laptop. Null when there is none. */
     val body: String? get() = details?.let { text ->
@@ -53,6 +58,23 @@ data class TaskDetail(
 
     /** The pull request's number, out of its address. */
     val pull: Int? get() = task?.pr?.substringAfterLast('/')?.toIntOrNull()
+
+    /**
+     * How a done task ended, in a line: `Merged as #72 and deployed.
+     * live: the site, the APK`. Null while it is live. Matt: "for done
+     * requests i want to see a short succinct summary of changes made and
+     * result of the ticket".
+     */
+    val result: String? get() {
+        val t = task?.takeIf { it.status.finished } ?: return null
+        val merged = "Merged" + (pull?.let { " as #$it" } ?: "")
+        val how = when (t.status) {
+            TaskStatus.DEPLOYED -> "$merged and deployed"
+            TaskStatus.MERGED -> merged
+            else -> "Cancelled"
+        }
+        return listOfNotNull(how, t.note?.takeIf { it.isNotBlank() }).joinToString(". ")
+    }
 
     /**
      * Label and value, in the order both shells list them. Nothing is
@@ -121,6 +143,7 @@ data class TaskDetail(
                     val data = str(f, "data").orEmpty()
                     TaskFile(str(f, "name").orEmpty(), str(f, "type").orEmpty(), base64Bytes(data), data)
                 },
+                summary = str(o, "summary")?.trim()?.ifEmpty { null },
             )
         } catch (e: Exception) {
             TaskDetail(key).failed(UNREADABLE)
