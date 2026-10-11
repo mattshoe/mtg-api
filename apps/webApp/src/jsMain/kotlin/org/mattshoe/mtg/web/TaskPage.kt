@@ -64,6 +64,17 @@ fun TaskPage(detail: TaskDetail, listed: Task?, now: Long, onBack: () -> Unit) {
             if (detail.busy) Div(attrs = { classes("empty") }) { Text("Loading…") }
             detail.error?.let { Div(attrs = { classes("err") }) { Text("Could not load the task: $it") } }
 
+            detail.copy(task = task).result?.let { result ->
+                H3 { Text("Summary") }
+                Div(attrs = { attr("data-task-detail-result", "") }) { Text(result) }
+                detail.summary?.let { summary ->
+                    Div(attrs = {
+                        classes("task-detail-text")
+                        attr("data-task-detail-summary", "")
+                    }) { Text(summary) }
+                }
+            }
+
             H3 { Text("Request") }
             val body = detail.body
             if (body != null) {

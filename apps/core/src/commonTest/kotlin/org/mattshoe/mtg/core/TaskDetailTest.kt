@@ -135,5 +135,31 @@ class TaskDetailTest {
         assertFalse(d.busy)
     }
 
+    /**
+     * Matt: "on the task details page, for done requests i want to see a
+     * short succinct summary of changes made and result of the ticket".
+     */
+    @Test
+    fun aDoneTaskSaysWhatChangedAndHowItEnded() {
+        val d = TaskDetail.decode(
+            "q7w8e9r0",
+            """{"key":"q7w8e9r0","title":"Bigger buttons","status":"deployed","note":"live: the site, the APK",
+               "pr":"https://github.com/mattshoe/mtg-api/pull/72","summary":"The deck page buttons are bigger. Website and Android.","files":[]}""",
+        )
+        assertEquals("The deck page buttons are bigger. Website and Android.", d.summary, "the release note was not read")
+        assertEquals("Merged as #72 and deployed. live: the site, the APK", d.result)
+    }
+
+    @Test
+    fun eachWayATaskEndsIsSaidPlainly() {
+        fun result(status: String, extra: String = "") =
+            TaskDetail.decode("k", """{"key":"k","title":"t","status":"$status"$extra}""").result
+        assertEquals("Merged as #9. deploying: the APK", result("merged", ""","pr":"https://x/pull/9","note":"deploying: the APK""""))
+        assertEquals("Merged", result("merged"))
+        assertEquals("Cancelled. withdrawn", result("cancelled", ""","note":"withdrawn""""))
+        assertNull(result("in review", ""","pr":"https://x/pull/9""""), "a live task has no result yet")
+        assertNull(TaskDetail.decode("q7w8e9r0", row).summary, "a live task has no summary")
+    }
+
     private fun json(s: String) = "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n") + "\""
 }

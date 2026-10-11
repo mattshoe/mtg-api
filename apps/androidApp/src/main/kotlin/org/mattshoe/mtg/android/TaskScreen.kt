@@ -83,6 +83,13 @@ fun TaskScreen(detail: TaskDetail, listed: Task?, now: Long, onBack: () -> Unit)
             detail.error?.let { Line("Could not load the task: $it", Bad, Design.SMALL) }
         }
 
+        detail.copy(task = task).result?.let { result ->
+            Panel(head = "Summary") {
+                Line(result, Ink, Design.SMALL, modifier = Modifier.testTag("task-detail-result"))
+                detail.summary?.let { Line(it, Ink, Design.BODY, modifier = Modifier.testTag("task-detail-summary")) }
+            }
+        }
+
         Panel(head = "Request") {
             val body = detail.body
             if (body != null) Line(body, Ink, Design.BODY, modifier = Modifier.testTag("task-detail-body"))

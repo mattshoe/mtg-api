@@ -285,6 +285,57 @@ describe('task status', () => {
 })
 
 /**
+ * Matt: "on the task details page, for done requests i want to see a
+ * short succinct summary of changes made and result of the ticket".
+ *
+ * The summary is the release note the builder wrote for it, by hand, at
+ * `release-notes/<request name>.md` on main. The Worker reads it for a
+ * finished task and nothing else: a live one has not shipped anything.
+ */
+describe('a done task\'s summary', () => {
+  const getAs = async (path) => call(path, { method: 'GET', token: await mattSession() })
+
+  function github(files) {
+    const asked = []
+    const impl = async (url) => {
+      asked.push(String(url))
+      const hit = Object.entries(files).find(([name]) => String(url).endsWith(`/release-notes/${name}.md`))
+      return hit ? new Response(hit[1]) : new Response('404: Not Found', { status: 404 })
+    }
+    return { impl, asked }
+  }
+
+  const keyOf = async (name) => (await sql('SELECT key FROM task_inbox WHERE name = ?1', name))[0].key
+
+  it('a merged task carries the release note it shipped with, without its frontmatter', async () => {
+    await post('/tasks/status', { name: 'deck-colours', title: 'Deck colours', status: 'deployed', note: 'live: the site, the APK' })
+    const gh = github({ 'deck-colours': '---\nbump: minor\n---\nDeck colours show on the deck page. Website and Android.\n' })
+    const r = await call(`/tasks/${await keyOf('deck-colours')}`, { method: 'GET', token: await mattSession(), githubFetch: gh.impl })
+    expect(r.body.summary, 'no summary on a deployed task').toBe('Deck colours show on the deck page. Website and Android.')
+    expect(gh.asked).toEqual(['https://raw.githubusercontent.com/mattshoe/mtg-api/main/release-notes/deck-colours.md'])
+  })
+
+  it('a live task asks nobody and has no summary, and a done one with no note says nothing', async () => {
+    await post('/tasks/status', { name: 'still-going', title: 'Still going', status: 'in review' })
+    await post('/tasks/status', { name: 'never-noted', title: 'Never noted', status: 'cancelled' })
+    const gh = github({ 'still-going': 'Should not be read.' })
+    const going = await call(`/tasks/${await keyOf('still-going')}`, { method: 'GET', token: await mattSession(), githubFetch: gh.impl })
+    expect(going.body.summary).toBeNull()
+    expect(gh.asked, 'a task still in review asked GitHub for a note').toEqual([])
+    const gone = await call(`/tasks/${await keyOf('never-noted')}`, { method: 'GET', token: await mattSession(), githubFetch: gh.impl })
+    expect(gone.status).toBe(200)
+    expect(gone.body.summary).toBeNull()
+  })
+
+  it('GitHub not answering is no summary, not a broken page', async () => {
+    await post('/tasks/status', { name: 'offline', title: 'Offline', status: 'merged' })
+    const r = await getAs(`/tasks/${await keyOf('offline')}`)
+    expect(r.status).toBe(200)
+    expect(r.body).toMatchObject({ status: 'merged', summary: null })
+  })
+})
+
+/**
  * The release notes, through the Worker. GitHub is still the record —
  * `release.yml` writes the note into the release — but the app no longer
  * asks it directly: the Worker keeps the last answer in D1 and asks

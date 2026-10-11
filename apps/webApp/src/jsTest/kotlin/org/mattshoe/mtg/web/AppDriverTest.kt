@@ -156,6 +156,14 @@ class AppDriverTest {
                         """"created_at":"2026-10-08T09:00:00.000Z","started_at":"2026-10-08T09:05:00.000Z","finished_at":null,""" +
                         """"files":[{"name":"shot.png","type":"image/png","data":"$PNG"}]}"""
 
+                // A done one: deployed, with the release note it shipped with.
+                request.url.encodedPath == "/tasks/ef56gh78" ->
+                    """{"key":"ef56gh78","name":"bigger-buttons","title":"Bigger buttons","details":"Too small.",""" +
+                        """"status":"deployed","note":"live: the site, the APK","pr":"https://github.com/mattshoe/mtg-api/pull/72",""" +
+                        """"summary":"The deck page buttons are bigger. Website and Android.",""" +
+                        """"created_at":"2026-10-08T09:00:00.000Z","started_at":"2026-10-08T09:05:00.000Z",""" +
+                        """"finished_at":"2026-10-08T10:00:00.000Z","files":[]}"""
+
                 request.url.encodedPath == "/cards/validate" ->
                     """{"checked":1,"unknown":0,"ok":true,"cards":[],"bad":[],"suggestions":{}}"""
 
@@ -1307,6 +1315,27 @@ class AppDriverTest {
 
         root.button("← Admin Settings").click()
         waitFor("back on Admin Settings") { window.location.hash.endsWith("/admin") }
+    }
+
+    /**
+     * Matt: "on the task details page, for done requests i want to see a
+     * short succinct summary of changes made and result of the ticket".
+     * Sibling of Android's `TaskDetailParityTest`.
+     */
+    @Test
+    fun aDoneTasksPageSaysWhatChangedAndHowItEnded() = runTest {
+        role = "admin"
+        mount("#/admin/task/ef56gh78")
+        waitFor("the done task's summary") { document.querySelector("[data-task-detail-summary]") != null }
+        val summary = document.querySelector("[data-task-detail-summary]") as HTMLElement
+        assertEquals("The deck page buttons are bigger. Website and Android.", summary.textContent)
+        assertTrue(summary.getBoundingClientRect().height > 0, "the summary is on the page with no height")
+        val result = document.querySelector("[data-task-detail-result]")?.textContent
+        assertEquals("Merged as #72 and deployed. live: the site, the APK", result, "how the task ended is not on the page")
+        val summaryTop = summary.getBoundingClientRect().top
+        val requestTop = (document.querySelector("[data-task-detail-body]") as HTMLElement).getBoundingClientRect().top
+        assertTrue(summaryTop < requestTop, "the summary is below the request, at $summaryTop against $requestTop")
+        assertEquals(0, askedGitHub, "the website asked GitHub itself")
     }
 
     // --------------------------------------------------------- new task
