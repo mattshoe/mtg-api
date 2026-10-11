@@ -206,7 +206,21 @@ data class DeckStats(
     val unpriced: Int,
     val missing: Int,
     val identity: String,
+    /**
+     * Every creature type in the deck, most common first, by copies.
+     *
+     * Matt: "a human warrior would add 1 to human and 1 to warrior.
+     * There would be no 'human warrior' type".
+     */
+    val creatureTypes: List<Bar> = emptyList(),
+    /** Copies that carry at least one creature type: what [creatureTypes] is out of. */
+    val creatures: Int = 0,
 ) {
+    /** The line under the creature types chart, the same on both platforms. */
+    val creatureTypesNote: String
+        get() = "Of $creatures card${if (creatures == 1) "" else "s"} with a creature type. " +
+            "A Human Warrior counts once as each."
+
     val hasCurve: Boolean get() = curve.any { it.value > 0 }
 
     /** Lands as a share of the deck, the number every deckbuilder checks first. */
@@ -271,7 +285,36 @@ object DeckAnalysis {
             unpriced = cards.filter { it.price == null }.sumOf { it.qty },
             missing = cards.sumOf { it.short },
             identity = identity(cards),
+            creatureTypes = creatureTypes(cards),
+            creatures = cards.filter { creatureTypesOf(it).isNotEmpty() }.sumOf { it.qty },
         )
+    }
+
+    /**
+     * The creature types one card has, each once.
+     *
+     * The words after the dash on any face that is a creature or
+     * kindred. Both faces of a Human Wizard // Human Insect are one
+     * Human; the Adventure half of an Elf Rogue is not a type.
+     */
+    private fun creatureTypesOf(c: DeckCard): Set<String> =
+        c.knownTypeLine.orEmpty().split("//").flatMap { face ->
+            val (types, subtypes) = face.split("—").let { it[0] to it.getOrNull(1).orEmpty() }
+            val words = types.split(" ")
+            if ("Creature" in words || "Kindred" in words || "Tribal" in words) {
+                subtypes.split(" ").map { it.trim() }.filter { it.isNotEmpty() }
+            } else {
+                emptyList()
+            }
+        }.toSet()
+
+    /** Each creature type by copies, most first, ties alphabetical. */
+    private fun creatureTypes(cards: List<DeckCard>): List<Bar> {
+        val counts = mutableMapOf<String, Int>()
+        cards.forEach { c -> creatureTypesOf(c).forEach { counts[it] = (counts[it] ?: 0) + c.qty } }
+        return counts.entries
+            .sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
+            .map { (type, n) -> Bar(type, n) }
     }
 
     /**
