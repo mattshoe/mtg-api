@@ -24,7 +24,7 @@ fun CountStepper(stepper: Stepper, onStep: (Int) -> Unit) {
         attr("aria-label", "How many, ${stepper.unit}")
     }) {
         Button(attrs = {
-            classes("btn", "sm", "step-minus")
+            classes("btn", "step-minus")
             attr("aria-label", "One fewer")
             if (!stepper.canTakeOne) disabled()
             onClick { onStep(-1) }
@@ -34,7 +34,7 @@ fun CountStepper(stepper: Stepper, onStep: (Int) -> Unit) {
             attr("aria-live", "polite")
         }) { Text(stepper.count.toString()) }
         Button(attrs = {
-            classes("btn", "sm", "step-plus")
+            classes("btn", "step-plus")
             attr("aria-label", "One more")
             if (!stepper.canAddOne) disabled()
             onClick { onStep(+1) }
