@@ -363,6 +363,9 @@ data class AppState(
     val peekRun: List<PeekCard>
         get() = when (peek.of) {
             PeekOf.DECK -> runFor(PeekOf.DECK, peek.tribe).map { card ->
+                // Where the stepper says how many, a tag saying it
+                // again is the "1x in deck" Matt called redundant.
+                val stepped = stepsDeckRow(card)
                 PeekCard(
                     title = card.shown,
                     nameNorm = card.nameNorm,
@@ -370,18 +373,20 @@ data class AppState(
                     typeLine = card.knownTypeLine,
                     printing = card.printing,
                     price = card.price,
-                    tags = listOf(
-                        PeekTag("${card.qty}× in deck"),
+                    tags = listOfNotNull(
+                        PeekTag("${card.qty}× in deck").takeUnless { stepped },
                         // The one bad fact a deck row can state: the
                         // deck wants more than the collection holds.
                         PeekTag("${card.owned} owned", bad = card.short > 0),
                         PeekTag.edhrec(card.edhrecRank),
                     ),
                     inDeck = card,
+                    stepped = stepped,
                 )
             }
 
             PeekOf.LIBRARY -> library.rows.map { row ->
+                val stepped = stepsLibraryRow(row)
                 PeekCard(
                     title = row.fullName,
                     nameNorm = row.nameNorm,
@@ -390,10 +395,11 @@ data class AppState(
                     printing = row.printing,
                     price = row.price,
                     tags = listOfNotNull(
-                        PeekTag("${row.qty} owned"),
+                        PeekTag("${row.qty} owned").takeUnless { stepped },
                         row.free?.let { PeekTag("$it free") },
                         PeekTag.edhrec(row.edhrecRank),
                     ),
+                    stepped = stepped,
                 )
             }
         }

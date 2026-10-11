@@ -71,15 +71,20 @@ private fun AppState.commanderLine(deck: Deck): String =
         .joinToString(" // ") { it.name }
         .ifEmpty { deck.commanderName.orEmpty() }
 
+/** Whether the stepper counts this row of the open deck: yours, and not its commander. */
+internal fun AppState.stepsDeckRow(row: DeckCard): Boolean =
+    // A commander's count is not a number anybody steps.
+    !row.isCommander && decks.open?.let { admin.account?.owns(it.owner) } == true
+
+/** Whether the stepper counts this Library row: one in a collection you may change. */
+internal fun AppState.stepsLibraryRow(row: CardRow): Boolean = admin.account?.owns(row.owner) == true
+
 /** The deck row on show, if it is one you may change the count of. */
 private fun AppState.deckRowOnShow(): Pair<Deck, DeckCard>? {
     if (peek.of != PeekOf.DECK) return null
     val row = peeked?.inDeck ?: return null
     val deck = decks.open ?: return null
-    // A commander's count is not a number anybody steps.
-    if (row.isCommander) return null
-    if (admin.account?.owns(deck.owner) != true) return null
-    return deck to row
+    return (deck to row).takeIf { stepsDeckRow(row) }
 }
 
 /** The Library row on show, if it is in a collection you may change. */
@@ -87,7 +92,7 @@ private fun AppState.libraryRowOnShow(): CardRow? {
     if (peek.of != PeekOf.LIBRARY || !peek.open) return null
     val rows = library.rows
     val row = rows.getOrNull(peek.at.coerceAtMost(rows.lastIndex)) ?: return null
-    return row.takeIf { admin.account?.owns(it.owner) == true }
+    return row.takeIf { stepsLibraryRow(it) }
 }
 
 /** "- 2 +" under the carousel: the deck's count over a deck, the collection's in the Library. */
@@ -130,9 +135,16 @@ fun AppState.peekStep(by: Int): CountWrite? {
  * On the deck row rather than on `admin`: being admin in the Library
  * still leaves nothing to count, swap or remove, because there is no
  * deck.
+ *
+ * Swap alone where the stepper counts the card. Matt: "why is there
+ * still s count button?!?! DON'T YOU THINK THAT'S A LITTLE FUCKING
+ * REDUNDANT?! same with remove?!" Minus to nought is the remove.
  */
-fun PeekCard.tweaks(admin: Boolean): List<Tweak> =
-    if (inDeck == null || !admin) emptyList() else listOf(Tweak.QUANTITY, Tweak.SWAP, Tweak.REMOVE)
+fun PeekCard.tweaks(admin: Boolean): List<Tweak> = when {
+    inDeck == null || !admin -> emptyList()
+    stepped -> listOf(Tweak.SWAP)
+    else -> listOf(Tweak.QUANTITY, Tweak.SWAP, Tweak.REMOVE)
+}
 
 // ------------------------------------------------------- the card page
 
