@@ -21,7 +21,7 @@
 //   GET  /tasks       every task and where it is (admin)
 //   POST /tasks/status one transition, from the dispatcher (admin)
 //   GET  /tasks/:key  one task, its details and its files, and a done one's
-//                     release note as its summary (admin)
+//                     builder's writeup (or else release note) as its summary (admin)
 //   GET  /releases    the release notes, GitHub's list as the Worker keeps it
 //   GET  /edhrec/commander?name=  a commander's rank among commanders, from EDHREC
 //   GET  /maintenance last run of the daily job
@@ -297,7 +297,7 @@ const INDEX = {
     'POST /tasks/inbox/received': '{"keys":["..."],"names":{"<key>":"<request file>"}} — the laptop has written these; admin only',
     'GET /tasks': 'every task, newest first, with its status; admin only',
     'POST /tasks/status': '{"key" or "name","status","note"?,"title"?,"pr"?,"started_at"?,"finished_at"?,"details"?} — one transition, written by whoever caused it; the times only fill a task that never had a start; details is the request file, kept only for a task with none; admin only',
-    'GET /tasks/:key': 'one task, its details, status and files, collected or not, and for a done one the release note it shipped with as summary; admin only',
+    'GET /tasks/:key': 'one task, its details, status and files, collected or not, and for a done one the writeup its builder filed in summaries/, or else its release note, as summary; admin only',
     'GET /releases': 'GitHub\'s release list, kept by the Worker for a few minutes',
     'GET /edhrec/commander': '?name=Teysa Karlov -> {"name","slug","rank":58,"decks":21728} — rank among commanders as EDHREC\'s commander page says it; null when EDHREC has no page',
     'GET /logs': '?min=info&q=&event=&status=error&since=24&limit=100 — admin only',
