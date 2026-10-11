@@ -2,6 +2,11 @@ package org.mattshoe.mtg.android
 
 import org.mattshoe.mtg.core.TaskDetail
 import org.mattshoe.mtg.core.openTaskKey
+import org.mattshoe.mtg.core.CommanderRank
+import org.mattshoe.mtg.core.askingCommanderRank
+import org.mattshoe.mtg.core.commanderRankFound
+import org.mattshoe.mtg.core.commanderRankWanted
+import org.mattshoe.mtg.core.showing
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -112,6 +117,9 @@ class MainActivity : ComponentActivity() {
             // Every write, so a pull lets go of its spinner the moment
             // its page's fetch lands, whichever coroutine landed it.
             model.app = value.settled()
+            // Every write, so whichever path put a commander on screen —
+            // its page, the carousel, a link — asks for its rank.
+            model.app.commanderRankWanted?.let { askCommanderRank(it) }
         }
 
     // All on the ViewModel, so a rotation mid-request neither cancels
@@ -967,7 +975,27 @@ class MainActivity : ComponentActivity() {
 
     private suspend fun loadCard(nameNorm: String, label: String): AppState {
         val answers = Load.card(nameNorm).map { api.query(it).let { a -> a.cols to a.rows } }
-        return app.copy(card = Load.cardDetail(nameNorm, label, answers))
+        return app.showing(Load.cardDetail(nameNorm, label, answers))
+    }
+
+    /**
+     * A commander's rank among commanders, from EDHREC through the
+     * Worker. `:core` says which card; this only asks. A failure is no
+     * rank rather than a toast: it is a detail on a page that works
+     * without it. Sibling of the website's `askCommanderRank`.
+     */
+    private fun askCommanderRank(name: String) {
+        app = app.askingCommanderRank(name)
+        scope.launch {
+            val found = try {
+                api.commanderRank(name)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                CommanderRank(null, null)
+            }
+            app = app.commanderRankFound(name, found)
+        }
     }
 
     // ---------------------------------------------------- find and hint
