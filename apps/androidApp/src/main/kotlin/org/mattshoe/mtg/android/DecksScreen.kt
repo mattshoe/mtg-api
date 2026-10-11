@@ -751,6 +751,10 @@ internal fun DeckStatsPanel(s: org.mattshoe.mtg.core.DeckStats, guild: String? =
     if (s.hasCurve) Panel { Curve(s) }
     if (s.pips.isNotEmpty() || s.sources.isNotEmpty()) Panel { Colours(s) }
     if (s.types.isNotEmpty()) Panel { Bars("Card types", s.types, s.totalCards) }
+    // A Human Warrior is a bar each for Human and Warrior.
+    if (s.creatureTypes.isNotEmpty()) {
+        Panel { Bars("Creature types", s.creatureTypes, s.creatures, s.creatureTypesNote, tag = "tribe") }
+    }
     if (s.rarities.isNotEmpty()) Panel { Bars("Rarity", s.rarities, s.totalCards) }
 
     if (s.unknown > 0) {
@@ -1188,7 +1192,13 @@ private fun Track(n: Int, most: Int, pip: Pip, what: String, faded: Boolean) {
 }
 
 @Composable
-private fun Bars(title: String, bars: List<Bar>, total: Int) {
+private fun Bars(
+    title: String,
+    bars: List<Bar>,
+    total: Int,
+    note: String = "Of $total cards.",
+    tag: String = "hbar",
+) {
     // `.stats-card > h3 { text-transform: uppercase }` on the web.
     Line(title.uppercase(), Ink3, Design.MINI, FontWeight.SemiBold)
     val most = bars.maxOfOrNull { it.value } ?: 0
@@ -1204,13 +1214,13 @@ private fun Bars(title: String, bars: List<Bar>, total: Int) {
                     Modifier.fillMaxWidth(if (most <= 0) 0f else bar.value.toFloat() / most)
                         .height(8.dp)
                         .background(Accent, Radius)
-                        .testTag("hbar-${bar.label}"),
+                        .testTag("$tag-${bar.label}"),
                 )
             }
             Line("${bar.value}", Ink3, Design.MINI)
         }
     }
-    Line("Of $total cards.", Ink3, Design.MINI)
+    Line(note, Ink3, Design.MINI)
 }
 
 /**

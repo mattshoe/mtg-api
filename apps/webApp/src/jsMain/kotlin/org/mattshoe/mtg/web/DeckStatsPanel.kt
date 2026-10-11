@@ -55,6 +55,10 @@ fun DeckStatsPanel(s: DeckStats, guild: String? = null) {
             if (s.hasCurve) card("Mana curve") { Curve(s) }
             if (s.pips.isNotEmpty() || s.sources.isNotEmpty()) card("Colour") { Colours(s) }
             if (s.types.isNotEmpty()) card("Card types") { Bars(s.types, s.totalCards) }
+            // A Human Warrior is a bar each for Human and Warrior.
+            if (s.creatureTypes.isNotEmpty()) {
+                card("Creature types") { Bars(s.creatureTypes, s.creatures, s.creatureTypesNote) }
+            }
             if (s.rarities.isNotEmpty()) card("Rarity") { Bars(s.rarities, s.totalCards) }
         }
 
@@ -196,7 +200,7 @@ private fun track(n: Int, most: Int, pip: Pip, what: String, faded: Boolean) {
 }
 
 @Composable
-private fun Bars(bars: List<Bar>, total: Int) {
+private fun Bars(bars: List<Bar>, total: Int, note: String = "Of $total cards.") {
     val most = bars.maxOfOrNull { it.value } ?: 0
     bars.forEach { bar ->
         val share = if (total <= 0) 0 else (bar.value * 100) / total
@@ -208,7 +212,7 @@ private fun Bars(bars: List<Bar>, total: Int) {
             Span(attrs = { classes("v") }) { Text("${bar.value}") }
         }
     }
-    Div(attrs = { classes("sub") }) { Text("Of $total cards.") }
+    Div(attrs = { classes("sub") }) { Text(note) }
 }
 
 
