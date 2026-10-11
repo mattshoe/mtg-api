@@ -21,7 +21,7 @@ const baseline = new Set(JSON.parse(baselineJson).names)
  */
 function problems(text) {
   const body = text.replace(/\r\n/g, '\n').replace(/^---\n[\s\S]*?\n---\n/, '')
-  const has = (label) => new RegExp(`^${label}:\\s*\\S`, 'm').test(body)
+  const has = (label) => new RegExp(`^${label}:[ \\t]*\\S`, 'm').test(body)
   if (has('What was wrong')) {
     return has('Could not reproduce') ? [] : ['Why', 'Fix'].filter((l) => !has(l))
   }

@@ -129,24 +129,33 @@ export async function task(db, key) {
   return { ...row, files: files.map((f) => ({ name: f.name, type: f.type, data: toBase64(f.bytes) })) };
 }
 
-/** Where main keeps a request's release note, which is public and not GitHub's rate-limited API. */
-const NOTES = 'https://raw.githubusercontent.com/mattshoe/mtg-api/main/release-notes/';
+/** Where main keeps a request's files, which is public and not GitHub's rate-limited API. */
+const MAIN = 'https://raw.githubusercontent.com/mattshoe/mtg-api/main/';
 
 /**
- * What a done task changed, in the words its builder wrote for the
- * release: `release-notes/<request name>.md` on main, frontmatter off.
- * Matt: "for done requests i want to see a short succinct summary of
- * changes made and result of the ticket". Null for a live task, one
- * with no request file, one that shipped no note, or GitHub not
- * answering: the page is still the page without it.
+ * What a done task changed. First the builder's writeup,
+ * `summaries/<request name>.md`: what was wrong, why and the fix, or
+ * what was built and the choices made. Matt, of the release note alone:
+ * "the summary doesn't contain any useful information". A request filed
+ * before writeups existed falls back to its one-line release note,
+ * `release-notes/<request name>.md`. Frontmatter off either way. Null for
+ * a live task, one with no request file, one with neither file, or
+ * GitHub not answering: the page is still the page without it.
  */
 export async function summary(row, fetchImpl) {
   if (!FINISHED.has(row.status) || !/^[a-z0-9-]+$/.test(row.name ?? '')) return null;
+  for (const dir of ['summaries', 'release-notes']) {
+    const text = await fromMain(`${dir}/${row.name}.md`, fetchImpl);
+    if (text) return text;
+  }
+  return null;
+}
+
+async function fromMain(path, fetchImpl) {
   try {
-    const res = await fetchImpl(`${NOTES}${row.name}.md`, { headers: { 'user-agent': 'mtg-api (mattshoe/mtg-api)' } });
+    const res = await fetchImpl(MAIN + path, { headers: { 'user-agent': 'mtg-api (mattshoe/mtg-api)' } });
     if (!res.ok) return null;
-    const text = (await res.text()).replace(/\r\n/g, '\n').replace(/^---\n[\s\S]*?\n---\n/, '').trim();
-    return text || null;
+    return (await res.text()).replace(/\r\n/g, '\n').replace(/^---\n[\s\S]*?\n---\n/, '').trim() || null;
   } catch {
     return null;
   }
