@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { spawn } from 'node:child_process'
+import { spawn, execFileSync } from 'node:child_process'
 import { outcome, titleOf, started, report, reconcile, requestOfBranch, cancels, cancelFile, stop } from '../scripts/intake/task-status.mjs'
 import { statusOf, buildable } from '../scripts/intake.mjs'
 
@@ -359,15 +359,26 @@ describe('a task cancelled in the app', () => {
     `, `requests/${name}.md`], { stdio: ['ignore', 'pipe', 'ignore'] })
     const bystander = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', `requests/${name}-other.md`], { stdio: 'ignore' })
     const child = Number(await new Promise((done) => agent.stdout.once('data', (d) => done(String(d).trim()))))
-    const alive = (pid) => { try { process.kill(pid, 0); return true } catch { return false } }
+    // A zombie is dead: killed, and waiting for a parent that may never
+    // reap it, as in a CI container whose pid 1 reaps nothing.
+    const alive = (pid) => {
+      try {
+        return !execFileSync('ps', ['-o', 'stat=', '-p', String(pid)], { encoding: 'utf8' }).trim().startsWith('Z')
+      } catch { return false }
+    }
+    // A SIGKILL lands within moments, not at once. Two seconds is plenty.
+    const dies = async (pid) => {
+      for (let i = 0; i < 40 && alive(pid); i++) await new Promise((r) => setTimeout(r, 50))
+      return !alive(pid)
+    }
     const gone = new Promise((done) => agent.once('exit', done))
     try {
       expect(alive(agent.pid) && alive(child), 'the probe never started, so this proves nothing').toBe(true)
       const killed = stop(name)
       await gone
       expect(killed).toEqual(expect.arrayContaining([agent.pid, child]))
-      expect(alive(agent.pid), 'the agent is still running').toBe(false)
-      expect(alive(child), 'the agent died but what it started is still running').toBe(false)
+      expect(await dies(agent.pid), 'the agent is still running').toBe(true)
+      expect(await dies(child), 'the agent died but what it started is still running').toBe(true)
       expect(alive(bystander.pid), 'an agent on another request was killed too').toBe(true)
     } finally {
       for (const p of [agent.pid, child, bystander.pid]) { try { process.kill(p, 'SIGKILL') } catch { /* gone */ } }

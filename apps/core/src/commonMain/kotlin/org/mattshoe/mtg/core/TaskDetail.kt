@@ -42,15 +42,31 @@ data class TaskDetail(
     /** The cancel is on its way to the Worker. */
     val cancelling: Boolean = false,
 ) {
-    val canCancel: Boolean get() = false
+    /**
+     * Matt: "i want the ability to cancel/abort tasks and any running
+     * agent should be immediately killed". A live task, and only one the
+     * page has loaded: a finished one has nothing left to stop.
+     */
+    val canCancel: Boolean get() = task?.status?.finished == false
 
-    fun askToCancel() = this
+    /** Cancel task, tapped: the page asks before anything goes. */
+    fun askToCancel() = copy(confirming = true)
 
-    fun keep() = this
+    /** Keep it: the question goes away and nothing was sent. */
+    fun keep() = copy(confirming = false)
 
-    fun cancelling() = this
+    /** Yes: the cancel is on its way. */
+    fun confirmCancel() = copy(confirming = false, cancelling = true)
 
-    fun cancelRefused() = this
+    /** The Worker refused. The task is as it was, and Cancel task is offered again. */
+    fun cancelRefused() = copy(confirming = false, cancelling = false)
+
+    /** The Worker wrote it. The page says cancelled, with why, and offers nothing more. */
+    fun cancelled() = copy(
+        confirming = false,
+        cancelling = false,
+        task = task?.copy(status = TaskStatus.CANCELLED, note = CANCEL_NOTE),
+    )
 
     /** The request as Matt wrote it: no frontmatter, no heading, no paths on the laptop. Null when there is none. */
     val body: String? get() = details?.let { text ->
@@ -124,13 +140,15 @@ data class TaskDetail(
 
         const val UNREADABLE = "the Worker's answer was not a task"
 
-        const val CANCEL_NOTE = ""
-        const val CANCEL = ""
-        const val ASK = ""
-        const val CONFIRM = ""
-        const val KEEP = ""
-        const val CANCELLING = ""
-        const val CANCELLED = ""
+        /** Why a task cancelled from the app is cancelled, on its row and its page. */
+        const val CANCEL_NOTE = "cancelled in the app"
+        const val CANCEL = "Cancel task"
+        const val ASK = "Stop this task and kill its agent? Its pull request and branch stay."
+        const val CONFIRM = "Yes, cancel it"
+        const val KEEP = "Keep it"
+        const val CANCELLING = "Cancelling…"
+        /** Said once the Worker has it. The laptop checks once a minute. */
+        const val CANCELLED = "Task cancelled. Its agent is stopped within a minute."
 
 
         private val json = Json { ignoreUnknownKeys = true; isLenient = true }
@@ -225,4 +243,14 @@ val AppState.openTask: Task? get() = openTaskKey?.let { key -> tasks.rows.firstO
 fun AppState.openingTask(task: Task): AppState =
     copy(taskDetail = TaskDetail(task.key, task = task, busy = true)).navigate(Route(View.ADMIN, "${TaskDetail.ROUTE}/${task.key}"))
 
-fun AppState.taskCancelled(key: String): AppState = this
+/**
+ * A task the Worker has written cancelled: its page and its row on the
+ * list both say so at once, without waiting for the next load.
+ */
+fun AppState.taskCancelled(key: String): AppState {
+    val now = tasks.rows.firstOrNull { it.key == key }?.let { it.copy(status = TaskStatus.CANCELLED, note = TaskDetail.CANCEL_NOTE) }
+    return copy(
+        taskDetail = taskDetail?.takeIf { it.key == key }?.cancelled() ?: taskDetail,
+        tasks = if (now == null) tasks else tasks.copy(rows = tasks.rows.map { if (it.key == key) now else it }),
+    )
+}

@@ -1330,7 +1330,7 @@ object MtgApp {
      */
     private fun cancelTask(key: String) {
         val detail = app.taskDetail?.takeIf { it.key == key } ?: return
-        app = app.copy(taskDetail = detail.cancelling())
+        app = app.copy(taskDetail = detail.confirmCancel())
         scope.launch {
             app = try {
                 api.cancelTask(token(), key)

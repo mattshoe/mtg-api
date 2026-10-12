@@ -181,12 +181,12 @@ class TaskDetailTest {
         assertFalse(d.confirming, "the question is up before anybody asked")
         assertTrue(d.askToCancel().confirming, "tapping Cancel task did not ask")
         assertFalse(d.askToCancel().keep().confirming, "Keep it did not take the question back")
-        assertTrue(d.askToCancel().cancelling().cancelling, "confirming did not say it is cancelling")
+        assertTrue(d.askToCancel().confirmCancel().cancelling, "confirming did not say it is cancelling")
     }
 
     @Test
     fun aCancelledTaskSaysCancelledOnItsPageAndInTheList() {
-        val opened = onAdmin().openingTask(task).let { it.copy(taskDetail = it.taskDetail!!.askToCancel().cancelling()) }
+        val opened = onAdmin().openingTask(task).let { it.copy(taskDetail = it.taskDetail!!.askToCancel().confirmCancel()) }
         val after = opened.taskCancelled(task.key)
         val d = after.taskDetail!!
         assertEquals(TaskStatus.CANCELLED, d.task?.status, "the page still says ${d.task?.status?.word}")
@@ -201,7 +201,7 @@ class TaskDetailTest {
 
     @Test
     fun aRefusedCancelLeavesTheTaskAsItWasAndOffersItAgain() {
-        val d = TaskDetail(task.key, task = task).askToCancel().cancelling().cancelRefused()
+        val d = TaskDetail(task.key, task = task).askToCancel().confirmCancel().cancelRefused()
         assertEquals(TaskStatus.IN_REVIEW, d.task?.status)
         assertFalse(d.cancelling)
         assertFalse(d.confirming)
