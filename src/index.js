@@ -42,7 +42,7 @@ import { disassembleDeck, editDeckList, createDeck, renameDeck, FORMATS } from '
 import { mintToken, verifyToken, bearer } from './admin.js';
 import {
   whoAmI, canEdit, profileOf, endSession, signIn, newSession, cookieValue,
-  collectionByKey, allUsers, setRole, ownerOfKey, SESSION_COOKIE,
+  collectionByKey, allUsers, setRole, ownerOfKey, SESSION_COOKIE, AGENT,
 } from './accounts.js';
 import { startSignIn, finishSignIn, verifyIdToken } from './google.js';
 import { lookupPrices } from './prices.js';
@@ -807,11 +807,17 @@ async function route(request, env, ctx, entry) {
     if (path === '/tasks' || path === '/tasks/inbox' || path === '/tasks/inbox/received' || path === '/tasks/status' || taskKey) {
       const wants = path === '/tasks/inbox' || taskKey || (path === '/tasks' && method === 'GET') ? 'GET' : 'POST';
       if (method !== wants) return notAllowed(wants);
+      // A build agent reaches the task routes and nothing else. This is
+      // the one door it has to say it needs Matt — it writes `blocked` on
+      // its own task and the row says so in Admin Settings. With that shut
+      // a stuck agent is silent, and one sat seven and a half hours
+      // reading `in review` with nothing running on it.
       const who = await whoAmI(env, request, verifyToken);
-      if (!who.operator && who.user?.role !== 'admin') {
+      const mayTask = who.operator || who.user?.role === 'admin' || who.user?.role === AGENT;
+      if (!mayTask) {
         return who.user
-          ? json({ error: 'that needs the admin role' }, 403)
-          : denied('that needs the admin role');
+          ? json({ error: 'that needs the admin or agent role' }, 403)
+          : denied('that needs the admin or agent role');
       }
       entry.admin = true;
       if (path === '/tasks/inbox') return json({ tasks: await inbox(env.DB) });

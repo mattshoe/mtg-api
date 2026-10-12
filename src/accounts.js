@@ -229,7 +229,23 @@ export async function ownerOfKey(db, key) {
 /** The only two roles there are. `user` is the floor, `admin` the ceiling. */
 export const USER = 'user';
 export const ADMIN = 'admin';
-export const ROLES = [USER, ADMIN];
+
+/**
+ * A build agent. Reads and writes task status, and nothing else.
+ *
+ * `intake-agent` used to be an admin, which is how an agent with
+ * `/admin/sql` rewrote two production views. Demoting it to `user` fixed
+ * that and broke something else: an agent that needs Matt says so by
+ * writing `blocked` to its task, and as a `user` that is a 403. One sat
+ * seven and a half hours reading `in review` with nothing running on it,
+ * because the only way it had to speak was shut.
+ *
+ * So the door is narrow instead of shut. An agent reaches `/tasks*` and
+ * nothing more — `/admin/sql`, `/query`, roles and every collection stay
+ * out of reach.
+ */
+export const AGENT = 'agent';
+export const ROLES = [USER, AGENT, ADMIN];
 
 /**
  * Everybody, for the admin screen's list.
