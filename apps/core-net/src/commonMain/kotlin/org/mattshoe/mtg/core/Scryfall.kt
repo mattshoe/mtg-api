@@ -259,7 +259,17 @@ class Scryfall internal constructor(private val http: HttpClient) {
     }
 }
 
-/** Stub. */
+/**
+ * Find on the Fetch list: the owned printings, filed, then the same
+ * filing with Scryfall's Also check.
+ *
+ * `filed` is called the moment the collection answers, before Scryfall
+ * is asked anything. The collection is one query and about a second;
+ * the Also check is a search per rarity per twenty names, one after
+ * another, which for a hundred-card deck was the minutes Matt sat
+ * through. Both shells run this, so neither can wait on the slow half
+ * again.
+ */
 suspend fun FetchList.find(
     api: MtgApi,
     scryfall: Scryfall,
@@ -269,8 +279,8 @@ suspend fun FetchList.find(
 ): FetchResult {
     val q = query(entries.map { it.key }, owner) ?: return FetchResult()
     val r = api.query(q)
+    val owned = decode(r.cols, r.rows)
+    filed(build(entries, owned))
     val printed = scryfall.rarities(entries.map { it.name })
-    val done = build(entries, decode(r.cols, r.rows), printed)
-    filed(done)
-    return done
+    return build(entries, owned, printed)
 }
