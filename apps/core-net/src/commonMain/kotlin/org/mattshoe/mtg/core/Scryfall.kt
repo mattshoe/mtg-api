@@ -165,6 +165,60 @@ class Scryfall internal constructor(private val http: HttpClient) {
             .sortedWith(compareByDescending<TokenCard> { it.madeBy }.thenBy { it.name })
     }
 
+    @Serializable
+    private data class Named(val name: String = "")
+
+    @Serializable
+    private data class Search(val data: List<Named> = emptyList())
+
+    /**
+     * Every rarity each of these cards has been printed at, on paper.
+     *
+     * For the Fetch list's Also check: the database holds the rarity
+     * of the printing that was entered, and Matt: "sometimes the
+     * rarity i have in the database does not match the rarity of the
+     * actual printing i have". One search per rarity over a batch of
+     * names — `!"Sol Ring" or !"Counterspell" r:uncommon` — answers
+     * which of them have a printing at it, and a hundred-card deck is
+     * a couple of dozen small requests rather than one per card.
+     *
+     * Keyed by the lowercased name, and by the front face of a
+     * double-faced card too, because that is how a list writes it.
+     * A failure is a rarity nobody mentions, never an error: the
+     * list is still right without it.
+     */
+    suspend fun rarities(names: List<String>): Map<String, Set<String>> {
+        val wanted = names.map { it.replace("\"", "").trim() }.filter { it.isNotEmpty() }.distinct()
+        val out = mutableMapOf<String, MutableSet<String>>()
+        wanted.chunked(RARITY_BATCH).forEach { batch ->
+            val any = batch.joinToString(" or ") { "!\"$it\"" }
+            RARITIES.forEach { rarity ->
+                val found = try {
+                    val text = plainGet(
+                        http,
+                        "$BASE/cards/search?q=" + encodeTerm("($any) r:$rarity game:paper"),
+                        accept = "application/json",
+                        userAgent = USER_AGENT,
+                    )
+                    json.decodeFromString<Search>(text).data
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    // No match is a 404 from Scryfall, and offline is
+                    // offline. Either way this rarity says nothing.
+                    emptyList()
+                }
+                found.forEach { card ->
+                    val full = card.name.lowercase()
+                    listOf(full, full.substringBefore(" // ")).forEach { key ->
+                        out.getOrPut(key) { mutableSetOf() } += rarity
+                    }
+                }
+            }
+        }
+        return out
+    }
+
     private suspend fun fetch(ids: List<String>): List<Card> = try {
         val text = http.post("$BASE/cards/collection") {
             contentType(ContentType.Application.Json)
@@ -196,5 +250,11 @@ class Scryfall internal constructor(private val http: HttpClient) {
         const val BASE = "https://api.scryfall.com"
         const val USER_AGENT = "mtg-collection/1.0 (+https://mtg.mattshoe.org)"
         const val MIN_TERM = 2
+
+        /** Names per search. Scryfall's query has a length limit, and a card name can be long. */
+        const val RARITY_BATCH = 20
+
+        /** The rarities a binder is sorted by. */
+        val RARITIES = listOf("common", "uncommon", "rare", "mythic", "special")
     }
 }

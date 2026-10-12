@@ -87,19 +87,21 @@ class OneWayInTest {
 
     @Test
     fun soTheProfileOffersTheAdminHalfOnlyToAnOperator() {
-        assertEquals(emptyList(), Admin().signIn(me, "s").behindProfile)
+        // Stats lives behind the profile for everybody now: the Fetch
+        // list took its place in the bar.
+        assertEquals(listOf(View.STATS), Admin().signIn(me, "s").behindProfile)
         assertEquals(
-            listOf(View.ADMIN, View.LOGS),
+            listOf(View.STATS, View.ADMIN, View.LOGS),
             Admin().signIn(operator, "s").behindProfile,
         )
-        assertEquals(emptyList(), Admin().behindProfile, "a stranger was offered the server log")
+        assertEquals(listOf(View.STATS), Admin().behindProfile, "a stranger was offered the server log")
     }
 
     @Test
     fun theBarIsThreeUntilYouAreSomebodyAndFourAfter() {
-        assertEquals(listOf(View.LIBRARY, View.DECKS, View.STATS), Admin().bar)
+        assertEquals(listOf(View.LIBRARY, View.DECKS, View.FETCH), Admin().bar)
         assertEquals(
-            listOf(View.LIBRARY, View.DECKS, View.STATS, View.ENTRY),
+            listOf(View.LIBRARY, View.DECKS, View.FETCH, View.ENTRY),
             Admin().signIn(me, "s").bar,
         )
     }

@@ -1,0 +1,157 @@
+package org.mattshoe.mtg.android
+
+import android.os.Looper
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.respond
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.content.TextContent
+import io.ktor.http.headersOf
+import io.ktor.serialization.kotlinx.json.json
+import kotlinx.serialization.json.Json
+import org.junit.After
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.mattshoe.mtg.core.Account
+import org.mattshoe.mtg.core.Admin
+import org.mattshoe.mtg.core.AppState
+import org.mattshoe.mtg.core.FetchListState
+import org.mattshoe.mtg.core.MtgApi
+import org.mattshoe.mtg.core.Route
+import org.mattshoe.mtg.core.Scryfall
+import org.mattshoe.mtg.core.View
+import org.robolectric.Robolectric
+import org.robolectric.Shadows.shadowOf
+import org.robolectric.android.controller.ActivityController
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+
+/**
+ * The Fetch list through the real `MainActivity`: Find asks the Worker
+ * which printings are owned and Scryfall which rarities exist, and the
+ * answer is filed by type, colour and rarity. Saving keeps it across a
+ * fresh launch.
+ *
+ * Sibling of the web's `FetchListJourneyTest`.
+ */
+@RunWith(AndroidJUnit4::class)
+class FetchListLoadTest {
+
+    @get:Rule(order = Int.MIN_VALUE)
+    val retry = Retry()
+
+    private val controllers = mutableListOf<ActivityController<MainActivity>>()
+    private val asked = mutableListOf<String>()
+
+    @After
+    fun tearDown() {
+        controllers.forEach { runCatching { it.pause().stop().destroy() } }
+        controllers.clear()
+    }
+
+    private fun http() = HttpClient(
+        MockEngine { request ->
+            val sql = (request.body as? TextContent)?.text.orEmpty()
+            val q = request.url.parameters["q"].orEmpty()
+            asked += if (sql.isNotEmpty()) sql else q
+            val body = when {
+                "json_each" in sql ->
+                    """{"cols":["name_norm","name","face1","types","colors","rarity","qty"],"rows":[
+                        ["counterspell","Counterspell","Counterspell","Instant","U","common",2],
+                        ["arcane signet","Arcane Signet","Arcane Signet","Artifact",null,"common",1]
+                    ],"n":2}"""
+                request.url.encodedPath.endsWith("/cards/search") && "r:uncommon" in q ->
+                    """{"data":[{"name":"Arcane Signet"}]}"""
+                request.url.encodedPath.endsWith("/cards/search") && "r:common" in q ->
+                    """{"data":[{"name":"Arcane Signet"},{"name":"Counterspell"}]}"""
+                request.url.encodedPath.endsWith("/cards/search") ->
+                    """{"object":"error","code":"not_found","status":404}"""
+                else -> """{"cols":[],"rows":[],"n":0}"""
+            }
+            respond(body, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+        },
+    ) { install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) } }
+
+    private fun launch(): MainActivity {
+        val built = Robolectric.buildActivity(MainActivity::class.java)
+        controllers += built
+        val activity = built.get()
+        val client = http()
+        activity.useForTesting(MtgApi.withEngine("https://example.invalid", client))
+        activity.useScryfallForTesting(Scryfall.withEngine(client))
+        built.create().start().resume()
+        return activity
+    }
+
+    private fun idleUntil(cond: () -> Boolean) {
+        val looper = shadowOf(Looper.getMainLooper())
+        repeat(500) {
+            looper.idle()
+            if (cond()) return
+            Thread.sleep(10)
+        }
+        looper.idle()
+    }
+
+    private val me = Admin().signIn(Account(key = "e7de0cb1"), "t")
+
+    private fun found(activity: MainActivity) {
+        activity.setStateForTesting(
+            AppState(admin = me, route = Route(View.FETCH)).copy(
+                fetch = FetchListState(list = "1 Counterspell\n1 Arcane Signet\n1 Black Lotus"),
+            ),
+        )
+        activity.fetchForTesting()
+        idleUntil { activity.stateForTesting().fetch.result != null }
+    }
+
+    @Test
+    fun findFilesEveryCardAndSaysWhatIsMissing() {
+        val activity = launch()
+        found(activity)
+        val r = activity.stateForTesting().fetch.result
+        assertEquals(
+            listOf("Instants · Blue · Common", "Artifacts · Colorless · Common"),
+            r?.sections?.map { it.title },
+            "the list was not filed; the Worker was asked ${asked.size} things",
+        )
+        assertEquals(listOf("Black Lotus"), r?.missing?.map { it.name })
+        assertTrue(asked.any { "json_each" in it && "e7de0cb1" in it }, "the owned printings were never asked for")
+    }
+
+    @Test
+    fun aRarityScryfallKnowsIsAnAlsoCheck() {
+        val activity = launch()
+        found(activity)
+        val signet = activity.stateForTesting().fetch.result?.sections?.flatMap { it.cards }
+            ?.firstOrNull { it.name == "Arcane Signet" }
+        assertEquals("Also check: Uncommon", signet?.alsoCheckLine)
+    }
+
+    @Test
+    fun aSavedListNeedsATitleAndIsThereOnTheNextLaunch() {
+        val activity = launch()
+        found(activity)
+        activity.saveFetchForTesting()
+        assertEquals("Give it a title first", activity.stateForTesting().fetch.error)
+        assertTrue(activity.stateForTesting().fetch.saved.isEmpty(), "it saved without a title")
+
+        activity.setStateForTesting(
+            activity.stateForTesting().let { it.copy(fetch = it.fetch.titled("Alela")) },
+        )
+        activity.saveFetchForTesting()
+        assertEquals(listOf("Alela"), activity.stateForTesting().fetch.saved.map { it.title })
+
+        val again = launch()
+        idleUntil { again.stateForTesting().fetch.saved.isNotEmpty() }
+        assertEquals(
+            listOf("Alela"),
+            again.stateForTesting().fetch.saved.map { it.title },
+            "the saved list did not survive a fresh launch",
+        )
+    }
+}

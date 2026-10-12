@@ -16,6 +16,8 @@ data class AppState(
     val library: Library = Library(),
     val decks: DecksState = DecksState(),
     val stats: StatsState = StatsState(),
+    /** A deck list, where each of its cards is filed, and the lists kept. See `FetchList.kt`. */
+    val fetch: FetchListState = FetchListState(),
     val console: ConsoleState = ConsoleState(),
     val logs: LogsState = LogsState(),
     val entry: MassEntry = MassEntry(),
@@ -490,6 +492,7 @@ data class AppState(
         View.ADMIN -> copy(people = people.loading())
         View.CARD -> copy(card = card?.loading())
         View.ENTRY -> this
+        View.FETCH -> copy(fetch = fetch.loading())
     }
 
     /** And the same screen, told why it has nothing to show. */
@@ -501,6 +504,7 @@ data class AppState(
         View.ADMIN -> copy(people = people.failed(message))
         View.CARD -> copy(card = card?.failed(message))
         View.ENTRY -> say(message, failed = true)
+        View.FETCH -> copy(fetch = fetch.failed(message))
     }
 
     /**
@@ -519,7 +523,7 @@ data class AppState(
      * on either has nothing to wait for and ends at once.
      */
     fun refreshed(): AppState = when (view) {
-        View.ENTRY, View.LOGS -> this
+        View.ENTRY, View.LOGS, View.FETCH -> this
         View.CARD -> if (card == null) this else fetching().copy(pulled = view)
         View.LIBRARY -> copy(library = library.copy(loadedFor = null)).fetching().copy(pulled = view)
         else -> fetching().copy(pulled = view, tasks = tasks.stale())
@@ -538,6 +542,7 @@ data class AppState(
             View.ADMIN -> people.busy
             View.CARD -> card?.busy == true
             View.ENTRY -> false
+            View.FETCH -> fetch.busy
         }
 
     /**
@@ -907,6 +912,8 @@ object Load {
         View.ADMIN -> listOf("people")
         View.CARD -> listOf("card")
         View.ENTRY -> emptyList()
+        // Nothing until a list is pasted and Find is pressed.
+        View.FETCH -> emptyList()
     }
 
     /**

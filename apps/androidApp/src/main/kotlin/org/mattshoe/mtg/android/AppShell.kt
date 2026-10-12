@@ -141,6 +141,9 @@ fun AppShell(
     onPickFile: () -> Unit = {},
     /** Send on the New task screen. */
     onSendTask: () -> Unit = {},
+    /** Find cards on the Fetch screen, and Save. */
+    onFetch: () -> Unit = {},
+    onSaveFetch: () -> Unit = {},
     onReuse: (HistoryEntry) -> Unit = {},
     onClearHistory: () -> Unit = {},
     onEditDeck: (String) -> Unit = {},
@@ -413,6 +416,13 @@ fun AppShell(
                     }
 
                     View.STATS -> StatsScreen(state.stats)
+
+                    View.FETCH -> FetchListScreen(
+                        state = state.fetch,
+                        onState = { onState(state.copy(fetch = it)) },
+                        onFind = onFetch,
+                        onSave = onSaveFetch,
+                    )
 
 
                     View.ADMIN -> if (state.writingTask) {

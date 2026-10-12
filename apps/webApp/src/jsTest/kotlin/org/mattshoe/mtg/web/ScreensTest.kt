@@ -760,13 +760,13 @@ class NavTest {
         fun labels(css: String) = root.querySelectorAll(css).let { n ->
             (0 until n.length).mapNotNull { (n[it] as? org.w3c.dom.HTMLElement)?.textContent?.trim() }
         }
-        assertEquals(listOf("Library", "Decks", "Stats", "Entry"), labels(".app-menu button"))
+        assertEquals(listOf("Library", "Decks", "Fetch", "Entry"), labels(".app-menu button"))
         assertEquals(0, root.querySelectorAll(".app-menu .app-menu-sep").length, "a rule with nothing to divide")
 
         val behind = labels(".profile-menu button")
         // The fixture is an operator, so the log is there, and one way
         // out because somebody is signed in.
-        assertEquals(listOf("Admin Settings", "Server Logs", "Log out"), behind)
+        assertEquals(listOf("Stats", "Admin Settings", "Server Logs", "Log out"), behind)
         assertFalse(behind.contains("Library"), behind.toString())
         assertEquals(1, root.querySelectorAll(".profile-menu .app-menu-sep").length, "no rule under the name")
     }

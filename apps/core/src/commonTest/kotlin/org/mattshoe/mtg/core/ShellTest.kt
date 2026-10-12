@@ -16,7 +16,7 @@ class ShellTest {
 
     @Test
     fun theViewsAndWhichOfThemAreGated() {
-        assertEquals(7, View.entries.size)
+        assertEquals(8, View.entries.size)
         assertEquals(
             listOf(View.ENTRY, View.ADMIN, View.LOGS),
             View.entries.filter { it.gated },
@@ -62,16 +62,16 @@ class ShellTest {
         assertFalse(locked.reachable(View.ENTRY))
         assertFalse(locked.reachable(View.LOGS))
         assertTrue(locked.reachable(View.LIBRARY))
-        assertEquals(3, locked.visible.size)
+        assertEquals(4, locked.visible.size)
     }
 
     @Test
-    fun signedInShowsTheFour() {
-        // Four, not five: the log needs a role, and a fresh account
-        // has none. Matt hands those out.
+    fun signedInShowsTheFive() {
+        // Five, not seven: the log and Admin Settings need a role, and
+        // a fresh account has none. Matt hands those out.
         val me = Admin().signIn(Account(key = "e7de0cb1"), "s")
         assertTrue(me.unlocked)
-        assertEquals(4, me.visible.size)
+        assertEquals(5, me.visible.size)
         assertFalse(me.reachable(View.LOGS))
         assertTrue(me.reachable(View.ENTRY))
     }
@@ -79,7 +79,7 @@ class ShellTest {
     @Test
     fun andAnOperatorSeesTheAdminHalfAsWell() {
         val op = Admin().signIn(Account(key = "e7de0cb1", role = Role.ADMIN), "s")
-        assertEquals(6, op.visible.size)
+        assertEquals(7, op.visible.size)
         assertTrue(op.reachable(View.LOGS))
         assertTrue(op.reachable(View.ADMIN))
     }

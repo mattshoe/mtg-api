@@ -177,7 +177,7 @@ class ProfileMenuTest {
         root.press("Menu")
         settle()
         val inMenu = root.buttons(".app-menu")
-        assertEquals(listOf("Library", "Decks", "Stats", "Entry"), inMenu)
+        assertEquals(listOf("Library", "Decks", "Fetch", "Entry"), inMenu)
         assertEquals(0, root.all(".app-menu .app-who").size, "the account is still in the hamburger")
     }
 
@@ -214,7 +214,7 @@ class ProfileMenuTest {
         root.profile().click()
         settle()
         val tabs = root.buttons(".profile-menu")
-        assertEquals(listOf("Sign in with Google"), tabs, "there is more than one way in")
+        assertEquals(listOf("Stats", "Sign in with Google"), tabs, "there is more than one way in")
         assertTrue(
             root.all(".profile-menu").first().textContent.orEmpty().contains("Not signed in"),
             "it does not say that nobody is signed in",
