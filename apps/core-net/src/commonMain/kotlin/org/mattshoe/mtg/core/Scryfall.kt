@@ -165,6 +165,8 @@ class Scryfall internal constructor(private val http: HttpClient) {
             .sortedWith(compareByDescending<TokenCard> { it.madeBy }.thenBy { it.name })
     }
 
+    suspend fun rarities(names: List<String>): Map<String, Set<String>> = emptyMap()
+
     private suspend fun fetch(ids: List<String>): List<Card> = try {
         val text = http.post("$BASE/cards/collection") {
             contentType(ContentType.Application.Json)
