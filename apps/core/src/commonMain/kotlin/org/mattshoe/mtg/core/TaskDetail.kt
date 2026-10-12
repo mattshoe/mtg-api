@@ -125,6 +125,12 @@ data class TaskDetail(
         const val UNREADABLE = "the Worker's answer was not a task"
 
         const val CANCEL_NOTE = ""
+        const val CANCEL = ""
+        const val ASK = ""
+        const val CONFIRM = ""
+        const val KEEP = ""
+        const val CANCELLING = ""
+        const val CANCELLED = ""
 
 
         private val json = Json { ignoreUnknownKeys = true; isLenient = true }
