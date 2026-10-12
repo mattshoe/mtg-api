@@ -71,6 +71,12 @@ export function newEntry(request) {
     admin: false,
     message: null,
     detail: null,
+    // How big the body is, recorded at the START. Three share failures
+    // in a row were diagnosed without knowing how much was being sent,
+    // because the only row that existed was written on completion and
+    // these never completed. A number here is the difference between
+    // reading what happened and guessing at it.
+    bytes: Number(request.headers.get('content-length')) || null,
     ip: request.headers.get('cf-connecting-ip') || null,
     country: request.cf?.country || request.headers.get('cf-ipcountry') || null,
     ray: request.headers.get('cf-ray') || null,
@@ -121,7 +127,7 @@ export async function startEntry(env, entry) {
       eventFor(entry.method, entry.path),
       entry.method,
       entry.path,
-      IN_FLIGHT,
+      entry.bytes ? `${IN_FLIGHT}, ${entry.bytes} bytes in` : IN_FLIGHT,
       entry.ip,
       entry.country,
       entry.ray,
