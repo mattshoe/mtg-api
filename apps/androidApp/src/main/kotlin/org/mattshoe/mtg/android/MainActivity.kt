@@ -49,6 +49,7 @@ import org.mattshoe.mtg.core.EntryHistory
 import org.mattshoe.mtg.core.FetchList
 import org.mattshoe.mtg.core.FetchListState
 import org.mattshoe.mtg.core.savedFetch
+import org.mattshoe.mtg.core.find
 import org.mattshoe.mtg.core.Export
 import org.mattshoe.mtg.core.ExportTo
 import org.mattshoe.mtg.core.FacetQueries
@@ -972,11 +973,14 @@ class MainActivity : ComponentActivity() {
             return
         }
         app = app.fetching(View.FETCH)
+        val list = s.fetch.list
         intoPage(View.FETCH) {
-            val r = api.query(q)
-            val printed = scryfall.rarities(s.fetch.entries.map { it.name })
-            val found = FetchList.build(s.fetch.entries, FetchList.decode(r.cols, r.rows), printed)
-            app.copy(fetch = app.fetch.found(found))
+            // The filing goes on screen as soon as the collection
+            // answers; Scryfall's Also check follows. See `FetchList.find`.
+            val done = FetchList.find(api, scryfall, s.fetch.entries, s.viewing) { filed ->
+                app = app.copy(fetch = app.fetch.filed(list, filed))
+            }
+            app.copy(fetch = app.fetch.checked(list, done))
         }
     }
 

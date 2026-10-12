@@ -11,6 +11,7 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.browser.document
 import kotlinx.browser.localStorage
 import kotlinx.browser.window
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.await
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
@@ -47,22 +48,29 @@ class FetchListJourneyTest {
     private var realFetch: dynamic = null
     private val asked = mutableListOf<String>()
 
+    /** Scryfall holds every answer until this completes, when set. */
+    private var scryfallGate: CompletableDeferred<Unit>? = null
+
     @BeforeTest
     fun stubTheNetwork() {
         localStorage.removeItem("mtg.fetch")
         asked.clear()
+        scryfallGate = null
         val engine = MockEngine { request ->
             val body = (request.body as? io.ktor.http.content.TextContent)?.text.orEmpty()
             val q = request.url.parameters["q"].orEmpty()
             asked += if (body.isNotEmpty()) body else request.url.toString()
+            if (request.url.encodedPath.endsWith("/cards/search")) scryfallGate?.await()
             val json = when {
                 // The owned printings, the way the query asks for them.
                 "json_each" in body ->
-                    """{"cols":["name_norm","name","face1","types","colors","rarity","qty"],"rows":[""" +
-                        """["counterspell","Counterspell","Counterspell","Instant","U","common",2],""" +
-                        """["arcane signet","Arcane Signet","Arcane Signet","Artifact",null,"common",1],""" +
-                        """["brazen borrower // petty theft","Brazen Borrower // Petty Theft","Brazen Borrower","Creature","U","mythic",1]""" +
-                        """],"n":3}"""
+                    """{"cols":["name_norm","name","face1","types","colors","color_identity","rarity","qty"],"rows":[""" +
+                        """["counterspell","Counterspell","Counterspell","Instant","U","U","common",2],""" +
+                        """["arcane signet","Arcane Signet","Arcane Signet","Artifact",null,null,"common",1],""" +
+                        """["brazen borrower // petty theft","Brazen Borrower // Petty Theft","Brazen Borrower","Creature","U","U","mythic",1],""" +
+                        // Stored RU; the card prints {U}{R}.
+                        """["electrolyze","Electrolyze","Electrolyze","Instant","RU","RU","uncommon",1]""" +
+                        """],"n":4}"""
                 // Scryfall: Arcane Signet has an uncommon printing too.
                 request.url.encodedPath.endsWith("/cards/search") && "r:uncommon" in q ->
                     """{"data":[{"name":"Arcane Signet"}]}"""
@@ -152,7 +160,7 @@ class FetchListJourneyTest {
 
     private suspend fun found(root: HTMLElement) {
         waitFor("the Fetch page") { root.all("#fetch-list").isNotEmpty() }
-        type(root.all("#fetch-list").single(), "1 Counterspell\n1 Arcane Signet\n1 Brazen Borrower\n1 Black Lotus")
+        type(root.all("#fetch-list").single(), "1 Counterspell\n1 Arcane Signet\n1 Brazen Borrower\n1 Electrolyze\n1 Black Lotus")
         tick()
         root.button("Find cards").click()
         waitFor("the sections") { root.all("[data-fetch-section]").isNotEmpty() }
@@ -164,9 +172,10 @@ class FetchListJourneyTest {
         found(root)
         assertEquals(
             listOf(
-                "Creatures · Blue · Mythic",
-                "Instants · Blue · Common",
-                "Artifacts · Colorless · Common",
+                "Creatures · U · Mythic",
+                "Instants · U · Common",
+                "Instants · UR · Uncommon",
+                "Artifacts · C · Common",
                 "Missing",
             ),
             root.all("[data-fetch-section]").map { it.getAttribute("data-fetch-section") },
@@ -177,9 +186,51 @@ class FetchListJourneyTest {
     }
 
     @Test
+    fun aTwoColourSectionIsHeadedByItsManaSymbolsInPrintedOrderAndNotByAWord() = runTest {
+        val root = mount("#/fetch")
+        found(root)
+        assertTrue(!root.textContent.orEmpty().contains("Multicolor"), "a section still says Multicolor")
+        val section = root.all("[data-fetch-section]").single { it.getAttribute("data-fetch-section") == "Instants · UR · Uncommon" }
+        val head = section.querySelector("h2") as HTMLElement
+        val symbols = head.all("img.mana-sym")
+        assertEquals(listOf("{U}", "{R}"), symbols.map { it.getAttribute("alt") }, "the head's symbols are not {U}{R}")
+        val lefts = symbols.map { it.getBoundingClientRect().left }
+        assertTrue(lefts[0] < lefts[1], "{U} is not drawn before {R}: $lefts")
+        assertEquals("InstantsUncommon", head.textContent?.replace(" ", ""), "the head says more than type, symbols and rarity")
+    }
+
+    @Test
+    fun aColourlessSectionIsHeadedByTheColourlessSymbol() = runTest {
+        val root = mount("#/fetch")
+        found(root)
+        val section = root.all("[data-fetch-section]").single { it.getAttribute("data-fetch-section") == "Artifacts · C · Common" }
+        assertEquals(listOf("{C}"), (section.querySelector("h2") as HTMLElement).all("img.mana-sym").map { it.getAttribute("alt") })
+    }
+
+    @Test
+    fun theFilingIsOnScreenWhileScryfallIsStillThinking() = runTest {
+        // Matt: "it takes several full minutes to run". Those minutes
+        // were Scryfall's, and the whole list waited for them.
+        val gate = CompletableDeferred<Unit>()
+        scryfallGate = gate
+        try {
+            val root = mount("#/fetch")
+            found(root)
+            assertTrue(root.all("[data-fetch-checking]").isNotEmpty(), "nothing says the Also check is still coming")
+            assertTrue(root.all("[data-fetch-also]").isEmpty(), "an Also check arrived without Scryfall")
+            gate.complete(Unit)
+            waitFor("the Also check to follow") { root.all("[data-fetch-also]").isNotEmpty() }
+            waitFor("the checking line to go") { root.all("[data-fetch-checking]").isEmpty() }
+        } finally {
+            gate.complete(Unit)
+        }
+    }
+
+    @Test
     fun aCardPrintedAtAnotherRaritySaysWhereElseToLook() = runTest {
         val root = mount("#/fetch")
         found(root)
+        waitFor("the Also check") { root.all("[data-fetch-also]").isNotEmpty() }
         val signet = root.all("[data-fetch-card]").single { it.getAttribute("data-fetch-card") == "Arcane Signet" }
         assertEquals("Also check: Uncommon", signet.querySelector("[data-fetch-also]")?.textContent?.trim())
         assertTrue(
@@ -220,7 +271,7 @@ class FetchListJourneyTest {
         again.button("Alela").click()
         waitFor("the saved sections") { again.all("[data-fetch-section]").isNotEmpty() }
         assertTrue(
-            again.all("[data-fetch-section]").any { it.getAttribute("data-fetch-section") == "Instants · Blue · Common" },
+            again.all("[data-fetch-section]").any { it.getAttribute("data-fetch-section") == "Instants · U · Common" },
             "the saved list did not come back as it was",
         )
     }

@@ -13,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.mattshoe.mtg.core.Design
 import org.mattshoe.mtg.core.FetchListState
@@ -55,6 +56,9 @@ fun FetchListScreen(
                 }
             }
             state.error?.let { Line(it, Bad, modifier = Modifier.testTag("fetch-err")) }
+            if (state.checking) {
+                Line(FetchListState.CHECKING, Ink3, Design.MINI, modifier = Modifier.testTag("fetch-checking"))
+            }
         }
 
         state.result?.let { result ->
@@ -70,7 +74,22 @@ fun FetchListScreen(
             }
 
             result.sections.forEach { section ->
-                Panel(modifier = Modifier.testTag("fetch-section:${section.title}"), head = section.title) {
+                Panel(modifier = Modifier.testTag("fetch-section:${section.title}")) {
+                    // The colour as its mana symbols, in the order the
+                    // card prints them, between the type and the rarity.
+                    Row(
+                        Modifier.testTag("fetch-head:${section.title}"),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Line(section.type.label, Ink, Design.H2, FontWeight.SemiBold)
+                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                            section.symbols.forEachIndexed { i, letter ->
+                                ManaSymbol(letter, size = 18.dp, tag = "fetch-symbol:${section.title}:$i")
+                            }
+                        }
+                        Line(section.rarity.label, Ink, Design.H2, FontWeight.SemiBold)
+                    }
                     section.cards.forEach { card ->
                         Column(Modifier.fillMaxWidth().testTag("fetch-card:${card.name}")) {
                             Row(

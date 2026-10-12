@@ -23,6 +23,7 @@ import org.mattshoe.mtg.core.Admin
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.DeckList
 import org.mattshoe.mtg.core.FetchList
+import org.mattshoe.mtg.core.FetchListState
 import org.mattshoe.mtg.core.OwnedPrinting
 import org.mattshoe.mtg.core.Route
 import org.mattshoe.mtg.core.View
@@ -57,9 +58,11 @@ class FetchListParityTest {
         OwnedPrinting("counterspell", "Counterspell", "Counterspell", "Instant", "U", "common", 2),
         OwnedPrinting("arcane signet", "Arcane Signet", "Arcane Signet", "Artifact", null, "common", 1),
         OwnedPrinting("brazen borrower // petty theft", "Brazen Borrower // Petty Theft", "Brazen Borrower", "Creature", "U", "mythic", 1),
+        // The database stores the letters in its own order; the card prints {U}{R}.
+        OwnedPrinting("electrolyze", "Electrolyze", "Electrolyze", "Instant", "RU", "uncommon", 1, identity = "RU"),
     )
 
-    private val list = "1 Counterspell\n1 Arcane Signet\n1 Brazen Borrower\n1 Black Lotus"
+    private val list = "1 Counterspell\n1 Arcane Signet\n1 Brazen Borrower\n1 Electrolyze\n1 Black Lotus"
 
     private fun shell(start: AppState) {
         rule.setContent {
@@ -117,13 +120,59 @@ class FetchListParityTest {
     fun theSectionsAreDrawnDownThePageInBinderOrder() {
         found()
         val tags = listOf(
-            "fetch-section:Creatures · Blue · Mythic",
-            "fetch-section:Instants · Blue · Common",
-            "fetch-section:Artifacts · Colorless · Common",
+            "fetch-section:Creatures · U · Mythic",
+            "fetch-section:Instants · U · Common",
+            "fetch-section:Instants · UR · Uncommon",
+            "fetch-section:Artifacts · C · Common",
             "fetch-section:Missing",
         )
         val tops = tags.map { top(it) }
         assertEquals(tops.sorted(), tops, "the sections are not drawn top to bottom in binder order: $tops")
+    }
+
+    @Test
+    fun aTwoColourSectionIsHeadedByItsManaSymbolsInPrintedOrderAndNotByAWord() {
+        found()
+        val head = "Instants · UR · Uncommon"
+        rule.onNodeWithTag("fetch-head:$head").performScrollTo()
+        assertTrue(
+            rule.onAllNodes(hasText("Multicolor", substring = true)).fetchSemanticsNodes().isEmpty(),
+            "a section still says Multicolor",
+        )
+        fun symbol(i: Int) = rule.onNodeWithTag("fetch-symbol:$head:$i", useUnmergedTree = true)
+        val named = (0..1).map {
+            symbol(it).fetchSemanticsNode().config.getOrNull(SemanticsProperties.ContentDescription)?.joinToString()
+        }
+        assertEquals(listOf("Blue", "Red"), named, "the head's symbols are not {U}{R}")
+        val u = symbol(0).getUnclippedBoundsInRoot()
+        val r = symbol(1).getUnclippedBoundsInRoot()
+        assertTrue(u.left < r.left, "{U} is not drawn before {R}: ${u.left} vs ${r.left}")
+        assertTrue(
+            rule.onAllNodes(hasText("Instants · UR · Uncommon"), useUnmergedTree = true).fetchSemanticsNodes().isEmpty(),
+            "the head is still the words, not the symbols",
+        )
+    }
+
+    @Test
+    fun aColourlessSectionIsHeadedByTheColourlessSymbol() {
+        found()
+        val head = "Artifacts · C · Common"
+        rule.onNodeWithTag("fetch-head:$head").performScrollTo()
+        val named = rule.onNodeWithTag("fetch-symbol:$head:0", useUnmergedTree = true).fetchSemanticsNode()
+            .config.getOrNull(SemanticsProperties.ContentDescription)?.joinToString()
+        assertEquals("Colourless", named)
+    }
+
+    @Test
+    fun theFilingIsOnScreenWhileTheAlsoCheckIsStillComing() {
+        shell(AppState(admin = me, route = Route(View.FETCH)))
+        val s = held.value
+        val filed = FetchList.build(DeckList.entries(list), owned)
+        rule.runOnIdle { held.value = s.copy(fetch = s.fetch.typed(list).loading().filed(list, filed)) }
+        rule.waitForIdle()
+        rule.onNodeWithTag("fetch-card:Counterspell").performScrollTo()
+        rule.onNodeWithTag("fetch-checking").performScrollTo()
+        assertEquals(FetchListState.CHECKING, text("fetch-checking"))
     }
 
     @Test
