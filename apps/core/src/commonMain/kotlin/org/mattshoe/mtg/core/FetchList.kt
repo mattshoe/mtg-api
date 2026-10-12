@@ -1,5 +1,6 @@
 package org.mattshoe.mtg.core
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
@@ -63,36 +64,6 @@ enum class FetchType(val label: String) {
     }
 }
 
-/** One colour, several, or none — WUBRG, then multicolour, then colourless. */
-enum class FetchColor(val label: String) {
-    WHITE("White"),
-    BLUE("Blue"),
-    BLACK("Black"),
-    RED("Red"),
-    GREEN("Green"),
-    MULTICOLOR("Multicolor"),
-    COLORLESS("Colorless"),
-    ;
-
-    companion object {
-        /** From the `colors` column, which is letters — `U`, `BG` — or nothing. */
-        fun of(colors: String?): FetchColor {
-            val c = colors.orEmpty().uppercase().filter { it in "WUBRG" }.toSet()
-            return when {
-                c.isEmpty() -> COLORLESS
-                c.size > 1 -> MULTICOLOR
-                else -> when (c.single()) {
-                    'W' -> WHITE
-                    'U' -> BLUE
-                    'B' -> BLACK
-                    'R' -> RED
-                    else -> GREEN
-                }
-            }
-        }
-    }
-}
-
 enum class FetchRarity(val slug: String, val label: String) {
     COMMON("common", "Common"),
     UNCOMMON("uncommon", "Uncommon"),
@@ -119,13 +90,54 @@ data class OwnedPrinting(
     val colors: String?,
     val rarity: String?,
     val qty: Int,
+    /** The `color_identity` column: letters in any order, or nothing for colourless. */
     val identity: String? = null,
 )
 
-/** Stub. */
+/**
+ * A colour identity, the way a card prints it.
+ *
+ * Matt: "UR is not 'multicolored', it's fucking UR", "every color
+ * identity needs its own section", and "make sure the mana symbols are
+ * in the SAME order they appear on the card". Cards print their colours
+ * in a fixed order that is not WUBRG for every set — Izzet is {U}{R},
+ * Boros {R}{W}, Abzan {W}{B}{G}, Temur {G}{U}{R} — and the database
+ * stores the letters in its own order (`RU`, `BGW`). So all thirty-one
+ * combinations are written out here, in the order a section is listed:
+ * one colour, then two, three, four and five, colourless last.
+ */
 object ColorIdentity {
-    fun printed(letters: String?): String = letters.orEmpty()
-    fun rank(letters: String): Int = 0
+
+    val PRINTED: List<String> = listOf(
+        "W", "U", "B", "R", "G",
+        // Allies, then enemies.
+        "WU", "UB", "BR", "RG", "GW",
+        "WB", "UR", "BG", "RW", "GU",
+        // Shards, then wedges.
+        "WUB", "UBR", "BRG", "RGW", "GWU",
+        "WBG", "URW", "BGU", "RWB", "GUR",
+        // Each four-colour set, missing green, white, blue, black, red.
+        "WUBR", "UBRG", "BRGW", "RGWU", "GWUB",
+        "WUBRG",
+    )
+
+    private val byLetters: Map<Set<Char>, String> = PRINTED.associateBy { it.toSet() }
+
+    /** `RU` into `UR`. Empty for colourless, or for anything that is not colours. */
+    fun printed(letters: String?): String {
+        val set = letters.orEmpty().uppercase().filter { it in "WUBRG" }.toSet()
+        return byLetters[set].orEmpty()
+    }
+
+    /** Where a section with this identity is listed. Colourless is last. */
+    fun rank(letters: String): Int {
+        val i = PRINTED.indexOf(printed(letters))
+        return if (i < 0) PRINTED.size else i
+    }
+
+    /** The symbols to draw: the letters, or `C` for colourless. */
+    fun symbols(letters: String): List<String> =
+        printed(letters).ifEmpty { "C" }.map { it.toString() }
 }
 
 /**
@@ -147,17 +159,27 @@ data class FetchCard(
     val alsoCheckLine: String get() = "Also check: " + alsoCheck.joinToString(", ") { it.label }
 }
 
-/** One binder section: a type, a colour and a rarity. */
+/**
+ * One binder section: a type, a colour identity and a rarity.
+ *
+ * `colors` is the identity in printed order, empty for colourless.
+ * `legacy` is the word a list saved before identities had in its place
+ * — "MULTICOLOR" among them — and only ever read to tell such a list
+ * apart. See `FetchListState.restore`.
+ */
 @Serializable
 data class FetchSection(
     val type: FetchType,
-    val color: FetchColor,
+    val colors: String = "",
     val rarity: FetchRarity,
     val cards: List<FetchCard>,
+    @SerialName("color") val legacy: String? = null,
 ) {
-    val colors: String get() = ""
-    val symbols: List<String> get() = emptyList()
-    val title: String get() = "${type.label} · ${color.label} · ${rarity.label}"
+    /** What the head draws between the type and the rarity. */
+    val symbols: List<String> get() = ColorIdentity.symbols(colors)
+
+    /** The section in words, for an address or a test: `Instants · UR · Uncommon`. */
+    val title: String get() = "${type.label} · ${colors.ifEmpty { "C" }} · ${rarity.label}"
 }
 
 /** A card the collection does not have enough of. `short` is how many are missing. */
@@ -178,7 +200,8 @@ data class SavedFetch(
     /** ISO 8601, so it sorts as a string and reads the same everywhere. */
     val at: String,
     val list: String,
-    val result: FetchResult,
+    /** Null for a list saved under the old colour sections. See `FetchListState.restore`. */
+    val result: FetchResult?,
 )
 
 object FetchList {
@@ -202,7 +225,7 @@ object FetchList {
         val byName = owned.groupBy { it.nameNorm }
         val byFace = owned.filter { !it.face.isNullOrBlank() }.groupBy { it.face!!.lowercase() }
 
-        data class Filed(val type: FetchType, val color: FetchColor, val rarity: FetchRarity, val card: FetchCard)
+        data class Filed(val type: FetchType, val colors: String, val rarity: FetchRarity, val card: FetchCard)
 
         val filed = mutableListOf<Filed>()
         val missing = mutableListOf<MissingCard>()
@@ -227,7 +250,7 @@ object FetchList {
             val first = rows.first()
             filed += Filed(
                 FetchType.of(first.types),
-                FetchColor.of(first.colors),
+                ColorIdentity.printed(first.identity),
                 primary,
                 FetchCard(first.name, e.qty, have, also),
             )
@@ -235,11 +258,11 @@ object FetchList {
         }
 
         val sections = filed
-            .groupBy { Triple(it.type, it.color, it.rarity) }
+            .groupBy { Triple(it.type, it.colors, it.rarity) }
             .entries
             .sortedWith(
-                compareBy<Map.Entry<Triple<FetchType, FetchColor, FetchRarity>, List<Filed>>> { it.key.first.ordinal }
-                    .thenBy { it.key.second.ordinal }
+                compareBy<Map.Entry<Triple<FetchType, String, FetchRarity>, List<Filed>>> { it.key.first.ordinal }
+                    .thenBy { ColorIdentity.rank(it.key.second) }
                     .thenBy { it.key.third.ordinal },
             )
             .map { (k, v) -> FetchSection(k.first, k.second, k.third, v.map { it.card }.sortedBy { it.name.lowercase() }) }
@@ -263,7 +286,7 @@ object FetchList {
         val names = keys.distinct()
         val json = Json.encodeToString(ListSerializer(String.serializer()), names)
         return Sql(
-            """SELECT c.name_norm, c.name, c.face1, c.types, c.colors, c.rarity, SUM(c.qty) AS qty
+            """SELECT c.name_norm, c.name, c.face1, c.types, c.colors, c.color_identity, c.rarity, SUM(c.qty) AS qty
                  FROM cards c
                 WHERE ${Owners.owns("c.owner_id")}
                   AND (c.name_norm IN (SELECT value FROM json_each(?2))
@@ -289,6 +312,7 @@ object FetchList {
                 colors = str("colors"),
                 rarity = str("rarity"),
                 qty = str("qty")?.toDoubleOrNull()?.toInt() ?: 0,
+                identity = str("color_identity"),
             )
         }
     }
@@ -310,6 +334,8 @@ data class FetchListState(
     val saved: List<SavedFetch> = emptyList(),
     val busy: Boolean = false,
     val error: String? = null,
+    /** The filing is on screen and Scryfall's Also check has not come back yet. */
+    val checking: Boolean = false,
 ) {
     /** The cards on the list, the way `DeckList` reads any list. */
     val entries: List<DeckList.Entry> get() = DeckList.entries(list)
@@ -320,10 +346,23 @@ data class FetchListState(
     fun titled(t: String) = copy(title = t, error = null)
     fun loading() = copy(busy = true, error = null)
     fun failed(message: String) = copy(busy = false, error = message)
-    fun found(r: FetchResult) = copy(result = r, busy = false, error = null)
-    val checking: Boolean get() = false
-    fun filed(list: String, r: FetchResult) = this
-    fun checked(list: String, r: FetchResult) = this
+    fun found(r: FetchResult) = copy(result = r, busy = false, error = null, checking = false)
+
+    /**
+     * The collection has answered: the filing goes on screen and Find
+     * is free again, while the Also check is still coming.
+     *
+     * Matt: "it takes several full minutes to run". The minutes were
+     * Scryfall's, and the list used to wait for them. `list` is the
+     * list that was asked about, so a list cleared or retyped since
+     * does not get somebody else's answer.
+     */
+    fun filed(list: String, r: FetchResult) =
+        if (list != this.list) this else copy(result = r, busy = false, error = null, checking = true)
+
+    /** The same list with the Also check filled in. Dropped if the list has changed since. */
+    fun checked(list: String, r: FetchResult) =
+        if (list != this.list) copy(checking = false) else copy(result = r, busy = false, checking = false)
 
     /** A fresh list, keeping the saved ones. */
     fun cleared() = FetchListState(saved = saved)
@@ -346,7 +385,7 @@ data class FetchListState(
     /** A saved list, back on screen as it was. */
     fun open(id: String): FetchListState {
         val s = saved.firstOrNull { it.id == id } ?: return this
-        return copy(list = s.list, title = s.title, result = s.result, busy = false, error = null)
+        return copy(list = s.list, title = s.title, result = s.result, busy = false, error = null, checking = false)
     }
 
     fun delete(id: String) = copy(saved = saved.filter { it.id != id })
@@ -354,12 +393,22 @@ data class FetchListState(
     companion object {
         const val KEY = "mtg.fetch"
 
+        /** Said under Find while the filing is on screen and Scryfall is still being asked. */
+        const val CHECKING = "Checking Scryfall for other rarities…"
+
         private val json = Json { ignoreUnknownKeys = true }
 
         /** Anything unreadable is no saved lists rather than a crash on boot. */
         fun restore(store: Store): FetchListState = try {
             FetchListState(
                 saved = store.get(KEY)?.let { json.decodeFromString(ListSerializer(SavedFetch.serializer()), it) }
+                    ?.map { s ->
+                        // Filed by colour words, Multicolor among them,
+                        // before identities had their own sections. The
+                        // list stays; the old filing is not shown as if
+                        // it were right, and Find files it again.
+                        if (s.result?.sections?.any { it.legacy != null } == true) s.copy(result = null) else s
+                    }
                     ?: emptyList(),
             )
         } catch (e: Exception) {
