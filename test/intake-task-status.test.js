@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { STATUSES } from '../src/tasks.js'
 import { spawn, execFileSync } from 'node:child_process'
 import { outcome, titleOf, started, report, reconcile, requestOfBranch, cancels, cancelFile, stop } from '../scripts/intake/task-status.mjs'
 import { statusOf, buildable } from '../scripts/intake.mjs'
@@ -402,5 +403,60 @@ describe('a task cancelled in the app', () => {
     } finally {
       for (const p of [agent.pid, child, bystander.pid]) { try { process.kill(p, 'SIGKILL') } catch { /* gone */ } }
     }
+  })
+})
+
+/**
+ * Every status can be left.
+ *
+ * Matt: "Why does this keep fucking happening?!"
+ *
+ * Because I add a write without tracing who clears it. #118 taught the
+ * dispatcher to write `blocked` for a worktree with no agent in it, and I
+ * tested that it writes it — not who takes it back. `blocked` turned out
+ * to be sticky in `truth()`, so two tasks entered it and could not leave:
+ * one had already merged, the other had an agent working on it.
+ *
+ * This is the test that makes that class of mistake fail instead of
+ * shipping. For every status in the vocabulary, the two facts that
+ * outrank everything — an agent is working on it, and it merged — have to
+ * move the row. A status nothing can leave is a dead end, and the next
+ * one somebody adds gets caught here rather than by Matt.
+ */
+describe('no status is a dead end', () => {
+  const row = (name, status) => ({ key: 'k-' + name, name, status })
+  const seen = (over = {}) => ({ rows: [], ready: [], held: [], filed: [], stalled: [], alive: [], ...over })
+  const LIVE = STATUSES.filter((s) => !['merged', 'deployed', 'cancelled'].includes(s))
+
+  it.each(LIVE)('an agent working on it takes a task out of %s', (status) => {
+    const wrote = reconcile(seen({
+      alive: ['a-task'], ready: ['a-task'], rows: [row('a-task', status)],
+    }))
+    if (status === 'in progress') {
+      expect(wrote, 'it rewrote a row that was already right').toEqual([])
+      return
+    }
+    expect(wrote, `a live agent could not clear ${status}`)
+      .toEqual([{ name: 'a-task', status: 'in progress' }])
+  })
+
+  it.each(STATUSES)('a merge takes a task out of %s', (status) => {
+    const wrote = reconcile(seen({
+      ready: ['a-task'],
+      rows: [row('a-task', status)],
+      prs: { 'a-task': [{ state: 'MERGED', url: 'u', mergedAt: '2026-10-12T00:00:00Z' }] },
+    }))
+    const now = wrote[0]?.status ?? status
+    expect(['merged', 'deployed'], `a merge could not clear ${status} (left at ${now})`)
+      .toContain(now)
+  })
+
+  // The other half: a row that is already right must not be rewritten on
+  // every tick. Reconcile runs once a minute and a write a minute per task
+  // is its own kind of broken.
+  it.each(STATUSES)('leaves %s alone when nothing about it changed', (status) => {
+    const wrote = reconcile(seen({ ready: ['a-task'], rows: [row('a-task', status)] }))
+    const to = wrote[0]?.status
+    expect(to === undefined || to !== status, `${status} was rewritten as itself`).toBe(true)
   })
 })
