@@ -1,0 +1,3 @@
+What was wrong: The line under the carousel name printed the whole type line, Legendary Enchantment Creature, God and all, and colourless cards and colourless lands showed no symbol.
+Why: The line used the type line as stored. A colourless identity is stored empty, and the line read empty as nothing known rather than colourless.
+Fix: The line shows one card type, the main one, so an enchantment creature reads Creature and an artifact land reads Land. Any card the app knows anything about gets its colour symbols, or the colourless symbol, and a basic land nobody owns a printing of shows its colour. Phone and website.

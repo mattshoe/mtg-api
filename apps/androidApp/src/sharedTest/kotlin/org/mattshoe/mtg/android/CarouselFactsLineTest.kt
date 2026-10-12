@@ -71,11 +71,12 @@ class CarouselFactsLineTest {
     /** In `pageOrder`, which groups by type and sorts by name inside a group. */
     private val run = listOf(
         card("Counterspell"),
-        card("Cultivate", type = "Sorcery", identity = "UG", rarity = "common"),
-        card("Sol Ring"),
+        card("Cultivate", type = "Kindred Sorcery — Elf", identity = "UG", rarity = "common"),
+        // Stored as the Worker stores it: a colourless identity is NULL.
+        card("Sol Ring", rarity = "uncommon"),
     )
 
-    private fun peeking() {
+    private fun peeking(name: String = "Cultivate") {
         val start = AppState(admin = Admin().signIn(Account("matt"), "t"))
             .navigate(Route(View.DECKS, "alela"))
             .let {
@@ -103,11 +104,11 @@ class CarouselFactsLineTest {
             }
         }
         rule.waitForIdle()
-        val row = rule.onNodeWithText("Cultivate")
+        val row = rule.onNodeWithText(name)
         runCatching { row.performScrollTo() }
         row.performClick()
         rule.waitForIdle()
-        assertEquals("Cultivate", held.value.peeked?.title, "the row did not open the carousel on Cultivate")
+        assertEquals(name, held.value.peeked?.title, "the row did not open the carousel on $name")
     }
 
     private fun onTheSheet(text: String): SemanticsNodeInteraction =
@@ -135,6 +136,16 @@ class CarouselFactsLineTest {
         )
         val x = listOf(type, u, g, rarity).map { it.getUnclippedBoundsInRoot().left }
         assertEquals(x.sortedBy { it.value }, x, "the parts are not type, {U}, {G}, rarity from left to right")
+    }
+
+    @Test
+    fun aColourlessCardShowsTheColourlessSymbol() {
+        // Matt: "colorless cards aren't showing colorless pip".
+        peeking("Sol Ring")
+        assertTrue(exists("carousel-fact-0"), "there is no line under the name at all")
+        onTheLine("carousel-fact-0").assertTextEquals("Artifact")
+        assertTrue(exists("carousel-pip-C"), "a colourless card has no colourless symbol")
+        onTheLine("carousel-fact-2").assertTextEquals("Uncommon")
     }
 
     @Test

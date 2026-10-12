@@ -387,7 +387,7 @@ data class AppState(
                     ),
                     inDeck = card,
                     stepped = stepped,
-                    facts = PeekFact.line(card.knownTypeLine, card.colorIdentity, card.rarity),
+                    facts = PeekFact.line(card.knownTypeLine, card.knownColorIdentity, card.rarity),
                 )
             }
 

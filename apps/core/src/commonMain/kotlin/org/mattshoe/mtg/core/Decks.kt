@@ -179,17 +179,44 @@ sealed interface PeekFact {
     data class Identity(val pips: List<String>) : PeekFact
 
     companion object {
-        /** Whatever is known, in that order. Nothing known is an empty line. */
-        fun line(typeLine: String?, colorIdentity: String?, rarity: String?): List<PeekFact> = listOfNotNull(
-            typeLine?.takeIf { it.isNotBlank() }?.let(::Words),
-            // An empty identity is a colourless card, which has a
-            // symbol of its own. Null is a card nothing is known about.
-            colorIdentity?.let { id ->
-                val pips = Pip.COLOURS.filter { it.letter in id.uppercase() }.map { it.letter }
-                Identity(pips.ifEmpty { listOf(Pip.C.letter) })
-            },
-            rarity?.takeIf { it.isNotBlank() }?.let { Words(it.replaceFirstChar(Char::uppercase)) },
+        /**
+         * Whatever is known, in that order. Nothing known is an empty line.
+         *
+         * Every card has a colour, so anything known about a card means
+         * a symbol. A colourless identity is stored as NULL, not "", so
+         * a missing identity on a card with a type or a rarity is the
+         * colourless symbol, not a gap.
+         */
+        fun line(typeLine: String?, colorIdentity: String?, rarity: String?): List<PeekFact> {
+            val type = cardType(typeLine)
+            val known = type != null || !rarity.isNullOrBlank() || colorIdentity != null
+            return listOfNotNull(
+                type?.let(::Words),
+                if (!known) null else {
+                    val id = colorIdentity.orEmpty().uppercase()
+                    val pips = Pip.COLOURS.filter { it.letter in id }.map { it.letter }
+                    Identity(pips.ifEmpty { listOf(Pip.C.letter) })
+                },
+                rarity?.takeIf { it.isNotBlank() }?.let { Words(it.replaceFirstChar(Char::uppercase)) },
+            )
+        }
+
+        /** Most telling first: an enchantment creature is a creature, an artifact land a land. */
+        private val TYPES = listOf(
+            "Creature", "Planeswalker", "Battle", "Land", "Instant", "Sorcery", "Artifact", "Enchantment",
         )
+
+        /**
+         * The one card type, and nothing else. Matt: "i JUST want
+         * creature, artifact, enchantment, sorcery". No supertypes, no
+         * subtypes, no second type, and only the front face.
+         */
+        fun cardType(typeLine: String?): String? {
+            val words = typeLine.orEmpty().substringBefore("//").substringBefore("—").trim()
+                .split(" ").filter { it.isNotBlank() }
+            if (words.isEmpty()) return null
+            return TYPES.firstOrNull { t -> words.any { it.equals(t, ignoreCase = true) } } ?: words.last()
+        }
     }
 }
 
@@ -256,6 +283,9 @@ data class DeckCard(
 
     /** The type line, or the one a basic land has by definition. */
     val knownTypeLine: String? get() = typeLine ?: basic?.typeLine
+
+    /** The colour identity, or a basic land's colour by definition. */
+    val knownColorIdentity: String? get() = colorIdentity ?: basic?.produces
 
     /** What it taps for, including a basic nobody has a printing of. */
     val knownProducedMana: String? get() = producedMana ?: basic?.produces
