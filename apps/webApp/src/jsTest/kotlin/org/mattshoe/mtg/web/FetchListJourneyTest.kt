@@ -233,7 +233,9 @@ class FetchListJourneyTest {
         val root = mount("#/fetch")
         found(root)
         box(root, "Counterspell").click()
-        waitFor("the tick") { box(root, "Counterspell").checked }
+        // The box flips itself on a click; the progress line is the
+        // app having heard it.
+        waitFor("the tick") { root.all("[data-fetch-progress]").singleOrNull()?.textContent.orEmpty().contains("1 of 4 found") }
         val name = root.all("[data-fetch-card]").single { it.getAttribute("data-fetch-card") == "Counterspell" }
             .all(".fetch-name").single()
         assertTrue(
@@ -254,7 +256,9 @@ class FetchListJourneyTest {
         val root = mount("#/fetch")
         found(root)
         box(root, "Counterspell").click()
-        waitFor("the tick") { box(root, "Counterspell").checked }
+        // The box flips itself on a click; the progress line is the
+        // app having heard it.
+        waitFor("the tick") { root.all("[data-fetch-progress]").singleOrNull()?.textContent.orEmpty().contains("1 of 4 found") }
         root.button("Edit").click()
         waitFor("the list to edit") { root.all("#fetch-edit").isNotEmpty() }
         val edit = root.all("#fetch-edit").single() as HTMLTextAreaElement
