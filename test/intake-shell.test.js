@@ -1110,3 +1110,48 @@ describe('what a worktree is handed', () => {
     expect(box.log()).toContain('claude')
   })
 })
+
+// A worktree nobody is working in says so.
+//
+// There is no resume: the machinery that picked a stopped agent's
+// worktree back up is what ran seven agents on one request in four hours,
+// and it went in the strip. The consequence nobody wrote down is that a
+// dead agent's worktree blocks its request FOREVER — the dispatcher skips
+// anything with a worktree, so the request is never claimed again and
+// nothing anywhere says why.
+//
+// Two tasks sat at `in review` for three hours with no agent alive on
+// them. The only reason it came to light is that Matt asked.
+describe('a worktree with nobody in it', () => {
+  it('marks the task blocked, so somebody knows it needs picking up', () => {
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    // A stopped agent's worktree: it exists, nothing is running in it.
+    mkdirSync(join(box.repo, '.intake', 'wt', 'a-thing', 'requests'), { recursive: true })
+
+    run('dispatch.sh')
+
+    // task-status.mjs runs for real here and has no credential in a box,
+    // so what it writes to the log is the proof it was asked at all.
+    expect(box.intakeLog(), 'nothing told D1 the task had stalled')
+      .toMatch(/a-thing blocked|blocked was not written/)
+    // And still no second agent on it.
+    expect(box.log()).not.toContain('claude ')
+  })
+
+  it('says nothing when an agent is alive in there', () => {
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    const wt = join(box.repo, '.intake', 'wt', 'a-thing')
+    mkdirSync(join(wt, 'requests'), { recursive: true })
+    // A process whose command line names the request, which is how the
+    // dispatcher tells a live agent from a dead one.
+    const alive = spawn('/bin/sh', ['-c', 'sleep 30 # requests/a-thing.md'], {
+      detached: true, stdio: 'ignore',
+    })
+    try {
+      run('dispatch.sh')
+      expect(box.log()).not.toContain('stalled')
+    } finally {
+      alive.kill('SIGKILL')
+    }
+  })
+})
