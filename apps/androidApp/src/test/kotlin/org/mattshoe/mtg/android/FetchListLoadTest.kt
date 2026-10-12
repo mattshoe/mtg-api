@@ -25,6 +25,7 @@ import org.mattshoe.mtg.core.MtgApi
 import org.mattshoe.mtg.core.Route
 import org.mattshoe.mtg.core.Scryfall
 import org.mattshoe.mtg.core.View
+import org.mattshoe.mtg.core.onFetchList
 import org.robolectric.Robolectric
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.android.controller.ActivityController
@@ -51,6 +52,9 @@ class FetchListLoadTest {
     /** Scryfall holds every answer until this completes, when set. */
     private var scryfallGate: CompletableDeferred<Unit>? = null
 
+    /** The Worker answers the owned printings with a 500 while this is true. */
+    private var ownedFails = false
+
     @After
     fun tearDown() {
         controllers.forEach { runCatching { it.pause().stop().destroy() } }
@@ -63,6 +67,13 @@ class FetchListLoadTest {
             val q = request.url.parameters["q"].orEmpty()
             asked += if (sql.isNotEmpty()) sql else q
             if (request.url.encodedPath.endsWith("/cards/search")) scryfallGate?.await()
+            if ("json_each" in sql && ownedFails) {
+                return@MockEngine respond(
+                    """{"error":"D1 is down"}""",
+                    HttpStatusCode.InternalServerError,
+                    headersOf(HttpHeaders.ContentType, "application/json"),
+                )
+            }
             val body = when {
                 "json_each" in sql ->
                     """{"cols":["name_norm","name","face1","types","colors","color_identity","rarity","qty"],"rows":[
@@ -107,7 +118,7 @@ class FetchListLoadTest {
     private fun found(activity: MainActivity) {
         activity.setStateForTesting(
             AppState(admin = me, route = Route(View.FETCH)).copy(
-                fetch = FetchListState(list = "1 Counterspell\n1 Arcane Signet\n1 Black Lotus"),
+                fetch = FetchListState(draft = "1 Counterspell\n1 Arcane Signet\n1 Black Lotus"),
             ),
         )
         activity.fetchForTesting()
@@ -187,5 +198,52 @@ class FetchListLoadTest {
             again.stateForTesting().fetch.saved.map { it.title },
             "the saved list did not survive a fresh launch",
         )
+    }
+
+    @Test
+    fun findGoesOntoTheListPage() {
+        val activity = launch()
+        found(activity)
+        assertTrue(activity.stateForTesting().onFetchList, "Find stayed on the root")
+    }
+
+    @Test
+    fun aFailedFindClearsTheLoadingViewSaysWhyAndCanBeTriedAgain() {
+        ownedFails = true
+        val activity = launch()
+        activity.setStateForTesting(
+            AppState(admin = me, route = Route(View.FETCH)).copy(
+                fetch = FetchListState(draft = "1 Counterspell\n1 Arcane Signet"),
+            ),
+        )
+        activity.fetchForTesting()
+        idleUntil { activity.stateForTesting().fetch.error != null }
+        val failed = activity.stateForTesting()
+        assertTrue(!failed.fetch.busy, "the loading view is still up after a 500")
+        assertTrue(failed.fetch.error.orEmpty().isNotBlank(), "nothing says what happened")
+        assertTrue(failed.onFetchList, "the failure left the list page")
+
+        ownedFails = false
+        activity.fetchForTesting()
+        idleUntil { activity.stateForTesting().fetch.result != null }
+        assertEquals(
+            listOf("Instants · U · Common", "Artifacts · C · Common"),
+            activity.stateForTesting().fetch.result?.sections?.map { it.title },
+            "trying again did not find the list",
+        )
+        assertEquals(null, activity.stateForTesting().fetch.error, "the error stayed after it worked")
+    }
+
+    @Test
+    fun aTickIsThereOnTheNextLaunch() {
+        val activity = launch()
+        found(activity)
+        activity.setStateForTesting(
+            activity.stateForTesting().let { it.copy(fetch = it.fetch.tick("Counterspell")) },
+        )
+        val again = launch()
+        idleUntil { again.stateForTesting().fetch.result != null }
+        assertTrue(again.stateForTesting().fetch.isTicked("Counterspell"), "the tick did not survive a fresh launch")
+        assertTrue(!again.stateForTesting().fetch.isTicked("Arcane Signet"))
     }
 }

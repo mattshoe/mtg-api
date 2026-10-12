@@ -14,6 +14,9 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.state.ToggleableState
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
 import org.junit.Test
@@ -28,6 +31,8 @@ import org.mattshoe.mtg.core.OwnedPrinting
 import org.mattshoe.mtg.core.Route
 import org.mattshoe.mtg.core.View
 import org.mattshoe.mtg.core.savedFetch
+import org.mattshoe.mtg.core.findingFetch
+import org.mattshoe.mtg.core.onFetchList
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -79,7 +84,7 @@ class FetchListParityTest {
                         // What `MainActivity.fetchCards` lands, over the
                         // same rows the query would return.
                         onFetch = {
-                            val s = held.value
+                            val s = held.value.findingFetch()
                             held.value = s.copy(
                                 fetch = s.fetch.found(
                                     FetchList.build(
@@ -108,6 +113,100 @@ class FetchListParityTest {
         rule.onNodeWithTag("fetch-find").performClick()
         rule.waitForIdle()
         assertTrue(held.value.fetch.result != null, "Find cards did nothing")
+    }
+
+    private fun ticked(card: String): ToggleableState? =
+        rule.onNodeWithTag("fetch-tick:$card").fetchSemanticsNode().config.getOrNull(SemanticsProperties.ToggleableState)
+
+    @Test
+    fun findGoesToANewPageWithoutTheEntryBox() {
+        found()
+        assertTrue(held.value.onFetchList, "Find stayed on the root")
+        rule.onNodeWithTag("fetch-page").assertExists()
+        assertTrue(
+            rule.onAllNodesWithTag("fetch-list").fetchSemanticsNodes().isEmpty(),
+            "the entry box is still on the list page",
+        )
+    }
+
+    @Test
+    fun theListPageShowsTheLoadingViewWhileTheCollectionIsAsked() {
+        shell(AppState(admin = me, route = Route(View.FETCH)))
+        rule.runOnIdle {
+            val s = held.value
+            held.value = s.copy(fetch = s.fetch.drafted(list)).findingFetch().fetching(View.FETCH)
+        }
+        rule.waitForIdle()
+        val box = rule.onNodeWithTag("fetch-loading").getUnclippedBoundsInRoot()
+        assertTrue(box.bottom.value - box.top.value > 80f, "the loading view is not drawn: $box")
+        assertTrue(text("fetch-loading-line").contains("5 cards"), "the loading view does not say what it is looking for")
+        assertTrue(
+            rule.onAllNodesWithTag("fetch-section:Missing").fetchSemanticsNodes().isEmpty(),
+            "sections are drawn under the loading view",
+        )
+        rule.runOnIdle {
+            val s = held.value
+            held.value = s.copy(fetch = s.fetch.found(FetchList.build(DeckList.entries(list), owned)))
+        }
+        rule.waitForIdle()
+        assertTrue(
+            rule.onAllNodesWithTag("fetch-loading").fetchSemanticsNodes().isEmpty(),
+            "the loading view stayed over the list",
+        )
+    }
+
+    @Test
+    fun aCardIsTickedByTappingItsRow() {
+        found()
+        assertEquals(ToggleableState.Off, ticked("Counterspell"), "a card starts ticked")
+        rule.onNodeWithTag("fetch-tick:Counterspell").performScrollTo().performClick()
+        rule.waitForIdle()
+        assertEquals(ToggleableState.On, ticked("Counterspell"), "the tap did not tick the card")
+        assertTrue(held.value.fetch.isTicked("Counterspell"))
+        assertEquals("1 of 4 found", held.value.fetch.progress)
+    }
+
+    @Test
+    fun editingTheListKeepsTheTicks() {
+        found()
+        rule.onNodeWithTag("fetch-tick:Counterspell").performScrollTo().performClick()
+        rule.onNodeWithTag("fetch-edit").performScrollTo().performClick()
+        rule.waitForIdle()
+        rule.onNodeWithTag("fetch-edit-list").performTextReplacement(list + "\n1 Sol Ring")
+        rule.onNodeWithTag("fetch-refind").performScrollTo().performClick()
+        rule.waitForIdle()
+        assertTrue(held.value.onFetchList, "an edit left the list page")
+        assertTrue(held.value.fetch.list.endsWith("1 Sol Ring"), "the edit was not the list found")
+        assertEquals(ToggleableState.On, ticked("Counterspell"), "editing removed a tick")
+    }
+
+    @Test
+    fun aFailedFindSaysWhatHappenedAndOffersToTryAgain() {
+        shell(AppState(admin = me, route = Route(View.FETCH)))
+        rule.runOnIdle {
+            val s = held.value
+            held.value = s.copy(fetch = s.fetch.drafted(list)).findingFetch().fetching(View.FETCH)
+                .fetchFailed("HTTP 500", View.FETCH)
+        }
+        rule.waitForIdle()
+        assertEquals("HTTP 500", text("fetch-err"))
+        assertTrue(
+            rule.onAllNodesWithTag("fetch-loading").fetchSemanticsNodes().isEmpty(),
+            "the loading view is still up after a failure",
+        )
+        rule.onNodeWithTag("fetch-retry").performClick()
+        rule.waitForIdle()
+        assertTrue(held.value.fetch.result != null, "Try again did not find the list")
+    }
+
+    @Test
+    fun backFromTheListIsTheEntryBox() {
+        found()
+        rule.onNodeWithTag("fetch-back").performClick()
+        rule.waitForIdle()
+        assertTrue(!held.value.onFetchList, "back stayed on the list")
+        rule.onNodeWithTag("fetch-list").assertExists()
+        rule.onNodeWithTag("fetch-current").assertExists()
     }
 
     private fun top(tag: String) = rule.onNodeWithTag(tag).getUnclippedBoundsInRoot().top.value
@@ -165,7 +264,7 @@ class FetchListParityTest {
 
     @Test
     fun theFilingIsOnScreenWhileTheAlsoCheckIsStillComing() {
-        shell(AppState(admin = me, route = Route(View.FETCH)))
+        shell(AppState(admin = me, route = Route(View.FETCH, FetchListState.PAGE)))
         val s = held.value
         val filed = FetchList.build(DeckList.entries(list), owned)
         rule.runOnIdle { held.value = s.copy(fetch = s.fetch.typed(list).loading().filed(list, filed)) }
