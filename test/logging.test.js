@@ -6,6 +6,7 @@ import {
 } from './helpers.js';
 import {
   levelFor, eventFor, buildLogQuery, pruneLogs, logStats, RETENTION_DAYS,
+  newEntry, startEntry, writeEntry, IN_FLIGHT,
 } from '../src/log.js';
 
 /** Logs are written after the response, so give waitUntil a moment. */
@@ -292,5 +293,96 @@ describe('helpers', () => {
     expect(eventFor('GET', '/schema')).toBe('schema');
     expect(eventFor('POST', '/cards/add')).toBe('cards.add');
     expect(eventFor('GET', '/')).toBe('root');
+  });
+});
+
+// A request that never comes back still leaves a row.
+//
+// The log was written in `ctx.waitUntil`, after the response, so the only
+// requests it never recorded were the ones that died — and those are the
+// only ones worth reading about. Three separate production failures left
+// nothing in `logs` at all: a `/cards/add` claimed its idempotency key,
+// was killed, and the only evidence was a leftover row in `idempotency`
+// and a 409 from the client's own retry ten seconds later. Each one was
+// diagnosed by inference. Matt: "Then fix the fucking observability."
+describe('a write says so before it runs', () => {
+  const asPost = (path = '/cards/add') => newEntry(new Request(`https://x.test${path}`, { method: 'POST' }));
+
+  it('leaves a row the moment it starts, before anything can kill it', async () => {
+    const entry = await startEntry(env, asPost());
+
+    const [row] = await sql('SELECT id, path, status, message FROM logs WHERE id = ?', entry.id);
+    expect(row, 'nothing was written before the request ran').toBeTruthy();
+    expect(row.status, 'an unfinished request must not look finished').toBeNull();
+    expect(row.message).toBe(IN_FLIGHT);
+  });
+
+  it('is still there, unfinished, when the request never comes back', async () => {
+    // Exactly the production shape: started, killed, no completion.
+    const entry = await startEntry(env, asPost());
+
+    const [row] = await sql("SELECT status, message FROM logs WHERE id = ?", entry.id);
+    expect(row.status).toBeNull();
+    expect(row.message).toBe(IN_FLIGHT);
+    // And it is findable as a class, which is what makes it useful.
+    const [{ stuck }] = await sql('SELECT COUNT(*) AS stuck FROM logs WHERE status IS NULL');
+    expect(stuck).toBeGreaterThan(0);
+  });
+
+  it('fills in the row it already put down rather than writing a second', async () => {
+    const before = await count('logs');
+    const entry = await startEntry(env, asPost());
+    entry.message = 'all good';
+    await writeEntry(env, entry, 200);
+
+    expect(await count('logs'), 'one request wrote two rows').toBe(before + 1);
+    const [row] = await sql('SELECT status, message, ms FROM logs WHERE id = ?', entry.id);
+    expect(row.status).toBe(200);
+    expect(row.message).toBe('all good');
+  });
+
+  it('still records a request nobody started a row for', async () => {
+    // Reads take this path: no start row, one row at the end, as before.
+    const before = await count('logs');
+    const entry = newEntry(new Request('https://x.test/query', { method: 'POST' }));
+    await writeEntry(env, entry, 200);
+    expect(await count('logs')).toBe(before + 1);
+  });
+
+  // The one that actually proves it, by looking while the request is
+  // still running. Asserting afterwards proves nothing: a finished POST
+  // leaves exactly one finished row either way, which is why the first
+  // version of this test passed with the feature taken out.
+  it('is visible as in flight WHILE a real POST is still running', async () => {
+    let release;
+    const held = new Promise((r) => { release = r; });
+    const stub = stubScryfall();
+    const slow = async (url, init) => {
+      if (new URL(url).pathname === '/cards/collection') await held;
+      return stub(url, init);
+    };
+
+    const inFlight = post('/cards/add', { list: '1 Sol Ring' }, slow);
+
+    // The row has to be there before the request can possibly finish.
+    let seen = null;
+    for (let i = 0; i < 100 && !seen; i += 1) {
+      [seen] = await sql(
+        "SELECT id, path, status, message FROM logs WHERE path = '/cards/add' AND status IS NULL",
+      );
+      if (!seen) await new Promise((r) => setTimeout(r, 10));
+    }
+    expect(seen, 'a running POST was invisible in the log').toBeTruthy();
+    expect(seen.message).toBe(IN_FLIGHT);
+
+    release();
+    await inFlight;
+    await settle();
+
+    // And the same row is filled in, not joined by a second.
+    const [done] = await sql('SELECT status, message FROM logs WHERE id = ?', seen.id);
+    expect(done.status, 'the row was left unfinished').not.toBeNull();
+    const [{ n }] = await sql("SELECT COUNT(*) AS n FROM logs WHERE path = '/cards/add'");
+    expect(n, 'one request wrote more than one row').toBe(1);
   });
 });

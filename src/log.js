@@ -85,6 +85,58 @@ export function newEntry(request) {
  */
 const SKIP = new Set(['/logs', '/logs/stats']);
 
+/**
+ * Write the row BEFORE the request runs, for anything that mutates.
+ *
+ * The log was written in `ctx.waitUntil` after the response, which means
+ * the only requests it never recorded were the ones that died — and those
+ * are the only ones worth reading about. A `/cards/add` that claimed its
+ * idempotency key and was killed left no entry at all, three separate
+ * times, and each was diagnosed by reading leftover rows in `idempotency`
+ * and guessing. Matt, eventually: "Then fix the fucking observability."
+ *
+ * So a write puts a row down first, with `status` NULL meaning in flight,
+ * and `writeEntry` fills it in when the request comes back. A row still
+ * reading NULL minutes later is a request that never finished, which is
+ * exactly the thing that was invisible.
+ *
+ * Reads are left alone. They are the overwhelming majority of traffic,
+ * they complete, and doubling every one of them to catch a hang that does
+ * not happen to them is not worth the write.
+ *
+ * This is deliberately NOT in `waitUntil`: the whole point is that it has
+ * already happened before anything can kill the request.
+ */
+export async function startEntry(env, entry) {
+  if (!env?.DB) return entry;
+  try {
+    const row = await env.DB.prepare(
+      `INSERT INTO logs (ts, level, event, method, path, status, ms, message,
+                         detail, ip, country, ray, admin)
+       VALUES (?,?,?,?,?,NULL,0,?,NULL,?,?,?,?)
+       RETURNING id`,
+    ).bind(
+      entry.ts,
+      'info',
+      eventFor(entry.method, entry.path),
+      entry.method,
+      entry.path,
+      IN_FLIGHT,
+      entry.ip,
+      entry.country,
+      entry.ray,
+      entry.admin ? 1 : 0,
+    ).first();
+    if (row?.id != null) entry.id = row.id;
+  } catch {
+    // Never let logging be the reason a request failed.
+  }
+  return entry;
+}
+
+/** What an unfinished row says, until the request comes back to say more. */
+export const IN_FLIGHT = 'in flight';
+
 export async function writeEntry(env, entry, status) {
   if (!env?.DB) return;
   if (SKIP.has(entry.path) && status < 400) return;
@@ -93,6 +145,24 @@ export async function writeEntry(env, entry, status) {
     // the real duration rather than a precise measurement. Good enough to
     // spot something taking seconds; do not read it as a benchmark.
     const ms = Math.max(0, Date.now() - entry.started);
+    // A write already put its row down before it ran, so this fills that
+    // one in rather than adding a second. One request is one row whether
+    // it finished or not.
+    if (entry.id != null) {
+      await env.DB.prepare(
+        `UPDATE logs SET level = ?, status = ?, ms = ?, message = ?, detail = ?, admin = ?
+          WHERE id = ?`,
+      ).bind(
+        entry.level || levelFor(status, { write: entry.write }),
+        status,
+        ms,
+        clip(entry.message, MAX_MESSAGE),
+        entry.detail ? clip(scrub(entry.detail), MAX_DETAIL) : null,
+        entry.admin ? 1 : 0,
+        entry.id,
+      ).run();
+      return;
+    }
     await env.DB.prepare(
       `INSERT INTO logs (ts, level, event, method, path, status, ms, message,
                          detail, ip, country, ray, admin)
