@@ -30,7 +30,6 @@ import org.mattshoe.mtg.core.Tweak
 fun DecksPage(
     state: DecksState,
     onOpen: (Deck) -> Unit,
-    onClose: () -> Unit,
     admin: Boolean = false,
     onEdit: (Deck) -> Unit = {},
     onDisassemble: (Deck) -> Unit = {},
@@ -69,13 +68,11 @@ fun DecksPage(
                 }
             }
         } else {
-            // The back button, the name and the two admin actions are
-            // one header row rather than four things stacked flush.
+            // The share and the admin actions are one header row
+            // rather than things stacked flush. No "← Decks" — Matt:
+            // "get rid of the 'back' button on all the details pages".
+            // The browser's back is the way to the shelf.
             Div(attrs = { classes("page-head") }) {
-                Button(attrs = {
-                    classes("btn", "sm", "ghost")
-                    onClick { onClose() }
-                }) { Text("← Decks") }
                 Span(attrs = { classes("spacer") }) {}
                 ShareMenu(onShare)
                 if (admin) {

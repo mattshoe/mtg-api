@@ -57,7 +57,7 @@ class DecksStatsPageTest {
         // heading, which is one group with somebody's name
         // pointlessly over it now that the page is their collection.
         val s = DecksState().loaded(listOf(deck("a", "matt", "Alela"), deck("b", "matt", "Bello")))
-        val root = mount { DecksPage(s, { opened = it }, {}) }
+        val root = mount { DecksPage(s, { opened = it }) }
         settle()
         assertTrue(root.textContent!!.contains("2 decks"), "the shelf does not say how many")
         assertTrue(root.textContent!!.contains("Alela"))
@@ -72,7 +72,7 @@ class DecksStatsPageTest {
 
     @Test
     fun oneDeckIsADeckRatherThanOneDecks() = runTest {
-        val root = mount { DecksPage(DecksState().loaded(listOf(deck("a", "matt", "Alela"))), {}, {}) }
+        val root = mount { DecksPage(DecksState().loaded(listOf(deck("a", "matt", "Alela"))), {}) }
         settle()
         assertTrue(root.textContent!!.contains("1 deck"))
         assertTrue(!root.textContent!!.contains("1 decks"))
@@ -80,7 +80,7 @@ class DecksStatsPageTest {
 
     @Test
     fun aTileShowsTheCommanderWithoutItsSetAnnotation() = runTest {
-        val root = mount { DecksPage(DecksState().loaded(listOf(deck("a", "matt"))), {}, {}) }
+        val root = mount { DecksPage(DecksState().loaded(listOf(deck("a", "matt"))), {}) }
         settle()
         assertTrue(root.textContent!!.contains("Alela, Artful Provocateur"))
         assertTrue(!root.textContent!!.contains("(ELD)"), "the set annotation is noise on a tile")
@@ -88,7 +88,7 @@ class DecksStatsPageTest {
 
     @Test
     fun openingADeckAsksThroughTheCallback() = runTest {
-        val root = mount { DecksPage(DecksState().loaded(listOf(deck("a", "matt", "Alela"))), { opened = it }, {}) }
+        val root = mount { DecksPage(DecksState().loaded(listOf(deck("a", "matt", "Alela"))), { opened = it }) }
         settle()
         // The whole tile is the target now, the way the hand-written
         // grid had it — there is no separate Open button to aim at.
@@ -99,7 +99,7 @@ class DecksStatsPageTest {
 
     @Test
     fun aDeckTileCanBeReachedAndOpenedFromTheKeyboard() = runTest {
-        val root = mount { DecksPage(DecksState().loaded(listOf(deck("a", "matt", "Alela"))), { opened = it }, {}) }
+        val root = mount { DecksPage(DecksState().loaded(listOf(deck("a", "matt", "Alela"))), { opened = it }) }
         settle()
         val tile = root.querySelector(".deck-card") as HTMLElement
         // The grid is the only way into a deck, so a tile that Tab
@@ -126,7 +126,7 @@ class DecksStatsPageTest {
             "a",
             listOf(DeckCard("Sol Ring", 1, null, 1), DeckCard("Mana Crypt", 1, null, 0)),
         )
-        val root = mount { DecksPage(s, {}, {}) }
+        val root = mount { DecksPage(s, {}) }
         settle()
         // The figures say it now, and they count copies rather than
         // distinct names — which is why the old tag saying "1 not

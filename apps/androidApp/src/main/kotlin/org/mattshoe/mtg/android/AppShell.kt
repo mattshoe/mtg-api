@@ -388,12 +388,11 @@ fun AppShell(
                         } else if (openDeck == null) {
                             // The address names a deck whose cards have
                             // not landed. Still the deck's destination,
-                            // with the deck's own way back — not the
-                            // shelf, which would take the gesture.
+                            // so the back gesture is the deck's — not the
+                            // shelf's.
                             DeckLoadingScreen(
                                 key = state.route.rest,
                                 error = state.decks.error,
-                                onClose = { onState(state.navigate(Route(View.DECKS))) },
                             )
                         } else {
                             DeckDetailScreen(
@@ -401,7 +400,6 @@ fun AppShell(
                                 open = openDeck,
                                 scrollState = deckScrollState,
                                 admin = state.canEdit,
-                                onClose = { onState(state.navigate(Route(View.DECKS))) },
                                 onEdit = { onEditDeck(it.key) },
                                 onDisassemble = { onAskDisassemble(it.key) },
                                 onRename = { onAskRename(it.key) },
@@ -446,7 +444,6 @@ fun AppShell(
                             detail = state.taskDetail?.takeIf { it.key == state.openTaskKey } ?: TaskDetail(state.openTaskKey!!, busy = true),
                             listed = state.openTask,
                             now = state.tasks.now.takeIf { it > 0 } ?: System.currentTimeMillis(),
-                            onBack = { onState(state.navigate(Route(View.ADMIN))) },
                             onState = { onState(state.copy(taskDetail = it)) },
                             onCancel = { onCancelTask(state.openTaskKey!!) },
                         )
@@ -462,7 +459,6 @@ fun AppShell(
                         onSearch = { onState(state.copy(people = state.people.searching(it))) },
                         onOpen = { onState(state.navigate(Route(View.ADMIN, it.key))) },
                         onSetRole = onSetRole,
-                        onBack = { onState(state.navigate(Route(View.ADMIN))) },
                     )
 
                     View.LOGS -> LogsScreen(state.logs) { onState(state.copy(logs = it)) }
@@ -471,7 +467,6 @@ fun AppShell(
                     // gesture leaves it the way it leaves any other screen.
                     View.CARD -> CardSheet(
                         card = state.card ?: org.mattshoe.mtg.core.CardDetail(name = state.route.rest).loading(),
-                        onClose = { onState(state.leaveCard()) },
                         // Reading a deck a card at a time, the same three
                         // controls the web page puts under the card.
                         previous = state.previousCard,

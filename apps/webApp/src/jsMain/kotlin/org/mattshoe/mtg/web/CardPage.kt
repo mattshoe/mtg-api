@@ -39,7 +39,6 @@ import org.mattshoe.mtg.core.Stepper
 fun CardPage(
     card: CardDetail,
     onShare: () -> Unit = {},
-    onBack: () -> Unit = {},
     /** The card before this one in the deck being read, if there is one. */
     previous: DeckCard? = null,
     next: DeckCard? = null,
@@ -51,11 +50,12 @@ fun CardPage(
     onCount: (Int) -> Unit = {},
 ) {
     Div(attrs = { classes("wrap") }) {
-        Div(attrs = { classes("page-head") }) {
-            Button(attrs = {
-                classes("btn", "sm", "ghost")
-                onClick { onBack() }
-            }) { Text("← Back") }
+        // The name with the share beside it. There was a "← Back"
+        // here — Matt: "get rid of the 'back' button on all the
+        // details pages and put the share icon inline with title".
+        // The browser's back is the way off.
+        Div(attrs = { classes("page-head", "card-head") }) {
+            H2 { Text(card.name) }
             Span(attrs = { classes("spacer") }) {}
             Button(attrs = {
                 classes("btn", "sm", "ghost", "icon-only")

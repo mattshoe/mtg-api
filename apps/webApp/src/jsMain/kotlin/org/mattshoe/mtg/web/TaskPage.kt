@@ -27,18 +27,10 @@ fun TaskPage(
     detail: TaskDetail,
     listed: Task?,
     now: Long,
-    onBack: () -> Unit,
     onState: (TaskDetail) -> Unit = {},
     onCancel: () -> Unit = {},
 ) {
     val task = detail.task ?: listed
-    Div(attrs = { classes("page-head") }) {
-        Button(attrs = {
-            classes("btn", "sm", "ghost")
-            onClick { onBack() }
-        }) { Text("← Admin Settings") }
-    }
-
     Div(attrs = {
         classes("panel", "task-detail")
         attr("data-task-detail", detail.key)

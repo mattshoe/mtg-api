@@ -694,6 +694,10 @@ data class AppState(
         writingTask -> navigate(Route(View.ADMIN))
         // A task's own page is the same: back is the list it came from.
         openTaskKey != null -> navigate(Route(View.ADMIN))
+        // And a person's page. It had a "← Everybody" button and back
+        // fell through to the Library; the button is gone, so the
+        // gesture has to go where it went.
+        view == View.ADMIN && route.rest.isNotBlank() -> navigate(Route(View.ADMIN))
         // Inside the entry wizard, Back is a step and not an exit.
         // It had never heard of the wizard, so the gesture went
         // straight from step four to the Library and whatever was

@@ -66,7 +66,7 @@ class CardSheetParityTest {
      * `setContent` may only be called once per test, so a test that
      * wants a second card is a second test.
      */
-    private fun open(card: CardDetail, width: Int = phone) = mount(width) { CardSheet(card) {} }
+    private fun open(card: CardDetail, width: Int = phone) = mount(width) { CardSheet(card) }
 
     private fun mount(width: Int = phone, body: @Composable () -> Unit) {
         rule.setContent {
@@ -617,14 +617,6 @@ class CardSheetParityTest {
         rule.onRoot().shoot("card_sheet_everything")
     }
 
-    @Test
-    fun backLeavesTheCard() {
-        var left = 0
-        mount { CardSheet(everything()) { left++ } }
-        rule.onNodeWithText("← Back").performClick()
-        rule.runOnIdle { assertEquals(1, left) }
-    }
-
     // -------------------------------------------- stepping along a deck
 
     @Test
@@ -633,7 +625,6 @@ class CardSheetParityTest {
         mount {
             CardSheet(
                 everything(),
-                onClose = {},
                 previous = deckCard("Bitterblossom"),
                 next = deckCard("Arcane Signet"),
                 place = "7 of 84",
@@ -654,7 +645,7 @@ class CardSheetParityTest {
     @Test
     fun theEndsOfADeckOfferNothingToStepTo() {
         mount {
-            CardSheet(everything(), onClose = {}, previous = null, next = null, place = "1 of 1")
+            CardSheet(everything(), previous = null, next = null, place = "1 of 1")
         }
         Parity.check(
             Parity.Fact("the place is still stated on a one-card run") { seen("1 of 1") },
@@ -685,7 +676,6 @@ class CardSheetParityTest {
         mount {
             CardSheet(
                 CardDetail(name = "Sol Ring").loading(),
-                onClose = {},
                 previous = deckCard("Bitterblossom"),
                 next = deckCard("Arcane Signet"),
                 place = "7 of 84",
