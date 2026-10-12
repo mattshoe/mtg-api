@@ -2,6 +2,7 @@ package org.mattshoe.mtg.web
 
 import org.mattshoe.mtg.core.TaskDetail
 import org.mattshoe.mtg.core.openTaskKey
+import org.mattshoe.mtg.core.taskCancelled
 import org.mattshoe.mtg.core.CommanderRank
 import org.mattshoe.mtg.core.askingCommanderRank
 import org.mattshoe.mtg.core.commanderRankFound
@@ -394,6 +395,7 @@ object MtgApp {
                 },
                 onTaskFiles = { files -> readTaskFiles(files) },
                 onSendTask = { sendTask() },
+                onCancelTask = { cancelTask(it) },
             )
         }
     }
@@ -1319,6 +1321,25 @@ object MtgApp {
         reader.onload = { cont.resume((reader.result as? String)?.substringAfter("base64,", "")) }
         reader.onerror = { cont.resume(null) }
         reader.readAsDataURL(file)
+    }
+
+    /**
+     * Cancel a task: its row says cancelled, and the laptop kills its
+     * agent off that within a minute. A refusal leaves it as it was and
+     * says why. Sibling of Android's `cancelTask`.
+     */
+    private fun cancelTask(key: String) {
+        val detail = app.taskDetail?.takeIf { it.key == key } ?: return
+        app = app.copy(taskDetail = detail.cancelling())
+        scope.launch {
+            app = try {
+                api.cancelTask(token(), key)
+                app.taskCancelled(key).say(TaskDetail.CANCELLED)
+            } catch (e: Exception) {
+                val why = e.message ?: "that did not cancel"
+                app.copy(taskDetail = app.taskDetail?.takeIf { it.key == key }?.cancelRefused()).say(why, failed = true)
+            }
+        }
     }
 
     /** Send it. A refusal stays on the page with everything typed. */

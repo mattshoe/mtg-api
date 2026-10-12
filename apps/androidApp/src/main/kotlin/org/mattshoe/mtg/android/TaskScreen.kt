@@ -41,7 +41,14 @@ import org.mattshoe.mtg.core.isImage
  * this only lays it out.
  */
 @Composable
-fun TaskScreen(detail: TaskDetail, listed: Task?, now: Long, onBack: () -> Unit) {
+fun TaskScreen(
+    detail: TaskDetail,
+    listed: Task?,
+    now: Long,
+    onBack: () -> Unit,
+    onState: (TaskDetail) -> Unit = {},
+    onCancel: () -> Unit = {},
+) {
     val uri = LocalUriHandler.current
     val task = detail.task ?: listed
     Column(
@@ -79,6 +86,7 @@ fun TaskScreen(detail: TaskDetail, listed: Task?, now: Long, onBack: () -> Unit)
                     Line(detail.pull?.let { "#$it" } ?: url, Accent, Design.SMALL)
                 }
             }
+            CancelTask(detail.copy(task = task), onState, onCancel)
             if (detail.busy) Line("Loading…", Ink3)
             detail.error?.let { Line("Could not load the task: $it", Bad, Design.SMALL) }
         }
@@ -103,6 +111,30 @@ fun TaskScreen(detail: TaskDetail, listed: Task?, now: Long, onBack: () -> Unit)
                 detail.files.forEach { f -> FileRow(f) }
             }
         }
+    }
+}
+
+/**
+ * Matt: "i want the ability to cancel/abort tasks and any running agent
+ * should be immediately killed". Asks first; the laptop kills the agent
+ * off the row this writes. Sibling of the web's `CancelTask`.
+ */
+@Composable
+private fun CancelTask(detail: TaskDetail, onState: (TaskDetail) -> Unit, onCancel: () -> Unit) {
+    if (!detail.canCancel) return
+    if (detail.confirming) {
+        Line(TaskDetail.ASK, Ink, Design.SMALL, modifier = Modifier.padding(top = 6.dp).testTag("task-cancel-ask"))
+        Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(Design.GAP.dp)) {
+            Btn(TaskDetail.CONFIRM, danger = true, modifier = Modifier.testTag("task-cancel-confirm")) { onCancel() }
+            Box(Modifier.testTag("task-cancel-keep")) { Ghost(TaskDetail.KEEP) { onState(detail.keep()) } }
+        }
+    } else {
+        Btn(
+            if (detail.cancelling) TaskDetail.CANCELLING else TaskDetail.CANCEL,
+            enabled = !detail.cancelling,
+            danger = true,
+            modifier = Modifier.padding(top = 6.dp).testTag("task-cancel"),
+        ) { onState(detail.askToCancel()) }
     }
 }
 

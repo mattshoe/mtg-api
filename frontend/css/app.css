@@ -1794,6 +1794,9 @@ select.sort {
 .task-detail { max-width: 760px; }
 .task-detail h3 { margin: 18px 0 6px; }
 .task-detail-text { color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; }
+/* Cancel task, and the question it asks before it stops an agent. */
+.task-cancel { margin-top: 10px; display: grid; gap: 6px; justify-items: start; }
+.task-cancel-buttons { display: flex; gap: 8px; }
 .task-detail-image {
   display: block; max-width: 100%; max-height: 480px; margin: 4px 0 10px;
   border: 1px solid var(--line); border-radius: 8px;

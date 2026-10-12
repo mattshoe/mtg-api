@@ -108,6 +108,8 @@ fun AppShell(
     /** Files picked on the New task page. */
     onTaskFiles: (List<File>) -> Unit = {},
     onSendTask: () -> Unit = {},
+    /** Yes on a task's Cancel task question, with its key. */
+    onCancelTask: (String) -> Unit = {},
 ) {
     // The page underneath an overlay holds still. `overscroll-behavior`
     // on the overlay only stops the chaining once the overlay itself
@@ -188,6 +190,8 @@ fun AppShell(
                 listed = state.openTask,
                 now = state.tasks.now.takeIf { it > 0 } ?: kotlin.js.Date.now().toLong(),
                 onBack = { onState(state.navigate(Route(View.ADMIN))) },
+                onState = { onState(state.copy(taskDetail = it)) },
+                onCancel = { onCancelTask(state.openTaskKey!!) },
             )
         } else AdminPage(
             state = state.people,

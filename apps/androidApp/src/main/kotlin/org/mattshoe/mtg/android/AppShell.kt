@@ -431,6 +431,8 @@ fun AppShell(
                             listed = state.openTask,
                             now = state.tasks.now.takeIf { it > 0 } ?: System.currentTimeMillis(),
                             onBack = { onState(state.navigate(Route(View.ADMIN))) },
+                            onState = { onState(state.copy(taskDetail = it)) },
+                            onCancel = { onCancelTask(state.openTaskKey!!) },
                         )
                     } else AdminScreen(
                         state = state.people,

@@ -23,7 +23,14 @@ import org.mattshoe.mtg.core.isImage
  * this only lays it out.
  */
 @Composable
-fun TaskPage(detail: TaskDetail, listed: Task?, now: Long, onBack: () -> Unit) {
+fun TaskPage(
+    detail: TaskDetail,
+    listed: Task?,
+    now: Long,
+    onBack: () -> Unit,
+    onState: (TaskDetail) -> Unit = {},
+    onCancel: () -> Unit = {},
+) {
     val task = detail.task ?: listed
     Div(attrs = { classes("page-head") }) {
         Button(attrs = {
@@ -60,6 +67,8 @@ fun TaskPage(detail: TaskDetail, listed: Task?, now: Long, onBack: () -> Unit) {
                     }) { Text(detail.pull?.let { "#$it" } ?: url) }
                 }
             }
+
+            CancelTask(detail.copy(task = task), onState, onCancel)
 
             if (detail.busy) Div(attrs = { classes("empty") }) { Text("Loading…") }
             detail.error?.let { Div(attrs = { classes("err") }) { Text("Could not load the task: $it") } }
@@ -110,6 +119,40 @@ fun TaskPage(detail: TaskDetail, listed: Task?, now: Long, onBack: () -> Unit) {
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Matt: "i want the ability to cancel/abort tasks and any running agent
+ * should be immediately killed". Asks first; the laptop kills the agent
+ * off the row this writes. Sibling of Android's `CancelTask`.
+ */
+@Composable
+private fun CancelTask(detail: TaskDetail, onState: (TaskDetail) -> Unit, onCancel: () -> Unit) {
+    if (!detail.canCancel) return
+    Div(attrs = { classes("task-cancel") }) {
+        if (detail.confirming) {
+            Div(attrs = {
+                classes("small")
+                attr("data-task-cancel-ask", "")
+            }) { Text(TaskDetail.ASK) }
+            Div(attrs = { classes("task-cancel-buttons") }) {
+                Button(attrs = {
+                    classes("btn", "sm", "danger")
+                    onClick { onCancel() }
+                }) { Text(TaskDetail.CONFIRM) }
+                Button(attrs = {
+                    classes("btn", "sm", "ghost")
+                    onClick { onState(detail.keep()) }
+                }) { Text(TaskDetail.KEEP) }
+            }
+        } else {
+            Button(attrs = {
+                classes("btn", "sm", "danger")
+                if (detail.cancelling) attr("disabled", "")
+                onClick { onState(detail.askToCancel()) }
+            }) { Text(if (detail.cancelling) TaskDetail.CANCELLING else TaskDetail.CANCEL) }
         }
     }
 }
