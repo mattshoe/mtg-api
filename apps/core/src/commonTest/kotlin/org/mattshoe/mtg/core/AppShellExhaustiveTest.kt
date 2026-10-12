@@ -83,6 +83,7 @@ private fun busyOn(s: AppState, v: View): Boolean = when (v) {
     View.ADMIN -> s.people.busy
     View.CARD -> s.card?.busy == true
     View.ENTRY -> s.entry.busy != null
+    View.FETCH -> s.fetch.busy
 }
 
 private fun errorOn(s: AppState, v: View): String? = when (v) {
@@ -93,6 +94,7 @@ private fun errorOn(s: AppState, v: View): String? = when (v) {
     View.ADMIN -> s.people.error
     View.CARD -> s.card?.error
     View.ENTRY -> s.entry.error
+    View.FETCH -> s.fetch.error
 }
 
 /** A state with something on every screen, so a reset shows up. */
@@ -1870,7 +1872,7 @@ class FetchingTest {
 
     @Test
     fun everyScreenThatFetchesSaysSo() {
-        val fetches = setOf(View.LIBRARY, View.DECKS, View.STATS, View.LOGS, View.ADMIN, View.CARD)
+        val fetches = setOf(View.LIBRARY, View.DECKS, View.STATS, View.LOGS, View.ADMIN, View.CARD, View.FETCH)
         View.entries.forEach {
             assertEquals(it in fetches, busyOn(withACard.fetching(it), it), it.slug)
         }
@@ -1939,7 +1941,7 @@ class FetchFailedTest {
 
     @Test
     fun everyScreenWithSomewhereToSayItSaysIt() {
-        val says = setOf(View.LIBRARY, View.DECKS, View.STATS, View.LOGS, View.ADMIN, View.CARD)
+        val says = setOf(View.LIBRARY, View.DECKS, View.STATS, View.LOGS, View.ADMIN, View.CARD, View.FETCH)
         View.entries.forEach {
             assertEquals(
                 if (it in says) "the database said no" else null,
@@ -2025,6 +2027,7 @@ class LoadNeedsTest {
                 View.ADMIN -> listOf("people")
                 View.CARD -> listOf("card")
                 View.ENTRY -> emptyList()
+                View.FETCH -> emptyList()
             }
             assertEquals(expected, Load.needs(Route(it)), it.slug)
         }

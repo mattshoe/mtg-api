@@ -56,7 +56,7 @@ class NavShapeTest {
     @Test
     fun theBarIsTheThreeAnybodyCanReach() {
         assertEquals(
-            listOf(View.LIBRARY, View.DECKS, View.STATS),
+            listOf(View.LIBRARY, View.DECKS, View.FETCH),
             Admin().bar,
             "a locked app's bottom bar is wrong",
         )
@@ -66,7 +66,7 @@ class NavShapeTest {
     fun unlockingAddsEntryToTheBarAndNothingElse() {
         val unlocked = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t")
         assertEquals(
-            listOf(View.LIBRARY, View.DECKS, View.STATS, View.ENTRY),
+            listOf(View.LIBRARY, View.DECKS, View.FETCH, View.ENTRY),
             unlocked.bar,
             "Mass Entry should join the bar when admin is on, and the log should not",
         )

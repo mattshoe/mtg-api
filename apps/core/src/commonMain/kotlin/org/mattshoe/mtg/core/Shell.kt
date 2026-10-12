@@ -35,6 +35,7 @@ enum class View(
 ) {
     LIBRARY("search", "Library"),
     DECKS("decks", "Decks"),
+    FETCH("fetch", "Fetch"),
     STATS("stats", "Stats"),
     // "Mass Entry" wrapped onto two lines under an icon. The screen
     // is unchanged; only what the bar calls it.
