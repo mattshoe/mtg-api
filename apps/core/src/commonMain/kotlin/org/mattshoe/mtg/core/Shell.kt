@@ -35,8 +35,16 @@ enum class View(
 ) {
     LIBRARY("search", "Library"),
     DECKS("decks", "Decks"),
+    /**
+     * A deck list in, where every card is filed out. See `FetchList.kt`.
+     *
+     * Matt: "this feature should take the place of the stats tab in
+     * bottom nav ... the stats feature can just move into the profile
+     * menu".
+     */
     FETCH("fetch", "Fetch"),
-    STATS("stats", "Stats"),
+    /** Behind the profile since the Fetch list took its place in the bar. */
+    STATS("stats", "Stats", bar = false),
     // "Mass Entry" wrapped onto two lines under an icon. The screen
     // is unchanged; only what the bar calls it.
     ENTRY("entry", "Entry", gated = true),

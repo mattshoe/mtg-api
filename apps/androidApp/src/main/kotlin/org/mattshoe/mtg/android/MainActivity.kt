@@ -363,6 +363,12 @@ class MainActivity : ComponentActivity() {
     /** A pull to refresh, for a test that cannot drag a finger. */
     internal fun refreshForTesting() = refresh()
 
+    /** Find cards and Save on the Fetch screen, as the two buttons call them. */
+    internal fun fetchForTesting() = fetchCards()
+    internal fun saveFetchForTesting() {
+        app = app.savedFetch(now())
+    }
+
     /**
      * The page on screen, pulled down: asked for again, the way
      * arriving on it asks. The web's `refresh` is the same two lines.

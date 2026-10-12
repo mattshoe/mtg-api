@@ -1487,15 +1487,16 @@ class AdminGateTest {
     @Test
     fun theMenuOffersTheUngatedOnesWhileLocked() {
         assertEquals(View.entries.filter { it.inNav && !it.gated }, locked.visible)
-        assertEquals(3, locked.visible.size)
+        // Library, Decks, Fetch, and Stats behind the profile.
+        assertEquals(4, locked.visible.size)
     }
 
     @Test
     fun andEveryOneInTheNavForAnOperator() {
         assertEquals(View.entries.filter { it.inNav }, operator.visible)
-        assertEquals(6, operator.visible.size)
-        // Four for an ordinary account: the admin half is not theirs.
-        assertEquals(4, open.visible.size)
+        assertEquals(7, operator.visible.size)
+        // Five for an ordinary account: the admin half is not theirs.
+        assertEquals(5, open.visible.size)
     }
 
     @Test
@@ -1785,9 +1786,9 @@ class ViewTableTest {
 
     @Test
     fun thereAreSevenOfThem() {
-        // Seven again, with Admin Settings. It was six after the
-        // Query page went.
-        assertEquals(7, View.entries.size)
+        // Eight, with the Fetch list. Seven with Admin Settings, six
+        // after the Query page went.
+        assertEquals(8, View.entries.size)
     }
 
     @Test
@@ -2060,7 +2061,8 @@ class LoadNeedsTest {
     @Test
     fun onlyTheTwoScreensThatFetchNothingAskForNothing() {
         View.entries.forEach {
-            val quiet = it == View.ENTRY
+            // Fetch asks for nothing until a list is pasted and Find is pressed.
+            val quiet = it == View.ENTRY || it == View.FETCH
             assertEquals(quiet, Load.needs(Route(it)).isEmpty(), it.slug)
         }
     }
