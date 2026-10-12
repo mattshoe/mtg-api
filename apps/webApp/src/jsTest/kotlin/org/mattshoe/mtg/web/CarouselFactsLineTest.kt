@@ -63,7 +63,23 @@ class CarouselFactsLineTest {
         collectorNumber = "1",
     )
 
-    private suspend fun peeking() {
+    /** Stored as the Worker stores it: a colourless identity is NULL. */
+    private val solRing = DeckCard(
+        name = "Sol Ring",
+        qty = 1,
+        role = null,
+        owned = 1,
+        nameNorm = "sol ring",
+        typeLine = "Artifact",
+        scryfallId = "abcdef12-0000",
+        colorIdentity = null,
+        rarity = "uncommon",
+        price = 1.75,
+        setCode = "c21",
+        collectorNumber = "263",
+    )
+
+    private suspend fun peeking(card: DeckCard = alela) {
         val frame = document.createElement("div") as HTMLElement
         document.body!!.appendChild(frame)
         roots += frame
@@ -73,7 +89,7 @@ class CarouselFactsLineTest {
                 it.copy(
                     decks = it.decks
                         .loaded(listOf(Deck("alela", "Alela", "matt0001", null, "UB", 1, null)))
-                        .opened("alela", listOf(alela)),
+                        .opened("alela", listOf(card)),
                 )
             }
         renderComposable(root = frame) {
@@ -89,7 +105,7 @@ class CarouselFactsLineTest {
         }
         settle()
         document.querySelectorAll(".deck-line").let { l -> (0 until l.length).map { l[it] as HTMLElement } }
-            .first { it.textContent?.contains("Alela") == true }
+            .first { it.textContent?.contains(card.name.substringBefore(",")) == true }
             .click()
         settle()
         assertNotNull(held.value.peeked, "the carousel did not open")
@@ -104,13 +120,23 @@ class CarouselFactsLineTest {
         val line = el(".peek-sheet .peek-facts")
         // Spacing is the stylesheet's, so it is taken out before comparing.
         val words = line.textContent.orEmpty().replace(Regex("\\s+"), "")
-        assertEquals("LegendaryCreature—FaerieWarlock••Rare", words, "the words on the line are wrong")
+        assertEquals("Creature••Rare", words, "the words on the line are wrong")
         val pips = line.querySelectorAll("img.mana-sym").let { l -> (0 until l.length).map { l[it] as HTMLImageElement } }
         assertEquals(listOf("{U}", "{B}"), pips.map { it.alt }, "the identity is not drawn as its symbols, in order")
         assertTrue(!words.contains("Blue") && !words.contains("Black"), "the identity is spelled out in words")
         val rects = pips.map { it.getBoundingClientRect() }
         assertTrue(rects.all { it.width > 0 && it.height > 0 }, "a symbol has no size")
         assertTrue(rects[0].right <= rects[1].left + 0.5, "the symbols are not side by side, left to right")
+    }
+
+    @Test
+    fun aColourlessCardShowsTheColourlessSymbol() = runTest {
+        // Matt: "colorless cards aren't showing colorless pip".
+        peeking(solRing)
+        val line = el(".peek-sheet .peek-facts")
+        assertEquals("Artifact••Uncommon", line.textContent.orEmpty().replace(Regex("\\s+"), ""), "the words on the line are wrong")
+        val pips = line.querySelectorAll("img.mana-sym").let { l -> (0 until l.length).map { l[it] as HTMLImageElement } }
+        assertEquals(listOf("{C}"), pips.map { it.alt }, "a colourless card has no colourless symbol")
     }
 
     @Test
