@@ -313,4 +313,42 @@ class EntryInFlightTest {
         val busy = ready().working("Applying…")
         assertTrue(busy.failed("nope").canPreview, "a failure left the wizard stuck")
     }
+
+    /**
+     * Matt, on the share-to-collection flow stuck on "Checking…":
+     * "This is like the third fucking time!!! THIS FEATURE IS THE ENTIRE
+     * REASON I BUILT THE ANDROID APP!"
+     *
+     * `MassEntry.failed` clears `busy` and a test above proves it. What
+     * nothing proved was that the app ever CALLS it. Both shells' `work`
+     * helper caught the failure, raised a toast and stopped — and a toast
+     * does not clear a spinner, so a dropped connection left the wizard
+     * on "Working / Checking…" with no way out but killing the app.
+     *
+     * The dropped connection is real and unavoidable on a phone. Coming
+     * back from it is not optional.
+     */
+    @Test
+    fun aFailedCallClearsTheWizardSpinner() {
+        val waiting = AppState().copy(
+            entry = MassEntry(list = "1 Sol Ring").choose(Direction.ADD).working("Checking…"),
+        )
+        assertEquals("Checking…", waiting.entry.busy)
+
+        val after = waiting.broke("that write is already in progress")
+
+        assertNull(after.entry.busy, "the wizard was left spinning after a failed call")
+        assertEquals("that write is already in progress", after.entry.error)
+        assertTrue(after.toastFailed, "the failure must still be said out loud")
+    }
+
+    @Test
+    fun aFailedCallLeavesAWizardNobodyOpenedAlone() {
+        // A failure somewhere else must not stamp an error on a form that
+        // was never waiting on anything.
+        val idle = AppState().copy(entry = MassEntry(list = "1 Sol Ring"))
+        val after = idle.broke("decks could not load")
+        assertNull(after.entry.error, "it wrote an error onto an idle wizard")
+        assertNull(after.entry.busy)
+    }
 }

@@ -635,9 +635,9 @@ object MtgApp {
             app = try {
                 block()
             } catch (e: ApiFailure) {
-                app.say(e.message ?: "something went wrong", failed = true)
+                app.broke(e.message ?: "something went wrong")
             } catch (e: Exception) {
-                app.say(e.message ?: e.toString(), failed = true)
+                app.broke(e.message ?: e.toString())
             }
         }
     }

@@ -495,6 +495,26 @@ data class AppState(
         View.FETCH -> copy(fetch = fetch.loading())
     }
 
+    /**
+     * A call failed, so nothing is in flight any more.
+     *
+     * Both shells' `work` helper caught the failure, raised a toast and
+     * stopped — and a toast does not clear a spinner. The share-to-collection
+     * flow sat on "Working / Checking…" forever after a dropped connection,
+     * which is the most used feature on the phone and the third time it has
+     * broken. `MassEntry.failed` and `NewDeck.failed` both exist and both
+     * clear `busy`; nothing called either of them.
+     *
+     * Only a form that is actually waiting is touched, so a failure
+     * somewhere else does not stamp an error on a wizard nobody opened.
+     */
+    fun broke(message: String): AppState {
+        var s = say(message, failed = true)
+        if (s.entry.busy != null) s = s.copy(entry = s.entry.failed(message))
+        if (s.newDeck.busy != null) s = s.copy(newDeck = s.newDeck.failed(message))
+        return s
+    }
+
     /** And the same screen, told why it has nothing to show. */
     fun fetchFailed(message: String, view: View = this.view): AppState = when (view) {
         View.LIBRARY -> copy(library = library.failed(message))
@@ -503,7 +523,7 @@ data class AppState(
         View.LOGS -> copy(logs = logs.failed(message))
         View.ADMIN -> copy(people = people.failed(message))
         View.CARD -> copy(card = card?.failed(message))
-        View.ENTRY -> say(message, failed = true)
+        View.ENTRY -> broke(message)
         View.FETCH -> copy(fetch = fetch.failed(message))
     }
 
