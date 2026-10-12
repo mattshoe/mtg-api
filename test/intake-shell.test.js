@@ -324,6 +324,20 @@ describe('the switches', () => {
     expect(box.log()).not.toContain('claude')
   })
 
+  // Matt: "any running agent should be immediately killed". A paused
+  // system still has agents running, so a cancel is carried out either way.
+  for (const paused of [false, true]) {
+    it(`carries out a cancel from the app before it reconciles, ${paused ? 'paused' : 'running'}`, () => {
+      build({ requests: { 'a-thing.md': READY('A thing') } })
+      if (paused) box.disable()
+      expect(run('dispatch.sh', { timeout: 110_000 }).status).toBe(0)
+      const log = box.intakeLog()
+      expect(log).toContain('nothing was cancelled')
+      expect(log.indexOf('nothing was cancelled'), 'cancel ran after reconcile')
+        .toBeLessThan(log.indexOf('nothing was reconciled'))
+    })
+  }
+
   it('stops dispatch.sh dead once .intake/disabled exists', () => {
     build({ requests: { 'a-thing.md': READY('A thing') } })
     box.disable()

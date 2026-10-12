@@ -45,6 +45,7 @@ say() { printf '%s  %s\n' "$(date '+%H:%M:%S')" "$1" >>"$LOG"; }
 # Matt watched a task read `in progress` for three hours after I had
 # switched the system off and nothing was running.
 if [ -f "$STATE/disabled" ]; then
+  node "$REPO/scripts/intake/task-status.mjs" cancel >>"$LOG" 2>&1 || true
   node "$REPO/scripts/intake/task-status.mjs" reconcile >>"$LOG" 2>&1 || true
   exit 0
 fi
@@ -61,6 +62,12 @@ mkdir -p "$STATE"
 # the inbox, and launchd only fires on a change under requests/, which
 # submitting from the app does not cause.
 node "$REPO/scripts/intake/inbox.mjs" >>"$LOG" 2>&1 || true
+
+# A task cancelled in the app: its request file marked cancelled, so it is
+# never built again, and any agent on it killed. Matt: "any running agent
+# should be immediately killed". Every tick, so within a minute of the tap,
+# and before reconcile so the row it reads already says cancelled.
+node "$REPO/scripts/intake/task-status.mjs" cancel >>"$LOG" 2>&1 || true
 
 # Every run puts D1 right about what this laptop can see: a dead agent
 # reads paused rather than in progress forever, a held request paused, a
