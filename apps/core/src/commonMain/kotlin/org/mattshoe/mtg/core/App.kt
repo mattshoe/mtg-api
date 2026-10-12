@@ -387,6 +387,7 @@ data class AppState(
                     ),
                     inDeck = card,
                     stepped = stepped,
+                    facts = PeekFact.line(card.knownTypeLine, card.colorIdentity, card.rarity),
                 )
             }
 
@@ -406,6 +407,7 @@ data class AppState(
                         PeekTag.edhrec(row.edhrecRank),
                     ),
                     stepped = stepped,
+                    facts = PeekFact.line(row.typeLine, row.colorIdentity, row.rarity),
                 )
             }
         }

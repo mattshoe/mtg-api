@@ -9,6 +9,7 @@ import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.Dp
@@ -16,6 +17,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mattshoe.mtg.core.Account
+import org.mattshoe.mtg.core.Admin
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.Deck
 import org.mattshoe.mtg.core.DeckCard
@@ -25,7 +28,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * "Type • {U}{B} • Rarity" under the carousel's name, the phone's half.
+ * "Type • {U}{G} • Rarity" under the carousel's name, the phone's half.
  *
  * Matt: "underneath the name text, i want to see 'Type • <<color
  * identity>> • Rarity' where color identity is just the mana symbols,
@@ -43,29 +46,43 @@ class CarouselFactsLineTest {
 
     private lateinit var held: androidx.compose.runtime.MutableState<AppState>
 
-    private val alela = DeckCard(
-        name = "Alela, Cunning Conqueror",
+    /**
+     * The fixture `DeckCardCarouselParityTest` already drives, so the
+     * only thing new here is the line: Cultivate carries a type, an
+     * identity and a rarity, and the others are as they were.
+     */
+    private fun card(name: String, type: String = "Artifact", identity: String? = null, rarity: String? = null) = DeckCard(
+        name = name,
         qty = 1,
         role = null,
-        owned = 1,
-        nameNorm = "alela, cunning conqueror",
-        typeLine = "Legendary Creature — Faerie Warlock",
+        owned = 3,
+        nameNorm = name.lowercase(),
+        typeLine = type,
         scryfallId = "abcdef12-3456",
-        colorIdentity = "UB",
-        rarity = "rare",
+        colorIdentity = identity,
+        rarity = rarity,
         price = 1.75,
-        setCode = "woe",
-        collectorNumber = "1",
+        setCode = "m3c",
+        setName = "Modern Horizons 3 Commander",
+        collectorNumber = "409",
+        edhrecRank = 412,
+    )
+
+    /** In `pageOrder`, which groups by type and sorts by name inside a group. */
+    private val run = listOf(
+        card("Counterspell"),
+        card("Cultivate", type = "Sorcery", identity = "UG", rarity = "common"),
+        card("Sol Ring"),
     )
 
     private fun peeking() {
-        val start = AppState()
+        val start = AppState(admin = Admin().signIn(Account("matt"), "t"))
             .navigate(Route(View.DECKS, "alela"))
             .let {
                 it.copy(
                     decks = it.decks
-                        .loaded(listOf(Deck("alela", "Alela", "matt", null, "UB", 1, null)))
-                        .opened("alela", listOf(alela)),
+                        .loaded(listOf(Deck("alela", "Alela", "matt", null, "UW", 3, null)))
+                        .opened("alela", run),
                 )
             }
         rule.setContent {
@@ -79,16 +96,18 @@ class CarouselFactsLineTest {
                         onOpenDeck = {},
                         onPreviewEntry = {},
                         onApplyEntry = {},
+                        onTweak = { _, _ -> },
+                        onOpenPeeked = {},
                     )
                 }
             }
         }
         rule.waitForIdle()
-        val row = rule.onAllNodes(hasText("Alela, Cunning Conqueror"))[0]
+        val row = rule.onNodeWithText("Cultivate")
         runCatching { row.performScrollTo() }
         row.performClick()
         rule.waitForIdle()
-        assertTrue(held.value.peeked != null, "the row did not open the carousel")
+        assertEquals("Cultivate", held.value.peeked?.title, "the row did not open the carousel on Cultivate")
     }
 
     private fun onTheSheet(text: String): SemanticsNodeInteraction =
@@ -107,23 +126,23 @@ class CarouselFactsLineTest {
         val type = onTheLine("carousel-fact-0")
         val rarity = onTheLine("carousel-fact-2")
         val u = onTheLine("carousel-pip-U")
-        val b = onTheLine("carousel-pip-B")
-        type.assertTextEquals("Legendary Creature — Faerie Warlock")
-        rarity.assertTextEquals("Rare")
+        val g = onTheLine("carousel-pip-G")
+        type.assertTextEquals("Sorcery")
+        rarity.assertTextEquals("Common")
         assertTrue(
             rule.onAllNodes(hasText("Blue") and hasAnyAncestor(hasTestTag("carousel-facts"))).fetchSemanticsNodes().isEmpty(),
             "the identity is spelled out in words",
         )
-        val x = listOf(type, u, b, rarity).map { it.getUnclippedBoundsInRoot().left }
-        assertEquals(x.sortedBy { it.value }, x, "the parts are not type, {U}, {B}, rarity from left to right")
+        val x = listOf(type, u, g, rarity).map { it.getUnclippedBoundsInRoot().left }
+        assertEquals(x.sortedBy { it.value }, x, "the parts are not type, {U}, {G}, rarity from left to right")
     }
 
     @Test
     fun theLineSitsDirectlyUnderTheName() {
         peeking()
-        val name = onTheSheet("Alela, Cunning Conqueror").getUnclippedBoundsInRoot()
+        val name = onTheSheet("Cultivate").getUnclippedBoundsInRoot()
         val line = rule.onAllNodes(hasTestTag("carousel-facts"))[0].getUnclippedBoundsInRoot()
-        val printing = onTheSheet("WOE · 1 · $1.75").getUnclippedBoundsInRoot()
+        val printing = onTheSheet("M3C · 409 · $1.75").getUnclippedBoundsInRoot()
         assertTrue(line.top >= name.bottom - Dp(0.5f), "the line (top ${line.top}) is not under the name (bottom ${name.bottom})")
         assertTrue(line.bottom <= printing.top + Dp(0.5f), "the printing (top ${printing.top}) comes before the line (bottom ${line.bottom})")
     }

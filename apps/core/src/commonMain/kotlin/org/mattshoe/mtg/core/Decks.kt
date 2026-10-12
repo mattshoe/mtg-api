@@ -180,7 +180,16 @@ sealed interface PeekFact {
 
     companion object {
         /** Whatever is known, in that order. Nothing known is an empty line. */
-        fun line(typeLine: String?, colorIdentity: String?, rarity: String?): List<PeekFact> = emptyList()
+        fun line(typeLine: String?, colorIdentity: String?, rarity: String?): List<PeekFact> = listOfNotNull(
+            typeLine?.takeIf { it.isNotBlank() }?.let(::Words),
+            // An empty identity is a colourless card, which has a
+            // symbol of its own. Null is a card nothing is known about.
+            colorIdentity?.let { id ->
+                val pips = Pip.COLOURS.filter { it.letter in id.uppercase() }.map { it.letter }
+                Identity(pips.ifEmpty { listOf(Pip.C.letter) })
+            },
+            rarity?.takeIf { it.isNotBlank() }?.let { Words(it.replaceFirstChar(Char::uppercase)) },
+        )
     }
 }
 
