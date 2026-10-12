@@ -199,6 +199,21 @@ class TaskDetailTest {
         assertTrue(after.tasks.done.any { it.key == task.key }, "the list does not count it as done")
     }
 
+    /**
+     * The page loads again after sign-in settles, and on CI that second
+     * answer landed after Cancel task was tapped and took the question
+     * away. A fresh load is the Worker's facts; the question is Matt's.
+     */
+    @Test
+    fun aLoadThatLandsUnderTheQuestionKeepsItAsked() {
+        val fresh = TaskDetail.decode("q7w8e9r0", row)
+        val asked = TaskDetail("q7w8e9r0", task = task).askToCancel()
+        assertTrue(asked.reloaded(fresh).confirming, "a reload took the question away")
+        assertEquals("CI running", asked.reloaded(fresh).task?.note, "the reload's facts were not kept")
+        val sending = TaskDetail("q7w8e9r0", task = task).askToCancel().confirmCancel()
+        assertTrue(sending.reloaded(fresh).cancelling, "a reload forgot the cancel on its way")
+    }
+
     @Test
     fun aRefusedCancelLeavesTheTaskAsItWasAndOffersItAgain() {
         val d = TaskDetail(task.key, task = task).askToCancel().confirmCancel().cancelRefused()

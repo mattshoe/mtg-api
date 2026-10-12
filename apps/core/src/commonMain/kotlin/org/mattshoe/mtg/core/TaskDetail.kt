@@ -58,6 +58,8 @@ data class TaskDetail(
     /** Yes: the cancel is on its way. */
     fun confirmCancel() = copy(confirming = false, cancelling = true)
 
+    fun reloaded(fresh: TaskDetail) = fresh
+
     /** The Worker refused. The task is as it was, and Cancel task is offered again. */
     fun cancelRefused() = copy(confirming = false, cancelling = false)
 
