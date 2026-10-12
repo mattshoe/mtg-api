@@ -58,7 +58,13 @@ data class TaskDetail(
     /** Yes: the cancel is on its way. */
     fun confirmCancel() = copy(confirming = false, cancelling = true)
 
-    fun reloaded(fresh: TaskDetail) = fresh
+    /**
+     * A load of this page that lands over it: the Worker's facts are the
+     * new ones, but a Cancel task question that is open, or a cancel on
+     * its way, stays. The page loads again once sign-in settles, and on
+     * CI that second answer took the question away under the tap.
+     */
+    fun reloaded(fresh: TaskDetail) = fresh.copy(confirming = confirming, cancelling = cancelling)
 
     /** The Worker refused. The task is as it was, and Cancel task is offered again. */
     fun cancelRefused() = copy(confirming = false, cancelling = false)
