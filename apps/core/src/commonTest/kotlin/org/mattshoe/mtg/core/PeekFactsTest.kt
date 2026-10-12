@@ -16,7 +16,12 @@ import kotlin.test.assertNotNull
  */
 class PeekFactsTest {
 
-    private fun row(name: String, identity: String?, rarity: String?) = CardRow(
+    private fun row(
+        name: String,
+        identity: String?,
+        rarity: String?,
+        typeLine: String? = "Legendary Creature — Elf Druid",
+    ) = CardRow(
         id = 1,
         owner = "matt",
         name = name,
@@ -26,7 +31,7 @@ class PeekFactsTest {
         scryfallId = "abcdef12-3456",
         manaCost = "{1}",
         cmc = 1.0,
-        typeLine = "Legendary Creature — Elf Druid",
+        typeLine = typeLine,
         colorIdentity = identity,
         rarity = rarity,
         setCode = "m3c",
@@ -55,7 +60,7 @@ class PeekFactsTest {
         val card = assertNotNull(inTheLibrary(r).peekRow(r).peeked)
         assertEquals(
             listOf(
-                PeekFact.Words("Legendary Creature — Elf Druid"),
+                PeekFact.Words("Creature"),
                 PeekFact.Identity(listOf("R", "G")),
                 PeekFact.Words("Mythic"),
             ),
@@ -90,7 +95,7 @@ class PeekFactsTest {
             .peekAt(0)
         assertEquals(
             listOf(
-                PeekFact.Words("Legendary Creature — Faerie Warlock"),
+                PeekFact.Words("Creature"),
                 PeekFact.Identity(listOf("U", "B")),
                 PeekFact.Words("Rare"),
             ),
@@ -109,5 +114,61 @@ class PeekFactsTest {
             .let { it.copy(decks = it.decks.loaded(listOf(deck)).opened("alela", listOf(c))) }
             .peekAt(0)
         assertEquals(emptyList(), assertNotNull(s.peeked).facts)
+    }
+
+    private fun factsOf(r: CardRow) = assertNotNull(inTheLibrary(r).peekRow(r).peeked).facts
+
+    @Test
+    fun theTypeIsJustTheCardTypeWithNoSupertypesSubtypesOrSecondTypes() {
+        // Matt: "i JUST want creature, artifact, enchantment, sorcery".
+        // Not legendary, not the creature types, not "enchantment creature".
+        val cases = mapOf(
+            "Legendary Creature — Elf Druid" to "Creature",
+            "Legendary Enchantment Creature — God" to "Creature",
+            "Artifact Creature — Golem" to "Creature",
+            "Legendary Artifact — Equipment" to "Artifact",
+            "Enchantment — Aura" to "Enchantment",
+            "Kindred Sorcery — Elf" to "Sorcery",
+            "Instant" to "Instant",
+            "Legendary Planeswalker — Jace" to "Planeswalker",
+            "Artifact Land" to "Land",
+            "Basic Snow Land — Forest" to "Land",
+            "Battle — Siege" to "Battle",
+            "Creature — Human Wizard // Sorcery — Adventure" to "Creature",
+            "Legendary Enchantment — Saga // Legendary Creature — God" to "Enchantment",
+        )
+        val shown = cases.keys.associateWith { factsOf(row("X", "G", "rare", typeLine = it)).first() }
+        assertEquals(cases.mapValues { PeekFact.Words(it.value) }, shown)
+    }
+
+    @Test
+    fun aColourlessCardStoredWithNoIdentityStillShowsTheColourlessSymbol() {
+        // The Worker writes a colourless identity as NULL, not "", so
+        // this is what Sol Ring actually looks like when it arrives.
+        val r = row("Sol Ring", null, "uncommon", typeLine = "Artifact")
+        assertEquals(
+            listOf(PeekFact.Words("Artifact"), PeekFact.Identity(listOf("C")), PeekFact.Words("Uncommon")),
+            factsOf(r),
+        )
+    }
+
+    @Test
+    fun aColourlessLandShowsTheColourlessSymbol() {
+        val r = row("Command Tower", null, "common", typeLine = "Land")
+        assertEquals(PeekFact.Identity(listOf("C")), factsOf(r)[1])
+    }
+
+    @Test
+    fun aBasicLandNobodyOwnsInADeckShowsItsColour() {
+        val deck = Deck("alela", "Alela", "matt", null, "UG", 1, null)
+        val c = DeckCard(name = "Forest", qty = 10, role = null, owned = 0, nameNorm = "forest")
+        val s = AppState()
+            .navigate(Route(View.DECKS, "alela"))
+            .let { it.copy(decks = it.decks.loaded(listOf(deck)).opened("alela", listOf(c))) }
+            .peekAt(0)
+        assertEquals(
+            listOf(PeekFact.Words("Land"), PeekFact.Identity(listOf("G"))),
+            assertNotNull(s.peeked).facts,
+        )
     }
 }
