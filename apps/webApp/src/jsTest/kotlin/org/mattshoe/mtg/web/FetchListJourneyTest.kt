@@ -51,16 +51,35 @@ class FetchListJourneyTest {
     /** Scryfall holds every answer until this completes, when set. */
     private var scryfallGate: CompletableDeferred<Unit>? = null
 
+    /** The owned printings are held until this completes, when set. */
+    private var ownedGate: CompletableDeferred<Unit>? = null
+
+    /** The Worker answers the owned printings with a 500 while this is true. */
+    private var ownedFails = false
+
     @BeforeTest
     fun stubTheNetwork() {
         localStorage.removeItem("mtg.fetch")
+        localStorage.removeItem("mtg.fetch.open")
         asked.clear()
         scryfallGate = null
+        ownedGate = null
+        ownedFails = false
         val engine = MockEngine { request ->
             val body = (request.body as? io.ktor.http.content.TextContent)?.text.orEmpty()
             val q = request.url.parameters["q"].orEmpty()
             asked += if (body.isNotEmpty()) body else request.url.toString()
             if (request.url.encodedPath.endsWith("/cards/search")) scryfallGate?.await()
+            if ("json_each" in body) {
+                ownedGate?.await()
+                if (ownedFails) {
+                    return@MockEngine respond(
+                        """{"error":"D1 is down"}""",
+                        HttpStatusCode.InternalServerError,
+                        headersOf(HttpHeaders.ContentType, "application/json"),
+                    )
+                }
+            }
             val json = when {
                 // The owned printings, the way the query asks for them.
                 "json_each" in body ->
@@ -112,6 +131,7 @@ class FetchListJourneyTest {
         roots.forEach { it.remove() }
         roots.clear()
         localStorage.removeItem("mtg.fetch")
+        localStorage.removeItem("mtg.fetch.open")
         window.location.hash = ""
     }
 
@@ -158,12 +178,126 @@ class FetchListJourneyTest {
         el.dispatchEvent(Event("input", js("({bubbles: true})")))
     }
 
-    private suspend fun found(root: HTMLElement) {
+    private suspend fun typedAndFound(root: HTMLElement) {
         waitFor("the Fetch page") { root.all("#fetch-list").isNotEmpty() }
         type(root.all("#fetch-list").single(), "1 Counterspell\n1 Arcane Signet\n1 Brazen Borrower\n1 Electrolyze\n1 Black Lotus")
         tick()
         root.button("Find cards").click()
+    }
+
+    private suspend fun found(root: HTMLElement) {
+        typedAndFound(root)
         waitFor("the sections") { root.all("[data-fetch-section]").isNotEmpty() }
+    }
+
+    private fun box(root: HTMLElement, card: String): HTMLInputElement =
+        root.all("[data-fetch-tick]").filterIsInstance<HTMLInputElement>()
+            .firstOrNull { it.getAttribute("data-fetch-tick") == card }
+            ?: error("no box to tick for $card")
+
+    private fun remount(hash: String): HTMLElement {
+        MtgApp.unmount()
+        roots.forEach { it.remove() }
+        roots.clear()
+        return mount(hash)
+    }
+
+    @Test
+    fun findGoesToANewPageThatShowsTheLoadingViewAndThenTheList() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        ownedGate = gate
+        try {
+            val root = mount("#/fetch")
+            typedAndFound(root)
+            waitFor("the address to name the list page") { window.location.hash.endsWith("/fetch/list") }
+            waitFor("the loading view") { root.all("[data-fetch-loading]").isNotEmpty() }
+            val loading = root.all("[data-fetch-loading]").single()
+            assertTrue(loading.getBoundingClientRect().height > 80, "the loading view is not drawn")
+            assertTrue(root.all("#fetch-list").isEmpty(), "the entry box is still on the list page")
+            assertEquals(5, loading.all("img.mana-sym").size, "the loading view does not have the five colours")
+            assertEquals(
+                "running",
+                window.getComputedStyle(loading.all(".fetch-orbit").single()).getPropertyValue("animation-play-state"),
+                "the loading view does not move",
+            )
+            gate.complete(Unit)
+            waitFor("the sections after the loading view") { root.all("[data-fetch-section]").isNotEmpty() }
+            assertTrue(root.all("[data-fetch-loading]").isEmpty(), "the loading view stayed over the list")
+        } finally {
+            gate.complete(Unit)
+        }
+    }
+
+    @Test
+    fun aTickedCardIsStruckThroughAndStillTickedAfterAReload() = runTest {
+        val root = mount("#/fetch")
+        found(root)
+        box(root, "Counterspell").click()
+        // The box flips itself on a click; the progress line is the
+        // app having heard it.
+        waitFor("the tick") { root.all("[data-fetch-progress]").singleOrNull()?.textContent.orEmpty().contains("1 of 4 found") }
+        val name = root.all("[data-fetch-card]").single { it.getAttribute("data-fetch-card") == "Counterspell" }
+            .all(".fetch-name").single()
+        assertTrue(
+            window.getComputedStyle(name).getPropertyValue("text-decoration-line").contains("line-through"),
+            "a ticked card is not struck through",
+        )
+        assertTrue(root.all("[data-fetch-progress]").single().textContent.orEmpty().contains("1 of 4 found"))
+
+        // A fresh page, as after closing the tab, straight onto the list.
+        val again = remount("#/fetch/list")
+        waitFor("the list after a reload") { again.all("[data-fetch-section]").isNotEmpty() }
+        assertTrue(box(again, "Counterspell").checked, "the tick did not survive a reload")
+        assertTrue(!box(again, "Arcane Signet").checked, "a card nobody ticked came back ticked")
+    }
+
+    @Test
+    fun editingTheListKeepsTheTicks() = runTest {
+        val root = mount("#/fetch")
+        found(root)
+        box(root, "Counterspell").click()
+        // The box flips itself on a click; the progress line is the
+        // app having heard it.
+        waitFor("the tick") { root.all("[data-fetch-progress]").singleOrNull()?.textContent.orEmpty().contains("1 of 4 found") }
+        root.button("Edit").click()
+        waitFor("the list to edit") { root.all("#fetch-edit").isNotEmpty() }
+        val edit = root.all("#fetch-edit").single() as HTMLTextAreaElement
+        assertTrue(edit.value.contains("1 Counterspell"), "Edit did not start from the list")
+        type(edit, edit.value + "\n1 Sol Ring")
+        tick()
+        val asks = asked.count { "json_each" in it }
+        root.button("Find cards").click()
+        waitFor("the list to be filed again") { asked.count { "json_each" in it } > asks && root.all("[data-fetch-section]").isNotEmpty() }
+        assertTrue(window.location.hash.endsWith("/fetch/list"), "an edit left the list page")
+        assertTrue(box(root, "Counterspell").checked, "editing removed a tick")
+        assertTrue(asked.last { "json_each" in it }.contains("sol ring"), "the edited list was not the one asked about")
+    }
+
+    @Test
+    fun aFailedFindSaysWhatHappenedAndCanBeTriedAgain() = runTest {
+        ownedFails = true
+        val root = mount("#/fetch")
+        typedAndFound(root)
+        waitFor("the error") { root.all("[data-fetch-err]").isNotEmpty() }
+        assertTrue(root.all("[data-fetch-loading]").isEmpty(), "the loading view is still up after a failure")
+        assertTrue(root.all("[data-fetch-err]").single().textContent.orEmpty().isNotBlank(), "the error says nothing")
+        ownedFails = false
+        root.button("Try again").click()
+        waitFor("the sections after trying again") { root.all("[data-fetch-section]").isNotEmpty() }
+        assertTrue(root.all("[data-fetch-err]").isEmpty(), "the error stayed after it worked")
+    }
+
+    @Test
+    fun backFromTheListIsTheEntryBoxWithTheListStillReachable() = runTest {
+        val root = mount("#/fetch")
+        found(root)
+        root.all("[data-fetch-back]").single().click()
+        waitFor("the root") { root.all("#fetch-list").isNotEmpty() }
+        assertTrue(window.location.hash.endsWith("/fetch"), "back did not go to the root: " + window.location.hash)
+        assertEquals("", (root.all("#fetch-list").single() as HTMLTextAreaElement).value, "the entry box still holds the list")
+        assertTrue(root.all("[data-fetch-section]").isEmpty(), "the list is drawn on the root")
+        root.button(org.mattshoe.mtg.core.FetchListState.UNSAVED).click()
+        waitFor("the list again") { root.all("[data-fetch-section]").isNotEmpty() }
     }
 
     @Test
@@ -260,13 +394,13 @@ class FetchListJourneyTest {
         type(root.all("#fetch-title").single(), "Alela")
         tick()
         root.button("Save").click()
+        tick()
+        // The saved lists are on the root, with the entry box.
+        root.all("[data-fetch-back]").single().click()
         waitFor("the saved list") { root.all("[data-fetch-saved]").isNotEmpty() }
 
         // A fresh page, as after closing the tab.
-        MtgApp.unmount()
-        roots.forEach { it.remove() }
-        roots.clear()
-        val again = mount("#/fetch")
+        val again = remount("#/fetch")
         waitFor("the saved list after a reload") { again.all("[data-fetch-saved]").isNotEmpty() }
         again.button("Alela").click()
         waitFor("the saved sections") { again.all("[data-fetch-section]").isNotEmpty() }

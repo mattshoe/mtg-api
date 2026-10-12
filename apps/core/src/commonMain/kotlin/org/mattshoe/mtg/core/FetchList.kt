@@ -202,6 +202,8 @@ data class SavedFetch(
     val list: String,
     /** Null for a list saved under the old colour sections. See `FetchListState.restore`. */
     val result: FetchResult?,
+    /** The cards ticked off as found. Matt: "the checked boxes should Persist". */
+    val ticked: Set<String> = emptySet(),
 )
 
 object FetchList {
@@ -336,7 +338,58 @@ data class FetchListState(
     val error: String? = null,
     /** The filing is on screen and Scryfall's Also check has not come back yet. */
     val checking: Boolean = false,
+    /** What is typed in the root's box. `list` is the one on the list page. */
+    val draft: String = "",
+    /** Names ticked off as found on the list page. */
+    val ticked: Set<String> = emptySet(),
+    /** The saved list on the list page, or null for one not saved yet. */
+    val openId: String? = null,
+    /** The list text while Edit is open, or null. */
+    val editing: String? = null,
 ) {
+    fun drafted(text: String) = copy(draft = text, error = null)
+
+    /** Find from the root's box: a new list, so no ticks and no title. */
+    fun started() = copy(
+        list = draft, draft = "", title = "", result = null, ticked = emptySet(),
+        openId = null, editing = null, error = null, checking = false,
+    )
+
+    /**
+     * Find from Edit: the edited text is the list now. Ticks stay —
+     * Matt: "editing should not remove existing check boxes".
+     */
+    fun refinding() = copy(list = editing ?: list, editing = null, error = null)
+
+    fun tick(name: String) = copy(ticked = if (name in ticked) ticked - name else ticked + name).synced()
+
+    fun isTicked(name: String) = name in ticked
+
+    /** `1 of 4 found`, against the cards filed. One not owned cannot be found. */
+    val progress: String get() {
+        val names = result?.sections?.flatMap { s -> s.cards.map { it.name } } ?: return ""
+        return "${names.count { it in ticked }} of ${names.size} found"
+    }
+
+    fun edit() = copy(editing = list)
+    fun editTyped(text: String) = if (editing == null) this else copy(editing = text)
+    fun cancelEdit() = copy(editing = null)
+
+    /** The list on its page, as kept across a restart. Null with nothing open. */
+    val current: SavedFetch? get() =
+        if (list.isBlank()) null else SavedFetch(openId.orEmpty(), title, "", list, result, ticked)
+
+    val canStart: Boolean get() = !busy && DeckList.entries(draft).isNotEmpty()
+
+    /** A list found and not saved, which the root offers to reopen. */
+    val unsaved: Boolean get() = list.isNotBlank() && openId == null
+
+    /** The open saved list brought up to date with the page. */
+    private fun synced(): FetchListState {
+        val id = openId ?: return this
+        return copy(saved = saved.map { if (it.id == id) it.copy(list = list, result = result, ticked = ticked) else it })
+    }
+
     /** The cards on the list, the way `DeckList` reads any list. */
     val entries: List<DeckList.Entry> get() = DeckList.entries(list)
 
@@ -346,7 +399,7 @@ data class FetchListState(
     fun titled(t: String) = copy(title = t, error = null)
     fun loading() = copy(busy = true, error = null)
     fun failed(message: String) = copy(busy = false, error = message)
-    fun found(r: FetchResult) = copy(result = r, busy = false, error = null, checking = false)
+    fun found(r: FetchResult) = copy(result = r, busy = false, error = null, checking = false).synced()
 
     /**
      * The collection has answered: the filing goes on screen and Find
@@ -358,11 +411,11 @@ data class FetchListState(
      * does not get somebody else's answer.
      */
     fun filed(list: String, r: FetchResult) =
-        if (list != this.list) this else copy(result = r, busy = false, error = null, checking = true)
+        if (list != this.list) this else copy(result = r, busy = false, error = null, checking = true).synced()
 
     /** The same list with the Also check filled in. Dropped if the list has changed since. */
     fun checked(list: String, r: FetchResult) =
-        if (list != this.list) copy(checking = false) else copy(result = r, busy = false, checking = false)
+        if (list != this.list) copy(checking = false) else copy(result = r, busy = false, checking = false).synced()
 
     /** A fresh list, keeping the saved ones. */
     fun cleared() = FetchListState(saved = saved)
@@ -378,17 +431,21 @@ data class FetchListState(
         val r = result ?: return copy(error = "Find the cards first")
         if (t.isEmpty()) return copy(error = "Give it a title first")
         val id = saved.firstOrNull { it.title == t }?.id ?: "$now-${saved.size}"
-        val entry = SavedFetch(id, t, now, list, r)
-        return copy(title = t, error = null, saved = listOf(entry) + saved.filter { it.id != id })
+        val entry = SavedFetch(id, t, now, list, r, ticked)
+        return copy(title = t, error = null, openId = id, saved = listOf(entry) + saved.filter { it.id != id })
     }
 
-    /** A saved list, back on screen as it was. */
+    /** A saved list, back on screen as it was, ticks and all. */
     fun open(id: String): FetchListState {
         val s = saved.firstOrNull { it.id == id } ?: return this
-        return copy(list = s.list, title = s.title, result = s.result, busy = false, error = null, checking = false)
+        return copy(
+            list = s.list, title = s.title, result = s.result, ticked = s.ticked, openId = id,
+            editing = null, busy = false, error = null, checking = false,
+        )
     }
 
-    fun delete(id: String) = copy(saved = saved.filter { it.id != id })
+    /** Deleting the list on the page leaves it there, unsaved. */
+    fun delete(id: String) = copy(saved = saved.filter { it.id != id }, openId = openId.takeIf { it != id })
 
     companion object {
         const val KEY = "mtg.fetch"
@@ -400,7 +457,7 @@ data class FetchListState(
 
         /** Anything unreadable is no saved lists rather than a crash on boot. */
         fun restore(store: Store): FetchListState = try {
-            FetchListState(
+            reopen(store, FetchListState(
                 saved = store.get(KEY)?.let { json.decodeFromString(ListSerializer(SavedFetch.serializer()), it) }
                     ?.map { s ->
                         // Filed by colour words, Multicolor among them,
@@ -410,9 +467,38 @@ data class FetchListState(
                         if (s.result?.sections?.any { it.legacy != null } == true) s.copy(result = null) else s
                     }
                     ?: emptyList(),
-            )
+            ))
         } catch (e: Exception) {
             FetchListState()
+        }
+
+        /** The list that was on its page, back as it was. Unreadable is nothing open. */
+        private fun reopen(store: Store, s: FetchListState): FetchListState = try {
+            val c = store.get(OPEN)?.let { json.decodeFromString(SavedFetch.serializer(), it) }
+            if (c == null) s
+            else s.copy(
+                list = c.list, title = c.title, ticked = c.ticked,
+                result = c.result?.takeIf { r -> r.sections.none { it.legacy != null } },
+                openId = c.id.takeIf { id -> s.saved.any { it.id == id } },
+            )
+        } catch (e: Exception) {
+            s
+        }
+
+        /** Where the list on its page is kept, saved or not. */
+        const val OPEN = "mtg.fetch.open"
+
+        /** `#/fetch/list`: the list's own page. `#/fetch` is the entry box. */
+        const val PAGE = "list"
+        const val UNSAVED = "Unsaved list"
+        const val NOTHING_OPEN = "No list open. Paste one into Fetch and press Find cards."
+
+        /** Said under the loading view. */
+        fun finding(cards: Int) = "Finding " + (if (cards == 1) "1 card" else "$cards cards") + " in your binders…"
+
+        fun keep(store: Store, current: SavedFetch?) {
+            if (current == null) store.remove(OPEN)
+            else store.put(OPEN, json.encodeToString(SavedFetch.serializer(), current))
         }
 
         fun persist(store: Store, saved: List<SavedFetch>) {
@@ -433,3 +519,32 @@ fun AppState.savedFetch(now: String): AppState {
     val s = copy(fetch = next)
     return if (next.error == null) s.say("Saved \"" + next.title + "\"") else s
 }
+
+/** `#/fetch/list` rather than the entry box at `#/fetch`. */
+val AppState.onFetchList: Boolean get() = view == View.FETCH && route.rest == FetchListState.PAGE
+
+/**
+ * Find pressed: onto the list's own page with the list to look for.
+ *
+ * From the root's box that is a new list. From Edit it is the edited
+ * text with the ticks kept. Anywhere else — Try again — it is the
+ * list already there.
+ */
+fun AppState.findingFetch(): AppState {
+    val f = when {
+        fetch.editing != null -> fetch.refinding()
+        !onFetchList && fetch.draft.isNotBlank() -> fetch.started()
+        else -> fetch.copy(error = null)
+    }
+    val s = if (onFetchList) this else navigate(Route(View.FETCH, FetchListState.PAGE))
+    return s.copy(fetch = f)
+}
+
+/** A saved list on its page, or with an empty id the unsaved one. */
+fun AppState.openFetch(id: String): AppState {
+    val f = if (id.isEmpty()) fetch else fetch.open(id)
+    return navigate(Route(View.FETCH, FetchListState.PAGE)).copy(fetch = f)
+}
+
+/** Back to the entry box and the saved lists. An open Edit is dropped. */
+fun AppState.leaveFetchList(): AppState = navigate(Route(View.FETCH)).copy(fetch = fetch.cancelEdit())
