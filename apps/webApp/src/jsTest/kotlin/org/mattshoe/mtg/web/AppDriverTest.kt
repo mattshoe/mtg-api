@@ -79,6 +79,9 @@ class AppDriverTest {
      */
     private var addFails = false
 
+    /** How many times `/cards/add` was refused, so a test can prove it tried. */
+    private var addRefusals = 0
+
     @BeforeTest
     fun stubTheNetwork() {
         writes.clear()
@@ -89,6 +92,7 @@ class AppDriverTest {
         askedGitHub = 0
         whoAmIMs = 0
         addFails = false
+        addRefusals = 0
         val engine = MockEngine { request ->
             if (request.method.value == "POST" && """"dry_run":false""" in
                 (request.body as? io.ktor.http.content.TextContent)?.text.orEmpty()
@@ -127,12 +131,14 @@ class AppDriverTest {
                     """{"cols":["name","name_norm","qty","role","owned","type_line","scryfall_id"],""" +
                         """"rows":[["Sol Ring","sol ring",1,null,1,"Artifact",null]],"n":1}"""
 
-                request.url.encodedPath == "/cards/add" && addFails ->
+                request.url.encodedPath == "/cards/add" && addFails -> {
+                    addRefusals++
                     return@MockEngine respond(
                         """{"error":"that write is already in progress"}""",
                         HttpStatusCode.Conflict,
                         headersOf(HttpHeaders.ContentType, "application/json"),
                     )
+                }
 
                 request.url.encodedPath == "/cards/add" ->
                     """{"applied":true,"dry_run":false,"resolved":1,"failed":0,""" +
@@ -1642,24 +1648,28 @@ class AppDriverTest {
     fun aRefusedDryRunLetsYouOutOfTheWizard() = runTest {
         addFails = true
         val view = mount("#/entry", token = "t", share = "1 Sol Ring\n1 Arcane Signet")
-        waitFor("the entry wizard") { view.textContent.orEmpty().contains("What are you doing?") }
-        view.all("button.opt").first { it.textContent.orEmpty().contains("Add") }.click()
-        settle()
-        pressOnThePage("Continue →")
-        waitFor("the list step") { paletteButtons().any { it.says() == "Preview changes →" } }
+        waitFor("the wizard") { view.all("button").isNotEmpty() }
+        view.button("Add to the collection").click()
+        waitFor("the direction to take") { !view.button("Continue →").disabled }
+        view.button("Continue →").click()
+        waitFor("the box") { view.all("textarea").isNotEmpty() }
+        waitFor("preview to arm") { !view.button("Preview changes →").disabled }
 
-        press("Preview changes →")
+        view.button("Preview changes →").click()
 
-        // It must come back. Before the fix this waited forever.
+        // It has to come back. Before the fix this waited until the test
+        // timed out, because `work` toasted and left `busy` set, and the
+        // page draws only the Working panel while `busy` is set.
+        waitFor("the dry run to be refused") { addRefusals > 0 }
         waitFor("the wizard to come back from a refused dry run") {
             !view.textContent.orEmpty().contains("Checking…")
         }
         assertTrue(
-            view.textContent.orEmpty().contains("already in progress"),
-            "the refusal was swallowed: ${view.textContent}",
+            view.querySelector(".err")?.textContent.orEmpty().contains("already in progress"),
+            "the refusal was swallowed, so nothing said what happened",
         )
         assertTrue(
-            paletteButtons().any { it.says() == "Preview changes →" },
+            view.all("button").any { it.textContent.orEmpty().contains("Preview changes") },
             "there was no way to try again",
         )
     }
