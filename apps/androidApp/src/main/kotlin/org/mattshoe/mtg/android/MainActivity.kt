@@ -622,9 +622,9 @@ class MainActivity : ComponentActivity() {
                 // same toast with the same colour, and the one
                 // person using this is colourblind, so the wording
                 // was the only thing telling them apart.
-                app.say(e.message ?: "something went wrong", failed = true)
+                app.broke(e.message ?: "something went wrong")
             } catch (e: Exception) {
-                app.say(e.message ?: e.toString(), failed = true)
+                app.broke(e.message ?: e.toString())
             }
         }
     }

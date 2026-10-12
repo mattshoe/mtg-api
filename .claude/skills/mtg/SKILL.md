@@ -89,6 +89,34 @@ learns which.
 custom properties in `frontend/css/app.css`. `DesignTest` holds the two
 to each other, so change both or the test goes red.
 
+## Happy-path tests are not enough, ever
+
+Matt: "HAPPY PATH ONLY TESTING IS NOT EVER EVER EVER EVER EVER
+SUFFICIENT!!!!!"
+
+The share-to-collection flow — the feature the Android app exists for —
+broke three times the same way and shipped green every time. Both shells'
+`work` helper caught a failed call, raised a toast and stopped. A toast
+does not clear a spinner, so the wizard sat on "Working / Checking…"
+forever with no way out but killing the app. `MassEntry.failed()` existed,
+was unit-tested, and nothing ever called it.
+
+Every e2e test launches the real app against a fake Worker with real
+SQLite, and every one of them lets the server answer normally. The catch
+block had never run in any test, on either platform. That is how it
+reached a real person three times.
+
+**So: anything that calls the network gets the failing test as well as the
+working one.** Make the server answer 500, or 409, or drop the connection,
+and assert what the person is left looking at:
+
+- the spinner is gone
+- there is an error that says what happened
+- they can try again without restarting the app
+
+A green suite over an untested catch block is worse than no suite, because
+it is believed.
+
 ## The hard requirements
 
 These are not style. Each one is here because breaking it shipped
