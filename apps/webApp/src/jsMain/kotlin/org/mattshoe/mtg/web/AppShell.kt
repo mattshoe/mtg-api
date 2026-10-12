@@ -164,7 +164,6 @@ fun AppShell(
         View.DECKS -> DecksPage(
             state = state.decks,
             onOpen = { onOpenDeck(it.key) },
-            onClose = { onState(state.copy(decks = state.decks.close())) },
             admin = state.canEdit,
             onEdit = { onEditDeck(it.key) },
             onRename = { onAskRename(it.key) },
@@ -204,7 +203,6 @@ fun AppShell(
                 detail = state.taskDetail?.takeIf { it.key == state.openTaskKey } ?: TaskDetail(state.openTaskKey!!, busy = true),
                 listed = state.openTask,
                 now = state.tasks.now.takeIf { it > 0 } ?: kotlin.js.Date.now().toLong(),
-                onBack = { onState(state.navigate(Route(View.ADMIN))) },
                 onState = { onState(state.copy(taskDetail = it)) },
                 onCancel = { onCancelTask(state.openTaskKey!!) },
             )
@@ -220,7 +218,6 @@ fun AppShell(
             onSearch = { onState(state.copy(people = state.people.searching(it))) },
             onOpen = { onState(state.navigate(Route(View.ADMIN, it.key))) },
             onSetRole = onSetRole,
-            onBack = { onState(state.navigate(Route(View.ADMIN))) },
         )
 
         View.LOGS -> LogsPage(state.logs) { onState(state.copy(logs = it)) }
@@ -228,7 +225,6 @@ fun AppShell(
         View.CARD -> CardPage(
             card = state.card ?: CardDetail(name = state.route.rest).loading(),
             onShare = onShare,
-            onBack = { onState(state.leaveCard()) },
             previous = state.previousCard,
             next = state.nextCard,
             place = state.cardPlace,

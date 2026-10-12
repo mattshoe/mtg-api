@@ -168,7 +168,7 @@ class DecksParityTest {
         // It was a group per owner with the owner's name as its
         // heading. The page is one collection, so that was one group
         // with somebody's name pointlessly over it.
-        content { DecksScreen(shelf(), {}, {}) }
+        content { DecksScreen(shelf(), {}) }
         Parity.check(
             Parity.Fact("the heading says how many decks are on the shelf") {
                 howMany("4 decks") == 1
@@ -184,7 +184,7 @@ class DecksParityTest {
 
     @Test
     fun oneDeckIsADeckRatherThanOneDecks() {
-        content { DecksScreen(DecksState().loaded(listOf(deck("a", "matt", "Alela"))), {}, {}) }
+        content { DecksScreen(DecksState().loaded(listOf(deck("a", "matt", "Alela"))), {}) }
         Parity.check(
             Parity.Fact("a shelf of one says '1 deck'") { says("1 deck") },
             Parity.Fact("and does not say '1 decks'") { !says("1 decks") },
@@ -197,7 +197,7 @@ class DecksParityTest {
             "alela", "Alela — Custom Dimir Faerie Tribal", "matt",
             "Alela, Artful Provocateur (ELD) 324", "Five-color (WUBRG)", 3, "abcdef12-3456",
         )
-        content { DecksScreen(DecksState().loaded(listOf(deck)), {}, {}) }
+        content { DecksScreen(DecksState().loaded(listOf(deck)), {}) }
         Parity.check(
             Parity.Fact("the tile-width name, not the prose after the dash") {
                 says("Alela") && !says("Alela — Custom Dimir Faerie Tribal")
@@ -215,7 +215,7 @@ class DecksParityTest {
     @Test
     fun aDeckWithNoCommanderSaysSoRatherThanLeavingTheLineBlank() {
         val bare = Deck("a", "Sixty", "matt", null, "UW", null, null)
-        content { DecksScreen(DecksState().loaded(listOf(bare)), {}, {}) }
+        content { DecksScreen(DecksState().loaded(listOf(bare)), {}) }
         Parity.check(
             Parity.Fact("an em dash where the commander would be") { says("—") },
             Parity.Fact("no bracket tag on a deck with no bracket") { !says("bracket") },
@@ -224,7 +224,7 @@ class DecksParityTest {
 
     @Test
     fun theThreeEmptyStatesEachSayWhichOneTheyAre() {
-        content { DecksScreen(DecksState(), {}, {}, admin = true) }
+        content { DecksScreen(DecksState(), {}, admin = true) }
         assertTrue(says("No decks yet."), "an empty shelf says nothing at all")
         // And no New deck button: a deck is started from the entry
         // wizard's first question now. Matt: "get rid of the one on
@@ -234,20 +234,20 @@ class DecksParityTest {
 
     @Test
     fun aFailureNamesWhatWentWrong() {
-        content { DecksScreen(DecksState().failed("boom"), {}, {}, admin = true) }
+        content { DecksScreen(DecksState().failed("boom"), {}, admin = true) }
         assertTrue(says("Could not load decks: boom"), "the error is swallowed")
     }
 
     @Test
     fun loadingSaysItIsLoading() {
-        content { DecksScreen(DecksState().loading(), {}, {}, admin = true) }
+        content { DecksScreen(DecksState().loading(), {}, admin = true) }
         assertTrue(says("Loading…"), "a loading shelf is blank")
     }
 
     @Test
     fun theTileIsTheTargetRatherThanAnOpenButton() {
         var opened: Deck? = null
-        content { DecksScreen(shelf(), { opened = it }, {}) }
+        content { DecksScreen(shelf(), { opened = it }) }
         rule.onNodeWithText("Bello").performScrollTo().performClick()
         rule.runOnIdle { assertEquals("a", opened?.key) }
     }
@@ -255,10 +255,11 @@ class DecksParityTest {
     // ------------------------------------------------------ one deck, opened
 
     @Test
-    fun theOpenDeckLeadsWithTheBannerAndTheWayBack() {
-        content { DecksScreen(opened(), {}, {}) }
+    fun theOpenDeckLeadsWithTheBannerAndNoBackButton() {
+        content { DecksScreen(opened(), {}) }
         Parity.check(
-            Parity.Fact("the way back is in the header") { says("← Decks") },
+            // Matt: "get rid of the 'back' button on all the details pages".
+            Parity.Fact("there is no back button in the header") { !says("← Decks") },
             // The web's hierarchy, which Android now follows: the
             // commander is the band's big line and the bracket, the
             // colours and the count are the small one under it. These
@@ -271,8 +272,8 @@ class DecksParityTest {
             },
             Parity.Fact("the bracket is in the small line under it") { says("Bracket 3") },
             // The deck's own name is deliberately absent. The web's
-            // open-deck `page-head` carries the back button, the share
-            // menu and the admin actions and no title at all — the
+            // open-deck `page-head` carries the share menu and the
+            // admin actions and no title at all — the
             // name was on the tile that was tapped to get here.
             Parity.Fact("the deck's own name is not repeated in the band") { !says("Alela") },
             Parity.Fact("and how many cards it holds") { says("6 cards") },
@@ -285,7 +286,7 @@ class DecksParityTest {
 
     @Test
     fun theListIsGroupedByTypeInReadingOrderWithACountOnEachSection() {
-        content { DecksScreen(opened(), {}, {}) }
+        content { DecksScreen(opened(), {}) }
         assertEquals(
             // `.panel-head h2 { text-transform: uppercase }` on the
             // web — the deck's own heading and every type section.
@@ -312,7 +313,7 @@ class DecksParityTest {
 
     @Test
     fun everyCardRowCarriesItsNameItsTypeAndItsQuantity() {
-        content { DecksScreen(opened(), {}, {}) }
+        content { DecksScreen(opened(), {}) }
         Parity.check(
             Parity.Fact("every card in the list is on the screen") {
                 listOf(
@@ -345,7 +346,7 @@ class DecksParityTest {
                 DeckCard("Rhystic Study", 1, null, 0, nameNorm = "rhystic study", typeLine = "Enchantment"),
             ),
         )
-        content { DecksScreen(s, {}, {}) }
+        content { DecksScreen(s, {}) }
         Parity.check(
             Parity.Fact("a basic nobody owns is still named a Basic Land") {
                 says("Basic Land — Plains")
@@ -366,7 +367,7 @@ class DecksParityTest {
     fun tappingACardAsksForItsDetailByNameNormAndOwner() {
         var asked: Pair<String, String>? = null
         content {
-            DecksScreen(opened(), {}, {}, onOpenCard = { c, owner -> asked = c.nameNorm to owner })
+            DecksScreen(opened(), {}, onOpenCard = { c, owner -> asked = c.nameNorm to owner })
         }
         rule.onNodeWithText("Sol Ring").performScrollTo().performClick()
         rule.runOnIdle { assertEquals("sol ring" to "matt", asked) }
@@ -376,7 +377,7 @@ class DecksParityTest {
 
     @Test
     fun theAdminActionsAreNotThereAtAllWhileLocked() {
-        content { DecksScreen(opened(), {}, {}, admin = false) }
+        content { DecksScreen(opened(), {}, admin = false) }
         Parity.check(
             Parity.Fact("no edit") { !says("Edit list") },
             Parity.Fact("no rename") { !says("Rename") },
@@ -398,7 +399,7 @@ class DecksParityTest {
         var edited: Deck? = null
         content {
             DecksScreen(
-                opened(), {}, {}, admin = true,
+                opened(), {}, admin = true,
                 onEdit = { edited = it }, onRename = { renamed = it },
             )
         }
@@ -411,14 +412,14 @@ class DecksParityTest {
     @Test
     fun theAddButtonIsOfferedOnTheDeckItself() {
         var asked = false
-        content { DecksScreen(opened(), {}, {}, admin = true, onAddCard = { asked = true }) }
+        content { DecksScreen(opened(), {}, admin = true, onAddCard = { asked = true }) }
         rule.onNodeWithText("+ Add a card").performScrollTo().performClick()
         rule.runOnIdle { assertTrue(asked, "the add button does nothing") }
     }
 
     @Test
     fun everyCardRowGetsExactlyOneActionWhenUnlocked() {
-        content { DecksScreen(opened(), {}, {}, admin = true) }
+        content { DecksScreen(opened(), {}, admin = true) }
         Parity.check(
             Parity.Fact("one ⋯ per card, six cards") { howMany("⋯") == 6 },
             Parity.Fact("the commander's row has one too") {
@@ -439,7 +440,7 @@ class DecksParityTest {
         var openedCard: String? = null
         content {
             DecksScreen(
-                opened(), {}, {}, admin = true,
+                opened(), {}, admin = true,
                 onOpenCard = { c, _ -> openedCard = c.nameNorm },
                 onTweak = { c, t -> asked = c.nameNorm to t },
             )
@@ -460,7 +461,7 @@ class DecksParityTest {
         var tweaked: String? = null
         content {
             DecksScreen(
-                opened(), {}, {}, admin = true,
+                opened(), {}, admin = true,
                 onOpenCard = { c, owner -> openedCard = "${c.nameNorm}/$owner" },
                 onTweak = { c, _ -> tweaked = c.nameNorm },
             )
@@ -474,7 +475,7 @@ class DecksParityTest {
 
     @Test
     fun aTokenRowHasNoActionBecauseTheDeckDoesNotHaveThatCard() {
-        content { DecksScreen(withTokens(), {}, {}, admin = true) }
+        content { DecksScreen(withTokens(), {}, admin = true) }
         // Six, so the count did not quietly spill onto the tokens.
         assertEquals(6, howMany("⋯"), "a token the deck makes is offered a change to the deck list")
     }
@@ -484,7 +485,7 @@ class DecksParityTest {
     @Test
     fun theShareOffersALinkOrTheListEitherWay() {
         val picked = mutableListOf<Pair<ShareWhat, ExportTo>>()
-        content { DecksScreen(opened(), {}, {}, onShare = { w, e -> picked += w to e }) }
+        content { DecksScreen(opened(), {}, onShare = { w, e -> picked += w to e }) }
         Parity.check(
             Parity.Fact("the button is the icon, not the word") { !says("Share this deck") },
             Parity.Fact("nothing is open until it is pressed") { !says("Deck list") },
@@ -522,7 +523,7 @@ class DecksParityTest {
     @Test
     fun eachOfTheFourReportsItself() {
         val picked = mutableListOf<Pair<ShareWhat, ExportTo>>()
-        content { DecksScreen(opened(), {}, {}, onShare = { w, e -> picked += w to e }) }
+        content { DecksScreen(opened(), {}, onShare = { w, e -> picked += w to e }) }
         repeat(4) { n ->
             rule.onNodeWithContentDescription("Share this deck").performScrollTo().performClick()
             rule.waitForIdle()
@@ -552,7 +553,7 @@ class DecksParityTest {
 
     @Test
     fun theTokensAreCardsBelowTheListWithTheirOwnCount() {
-        content { DecksScreen(withTokens(), {}, {}) }
+        content { DecksScreen(withTokens(), {}) }
         assertEquals("TOKENS", headings().last(), "the tokens are not the last thing on the screen")
         Parity.check(
             Parity.Fact("the heading counts them") { tagBeside("TOKENS") == "3" },
@@ -588,7 +589,7 @@ class DecksParityTest {
 
     @Test
     fun aDeckWithNoTokensHasNoTokenPanel() {
-        content { DecksScreen(opened(), {}, {}) }
+        content { DecksScreen(opened(), {}) }
         assertTrue("Tokens" !in headings(), "an empty token panel is worse than none")
     }
 }

@@ -336,11 +336,11 @@ class AppDriverTest {
 
     // ------------------------------------------------- opening a card
 
-    /** The ← Back button on the card page, wherever it is. */
-    private fun backButton(): HTMLButtonElement =
+    /** Every button on the page, by what it says. */
+    private fun buttons(): List<String> =
         document.querySelectorAll("button").let { n ->
-            (0 until n.length).mapNotNull { n[it] as? HTMLButtonElement }
-        }.firstOrNull { it.textContent?.trim() == "← Back" } ?: error("no back button on the card")
+            (0 until n.length).mapNotNull { (n[it] as? HTMLButtonElement)?.textContent?.trim() }
+        }
 
     @Test
     fun aCardOpensFromTheGridAndTheAddressIsTheCardAlone() = runTest {
@@ -375,27 +375,13 @@ class AppDriverTest {
     }
 
     @Test
-    fun theBackButtonGoesWhereTheBrowsersDoes() = runTest {
-        val view = mount("#/search")
-        settle()
-        waitFor("the grid") { view.all("div.card").isNotEmpty() }
-        openFromTheGrid(view)
-        waitFor("the card page") { cardPages() == 1 }
-
-        backButton().click()
-        waitFor("the search again") { cardPages() == 0 }
-        assertEquals("#/search", hash())
-    }
-
-    @Test
-    fun aCardOpenedFromALinkStillHasSomewhereToGoBackTo() = runTest {
-        // There is no page behind it, so ← Back cannot mean "the page
-        // before". It means the library rather than nothing at all.
+    fun theCardPageHasNoBackButtonOfItsOwn() = runTest {
+        // Matt: "get rid of the 'back' button on all the details
+        // pages". The browser's back, above, is the way off.
         mount("#/card/sol+ring")
         waitFor("the card page") { cardPages() == 1 }
-        backButton().click()
-        waitFor("the library") { cardPages() == 0 }
-        assertEquals("#/search", hash())
+        waitFor("the card") { document.body!!.textContent.orEmpty().contains("Sol Ring") }
+        assertTrue("← Back" !in buttons(), "the card page still has its ← Back button")
     }
 
     @Test
@@ -406,7 +392,7 @@ class AppDriverTest {
             waitFor("round $round: the grid") { view.all("div.card").isNotEmpty() }
             openFromTheGrid(view)
             waitFor("round $round: the card page") { cardPages() == 1 }
-            backButton().click()
+            window.history.back()
             waitFor("round $round: back on the search") { cardPages() == 0 }
             settle()
             assertEquals(0, cardPages(), "round $round: the card came back on its own")
@@ -482,7 +468,7 @@ class AppDriverTest {
         waitFor("the card page") { cardPages() == 1 }
         assertEquals("#/card/sol+ring", hash(), "the link to the card carried the deck")
 
-        backButton().click()
+        window.history.back()
         waitFor("the deck again") { cardPages() == 0 }
         assertEquals("#/decks/alela", hash())
     }
@@ -559,9 +545,9 @@ class AppDriverTest {
     }
 
     @Test
-    fun thePagesOwnBackButtonLandsWhereTheBrowsersDoes() = runTest {
-        // Two ways back that leave you in two different places is the
-        // same bug as no scroll handling at all.
+    fun theBrowsersBackOffACardLandsWhereTheListWas() = runTest {
+        // The page's own back button is gone, so this is the only way
+        // back and it has to put the list where it was.
         val view = mount("#/search")
         settle()
         waitFor("the grid") { view.all("div.card").isNotEmpty() }
@@ -576,7 +562,7 @@ class AppDriverTest {
         settle()
         assertTrue(window.scrollY < 10, "the card opened at ${window.scrollY}")
 
-        backButton().click()
+        window.history.back()
         waitFor("the search again") { cardPages() == 0 }
         waitFor("the list to be back where it was", upTo = 4000) { window.scrollY > 1000 }
     }
@@ -1335,7 +1321,7 @@ class AppDriverTest {
         assertTrue(img.getBoundingClientRect().height > 0, "the picture is on the page with no height")
         assertEquals(0, askedGitHub, "the website asked GitHub itself")
 
-        root.button("← Admin Settings").click()
+        window.history.back()
         waitFor("back on Admin Settings") { window.location.hash.endsWith("/admin") }
     }
 

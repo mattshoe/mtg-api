@@ -46,11 +46,10 @@ fun AdminPage(
     onSearch: (String) -> Unit = {},
     onOpen: (Person) -> Unit = {},
     onSetRole: (Person, String) -> Unit = { _, _ -> },
-    onBack: () -> Unit = {},
 ) {
     Div(attrs = { classes("wrap") }) {
         if (person != null) {
-            PersonPage(state, person, me, onSetRole, onBack)
+            PersonPage(state, person, me, onSetRole)
         } else {
             Everybody(state, onSearch, onOpen)
             TaskList(tasks, onToggleDone, onNewTask, onOpenTask)
@@ -223,15 +222,7 @@ private fun PersonPage(
     person: Person,
     me: String?,
     onSetRole: (Person, String) -> Unit,
-    onBack: () -> Unit,
 ) {
-    Div(attrs = { classes("page-head") }) {
-        Button(attrs = {
-            classes("btn", "sm", "ghost")
-            onClick { onBack() }
-        }) { Text("← Everybody") }
-    }
-
     Div(attrs = { classes("panel") }) {
         Div(attrs = { classes("panel-body") }) {
             Div(attrs = { classes("person-head") }) {

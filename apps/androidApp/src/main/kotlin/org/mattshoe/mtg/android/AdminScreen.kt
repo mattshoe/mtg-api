@@ -54,7 +54,6 @@ fun AdminScreen(
     onSearch: (String) -> Unit = {},
     onOpen: (Person) -> Unit = {},
     onSetRole: (Person, String) -> Unit = { _, _ -> },
-    onBack: () -> Unit = {},
 ) {
     Column(
         Modifier.fillMaxWidth()
@@ -63,7 +62,7 @@ fun AdminScreen(
         verticalArrangement = Arrangement.spacedBy(Design.GAP.dp),
     ) {
         if (person != null) {
-            PersonPage(state, person, me, onSetRole, onBack)
+            PersonPage(state, person, me, onSetRole)
         } else {
             Everybody(state, onSearch, onOpen)
             TaskList(tasks, onToggleDone, onNewTask, onOpenTask)
@@ -227,10 +226,7 @@ private fun PersonPage(
     person: Person,
     me: String?,
     onSetRole: (Person, String) -> Unit,
-    onBack: () -> Unit,
 ) {
-    Ghost("← Everybody") { onBack() }
-
     Panel {
         Row(
             Modifier.fillMaxWidth().testTag("person-head"),

@@ -45,7 +45,7 @@ class CardDetailsParityTest {
     private fun open(card: CardDetail) {
         rule.setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
-                Surface { Box(Modifier.width(340.dp)) { CardSheet(card) {} } }
+                Surface { Box(Modifier.width(340.dp)) { CardSheet(card) } }
             }
         }
         rule.waitForIdle()

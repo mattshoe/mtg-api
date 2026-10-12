@@ -5,7 +5,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotDisplayed
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.activity.ComponentActivity
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performTouchInput
@@ -51,7 +52,7 @@ class ScrollPositionSurvivesACardTest {
     val retry = Retry()
 
     @get:Rule
-    val rule = createComposeRule()
+    val rule = createAndroidComposeRule<ComponentActivity>()
 
     private fun cardRow(name: String) = CardRow(
         id = 1, owner = "matt", name = name, nameNorm = name.lowercase(), face2 = null,
@@ -137,9 +138,9 @@ class ScrollPositionSurvivesACardTest {
         rule.onNodeWithTag("card-carousel").assertExists()
         rule.onNodeWithText("Full details").performClick()
         rule.waitForIdle()
-        rule.onNodeWithText("← Back").assertIsDisplayed()
+        rule.onNodeWithTag("card-sheet").assertIsDisplayed()
 
-        rule.onNodeWithText("← Back").performClick()
+        rule.activity.onBackPressedDispatcher.onBackPressed()
         rule.waitForIdle()
 
         rule.onNodeWithText("Card 39").assertIsDisplayed()
@@ -169,9 +170,9 @@ class ScrollPositionSurvivesACardTest {
         rule.onNodeWithTag("card-carousel").assertExists()
         rule.onNodeWithText("Full details").performClick()
         rule.waitForIdle()
-        rule.onNodeWithText("← Back").assertIsDisplayed()
+        rule.onNodeWithTag("card-sheet").assertIsDisplayed()
 
-        rule.onNodeWithText("← Back").performClick()
+        rule.activity.onBackPressedDispatcher.onBackPressed()
         rule.waitForIdle()
 
         rule.onNodeWithText("Card 39").assertIsDisplayed()

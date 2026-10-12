@@ -110,7 +110,7 @@ class DeckRowActionTest {
 
     @Test
     fun theActionIsNotThereAtAllWhenAdminIsLocked() = runTest {
-        val frame = mount(1000) { DecksPage(opened(), {}, {}, admin = false) }
+        val frame = mount(1000) { DecksPage(opened(), {}, admin = false) }
         settle()
         assertEquals(
             0, frame.all("button.row-act").size,
@@ -125,7 +125,7 @@ class DeckRowActionTest {
 
     @Test
     fun everyCardRowGetsExactlyOneActionWhenAdminIsUnlocked() = runTest {
-        val frame = mount(1000) { DecksPage(opened(), {}, {}, admin = true) }
+        val frame = mount(1000) { DecksPage(opened(), {}, admin = true) }
         settle()
         val rows = frame.all("div.deck-line")
         assertEquals(6, rows.size)
@@ -142,7 +142,7 @@ class DeckRowActionTest {
 
     @Test
     fun aTokenRowHasNoActionBecauseTheDeckDoesNotHaveThatCard() = runTest {
-        val frame = mount(1000) { DecksPage(withTokens(), {}, {}, admin = true) }
+        val frame = mount(1000) { DecksPage(withTokens(), {}, admin = true) }
         settle()
         val tokens = frame.all("div.panel").first { it.textContent.orEmpty().startsWith("Tokens") }
         assertEquals(
@@ -159,7 +159,7 @@ class DeckRowActionTest {
     fun pressingItAsksToTweakThatCardAndNoOther() = runTest {
         var asked: Pair<String, Tweak?>? = null
         val frame = mount(1000) {
-            DecksPage(opened(), {}, {}, admin = true, onTweak = { c, t -> asked = c.nameNorm to t })
+            DecksPage(opened(), {}, admin = true, onTweak = { c, t -> asked = c.nameNorm to t })
         }
         settle()
         frame.action("Sol Ring").click()
@@ -179,7 +179,7 @@ class DeckRowActionTest {
         var tweaked: String? = null
         val frame = mount(1000) {
             DecksPage(
-                opened(), {}, {}, admin = true,
+                opened(), {}, admin = true,
                 onOpenCard = { c, _ -> openedCard = c.nameNorm },
                 onTweak = { c, _ -> tweaked = c.nameNorm },
             )
@@ -197,7 +197,7 @@ class DeckRowActionTest {
         var tweaked: String? = null
         val frame = mount(1000) {
             DecksPage(
-                opened(), {}, {}, admin = true,
+                opened(), {}, admin = true,
                 onOpenCard = { c, owner -> openedCard = "${c.nameNorm}/$owner" },
                 onTweak = { c, _ -> tweaked = c.nameNorm },
             )
@@ -215,7 +215,7 @@ class DeckRowActionTest {
     fun theRowItselfIsStillOpenedByTheKeyboard() = runTest {
         var openedCard: String? = null
         val frame = mount(1000) {
-            DecksPage(opened(), {}, {}, admin = true, onOpenCard = { c, _ -> openedCard = c.nameNorm })
+            DecksPage(opened(), {}, admin = true, onOpenCard = { c, _ -> openedCard = c.nameNorm })
         }
         settle()
         frame.row("Sol Ring").press("Enter")
@@ -231,7 +231,7 @@ class DeckRowActionTest {
     fun theKeyboardOnTheActionDoesNotOpenTheCardDetail() = runTest {
         var openedCard: String? = null
         val frame = mount(1000) {
-            DecksPage(opened(), {}, {}, admin = true, onOpenCard = { c, _ -> openedCard = c.nameNorm })
+            DecksPage(opened(), {}, admin = true, onOpenCard = { c, _ -> openedCard = c.nameNorm })
         }
         settle()
         // Tab to the ⋯ and press it. The row is listening for the same
@@ -247,7 +247,7 @@ class DeckRowActionTest {
 
     @Test
     fun theActionIsARealButtonTheKeyboardCanReach() = runTest {
-        val frame = mount(1000) { DecksPage(opened(), {}, {}, admin = true) }
+        val frame = mount(1000) { DecksPage(opened(), {}, admin = true) }
         settle()
         val act = frame.action("Sol Ring")
         assertEquals("BUTTON", act.tagName, "a div cannot be pressed with a keyboard")
@@ -260,7 +260,7 @@ class DeckRowActionTest {
 
     @Test
     fun itSaysWhichCardItActsOnRatherThanJustEllipsis() = runTest {
-        val frame = mount(1000) { DecksPage(opened(), {}, {}, admin = true) }
+        val frame = mount(1000) { DecksPage(opened(), {}, admin = true) }
         settle()
         val act = frame.action("Zulaport Cutthroat")
         val name = act.getAttribute("aria-label").orEmpty()
@@ -282,7 +282,7 @@ class DeckRowActionTest {
 
     @Test
     fun itIsAFortyFourPixelTapTargetOnAPhone() = runTest {
-        val frame = mount(400) { DecksPage(opened(), {}, {}, admin = true) }
+        val frame = mount(400) { DecksPage(opened(), {}, admin = true) }
         settle()
         if (!Stylesheet.applied()) return@runTest
         val r = frame.action("Sol Ring").getBoundingClientRect()
@@ -304,7 +304,7 @@ class DeckRowActionTest {
 
     @Test
     fun itDoesNotOverlapTheNameOrPushTheQuantityOffAPhone() = runTest {
-        val frame = mount(400) { DecksPage(opened(), {}, {}, admin = true) }
+        val frame = mount(400) { DecksPage(opened(), {}, admin = true) }
         settle()
         if (!Stylesheet.applied()) return@runTest
         val row = frame.row("Zulaport Cutthroat")

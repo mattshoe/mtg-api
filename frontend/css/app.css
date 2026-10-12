@@ -342,6 +342,10 @@ main { min-height: calc(100vh - var(--topbar-h)); }
 .sticky-side { position: sticky; top: calc(var(--topbar-h) + 18px); max-height: calc(100vh - var(--topbar-h) - 36px); overflow-y: auto; }
 
 .page-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+/* A card's name with its share beside it: an icon has no baseline
+   worth lining a heading up with, so the two are centred instead. */
+.page-head.card-head { align-items: center; flex-wrap: nowrap; }
+.page-head.card-head h2 { min-width: 0; overflow-wrap: anywhere; }
 .page-head .sub {
   color: var(--text-2); font-size: 13px;
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;

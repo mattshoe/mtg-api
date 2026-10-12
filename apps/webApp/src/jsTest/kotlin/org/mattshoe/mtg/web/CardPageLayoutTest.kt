@@ -5,9 +5,6 @@ import kotlinx.browser.window
 import kotlinx.coroutines.await
 import kotlinx.coroutines.test.runTest
 import org.jetbrains.compose.web.renderComposable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.CardDetail
 import org.mattshoe.mtg.core.Printing
 import org.w3c.dom.HTMLElement
@@ -113,29 +110,6 @@ class CardPageLayoutTest {
             .filter { it.getBoundingClientRect().right > limit }
             .map { it.tagName.lowercase() + "." + it.className }
         assertTrue(over.isEmpty(), "hanging off the right edge: $over")
-    }
-
-    @Test
-    fun backLeavesTheCardForThePageItWasOpenedFrom() = runTest {
-        // Through the shell, over a real AppState, because the button
-        // itself was never the suspect.
-        val root = document.createElement("div") as HTMLElement
-        document.body!!.appendChild(root)
-        roots += root
-        var state = AppState().navigate(org.mattshoe.mtg.core.Route(org.mattshoe.mtg.core.View.DECKS, "alela"))
-            .openCard(org.mattshoe.mtg.core.CardRef("sol ring"), "Sol Ring")
-        renderComposable(root = root) {
-            var s by androidx.compose.runtime.remember {
-                androidx.compose.runtime.mutableStateOf(state)
-            }
-            AppShell(s, { s = it; state = it }, {}, {}, {}, {}, {})
-        }
-        settle()
-        assertTrue(root.all("div.card-page").isNotEmpty(), "the card page is not showing")
-        root.all("button").first { it.textContent?.trim() == "← Back" }.click()
-        settle()
-        assertEquals(org.mattshoe.mtg.core.View.DECKS, state.view, "back went somewhere else")
-        assertEquals("alela", state.route.rest)
     }
 
     /** Two people, one card, the numbers that differ between them. */

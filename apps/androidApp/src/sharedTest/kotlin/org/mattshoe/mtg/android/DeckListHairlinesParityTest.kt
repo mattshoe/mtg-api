@@ -94,14 +94,14 @@ class DeckListHairlinesParityTest {
         // It was a heading per owner, with their name on it. The page
         // is one collection, so there is one shelf and its heading is
         // how many decks are on it.
-        content { DecksScreen(shelf(), {}, {}) }
+        content { DecksScreen(shelf(), {}) }
         assertTrue(exists("group-rule-4 decks"), "no rule under the shelf heading")
         assertFalse(exists("group-rule-Matt"), "the owner's name is still a heading")
     }
 
     @Test
     fun theRuleSitsBetweenTheHeadingAndTheDecksNotAboveIt() {
-        content { DecksScreen(shelf(), {}, {}) }
+        content { DecksScreen(shelf(), {}) }
         val headBottom = bottomOf("4 decks")
         val ruleTop = topOfTag("group-rule-4 decks")
         val tileTop = topOf("Bello")
@@ -113,7 +113,7 @@ class DeckListHairlinesParityTest {
 
     @Test
     fun theTypeGroupHeadingHasAShadedBandWithARuleUnderIt() {
-        content { DecksScreen(opened(), {}, {}) }
+        content { DecksScreen(opened(), {}) }
         assertTrue(exists("group-rule-Commander"), "no rule under the Commander section")
         assertTrue(exists("group-rule-Creatures"), "no rule under the Creatures section")
     }
@@ -130,8 +130,8 @@ class DeckListHairlinesParityTest {
         // per test.
         content {
             androidx.compose.foundation.layout.Column {
-                DecksScreen(shelf(), {}, {})
-                DecksScreen(opened(), {}, {})
+                DecksScreen(shelf(), {})
+                DecksScreen(opened(), {})
             }
         }
         val ownerHeadingLeft = rule.onNodeWithText("4 decks").getUnclippedBoundsInRoot().left.value
@@ -148,7 +148,7 @@ class DeckListHairlinesParityTest {
 
     @Test
     fun thereIsNoDividerBeforeTheFirstCardRowInASection() {
-        content { DecksScreen(opened(), {}, {}) }
+        content { DecksScreen(opened(), {}) }
         assertFalse(
             exists("deck-line-rule-Creatures-0"),
             "a rule was drawn above the first card in its own section",
@@ -157,7 +157,7 @@ class DeckListHairlinesParityTest {
 
     @Test
     fun aDividerSitsBetweenTwoCardRowsInTheSameSection() {
-        content { DecksScreen(opened(), {}, {}) }
+        content { DecksScreen(opened(), {}) }
         // Alphabetical inside the section: Birds of Paradise, then
         // Zulaport Cutthroat.
         assertTrue(exists("deck-line-rule-Creatures-1"), "no rule between the two creatures")
