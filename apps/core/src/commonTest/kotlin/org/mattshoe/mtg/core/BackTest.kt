@@ -240,4 +240,20 @@ class BackTest {
         val s = readingACardFromThatDeck().copy(entry = MassEntry().copy(list = "1 Sol Ring"))
         assertFalse(s.wouldExitWithUnsavedEntry, "a press that only leaves a card flagged an exit")
     }
+
+    // ------------------------------------------- a person's own page
+
+    @Test
+    fun backFromAPersonsPageIsEverybodyNotTheLibrary() {
+        // The page lost its "← Everybody" button, so the gesture is
+        // the only way back and it has to go where the button did.
+        val s = AppState(admin = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t"))
+            .let { it.copy(people = it.people.copy(rows = listOf(Person("kayla123", "Kayla")))) }
+            .navigate(Route(View.ADMIN, "kayla123"))
+        assertNotNull(s.person, "the fixture is not on a person's page")
+
+        val once = s.back() ?: error("back wanted to leave the app from a person's page")
+        assertEquals(View.ADMIN, once.view, "back from a person left Admin Settings for " + once.view)
+        assertNull(once.person, "back from a person stayed on that person")
+    }
 }
