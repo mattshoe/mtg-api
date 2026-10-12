@@ -903,6 +903,11 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
 .mana-sym.lg { width: 19px; height: 19px; }
 .mana-sym.sm { width: 12px; height: 12px; }
 
+/* A Fetch section's head: the type, the colour as its symbols, the rarity. */
+.fetch-head { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.fetch-symbols { display: inline-flex; align-items: center; gap: 2px; }
+.fetch-symbols .mana-sym { width: 18px; height: 18px; }
+
 /* ------------------------------------------------------- deck stats */
 /* Charts drawn in CSS rather than by a library: every bar here is a
    div with a width or a height, which is a tenth of the bytes of a

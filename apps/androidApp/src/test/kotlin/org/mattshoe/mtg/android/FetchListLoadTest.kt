@@ -11,6 +11,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.TextContent
 import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.serialization.json.Json
 import org.junit.After
 import org.junit.Rule
@@ -47,6 +48,9 @@ class FetchListLoadTest {
     private val controllers = mutableListOf<ActivityController<MainActivity>>()
     private val asked = mutableListOf<String>()
 
+    /** Scryfall holds every answer until this completes, when set. */
+    private var scryfallGate: CompletableDeferred<Unit>? = null
+
     @After
     fun tearDown() {
         controllers.forEach { runCatching { it.pause().stop().destroy() } }
@@ -58,11 +62,12 @@ class FetchListLoadTest {
             val sql = (request.body as? TextContent)?.text.orEmpty()
             val q = request.url.parameters["q"].orEmpty()
             asked += if (sql.isNotEmpty()) sql else q
+            if (request.url.encodedPath.endsWith("/cards/search")) scryfallGate?.await()
             val body = when {
                 "json_each" in sql ->
-                    """{"cols":["name_norm","name","face1","types","colors","rarity","qty"],"rows":[
-                        ["counterspell","Counterspell","Counterspell","Instant","U","common",2],
-                        ["arcane signet","Arcane Signet","Arcane Signet","Artifact",null,"common",1]
+                    """{"cols":["name_norm","name","face1","types","colors","color_identity","rarity","qty"],"rows":[
+                        ["counterspell","Counterspell","Counterspell","Instant","U","U","common",2],
+                        ["arcane signet","Arcane Signet","Arcane Signet","Artifact",null,null,"common",1]
                     ],"n":2}"""
                 request.url.encodedPath.endsWith("/cards/search") && "r:uncommon" in q ->
                     """{"data":[{"name":"Arcane Signet"}]}"""
@@ -107,6 +112,7 @@ class FetchListLoadTest {
         )
         activity.fetchForTesting()
         idleUntil { activity.stateForTesting().fetch.result != null }
+        if (scryfallGate == null) idleUntil { !activity.stateForTesting().fetch.checking }
     }
 
     @Test
@@ -115,12 +121,40 @@ class FetchListLoadTest {
         found(activity)
         val r = activity.stateForTesting().fetch.result
         assertEquals(
-            listOf("Instants · Blue · Common", "Artifacts · Colorless · Common"),
+            listOf("Instants · U · Common", "Artifacts · C · Common"),
             r?.sections?.map { it.title },
             "the list was not filed; the Worker was asked ${asked.size} things",
         )
         assertEquals(listOf("Black Lotus"), r?.missing?.map { it.name })
         assertTrue(asked.any { "json_each" in it && "e7de0cb1" in it }, "the owned printings were never asked for")
+    }
+
+    @Test
+    fun theFilingLandsWhileScryfallIsStillThinking() {
+        // Matt: "it takes several full minutes to run". Those minutes
+        // were Scryfall's, and the whole list waited for them.
+        val gate = CompletableDeferred<Unit>()
+        scryfallGate = gate
+        try {
+            val activity = launch()
+            found(activity)
+            val held = activity.stateForTesting().fetch
+            assertEquals(
+                listOf("Instants · U · Common", "Artifacts · C · Common"),
+                held.result?.sections?.map { it.title },
+                "nothing was filed while Scryfall had not answered",
+            )
+            assertTrue(held.checking, "nothing says the Also check is still coming")
+            assertTrue(!held.busy, "Find cards is still busy with the list on screen")
+
+            gate.complete(Unit)
+            idleUntil { !activity.stateForTesting().fetch.checking }
+            val signet = activity.stateForTesting().fetch.result?.sections?.flatMap { it.cards }
+                ?.firstOrNull { it.name == "Arcane Signet" }
+            assertEquals("Also check: Uncommon", signet?.alsoCheckLine, "the Also check never followed")
+        } finally {
+            gate.complete(Unit)
+        }
     }
 
     @Test

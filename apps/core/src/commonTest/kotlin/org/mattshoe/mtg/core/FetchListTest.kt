@@ -28,6 +28,7 @@ class FetchListTest {
         rarity: String,
         qty: Int = 1,
         face: String? = null,
+        identity: String? = colors,
     ) = OwnedPrinting(
         nameNorm = name.lowercase(),
         name = name,
@@ -36,6 +37,7 @@ class FetchListTest {
         colors = colors,
         rarity = rarity,
         qty = qty,
+        identity = identity,
     )
 
     private val collection = listOf(
@@ -46,6 +48,9 @@ class FetchListTest {
         owned("Dryad Arbor", "Land Creature", "G", "uncommon"),
         owned("Fractured Identity", "Sorcery", "WU", "rare"),
         owned("Ornithopter", "Artifact Creature", null, "uncommon"),
+        owned("Electrolyze", "Instant", "RU", "uncommon"),
+        owned("Absorb", "Instant", "UW", "rare"),
+        owned("Ashling, the Limitless", "Creature", "R", "mythic", identity = "BGRUW"),
     )
 
     private fun fetch(list: String, printed: Map<String, Set<String>> = emptyMap()) =
@@ -56,10 +61,48 @@ class FetchListTest {
         val r = fetch("1 Fractured Identity")
         val s = r.sections.single()
         assertEquals(FetchType.SORCERY, s.type)
-        assertEquals(FetchColor.MULTICOLOR, s.color)
+        assertEquals("WU", s.colors)
         assertEquals(FetchRarity.RARE, s.rarity)
-        assertEquals("Sorceries · Multicolor · Rare", s.title)
+        assertEquals("Sorceries · WU · Rare", s.title)
         assertEquals(listOf("Fractured Identity"), s.cards.map { it.name })
+    }
+
+    @Test
+    fun everyColourIdentityHasASectionOfItsOwnAndNoneIsCalledMulticolor() {
+        // Matt: "UR is not 'multicolored', it's fucking UR".
+        val r = fetch("1 Electrolyze\n1 Absorb\n1 Fractured Identity")
+        assertEquals(
+            listOf("Instants · WU · Rare", "Instants · UR · Uncommon", "Sorceries · WU · Rare"),
+            r.sections.map { it.title },
+        )
+        assertTrue(r.sections.none { "Multicolor" in it.title }, r.sections.map { it.title }.toString())
+    }
+
+    @Test
+    fun theSectionIsTheColourIdentityNotTheColourOfTheCard() {
+        // Ashling is red to cast and five colours by identity.
+        assertEquals("WUBRG", fetch("1 Ashling, the Limitless").sections.single().colors)
+    }
+
+    @Test
+    fun theHeaderIsManaSymbolsInTheOrderTheCardPrintsThem() {
+        assertEquals(listOf("U", "R"), fetch("1 Electrolyze").sections.single().symbols)
+        assertEquals(listOf("C"), fetch("1 Arcane Signet").sections.single().symbols)
+        // The order a card is printed in, whatever order the database
+        // happened to store the letters in.
+        assertEquals("UR", ColorIdentity.printed("RU"))
+        assertEquals("RW", ColorIdentity.printed("WR"))
+        assertEquals("GW", ColorIdentity.printed("WG"))
+        assertEquals("GU", ColorIdentity.printed("UG"))
+        assertEquals("WB", ColorIdentity.printed("BW"))
+        assertEquals("BG", ColorIdentity.printed("GB"))
+        assertEquals("WBG", ColorIdentity.printed("BGW"))
+        assertEquals("RWB", ColorIdentity.printed("BRW"))
+        assertEquals("GUR", ColorIdentity.printed("GRU"))
+        assertEquals("GWU", ColorIdentity.printed("GUW"))
+        assertEquals("RGWU", ColorIdentity.printed("GRUW"))
+        assertEquals("WUBRG", ColorIdentity.printed("BGRUW"))
+        assertEquals("", ColorIdentity.printed(null))
     }
 
     @Test
@@ -76,12 +119,12 @@ class FetchListTest {
         )
         assertEquals(
             listOf(
-                "Creatures · Blue · Mythic",
-                "Creatures · Colorless · Uncommon",
-                "Instants · Blue · Common",
-                "Sorceries · Multicolor · Rare",
-                "Artifacts · Colorless · Common",
-                "Lands · Green · Uncommon",
+                "Creatures · U · Mythic",
+                "Creatures · C · Uncommon",
+                "Instants · U · Common",
+                "Sorceries · WU · Rare",
+                "Artifacts · C · Common",
+                "Lands · G · Uncommon",
             ),
             r.sections.map { it.title },
         )
@@ -154,12 +197,9 @@ class FetchListTest {
     }
 
     @Test
-    fun theColourIsOneColourMulticolourOrColourless() {
-        assertEquals(FetchColor.WHITE, FetchColor.of("W"))
-        assertEquals(FetchColor.GREEN, FetchColor.of("G"))
-        assertEquals(FetchColor.MULTICOLOR, FetchColor.of("BG"))
-        assertEquals(FetchColor.COLORLESS, FetchColor.of(null))
-        assertEquals(FetchColor.COLORLESS, FetchColor.of(""))
+    fun monoColoursComeFirstInWubrgThenPairsThenMoreAndColourlessLast() {
+        val order = listOf("", "UR", "G", "WUBRG", "W", "WU", "WBG").sortedBy { ColorIdentity.rank(it) }
+        assertEquals(listOf("W", "G", "WU", "UR", "WBG", "WUBRG", ""), order)
     }
 
     @Test
@@ -170,6 +210,7 @@ class FetchListTest {
         // One parameter for the names, however many there are: D1
         // refuses more than a hundred, and a deck is a hundred cards.
         assertEquals(2, q.params.size)
+        assertTrue("color_identity" in q.sql, "the section is the colour identity, so the query has to ask for it")
         assertEquals("[\"sol ring\",\"brazen borrower\"]", q.params[1])
     }
 
@@ -180,19 +221,57 @@ class FetchListTest {
 
     @Test
     fun theRowsComeBackAsPrintings() {
-        val cols = listOf("name_norm", "name", "face1", "types", "colors", "rarity", "qty")
+        val cols = listOf("name_norm", "name", "face1", "types", "colors", "color_identity", "rarity", "qty")
         val rows = listOf(
             JsonArray(
                 listOf(
                     JsonPrimitive("arcane signet"), JsonPrimitive("Arcane Signet"), JsonPrimitive("Arcane Signet"),
-                    JsonPrimitive("Artifact"), JsonNull, JsonPrimitive("common"), JsonPrimitive(6),
+                    JsonPrimitive("Artifact"), JsonNull, JsonPrimitive("BGRUW"), JsonPrimitive("common"), JsonPrimitive(6),
                 ),
             ),
         )
         val p = FetchList.decode(cols, rows).single()
         assertEquals("arcane signet", p.nameNorm)
         assertNull(p.colors)
+        assertEquals("BGRUW", p.identity)
         assertEquals(6, p.qty)
+    }
+
+    @Test
+    fun theFilingShowsBeforeScryfallHasAnsweredAndTheAlsoCheckFollows() {
+        val list = "1 Arcane Signet"
+        val filed = FetchListState(list = list).loading().filed(list, fetch(list))
+        assertTrue(!filed.busy, "the list is still busy after the collection answered")
+        assertTrue(filed.checking, "nothing says the Also check is still coming")
+        assertNotNull(filed.result)
+        val checked = filed.checked(list, fetch(list, mapOf("arcane signet" to setOf("common", "rare"))))
+        assertTrue(!checked.checking)
+        assertEquals(listOf(FetchRarity.RARE), checked.result?.sections?.single()?.cards?.single()?.alsoCheck)
+    }
+
+    @Test
+    fun anAlsoCheckForAListNoLongerOnScreenIsDropped() {
+        val list = "1 Arcane Signet"
+        val moved = FetchListState(list = list).filed(list, fetch(list)).cleared().typed("1 Counterspell")
+        val after = moved.checked(list, fetch(list))
+        assertNull(after.result, "an old list's answer landed on a new one")
+        assertTrue(!after.checking)
+    }
+
+    @Test
+    fun aListSavedUnderTheOldMulticolorSectionsComesBackToBeFoundAgain() {
+        val store = Store.inMemory()
+        store.put(
+            FetchListState.KEY,
+            """[{"id":"a","title":"Alela","at":"2026-10-12T00:00:00Z","list":"1 Fractured Identity",
+               "result":{"sections":[{"type":"SORCERY","color":"MULTICOLOR","rarity":"RARE",
+               "cards":[{"name":"Fractured Identity","want":1,"have":1}]}]}}]""",
+        )
+        val back = FetchListState.restore(store)
+        assertEquals(listOf("Alela"), back.saved.map { it.title }, "the saved list itself was lost")
+        val opened = back.open("a")
+        assertEquals("1 Fractured Identity", opened.list)
+        assertNull(opened.result, "an old Multicolor filing came back as if it were right")
     }
 
     @Test

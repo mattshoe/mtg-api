@@ -64,6 +64,12 @@ fun FetchListPage(
                     }
                 }
                 state.error?.let { Div(attrs = { classes("err") }) { Text(it) } }
+                if (state.checking) {
+                    Div(attrs = {
+                        classes("muted", "small")
+                        attr("data-fetch-checking", "")
+                    }) { Text(FetchListState.CHECKING) }
+                }
             }
         }
 
@@ -91,7 +97,15 @@ fun FetchListPage(
                     attr("data-fetch-section", section.title)
                 }) {
                     Div(attrs = { classes("panel-head") }) {
-                        H2 { Text(section.title) }
+                        // The colour as its mana symbols, in the order
+                        // the card prints them.
+                        H2(attrs = { classes("fetch-head") }) {
+                            Text(section.type.label)
+                            Span(attrs = { classes("fetch-symbols") }) {
+                                section.symbols.forEach { ManaPip(it, "fetch-sym") }
+                            }
+                            Text(section.rarity.label)
+                        }
                         Span(attrs = { classes("tag") }) { Text(section.cards.sumOf { it.want }.toString()) }
                     }
                     Div(attrs = { classes("panel-body") }) {
