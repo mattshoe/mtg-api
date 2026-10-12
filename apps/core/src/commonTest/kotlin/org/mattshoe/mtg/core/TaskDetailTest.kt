@@ -161,5 +161,52 @@ class TaskDetailTest {
         assertNull(TaskDetail.decode("q7w8e9r0", row).summary, "a live task has no summary")
     }
 
+    // ------------------------------------------------------------ cancel
+    // Matt: "i want the ability to cancel/abort tasks and any running
+    // agent should be immediately killed. prs, branches etc can stay just
+    // need to kill the agent".
+
+    @Test
+    fun aLiveTaskCanBeCancelledAndAFinishedOneCannot() {
+        for (s in TaskStatus.entries) {
+            val d = TaskDetail(task.key, task = task.copy(status = s))
+            assertEquals(!s.finished, d.canCancel, "${s.word} ${if (s.finished) "offers" else "does not offer"} a cancel")
+        }
+        assertFalse(TaskDetail(task.key).canCancel, "a task not loaded yet offers a cancel")
+    }
+
+    @Test
+    fun cancellingAsksFirstAndKeepingItTakesTheQuestionBack() {
+        val d = TaskDetail(task.key, task = task)
+        assertFalse(d.confirming, "the question is up before anybody asked")
+        assertTrue(d.askToCancel().confirming, "tapping Cancel task did not ask")
+        assertFalse(d.askToCancel().keep().confirming, "Keep it did not take the question back")
+        assertTrue(d.askToCancel().cancelling().cancelling, "confirming did not say it is cancelling")
+    }
+
+    @Test
+    fun aCancelledTaskSaysCancelledOnItsPageAndInTheList() {
+        val opened = onAdmin().openingTask(task).let { it.copy(taskDetail = it.taskDetail!!.askToCancel().cancelling()) }
+        val after = opened.taskCancelled(task.key)
+        val d = after.taskDetail!!
+        assertEquals(TaskStatus.CANCELLED, d.task?.status, "the page still says ${d.task?.status?.word}")
+        assertEquals(TaskDetail.CANCEL_NOTE, d.task?.note)
+        assertFalse(d.cancelling, "the page still says it is cancelling")
+        assertFalse(d.confirming, "the question is still up")
+        assertFalse(d.canCancel, "a cancelled task still offers a cancel")
+        assertEquals("Cancelled. ${TaskDetail.CANCEL_NOTE}", d.result)
+        assertEquals(TaskStatus.CANCELLED, after.tasks.rows.single().status, "the list still says it is live")
+        assertTrue(after.tasks.done.any { it.key == task.key }, "the list does not count it as done")
+    }
+
+    @Test
+    fun aRefusedCancelLeavesTheTaskAsItWasAndOffersItAgain() {
+        val d = TaskDetail(task.key, task = task).askToCancel().cancelling().cancelRefused()
+        assertEquals(TaskStatus.IN_REVIEW, d.task?.status)
+        assertFalse(d.cancelling)
+        assertFalse(d.confirming)
+        assertTrue(d.canCancel, "a refused cancel does not offer it again")
+    }
+
     private fun json(s: String) = "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n") + "\""
 }

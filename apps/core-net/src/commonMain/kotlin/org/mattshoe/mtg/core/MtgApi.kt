@@ -334,6 +334,8 @@ class MtgApi internal constructor(
         return Tasks.decode(text)
     }
 
+    suspend fun cancelTask(session: String, key: String) {}
+
     /** One task, its text and its files, for its own page. Admin only, server-side. */
     suspend fun task(session: String, key: String): TaskDetail {
         val res = http.get("$base/tasks/$key") { header("Authorization", "Bearer $session") }

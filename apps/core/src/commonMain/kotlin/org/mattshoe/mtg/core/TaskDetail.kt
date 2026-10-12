@@ -37,7 +37,21 @@ data class TaskDetail(
      * the Worker reads off main for a finished task and nothing else.
      */
     val summary: String? = null,
+    /** Cancel task was tapped and the page is asking whether to. */
+    val confirming: Boolean = false,
+    /** The cancel is on its way to the Worker. */
+    val cancelling: Boolean = false,
 ) {
+    val canCancel: Boolean get() = false
+
+    fun askToCancel() = this
+
+    fun keep() = this
+
+    fun cancelling() = this
+
+    fun cancelRefused() = this
+
     /** The request as Matt wrote it: no frontmatter, no heading, no paths on the laptop. Null when there is none. */
     val body: String? get() = details?.let { text ->
         val out = mutableListOf<String>()
@@ -109,6 +123,9 @@ data class TaskDetail(
         const val NO_TEXT = "No text was kept for this task. It was written on the laptop before the app kept requests."
 
         const val UNREADABLE = "the Worker's answer was not a task"
+
+        const val CANCEL_NOTE = ""
+
 
         private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
@@ -201,3 +218,5 @@ val AppState.openTask: Task? get() = openTaskKey?.let { key -> tasks.rows.firstO
 /** A task tapped on Admin Settings: its row at once, the rest on its way. Landing still checks the role. */
 fun AppState.openingTask(task: Task): AppState =
     copy(taskDetail = TaskDetail(task.key, task = task, busy = true)).navigate(Route(View.ADMIN, "${TaskDetail.ROUTE}/${task.key}"))
+
+fun AppState.taskCancelled(key: String): AppState = this
