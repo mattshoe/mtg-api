@@ -491,3 +491,62 @@ describe('POST /cards/add — rows are batched into statements', () => {
     expect(r.body.applied).toBe(true);
   });
 });
+
+// One Scryfall lookup per distinct card, not one per line.
+//
+// A ManaBox export is one row per copy, so a 400 card collection arrives
+// as 3,000 lines — and every one of them was sent to Scryfall. At 75
+// identifiers a chunk that is 40 round trips to do 6 chunks of work.
+// Measured against the live API before the fix: 750 rows 12.5s, 1,500
+// rows 25.8s, 3,000 rows 51.9s, dead linear at 1.3 seconds a chunk.
+// Matt's phone gave up long before the end, retried, and was refused by
+// its own unfinished write. That is the share loop, and this is its cause.
+describe('POST /cards/add — the same card on many lines', () => {
+  const countingStub = () => {
+    const stub = stubScryfall();
+    const asked = [];
+    const f = async (url, init) => {
+      if (new URL(url).pathname === '/cards/collection') {
+        asked.push(JSON.parse(init.body).identifiers.length);
+      }
+      return stub(url, init);
+    };
+    f.asked = asked;
+    return f;
+  };
+
+  it('asks about a repeated card once, however many lines it is on', async () => {
+    const f = countingStub();
+    const list = Array.from({ length: 200 }, () => '1 Sol Ring').join('\n');
+
+    const r = await post('/cards/add', { list, dry_run: true }, f);
+
+    expect(r.status, r.body?.error).toBe(200);
+    expect(f.asked, '200 lines of one card should be one identifier, one call')
+      .toEqual([1]);
+  });
+
+  it('still applies every line\'s quantity', async () => {
+    const f = countingStub();
+    const list = Array.from({ length: 5 }, () => '2 Sol Ring').join('\n');
+
+    const r = await post('/cards/add', { list, dry_run: true }, f);
+
+    // Five lines of two, folded into one stack of ten.
+    const [, , , , before, after] = r.body.changes[0];
+    expect(after - before, 'deduping the lookup lost some of the lines').toBe(10);
+  });
+
+  it('chunks on distinct cards, so a big list is a few calls not many', async () => {
+    const f = countingStub();
+    // 300 lines, 4 distinct cards: one chunk, not four.
+    const four = ['1 Sol Ring', '1 Lightning Bolt (2X2) 117', '1 Arcane Signet', '1 Command Tower'];
+    const list = Array.from({ length: 300 }, (_, i) => four[i % 4]).join('\n');
+
+    const r = await post('/cards/add', { list, dry_run: true }, f);
+
+    expect(r.status, r.body?.error).toBe(200);
+    expect(f.asked.length, `300 lines took ${f.asked.length} Scryfall calls`).toBe(1);
+    expect(f.asked[0]).toBe(4);
+  });
+})
