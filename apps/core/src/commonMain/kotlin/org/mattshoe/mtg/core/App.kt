@@ -702,6 +702,10 @@ data class AppState(
         // through to leaving the screen at the ends.
         view == View.ENTRY && entry.previousStep != null ->
             copy(entry = entry.goTo(entry.previousStep!!))
+        // The Fetch list's own page: an open Edit closes first, then
+        // back is the entry box it came from.
+        onFetchList && fetch.editing != null -> copy(fetch = fetch.cancelEdit())
+        onFetchList -> leaveFetchList()
         view != View.DEFAULT -> navigate(View.DEFAULT)
         else -> null
     }
