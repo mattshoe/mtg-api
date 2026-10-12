@@ -351,6 +351,8 @@ data class FetchListState(
     fun editTyped(text: String) = this
     fun cancelEdit() = this
     val current: SavedFetch? get() = null
+    val canStart: Boolean get() = false
+    val unsaved: Boolean get() = false
 
     /** The cards on the list, the way `DeckList` reads any list. */
     val entries: List<DeckList.Entry> get() = DeckList.entries(list)
@@ -431,6 +433,9 @@ data class FetchListState(
         }
 
         const val PAGE = "list"
+        const val UNSAVED = "Unsaved list"
+        const val NOTHING_OPEN = ""
+        fun finding(cards: Int) = ""
 
         fun keep(store: Store, current: SavedFetch?) {}
 
@@ -456,3 +461,4 @@ fun AppState.savedFetch(now: String): AppState {
 val AppState.onFetchList: Boolean get() = false
 fun AppState.findingFetch(): AppState = this
 fun AppState.openFetch(id: String): AppState = this
+fun AppState.leaveFetchList(): AppState = this
