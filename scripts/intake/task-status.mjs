@@ -10,22 +10,25 @@
 //
 //   node scripts/intake/task-status.mjs building <file>
 //   node scripts/intake/task-status.mjs settle <file> <branch>
+//   node scripts/intake/task-status.mjs cancel
 //   node scripts/intake/task-status.mjs reconcile
 //
 // `building` writes `in progress` before the builder starts. `settle`
 // after it exits: what its pull request came to, asked of `gh` on this
 // laptop, which is signed in and has no sixty-an-hour ceiling.
+// `cancel` on every run, before reconcile: a task cancelled in the app
+// has its request file marked `status: cancelled` and its agent killed.
 // `reconcile` on every run: what the laptop can see, held against what D1
 // says, so a dead agent reads paused and a withdrawn request cancelled.
 // None may stop a build: a refusal is a line in the log and the
 // dispatcher carries on.
 
-import { readFileSync, readdirSync, existsSync } from 'node:fs'
+import { readFileSync, readdirSync, existsSync, writeFileSync } from 'node:fs'
 import { join, basename, dirname } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { writeToken } from './inbox.mjs'
-import { pending, buildable, branchFor } from '../intake.mjs'
+import { pending, buildable, branchFor, statusOf } from '../intake.mjs'
 
 const API = 'https://mtg-api.mattshoe81.workers.dev'
 
@@ -38,6 +41,7 @@ const ORDER = [
 
 const STOPPED = 'the agent stopped; its work is kept in the worktree'
 const WITHDRAWN = 'request withdrawn'
+const CANCELLED = 'cancelled; the agent was stopped'
 const FINISHED = new Set(['merged', 'deployed', 'cancelled'])
 
 /** The workflows a merge to main deploys with, by path, and what each puts live. */
@@ -83,7 +87,13 @@ export function deployment(pr, { runs, now } = {}) {
  * cancelled: its worktree is kept and the next run resumes it. One whose
  * request was taken back while it ran is cancelled.
  */
-export function outcome(prs, { withdrawn = false } = {}) {
+export function outcome(prs, { withdrawn = false, cancelled = false } = {}) {
+  // Cancelled in the app: the pull request stays, named, and nothing but
+  // a merge outranks the cancel.
+  if (cancelled && !(prs || []).some((p) => p.state === 'MERGED')) {
+    const kept = (prs || []).find((p) => p.state === 'OPEN') ?? (prs || [])[0]
+    return { status: 'cancelled', pr: kept?.url ?? null, note: CANCELLED }
+  }
   for (const [state, to] of ORDER) {
     if (withdrawn && state === 'CLOSED') continue
     const hit = (prs || []).find((p) => p.state === state)
@@ -118,16 +128,16 @@ export function outcome(prs, { withdrawn = false } = {}) {
  * collected yet, and is left alone.
  */
 export function reconcile({
-  rows = [], ready = [], held = [], filed = [], stalled = [], alive = [], prs = {}, branches = [], runs, now,
+  rows = [], ready = [], held = [], filed = [], stalled = [], alive = [], prs = {}, branches = [], runs, now, cancelled = [],
 }) {
   const byName = new Map(rows.filter((r) => r.name).map((r) => [r.name, r]))
   const names = new Set([
-    ...ready, ...held, ...filed, ...alive, ...stalled, ...Object.keys(prs), ...branches, ...byName.keys(),
+    ...ready, ...held, ...filed, ...alive, ...stalled, ...cancelled, ...Object.keys(prs), ...branches, ...byName.keys(),
   ])
   const out = []
   for (const name of names) {
     const row = byName.get(name)
-    const found = truth(name, row?.status, { ready, held, filed, stalled, alive, prs: prs[name] || [], runs, at: now })
+    const found = truth(name, row?.status, { ready, held, filed, stalled, alive, cancelled, prs: prs[name] || [], runs, at: now })
     if (!found) continue
     const { deploy, ...t } = found
     const backfill = t.started_at && !row?.started_at
@@ -150,7 +160,7 @@ function shipped(pr, now, deploys) {
 }
 
 /** What one task's row should say, or null to leave it as it is. */
-function truth(name, now, { ready, held, filed, stalled, alive, prs, runs, at }) {
+function truth(name, now, { ready, held, filed, stalled, alive, cancelled = [], prs, runs, at }) {
   const merged = prs.find((p) => p.state === 'MERGED')
   const landed = now === 'merged' || now === 'deployed'
   const deploys = { runs, now: at }
@@ -158,6 +168,12 @@ function truth(name, now, { ready, held, filed, stalled, alive, prs, runs, at })
   if (filed.includes(name)) {
     if (merged) return shipped(merged, now, deploys)
     return landed ? null : { status: 'merged' }
+  }
+  // A request file that says cancelled is cancelled, agent or no agent:
+  // the next tick kills one still running. Only a merge outranks it.
+  if (cancelled.includes(name)) {
+    if (merged) return shipped(merged, now, deploys)
+    return now === 'cancelled' ? null : { status: 'cancelled', note: CANCELLED }
   }
   if (alive.includes(name)) return now === 'blocked' ? null : { status: 'in progress' }
   const isReady = ready.includes(name)
@@ -179,6 +195,60 @@ function truth(name, now, { ready, held, filed, stalled, alive, prs, runs, at })
   // A worktree, a branch or a row with no request file anywhere.
   if (FINISHED.has(now)) return null
   return { status: 'cancelled', note: WITHDRAWN }
+}
+
+/**
+ * What a cancel in the app asks of this laptop. Matt: "i want the
+ * ability to cancel/abort tasks and any running agent should be
+ * immediately killed. prs, branches etc can stay just need to kill the
+ * agent". `files` are the request files to mark cancelled, so the
+ * dispatcher never builds them again; `kill` the ones with an agent
+ * alive on them. `files` is each live request file's text by name.
+ */
+export function cancels({ rows = [], files = {}, alive = [] }) {
+  const out = rows.filter((r) => r.name && r.status === 'cancelled').map((r) => r.name)
+  return {
+    files: out.filter((n) => files[n] !== undefined && statusOf(files[n]) !== 'cancelled'),
+    kill: out.filter((n) => alive.includes(n)),
+  }
+}
+
+/** A request file's text with its frontmatter saying `status: cancelled`, and nothing else touched. */
+export function cancelFile(text) {
+  const t = String(text ?? '').replace(/\r\n/g, '\n')
+  if (!t.startsWith('---\n') || t.indexOf('\n---', 4) === -1) return `---\nstatus: cancelled\n---\n\n${t}`
+  const end = t.indexOf('\n---', 4)
+  const head = t.slice(4, end)
+  const next = /^status:.*$/m.test(head) ? head.replace(/^status:.*$/m, 'status: cancelled') : `status: cancelled\n${head}`
+  return `---\n${next}${t.slice(end)}`
+}
+
+/**
+ * Kill the agent working on a request, and everything it started. An
+ * agent is a process whose command line names `requests/<name>.md`,
+ * which is how `reconcile` already tells one is alive; what it started
+ * (a Bash tool call, a test run) does not name it, so its children are
+ * found first, while they are still its children, and killed with it.
+ * The pids killed come back.
+ */
+export function stop(name) {
+  const pids = (args) => {
+    try {
+      return execFileSync('pgrep', args, { encoding: 'utf8' }).split('\n').map(Number).filter(Boolean)
+    } catch { return [] }
+  }
+  const pattern = `requests/${name.replace(/[.*+?^$()[\]{}|\\]/g, '\\$&')}\\.md( |$)`
+  const all = []
+  const walk = (pid) => {
+    if (pid === process.pid || all.includes(pid)) return
+    all.push(pid)
+    pids(['-P', String(pid)]).forEach(walk)
+  }
+  pids(['-f', pattern]).forEach(walk)
+  for (const pid of all) {
+    try { process.kill(pid, 'SIGKILL') } catch { /* already gone */ }
+  }
+  return all
 }
 
 /** The request a dispatcher branch was made for, or null for any other branch. */
@@ -221,6 +291,32 @@ export async function report(transition, { token, base = API, fetch = globalThis
   }
 }
 
+/**
+ * Every task cancelled in the app, carried out on this laptop: its
+ * request file marked so it is never built again, and its agent killed.
+ */
+async function cancelNow({ repo, token, base = API }) {
+  const res = await fetch(`${base}/tasks`, { headers: { authorization: `Bearer ${token}` } })
+  if (!res.ok) throw new Error(`the Worker would not list tasks: ${res.status}`)
+  const { tasks: rows = [] } = await res.json()
+  const dir = join(repo, 'requests')
+  const files = {}
+  for (const f of readdirSync(dir).filter((e) => e.endsWith('.md') && e !== 'README.md')) {
+    files[basename(f, '.md')] = readFileSync(join(dir, f), 'utf8')
+  }
+  const running = (name) => {
+    try { execFileSync('pgrep', ['-f', `requests/${name}.md`]); return true } catch { return false }
+  }
+  const todo = cancels({ rows, files, alive: Object.keys(files).filter(running) })
+  const done = []
+  for (const name of todo.files) {
+    writeFileSync(join(dir, `${name}.md`), cancelFile(files[name]))
+    done.push(`${name}: request file marked cancelled`)
+  }
+  for (const name of todo.kill) done.push(`${name}: agent killed (${stop(name).length} processes)`)
+  return done
+}
+
 /** Everything `reconcile` needs, gathered off this laptop and the Worker, and the fixes written. */
 async function reconcileNow({ repo, token, base = API }) {
   const res = await fetch(`${base}/tasks`, { headers: { authorization: `Bearer ${token}` } })
@@ -231,7 +327,9 @@ async function reconcileNow({ repo, token, base = API }) {
   const strip = (f) => basename(f, '.md')
   const live = pending(ls(dir), { done: ls(join(dir, 'done')) })
   const ready = live.filter((f) => buildable(readFileSync(join(dir, f), 'utf8'))).map(strip)
-  const held = live.map(strip).filter((n) => !ready.includes(n))
+  const said = (f) => statusOf(readFileSync(join(dir, f), 'utf8'))
+  const cancelled = live.filter((f) => said(f) === 'cancelled').map(strip)
+  const held = live.map(strip).filter((n) => !ready.includes(n) && !cancelled.includes(n))
   // What main has filed, for the reason dispatch.sh asks main: the local
   // folder lags it whenever an agent merges its own work. And what this
   // folder has filed, because a request done by hand is moved here and
@@ -271,7 +369,7 @@ async function reconcileNow({ repo, token, base = API }) {
     runs = JSON.parse(execFileSync('gh', ['run', 'list', '--branch', 'main', '--event', 'push', '--limit', '300',
       '--json', 'headSha,workflowName,status,conclusion,createdAt'], { cwd: repo, encoding: 'utf8' }))
   } catch { /* no deploy runs to read */ }
-  const wrote = reconcile({ rows, ready, held, filed, stalled, alive, prs, branches, runs })
+  const wrote = reconcile({ rows, ready, held, filed, stalled, alive, prs, branches, runs, cancelled })
   for (const t of wrote) await report(t, { token, base })
   return wrote
 }
@@ -295,11 +393,19 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
       prs = JSON.parse(execFileSync('gh', ['pr', 'list', '--head', branch, '--state', 'all', '--json', 'state,url'], {
         cwd: repo, encoding: 'utf8',
       }))
-      const withdrawn = !existsSync(join(repo, 'requests', `${name}.md`))
-        && !existsSync(join(repo, 'requests', 'done', `${name}.md`))
-      transition = { name, ...outcome(prs, { withdrawn }) }
+      const file = join(repo, 'requests', `${name}.md`)
+      const withdrawn = !existsSync(file) && !existsSync(join(repo, 'requests', 'done', `${name}.md`))
+      const cancelled = existsSync(file) && statusOf(readFileSync(file, 'utf8')) === 'cancelled'
+      transition = { name, ...outcome(prs, { withdrawn, cancelled }) }
     } catch (e) {
       say(`could not ask gh about ${branch}: ${e.message}`)
+    }
+  } else if (cmd === 'cancel') {
+    if (!token) say('no credential that may read task status, so nothing was cancelled')
+    else {
+      await cancelNow({ repo, token })
+        .then((done) => done.forEach((line) => say(`cancel: ${line}`)))
+        .catch((e) => say(e.message))
     }
   } else if (cmd === 'reconcile') {
     if (!token) say('no credential that may write task status, so nothing was reconciled')
@@ -309,7 +415,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
         .catch((e) => say(e.message))
     }
   } else {
-    console.error('usage: task-status.mjs building <file> | settle <file> <branch> | reconcile')
+    console.error('usage: task-status.mjs building <file> | settle <file> <branch> | cancel | reconcile')
     process.exit(2)
   }
 

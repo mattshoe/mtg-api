@@ -304,6 +304,9 @@ class MtgApi internal constructor(
     @Serializable
     private data class TaskSent(val key: String = "")
 
+    @Serializable
+    private data class TaskCancel(val key: String, val status: String, val note: String)
+
     /**
      * A new task, from Admin Settings, into the Worker's inbox. The key
      * it was filed under. Admin only, server-side.
@@ -332,6 +335,19 @@ class MtgApi internal constructor(
         val text = res.bodyAsText()
         if (!res.status.isSuccess()) throw ApiFailure(errorIn(text, res.status))
         return Tasks.decode(text)
+    }
+
+    /**
+     * Cancel a task: its row says cancelled, and the laptop kills its
+     * agent off that. Admin only, server-side.
+     */
+    suspend fun cancelTask(session: String, key: String) {
+        val res = http.post("$base/tasks/status") {
+            contentType(ContentType.Application.Json)
+            header("Authorization", "Bearer $session")
+            setBody(TaskCancel(key, "cancelled", TaskDetail.CANCEL_NOTE))
+        }
+        if (!res.status.isSuccess()) throw ApiFailure(errorIn(res.bodyAsText(), res.status))
     }
 
     /** One task, its text and its files, for its own page. Admin only, server-side. */

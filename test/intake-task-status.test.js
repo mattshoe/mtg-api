@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { outcome, titleOf, started, report, reconcile, requestOfBranch } from '../scripts/intake/task-status.mjs'
+import { spawn, execFileSync } from 'node:child_process'
+import { outcome, titleOf, started, report, reconcile, requestOfBranch, cancels, cancelFile, stop } from '../scripts/intake/task-status.mjs'
+import { statusOf, buildable } from '../scripts/intake.mjs'
 
 /**
  * The dispatcher's half of "task status lives in D1".
@@ -290,5 +292,96 @@ describe('deployed is written from the deploy runs of the merge commit', () => {
     const runs = [run('worker', 'abc', 'success'), run('release', 'abc', 'success')]
     expect(reconcile(seen({ ready: ['unfiled'], prs: { unfiled: [merged(88, 'abc')] }, runs, rows: [row('unfiled', 'in review')] })))
       .toEqual([{ name: 'unfiled', status: 'deployed', ...times, pr: url(88), note: 'live: the APK, the API' }])
+  })
+})
+
+/**
+ * Matt: "i want the ability to cancel/abort tasks and any running agent
+ * should be immediately killed. prs, branches etc can stay just need to
+ * kill the agent". The app writes `cancelled` to the row; the laptop,
+ * on its next tick, marks the request file `status: cancelled` so it is
+ * never built again, and kills whatever agent is working on it.
+ */
+describe('a task cancelled in the app', () => {
+  const row = (name, status) => ({ key: 'k-' + name, name, status })
+  const ready = '---\nstatus: ready\n---\n\n# Bigger buttons\n\nThey are too small.\n'
+
+  it('marks its request file cancelled and kills its agent, and leaves every other task alone', () => {
+    expect(cancels({
+      rows: [row('dropped', 'cancelled'), row('kept', 'in progress'), row('waiting', 'cancelled')],
+      files: { dropped: ready, kept: ready, waiting: ready },
+      alive: ['dropped', 'kept'],
+    })).toEqual({ files: ['dropped', 'waiting'], kill: ['dropped'] })
+  })
+
+  it('a request file already marked is not marked again, and an agent already gone is not hunted', () => {
+    expect(cancels({
+      rows: [row('done-with', 'cancelled')],
+      files: { 'done-with': cancelFile(ready) },
+      alive: [],
+    })).toEqual({ files: [], kill: [] })
+  })
+
+  it('a request file marked cancelled says so in its frontmatter and keeps every word of the request', () => {
+    const out = cancelFile(ready)
+    expect(statusOf(out)).toBe('cancelled')
+    expect(buildable(out)).toBe(false)
+    expect(out).toContain('# Bigger buttons\n\nThey are too small.')
+  })
+
+  it('a request file with no frontmatter gets one that says cancelled', () => {
+    const out = cancelFile('# Loose\n\nwords\n')
+    expect(statusOf(out)).toBe('cancelled')
+    expect(out).toContain('# Loose\n\nwords')
+  })
+
+  it('a builder killed for a cancel settles cancelled, not paused, and its open pull request stays named', () => {
+    const open = { state: 'OPEN', url: 'https://github.com/mattshoe/mtg-api/pull/9' }
+    expect(outcome([], { cancelled: true })).toEqual({ status: 'cancelled', pr: null, note: 'cancelled; the agent was stopped' })
+    expect(outcome([open], { cancelled: true })).toEqual({
+      status: 'cancelled', pr: 'https://github.com/mattshoe/mtg-api/pull/9', note: 'cancelled; the agent was stopped',
+    })
+  })
+
+  it('reconcile keeps a cancelled request cancelled, even with an agent still alive in it', () => {
+    const seen = { rows: [row('dropped', 'cancelled'), row('by-hand', 'in progress')], ready: [], held: [], filed: [], stalled: [], prs: {} }
+    expect(reconcile({ ...seen, cancelled: ['dropped', 'by-hand'], alive: ['dropped', 'by-hand'] }))
+      .toEqual([{ name: 'by-hand', status: 'cancelled', note: 'cancelled; the agent was stopped' }])
+  })
+
+  it('kills the agent named for the request, and everything it started, and nothing else', async () => {
+    const name = `cancel-probe-${process.pid}-${Date.now()}`
+    // An "agent" whose command line names the request, as `claude -p` does,
+    // with a child of its own that does not, as a Bash tool call would be.
+    const agent = spawn(process.execPath, ['-e', `
+      const c = require('child_process').spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
+      console.log(c.pid); setInterval(() => {}, 1000)
+    `, `requests/${name}.md`], { stdio: ['ignore', 'pipe', 'ignore'] })
+    const bystander = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', `requests/${name}-other.md`], { stdio: 'ignore' })
+    const child = Number(await new Promise((done) => agent.stdout.once('data', (d) => done(String(d).trim()))))
+    // A zombie is dead: killed, and waiting for a parent that may never
+    // reap it, as in a CI container whose pid 1 reaps nothing.
+    const alive = (pid) => {
+      try {
+        return !execFileSync('ps', ['-o', 'stat=', '-p', String(pid)], { encoding: 'utf8' }).trim().startsWith('Z')
+      } catch { return false }
+    }
+    // A SIGKILL lands within moments, not at once. Two seconds is plenty.
+    const dies = async (pid) => {
+      for (let i = 0; i < 40 && alive(pid); i++) await new Promise((r) => setTimeout(r, 50))
+      return !alive(pid)
+    }
+    const gone = new Promise((done) => agent.once('exit', done))
+    try {
+      expect(alive(agent.pid) && alive(child), 'the probe never started, so this proves nothing').toBe(true)
+      const killed = stop(name)
+      await gone
+      expect(killed).toEqual(expect.arrayContaining([agent.pid, child]))
+      expect(await dies(agent.pid), 'the agent is still running').toBe(true)
+      expect(await dies(child), 'the agent died but what it started is still running').toBe(true)
+      expect(alive(bystander.pid), 'an agent on another request was killed too').toBe(true)
+    } finally {
+      for (const p of [agent.pid, child, bystander.pid]) { try { process.kill(p, 'SIGKILL') } catch { /* gone */ } }
+    }
   })
 })

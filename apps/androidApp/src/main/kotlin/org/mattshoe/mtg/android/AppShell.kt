@@ -141,6 +141,8 @@ fun AppShell(
     onPickFile: () -> Unit = {},
     /** Send on the New task screen. */
     onSendTask: () -> Unit = {},
+    /** Yes on a task's Cancel task question, with its key. */
+    onCancelTask: (String) -> Unit = {},
     /** Find cards on the Fetch screen, and Save. */
     onFetch: () -> Unit = {},
     onSaveFetch: () -> Unit = {},
@@ -439,6 +441,8 @@ fun AppShell(
                             listed = state.openTask,
                             now = state.tasks.now.takeIf { it > 0 } ?: System.currentTimeMillis(),
                             onBack = { onState(state.navigate(Route(View.ADMIN))) },
+                            onState = { onState(state.copy(taskDetail = it)) },
+                            onCancel = { onCancelTask(state.openTaskKey!!) },
                         )
                     } else AdminScreen(
                         state = state.people,

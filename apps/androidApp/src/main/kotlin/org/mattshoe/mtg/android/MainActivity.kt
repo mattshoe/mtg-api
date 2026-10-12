@@ -2,6 +2,7 @@ package org.mattshoe.mtg.android
 
 import org.mattshoe.mtg.core.TaskDetail
 import org.mattshoe.mtg.core.openTaskKey
+import org.mattshoe.mtg.core.taskCancelled
 import org.mattshoe.mtg.core.CommanderRank
 import org.mattshoe.mtg.core.askingCommanderRank
 import org.mattshoe.mtg.core.commanderRankFound
@@ -234,6 +235,9 @@ class MainActivity : ComponentActivity() {
     internal fun setStateForTesting(state: AppState) {
         app = state
     }
+
+    /** `cancelTask`, for a test that cannot press a button through the activity. */
+    internal fun cancelTaskForTesting(key: String) = cancelTask(key)
 
     /** `shareDeck`, for a test that cannot see a private method. */
     internal fun shareDeckForTesting(what: ShareWhat, where: ExportTo): AppState {
@@ -510,6 +514,7 @@ class MainActivity : ComponentActivity() {
                         onLookup = { term -> lookup(term) },
                         onPickFile = { pickFiles.launch(arrayOf("*/*")) },
                         onSendTask = { sendTask() },
+                        onCancelTask = { cancelTask(it) },
                         onFetch = { fetchCards() },
                         onSaveFetch = { app = app.savedFetch(now()) },
                         onReuse = { e ->
@@ -900,7 +905,8 @@ class MainActivity : ComponentActivity() {
             } catch (e: Exception) {
                 (app.taskDetail?.takeIf { it.key == key } ?: TaskDetail(key)).failed(e.message ?: "that did not work")
             }
-            if (app.taskDetail?.key == key) app = app.copy(taskDetail = loaded)
+            // Over a Cancel task question, or a cancel on its way, those stay.
+            app.taskDetail?.takeIf { it.key == key }?.let { app = app.copy(taskDetail = it.reloaded(loaded)) }
         }
     }
 
@@ -1314,6 +1320,25 @@ class MainActivity : ComponentActivity() {
     // ------------------------------------------------------------ files
 
     /** Send the New task page. A refusal stays on the page with everything typed. */
+    /**
+     * Cancel a task: its row says cancelled, and the laptop kills its
+     * agent off that within a minute. A refusal leaves it as it was and
+     * says why. Sibling of the website's `cancelTask`.
+     */
+    private fun cancelTask(key: String) {
+        val detail = app.taskDetail?.takeIf { it.key == key } ?: return
+        app = app.copy(taskDetail = detail.confirmCancel())
+        scope.launch {
+            app = try {
+                api.cancelTask(token(), key)
+                app.taskCancelled(key).say(TaskDetail.CANCELLED)
+            } catch (e: Exception) {
+                val why = e.message ?: "that did not cancel"
+                app.copy(taskDetail = app.taskDetail?.takeIf { it.key == key }?.cancelRefused()).say(why, failed = true)
+            }
+        }
+    }
+
     internal fun sendTask() {
         if (!app.newTask.canSend) return
         app = app.copy(newTask = app.newTask.sending())

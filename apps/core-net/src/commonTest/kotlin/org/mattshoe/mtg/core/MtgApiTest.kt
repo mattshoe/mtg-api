@@ -183,6 +183,28 @@ class MtgApiTest {
         assertEquals("aGVsbG8=", file["data"]!!.jsonPrimitive.content)
     }
 
+    /** Matt: "i want the ability to cancel/abort tasks". The row says cancelled; the laptop kills the agent. */
+    @Test
+    fun cancellingATaskWritesCancelledToItsRowByKey() = runTest {
+        api(body = """{"status":"cancelled"}""").cancelTask("0.abc", "ab12cd34")
+        val req = seen.single()
+        assertEquals("POST", req.method.value)
+        assertEquals("/tasks/status", req.url.encodedPath)
+        assertEquals("Bearer 0.abc", req.headers[HttpHeaders.Authorization])
+        val sent = Json.parseToJsonElement(req.bodyText()).jsonObject
+        assertEquals("ab12cd34", sent["key"]!!.jsonPrimitive.content)
+        assertEquals("cancelled", sent["status"]!!.jsonPrimitive.content)
+        assertEquals(TaskDetail.CANCEL_NOTE, sent["note"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun aRefusedCancelSaysWhatTheServerSaid() = runTest {
+        val e = assertFailsWith<ApiFailure> {
+            api(HttpStatusCode.NotFound, """{"error":"no task ab12cd34"}""").cancelTask("0.abc", "ab12cd34")
+        }
+        assertEquals("no task ab12cd34", e.message)
+    }
+
     @Test
     fun aRefusedTaskSaysWhatTheServerSaid() = runTest {
         val e = assertFailsWith<ApiFailure> {
