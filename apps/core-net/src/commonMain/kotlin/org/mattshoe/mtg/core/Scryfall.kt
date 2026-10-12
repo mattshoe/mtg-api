@@ -258,3 +258,19 @@ class Scryfall internal constructor(private val http: HttpClient) {
         val RARITIES = listOf("common", "uncommon", "rare", "mythic", "special")
     }
 }
+
+/** Stub. */
+suspend fun FetchList.find(
+    api: MtgApi,
+    scryfall: Scryfall,
+    entries: List<DeckList.Entry>,
+    owner: String,
+    filed: (FetchResult) -> Unit,
+): FetchResult {
+    val q = query(entries.map { it.key }, owner) ?: return FetchResult()
+    val r = api.query(q)
+    val printed = scryfall.rarities(entries.map { it.name })
+    val done = build(entries, decode(r.cols, r.rows), printed)
+    filed(done)
+    return done
+}

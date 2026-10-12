@@ -119,7 +119,14 @@ data class OwnedPrinting(
     val colors: String?,
     val rarity: String?,
     val qty: Int,
+    val identity: String? = null,
 )
+
+/** Stub. */
+object ColorIdentity {
+    fun printed(letters: String?): String = letters.orEmpty()
+    fun rank(letters: String): Int = 0
+}
 
 /**
  * One card to pull.
@@ -148,6 +155,8 @@ data class FetchSection(
     val rarity: FetchRarity,
     val cards: List<FetchCard>,
 ) {
+    val colors: String get() = ""
+    val symbols: List<String> get() = emptyList()
     val title: String get() = "${type.label} · ${color.label} · ${rarity.label}"
 }
 
@@ -312,6 +321,9 @@ data class FetchListState(
     fun loading() = copy(busy = true, error = null)
     fun failed(message: String) = copy(busy = false, error = message)
     fun found(r: FetchResult) = copy(result = r, busy = false, error = null)
+    val checking: Boolean get() = false
+    fun filed(list: String, r: FetchResult) = this
+    fun checked(list: String, r: FetchResult) = this
 
     /** A fresh list, keeping the saved ones. */
     fun cleared() = FetchListState(saved = saved)
