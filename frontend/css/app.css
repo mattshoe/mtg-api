@@ -1731,7 +1731,7 @@ select.sort {
 .peek-titles { min-width: 0; flex: 1; }
 .peek-name { font-size: 17px; font-weight: 600; color: var(--text); }
 .peek-sub { font-size: 13px; color: var(--text-2); }
-.peek-type { font-size: 12px; color: var(--text-3); }
+.peek-facts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; color: var(--text-3); }
 .peek-place { font-size: 12px; color: var(--text-3); white-space: nowrap; }
 .peek-tags { display: flex; gap: 8px; flex-wrap: wrap; }
 .peek-acts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }

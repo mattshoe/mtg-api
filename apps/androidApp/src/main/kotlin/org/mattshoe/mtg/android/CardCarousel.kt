@@ -48,6 +48,7 @@ import coil3.compose.AsyncImage
 import org.mattshoe.mtg.core.CardQueries
 import org.mattshoe.mtg.core.CardZoom
 import org.mattshoe.mtg.core.PeekCard
+import org.mattshoe.mtg.core.PeekFact
 import org.mattshoe.mtg.core.Design
 import org.mattshoe.mtg.core.Prices
 import org.mattshoe.mtg.core.Stepper
@@ -302,6 +303,30 @@ private fun CardSheet(
         ) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Line(card.title, Ink, Design.H3, FontWeight.SemiBold)
+                // "Type • {U}{B} • Rarity". `:core` says which parts
+                // are known and in what order; the identity is drawn
+                // as its symbols, which is what Matt asked for.
+                if (card.facts.isNotEmpty()) {
+                    FlowRow(
+                        Modifier.testTag("carousel-facts"),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        card.facts.forEachIndexed { i, fact ->
+                            val middle = Modifier.align(Alignment.CenterVertically)
+                            if (i > 0) Line("•", Ink3, Design.MINI, modifier = middle)
+                            when (fact) {
+                                is PeekFact.Words ->
+                                    Line(fact.text, Ink3, Design.MINI, modifier = middle.testTag("carousel-fact-$i"))
+                                is PeekFact.Identity -> Row(
+                                    middle.testTag("carousel-fact-$i"),
+                                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                ) {
+                                    fact.pips.forEach { ManaSymbol(it, size = 14.dp, tag = "carousel-pip-$it") }
+                                }
+                            }
+                        }
+                    }
+                }
                 // The printing and what it is worth, on one line.
                 // `printing` is null for a card nobody owns, which is
                 // also the card with no price, so the line collapses
@@ -311,9 +336,6 @@ private fun CardSheet(
                     card.price?.let { Prices.money(it) },
                 ).takeIf { it.isNotEmpty() }?.let {
                     Line(it.joinToString(" · "), Ink2, Design.SMALL)
-                }
-                card.typeLine?.takeIf { it.isNotBlank() }?.let {
-                    Line(it, Ink3, Design.MINI)
                 }
             }
             place?.let { Line(it, Ink3, Design.MINI, modifier = Modifier.testTag("carousel-place")) }

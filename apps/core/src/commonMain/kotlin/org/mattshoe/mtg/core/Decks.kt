@@ -162,7 +162,36 @@ data class PeekCard(
      * on the sheet says or sets that number. See [tweaks].
      */
     val stepped: Boolean = false,
+    /** "Type • {R}{G} • Rarity" under the name. See [PeekFact.line]. */
+    val facts: List<PeekFact> = emptyList(),
 )
+
+/**
+ * One part of the line under the carousel's name. Matt: "Type •
+ * <<color identity>> • Rarity", where the identity is "just the mana
+ * symbols, not the words" — so it is its own kind, which each shell
+ * draws as symbols, and the other two are words.
+ */
+sealed interface PeekFact {
+    data class Words(val text: String) : PeekFact
+
+    /** Symbol letters, WUBRG order, or `C` for a colourless card. */
+    data class Identity(val pips: List<String>) : PeekFact
+
+    companion object {
+        /** Whatever is known, in that order. Nothing known is an empty line. */
+        fun line(typeLine: String?, colorIdentity: String?, rarity: String?): List<PeekFact> = listOfNotNull(
+            typeLine?.takeIf { it.isNotBlank() }?.let(::Words),
+            // An empty identity is a colourless card, which has a
+            // symbol of its own. Null is a card nothing is known about.
+            colorIdentity?.let { id ->
+                val pips = Pip.COLOURS.filter { it.letter in id.uppercase() }.map { it.letter }
+                Identity(pips.ifEmpty { listOf(Pip.C.letter) })
+            },
+            rarity?.takeIf { it.isNotBlank() }?.let { Words(it.replaceFirstChar(Char::uppercase)) },
+        )
+    }
+}
 
 data class DeckCard(
     val name: String,
