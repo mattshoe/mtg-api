@@ -83,6 +83,7 @@ private fun busyOn(s: AppState, v: View): Boolean = when (v) {
     View.ADMIN -> s.people.busy
     View.CARD -> s.card?.busy == true
     View.ENTRY -> s.entry.busy != null
+    View.FETCH -> s.fetch.busy
 }
 
 private fun errorOn(s: AppState, v: View): String? = when (v) {
@@ -93,6 +94,7 @@ private fun errorOn(s: AppState, v: View): String? = when (v) {
     View.ADMIN -> s.people.error
     View.CARD -> s.card?.error
     View.ENTRY -> s.entry.error
+    View.FETCH -> s.fetch.error
 }
 
 /** A state with something on every screen, so a reset shows up. */
@@ -1485,15 +1487,16 @@ class AdminGateTest {
     @Test
     fun theMenuOffersTheUngatedOnesWhileLocked() {
         assertEquals(View.entries.filter { it.inNav && !it.gated }, locked.visible)
-        assertEquals(3, locked.visible.size)
+        // Library, Decks, Fetch, and Stats behind the profile.
+        assertEquals(4, locked.visible.size)
     }
 
     @Test
     fun andEveryOneInTheNavForAnOperator() {
         assertEquals(View.entries.filter { it.inNav }, operator.visible)
-        assertEquals(6, operator.visible.size)
-        // Four for an ordinary account: the admin half is not theirs.
-        assertEquals(4, open.visible.size)
+        assertEquals(7, operator.visible.size)
+        // Five for an ordinary account: the admin half is not theirs.
+        assertEquals(5, open.visible.size)
     }
 
     @Test
@@ -1783,9 +1786,9 @@ class ViewTableTest {
 
     @Test
     fun thereAreSevenOfThem() {
-        // Seven again, with Admin Settings. It was six after the
-        // Query page went.
-        assertEquals(7, View.entries.size)
+        // Eight, with the Fetch list. Seven with Admin Settings, six
+        // after the Query page went.
+        assertEquals(8, View.entries.size)
     }
 
     @Test
@@ -1870,7 +1873,7 @@ class FetchingTest {
 
     @Test
     fun everyScreenThatFetchesSaysSo() {
-        val fetches = setOf(View.LIBRARY, View.DECKS, View.STATS, View.LOGS, View.ADMIN, View.CARD)
+        val fetches = setOf(View.LIBRARY, View.DECKS, View.STATS, View.LOGS, View.ADMIN, View.CARD, View.FETCH)
         View.entries.forEach {
             assertEquals(it in fetches, busyOn(withACard.fetching(it), it), it.slug)
         }
@@ -1939,7 +1942,7 @@ class FetchFailedTest {
 
     @Test
     fun everyScreenWithSomewhereToSayItSaysIt() {
-        val says = setOf(View.LIBRARY, View.DECKS, View.STATS, View.LOGS, View.ADMIN, View.CARD)
+        val says = setOf(View.LIBRARY, View.DECKS, View.STATS, View.LOGS, View.ADMIN, View.CARD, View.FETCH)
         View.entries.forEach {
             assertEquals(
                 if (it in says) "the database said no" else null,
@@ -2025,6 +2028,7 @@ class LoadNeedsTest {
                 View.ADMIN -> listOf("people")
                 View.CARD -> listOf("card")
                 View.ENTRY -> emptyList()
+                View.FETCH -> emptyList()
             }
             assertEquals(expected, Load.needs(Route(it)), it.slug)
         }
@@ -2057,7 +2061,8 @@ class LoadNeedsTest {
     @Test
     fun onlyTheTwoScreensThatFetchNothingAskForNothing() {
         View.entries.forEach {
-            val quiet = it == View.ENTRY
+            // Fetch asks for nothing until a list is pasted and Find is pressed.
+            val quiet = it == View.ENTRY || it == View.FETCH
             assertEquals(quiet, Load.needs(Route(it)).isEmpty(), it.slug)
         }
     }

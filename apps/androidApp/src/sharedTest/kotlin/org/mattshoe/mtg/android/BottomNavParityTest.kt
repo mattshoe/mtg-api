@@ -115,8 +115,8 @@ class BottomNavParityTest {
     @Test
     fun theBarIsTheThreeYouCanReachWhileLocked() {
         shell()
-        assertEquals(3, tabs().size, "a locked app's bar should be Library, Decks, Stats")
-        listOf("Library", "Decks", "Stats").forEach { label ->
+        assertEquals(3, tabs().size, "a locked app's bar should be Library, Decks, Fetch")
+        listOf("Library", "Decks", "Fetch").forEach { label ->
             assertTrue(
                 rule.onAllNodes(hasText(label)).fetchSemanticsNodes().isNotEmpty(),
                 "$label is missing from the bar",
@@ -153,7 +153,7 @@ class BottomNavParityTest {
         // The icon and the label are separate nodes inside the item,
         // and the icon sits above the label — which is what makes it
         // a standard bottom bar rather than a row of text buttons.
-        listOf("Library", "Decks", "Stats", "Entry").forEach { label ->
+        listOf("Library", "Decks", "Fetch", "Entry").forEach { label ->
             val icon = rule.onNodeWithTag("nav-icon-$label", useUnmergedTree = true)
                 .getUnclippedBoundsInRoot()
             val word = rule.onAllNodes(hasText(label), useUnmergedTree = true)
@@ -184,7 +184,7 @@ class BottomNavParityTest {
     @Test
     fun everyTabIsThumbSized() {
         shell(unlocked())
-        listOf("Library", "Decks", "Stats", "Entry").forEach { label ->
+        listOf("Library", "Decks", "Fetch", "Entry").forEach { label ->
             val box = tab(label).getUnclippedBoundsInRoot()
             val h = box.bottom.value - box.top.value
             assertTrue(h >= 47.5f, "the $label tab is only ${h}dp tall")
@@ -211,11 +211,11 @@ class BottomNavParityTest {
                 .fetchSemanticsNodes().size == 1,
             "exactly one tab should be marked as current",
         )
-        tab("Stats").performClick()
+        tab("Fetch").performClick()
         rule.waitForIdle()
         val marked = rule.onNodeWithTag("nav-current", useUnmergedTree = true)
             .getUnclippedBoundsInRoot()
-        val stats = tab("Stats").getUnclippedBoundsInRoot()
+        val stats = tab("Fetch").getUnclippedBoundsInRoot()
         assertTrue(
             marked.left.value >= stats.left.value - 1f &&
                 marked.right.value <= stats.right.value + 1f,
@@ -230,7 +230,7 @@ class BottomNavParityTest {
         // that?!?!" They were — every one of them, because the
         // header printed `view.label` and so does the bar.
         shell(unlocked())
-        listOf("Library", "Decks", "Stats", "Entry").forEach { label ->
+        listOf("Library", "Decks", "Fetch", "Entry").forEach { label ->
             tab(label).performClick()
             rule.waitForIdle()
             assertEquals(
@@ -252,7 +252,7 @@ class BottomNavParityTest {
         // a header that said Library, directly above a tab that says
         // Library. One of the three has to go and it is not the tab.
         shell(unlocked())
-        listOf("Library", "Decks", "Stats", "Entry").forEach { label ->
+        listOf("Library", "Decks", "Fetch", "Entry").forEach { label ->
             tab(label).performClick()
             rule.waitForIdle()
             val printed = rule.onAllNodes(hasText(label), useUnmergedTree = true)

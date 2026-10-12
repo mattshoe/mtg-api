@@ -110,6 +110,8 @@ fun AppShell(
     onSendTask: () -> Unit = {},
     /** Yes on a task's Cancel task question, with its key. */
     onCancelTask: (String) -> Unit = {},
+    onFetch: () -> Unit = {},
+    onSaveFetch: () -> Unit = {},
 ) {
     // The page underneath an overlay holds still. `overscroll-behavior`
     // on the overlay only stops the chaining once the overlay itself
@@ -175,6 +177,13 @@ fun AppShell(
         )
 
         View.STATS -> StatsPage(state.stats)
+
+        View.FETCH -> FetchListPage(
+            state = state.fetch,
+            onState = { onState(state.copy(fetch = it)) },
+            onFind = onFetch,
+            onSave = onSaveFetch,
+        )
 
         View.ADMIN -> if (state.writingTask) {
             NewTaskPage(

@@ -85,6 +85,23 @@ fun StatsIcon(tint: Color, size: Dp = 22.dp, modifier: Modifier = Modifier) =
         pen.line(17f, 20f, 17f, 4.5f)
     }
 
+/**
+ * The Fetch list: a checklist, because it is a list of cards to go and
+ * pull, ticked off one section at a time. Not the bar chart Stats had
+ * in this slot — Stats kept its own drawing and moved behind the
+ * profile.
+ */
+@Composable
+fun FetchIcon(tint: Color, size: Dp = 22.dp, modifier: Modifier = Modifier) =
+    Canvas(modifier.size(size)) {
+        val pen = Pen(this, tint)
+        listOf(6f, 12f, 18f).forEach { y ->
+            pen.line(3.5f, y - 0.5f, 5f, y + 1f)
+            pen.line(5f, y + 1f, 8f, y - 2f)
+            pen.line(11f, y, 20.5f, y)
+        }
+    }
+
 /** Mass entry: a pencil, because it is the screen you write a list into. */
 @Composable
 fun EntryIcon(tint: Color, size: Dp = 22.dp, modifier: Modifier = Modifier) =
@@ -132,6 +149,7 @@ fun NavIcon(view: View, tint: Color, size: Dp = 22.dp, modifier: Modifier = Modi
         View.LIBRARY -> LibraryIcon(tint, size, tagged)
         View.DECKS -> DecksIcon(tint, size, tagged)
         View.STATS -> StatsIcon(tint, size, tagged)
+        View.FETCH -> FetchIcon(tint, size, tagged)
         View.ENTRY -> EntryIcon(tint, size, tagged)
         else -> LibraryIcon(tint, size, tagged)
     }

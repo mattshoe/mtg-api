@@ -80,10 +80,11 @@ class RolesTest {
 
     @Test
     fun andOnlyAnAdminIsOfferedIt() {
-        assertEquals(emptyList(), Admin().behindProfile)
-        assertEquals(emptyList(), Admin().signIn(me, "s").behindProfile)
+        // Stats is behind the profile for everybody; the admin half is not.
+        assertEquals(listOf(View.STATS), Admin().behindProfile)
+        assertEquals(listOf(View.STATS), Admin().signIn(me, "s").behindProfile)
         assertEquals(
-            listOf(View.ADMIN, View.LOGS),
+            listOf(View.STATS, View.ADMIN, View.LOGS),
             Admin().signIn(boss, "s").behindProfile,
             "the profile's admin half is not what it should be",
         )
