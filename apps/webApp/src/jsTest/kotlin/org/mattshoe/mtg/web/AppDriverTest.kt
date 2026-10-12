@@ -72,6 +72,13 @@ class AppDriverTest {
     /** How long `/auth/me` takes to answer. CI is slower than a laptop. */
     private var whoAmIMs = 0
 
+    /**
+     * Makes `/cards/add` answer the way it does when a write is already
+     * running — a dropped connection, the client's own retry, and the
+     * Worker still holding the idempotency key.
+     */
+    private var addFails = false
+
     @BeforeTest
     fun stubTheNetwork() {
         writes.clear()
@@ -81,6 +88,7 @@ class AppDriverTest {
         tasksAsked = 0
         askedGitHub = 0
         whoAmIMs = 0
+        addFails = false
         val engine = MockEngine { request ->
             if (request.method.value == "POST" && """"dry_run":false""" in
                 (request.body as? io.ktor.http.content.TextContent)?.text.orEmpty()
@@ -118,6 +126,13 @@ class AppDriverTest {
                 body.contains("FROM deck_cards dc") ->
                     """{"cols":["name","name_norm","qty","role","owned","type_line","scryfall_id"],""" +
                         """"rows":[["Sol Ring","sol ring",1,null,1,"Artifact",null]],"n":1}"""
+
+                request.url.encodedPath == "/cards/add" && addFails ->
+                    return@MockEngine respond(
+                        """{"error":"that write is already in progress"}""",
+                        HttpStatusCode.Conflict,
+                        headersOf(HttpHeaders.ContentType, "application/json"),
+                    )
 
                 request.url.encodedPath == "/cards/add" ->
                     """{"applied":true,"dry_run":false,"resolved":1,"failed":0,""" +
@@ -1604,5 +1619,48 @@ class AppDriverTest {
         waitFor("a task on Admin Settings") { root.all("[data-task]").isNotEmpty() }
         val text = root.all("[data-task]").first().textContent.orEmpty()
         assertTrue("2h 00m" in text, "the running task does not count from its creation to now: '$text'")
+    }
+
+    /**
+     * The share-to-collection flow when the server refuses.
+     *
+     * Matt, on the third time this broke: "IT JUST GETS FUCKING STUCK
+     * HERE!!!" — a screenshot of "Working / Checking…" that never moved.
+     *
+     * The cause was never in `MassEntry`. `failed()` clears `busy` and a
+     * unit test proves it; nothing called it. Both shells' `work` helper
+     * caught the failure, raised a toast and stopped, and the page draws
+     * ONLY the Working panel while `busy` is set — so the whole wizard
+     * was replaced by a spinner with no way out but killing the app.
+     *
+     * Every e2e test here let the server answer normally, which is why
+     * three releases shipped with the catch block never once executed.
+     * This one makes it answer 409, the way it does when a dropped
+     * connection makes the client retry a write the Worker still holds.
+     */
+    @Test
+    fun aRefusedDryRunLetsYouOutOfTheWizard() = runTest {
+        addFails = true
+        val view = mount("#/entry", token = "t", share = "1 Sol Ring\n1 Arcane Signet")
+        waitFor("the entry wizard") { view.textContent.orEmpty().contains("What are you doing?") }
+        view.all("button.opt").first { it.textContent.orEmpty().contains("Add") }.click()
+        settle()
+        pressOnThePage("Continue →")
+        waitFor("the list step") { paletteButtons().any { it.says() == "Preview changes →" } }
+
+        press("Preview changes →")
+
+        // It must come back. Before the fix this waited forever.
+        waitFor("the wizard to come back from a refused dry run") {
+            !view.textContent.orEmpty().contains("Checking…")
+        }
+        assertTrue(
+            view.textContent.orEmpty().contains("already in progress"),
+            "the refusal was swallowed: ${view.textContent}",
+        )
+        assertTrue(
+            paletteButtons().any { it.says() == "Preview changes →" },
+            "there was no way to try again",
+        )
     }
 }
