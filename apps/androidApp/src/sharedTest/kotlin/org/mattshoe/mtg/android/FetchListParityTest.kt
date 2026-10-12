@@ -55,9 +55,9 @@ class FetchListParityTest {
     private val me = Admin().signIn(Account(key = "e7de0cb1"), "t")
 
     private val owned = listOf(
-        OwnedPrinting("counterspell", "Counterspell", "Counterspell", "Instant", "U", "common", 2),
+        OwnedPrinting("counterspell", "Counterspell", "Counterspell", "Instant", "U", "common", 2, identity = "U"),
         OwnedPrinting("arcane signet", "Arcane Signet", "Arcane Signet", "Artifact", null, "common", 1),
-        OwnedPrinting("brazen borrower // petty theft", "Brazen Borrower // Petty Theft", "Brazen Borrower", "Creature", "U", "mythic", 1),
+        OwnedPrinting("brazen borrower // petty theft", "Brazen Borrower // Petty Theft", "Brazen Borrower", "Creature", "U", "mythic", 1, identity = "U"),
         // The database stores the letters in its own order; the card prints {U}{R}.
         OwnedPrinting("electrolyze", "Electrolyze", "Electrolyze", "Instant", "RU", "uncommon", 1, identity = "RU"),
     )
