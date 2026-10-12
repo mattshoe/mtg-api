@@ -336,7 +336,22 @@ data class FetchListState(
     val error: String? = null,
     /** The filing is on screen and Scryfall's Also check has not come back yet. */
     val checking: Boolean = false,
+    val draft: String = "",
+    val ticked: Set<String> = emptySet(),
+    val openId: String? = null,
+    val editing: String? = null,
 ) {
+    fun drafted(text: String) = this
+    fun started() = this
+    fun refinding() = this
+    fun tick(name: String) = this
+    fun isTicked(name: String) = false
+    val progress: String get() = ""
+    fun edit() = this
+    fun editTyped(text: String) = this
+    fun cancelEdit() = this
+    val current: SavedFetch? get() = null
+
     /** The cards on the list, the way `DeckList` reads any list. */
     val entries: List<DeckList.Entry> get() = DeckList.entries(list)
 
@@ -415,6 +430,10 @@ data class FetchListState(
             FetchListState()
         }
 
+        const val PAGE = "list"
+
+        fun keep(store: Store, current: SavedFetch?) {}
+
         fun persist(store: Store, saved: List<SavedFetch>) {
             if (saved.isEmpty()) store.remove(KEY)
             else store.put(KEY, json.encodeToString(ListSerializer(SavedFetch.serializer()), saved))
@@ -433,3 +452,7 @@ fun AppState.savedFetch(now: String): AppState {
     val s = copy(fetch = next)
     return if (next.error == null) s.say("Saved \"" + next.title + "\"") else s
 }
+
+val AppState.onFetchList: Boolean get() = false
+fun AppState.findingFetch(): AppState = this
+fun AppState.openFetch(id: String): AppState = this

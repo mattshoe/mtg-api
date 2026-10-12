@@ -49,6 +49,7 @@ import org.mattshoe.mtg.core.DisassembleState
 import org.mattshoe.mtg.core.EntryHistory
 import org.mattshoe.mtg.core.FetchList
 import org.mattshoe.mtg.core.FetchListState
+import org.mattshoe.mtg.core.findingFetch
 import org.mattshoe.mtg.core.savedFetch
 import org.mattshoe.mtg.core.find
 import org.mattshoe.mtg.core.Export
@@ -151,6 +152,8 @@ object MtgApp {
             // The same for the saved Fetch lists: whatever path saved
             // or deleted one, storage follows.
             if (value.fetch.saved != was.fetch.saved) FetchListState.persist(store, value.fetch.saved)
+            // And the list on its page, ticks and all, saved or not.
+            if (value.fetch.current != was.fetch.current) FetchListState.keep(store, value.fetch.current)
             if (value.toast != null && value.toast != was.toast) fadeToast(value.toast!!)
             // Every write, so whichever path put a commander on screen —
             // its page, the carousel, a link — asks for its rank.
@@ -932,7 +935,10 @@ object MtgApp {
      * and every rarity Scryfall knows them at, filed by `FetchList`.
      */
     private fun fetchCards() {
-        val s = app
+        // Onto the list's own page first, so what follows — the
+        // loading view, the answer or what went wrong — is drawn there.
+        val s = app.findingFetch()
+        app = s
         val q = FetchList.query(s.fetch.entries.map { it.key }, s.viewing)
         if (q == null) {
             app = app.copy(fetch = app.fetch.failed(FetchList.NO_COLLECTION))

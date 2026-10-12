@@ -42,6 +42,9 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.mattshoe.mtg.core.leaveFetchList
+import org.mattshoe.mtg.core.openFetch
+import org.mattshoe.mtg.core.onFetchList
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.CountWrite
 import org.mattshoe.mtg.core.cardStep
@@ -421,9 +424,12 @@ fun AppShell(
 
                     View.FETCH -> FetchListScreen(
                         state = state.fetch,
+                        onList = state.onFetchList,
                         onState = { onState(state.copy(fetch = it)) },
                         onFind = onFetch,
                         onSave = onSaveFetch,
+                        onOpen = { onState(state.openFetch(it)) },
+                        onBack = { onState(state.leaveFetchList()) },
                     )
 
 

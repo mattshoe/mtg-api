@@ -48,6 +48,7 @@ import org.mattshoe.mtg.core.DisassembleState
 import org.mattshoe.mtg.core.EntryHistory
 import org.mattshoe.mtg.core.FetchList
 import org.mattshoe.mtg.core.FetchListState
+import org.mattshoe.mtg.core.findingFetch
 import org.mattshoe.mtg.core.savedFetch
 import org.mattshoe.mtg.core.find
 import org.mattshoe.mtg.core.Export
@@ -121,6 +122,8 @@ class MainActivity : ComponentActivity() {
             AdminToken.sync(store, model.app.admin, value.admin)
             // The saved Fetch lists follow the same way. See `FetchListState.persist`.
             if (value.fetch.saved != model.app.fetch.saved) FetchListState.persist(store, value.fetch.saved)
+            // And the list on its page, ticks and all, saved or not.
+            if (value.fetch.current != model.app.fetch.current) FetchListState.keep(store, value.fetch.current)
             // Every write, so a pull lets go of its spinner the moment
             // its page's fetch lands, whichever coroutine landed it.
             model.app = value.settled()
@@ -966,7 +969,10 @@ class MainActivity : ComponentActivity() {
      * The same steps as the web's `fetchCards`.
      */
     private fun fetchCards() {
-        val s = app
+        // Onto the list's own page first, so what follows — the
+        // loading view, the answer or what went wrong — is drawn there.
+        val s = app.findingFetch()
+        app = s
         val q = FetchList.query(s.fetch.entries.map { it.key }, s.viewing)
         if (q == null) {
             app = app.copy(fetch = app.fetch.failed(FetchList.NO_COLLECTION))

@@ -15,6 +15,9 @@ import org.jetbrains.compose.web.dom.H2
 import org.jetbrains.compose.web.dom.Input
 import org.jetbrains.compose.web.dom.Span
 import org.jetbrains.compose.web.dom.Text
+import org.mattshoe.mtg.core.leaveFetchList
+import org.mattshoe.mtg.core.openFetch
+import org.mattshoe.mtg.core.onFetchList
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.TaskDetail
 import org.mattshoe.mtg.core.openTask
@@ -180,9 +183,12 @@ fun AppShell(
 
         View.FETCH -> FetchListPage(
             state = state.fetch,
+            onList = state.onFetchList,
             onState = { onState(state.copy(fetch = it)) },
             onFind = onFetch,
             onSave = onSaveFetch,
+            onOpen = { onState(state.openFetch(it)) },
+            onBack = { onState(state.leaveFetchList()) },
         )
 
         View.ADMIN -> if (state.writingTask) {
