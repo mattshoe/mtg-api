@@ -84,7 +84,7 @@ class AppShellTest {
         val tabs = root.tabs()
         assertTrue(tabs.contains("Library"))
         assertTrue(tabs.contains("Decks"))
-        assertTrue(tabs.contains("Stats"))
+        assertTrue(tabs.contains("Fetch"))
         assertFalse(tabs.contains("Query"), "the Query page is gone")
         assertFalse(tabs.contains("Entry"), "a gated tab must not be visible")
         assertFalse(tabs.contains("Server Logs"))

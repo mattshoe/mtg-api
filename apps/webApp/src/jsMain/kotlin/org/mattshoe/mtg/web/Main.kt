@@ -46,6 +46,9 @@ import org.mattshoe.mtg.core.DeckTweak
 import org.mattshoe.mtg.core.Tweak
 import org.mattshoe.mtg.core.DisassembleState
 import org.mattshoe.mtg.core.EntryHistory
+import org.mattshoe.mtg.core.FetchList
+import org.mattshoe.mtg.core.FetchListState
+import org.mattshoe.mtg.core.savedFetch
 import org.mattshoe.mtg.core.Export
 import org.mattshoe.mtg.core.ExportTo
 import org.mattshoe.mtg.core.FacetQueries
@@ -143,6 +146,9 @@ object MtgApp {
             // nav menu's Lock button, not Cmd+L, not whatever reaches
             // this property next. See `AdminToken`.
             AdminToken.sync(store, was.admin, value.admin)
+            // The same for the saved Fetch lists: whatever path saved
+            // or deleted one, storage follows.
+            if (value.fetch.saved != was.fetch.saved) FetchListState.persist(store, value.fetch.saved)
             if (value.toast != null && value.toast != was.toast) fadeToast(value.toast!!)
             // Every write, so whichever path put a commander on screen —
             // its page, the carousel, a link — asks for its rank.
@@ -222,7 +228,11 @@ object MtgApp {
     fun mount(root: HTMLElement, sharedList: String?, token: String) {
         unmount()
         val opening = routeFromHash()
-        app = AppState(admin = Admin(token.ifBlank { null }), history = EntryHistory.load(store))
+        app = AppState(
+            admin = Admin(token.ifBlank { null }),
+            history = EntryHistory.load(store),
+            fetch = FetchListState.restore(store),
+        )
             // A search is a link: the filters travel in the hash, so a
             // URL somebody sent opens the search they were looking at.
             .let { it.restoredSearch(FilterUrl.fromHash(opening.query)) }
@@ -394,6 +404,8 @@ object MtgApp {
                 },
                 onTaskFiles = { files -> readTaskFiles(files) },
                 onSendTask = { sendTask() },
+                onFetch = { fetchCards() },
+                onSaveFetch = { app = app.savedFetch(now()) },
             )
         }
     }
@@ -908,6 +920,26 @@ object MtgApp {
                 if (app.view != View.ADMIN || app.route.rest.isNotEmpty()) break
                 app = app.copy(tasks = app.tasks.at(kotlin.js.Date.now().toLong()))
             }
+        }
+    }
+
+    /**
+     * The Fetch list: the owned printings of every card on the list,
+     * and every rarity Scryfall knows them at, filed by `FetchList`.
+     */
+    private fun fetchCards() {
+        val s = app
+        val q = FetchList.query(s.fetch.entries.map { it.key }, s.viewing)
+        if (q == null) {
+            app = app.copy(fetch = app.fetch.failed(FetchList.NO_COLLECTION))
+            return
+        }
+        app = app.fetching(View.FETCH)
+        intoPage(View.FETCH) {
+            val r = api.query(q)
+            val printed = scryfall.rarities(s.fetch.entries.map { it.name })
+            val found = FetchList.build(s.fetch.entries, FetchList.decode(r.cols, r.rows), printed)
+            app.copy(fetch = app.fetch.found(found))
         }
     }
 

@@ -45,6 +45,9 @@ import org.mattshoe.mtg.core.DeckTweak
 import org.mattshoe.mtg.core.Deeplink
 import org.mattshoe.mtg.core.DisassembleState
 import org.mattshoe.mtg.core.EntryHistory
+import org.mattshoe.mtg.core.FetchList
+import org.mattshoe.mtg.core.FetchListState
+import org.mattshoe.mtg.core.savedFetch
 import org.mattshoe.mtg.core.Export
 import org.mattshoe.mtg.core.ExportTo
 import org.mattshoe.mtg.core.FacetQueries
@@ -114,6 +117,8 @@ class MainActivity : ComponentActivity() {
         get() = model.app
         set(value) {
             AdminToken.sync(store, model.app.admin, value.admin)
+            // The saved Fetch lists follow the same way. See `FetchListState.persist`.
+            if (value.fetch.saved != model.app.fetch.saved) FetchListState.persist(store, value.fetch.saved)
             // Every write, so a pull lets go of its spinner the moment
             // its page's fetch lands, whichever coroutine landed it.
             model.app = value.settled()
@@ -393,6 +398,7 @@ class MainActivity : ComponentActivity() {
             app = AppState(
                 admin = Admin(AdminToken.restore(store)),
                 history = EntryHistory.load(store),
+                fetch = FetchListState.restore(store),
             )
             // Whatever was held last time might be a session, might be
             // the old password, might be stale. Asking the server
@@ -498,6 +504,8 @@ class MainActivity : ComponentActivity() {
                         onLookup = { term -> lookup(term) },
                         onPickFile = { pickFiles.launch(arrayOf("*/*")) },
                         onSendTask = { sendTask() },
+                        onFetch = { fetchCards() },
+                        onSaveFetch = { app = app.savedFetch(now()) },
                         onReuse = { e ->
                             app = app.copy(entry = app.history.reuse(e)).navigate(View.ENTRY)
                         },
@@ -937,6 +945,27 @@ class MainActivity : ComponentActivity() {
         app.copy(people = app.people.loaded(found))
     } catch (ex: ApiFailure) {
         app.copy(people = app.people.failed(ex.message ?: "that did not work"))
+    }
+
+    /**
+     * The Fetch list: the owned printings of every card on the list,
+     * and every rarity Scryfall knows them at, filed by `FetchList`.
+     * The same steps as the web's `fetchCards`.
+     */
+    private fun fetchCards() {
+        val s = app
+        val q = FetchList.query(s.fetch.entries.map { it.key }, s.viewing)
+        if (q == null) {
+            app = app.copy(fetch = app.fetch.failed(FetchList.NO_COLLECTION))
+            return
+        }
+        app = app.fetching(View.FETCH)
+        intoPage(View.FETCH) {
+            val r = api.query(q)
+            val printed = scryfall.rarities(s.fetch.entries.map { it.name })
+            val found = FetchList.build(s.fetch.entries, FetchList.decode(r.cols, r.rows), printed)
+            app.copy(fetch = app.fetch.found(found))
+        }
     }
 
     private suspend fun loadStats(): AppState {
