@@ -82,8 +82,10 @@ class NavShapeTest {
         assertFalse(View.LOGS.bar, "the server log is in the bottom bar")
         assertFalse(View.ADMIN.bar, "Admin Settings is in the bottom bar")
         val unlocked = Admin().signIn(Account(key = "e7de0cb1", role = Role.ADMIN), "t")
-        assertEquals(listOf(View.ADMIN, View.LOGS), unlocked.behindProfile)
-        assertEquals(emptyList(), Admin().behindProfile, "a signed-out app offers the log")
+        // Stats first: it moved behind the profile when Fetch took its
+        // place in the bar, and it is for everybody.
+        assertEquals(listOf(View.STATS, View.ADMIN, View.LOGS), unlocked.behindProfile)
+        assertEquals(listOf(View.STATS), Admin().behindProfile, "a signed-out app offers the log")
     }
 
     @Test
