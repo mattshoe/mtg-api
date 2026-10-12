@@ -175,11 +175,19 @@ function truth(name, now, { ready, held, filed, stalled, alive, cancelled = [], 
     if (merged) return shipped(merged, now, deploys)
     return now === 'cancelled' ? null : { status: 'cancelled', note: CANCELLED }
   }
-  if (alive.includes(name)) return now === 'blocked' ? null : { status: 'in progress' }
+  // An agent working on it beats `blocked`, always. `blocked` used to win
+  // here, on the reasoning that a builder which stopped to ask should not
+  // have its question overwritten — but the dispatcher writes `blocked`
+  // for a stalled worktree too, and that one is answered by somebody
+  // picking the work up, which is exactly what a live agent is. Two tasks
+  // read `blocked` while one was merged and the other had an agent on it.
+  if (alive.includes(name)) return now === 'in progress' ? null : { status: 'in progress' }
   const isReady = ready.includes(name)
   const isHeld = held.includes(name)
   if (merged || prs.some((p) => p.state === 'OPEN')) {
     const o = outcome(prs, { withdrawn: !isReady && !isHeld })
+    // A merge answers everything, `blocked` included.
+    if (o.status === 'merged' || merged) return shipped(merged, now, deploys)
     if (now === 'blocked' || now === 'cancelled') return null
     if (o.status === 'merged') return shipped(merged, now, deploys)
     if (landed) return null

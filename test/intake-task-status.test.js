@@ -92,6 +92,25 @@ describe('what the dispatcher puts right on every run', () => {
   const row = (name, status) => ({ key: 'k-' + name, name, status })
   const seen = (over = {}) => ({ rows: [], ready: [], held: [], filed: [], stalled: [], ...over })
 
+  // `blocked` was sticky: once written, nothing cleared it. The
+  // dispatcher writes it for a worktree with no agent in it, and two
+  // tasks then sat reading `blocked` when one had already MERGED and the
+  // other had an agent working on it. A state that cannot be left is not
+  // a status, it is a dead end.
+  it('an agent working on it clears blocked', () => {
+    expect(reconcile(seen({ alive: ['card-page'], ready: ['card-page'], rows: [row('card-page', 'blocked')] })))
+      .toEqual([{ name: 'card-page', status: 'in progress' }])
+  })
+
+  it('a merge clears blocked', () => {
+    const wrote = reconcile(seen({
+      ready: ['card-page'],
+      rows: [row('card-page', 'blocked')],
+      prs: { 'card-page': [{ state: 'MERGED', url: 'u', mergedAt: '2026-10-12T00:00:00Z' }] },
+    }))
+    expect(wrote.map((w) => w.status)).toEqual(['merged'])
+  })
+
   it('a request held back from building is paused, held by Matt', () => {
     expect(reconcile(seen({ held: ['card-page'], rows: [row('card-page', 'pending')] })))
       .toEqual([{ name: 'card-page', status: 'paused', note: 'held by Matt' }])
