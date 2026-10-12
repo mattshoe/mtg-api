@@ -17,6 +17,24 @@ export const HEADER = 'idempotency-key';
 /** Long enough to be unguessable, short enough to index. */
 const MAX_KEY = 200;
 
+/**
+ * How long a claim with no answer is believed.
+ *
+ * A request that dies mid-flight leaves its claim behind, and every retry
+ * after that is refused with "already in progress" — forever, because the
+ * attempt holding the key is never coming back to release it. Matt's share
+ * looped on exactly this: start, die, 409, start, die, 409.
+ *
+ * So an unfinished claim is only trusted for as long as a request could
+ * plausibly still be running. Past that it is abandoned and the next
+ * attempt takes it over, which is the difference between a flow that
+ * recovers by itself and one that needs a human to clear a table.
+ *
+ * Thirty seconds: the slowest real write measured on this API is a 10,000
+ * line import at 20s, and every client gives up long before that anyway.
+ */
+const IN_FLIGHT_MS = 30_000;
+
 export function keyFrom(request) {
   const raw = request.headers.get(HEADER);
   if (!raw) return null;
@@ -52,7 +70,7 @@ export async function claim(db, key, path) {
   }
 
   const row = await db.prepare(
-    'SELECT path, status, body FROM idempotency WHERE key = ?',
+    'SELECT path, status, body, ts FROM idempotency WHERE key = ?',
   ).bind(key).first();
 
   if (!row) return { claimed: true };
@@ -64,7 +82,16 @@ export async function claim(db, key, path) {
       conflict: `that idempotency key was used for ${row.path}`,
     };
   }
-  if (row.status === null || row.status === undefined) return { inFlight: true };
+  if (row.status === null || row.status === undefined) {
+    // Still plausibly running: refuse, and say so.
+    const age = Date.now() - Date.parse(row.ts || '');
+    if (!Number.isFinite(age) || age < IN_FLIGHT_MS) return { inFlight: true };
+    // Abandoned. Take the key over rather than refusing this attempt and
+    // every attempt after it for the rest of time.
+    await db.prepare('UPDATE idempotency SET ts = ? WHERE key = ? AND status IS NULL')
+      .bind(new Date().toISOString(), key).run();
+    return { claimed: true };
+  }
 
   let body;
   try {

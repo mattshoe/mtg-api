@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { post, sql, count, snapshot, stubScryfall } from './helpers.js';
+import { post, sql, exec, count, snapshot, stubScryfall } from './helpers.js';
+import { env } from 'cloudflare:test';
+import { claim } from '../src/idempotency.js';
 import { MATT, KAYLA } from './helpers.js';
 
 // A retried write must not apply twice.
@@ -93,3 +95,58 @@ describe('POST with an idempotency key', () => {
     expect(real.body.applied).toBe(true);
   });
 });
+
+// A claim whose request died must not refuse every attempt after it.
+//
+// Matt's share from ManaBox looped: a `/cards/add` claimed its key and
+// never came back, the client's own retry ten seconds later was refused
+// with "already in progress", and the next tap did the same. The attempt
+// holding the key was dead, so nothing was ever going to release it — the
+// flow could not recover without somebody clearing a table by hand, and
+// somebody did, three times.
+describe('a claim nobody is coming back for', () => {
+  const KEY = 'k-abandoned';
+
+  it('refuses a retry while the first attempt could still be running', async () => {
+    await exec(
+      'INSERT INTO idempotency (key, path, ts) VALUES (?,?,?)',
+      KEY, '/cards/add', new Date().toISOString(),
+    );
+    const r = await claim(env.DB, KEY, '/cards/add');
+    expect(r.inFlight, 'it let a second attempt in while the first was live').toBe(true);
+  });
+
+  it('lets the next attempt take over once the first is plainly dead', async () => {
+    const longAgo = new Date(Date.now() - 5 * 60_000).toISOString();
+    await exec(
+      'INSERT INTO idempotency (key, path, ts) VALUES (?,?,?)',
+      KEY, '/cards/add', longAgo,
+    );
+
+    const r = await claim(env.DB, KEY, '/cards/add');
+
+    expect(r.claimed, 'a dead claim refused the retry forever').toBe(true);
+    expect(r.inFlight).toBeUndefined();
+  });
+
+  it('starts the clock again, so the attempt that took over is protected', async () => {
+    const longAgo = new Date(Date.now() - 5 * 60_000).toISOString();
+    await exec('INSERT INTO idempotency (key, path, ts) VALUES (?,?,?)', KEY, '/cards/add', longAgo);
+    await claim(env.DB, KEY, '/cards/add');
+
+    // A third attempt arriving straight after must be refused, not let in
+    // alongside the one now doing the work.
+    const r = await claim(env.DB, KEY, '/cards/add');
+    expect(r.inFlight, 'two attempts were allowed to run at once').toBe(true);
+  });
+
+  it('still replays a finished answer however old it is', async () => {
+    const longAgo = new Date(Date.now() - 5 * 60_000).toISOString();
+    await exec(
+      'INSERT INTO idempotency (key, path, ts, status, body) VALUES (?,?,?,?,?)',
+      KEY, '/cards/add', longAgo, 200, '{"applied":true}',
+    );
+    const r = await claim(env.DB, KEY, '/cards/add');
+    expect(r.replay?.status, 'an old success stopped being replayed').toBe(200);
+  });
+})
