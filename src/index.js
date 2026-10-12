@@ -47,7 +47,7 @@ import {
 import { startSignIn, finishSignIn, verifyIdToken } from './google.js';
 import { lookupPrices } from './prices.js';
 import { runMaintenance, CRON_TASKS } from './maintenance.js';
-import { newEntry, writeEntry, buildLogQuery, logStats } from './log.js';
+import { newEntry, startEntry, writeEntry, buildLogQuery, logStats } from './log.js';
 import { keyFrom, claim, remember, release } from './idempotency.js';
 import { newTask, inbox, received, list as taskList, setStatus, task as oneTask, summary as taskSummary } from './tasks.js';
 import { releases } from './releases.js';
@@ -339,6 +339,11 @@ export default {
 
   async fetch(request, env, ctx) {
     const entry = newEntry(request);
+    // A write says so before it runs, so a request that never comes back
+    // still leaves a row. Not in `waitUntil` on purpose — the point is that
+    // it has already happened before anything can kill the request. See
+    // `startEntry`.
+    if (entry.method === 'POST') await startEntry(env, entry);
     let res;
     try {
       res = await guarded(request, env, ctx, entry);
