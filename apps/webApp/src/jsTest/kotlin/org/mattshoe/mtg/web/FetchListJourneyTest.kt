@@ -234,7 +234,9 @@ class FetchListJourneyTest {
             .firstOrNull { it.textContent?.trim() == "Stats" }
             ?: error("Stats is not behind the profile")
         stats.click()
-        waitFor("the stats page") { window.location.hash.endsWith("stats") }
-        assertTrue(root.textContent.orEmpty().contains("Printings"), "the stats page did not draw")
+        waitFor("the address to say stats") { window.location.hash.endsWith("stats") }
+        // The totals load after the address changes, so wait for them
+        // rather than reading a page still saying Loading.
+        waitFor("the stats page to draw its totals") { root.textContent.orEmpty().contains("Printings") }
     }
 }

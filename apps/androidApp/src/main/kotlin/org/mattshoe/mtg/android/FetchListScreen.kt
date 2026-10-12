@@ -59,7 +59,7 @@ fun FetchListScreen(
 
         state.result?.let { result ->
             Panel {
-                Label("Title")
+                Line("Title", Ink2, Design.BODY)
                 Field(
                     value = state.title,
                     onValueChange = { onState(state.titled(it)) },
