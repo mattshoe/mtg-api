@@ -49,7 +49,7 @@ class TaskDetailParityTest {
 
     private var held: androidx.compose.runtime.MutableState<AppState>? = null
 
-    private fun shell(start: AppState) {
+    private fun shell(start: AppState, onCancelTask: (String) -> Unit = {}) {
         rule.setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
                 Surface {
@@ -64,6 +64,7 @@ class TaskDetailParityTest {
                         onOpenDeck = {},
                         onPreviewEntry = {},
                         onApplyEntry = {},
+                        onCancelTask = onCancelTask,
                     )
                 }
             }
@@ -197,6 +198,42 @@ class TaskDetailParityTest {
         } finally {
             java.util.TimeZone.setDefault(was)
         }
+    }
+
+    /**
+     * Matt: "i want the ability to cancel/abort tasks and any running
+     * agent should be immediately killed". Cancel task asks first; Keep it
+     * takes the question back; Yes sends the cancel for this task. Sibling
+     * of the web's `cancellingALiveTaskAsksFirstThenWritesCancelledToItsRow`.
+     */
+    @Test
+    fun cancellingALiveTaskAsksFirstThenSendsItsCancel() {
+        val live = opened.copy(
+            taskDetail = TaskDetail.decode("ab12cd34", """{"key":"ab12cd34","title":"Bigger buttons","status":"in progress","details":"x","files":[]}"""),
+        )
+        val asked = mutableListOf<String>()
+        shell(live, onCancelTask = { asked += it })
+        rule.onNodeWithTag("task-cancel").performScrollTo().performClick()
+        rule.waitForIdle()
+        assertTrue(held!!.value.taskDetail!!.confirming, "tapping Cancel task did not ask")
+        assertTrue(rule.onAllNodes(hasTestTag("task-cancel-ask")).fetchSemanticsNodes().isNotEmpty(), "the question is not on screen")
+        assertTrue(asked.isEmpty(), "the cancel went before it was confirmed")
+        rule.onNodeWithTag("task-cancel-keep").performScrollTo().performClick()
+        rule.waitForIdle()
+        assertTrue(!held!!.value.taskDetail!!.confirming, "Keep it did not take the question back")
+
+        rule.onNodeWithTag("task-cancel").performScrollTo().performClick()
+        rule.waitForIdle()
+        rule.onNodeWithTag("task-cancel-confirm").performScrollTo().performClick()
+        rule.waitForIdle()
+        assertEquals(listOf("ab12cd34"), asked, "confirming did not send this task's cancel")
+    }
+
+    /** A done task has nothing to stop, so its page offers no cancel. */
+    @Test
+    fun aDoneTasksPageOffersNoCancel() {
+        shell(opened)
+        assertTrue(rule.onAllNodes(hasTestTag("task-cancel")).fetchSemanticsNodes().isEmpty(), "a merged task offers Cancel task")
     }
 
     @Test

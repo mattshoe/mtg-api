@@ -15,6 +15,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import org.mattshoe.mtg.core.MtgApi
 import org.mattshoe.mtg.core.Scryfall
+import org.mattshoe.mtg.core.TaskDetail
 import org.w3c.dom.HTMLButtonElement
 import org.w3c.dom.HTMLElement
 import org.w3c.dom.get
@@ -1315,6 +1316,55 @@ class AppDriverTest {
 
         root.button("← Admin Settings").click()
         waitFor("back on Admin Settings") { window.location.hash.endsWith("/admin") }
+    }
+
+    /**
+     * Matt: "i want the ability to cancel/abort tasks and any running
+     * agent should be immediately killed. prs, branches etc can stay just
+     * need to kill the agent". The real app: Cancel task asks first, then
+     * writes cancelled to the task's row, and the page says so. The
+     * laptop kills the agent off that row. Sibling of Android's
+     * `TaskDetailParityTest` and `TaskDetailLoadTest` cancels.
+     */
+    @Test
+    fun cancellingALiveTaskAsksFirstThenWritesCancelledToItsRow() = runTest {
+        role = "admin"
+        val root = mount("#/admin/task/ab12cd34")
+        waitFor("the live task's page") {
+            document.querySelector("[data-task-detail-body]")?.textContent.orEmpty().contains("ongoing tasks")
+        }
+        root.button(TaskDetail.CANCEL).click()
+        waitFor("the question") { document.querySelector("[data-task-cancel-ask]") != null }
+        assertTrue(sent.none { "\"cancelled\"" in it }, "the cancel went up before it was confirmed")
+        root.button(TaskDetail.KEEP).click()
+        waitFor("the question taken back") { document.querySelector("[data-task-cancel-ask]") == null }
+
+        root.button(TaskDetail.CANCEL).click()
+        waitFor("the question again") { document.querySelector("[data-task-cancel-ask]") != null }
+        root.button(TaskDetail.CONFIRM).click()
+        waitFor("the cancel to go up") { sent.any { "\"cancelled\"" in it } }
+        val up = sent.single { "\"cancelled\"" in it }
+        assertTrue("\"key\":\"ab12cd34\"" in up && "\"status\":\"cancelled\"" in up, "what went up: $up")
+        waitFor("the page to say cancelled") {
+            document.querySelectorAll("[data-task-detail-fact]").let { l -> (0 until l.length).map { l.item(it)?.textContent.orEmpty() } }
+                .any { "Status" in it && "cancelled" in it }
+        }
+        assertTrue(
+            root.querySelectorAll("button").let { n -> (0 until n.length).none { (n[it] as HTMLElement).textContent == TaskDetail.CANCEL } },
+            "a cancelled task still offers Cancel task",
+        )
+    }
+
+    /** A done task has nothing to stop, so its page offers no cancel. */
+    @Test
+    fun aDoneTasksPageOffersNoCancel() = runTest {
+        role = "admin"
+        val root = mount("#/admin/task/ef56gh78")
+        waitFor("the done task's summary") { document.querySelector("[data-task-detail-summary]") != null }
+        assertTrue(
+            root.querySelectorAll("button").let { n -> (0 until n.length).none { (n[it] as HTMLElement).textContent == TaskDetail.CANCEL } },
+            "a deployed task offers Cancel task",
+        )
     }
 
     /**

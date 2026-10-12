@@ -20,10 +20,12 @@ import org.junit.runner.RunWith
 import org.mattshoe.mtg.core.AdminToken
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.MtgApi
+import org.mattshoe.mtg.core.TaskStatus
 import org.robolectric.Robolectric
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.android.controller.ActivityController
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /**
  * A task's page, through the real `MainActivity`: an address naming a
@@ -57,10 +59,19 @@ class TaskDetailLoadTest {
         error("gave up waiting for $what: ${activity.stateForTesting().taskDetail}")
     }
 
+    /** What went up to `POST /tasks/status`. */
+    private val statusWrites = mutableListOf<String>()
+
     private fun client() = HttpClient(
         MockEngine { request ->
             if (request.url.host != "example.invalid") error("the app asked somebody other than the Worker: ${request.url}")
+            if (request.url.encodedPath == "/tasks/status") {
+                statusWrites += (request.body as io.ktor.http.content.OutgoingContent.ByteArrayContent).bytes().decodeToString()
+            }
             val body = when (request.url.encodedPath) {
+                "/tasks/status" -> """{"status":"cancelled"}"""
+                "/tasks/ef56gh78" -> """{"key":"ef56gh78","name":"slow-decks","title":"Slow decks","status":"in progress",
+                    "details":"The decks page is slow.","files":[]}"""
                 "/auth/me" -> """{"key":"e7de0cb1","name":"Matt","role":"admin"}"""
                 "/admin/users" -> """{"users":[]}"""
                 "/releases" -> "[]"
@@ -94,5 +105,31 @@ class TaskDetailLoadTest {
         assertEquals(72, d.pull, "the pull request was not loaded")
         assertEquals(listOf("shot.png"), d.files.map { it.name })
         assertEquals(false, d.busy, "the page still says it is loading")
+    }
+
+    /**
+     * Matt: "i want the ability to cancel/abort tasks and any running
+     * agent should be immediately killed". Through the real activity: the
+     * cancel goes to the Worker as this task's row, cancelled, and the page
+     * says so. `TaskDetailParityTest` presses the buttons through `AppShell`.
+     */
+    @Test
+    fun cancellingATaskWritesCancelledToItsRowAndThePageSaysSo() {
+        val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        context.getSharedPreferences("mtg", android.content.Context.MODE_PRIVATE)
+            .edit().putString(AdminToken.KEY, "t").commit()
+        val link = Intent(Intent.ACTION_VIEW, Uri.parse("https://mtg.mattshoe.org/#/admin/task/ef56gh78"))
+        val built = Robolectric.buildActivity(MainActivity::class.java, link)
+        controller = built
+        val activity = built.get()
+        activity.useForTesting(MtgApi.withEngine("https://example.invalid", client()))
+        built.create().start().resume()
+        until(activity, "the live task") { it.taskDetail?.task?.status == TaskStatus.IN_PROGRESS }
+
+        activity.cancelTaskForTesting("ef56gh78")
+        until(activity, "the page to say cancelled") { it.taskDetail?.task?.status == TaskStatus.CANCELLED }
+        val up = statusWrites.single()
+        assertTrue("\"key\":\"ef56gh78\"" in up && "\"status\":\"cancelled\"" in up, "what went up: $up")
+        assertEquals(false, activity.stateForTesting().taskDetail!!.cancelling, "the page still says it is cancelling")
     }
 }

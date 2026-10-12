@@ -230,6 +230,9 @@ class MainActivity : ComponentActivity() {
         app = state
     }
 
+    /** `cancelTask`, for a test that cannot press a button through the activity. */
+    internal fun cancelTaskForTesting(key: String) {}
+
     /** `shareDeck`, for a test that cannot see a private method. */
     internal fun shareDeckForTesting(what: ShareWhat, where: ExportTo): AppState {
         app = shareDeck(what, where)

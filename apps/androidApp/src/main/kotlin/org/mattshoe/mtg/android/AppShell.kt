@@ -141,6 +141,8 @@ fun AppShell(
     onPickFile: () -> Unit = {},
     /** Send on the New task screen. */
     onSendTask: () -> Unit = {},
+    /** Yes on a task's Cancel task question, with its key. */
+    onCancelTask: (String) -> Unit = {},
     onReuse: (HistoryEntry) -> Unit = {},
     onClearHistory: () -> Unit = {},
     onEditDeck: (String) -> Unit = {},
