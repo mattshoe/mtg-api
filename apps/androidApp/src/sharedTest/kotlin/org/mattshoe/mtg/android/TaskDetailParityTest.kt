@@ -7,7 +7,8 @@ import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.hasTestTag
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.activity.ComponentActivity
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -45,7 +46,7 @@ class TaskDetailParityTest {
     val retry = Retry()
 
     @get:Rule
-    val rule = createComposeRule()
+    val rule = createAndroidComposeRule<ComponentActivity>()
 
     private var held: androidx.compose.runtime.MutableState<AppState>? = null
 
@@ -239,7 +240,7 @@ class TaskDetailParityTest {
     @Test
     fun backOnATasksPageIsAdminSettings() {
         shell(opened)
-        rule.onNodeWithTag("task-detail-back").performScrollTo().performClick()
+        rule.activity.onBackPressedDispatcher.onBackPressed()
         rule.waitForIdle()
         assertEquals(Route(View.ADMIN), held!!.value.route)
     }
