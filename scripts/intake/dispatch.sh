@@ -110,11 +110,20 @@ while IFS= read -r f; do
     say "skipping ${f%.md}: already filed under requests/done on ${BASE}"
     continue
   fi
-  # A worktree already there means an agent is on it, or one stopped on it
-  # and its work is kept. Either way this is not the dispatcher's to take —
-  # reconcile has already told the app which of the two it is.
+  # A worktree already there means an agent is on it, or one stopped on it.
+  # Either way this is not the dispatcher's to take — but the second case
+  # has to SAY so. A dead agent's worktree blocked its request forever and
+  # silently: two tasks sat at `in review` for three hours with nothing
+  # running, and the only reason anyone found out was Matt asking. There is
+  # no resume by design, so a stalled one needs a person, and the way to
+  # reach a person is the task row.
   wt="$STATE/wt/${f%.md}"
-  [ -e "$wt" ] && continue
+  if [ -e "$wt" ]; then
+    if ! pgrep -f "requests/${f}" >/dev/null 2>&1; then
+      node "$REPO/scripts/intake/task-status.mjs" stalled "$f" >>"$LOG" 2>&1 || true
+    fi
+    continue
+  fi
   b="$(cd "$REPO" && node scripts/intake.mjs branch "$f")" || continue
   if git -C "$REPO" worktree add -q -b "$b" "$wt" "$BASE" 2>>"$LOG"; then
     file="$f"; branch="$b"; tree="$wt"; break

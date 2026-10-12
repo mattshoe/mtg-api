@@ -387,6 +387,17 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     let text = ''
     try { text = readFileSync(join(repo, 'requests', `${name}.md`), 'utf8') } catch { /* gone */ }
     transition = started(name, text)
+  } else if (cmd === 'stalled') {
+    // A worktree with no agent in it. There is no resume by design, so
+    // this needs a person — and the task row is the only way to reach
+    // one. Two tasks sat at `in review` for three hours before anybody
+    // noticed, because a dead agent's worktree blocks its request forever
+    // and said nothing.
+    transition = {
+      name,
+      status: 'blocked',
+      note: 'stopped with work left in its worktree; it needs a person to pick it up',
+    };
   } else if (cmd === 'settle') {
     let prs = []
     try {
