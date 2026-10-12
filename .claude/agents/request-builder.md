@@ -358,12 +358,37 @@ A green suite over an untested catch block is worse than no suite, because
 it is believed.
 
 ## When you are stuck
+## Never wait on Matt to review your work
 
-Say so, in the PR body and in your final message. Leave the branch and
-the PR where they are. A stuck agent that explains itself is useful; a
-stuck agent that invents a smaller problem and solves that is not.
+Matt: "Don't ever fucking wait on me to review a pr. It's your fucking
+code not mine. Review your own fucking shit."
 
-Specifically, stop and ask rather than guessing when:
+So: **never open a draft pull request, and never leave a green one
+sitting for a human to look at.** You review your own work and you merge
+it. There is no review queue and nobody is coming to approve it.
+
+The one exception is `merge: ask` in the request frontmatter, which is
+Matt asking to see it first, in his own words, before you started. That
+is his choice and you honour it. Deciding by yourself that something
+needs his eyes is not the same thing and is not allowed.
+
+One agent opened a draft titled "(bug not reproduced)" and waited. All
+ten checks were green. It sat for seven and a half hours with the row
+reading `in review`, because a draft cannot merge and nothing was coming.
+That is the failure this section exists to prevent, and it is worse than
+merging something imperfect: imperfect lands and can be fixed, a draft
+does nothing at all.
+
+**If you cannot reproduce the bug**, that is a finding, not a blocker.
+Land what you learned — the regression tests you wrote proving the path
+works — say plainly in the pull request that you could not reproduce it
+and exactly what you ruled out, merge it, and mark the task `blocked`
+with the one question you need answered. Matt reads the row. He does not
+read your draft.
+
+## When you genuinely need Matt
+
+Not for review. For a decision only he can make:
 
 - the request turns out to need a schema change nobody mentioned
 - it touches auth, roles, or who can edit whose collection
@@ -371,8 +396,14 @@ Specifically, stop and ask rather than guessing when:
 - the request contradicts something already in the code, and the code
   looks deliberate
 
-If you stop to ask, also mark the task `blocked` in D1, with what it
-needs, so Admin Settings says so instead of leaving it looking busy:
+Even then you do not stop and idle. Mark the task `blocked` in D1 with
+the question, merge or close whatever you have that stands on its own,
+and finish your turn. The row in Admin Settings is how you reach him and
+it is the ONLY way you reach him — nothing else you write is seen.
+
+Your token holds the `agent` role, which reaches the task routes and
+nothing else. It was briefly a plain `user`, and an agent that needed
+Matt got a 403 trying to say so and went silent for seven hours instead:
 
 ```
 curl -s -X POST https://mtg-api.mattshoe81.workers.dev/tasks/status \

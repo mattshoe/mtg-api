@@ -274,6 +274,40 @@ describe('task status', () => {
     expect(await sql('SELECT * FROM task_inbox')).toEqual([])
   })
 
+  /**
+   * A build agent's one way to say it needs Matt.
+   *
+   * `intake-agent` was an admin until one of them reached `/admin/sql`
+   * and rewrote two production views. Demoting it to `user` stopped that
+   * and broke this: an agent that needs Matt writes `blocked` on its own
+   * task, and as a `user` that is a 403. One sat for seven and a half
+   * hours reading `in review` with nothing running on it, because the
+   * only door it had was shut. The door is narrow now, not shut.
+   */
+  it('a build agent writes a status, so a stuck one can say so', async () => {
+    const u = await signIn(env.DB, { provider: 'google', subject: 'sub-a', name: 'A', email: 'a@example.com' })
+    await exec('UPDATE users SET role = ? WHERE id = ?', 'agent', u.id)
+    const token = await newSession(env.DB, u.id)
+
+    const r = await postAs('/tasks/status', {
+      name: 'some-request', title: 'Some request', status: 'blocked', note: 'needs Matt: which platform?',
+    }, token)
+
+    expect(r.status, r.body?.error).toBe(200)
+    const [row] = await sql('SELECT status, note FROM task_inbox WHERE name = ?', 'some-request')
+    expect([row?.status, row?.note]).toEqual(['blocked', 'needs Matt: which platform?'])
+  })
+
+  it('a build agent still cannot reach anything but the task routes', async () => {
+    const u = await signIn(env.DB, { provider: 'google', subject: 'sub-b', name: 'B', email: 'b@example.com' })
+    await exec('UPDATE users SET role = ? WHERE id = ?', 'agent', u.id)
+    const token = await newSession(env.DB, u.id)
+
+    // The door that let an agent rewrite two production views stays shut.
+    expect((await postAs('/admin/sql', { sql: 'SELECT 1' }, token)).status).toBe(403)
+    expect((await postAs('/admin/role', { key: 'm4tt0001', role: 'user' }, token)).status).toBe(403)
+  })
+
   it('nobody without the admin role reads the list or writes a status', async () => {
     const u = await signIn(env.DB, { provider: 'google', subject: 'sub-s', name: 'S', email: 's@example.com' })
     const token = await newSession(env.DB, u.id)
