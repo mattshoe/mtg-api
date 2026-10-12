@@ -390,6 +390,9 @@ class FetchListJourneyTest {
         type(root.all("#fetch-title").single(), "Alela")
         tick()
         root.button("Save").click()
+        tick()
+        // The saved lists are on the root, with the entry box.
+        root.all("[data-fetch-back]").single().click()
         waitFor("the saved list") { root.all("[data-fetch-saved]").isNotEmpty() }
 
         // A fresh page, as after closing the tab.

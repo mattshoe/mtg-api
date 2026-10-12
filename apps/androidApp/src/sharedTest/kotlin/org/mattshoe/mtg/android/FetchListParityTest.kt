@@ -308,6 +308,15 @@ class FetchListParityTest {
         rule.onNodeWithTag("fetch-save").performScrollTo().performClick()
         rule.waitForIdle()
         assertEquals(listOf("Alela"), held.value.fetch.saved.map { it.title })
+        // The saved lists are on the root, with the entry box. On a
+        // phone "Saved" floats over the top of the page, back button
+        // included, so it is tapped away first, as a thumb would.
+        rule.onNodeWithContentDescription("Dismiss").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithTag("fetch-back").performScrollTo().performClick()
+        rule.waitForIdle()
+        assertTrue(!held.value.onFetchList, "back from a saved list stayed on the list page")
+        assertEquals(listOf("Alela"), held.value.fetch.saved.map { it.title }, "leaving the page lost the save")
         rule.onNodeWithTag("fetch-saved:Alela").performScrollTo()
     }
 
