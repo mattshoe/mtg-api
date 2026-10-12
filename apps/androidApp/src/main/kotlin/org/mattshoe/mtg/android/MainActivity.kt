@@ -891,7 +891,8 @@ class MainActivity : ComponentActivity() {
             } catch (e: Exception) {
                 (app.taskDetail?.takeIf { it.key == key } ?: TaskDetail(key)).failed(e.message ?: "that did not work")
             }
-            if (app.taskDetail?.key == key) app = app.copy(taskDetail = loaded)
+            // Over a Cancel task question, or a cancel on its way, those stay.
+            app.taskDetail?.takeIf { it.key == key }?.let { app = app.copy(taskDetail = it.reloaded(loaded)) }
         }
     }
 
