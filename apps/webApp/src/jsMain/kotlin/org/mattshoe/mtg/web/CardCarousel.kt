@@ -16,6 +16,7 @@ import org.mattshoe.mtg.core.CardQueries
 import org.mattshoe.mtg.core.CardZoom
 import org.mattshoe.mtg.core.DeckCard
 import org.mattshoe.mtg.core.PeekCard
+import org.mattshoe.mtg.core.PeekFact
 import org.mattshoe.mtg.core.Prices
 import org.mattshoe.mtg.core.Stepper
 import org.mattshoe.mtg.core.Tweak
@@ -188,6 +189,22 @@ private fun Sheet(
         Div(attrs = { classes("peek-head") }) {
             Div(attrs = { classes("peek-titles") }) {
                 Div(attrs = { classes("peek-name") }) { Text(card.title) }
+                // "Type • {U}{B} • Rarity". `:core` says which parts
+                // are known and in what order; the identity is drawn
+                // as its symbols, which is what Matt asked for.
+                if (card.facts.isNotEmpty()) {
+                    Div(attrs = { classes("peek-facts") }) {
+                        card.facts.forEachIndexed { i, fact ->
+                            if (i > 0) Span(attrs = { classes("peek-dot") }) { Text("•") }
+                            when (fact) {
+                                is PeekFact.Words -> Span { Text(fact.text) }
+                                is PeekFact.Identity -> Span(attrs = { classes("mana-cost") }) {
+                                    fact.pips.forEach { ManaPip(it) }
+                                }
+                            }
+                        }
+                    }
+                }
                 // The printing and what it is worth, on one line.
                 // `printing` is null for a card nobody owns, which is
                 // also the card with no price, so the line collapses
@@ -195,8 +212,6 @@ private fun Sheet(
                 listOfNotNull(card.printing, card.price?.let { Prices.money(it) })
                     .takeIf { it.isNotEmpty() }
                     ?.let { Div(attrs = { classes("peek-sub") }) { Text(it.joinToString(" · ")) } }
-                card.typeLine?.takeIf { it.isNotBlank() }
-                    ?.let { Div(attrs = { classes("peek-type") }) { Text(it) } }
             }
             place?.let { Span(attrs = { classes("peek-place") }) { Text(it) } }
         }
