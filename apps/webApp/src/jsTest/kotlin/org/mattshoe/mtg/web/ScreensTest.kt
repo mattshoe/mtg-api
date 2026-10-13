@@ -760,7 +760,7 @@ class NavTest {
         fun labels(css: String) = root.querySelectorAll(css).let { n ->
             (0 until n.length).mapNotNull { (n[it] as? org.w3c.dom.HTMLElement)?.textContent?.trim() }
         }
-        assertEquals(listOf("Library", "Decks", "Fetch", "Entry"), labels(".app-menu button"))
+        assertEquals(listOf("Library", "Decks", "Fetch", "Guide", "Entry"), labels(".app-menu button"))
         assertEquals(0, root.querySelectorAll(".app-menu .app-menu-sep").length, "a rule with nothing to divide")
 
         val behind = labels(".profile-menu button")
