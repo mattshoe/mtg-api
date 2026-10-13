@@ -102,8 +102,17 @@ fun CardSheet(
         ) {
             // Selectable, the same as the web. Copying a card name off
             // the page is most of what the page is for.
-            SelectionContainer(Modifier.weight(1f)) {
-                Text(card.name, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            //
+            // The weight is on a `Box` of its own. On the
+            // `SelectionContainer` it never reached the row, so the name
+            // took only its own width and the share sat right after it
+            // instead of pinned to the right — Matt: "the share button
+            // in all pages at the top must always be pinned to the
+            // right side".
+            Box(Modifier.weight(1f)) {
+                SelectionContainer {
+                    Text(card.name, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                }
             }
             ShareCardButton(onShare)
         }
