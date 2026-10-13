@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -26,8 +27,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import kotlinx.coroutines.launch
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.Key
@@ -196,6 +199,8 @@ fun AppShell(
     // below.
     var confirmDiscardOnExit by remember { mutableStateOf(false) }
     val keys = remember { FocusRequester() }
+    val pull = rememberPullToRefreshState()
+    val scope = rememberCoroutineScope()
 
     // Where the Library grid and each deck's card list were scrolled
     // to, kept here rather than inside `LibraryScreen` or
@@ -321,10 +326,22 @@ fun AppShell(
             // The spinner is `AppState.refreshing`, which is only a
             // pull that is still waiting — not every load, or opening
             // any page would spin at the top as if it had been pulled.
+            //
+            // A pull that fires parks the circle and waits for
+            // `isRefreshing` to go from true to false, which is the only
+            // thing that puts it away. A page with nothing to fetch, the
+            // Guide or Entry, never goes true, so it is put away here.
+            // Matt: "in the guide page, if i pull down to refresh, the
+            // spinner never goes away".
             PullToRefreshBox(
                 isRefreshing = state.refreshing,
-                onRefresh = onRefresh,
+                onRefresh = {
+                    val waits = state.pullWaits
+                    onRefresh()
+                    if (!waits) scope.launch { pull.animateToHidden() }
+                },
                 modifier = Modifier.weight(1f),
+                state = pull,
             ) {
                 // Behind the page, the full height of it. The pull
                 // arrives through nested scrolling, so it only starts

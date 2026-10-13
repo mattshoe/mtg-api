@@ -4,9 +4,6 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.compose")
-    // Turns google-services.json into the resources Firebase reads at
-    // startup. Without it FirebaseApp has no project to talk to.
-    id("com.google.gms.google-services")
 }
 
 // The app. Not "the Compose rewrite" any more — this is what ships.
@@ -162,17 +159,13 @@ android {
                 // *previous* run's, so the run looked green. Two things
                 // stop that now.
                 //
-                // One, the task kills itself. The number is a hang
-                // detector, not a budget: it wants to be far above the
-                // honest runtime and far below forever.
-                //
-                // Twelve minutes stopped being far above it. The suite
-                // is 609 screens tests now and a loaded CI runner took
-                // 12m39s, so the guard fired on a healthy run and the
-                // job went red saying "Timeout has been exceeded" — on
-                // two unrelated branches within the hour. Twenty-five
-                // keeps the same purpose with the growth allowed for.
-                it.timeout.set(Duration.ofMinutes(25))
+                // One, the task kills itself. It was twelve minutes, called
+                // eight times the honest runtime, but by 2026-10-13 the
+                // suite took ten to twelve on CI and the timeout killed
+                // honest runs at test 549 of 632, every hang-free one, on
+                // every pull request. Twenty is still well short of the
+                // job's own thirty.
+                it.timeout.set(Duration.ofMinutes(20))
                 // Two, every test writes its name as it starts and
                 // again as it ends, flushed. The last line with no
                 // matching end is the test that hung — which is the one
@@ -252,15 +245,6 @@ dependencies {
     // verifies the browser's. See `GoogleSignIn.kt`.
     implementation("androidx.credentials:credentials:1.3.0")
     implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
-    // Push, so a task that finishes says so without the app being open.
-    // The BoM pins the whole Firebase set to one tested combination, so
-    // the messaging line deliberately carries no version of its own.
-    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
-    implementation("com.google.firebase:firebase-messaging")
-    // `.await()` on a Firebase Task. Without it the token has to be
-    // fetched with a callback inside a coroutine, which is the same
-    // thing written worse.
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
     implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     // `viewModelScope` and `by viewModels()`. The whole `AppState`

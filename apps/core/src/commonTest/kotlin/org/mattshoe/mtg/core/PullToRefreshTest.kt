@@ -89,6 +89,26 @@ class PullToRefreshTest {
     }
 
     @Test
+    fun aPageWithNothingToFetchTellsTheShellNotToWait() {
+        // Matt: "in the guide page, if i pull down to refresh, the
+        // spinner never goes away". The phone's PullToRefreshBox parks
+        // its circle once a pull fires and puts it away only when
+        // `refreshing` goes from true to false. On these pages it is
+        // never true, so the shell has to be told to let go itself.
+        listOf(
+            Route(View.GUIDE),
+            Route(View.GUIDE, Guide.COLOURS),
+            Route(View.ENTRY),
+            Route(View.LOGS),
+            Route(View.FETCH),
+        ).forEach { route ->
+            assertFalse(AppState(route = route).pullWaits, "a pull on ${route.view} ${route.rest} waits for a fetch that never comes")
+        }
+        assertTrue(library().pullWaits, "a pull on the Library does not wait for its rows")
+        assertTrue(AppState(route = Route(View.STATS)).pullWaits, "a pull on Stats does not wait for its totals")
+    }
+
+    @Test
     fun aDragFiresAtTheSamePointAsThePhone() {
         // The phone's PullToRefreshBox fires once its indicator, which
         // moves at half the finger's speed, has travelled 80dp. The

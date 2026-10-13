@@ -3,6 +3,7 @@ package org.mattshoe.mtg.android
 import android.graphics.Bitmap
 import android.os.Build
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.captureToImage
 import androidx.test.platform.app.InstrumentationRegistry
@@ -82,22 +83,14 @@ object Parity {
         // test's assertions have already run either way.
         if (!onDevice) return null
         val file = File(shots, "$name.png")
-        // And a photograph that cannot be TAKEN is not a failure either,
-        // which is the half this was missing.
-        //
-        // `captureToImage` waits for the emulator to hand back a drawn
-        // window and gives up after two seconds of its own, which is not
-        // ours to lengthen. On a loaded CI runner that happens — the
-        // emulator logs "Failed to find ColorBuffer" and "invalid color
-        // buffer" around it — and the test went red having already
-        // proved everything it set out to prove. It cost three device
-        // runs and the whole suite each time.
-        //
-        // Said out loud rather than swallowed: if the pictures stop
-        // arriving entirely, somebody reading the log should see why
-        // rather than wonder where they went.
-        val bitmap = runCatching { captureToImage().asAndroidBitmap() }.getOrElse { e ->
-            println("SHOT $name could not be taken: $e")
+        // A capture that times out is a missing photo, not a failure,
+        // for the same reason. `ArtCropAlignmentParityTest`, which is
+        // nothing but photos, went red on every pull request on
+        // 2026-10-13 waiting 2000ms for the emulator to draw.
+        val bitmap = try {
+            captureToImage().asAndroidBitmap()
+        } catch (slow: ComposeTimeoutException) {
+            println("PARITY no photo for $name: $slow")
             return null
         }
         file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
