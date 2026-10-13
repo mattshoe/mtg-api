@@ -22,9 +22,23 @@ import { setRole, newSession } from '../src/accounts.js';
  */
 const CREDS = signingKey;
 
-beforeEach(() => { forgetToken(); });
+// Deliberately NOT a global `beforeEach(forgetToken)`.
+//
+// Clearing the cache makes the next send mint a fresh JWT, and signing
+// with a 2048-bit RSA key is the most expensive thing in this file. Done
+// once per test it was enough CPU to get the workerd isolate killed on a
+// CI runner — "Network connection lost", then every later test in that
+// isolate failing with "table cards already exists" because the storage
+// it meant to roll back had gone with the process. Eight other files
+// failed and this one passed, which is what made it look like their bug.
+//
+// Only the tests that are ABOUT the cache clear it. Everything else is
+// happy to reuse a token, which is what production does too.
 
 describe('getting an access token', () => {
+  // The only place the cache is cleared: these are the tests about it.
+  beforeEach(() => { forgetToken(); });
+
   const tokenStub = (calls) => async (url, init) => {
     calls.push({ url: String(url), body: String(init?.body || '') });
     return Response.json({ access_token: 'at-' + calls.length, expires_in: 3600 });
@@ -243,7 +257,6 @@ describe('only admins are pushed to, proved end to end', () => {
       sent.push(JSON.parse(init.body).message.token);
       return Response.json({ name: 'ok' });
     };
-    forgetToken();
     await tell(CREDS_ENV(), task, { fetch: f });
     return sent.sort();
   }
@@ -384,7 +397,6 @@ describe('a role change while somebody is signed in', () => {
       sent.push(JSON.parse(init.body).message.token);
       return Response.json({ name: 'ok' });
     };
-    forgetToken();
     await tell(CREDS_ENV(), { title: 'A task', status: 'merged' }, { fetch: f });
     return sent.sort();
   }
