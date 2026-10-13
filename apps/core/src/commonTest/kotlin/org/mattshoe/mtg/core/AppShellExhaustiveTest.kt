@@ -1489,16 +1489,16 @@ class AdminGateTest {
     @Test
     fun theMenuOffersTheUngatedOnesWhileLocked() {
         assertEquals(View.entries.filter { it.inNav && !it.gated }, locked.visible)
-        // Library, Decks, Fetch, and Stats behind the profile.
-        assertEquals(4, locked.visible.size)
+        // Library, Decks, Fetch, Guide, and Stats behind the profile.
+        assertEquals(5, locked.visible.size)
     }
 
     @Test
     fun andEveryOneInTheNavForAnOperator() {
         assertEquals(View.entries.filter { it.inNav }, operator.visible)
-        assertEquals(7, operator.visible.size)
-        // Five for an ordinary account: the admin half is not theirs.
-        assertEquals(5, open.visible.size)
+        assertEquals(8, operator.visible.size)
+        // Six for an ordinary account: the admin half is not theirs.
+        assertEquals(6, open.visible.size)
     }
 
     @Test
@@ -1787,10 +1787,10 @@ class RouteSpellingTest {
 class ViewTableTest {
 
     @Test
-    fun thereAreSevenOfThem() {
-        // Eight, with the Fetch list. Seven with Admin Settings, six
-        // after the Query page went.
-        assertEquals(8, View.entries.size)
+    fun thereAreNineOfThem() {
+        // Nine, with the Guide. Eight with the Fetch list, seven with
+        // Admin Settings, six after the Query page went.
+        assertEquals(9, View.entries.size)
     }
 
     @Test

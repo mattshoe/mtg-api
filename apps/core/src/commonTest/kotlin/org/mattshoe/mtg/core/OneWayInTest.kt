@@ -98,10 +98,10 @@ class OneWayInTest {
     }
 
     @Test
-    fun theBarIsThreeUntilYouAreSomebodyAndFourAfter() {
-        assertEquals(listOf(View.LIBRARY, View.DECKS, View.FETCH), Admin().bar)
+    fun theBarIsFourUntilYouAreSomebodyAndFiveAfter() {
+        assertEquals(listOf(View.LIBRARY, View.DECKS, View.FETCH, View.GUIDE), Admin().bar)
         assertEquals(
-            listOf(View.LIBRARY, View.DECKS, View.FETCH, View.ENTRY),
+            listOf(View.LIBRARY, View.DECKS, View.FETCH, View.GUIDE, View.ENTRY),
             Admin().signIn(me, "s").bar,
         )
     }

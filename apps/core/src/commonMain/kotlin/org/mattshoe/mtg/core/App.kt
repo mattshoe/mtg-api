@@ -452,6 +452,7 @@ data class AppState(
         get() = when {
             view == View.DECKS && decks.open != null -> decks.open!!.title
             view == View.CARD -> card?.name.orEmpty().ifBlank { View.CARD.label }
+            guideTile != null -> guideTile!!.title
             else -> view.label
         }
 
