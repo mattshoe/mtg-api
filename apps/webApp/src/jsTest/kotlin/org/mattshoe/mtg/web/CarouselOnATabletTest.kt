@@ -80,15 +80,17 @@ class CarouselOnATabletTest {
         }
         settle(s.window)
         val doc = s.frame.contentDocument!!
-        val sheet = assertNotNull(doc.querySelector(".peek-sheet") as? HTMLElement, "the carousel did not open")
+        val sheet = assertNotNull(doc.querySelector(".peek-sheet"), "the carousel did not open").unsafeCast<HTMLElement>()
             .getBoundingClientRect()
-        val rail = assertNotNull(doc.querySelector(".peek-rail") as? HTMLElement).getBoundingClientRect()
+        val rail = assertNotNull(doc.querySelector(".peek-rail")).unsafeCast<HTMLElement>().getBoundingClientRect()
         val cells = doc.querySelectorAll(".peek-card")
         assertTrue(cells.length == 2, "expected two cards in the rail, found ${cells.length}")
         val room = sheet.top - rail.top
         for (i in 0 until cells.length) {
-            val cell = (cells[i] as HTMLElement).getBoundingClientRect()
-            val face = assertNotNull((cells[i] as HTMLElement).firstElementChild as? HTMLElement).getBoundingClientRect()
+            // `unsafeCast`: these belong to the frame's window, see `Tablet`.
+            val el = assertNotNull(cells[i]).unsafeCast<HTMLElement>()
+            val cell = el.getBoundingClientRect()
+            val face = assertNotNull(el.firstElementChild, "an empty cell in the rail").getBoundingClientRect()
             val what = if (i == 0) "the card with a picture" else "the card nobody owns"
             val where = "on a ${size.first} by ${size.second} screen"
             assertTrue(

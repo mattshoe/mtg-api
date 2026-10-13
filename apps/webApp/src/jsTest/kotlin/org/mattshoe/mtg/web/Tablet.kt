@@ -26,7 +26,10 @@ object Tablet {
     /** A ten-inch tablet held sideways: far wider than tall. */
     val LANDSCAPE = 1280 to 800
 
-    /** A screen of [size], styled and empty. Mount into the element returned; remove [frame] after. */
+    /**
+     * A screen, styled and empty. Mount into [body]; remove [frame] after.
+     * Read anything inside it with `unsafeCast`, never `as`: see [styled].
+     */
     class Screen(val frame: HTMLIFrameElement, val body: HTMLElement) {
         val window: org.w3c.dom.Window get() = frame.contentWindow!!
     }
@@ -42,8 +45,22 @@ object Tablet {
             top = "0"
         }
         document.body!!.appendChild(frame)
+        try {
+            return styled(frame)
+        } catch (e: Throwable) {
+            // Left behind, a frame this size sits over the top of the
+            // test page and breaks every layout test after it.
+            frame.remove()
+            throw e
+        }
+    }
+
+    private suspend fun styled(frame: HTMLIFrameElement): Screen {
         val inner = frame.contentDocument!!
-        val link = inner.createElement("link") as HTMLLinkElement
+        // `unsafeCast`, never `as`, for anything inside the frame: it
+        // belongs to the frame's window, so it is not an instance of
+        // this window's `HTMLElement` and `as` throws.
+        val link = inner.createElement("link").unsafeCast<HTMLLinkElement>()
         link.rel = "stylesheet"
         link.href = window.location.origin + "/base/kotlin/app.css"
         val loaded = Promise<Unit> { ok, fail ->
@@ -52,7 +69,7 @@ object Tablet {
         }
         inner.head!!.appendChild(link)
         loaded.await()
-        val body = inner.body!!
+        val body = inner.body!!.unsafeCast<HTMLElement>()
         body.style.margin = "0"
         return Screen(frame, body)
     }
