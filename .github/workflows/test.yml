@@ -1,8 +1,25 @@
 name: test
 
 on:
+  # A branch with an open pull request used to run this TWICE on every
+  # push: once for `push` and once for `pull_request`. Every test run in
+  # the repo was billed double, which is how an Actions limit arrives
+  # without anybody doing anything unusual.
+  #
+  # `pull_request` is the one that matters — it is what the merge gate
+  # reads. `push` is kept for main alone, so a merge is still checked
+  # on the thing that actually shipped.
   push:
+    branches: [main]
   pull_request:
+  workflow_dispatch:
+
+# Pushing five times should not leave five full runs going. The newest
+# push is the only one anybody cares about; the rest are cancelled.
+# `apps.yml` has had this for a while and this should have matched it.
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   # The Worker suite, split across three runners.
