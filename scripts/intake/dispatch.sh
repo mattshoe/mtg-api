@@ -120,7 +120,16 @@ while IFS= read -r f; do
   wt="$STATE/wt/${f%.md}"
   if [ -e "$wt" ]; then
     if ! pgrep -f "requests/${f}" >/dev/null 2>&1; then
-      node "$REPO/scripts/intake/task-status.mjs" stalled "$f" >>"$LOG" 2>&1 || true
+      # Say WHY it stopped, not just that it did. The agent writes the
+      # reason as the last thing in its own log and nothing was reading
+      # it: every task failed one morning with "Not logged in · Please
+      # run /login" — Matt's Claude session had expired overnight and a
+      # headless agent cannot refresh it — and all the rows said was
+      # "stopped with work left in its worktree". The reason was on disk
+      # the whole time.
+      why="$(tail -c 2000 "$STATE/${f%.md}.log" 2>/dev/null | tr -d '\0' \
+        | sed -n 's/.*"result":"\([^"]\{1,120\}\)".*/\1/p' | tail -1)"
+      node "$REPO/scripts/intake/task-status.mjs" stalled "$f" "$why" >>"$LOG" 2>&1 || true
     fi
     continue
   fi
