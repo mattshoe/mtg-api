@@ -111,24 +111,40 @@ class GuideParityTest {
     }
 
     @Test
-    fun theCombinationsSitTwoToARow() {
+    fun theCombinationsAreOneListInWubrgOrderOneToALine() {
+        // Matt: "just a list of color combos and names, in wubrg order,
+        // so they can easily be scanned to find what i need".
         shell()
         openColours()
-        val w = rule.onNodeWithTag("combo-W", useUnmergedTree = true).getUnclippedBoundsInRoot()
-        val u = rule.onNodeWithTag("combo-U", useUnmergedTree = true).getUnclippedBoundsInRoot()
-        assertEquals(w.top, u.top, "blue is not beside white, so the page is one long column")
-        assertTrue(u.left >= w.right, "the two tiles overlap: ${w.right} vs ${u.left}")
-        assertTrue(w.right - w.left >= 120.dp, "a tile is ${w.right - w.left} wide, too narrow for Selesnya")
+        val order = listOf("W", "U", "B", "R", "G", "WU", "WB", "WR", "WG", "UB")
+        order.forEach {
+            assertTrue(
+                rule.onAllNodes(hasTestTag("combo-row-$it"), useUnmergedTree = true).fetchSemanticsNodes().size == 1,
+                "there is no single row for $it, so the colours are not a list",
+            )
+        }
+        val rows = order.map { rule.onNodeWithTag("combo-row-$it", useUnmergedTree = true).getUnclippedBoundsInRoot() }
+        rows.zipWithNext().forEachIndexed { i, (a, b) ->
+            assertTrue(b.top >= a.bottom, "${order[i + 1]} is not on the line under ${order[i]}, so this is not a WUBRG list")
+        }
+        val tallest = rows.maxOf { it.bottom - it.top }
+        assertTrue(tallest <= 48.dp, "a row is $tallest tall, so it is a tile, not a line of a list")
     }
 
     @Test
-    fun everyTileHasItsColourStrip() {
+    fun theGroupsComeAfterTheList() {
         shell()
         openColours()
-        val strips = rule.onAllNodes(hasTestTag("guide-band"), useUnmergedTree = true).fetchSemanticsNodes()
-        assertEquals(31, strips.size, "a combination is missing its strip")
-        val one = strips.first()
-        assertTrue(one.size.height > 0, "the strip has no height")
+        assertTrue(
+            rule.onAllNodes(hasTestTag("combo-row-WUBRG"), useUnmergedTree = true).fetchSemanticsNodes().size == 1,
+            "there is no row for all five, so the colours are not a list",
+        )
+        val last = rule.onNodeWithTag("combo-row-WUBRG", useUnmergedTree = true).getUnclippedBoundsInRoot()
+        val groups = rule.onAllNodes(hasTestTag("guide-group"), useUnmergedTree = true)
+        assertEquals(7, groups.fetchSemanticsNodes().size, "the groups are gone from the page")
+        val first = groups[0].getUnclippedBoundsInRoot()
+        assertTrue(first.top >= last.bottom, "the groups start above the end of the list")
+        assertTrue(texts("combo-note").any { it.contains("No white") }, "the four-colour notes are gone: ${texts("combo-note")}")
     }
 
     @Test

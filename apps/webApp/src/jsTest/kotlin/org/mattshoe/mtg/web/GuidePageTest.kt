@@ -123,27 +123,60 @@ class GuidePageTest {
         settle()
         frame.openColours()
         assertEquals("#/guide/colours", held.value.route.toHash())
-        val names = frame.all(".combo .combo-name").map { it.textContent.orEmpty().trim() }
+        val names = frame.all(".combo-row .combo-name").map { it.textContent.orEmpty().trim() }
         assertEquals(31, names.size, "every combination from one colour to five is 31; the page shows $names")
         listOf("Izzet", "Dimir", "Azorius", "Esper", "Jeskai", "Glint-Eye", "Five-colour").forEach {
             assertTrue(it in names, "$it is not on the page: $names")
         }
         // The symbols, not just the words: Izzet shows a blue and a red.
-        val izzet = frame.all(".combo").single { it.querySelector(".combo-name")?.textContent == "Izzet" }
+        val izzet = frame.all(".combo-row").single { it.querySelector(".combo-name")?.textContent == "Izzet" }
         assertEquals(2, izzet.all("img.mana-sym").size, "Izzet should show two mana symbols")
     }
 
     @Test
-    fun atAPhonesWidthTheCombinationsSitTwoToARow() = runTest {
+    fun theCombinationsAreOneListInWubrgOrderOneToALine() = runTest {
+        // Matt: "just a list of color combos and names, in wubrg order,
+        // so they can easily be scanned to find what i need".
         val frame = mount(400)
         settle()
         frame.openColours()
-        val pairs = frame.all(".combo-grid").first().all(".combo")
-        val a = pairs[0].getBoundingClientRect()
-        val b = pairs[1].getBoundingClientRect()
-        assertEquals(a.top, b.top, "the second tile is not beside the first, so the page is one long column")
-        assertTrue(b.left >= a.right, "the two tiles overlap: ${a.right} vs ${b.left}")
-        assertTrue(a.width >= 140.0, "a tile is ${a.width}px wide, too narrow for a name like Selesnya")
+        val rows = frame.all(".combo-row")
+        val order = rows.map { it.getAttribute("data-pips").orEmpty() }
+        assertEquals(
+            listOf("W", "U", "B", "R", "G", "WU", "WB", "WR", "WG", "UB"),
+            order.take(10),
+            "the list does not start in WUBRG order: $order",
+        )
+        assertEquals("WUBRG", order.lastOrNull(), "the list does not end with all five: $order")
+        rows.zipWithNext().forEach { (a, b) ->
+            val ra = a.getBoundingClientRect()
+            val rb = b.getBoundingClientRect()
+            assertTrue(
+                rb.top >= ra.bottom - 0.5,
+                "${b.getAttribute("data-pips")} sits beside ${a.getAttribute("data-pips")}, not under it",
+            )
+        }
+        val tallest = rows.maxOf { it.getBoundingClientRect().height }
+        assertTrue(tallest <= 48.0, "a row is ${tallest}px tall, so it is a tile, not a line of a list")
+    }
+
+    @Test
+    fun theGroupsComeAfterTheList() = runTest {
+        val frame = mount()
+        settle()
+        frame.openColours()
+        val last = frame.all(".combo-row").lastOrNull() ?: error("the colour page has no list")
+        val group = frame.all(".guide-group").firstOrNull() ?: error("the groups are gone from the page")
+        assertTrue(
+            group.getBoundingClientRect().top >= last.getBoundingClientRect().bottom,
+            "the groups start above the end of the list",
+        )
+        assertTrue(
+            group.textContent.orEmpty().contains("Mono-coloured"),
+            "the first group lost what it says: ${group.textContent}",
+        )
+        val fours = frame.all(".guide-group").single { it.textContent.orEmpty().contains("Four colours") }
+        assertTrue(fours.textContent.orEmpty().contains("No white"), "the four-colour notes are gone: ${fours.textContent}")
     }
 
     @Test
@@ -167,6 +200,6 @@ class GuidePageTest {
         settle()
         assertEquals("#/guide", held.value.route.toHash())
         assertTrue(frame.all("button.guide-tile").isNotEmpty(), "back did not show the tiles again")
-        assertTrue(frame.all(".combo").isEmpty(), "the colour page is still drawn")
+        assertTrue(frame.all(".combo-row").isEmpty(), "the colour page is still drawn")
     }
 }
