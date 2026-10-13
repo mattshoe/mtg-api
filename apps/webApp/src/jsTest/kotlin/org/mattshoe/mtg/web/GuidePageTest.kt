@@ -283,6 +283,36 @@ class GuidePageTest {
         listOf("Azorius", "Gruul", "Izzet", "Orzhov").forEach { assertTrue(it in names, "$it is not on the page: $names") }
     }
 
+    // Matt: "we should add lore inserts for the shards of alara and the
+    // tribes of tarkir. information that talks about the land scapes and
+    // culture with the missing colors of magic."
+
+    @Test
+    fun theWheelTellsTheLoreOfEachShardAndClanAndTheColoursEachLacks() = runTest {
+        val frame = mount()
+        settle()
+        frame.openWheel()
+        val lore = frame.all(".wheel-lore")
+        assertEquals(
+            listOf("Bant", "Esper", "Grixis", "Jund", "Naya", "Abzan", "Jeskai", "Sultai", "Mardu", "Temur"),
+            lore.map { it.all(".wheel-lore-name").singleOrNull()?.textContent.orEmpty().trim() },
+            "the shards and clans on the wheel page",
+        )
+        fun missing(pips: String) = lore.firstOrNull { it.getAttribute("data-pips") == pips }
+            ?.all(".wheel-lore-missing")?.singleOrNull()?.textContent.orEmpty()
+        val bant = missing("GWU")
+        assertTrue("Black" in bant && "Red" in bant, "Bant should say it has no black or red: \"$bant\"")
+        val abzan = missing("WBG")
+        assertTrue("Blue" in abzan && "Red" in abzan, "Abzan should say it has no blue or red: \"$abzan\"")
+        lore.forEach { l ->
+            listOf(".wheel-lore-land", ".wheel-lore-people", ".wheel-lore-without").forEach { part ->
+                val said = l.all(part).singleOrNull()
+                assertTrue(said != null && said.textContent.orEmpty().isNotBlank(), "${l.getAttribute("data-pips")} has nothing in $part")
+                assertTrue(said.getBoundingClientRect().height > 0, "${l.getAttribute("data-pips")}'s $part takes up no room on the page")
+            }
+        }
+    }
+
     @Test
     fun backFromTheWheelIsTheTiles() = runTest {
         val frame = mount()

@@ -81,6 +81,13 @@ class WheelOnATabletTest {
         assertEquals(5, colours.size, "$on the five colours are not all there")
         assertEquals(colours[0].top, colours[1].top, "$on blue is under white, so the page is one long column on a wide screen")
         colours.forEach { assertTrue(it.right <= size.first, "$on a colour runs off the side: ${it.right}") }
+
+        // The lore of the shards and clans, under the pairs: side by side
+        // on a wide screen, as the five colours are, and on the screen.
+        val lore = all(".wheel-lore").map { it.getBoundingClientRect() }
+        assertEquals(10, lore.size, "$on the shards and clans are not all there")
+        assertEquals(lore[0].top, lore[1].top, "$on Esper is under Bant, so the lore is one long column on a wide screen")
+        lore.forEach { assertTrue(it.left >= 0 && it.right <= size.first, "$on a shard or clan runs off the side: ${it.left} to ${it.right}") }
     }
 
     @Test
