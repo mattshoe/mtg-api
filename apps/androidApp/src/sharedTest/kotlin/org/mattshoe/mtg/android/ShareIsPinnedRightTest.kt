@@ -154,7 +154,8 @@ class ShareIsPinnedRightTest {
         val s = share("Share this card").getUnclippedBoundsInRoot()
         assertTrue(
             (page.right - s.right).value <= 24f,
-            "with '$name' the share is ${page.right - s.right} short of the right edge",
+            "with '$name' the share is ${page.right - s.right} short of the right edge: " +
+                "the share runs ${s.left} to ${s.right}, the page ${page.left} to ${page.right}",
         )
     }
 

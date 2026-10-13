@@ -1115,8 +1115,16 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
    landscape crop, so the band is a fixed height with the picture
    covering it and a wash under the text — white-on-art is unreadable
    over half the commanders in the game. */
+/* The band and the share in its top right corner. The share sits on
+   the wrapper, not inside `.deck-hero`, because the band clips to its
+   corners and the share's menu hangs down past its bottom edge. */
+.deck-hero-wrap { position: relative; margin-bottom: 14px; }
+.deck-hero-share { position: absolute; top: 8px; right: 8px; }
+/* Dark under the mark and the mark at full ink, so it reads over any
+   art by lightness rather than by colour. */
+.deck-hero-share .btn.icon-only { background: rgba(4,6,10,.62); color: var(--text); }
 .deck-hero {
-  position: relative; height: 168px; margin-bottom: 14px;
+  position: relative; height: 168px;
   border: 1px solid var(--line); border-radius: var(--radius);
   overflow: hidden; background: var(--bg-3);
 }

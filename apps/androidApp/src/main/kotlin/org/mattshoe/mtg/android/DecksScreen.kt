@@ -237,31 +237,20 @@ internal fun DeckDetailScreen(
             .padding(Design.WRAP_PAD_NARROW.dp),
         verticalArrangement = Arrangement.spacedBy(Design.GAP.dp),
     ) {
-        var sharing by remember { mutableStateOf(false) }
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(Design.GAP.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // No "← Decks" before it any more — Matt: "get rid of the
-            // 'back' button on all the details pages". The system back
-            // is the way to the shelf.
-            Spacer(Modifier.weight(1f))
-            // Anchored to its own button, the way the website
-            // anchors `.app-menu.from-right` to `.menu-anchor`.
-            // It used to be inline — a panel pushed into the
-            // column under the header — on the reasoning that a
-            // menu which is part of the page cannot end up off
-            // the edge of the screen. True, but it also meant the
-            // menu shoved the whole deck down the page every time
-            // it opened, which is not what pressing a share
-            // button should do.
-            //
-            // `DropdownMenu` gets the anchoring without the
-            // clipping: it keeps itself inside the window by
-            // construction, so Android never has to solve the
-            // off-screen problem the web needed container
-            // queries for.
+        // The share is pinned to the right of the top of the page,
+        // always — Matt: "the share button in all pages at the top
+        // must always be pinned to the right side, and on the deck
+        // details it should be overlayed on the banner image". On the
+        // banner when there is one; a row of its own, at the right,
+        // when there is not. No "← Decks": the system back is the way
+        // to the shelf.
+        //
+        // Anchored to its own button, the way the website anchors
+        // `.app-menu.from-right` to `.menu-anchor`. `DropdownMenu`
+        // keeps itself inside the window by construction, so neither
+        // the banner's clip nor the edge of the screen can cut it off.
+        val share: @Composable () -> Unit = {
+            var sharing by remember { mutableStateOf(false) }
             Box {
                 ShareButton(sharing) { sharing = !sharing }
                 ShareMenu(
@@ -270,7 +259,9 @@ internal fun DeckDetailScreen(
                 ) { what, where -> sharing = false; onShare(what, where) }
             }
         }
-        Hero(open, state)
+        if (!Hero(open, state, share)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { share() }
+        }
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -381,14 +372,14 @@ private fun Identity(
  * unreadable over half the commanders in the game.
  */
 @Composable
-private fun Hero(deck: Deck, state: DecksState) {
+private fun Hero(deck: Deck, state: DecksState, share: @Composable () -> Unit): Boolean {
     val cmdr = state.commander
     val url = cmdr?.art ?: CardQueries.banner(deck.artId, deck.commanderName)
     if (url == null) {
         // Nothing at all rather than the deck's name: the header at
         // the top of the app is already showing it, because an open
         // deck is the one thing the bottom bar cannot name.
-        return
+        return false
     }
     Box(Modifier.fillMaxWidth().height(150.dp).background(Bg3, Radius).clip(Radius).testTag("deck-hero")) {
         AsyncImage(
@@ -461,7 +452,16 @@ private fun Hero(deck: Deck, state: DecksState) {
                 }
             }
         }
+        // The share, in the top right corner over the art. Dark under
+        // the mark, the web's `.deck-hero-share`, so it reads over any
+        // commander by lightness rather than by colour.
+        Box(
+            Modifier.align(Alignment.TopEnd)
+                .padding(8.dp)
+                .background(androidx.compose.ui.graphics.Color(0x9E04060A), Radius),
+        ) { share() }
     }
+    return true
 }
 
 /**

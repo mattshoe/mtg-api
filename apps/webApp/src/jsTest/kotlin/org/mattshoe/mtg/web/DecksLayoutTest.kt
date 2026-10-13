@@ -157,9 +157,11 @@ class DecksLayoutTest {
         val frame = mount(1000) { DecksPage(opened(), {}) }
         settle()
         if (!Stylesheet.applied()) return@runTest
-        val head = frame.all("div.page-head").first().getBoundingClientRect()
+        // The banner is the top of a locked deck: the share sits on it
+        // and there is no header row above it any more.
+        val head = frame.all("div.deck-hero").first().getBoundingClientRect()
         val body = frame.all("div.stack").first().getBoundingClientRect()
-        assertTrue(body.top - head.bottom >= 8, "only ${body.top - head.bottom}px under the header")
+        assertTrue(body.top - head.bottom >= 8, "only ${body.top - head.bottom}px under the banner")
 
         // The analysis, then the list. Neither flush against the other.
         val panels = frame.all("div.panel").map { it.getBoundingClientRect() }
@@ -175,10 +177,10 @@ class DecksLayoutTest {
         // Matt: "get rid of the 'back' button on all the details pages".
         val frame = mount(1000) { DecksPage(opened(), {}) }
         settle()
-        val head = frame.all("div.page-head").firstOrNull() ?: error("no page head")
+        assertTrue(frame.textContent.orEmpty().contains("Sol Ring"), "the deck is not showing")
         assertTrue(
-            !head.textContent.orEmpty().contains("← Decks"),
-            "the back button is still in the header: ${head.textContent}",
+            !frame.textContent.orEmpty().contains("← Decks"),
+            "the back button is still on the page: ${frame.textContent}",
         )
     }
 

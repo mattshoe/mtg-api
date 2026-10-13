@@ -272,8 +272,8 @@ class DecksParityTest {
             },
             Parity.Fact("the bracket is in the small line under it") { says("Bracket 3") },
             // The deck's own name is deliberately absent. The web's
-            // open-deck `page-head` carries the share menu and the
-            // admin actions and no title at all — the
+            // open deck has the share on the banner and the admin
+            // actions above it, and no title at all — the
             // name was on the tile that was tapped to get here.
             Parity.Fact("the deck's own name is not repeated in the band") { !says("Alela") },
             Parity.Fact("and how many cards it holds") { says("6 cards") },
