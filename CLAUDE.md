@@ -114,6 +114,32 @@ Write a journey for anything a person does in a sequence. Keep
 asserting on measured geometry in `sharedTest`; that is still where
 layout belongs.
 
+## Every screen is tested on a tablet too
+
+Matt: "you need to test every single feature from this moment forward
+in tablet mode". The carousel was built and tested on a phone-shaped
+screen, and on his folding phone opened out the card was taller than
+the space it had, cut off top and bottom. Every screen test the JVM
+ran was on Robolectric's 320 by 470 default, narrower than it is
+tall, so nothing could have shown it.
+
+So any test of a screen runs on a tablet as well as a phone, on both
+platforms:
+
+- **Android**: wrap the real `AppShell` in `Tablet.Sized(Tablet.UNFOLDED)`
+  and `Tablet.Sized(Tablet.LANDSCAPE)`, from
+  `apps/androidApp/src/sharedTest/.../Tablet.kt`. It is
+  `DeviceConfigurationOverride.ForcedSize`, so it runs on the JVM and
+  on a device alike.
+- **Web**: `Tablet.open(Tablet.UNFOLDED)` in
+  `apps/webApp/src/jsTest/.../Tablet.kt` gives an iframe of that size
+  with the real stylesheet. Mount the page into its body.
+  `position: fixed` and `vh` resolve against the frame, which a plain
+  `div` of the same size does not do.
+
+Assert the same measured geometry at each size. `CarouselOnATabletTest`
+on both sides is the example.
+
 ## Happy-path tests are not enough, ever
 
 Matt: "HAPPY PATH ONLY TESTING IS NOT EVER EVER EVER EVER EVER
