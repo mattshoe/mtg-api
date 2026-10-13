@@ -11,6 +11,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.semantics.SemanticsActions
@@ -113,13 +114,13 @@ class RulesParityTest {
         assertEquals(4, count("rule-body"), "a rule started collapsed")
         assertTrue(texts("rule-example").any { it.startsWith("A 6/6 green creature") }, "702.19b's examples are not shown")
 
-        rule.onAllNodes(hasTestTag("rule-head"), useUnmergedTree = true)[2].performClick()
+        rule.onAllNodes(hasTestTag("rule-head"), useUnmergedTree = true)[2].performScrollTo().performClick()
         rule.waitForIdle()
         assertEquals(3, count("rule-body"), "tapping 702.19b did not fold it")
         assertEquals(4, texts("rule-number").size, "a folded rule left the list rather than folding")
         assertTrue(texts("rule-example").none { it.startsWith("A 6/6 green creature") }, "702.19b's examples are still shown")
 
-        rule.onAllNodes(hasTestTag("rule-head"), useUnmergedTree = true)[2].performClick()
+        rule.onAllNodes(hasTestTag("rule-head"), useUnmergedTree = true)[2].performScrollTo().performClick()
         rule.waitForIdle()
         assertEquals(4, count("rule-body"), "tapping again did not open it")
     }
