@@ -294,11 +294,31 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** End the session, on the server as well as here. */
+    /**
+     * End the session, on the server as well as here — and stop the
+     * pushes.
+     *
+     * Signing out used to leave the device registered, so a phone that
+     * had been signed out kept buzzing with task titles for as long as
+     * that account stayed an admin. The session is what says this phone
+     * belongs to that person; when it ends, so does the reason to tell
+     * this phone anything.
+     *
+     * Forgetting the device goes FIRST and on the same token, because
+     * `signOut` invalidates the session that authorises it.
+     */
     private fun signOutOfGoogle() {
         val held = app.admin.token
         app = app.copy(admin = app.admin.signOut()).navigate(app.route)
-        if (!held.isNullOrBlank()) scope.launch { runCatching { api.signOut(held) } }
+        if (!held.isNullOrBlank()) {
+            scope.launch {
+                runCatching {
+                    val token = com.google.firebase.messaging.FirebaseMessaging.getInstance().token.await()
+                    api.forgetDevice(held, token)
+                }
+                runCatching { api.signOut(held) }
+            }
+        }
     }
 
     /**

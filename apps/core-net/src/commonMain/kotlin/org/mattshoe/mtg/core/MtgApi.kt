@@ -4,6 +4,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
@@ -328,6 +329,23 @@ class MtgApi internal constructor(
             contentType(ContentType.Application.Json)
             header("Authorization", "Bearer $session")
             setBody(DeviceBody(token, "android", label))
+        }
+        if (!res.status.isSuccess()) throw ApiFailure(errorIn(res.bodyAsText(), res.status))
+    }
+
+    /**
+     * Stop pushing to this phone.
+     *
+     * Called on sign-out, before the session is ended, because ending it
+     * first would leave nothing to authorise this with — and a phone
+     * that is signed out but still registered keeps being told about
+     * tasks it no longer has any business knowing.
+     */
+    suspend fun forgetDevice(session: String, token: String) {
+        val res = http.delete("$base/devices") {
+            contentType(ContentType.Application.Json)
+            header("Authorization", "Bearer $session")
+            setBody(DeviceBody(token, "android", null))
         }
         if (!res.status.isSuccess()) throw ApiFailure(errorIn(res.bodyAsText(), res.status))
     }

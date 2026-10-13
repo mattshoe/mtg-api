@@ -3,7 +3,8 @@ import { env } from 'cloudflare:test';
 import { sql, exec, post, call } from './helpers.js';
 import { accessToken, forgetToken, isDead, sendTo, noteFor } from '../src/push.js';
 import { tell, credsFrom } from '../src/notify.js';
-import { adminDevices, remember, markDead } from '../src/devices.js';
+import { adminDevices, remember, markDead, forget } from '../src/devices.js';
+import { setRole, newSession } from '../src/accounts.js';
 
 // Push, which is the one part of this app that reaches Matt when the app
 // is closed. Everything here is about it never costing a request: a phone
@@ -222,3 +223,231 @@ describe('credsFrom', () => {
     expect(credsFrom({ FCM_SERVICE_ACCOUNT: 'not json' })).toBeNull();
   });
 });
+
+// Who is told, proved through the real send path.
+//
+// Matt: "i need to be positive this ONLY sends to users with the admin
+// role, and it needs to be certain that adding that role correctly
+// updates pushes to be sent, and removing the role correctly stops
+// pushes."
+//
+// The tests above check `adminDevices` in isolation. These assert the
+// tokens Firebase was actually asked to deliver to, because that is the
+// thing that reaches a phone — a wrong answer from the query and a wrong
+// send are the same bug to the person holding it.
+//
+// It matters more than it did yesterday: `agent` is a role as of today,
+// so "not an admin" has two shapes now, and a test that only tried
+// `user` would miss the one that was just invented.
+describe('only admins are pushed to, proved end to end', () => {
+  const CREDS_ENV = () => ({ DB: env.DB, FCM_SERVICE_ACCOUNT: JSON.stringify(CREDS) });
+
+  /** Every token Firebase was asked to deliver to, in one send. */
+  async function tokensSentTo(task = { title: 'A task', status: 'merged' }) {
+    const sent = [];
+    const f = async (url, init) => {
+      if (String(url).includes('oauth2')) {
+        return Response.json({ access_token: 'at', expires_in: 3600 });
+      }
+      sent.push(JSON.parse(init.body).message.token);
+      return Response.json({ name: 'ok' });
+    };
+    forgetToken();
+    await tell(CREDS_ENV(), task, { fetch: f });
+    return sent.sort();
+  }
+
+  /** An account at a role, with a device registered to it. */
+  async function personWithPhone(slug, role, token) {
+    const [u] = await sql('SELECT id FROM users WHERE slug = ?', slug);
+    await exec('UPDATE users SET role = ? WHERE id = ?', role, u.id);
+    await remember(env.DB, u.id, { token, platform: 'android' });
+    return u.id;
+  }
+
+  it('sends to an admin', async () => {
+    await personWithPhone('m4tt0001', 'admin', 'tok-admin');
+    expect(await tokensSentTo()).toEqual(['tok-admin']);
+  });
+
+  it('sends nothing to a plain user, even with a device registered', async () => {
+    await personWithPhone('m4tt0001', 'user', 'tok-user');
+    expect(await tokensSentTo(), 'a non-admin was pushed to').toEqual([]);
+  });
+
+  // The role invented today. A build agent has a session and could
+  // register a device; it must never be told about tasks.
+  it('sends nothing to the agent role', async () => {
+    await personWithPhone('m4tt0001', 'agent', 'tok-agent');
+    expect(await tokensSentTo(), 'the agent role was pushed to').toEqual([]);
+  });
+
+  it('sends to the admins and to nobody else, with a crowd registered', async () => {
+    await personWithPhone('m4tt0001', 'admin', 'tok-matt');
+    await personWithPhone('k4yy0003', 'admin', 'tok-kayla');
+    // Two accounts that must be silent, at both non-admin roles.
+    const [a] = await sql("SELECT id FROM users WHERE slug = 'bfa462f5'");
+    const [b] = await sql("SELECT id FROM users WHERE slug = 't4pee71g'");
+    if (a) { await exec('UPDATE users SET role = ? WHERE id = ?', 'agent', a.id); await remember(env.DB, a.id, { token: 'tok-agent', platform: 'android' }); }
+    if (b) { await exec('UPDATE users SET role = ? WHERE id = ?', 'user', b.id); await remember(env.DB, b.id, { token: 'tok-plain', platform: 'android' }); }
+
+    expect(await tokensSentTo()).toEqual(['tok-kayla', 'tok-matt']);
+  });
+
+  it('starts sending the moment somebody is made an admin, with nothing else done', async () => {
+    const id = await personWithPhone('m4tt0001', 'user', 'tok-promoted');
+    expect(await tokensSentTo(), 'pushed before the role was given').toEqual([]);
+
+    // The role, and only the role. No re-registering, no restart.
+    await setRole(env.DB, 'm4tt0001', 'admin');
+
+    expect(await tokensSentTo(), 'granting admin did not start pushes').toEqual(['tok-promoted']);
+    expect(id).toBeTruthy();
+  });
+
+  it('stops sending the moment the role is taken away', async () => {
+    await personWithPhone('m4tt0001', 'admin', 'tok-demoted');
+    expect(await tokensSentTo()).toEqual(['tok-demoted']);
+
+    await setRole(env.DB, 'm4tt0001', 'user');
+
+    expect(await tokensSentTo(), 'a demoted account was still pushed to').toEqual([]);
+  });
+
+  it('stops for one admin without stopping the other', async () => {
+    await personWithPhone('m4tt0001', 'admin', 'tok-matt');
+    await personWithPhone('k4yy0003', 'admin', 'tok-kayla');
+    expect(await tokensSentTo()).toEqual(['tok-kayla', 'tok-matt']);
+
+    await setRole(env.DB, 'k4yy0003', 'user');
+
+    expect(await tokensSentTo()).toEqual(['tok-matt']);
+  });
+
+  // Nothing is cached anywhere: the role is read at send time, by join,
+  // every time. This is what makes the two tests above hold a minute
+  // later as well as a millisecond later.
+  it('reads the role at send time rather than when the device registered', async () => {
+    await personWithPhone('m4tt0001', 'admin', 'tok-a');
+    await setRole(env.DB, 'm4tt0001', 'user');
+    await setRole(env.DB, 'm4tt0001', 'admin');
+    await setRole(env.DB, 'm4tt0001', 'user');
+    expect(await tokensSentTo(), 'a stale role decided the send').toEqual([]);
+  });
+
+  it('sends to every device an admin has, not just the newest', async () => {
+    const id = await personWithPhone('m4tt0001', 'admin', 'tok-phone');
+    await remember(env.DB, id, { token: 'tok-tablet', platform: 'android' });
+    expect(await tokensSentTo()).toEqual(['tok-phone', 'tok-tablet']);
+  });
+})
+
+// Android only.
+//
+// Matt: "web does NOT need any pushes for any reason ever right now."
+// The website is open in front of him when he is using it. A `web` row
+// would be a row the send loop tries, fails on, and marks dead forever —
+// so it is refused at the door instead of accepted and never used.
+describe('which platforms can register at all', () => {
+  const idOf = async () => (await sql("SELECT id FROM users WHERE slug = 'm4tt0001'"))[0].id;
+
+  it('takes an android device', async () => {
+    const r = await remember(env.DB, await idOf(), { token: 'tok-droid', platform: 'android' });
+    expect(r.status).toBe(200);
+  });
+
+  it('refuses web, rather than storing a row nothing will ever send to', async () => {
+    const r = await remember(env.DB, await idOf(), { token: 'tok-web', platform: 'web' });
+    expect(r.status, 'a web device was registered').toBe(400);
+    expect(await sql('SELECT token FROM devices WHERE token = ?', 'tok-web')).toEqual([]);
+  });
+
+  it('refuses ios for the same reason', async () => {
+    const r = await remember(env.DB, await idOf(), { token: 'tok-ios', platform: 'ios' });
+    expect(r.status).toBe(400);
+  });
+
+  it('says which platforms it does take, so the refusal is actionable', async () => {
+    const r = await remember(env.DB, await idOf(), { token: 'tok-web', platform: 'web' });
+    expect(r.body.error).toContain('android');
+  });
+})
+
+// A role change lands on the next push, with nothing to wait for.
+//
+// Matt: "do these updates happen mid-session? like if i give a user a
+// role and they are mid-session, will they start getting pushes
+// immediately? likewise for removal?"
+//
+// Yes, and the reason is that the send path never looks at a session.
+// It joins `devices` to `users` and reads the role as it is at that
+// instant. There is no cached claim, no token to expire, nothing to
+// refresh. These make that a fact rather than a reading of the code.
+describe('a role change while somebody is signed in', () => {
+  const CREDS_ENV = () => ({ DB: env.DB, FCM_SERVICE_ACCOUNT: JSON.stringify(CREDS) });
+
+  async function sentTo() {
+    const sent = [];
+    const f = async (url, init) => {
+      if (String(url).includes('oauth2')) return Response.json({ access_token: 'at', expires_in: 3600 });
+      sent.push(JSON.parse(init.body).message.token);
+      return Response.json({ name: 'ok' });
+    };
+    forgetToken();
+    await tell(CREDS_ENV(), { title: 'A task', status: 'merged' }, { fetch: f });
+    return sent.sort();
+  }
+
+  it('starts pushing to a live session the moment the role is given', async () => {
+    const [u] = await sql("SELECT id FROM users WHERE slug = 'm4tt0001'");
+    await exec('UPDATE users SET role = ? WHERE id = ?', 'user', u.id);
+    // A session that was opened BEFORE the role existed and is never
+    // touched again — the exact shape of the question.
+    const session = await newSession(env.DB, u.id);
+    await remember(env.DB, u.id, { token: 'tok-live', platform: 'android' });
+    expect(await sentTo()).toEqual([]);
+
+    await setRole(env.DB, 'm4tt0001', 'admin');
+
+    expect(await sentTo(), 'a live session did not start receiving').toEqual(['tok-live']);
+    expect(session, 'the session itself was never re-issued').toBeTruthy();
+  });
+
+  it('stops pushing to a live session the moment the role is taken', async () => {
+    const [u] = await sql("SELECT id FROM users WHERE slug = 'm4tt0001'");
+    await exec('UPDATE users SET role = ? WHERE id = ?', 'admin', u.id);
+    await newSession(env.DB, u.id);
+    await remember(env.DB, u.id, { token: 'tok-live', platform: 'android' });
+    expect(await sentTo()).toEqual(['tok-live']);
+
+    await setRole(env.DB, 'm4tt0001', 'user');
+
+    expect(await sentTo(), 'a demoted live session kept receiving').toEqual([]);
+  });
+
+  // The gap Matt's question turned up. Signing out ends the session and
+  // used to leave the device registered, so a signed-out phone kept
+  // buzzing with task titles for as long as the account stayed admin.
+  it('stops pushing to a phone that signed out', async () => {
+    const [u] = await sql("SELECT id FROM users WHERE slug = 'm4tt0001'");
+    await exec('UPDATE users SET role = ? WHERE id = ?', 'admin', u.id);
+    await remember(env.DB, u.id, { token: 'tok-byebye', platform: 'android' });
+    expect(await sentTo()).toEqual(['tok-byebye']);
+
+    // What the app does on sign-out, in order.
+    await forget(env.DB, 'tok-byebye');
+
+    expect(await sentTo(), 'a signed-out phone was still pushed to').toEqual([]);
+  });
+
+  it('leaves the other phones alone when one signs out', async () => {
+    const [u] = await sql("SELECT id FROM users WHERE slug = 'm4tt0001'");
+    await exec('UPDATE users SET role = ? WHERE id = ?', 'admin', u.id);
+    await remember(env.DB, u.id, { token: 'tok-phone', platform: 'android' });
+    await remember(env.DB, u.id, { token: 'tok-tablet', platform: 'android' });
+
+    await forget(env.DB, 'tok-phone');
+
+    expect(await sentTo()).toEqual(['tok-tablet']);
+  });
+})

@@ -10,7 +10,22 @@
 import { allUsers } from './accounts.js';
 
 const MAX_TOKEN = 400;
-const PLATFORMS = new Set(['android', 'ios', 'web']);
+
+/**
+ * Android, and nothing else.
+ *
+ * Matt: "web does NOT need any pushes for any reason ever right now."
+ * The website is open in front of him when he is using it and has
+ * nothing to tell him that the page is not already showing. iOS does not
+ * exist. Both were in this list for a few minutes because a set of three
+ * looked more finished than a set of one, which is the wrong reason to
+ * carry a path nothing walks — a `web` row here would be a row the send
+ * loop tries, fails on, and marks dead forever.
+ *
+ * Adding one back is this line and a test. Until then a web registration
+ * is refused, loudly, rather than accepted and silently never used.
+ */
+const PLATFORMS = new Set(['android']);
 
 /** Remember where to reach somebody. */
 export async function remember(db, userId, body) {
