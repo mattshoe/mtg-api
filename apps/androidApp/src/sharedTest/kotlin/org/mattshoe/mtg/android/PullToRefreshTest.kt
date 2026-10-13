@@ -5,7 +5,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.hasProgressBarRangeInfo
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performTouchInput
@@ -148,6 +151,68 @@ class PullToRefreshTest {
     @Test fun pullingDownOnEntryRefreshesIt() = pullAsks("Entry")
 
     private val spinners = hasProgressBarRangeInfo(ProgressBarRangeInfo.Indeterminate)
+
+    /**
+     * Every progress circle the pull has drawn where a person can see
+     * it, the arrow that follows the thumb as well as the spinner.
+     */
+    private fun pullCirclesInSight(): List<String> {
+        val page = rule.onNodeWithTag("topbar-title").fetchSemanticsNode().boundsInRoot.bottom
+        return rule.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo))
+            .fetchSemanticsNodes()
+            .filter { it.boundsInRoot.bottom > page + 1f && it.boundsInRoot.height > 0f }
+            .map { "${it.config[SemanticsProperties.ProgressBarRangeInfo]} at ${it.boundsInRoot}" }
+    }
+
+    /**
+     * A page with nothing to fetch, pulled, with the refresh the app
+     * really does — `refreshed` and then `settled`, as every write is.
+     *
+     * Matt: "in the guide page, if i pull down to refresh, the spinner
+     * never goes away. it always gets stuck". `refreshed` on the Guide
+     * is the page itself, so `refreshing` is never true, so it never
+     * goes from true back to false — and that change is the only thing
+     * that told `PullToRefreshBox` to put its circle away.
+     */
+    private fun pullLetsGo(start: AppState) {
+        assertTrue(!start.refreshed().refreshing, "the fixture has a fetch to wait on, so this proves nothing")
+        val held = androidx.compose.runtime.mutableStateOf(start)
+        var asked = 0
+        rule.setContent {
+            MaterialTheme(colorScheme = darkColorScheme()) {
+                Surface {
+                    AppShell(
+                        state = held.value,
+                        onState = { held.value = it },
+                        onSearch = {},
+                        onOpenDeck = {},
+                        onPreviewEntry = {},
+                        onApplyEntry = {},
+                        onRefresh = {
+                            asked++
+                            held.value = held.value.refreshed().settled()
+                        },
+                    )
+                }
+            }
+        }
+        rule.waitForIdle()
+        pullDown()
+        assertEquals(1, asked, "the pull never asked to refresh, so this proves nothing about the spinner")
+        rule.mainClock.advanceTimeBy(2_000)
+        rule.waitForIdle()
+        val left = pullCirclesInSight()
+        assertTrue(left.isEmpty(), "the pull's circle is still on screen after a refresh with nothing to wait for: $left")
+    }
+
+    @Test fun pullingDownOnTheGuideLetsTheSpinnerGo() =
+        pullLetsGo(AppState(route = Route(View.GUIDE), admin = me))
+
+    @Test fun pullingDownOnAGuideTileLetsTheSpinnerGo() =
+        pullLetsGo(AppState(route = Route(View.GUIDE, "colours"), admin = me))
+
+    @Test fun pullingDownOnEntryLetsTheSpinnerGo() =
+        pullLetsGo(AppState(route = Route(View.ENTRY), admin = me))
 
     @Test
     fun aPulledPageSpinsWhileItsFetchIsOut() {
