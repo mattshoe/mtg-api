@@ -1600,6 +1600,30 @@ class AppDriverTest {
     }
 
     /**
+     * Matt: "in the guide page, if i pull down to refresh, the spinner
+     * never goes away". The Guide has nothing to fetch, so once the
+     * finger lifts there is nothing to wait for and nothing to show.
+     */
+    @Test
+    fun aPullOnTheGuideLeavesNoSpinner() = runTest {
+        Stylesheet.load()
+        waitFor("the stylesheet") { Stylesheet.applied() }
+        mount("#/guide", token = "t")
+        waitFor("the Guide's tiles") { document.querySelector(".guide-tile") != null }
+        settle()
+        pullDown()
+        val spinner = document.querySelector("[data-pull]") as? HTMLElement
+            ?: error("no pull indicator on the page at all")
+        rest(600)
+        assertEquals("false", spinner.getAttribute("data-refreshing"), "the Guide says it is refreshing with nothing to fetch")
+        assertEquals(
+            "0",
+            window.getComputedStyle(spinner).opacity,
+            "the pull's circle is still on screen after a pull on the Guide",
+        )
+    }
+
+    /**
      * The running task counts from the start the dispatcher wrote to the
      * browser's own clock. `TasksPanelTest` hands the page a `now`;
      * this is the page finding one for itself.

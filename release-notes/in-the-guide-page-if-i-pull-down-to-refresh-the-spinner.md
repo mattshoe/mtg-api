@@ -1,0 +1,1 @@
+Pulling down to refresh the Guide no longer leaves the spinner stuck on screen. The same was true of the mass entry page, the server log and Fetch on the phone. Fixed on the phone, and the website now has a test holding it to the same.
