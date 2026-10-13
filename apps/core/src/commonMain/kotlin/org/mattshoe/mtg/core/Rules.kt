@@ -5,7 +5,9 @@ data class Rule(
     val text: String,
     val examples: List<String> = emptyList(),
     val section: String = "",
-)
+) {
+    val shownNumber: String get() = number
+}
 
 data class RuleBook(val effective: String = "", val rules: List<Rule> = emptyList()) {
     fun search(query: String): List<Rule> = emptyList()
@@ -15,7 +17,7 @@ data class RuleBook(val effective: String = "", val rules: List<Rule> = emptyLis
     }
 }
 
-data class RulesPage(
+data class Rules(
     val book: RuleBook? = null,
     val busy: Boolean = false,
     val error: String? = null,
@@ -24,12 +26,13 @@ data class RulesPage(
 ) {
     val total: Int get() = 0
     val hits: List<Rule> get() = emptyList()
+    val count: String get() = ""
     fun isOpen(rule: Rule): Boolean = false
-    fun toggled(rule: Rule): RulesPage = this
-    fun searched(query: String): RulesPage = this
-    fun loading(): RulesPage = this
-    fun loaded(text: String): RulesPage = this
-    fun failed(message: String): RulesPage = this
+    fun toggled(rule: Rule): Rules = this
+    fun searched(query: String): Rules = this
+    fun loading(): Rules = this
+    fun loaded(text: String): Rules = this
+    fun failed(message: String): Rules = this
 
     companion object {
         const val SHOWN = 150

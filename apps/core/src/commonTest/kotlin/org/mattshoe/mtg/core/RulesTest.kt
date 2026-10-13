@@ -98,7 +98,7 @@ class RulesTest {
 
     @Test
     fun everyRuleStartsExpandedAndCollapsesOnATap() {
-        val r = RulesPage().loaded(TEXT).searched("trample")
+        val r = Rules().loaded(TEXT).searched("trample")
         assertTrue(r.hits.all { r.isOpen(it) }, "a rule started collapsed")
         val b = r.hits.single { it.number == "702.19b" }
         val shut = r.toggled(b)
@@ -109,7 +109,7 @@ class RulesTest {
 
     @Test
     fun loadingThenFailingLeavesNoSpinnerAndSaysWhy() {
-        val failed = RulesPage().loading().failed("Wizards answered 404")
+        val failed = Rules().loading().failed("Wizards answered 404")
         assertFalse(failed.busy, "the spinner is still up after the load failed")
         assertEquals("Wizards answered 404", failed.error)
         val again = failed.loading()
@@ -119,7 +119,7 @@ class RulesTest {
 
     @Test
     fun aLoadedPageIsNotBusyAndKeepsWhatWasTyped() {
-        val r = RulesPage().searched("trample").loading().loaded(TEXT)
+        val r = Rules().searched("trample").loading().loaded(TEXT)
         assertFalse(r.busy)
         assertNotNull(r.book)
         assertEquals(4, r.hits.size, "a search typed while the rules loaded was dropped")
@@ -127,9 +127,9 @@ class RulesTest {
 
     @Test
     fun aWildlyBroadSearchShowsAFirstPageAndSaysHowManyThereWere() {
-        val r = RulesPage().loaded(TEXT).searched("a")
+        val r = Rules().loaded(TEXT).searched("a")
         assertEquals(book.search("a").size, r.total)
-        assertTrue(r.hits.size <= RulesPage.SHOWN)
+        assertTrue(r.hits.size <= Rules.SHOWN)
     }
 
     @Test

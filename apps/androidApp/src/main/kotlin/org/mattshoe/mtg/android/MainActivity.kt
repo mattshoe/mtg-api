@@ -1,5 +1,6 @@
 package org.mattshoe.mtg.android
 
+import org.mattshoe.mtg.core.onRules
 import org.mattshoe.mtg.core.TaskDetail
 import org.mattshoe.mtg.core.openTaskKey
 import org.mattshoe.mtg.core.taskCancelled

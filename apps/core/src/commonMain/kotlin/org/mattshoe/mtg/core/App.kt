@@ -53,7 +53,7 @@ data class AppState(
     /** Every build that shipped, for the release notes on Admin Settings. */
     val releases: Releases = Releases(),
     /** The Guide's rules page: the Comprehensive Rules, once fetched, and what was searched. */
-    val rules: RulesPage = RulesPage(),
+    val rules: Rules = Rules(),
     /** Intake requests and where each one is, for Admin Settings. */
     val tasks: Tasks = Tasks(),
     /** The task being written on Admin Settings' New task page. */
