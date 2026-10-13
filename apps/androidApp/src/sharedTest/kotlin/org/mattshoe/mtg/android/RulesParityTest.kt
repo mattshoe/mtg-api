@@ -91,7 +91,7 @@ class RulesParityTest {
         rule.onNodeWithContentDescription("Guide").performClick()
         rule.waitForIdle()
         rule.onNodeWithTag("guide-tile-rules").assertExists("the Guide has no rules tile")
-        rule.onNodeWithTag("guide-tile-rules").performClick()
+        rule.onNodeWithTag("guide-tile-rules").performScrollTo().performClick()
         rule.waitForIdle()
         assertEquals("#/guide/rules", held.value.route.toHash())
         rule.onNodeWithTag("rules-search").assertExists("the rules page has no search bar")
