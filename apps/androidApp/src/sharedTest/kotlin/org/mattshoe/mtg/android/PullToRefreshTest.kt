@@ -8,7 +8,6 @@ import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.hasProgressBarRangeInfo
-import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performTouchInput
@@ -153,16 +152,19 @@ class PullToRefreshTest {
     private val spinners = hasProgressBarRangeInfo(ProgressBarRangeInfo.Indeterminate)
 
     /**
-     * Every progress circle the pull has drawn where a person can see
-     * it, the arrow that follows the thumb as well as the spinner.
+     * Every progress circle the pull has out: the spinner, or the arrow
+     * that follows the thumb pulled any way down at all. Put away, the
+     * arrow is still in the tree reading 0.
+     *
+     * Not by where it sits. That was the first try, and the put-away
+     * arrow sits at different pixels on the JVM and on a phone.
      */
-    private fun pullCirclesInSight(): List<String> {
-        val page = rule.onNodeWithTag("topbar-title").fetchSemanticsNode().boundsInRoot.bottom
-        return rule.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo))
+    private fun pullCirclesInSight(): List<String> =
+        rule.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo))
             .fetchSemanticsNodes()
-            .filter { it.boundsInRoot.bottom > page + 1f && it.boundsInRoot.height > 0f }
-            .map { "${it.config[SemanticsProperties.ProgressBarRangeInfo]} at ${it.boundsInRoot}" }
-    }
+            .map { it.config[SemanticsProperties.ProgressBarRangeInfo] to it.boundsInRoot }
+            .filter { (info, _) -> info == ProgressBarRangeInfo.Indeterminate || info.current > 0f }
+            .map { (info, at) -> "$info at $at" }
 
     /**
      * A page with nothing to fetch, pulled, with the refresh the app
