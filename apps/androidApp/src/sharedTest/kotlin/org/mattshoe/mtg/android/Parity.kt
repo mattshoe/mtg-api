@@ -82,7 +82,24 @@ object Parity {
         // test's assertions have already run either way.
         if (!onDevice) return null
         val file = File(shots, "$name.png")
-        val bitmap = captureToImage().asAndroidBitmap()
+        // And a photograph that cannot be TAKEN is not a failure either,
+        // which is the half this was missing.
+        //
+        // `captureToImage` waits for the emulator to hand back a drawn
+        // window and gives up after two seconds of its own, which is not
+        // ours to lengthen. On a loaded CI runner that happens — the
+        // emulator logs "Failed to find ColorBuffer" and "invalid color
+        // buffer" around it — and the test went red having already
+        // proved everything it set out to prove. It cost three device
+        // runs and the whole suite each time.
+        //
+        // Said out loud rather than swallowed: if the pictures stop
+        // arriving entirely, somebody reading the log should see why
+        // rather than wonder where they went.
+        val bitmap = runCatching { captureToImage().asAndroidBitmap() }.getOrElse { e ->
+            println("SHOT $name could not be taken: $e")
+            return null
+        }
         file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
         return file
     }
