@@ -72,6 +72,8 @@ import org.mattshoe.mtg.core.ShareWhat
 import org.mattshoe.mtg.core.Tweak
 import org.mattshoe.mtg.core.View
 import org.mattshoe.mtg.core.guideTile
+import org.mattshoe.mtg.core.loreEra
+import org.mattshoe.mtg.core.openEra
 import org.mattshoe.mtg.core.openGuide
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -443,6 +445,8 @@ fun AppShell(
                         tile = state.guideTile,
                         onOpen = { onState(state.openGuide(it)) },
                         onBack = { onState(state.navigate(View.GUIDE)) },
+                        era = state.loreEra,
+                        onEra = { onState(state.openEra(it)) },
                     )
 
                     View.FETCH -> FetchListScreen(

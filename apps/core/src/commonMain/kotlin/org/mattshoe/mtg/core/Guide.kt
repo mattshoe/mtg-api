@@ -35,6 +35,7 @@ object Guide {
     val tiles: List<GuideTile> = listOf(
         GuideTile(COLOURS, "Colour combinations", "Every name, from Azorius to WUBRG. Guilds, shards, wedges and the rest."),
         GuideTile(WHEEL, "The colour wheel", "What each colour wants, what it is good at, and who its friends and enemies are."),
+        GuideTile(LORE, "Phyrexia", "The whole story, from the fall of the Thran to the March of the Machine, one era at a time."),
     )
 
     fun tile(slug: String): GuideTile? = tiles.firstOrNull { it.slug == slug }
@@ -109,8 +110,13 @@ object Guide {
     private fun named(pips: String) = Combo(pips, Guild.of(pips) ?: error("no name for $pips"))
 }
 
-/** The tile on screen, or null on the Guide's front page and everywhere else. */
-val AppState.guideTile: GuideTile? get() = if (view == View.GUIDE) Guide.tile(route.rest) else null
+/**
+ * The tile on screen, or null on the Guide's front page and everywhere else.
+ *
+ * Only the first part of the address names the tile: a page of tabs
+ * keeps its open tab after it, `#/guide/phyrexia/rath`.
+ */
+val AppState.guideTile: GuideTile? get() = if (view == View.GUIDE) Guide.tile(route.rest.substringBefore('/')) else null
 
 /** A tile, at its own address, so back and a bookmark both work. */
 fun AppState.openGuide(tile: GuideTile): AppState = navigate(Route(View.GUIDE, tile.slug))

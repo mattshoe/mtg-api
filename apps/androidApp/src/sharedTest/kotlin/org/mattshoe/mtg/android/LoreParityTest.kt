@@ -91,7 +91,7 @@ class LoreParityTest {
     private fun tab(named: String) {
         val i = tabTexts().indexOfFirst { named in it }
         assertTrue(i >= 0, "there is no $named tab: ${tabTexts()}")
-        tabs()[i].performClick()
+        tabs()[i].performScrollTo().performClick()
         rule.waitForIdle()
     }
 

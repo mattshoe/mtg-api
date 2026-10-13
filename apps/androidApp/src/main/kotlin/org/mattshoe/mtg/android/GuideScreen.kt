@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -20,7 +22,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,6 +45,8 @@ import org.mattshoe.mtg.core.Combo
 import org.mattshoe.mtg.core.Design
 import org.mattshoe.mtg.core.Guide
 import org.mattshoe.mtg.core.GuideTile
+import org.mattshoe.mtg.core.LoreEra
+import org.mattshoe.mtg.core.PhyrexianLore
 import org.mattshoe.mtg.core.WheelColour
 import org.mattshoe.mtg.core.WheelPair
 
@@ -52,10 +62,20 @@ import org.mattshoe.mtg.core.WheelPair
  * which is exactly where a test would go looking.
  */
 @Composable
-fun GuideScreen(tile: GuideTile?, onOpen: (GuideTile) -> Unit, onBack: () -> Unit) {
+fun GuideScreen(
+    tile: GuideTile?,
+    onOpen: (GuideTile) -> Unit,
+    onBack: () -> Unit,
+    era: LoreEra? = null,
+    onEra: (LoreEra) -> Unit = {},
+) {
+    val scroll = rememberScrollState()
+    // A new era is a new chapter, so it starts at the top, as the
+    // site's Read on does.
+    LaunchedEffect(era?.slug) { scroll.scrollTo(0) }
     Column(
         Modifier.fillMaxWidth()
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scroll)
             .padding(Design.WRAP_PAD_NARROW.dp)
             .testTag("guide"),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -77,6 +97,7 @@ fun GuideScreen(tile: GuideTile?, onOpen: (GuideTile) -> Unit, onBack: () -> Uni
             when (tile.slug) {
                 Guide.COLOURS -> Colours()
                 Guide.WHEEL -> Wheel()
+                Guide.LORE -> Lore(era ?: PhyrexianLore.eras.first(), onEra)
             }
         }
     }
@@ -275,6 +296,79 @@ private fun Pairs(title: String, about: String, pairs: List<WheelPair>) {
         }
     }
 }
+
+/**
+ * The story of Phyrexia: a row of tabs, one per era, then the era's
+ * chapter set for reading. Everything said is in `PhyrexianLore`, and
+ * the open tab is in the address. Sibling of `Lore` in `GuidePage`.
+ *
+ * One column no wider than the site's 680px, centred, so a tablet
+ * does not stretch a line past reading. The tab row scrolls sideways
+ * on a phone rather than wrapping into a pile.
+ */
+@Composable
+private fun Lore(era: LoreEra, onEra: (LoreEra) -> Unit) {
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+        Column(Modifier.widthIn(max = STORY.dp).fillMaxWidth()) {
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).testTag("lore-tabs"),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                PhyrexianLore.eras.forEach { e ->
+                    val open = e == era
+                    // Told apart by lightness and an underline, not by
+                    // a hue, because Matt is colourblind.
+                    Column(Modifier.width(IntrinsicSize.Max)) {
+                        Line(
+                            e.tab, if (open) Ink else Ink3, size = 14, weight = FontWeight.SemiBold, maxLines = 1,
+                            modifier = Modifier
+                                .selectable(selected = open, role = Role.Tab) { onEra(e) }
+                                .padding(horizontal = 12.dp, vertical = 10.dp)
+                                .testTag("lore-tab"),
+                        )
+                        Box(Modifier.fillMaxWidth().height(2.dp).background(if (open) Ink else androidx.compose.ui.graphics.Color.Transparent))
+                    }
+                }
+            }
+            Box(Modifier.fillMaxWidth().height(1.dp).background(Line))
+            Column(Modifier.fillMaxWidth().padding(top = 18.dp).testTag("lore-story")) {
+                androidx.compose.material3.Text(
+                    era.title, Modifier.testTag("lore-title"), color = Ink,
+                    fontSize = 24.sp, lineHeight = 30.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Serif,
+                )
+                Spacer(Modifier.height(14.dp))
+                era.story.forEach {
+                    androidx.compose.material3.Text(
+                        it, Modifier.padding(bottom = 18.dp).testTag("lore-paragraph"), color = Ink,
+                        fontSize = 17.sp, lineHeight = 29.sp, fontFamily = FontFamily.Serif,
+                    )
+                }
+                era.quote?.let { q ->
+                    Row(Modifier.fillMaxWidth().padding(vertical = 12.dp).height(IntrinsicSize.Min).testTag("lore-quote")) {
+                        Box(Modifier.width(3.dp).fillMaxHeight().background(Line2))
+                        Spacer(Modifier.width(18.dp))
+                        Column {
+                            androidx.compose.material3.Text(
+                                q.words, color = Ink, fontSize = 18.sp, lineHeight = 29.sp,
+                                fontFamily = FontFamily.Serif, fontStyle = FontStyle.Italic,
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            Line(q.source, Ink3, size = Design.MINI, modifier = Modifier.testTag("lore-quote-source"))
+                        }
+                    }
+                }
+                PhyrexianLore.next(era)?.let { next ->
+                    Spacer(Modifier.height(10.dp))
+                    Btn("Read on: " + next.tab + " ›", modifier = Modifier.testTag("lore-next")) { onEra(next) }
+                    Spacer(Modifier.height(24.dp))
+                }
+            }
+        }
+    }
+}
+
+/** The story's widest, the same as the site's `.lore-story`. */
+private const val STORY = 680
 
 /** The wheel's width, the same as the site's `.wheel`. */
 private const val WHEEL = 260
