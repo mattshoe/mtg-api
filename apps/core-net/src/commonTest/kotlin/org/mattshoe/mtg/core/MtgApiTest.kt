@@ -281,6 +281,27 @@ class MtgApiTest {
         assertEquals("API rate limit exceeded", e.message)
     }
 
+    /**
+     * The Comprehensive Rules, as Wizards publishes them, through the
+     * Worker. The text comes back as it was, for `:core` to parse on
+     * the device; the client does not touch it.
+     */
+    @Test
+    fun theRulesComeBackAsTheTextTheWorkerRelayed() = runTest {
+        val text = "Magic: The Gathering Comprehensive Rules\n\n702.19a Trample is a static ability.\n"
+        val found = api(body = text).rules()
+        assertEquals(text, found)
+        assertEquals("https://example.invalid/rules", seen.single().url.toString())
+    }
+
+    @Test
+    fun aRulesRefusalIsAnErrorThatSaysWhy() = runTest {
+        val e = assertFailsWith<ApiFailure> {
+            api(HttpStatusCode.BadGateway, """{"error":"Wizards answered 404 for the rules text"}""").rules()
+        }
+        assertEquals("Wizards answered 404 for the rules text", e.message)
+    }
+
     /** A task's own page: one row and its files, by key, with the session. */
     @Test
     fun oneTaskIsAskedForByItsKeyWithTheSession() = runTest {

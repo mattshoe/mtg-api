@@ -370,6 +370,12 @@ class MtgApi internal constructor(
         return Releases.decode(text)
     }
 
+    /**
+     * The Comprehensive Rules, the whole text file, as the Worker
+     * relayed it from Wizards. Parsed on the device by `RuleBook`.
+     */
+    suspend fun rules(): String = ""
+
     /** A commander's place among commanders, as EDHREC says it, through the Worker. */
     suspend fun commanderRank(name: String): CommanderRank {
         val res = http.get("$base/edhrec/commander") { url.parameters.append("name", name) }
