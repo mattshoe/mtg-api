@@ -33,6 +33,8 @@ object Guide {
 
     val tiles: List<GuideTile> = listOf(
         GuideTile(COLOURS, "Colour combinations", "Every name, from Azorius to WUBRG. Guilds, shards, wedges and the rest."),
+        // Matt: "i want a guide section on rules". The page is in `Rules.kt`.
+        GuideTile(RULES, "Rules", "The Comprehensive Rules, searchable. Every rule that mentions trample, or 702.19, one card each."),
     )
 
     fun tile(slug: String): GuideTile? = tiles.firstOrNull { it.slug == slug }

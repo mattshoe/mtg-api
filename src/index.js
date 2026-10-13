@@ -23,6 +23,7 @@
 //   GET  /tasks/:key  one task, its details and its files, and a done one's
 //                     builder's writeup (or else release note) as its summary (admin)
 //   GET  /releases    the release notes, GitHub's list as the Worker keeps it
+//   GET  /rules       the Comprehensive Rules, Wizards' text file relayed untouched
 //   GET  /edhrec/commander?name=  a commander's rank among commanders, from EDHREC
 //   GET  /maintenance last run of the daily job
 //   POST /maintenance run it now (admin)
@@ -51,6 +52,7 @@ import { newEntry, startEntry, writeEntry, buildLogQuery, logStats } from './log
 import { keyFrom, claim, remember, release } from './idempotency.js';
 import { newTask, inbox, received, list as taskList, setStatus, task as oneTask, summary as taskSummary } from './tasks.js';
 import { releases } from './releases.js';
+import { rules } from './rules.js';
 import { commanderRank } from './edhrec.js';
 import { preview } from './preview.js';
 // The site's own file, bundled in, so the two hosts cannot disagree.
@@ -299,6 +301,7 @@ const INDEX = {
     'POST /tasks/status': '{"key" or "name","status","note"?,"title"?,"pr"?,"started_at"?,"finished_at"?,"details"?} — one transition, written by whoever caused it; the times only fill a task that never had a start; details is the request file, kept only for a task with none; admin only',
     'GET /tasks/:key': 'one task, its details, status and files, collected or not, and for a done one the writeup its builder filed in summaries/, or else its release note, as summary; admin only',
     'GET /releases': 'GitHub\'s release list, kept by the Worker for a few minutes',
+    'GET /rules': 'the Comprehensive Rules as Wizards publishes them, text/plain, untouched; the apps parse it',
     'GET /edhrec/commander': '?name=Teysa Karlov -> {"name","slug","rank":58,"decks":21728} — rank among commanders as EDHREC\'s commander page says it; null when EDHREC has no page',
     'GET /logs': '?min=info&q=&event=&status=error&since=24&limit=100 — admin only',
     'POST /logs/client': '{"level":"info","message":"...","detail":{...}} — admin only',
@@ -801,6 +804,20 @@ async function route(request, env, ctx, entry) {
       const r = await releases(env.DB, env.GITHUB_FETCH || fetch);
       if (r.error) return json({ error: r.error }, 502);
       return new Response(r.body, { headers: { 'content-type': 'application/json' } });
+    }
+
+    // The Comprehensive Rules, relayed. The apps parse them; see rules.js.
+    if (path === '/rules') {
+      if (method !== 'GET') return notAllowed('GET');
+      const r = await rules(env.WIZARDS_FETCH || fetch);
+      if (r.error) return json({ error: r.error }, 502);
+      return new Response(r.text, {
+        headers: {
+          'content-type': 'text/plain; charset=utf-8',
+          'cache-control': 'public, max-age=86400',
+          'x-rules-source': r.source,
+        },
+      });
     }
 
     const taskKey = /^\/tasks\/([a-z0-9]{8})$/.exec(path)?.[1];
