@@ -159,10 +159,13 @@ android {
                 // *previous* run's, so the run looked green. Two things
                 // stop that now.
                 //
-                // One, the task kills itself. Twelve minutes is about
-                // eight times the honest runtime, so this only ever
-                // fires on a hang.
-                it.timeout.set(Duration.ofMinutes(12))
+                // One, the task kills itself. It was twelve minutes, called
+                // eight times the honest runtime, but by 2026-10-13 the
+                // suite took ten to twelve on CI and the timeout killed
+                // honest runs at test 549 of 632, every hang-free one, on
+                // every pull request. Twenty is still well short of the
+                // job's own thirty.
+                it.timeout.set(Duration.ofMinutes(20))
                 // Two, every test writes its name as it starts and
                 // again as it ends, flushed. The last line with no
                 // matching end is the test that hung — which is the one
