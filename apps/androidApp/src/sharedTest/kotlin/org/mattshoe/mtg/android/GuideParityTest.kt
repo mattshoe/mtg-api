@@ -148,4 +148,80 @@ class GuideParityTest {
         rule.waitForIdle()
         rule.onNodeWithTag("guide-tile-colours").assertExists("system back did not show the tiles")
     }
+
+    // ------------------------------------------------------------ the wheel
+    // Matt: "i want a guide section on the color wheel. i know nothing
+    // about it and it'll be cool to have ... it gets its own dedicated page"
+
+    private fun openWheel() {
+        openGuide()
+        rule.onNodeWithTag("guide-tile-wheel").assertExists("the Guide has no colour wheel tile")
+        rule.onNodeWithTag("guide-tile-wheel").performClick()
+        rule.waitForIdle()
+    }
+
+    @Test
+    fun theWheelTileOpensAPageOfItsOwn() {
+        shell()
+        openWheel()
+        assertEquals("#/guide/wheel", held.value.route.toHash())
+        assertEquals(listOf("White", "Blue", "Black", "Red", "Green"), texts("wheel-colour-name"), "the five colours on the page")
+        assertTrue(texts("combo-name").isEmpty(), "the wheel page is drawing the colour combinations")
+        assertTrue(headerSays().contains("wheel", ignoreCase = true), "the header does not name the page: ${headerSays()}")
+    }
+
+    @Test
+    fun theWheelIsDrawnAsACircleWithWhiteAtTheTopGoingClockwise() {
+        shell()
+        openWheel()
+        val centres = "WUBRG".map { p ->
+            val b = rule.onNodeWithTag("wheel-spoke-$p", useUnmergedTree = true).getUnclippedBoundsInRoot()
+            Triple(p.toString(), ((b.left + b.right) / 2).value.toDouble(), ((b.top + b.bottom) / 2).value.toDouble())
+        }
+        val cx = centres.sumOf { it.second } / 5
+        val cy = centres.sumOf { it.third } / 5
+        val radii = centres.map { kotlin.math.hypot(it.second - cx, it.third - cy) }
+        assertTrue(radii.min() > 30.0, "the colours are bunched up, not round a wheel: radii $radii")
+        assertTrue(radii.max() - radii.min() < radii.max() * 0.05, "the colours are not on one circle: radii $radii")
+        assertEquals("W", centres.minBy { it.third }.first, "white is not at the top")
+        val order = centres.sortedBy { (_, x, y) ->
+            val a = kotlin.math.atan2(x - cx, cy - y)
+            if (a < -0.01) a + 2 * kotlin.math.PI else a
+        }.map { it.first }
+        assertEquals(listOf("W", "U", "B", "R", "G"), order, "the colours do not go round clockwise in WUBRG order")
+    }
+
+    @Test
+    fun eachColourNamesItsAlliesAndItsEnemies() {
+        shell()
+        openWheel()
+        val allies = texts("wheel-allies-W").joinToString(" ")
+        val enemies = texts("wheel-enemies-W").joinToString(" ")
+        assertTrue("Blue" in allies && "Green" in allies, "white's allies should be blue and green: \"$allies\"")
+        assertTrue("Black" in enemies && "Red" in enemies, "white's enemies should be black and red: \"$enemies\"")
+        listOf("wheel-wants", "wheel-good", "wheel-bad").forEach { part ->
+            val said = texts(part)
+            assertEquals(5, said.size, "not every colour has $part: $said")
+            said.forEach { assertTrue(it.isNotBlank(), "a colour has nothing in $part") }
+        }
+    }
+
+    @Test
+    fun theTenPairsAreListedByGuild() {
+        shell()
+        openWheel()
+        val names = texts("wheel-pair-name")
+        assertEquals(10, names.size, "the pairs on the page: $names")
+        listOf("Azorius", "Gruul", "Izzet", "Orzhov").forEach { assertTrue(it in names, "$it is not on the page: $names") }
+    }
+
+    @Test
+    fun backFromTheWheelIsTheTiles() {
+        shell()
+        openWheel()
+        rule.onNodeWithTag("guide-back").performClick()
+        rule.waitForIdle()
+        assertEquals("#/guide", held.value.route.toHash())
+        rule.onNodeWithTag("guide-tile-wheel").assertExists("back did not show the tiles")
+    }
 }
