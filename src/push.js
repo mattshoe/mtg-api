@@ -131,16 +131,29 @@ export async function sendTo(token, note, { creds, fetch: f = fetch } = {}) {
  * What a task transition says on a phone, or null for one not worth
  * waking anybody for.
  *
- * Only the ends of a task are worth a push: it shipped, or it needs
- * somebody. `in progress` and `in review` happen several times an hour
- * and a phone that buzzes for those is a phone with notifications turned
- * off a day later.
+ * Two things only. Matt: "I only want to be notified when a task CANNOT
+ * be recovered, or when a task is deployed."
+ *
+ * - `blocked` is the one that cannot recover. Something needs him, and
+ *   until he does it nothing else will happen — which is the whole
+ *   reason a phone is involved.
+ * - `deployed` is the one he is waiting for: it is live on the site and
+ *   the phone, and he can go and look at it.
+ *
+ * Everything else is noise, and noise is how notifications get turned
+ * off. `merged` was buzzing a few minutes before `deployed` said the
+ * same thing properly. `cancelled` only ever happens because he
+ * cancelled it. `in progress` and `in review` fire several times an
+ * hour. The first version of this sent all of them and he had it for
+ * about an hour before saying so.
  */
 export function noteFor(task) {
   const title = task.title || task.name || 'A task';
-  if (task.status === 'deployed') return { title: `${title} is live`, body: task.note || 'Deployed to the site and the app.' };
-  if (task.status === 'merged') return { title: `${title} merged`, body: task.note || 'It is on main and deploying.' };
-  if (task.status === 'blocked') return { title: `${title} needs you`, body: task.note || 'It stopped and cannot carry on by itself.' };
-  if (task.status === 'cancelled') return { title: `${title} was cancelled`, body: task.note || 'It was withdrawn.' };
+  if (task.status === 'deployed') {
+    return { title: `${title} is live`, body: task.note || 'Deployed to the site and the app.' };
+  }
+  if (task.status === 'blocked') {
+    return { title: `${title} needs you`, body: task.note || 'It stopped and cannot carry on by itself.' };
+  }
   return null;
 }

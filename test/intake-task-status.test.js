@@ -97,9 +97,23 @@ describe('what the dispatcher puts right on every run', () => {
   // tasks then sat reading `blocked` when one had already MERGED and the
   // other had an agent working on it. A state that cannot be left is not
   // a status, it is a dead end.
-  it('an agent working on it clears blocked', () => {
+  // Reversed deliberately. Matt: "A task should NEVER enter blocked
+  // unless the process is COMPLETELY unrecoverable... It is NOT a
+  // temporary status, it is a PERMANENT, COMPLETELY UNRESOLVABLE
+  // status."
+  //
+  // This used to assert that a live agent took a task back out of
+  // `blocked`, which is what let it flap: the dispatcher wrote it for a
+  // stalled worktree, reconcile cleared it, the next tick wrote it
+  // again — once a minute, with a push notification each time.
+  it('is not cleared by an agent running: blocked is terminal', () => {
     expect(reconcile(seen({ alive: ['card-page'], ready: ['card-page'], rows: [row('card-page', 'blocked')] })))
-      .toEqual([{ name: 'card-page', status: 'in progress' }])
+      .toEqual([])
+  })
+
+  it('is not cleared by the request simply being ready again', () => {
+    expect(reconcile(seen({ ready: ['card-page'], rows: [row('card-page', 'blocked')] })))
+      .toEqual([])
   })
 
   it('a merge clears blocked', () => {
