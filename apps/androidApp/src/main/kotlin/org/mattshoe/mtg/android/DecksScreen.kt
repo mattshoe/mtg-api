@@ -390,7 +390,7 @@ private fun Hero(deck: Deck, state: DecksState) {
         // deck is the one thing the bottom bar cannot name.
         return
     }
-    Box(Modifier.fillMaxWidth().height(150.dp).background(Bg3, Radius).clip(Radius)) {
+    Box(Modifier.fillMaxWidth().height(150.dp).background(Bg3, Radius).clip(Radius).testTag("deck-hero")) {
         AsyncImage(
             model = url,
             contentDescription = null,
