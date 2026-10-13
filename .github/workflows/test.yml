@@ -5,15 +5,31 @@ on:
   pull_request:
 
 jobs:
-  test:
+  # The Worker suite, split across three runners.
+  #
+  # It used to be one job running all forty-odd test files at once. The
+  # pool gives every file its own workerd process, and somewhere around
+  # 930 tests that stopped fitting on a standard runner: workerd was
+  # killed mid-run with "Network connection lost", and every test after
+  # it in that process failed with "table cards already exists" because
+  # the storage it meant to roll back had gone with it.
+  #
+  # It had been close to the edge for a while and crossed it on a
+  # Tuesday afternoon with nothing merged. The proof it was the machine
+  # and not the code: main's own last green commit, re-run unchanged on
+  # the same runner image and the same lockfile, failed.
+  #
+  # Three shards means a third of the files per machine. Vitest splits
+  # them by file, so a shard is a whole number of files and no test runs
+  # twice. The counts are summed back together in `floor` below, which
+  # is what stops a lost shard reading as a smaller suite.
+  worker:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     steps:
-      # Full history, so `check-suite-floor.mjs` can compare the
-      # committed floors against main's. On a shallow checkout
-      # `git show origin/main:test/suite-floors.json` fails, the guard
-      # catches it and sets the reference to undefined, and a floor
-      # lowered by a merge resolution passes silently — in the only place
-      # that conflict ever lands.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -22,25 +38,83 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
-      # Runs the real Worker against a local D1 in workerd. No Cloudflare
-      # credentials needed and nothing touches the live database.
-      - run: npm test
 
-      # A suite that shrinks is worse than one that fails, because it
-      # goes green. The floor lives in `test/suite-floors.json` and may
-      # never go down. Re-run with a JUnit reporter rather than parsing
-      # the human output, which is not a format.
-      - name: The suite did not shrink
-        run: |
-          npx vitest run --reporter=junit --outputFile=.vitest-results/results.xml
-          node scripts/check-suite-floor.mjs worker=.vitest-results
+      # Lint once, on the first shard. It is the same answer on all
+      # three and costs the same every time.
+      - if: matrix.shard == 1
+        run: npx eslint frontend/js frontend/sw.js
 
-      # The shell harness has its own config, so the junit run above
-      # cannot see it — and without this, deleting all sixty of its tests
-      # left CI green, in the repo whose floor mechanism exists precisely
-      # to stop that.
-      - name: The shell harness did not shrink either
-        run: |
-          npx vitest run --config vitest.shell.config.js \
-            --reporter=junit --outputFile=.vitest-shell-results/results.xml
-          node scripts/check-suite-floor.mjs shell=.vitest-shell-results
+      # One run, not two. This used to run the whole suite for the
+      # output and then again for the JUnit file, which doubled the
+      # cost of the thing that was already too expensive.
+      - name: Tests
+        run: >-
+          node scripts/guard.mjs 1500 --
+          npx vitest run --shard=${{ matrix.shard }}/3
+          --reporter=default --reporter=junit
+          --outputFile.junit=test-results/worker/shard-${{ matrix.shard }}.xml
+
+      # `test-results`, not `.vitest-results`. upload-artifact globs with
+      # @actions/glob, which skips hidden paths — so a dot-prefixed
+      # directory uploads nothing and warns rather than failing. All four
+      # uploads here found no files while every test passed, and the only
+      # thing that went red was the job that tried to download them.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: worker-results-${{ matrix.shard }}
+          path: test-results/worker/*.xml
+
+  # The shell harness runs in node, not workerd, so it is small and
+  # stays whole.
+  shell:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Tests
+        run: >-
+          npx vitest run --config vitest.shell.config.js
+          --reporter=default --reporter=junit
+          --outputFile.junit=test-results/shell/results.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shell-results
+          path: test-results/shell/*.xml
+
+  # A suite that shrinks is worse than one that fails, because it goes
+  # green. The floor is judged on the shards added back together — a
+  # shard that vanished has to read as a smaller suite, which is exactly
+  # what this catches.
+  floor:
+    runs-on: ubuntu-latest
+    needs: [worker, shell]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: worker-results-*
+          path: test-results/worker
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: shell-results
+          path: test-results/shell
+      # `countFrom` sums every .xml it finds under the directory, so
+      # three shard files add up to the whole suite with no arithmetic
+      # here.
+      - run: node scripts/check-suite-floor.mjs worker=test-results/worker shell=test-results/shell

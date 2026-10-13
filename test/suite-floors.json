@@ -1,8 +1,8 @@
 {
-  "core": 2545,
-  "screens": 605,
-  "device": 540,
-  "web": 493,
+  "core": 2550,
+  "screens": 609,
+  "device": 577,
+  "web": 499,
   "worker": 930,
   "shell": 141
 }
