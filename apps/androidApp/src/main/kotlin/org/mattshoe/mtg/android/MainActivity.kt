@@ -244,6 +244,9 @@ class MainActivity : ComponentActivity() {
     /** `cancelTask`, for a test that cannot press a button through the activity. */
     internal fun cancelTaskForTesting(key: String) = cancelTask(key)
 
+    /** What the rules page's Try again does, for the same reason. */
+    internal fun loadRulesForTesting() = loadRules()
+
     /** `shareDeck`, for a test that cannot see a private method. */
     internal fun shareDeckForTesting(what: ShareWhat, where: ExportTo): AppState {
         app = shareDeck(what, where)
