@@ -202,4 +202,95 @@ class GuidePageTest {
         assertTrue(frame.all("button.guide-tile").isNotEmpty(), "back did not show the tiles again")
         assertTrue(frame.all(".combo-row").isEmpty(), "the colour page is still drawn")
     }
+
+    // ------------------------------------------------------------ the wheel
+    // Matt: "i want a guide section on the color wheel. i know nothing
+    // about it and it'll be cool to have ... it gets its own dedicated page"
+
+    private suspend fun HTMLElement.openWheel() {
+        openGuide()
+        val tile = all("button.guide-tile").firstOrNull { it.textContent.orEmpty().contains("wheel", ignoreCase = true) }
+            ?: error("the Guide has no colour wheel tile: ${all("button.guide-tile").map { it.textContent }}")
+        tile.click()
+        settle()
+    }
+
+    @Test
+    fun theWheelTileOpensAPageOfItsOwn() = runTest {
+        val frame = mount()
+        settle()
+        frame.openWheel()
+        assertEquals("#/guide/wheel", held.value.route.toHash())
+        assertTrue(frame.all(".combo-row").isEmpty(), "the wheel page is drawing the colour combinations")
+        val names = frame.all(".wheel-colour .wheel-colour-name").map { it.textContent.orEmpty().trim() }
+        assertEquals(listOf("White", "Blue", "Black", "Red", "Green"), names, "the five colours on the page")
+    }
+
+    @Test
+    fun theWheelIsDrawnAsACircleWithWhiteAtTheTopGoingClockwise() = runTest {
+        val frame = mount()
+        settle()
+        frame.openWheel()
+        val spokes = frame.all(".wheel-spoke")
+        assertEquals(5, spokes.size, "the wheel has ${spokes.size} colours on it")
+        val centres = spokes.map { s ->
+            val r = s.getBoundingClientRect()
+            Triple(s.getAttribute("data-pip").orEmpty(), r.left + r.width / 2, r.top + r.height / 2)
+        }
+        val cx = centres.sumOf { it.second } / 5
+        val cy = centres.sumOf { it.third } / 5
+        val radii = centres.map { kotlin.math.hypot(it.second - cx, it.third - cy) }
+        assertTrue(radii.min() > 30.0, "the colours are bunched up, not round a wheel: radii $radii")
+        assertTrue(radii.max() - radii.min() < 3.0, "the colours are not on one circle: radii $radii")
+        assertEquals("W", centres.minBy { it.third }.first, "white is not at the top")
+        // Clockwise from the top, on a screen where y runs down.
+        val order = centres.sortedBy { (_, x, y) ->
+            val a = kotlin.math.atan2(x - cx, cy - y)
+            if (a < -0.01) a + 2 * kotlin.math.PI else a
+        }.map { it.first }
+        assertEquals(listOf("W", "U", "B", "R", "G"), order, "the colours do not go round clockwise in WUBRG order")
+        spokes.forEach { assertEquals(1, it.all("img.mana-sym").size, "a colour on the wheel has no mana symbol") }
+    }
+
+    @Test
+    fun eachColourNamesItsAlliesAndItsEnemies() = runTest {
+        val frame = mount()
+        settle()
+        frame.openWheel()
+        val white = frame.all(".wheel-colour").firstOrNull { it.getAttribute("data-pip") == "W" }
+            ?: error("there is no section for white")
+        val allies = white.all(".wheel-allies").singleOrNull()?.textContent.orEmpty()
+        val enemies = white.all(".wheel-enemies").singleOrNull()?.textContent.orEmpty()
+        assertTrue("Blue" in allies && "Green" in allies, "white's allies should be blue and green: \"$allies\"")
+        assertTrue("Black" in enemies && "Red" in enemies, "white's enemies should be black and red: \"$enemies\"")
+        frame.all(".wheel-colour").forEach { c ->
+            listOf(".wheel-wants", ".wheel-good", ".wheel-bad").forEach { part ->
+                assertTrue(
+                    c.all(part).singleOrNull()?.textContent.orEmpty().isNotBlank(),
+                    "${c.getAttribute("data-pip")} has nothing in $part",
+                )
+            }
+        }
+    }
+
+    @Test
+    fun theTenPairsAreListedByGuild() = runTest {
+        val frame = mount()
+        settle()
+        frame.openWheel()
+        val names = frame.all(".wheel-pair .wheel-pair-name").map { it.textContent.orEmpty().trim() }
+        assertEquals(10, names.size, "the pairs on the page: $names")
+        listOf("Azorius", "Gruul", "Izzet", "Orzhov").forEach { assertTrue(it in names, "$it is not on the page: $names") }
+    }
+
+    @Test
+    fun backFromTheWheelIsTheTiles() = runTest {
+        val frame = mount()
+        settle()
+        frame.openWheel()
+        frame.all("button.guide-back").singleOrNull()?.click() ?: error("there is no way back to the tiles")
+        settle()
+        assertEquals("#/guide", held.value.route.toHash())
+        assertTrue(frame.all(".wheel-spoke").isEmpty(), "the wheel is still drawn")
+    }
 }

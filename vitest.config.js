@@ -8,15 +8,15 @@ export default defineWorkersConfig({
     poolOptions: {
       workers: {
         isolatedStorage: true,
-        // One worker for the whole suite. Parallel was 39s against 287s
-        // serial and ran that way for weeks, until 2026-10-13 around
-        // 16:50 UTC when GitHub's runners slowed to about a quarter of
-        // their speed and every parallel run on every branch died the
-        // same way: "Network connection lost" out of
-        // `updateStackedStorage`, then "table cards already exists" for
-        // the rest of that file. The same commit run serial on CI was
-        // green (run 38444970028, 532s). Slower and green beats fast
-        // and red on hardware nobody controls.
+        // One worker for the whole suite. Parallel was 39s against
+        // 287s serial and was the setting until 13 Oct 2026, when every
+        // CI run on every branch from about 17:00 failed the same way:
+        // workerd dropped its connection ("Network connection lost"),
+        // came back, and the next file found the last one's tables
+        // ("table cards already exists"). A different handful of files
+        // each time, and no code change behind it. Serial passed on
+        // `ci-probe/worker-serial` the same evening. Slower and green
+        // beats fast and red on every pull request.
         singleWorker: true,
         wrangler: { configPath: './wrangler.toml' },
         miniflare: {
