@@ -1762,7 +1762,6 @@ select.sort {
   overflow-y: hidden;
   scroll-snap-type: x mandatory;
   scrollbar-width: none;
-  align-items: center;
   min-height: 0;
 }
 .peek-rail::-webkit-scrollbar { display: none; }
@@ -1782,13 +1781,25 @@ select.sort {
 .peek-rail.zoomed { overflow-x: hidden; }
 .peek-rail.zoomed .peek-card { touch-action: none; cursor: grab; }
 
+/* One card, as big as the cell allows both ways: the width on a phone,
+   the height on a tablet. Matt: "in tablet mode the carousel looks
+   broken and zoomed in". It was as wide as the cell and as tall as that
+   made it, which on a screen nearly as wide as it is tall ran past the
+   sheet and was cut off. The cell is stretched to the rail's height and
+   is a size container, so `cqw` and `cqh` are its own box, and the
+   picture's size no longer waits on the picture loading. The phone's
+   `CardFace` is `aspectRatio` alone, which is the same rule. */
+.peek-card { container-type: size; }
+.peek-card img, .peek-blank {
+  width: min(100cqw, calc(100cqh * 488 / 680));
+  aspect-ratio: 488 / 680;
+}
 .peek-card img {
-  max-width: 100%; max-height: 100%;
+  object-fit: contain;
   border-radius: 4.75% / 3.5%;
   display: block;
 }
 .peek-blank {
-  width: 100%; aspect-ratio: 488 / 680;
   display: grid; place-items: center;
   background: var(--bg-3); border-radius: 4.75% / 3.5%;
   color: var(--text-2); font-size: 18px; text-align: center; padding: 24px;
