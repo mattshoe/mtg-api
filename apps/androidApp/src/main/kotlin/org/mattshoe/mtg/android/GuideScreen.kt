@@ -10,7 +10,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -69,22 +71,35 @@ fun GuideScreen(tile: GuideTile?, onOpen: (GuideTile) -> Unit, onBack: () -> Uni
     }
 }
 
+/**
+ * Matt: "just a list of color combos and names, in wubrg order, so
+ * they can easily be scanned to find what i need". The groups and
+ * what they mean follow underneath, for reading rather than finding.
+ */
 @Composable
 private fun Colours() {
+    Column(Modifier.fillMaxWidth().border(1.dp, Line, Radius).clip(Radius)) {
+        Guide.list.forEachIndexed { i, combo ->
+            if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(Line))
+            ComboRow(combo)
+        }
+    }
     Guide.colours.forEach { group ->
-        Column(Modifier.fillMaxWidth().testTag("guide-group")) {
+        Column(Modifier.fillMaxWidth().padding(top = 10.dp).testTag("guide-group")) {
             Line(group.title, Ink, size = Design.H2, weight = FontWeight.Bold)
             Spacer(Modifier.height(4.dp))
             Line(group.about, Ink3, size = Design.MINI)
-            Spacer(Modifier.height(10.dp))
-            // Two to a row, the way the site's grid lays out at a
-            // phone's width. A lone last tile keeps its half.
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                group.combos.chunked(2).forEach { pair ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        pair.forEach { ComboTile(it, Modifier.weight(1f)) }
-                        if (pair.size == 1) Spacer(Modifier.weight(1f))
-                    }
+            Spacer(Modifier.height(6.dp))
+            group.combos.forEach { combo ->
+                Row(Modifier.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Line(
+                        combo.pips, Ink3, size = Design.TINY, weight = FontWeight.SemiBold,
+                        fontFamily = FontFamily.Monospace, modifier = Modifier.width(52.dp),
+                    )
+                    Line(combo.name, Ink, size = Design.SMALL)
+                }
+                if (combo.note.isNotEmpty()) {
+                    Line(combo.note, Ink2, size = Design.MINI, modifier = Modifier.padding(start = 52.dp).testTag("combo-note"))
                 }
             }
         }
@@ -92,24 +107,21 @@ private fun Colours() {
 }
 
 @Composable
-private fun ComboTile(combo: Combo, modifier: Modifier) {
-    Card(combo.pips, modifier.testTag("combo-${combo.pips}"), pad = 12) {
-        Box(Modifier.fillMaxWidth()) {
-            Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                combo.pips.forEach { ManaSymbol(it.toString(), size = 22.dp, text = 12.sp) }
-            }
-            Line(
-                combo.pips, Ink3, size = Design.TINY, weight = FontWeight.SemiBold,
-                fontFamily = FontFamily.Monospace,
-                modifier = Modifier.align(Alignment.TopEnd),
-            )
+private fun ComboRow(combo: Combo) {
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 40.dp).padding(horizontal = 10.dp, vertical = 6.dp)
+            .testTag("combo-row-${combo.pips}"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Row(Modifier.width(116.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+            combo.pips.forEach { ManaSymbol(it.toString(), size = 20.dp, text = 11.sp) }
         }
-        Spacer(Modifier.height(8.dp))
-        Line(combo.name, Ink, size = 17, weight = FontWeight.Bold, modifier = Modifier.testTag("combo-name"))
-        if (combo.note.isNotEmpty()) {
-            Spacer(Modifier.height(3.dp))
-            Line(combo.note, Ink2, size = Design.MINI, modifier = Modifier.testTag("combo-note"))
-        }
+        Line(
+            combo.name, Ink, size = 15, weight = FontWeight.SemiBold,
+            modifier = Modifier.weight(1f).testTag("combo-name"),
+        )
+        Line(combo.pips, Ink3, size = Design.TINY, weight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace)
     }
 }
 
