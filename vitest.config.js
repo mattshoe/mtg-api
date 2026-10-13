@@ -37,6 +37,25 @@ export default defineWorkersConfig({
         },
       },
     },
+    // How many workerd isolates run at once.
+    //
+    // One per test file, in parallel, is what makes this suite 39
+    // seconds instead of 287. Unbounded, though, it is one isolate per
+    // file all at once — and on CI's two-core, 7GB runner that is more
+    // than the machine has. Adding a single test file was enough to
+    // push it over: workerd died 41 seconds into "Starting isolated
+    // runtimes", before one test had printed, and every file that ran
+    // after it failed with "table cards already exists" because the
+    // storage it was meant to roll back had gone with the process.
+    //
+    // Eight files failed and none of them was the one that had been
+    // added, which is what made it look like a bug in everything else.
+    //
+    // Four is a ceiling rather than a tuned number: it is above CI's
+    // core count, so the machine stays the limit, and far enough below
+    // forty that the next test file added cannot do this again.
+    maxWorkers: 4,
+
     // Only this checkout's tests. An agent worktree under
     // `.claude/worktrees/` is a whole copy of the repo, tests and
     // all, and vitest's default glob happily collected every one of

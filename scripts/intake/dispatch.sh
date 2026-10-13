@@ -120,7 +120,16 @@ while IFS= read -r f; do
   wt="$STATE/wt/${f%.md}"
   if [ -e "$wt" ]; then
     if ! pgrep -f "requests/${f}" >/dev/null 2>&1; then
-      node "$REPO/scripts/intake/task-status.mjs" stalled "$f" >>"$LOG" 2>&1 || true
+      # Say WHY it stopped, not just that it did. The agent writes the
+      # reason as the last thing in its own log and nothing was reading
+      # it: every task failed one morning with "Not logged in · Please
+      # run /login" — Matt's Claude session had expired overnight and a
+      # headless agent cannot refresh it — and all the rows said was
+      # "stopped with work left in its worktree". The reason was on disk
+      # the whole time.
+      why="$(tail -c 2000 "$STATE/${f%.md}.log" 2>/dev/null | tr -d '\0' \
+        | sed -n 's/.*"result":"\([^"]\{1,120\}\)".*/\1/p' | tail -1)"
+      node "$REPO/scripts/intake/task-status.mjs" stalled "$f" "$why" >>"$LOG" 2>&1 || true
     fi
     continue
   fi
@@ -196,9 +205,9 @@ env \
 
 It is yours end to end: build it test-first, open the pull request, wait for CI with \`gh pr checks <n> --watch --fail-fast\` (it blocks — do not use ScheduleWakeup or Monitor, you get no second turn), merge it on green unless the request says 'merge: ask', and move requests/$name.md into requests/done/ in your own commit.
 
-Run tests the way .claude/agents/request-builder.md says: one unit test at a time during the cycle, named, red then green. The functional suites you may run — test:web and npm test — run ONCE at the end, on what your diff reaches. Never in the cycle.
+Run tests the way .claude/agents/request-builder.md says: one unit test at a time during the cycle, named, red then green. Then ONCE at the end, before you merge, run 'npm run test:everything' and let it finish. CI does not validate anything any more — that command is the whole gate, it runs every suite including the emulator, and main takes a fully green one. Not the suites your diff reaches. All of them.
 
-Do NOT run npm run test:screens or the whole :androidApp:testDebugUnitTest task, ever. A cold worktree compile takes 12 to 20 minutes and your Bash tool stops every command at 10, so it cannot finish in the foreground and backgrounding it is banned — seven agent runs on one request died in four hours doing exactly that. Run your own Android test by name with --tests 'YourTest' during the cycle, then push and read CI's android job.
+During the CYCLE never run a whole suite — your Bash tool stops every command at 10 minutes and a cold worktree compile is longer than that. Run your own test by name, --tests 'YourTest'. The full run at the end goes through 'npm run test:everything', which puts every suite behind scripts/guard.mjs so none of them is subject to your tool's limit.
 
 Never background a command and poll its output, and never background a suite. One agent spent 55% of its run inside polling loops and another spent twelve minutes reading its own background task files. Run it in the foreground and let it finish.
 

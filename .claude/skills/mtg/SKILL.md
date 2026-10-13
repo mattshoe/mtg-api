@@ -118,6 +118,57 @@ platforms:
 Assert the same measured geometry at each size. `CarouselOnATabletTest`
 on both sides is the example.
 
+## Nothing merges to main without a full green suite, run locally
+
+Matt: "Just disable CI and make a HARD RULE that all tasks MUST have a
+fully passing test suite locally before merging to main. THE ENTIRE test
+suite must pass before merging to main."
+
+CI no longer validates anything. `test.yml` and `apps.yml` are
+`workflow_dispatch` only — runnable by hand, run by nothing. The merge
+gate is a pull request and that is all it is.
+
+So the suite is proved here, on this machine, before the merge:
+
+```
+npm run test:everything
+```
+
+That is worker, shell, core, screens, web and the device emulator, in
+cheapest-first order, stopping at the first failure. It prints
+EVERY SUITE PASSED or it tells you which one went red and that nothing
+after it ran. Roughly 35 minutes with the emulator, most of it the
+emulator.
+
+**All of it. Not the suites your diff reaches — all of them.** That
+rule used to read "only the ones your diff actually reaches", which was
+right when CI ran the rest. CI does not run the rest any more. There is
+nothing behind you.
+
+`--no-device` exists and skips the emulator, which is twenty of those
+thirty-five minutes. It prints a warning saying the run was not a full
+pass, and it is not one. Use it while you are working; never as the
+thing you merge on.
+
+### What this costs, said plainly
+
+The device suite is 580 tests that only ever run on an emulator. Before,
+CI ran them on every pull request and nobody had to think about it. Now
+they run when somebody runs them. If an agent skips that step the tests
+do not fail — they simply never happen, and the first person to find out
+is Matt, with the app in his hand.
+
+That is the trade. It was made deliberately: CI had become slower and
+less reliable than the laptop, and a gate that is red for reasons of its
+own is not a gate.
+
+### Deployment still happens on merge
+
+`worker.yml`, `pages.yml` and `release.yml` still run when main moves,
+and they no longer re-run the suite first. Matt: "MAKE SURE DEPLOYMENT
+IS NOT STILL RUNNING THE TEST SUITE BEFORE DEPLOYING!!" Whether main is
+fit to deploy is decided before the merge, not after it.
+
 ## Happy-path tests are not enough, ever
 
 Matt: "HAPPY PATH ONLY TESTING IS NOT EVER EVER EVER EVER EVER

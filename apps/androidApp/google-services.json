@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "567837541652",
+    "project_id": "mtg-collection-507a4",
+    "storage_bucket": "mtg-collection-507a4.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:567837541652:android:fe9fd4d03c71e544c5ae01",
+        "android_client_info": {
+          "package_name": "org.mattshoe.mtg.share"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAtKuPnp6PcXJZzCyJtZm5gTAWNqHmoYlQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

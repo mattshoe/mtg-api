@@ -7,25 +7,23 @@ name: apps
 # to run them, which is the same as not having them. The deploy gate in
 # pages.yml runs the fast half of this — a red test there stops the
 # site going out — and this runs all of it including the emulator.
-on:
-  # Pull requests only.
-  #
-  # This used to run on pushes to main as well, which meant merging
-  # re-ran the entire matrix — emulator included, twenty minutes of it
-  # — against a tree the pull request had just finished testing, before
-  # the release was allowed to start. The gate is the pull request.
-  # Merging is for shipping, and `release.yml` does that without
-  # asking the same questions twice.
-  #
-  # No path filter: these are required checks, and a required check
-  # that is skipped never reports, so the pull request waits for it
-  # forever.
-  pull_request:
-  workflow_dispatch:
 
-concurrency:
-  group: apps-${{ github.ref }}
-  cancel-in-progress: true
+# Validation does not run here any more.
+#
+# Matt: "Just disable CI and make a HARD RULE that all tasks MUST have a
+# fully passing test suite locally before merging to main."
+#
+# The shared, web, screens and device suites are proved on the laptop before a merge, by
+# `npm run test:everything`, and a pull request is still required so
+# there is something to read afterwards. Deployment still runs on a
+# merge; it just no longer re-proves what the merge already required.
+#
+# Left runnable by hand — `gh workflow run apps.yml` — because
+# a machine that is not Matt's laptop is still the only place the
+# emulator and a real browser agree with each other, and that is worth
+# having on demand.
+on:
+  workflow_dispatch:
 
 jobs:
   # The shared logic, on both targets it has to work on. Fast, and the

@@ -1155,3 +1155,41 @@ describe('a worktree with nobody in it', () => {
     }
   })
 })
+
+// The task row says WHY the agent stopped.
+//
+// One morning every task failed at once and every row said the same
+// thing: "stopped with work left in its worktree". The actual reason was
+// the last line of each agent's own log — "Not logged in · Please run
+// /login", because Matt's Claude session had expired overnight and a
+// headless agent cannot refresh one. Nothing read it, so the rows could
+// not tell a crashed build from a login that needed renewing.
+describe('why an agent stopped', () => {
+  const stopped = (name, lastWords) => {
+    const wt = join(box.repo, '.intake', 'wt', name)
+    mkdirSync(join(wt, 'requests'), { recursive: true })
+    if (lastWords !== undefined) {
+      writeFileSync(join(box.repo, '.intake', `${name}.log`),
+        `{"type":"result","is_error":true,"result":"${lastWords}"}\n`)
+    }
+  }
+
+  it('carries the agent\'s own last words onto the row', () => {
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    stopped('a-thing', 'Not logged in · Please run /login')
+
+    run('dispatch.sh')
+
+    expect(box.intakeLog(), 'the row did not say why it stopped')
+      .toContain('Not logged in')
+  })
+
+  it('still says something useful when the log has no reason in it', () => {
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    stopped('a-thing')
+
+    run('dispatch.sh')
+
+    expect(box.intakeLog()).toMatch(/a-thing blocked|blocked was not written/)
+  })
+})

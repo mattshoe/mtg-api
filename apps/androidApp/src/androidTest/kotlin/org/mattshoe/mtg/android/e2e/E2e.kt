@@ -1,15 +1,19 @@
 package org.mattshoe.mtg.android.e2e
 
+import android.Manifest
 import android.content.Context
+import android.os.Build
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.junit4.AndroidComposeTestRule
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.test.ext.junit.rules.ActivityScenarioRule
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.rule.GrantPermissionRule
 import org.junit.Rule
 import org.junit.rules.ExternalResource
 import org.junit.rules.RuleChain
+import org.junit.rules.TestRule
 import org.mattshoe.mtg.android.MainActivity
 import org.mattshoe.mtg.android.Wiring
 import org.mattshoe.mtg.core.AppState
@@ -63,8 +67,31 @@ internal abstract class E2eTest {
     protected val compose: AndroidComposeTestRule<ActivityScenarioRule<MainActivity>, MainActivity> =
         createAndroidComposeRule()
 
+    /**
+     * Notifications, granted before the activity starts.
+     *
+     * Android 13 and up ask for `POST_NOTIFICATIONS` with a system
+     * dialog, and the app asks on its first start. That dialog is drawn
+     * over everything, including the screen a journey is halfway
+     * through reading, and the journey then fails for a reason that has
+     * nothing to do with what it was testing — the first one to break
+     * was `signedOutThereIsOneWayInAndItIsGoogle`, which could not see
+     * the sign-in button underneath it.
+     *
+     * Granting it up front is what a person who has already said yes
+     * looks like, and that is the state every journey but a
+     * notifications one should be in. It is the outermost rule so it
+     * happens before the activity launches.
+     */
+    private val notifications: TestRule =
+        if (Build.VERSION.SDK_INT >= 33) {
+            GrantPermissionRule.grant(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            TestRule { base, _ -> base }
+        }
+
     @get:Rule
-    val rules: RuleChain = RuleChain.outerRule(worker).around(compose)
+    val rules: RuleChain = RuleChain.outerRule(notifications).around(worker).around(compose)
 
     /** What the app is actually holding, read off the real activity. */
     protected fun state(): AppState = compose.activity.stateForTesting()

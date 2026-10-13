@@ -396,15 +396,21 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     try { text = readFileSync(join(repo, 'requests', `${name}.md`), 'utf8') } catch { /* gone */ }
     transition = started(name, text)
   } else if (cmd === 'stalled') {
+    // The agent's own last words, when the shell found them. "Not logged
+    // in · Please run /login" is a different problem from "it crashed",
+    // and a row that says the first one is a row Matt can act on.
     // A worktree with no agent in it. There is no resume by design, so
     // this needs a person — and the task row is the only way to reach
     // one. Two tasks sat at `in review` for three hours before anybody
     // noticed, because a dead agent's worktree blocks its request forever
     // and said nothing.
+    const said = process.argv.slice(4).join(' ').trim();
     transition = {
       name,
       status: 'blocked',
-      note: 'stopped with work left in its worktree; it needs a person to pick it up',
+      note: said
+        ? `stopped: ${said.slice(0, 160)}`
+        : 'stopped with work left in its worktree; it needs a person to pick it up',
     };
   } else if (cmd === 'settle') {
     let prs = []
@@ -438,7 +444,12 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     process.exit(2)
   }
 
-  if (transition && !token) say(`no credential that may write task status, so ${name} ${transition.status} was not written`)
+  // The note goes in the message too: when there is no credential the log
+  // is the only place the reason survives, and the reason is the point.
+  if (transition && !token) {
+    say(`no credential that may write task status, so ${name} ${transition.status}`
+      + `${transition.note ? ` (${transition.note})` : ''} was not written`)
+  }
   else if (transition) {
     report(transition, { token })
       .then(() => say(`${name} ${transition.status}`))
