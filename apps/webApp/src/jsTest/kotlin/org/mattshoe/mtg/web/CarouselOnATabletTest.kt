@@ -86,31 +86,29 @@ class CarouselOnATabletTest {
         val cells = doc.querySelectorAll(".peek-card")
         assertTrue(cells.length == 2, "expected two cards in the rail, found ${cells.length}")
         val room = sheet.top - rail.top
+        // Every face and every claim, then one failure listing them, so
+        // a picture that has not loaded does not hide what the blank
+        // card beside it is doing.
+        val wrong = mutableListOf<String>()
         for (i in 0 until cells.length) {
             // `unsafeCast`: these belong to the frame's window, see `Tablet`.
             val el = assertNotNull(cells[i]).unsafeCast<HTMLElement>()
             val cell = el.getBoundingClientRect()
             val face = assertNotNull(el.firstElementChild, "an empty cell in the rail").getBoundingClientRect()
             val what = if (i == 0) "the card with a picture" else "the card nobody owns"
-            val where = "on a ${size.first} by ${size.second} screen"
-            assertTrue(
-                face.bottom <= sheet.top + 0.5,
-                "$where $what runs ${face.bottom - sheet.top}px behind the sheet: ${face.height}px tall with ${room}px above it",
-            )
-            assertTrue(face.top >= rail.top - 0.5, "$where $what starts ${rail.top - face.top}px above the space it has")
-            assertTrue(
-                face.left >= cell.left - 0.5 && face.right <= cell.right + 0.5,
-                "$where $what is wider than its place in the rail",
-            )
-            assertTrue(
-                face.height >= room * 0.85,
-                "$where $what is ${face.height}px tall with ${room}px to fill, so it is smaller than it needs to be",
-            )
-            assertTrue(
-                abs(face.width / face.height - 488.0 / 680.0) < 0.02,
-                "$where $what is not card-shaped: ${face.width} by ${face.height}",
-            )
+            if (face.bottom > sheet.top + 0.5) {
+                wrong += "$what runs ${face.bottom - sheet.top}px behind the sheet: ${face.height}px tall with ${room}px above it"
+            }
+            if (face.top < rail.top - 0.5) wrong += "$what starts ${rail.top - face.top}px above the space it has"
+            if (face.left < cell.left - 0.5 || face.right > cell.right + 0.5) wrong += "$what is wider than its place in the rail"
+            if (face.height < room * 0.85) {
+                wrong += "$what is ${face.height}px tall with ${room}px to fill, so it is smaller than it needs to be"
+            }
+            if (face.height > 0 && abs(face.width / face.height - 488.0 / 680.0) >= 0.02) {
+                wrong += "$what is not card-shaped: ${face.width} by ${face.height}"
+            }
         }
+        assertTrue(wrong.isEmpty(), "on a ${size.first} by ${size.second} screen " + wrong.joinToString("; "))
     }
 
     @Test
