@@ -31,3 +31,7 @@ frontend/kmp/
 .vitest-results/
 .vitest-shell-results/
 .intake/
+
+# Where CI writes JUnit XML. Not hidden, because upload-artifact
+# globs with @actions/glob and skips dot-prefixed paths.
+test-results/
