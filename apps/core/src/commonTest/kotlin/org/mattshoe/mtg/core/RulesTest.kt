@@ -50,6 +50,28 @@ class RulesTest {
         assertEquals("100. General", book.rules.first().section)
     }
 
+    /**
+     * Two lines in the 2026-09-25 file are misprinted: `119.1d.` has a
+     * rule's dot on a subrule, and `606.5` has lost its dot. Read
+     * strictly, both vanished, along with anything they mention.
+     */
+    @Test
+    fun theFilesOwnMisprintedNumbersAreStillRules() {
+        val book = RuleBook.parse(
+            """
+            |100.1. These Magic rules apply to any Magic game.
+            |
+            |119.1d. In a two-player Brawl game, each player’s starting life total is 25.
+            |
+            |606.5 If the total cost to activate a loyalty ability contains multiple costs.
+            |
+            |Glossary
+            """.trimMargin(),
+        )
+        assertEquals(listOf("100.1.", "119.1d.", "606.5"), book.rules.map { it.number })
+        assertEquals(listOf("119.1d"), book.search("brawl").map { it.shownNumber })
+    }
+
     @Test
     fun theBookSaysWhenItTookEffect() {
         assertEquals("These rules are effective as of September 25, 2026.", book.effective)
