@@ -56,36 +56,43 @@ fun GuidePage(tile: GuideTile?, onOpen: (GuideTile) -> Unit, onBack: () -> Unit)
     }
 }
 
+/**
+ * Matt: "just a list of color combos and names, in wubrg order, so
+ * they can easily be scanned to find what i need". The groups and
+ * what they mean follow underneath, for reading rather than finding.
+ */
 @Composable
 private fun Colours() {
+    Div(attrs = { classes("combo-list") }) {
+        Guide.list.forEach { ComboRow(it) }
+    }
     Guide.colours.forEach { group ->
         Section(attrs = { classes("guide-group") }) {
             H2(attrs = { classes("guide-group-title") }) { Text(group.title) }
             Div(attrs = { classes("guide-group-about") }) { Text(group.about) }
-            Div(attrs = { classes("combo-grid") }) {
-                group.combos.forEach { ComboTile(it) }
+            group.combos.forEach { combo ->
+                Div(attrs = { classes("guide-group-line") }) {
+                    Span(attrs = { classes("combo-letters") }) { Text(combo.pips) }
+                    Text(combo.name)
+                    if (combo.note.isNotEmpty()) {
+                        Span(attrs = { classes("combo-note") }) { Text(combo.note) }
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun ComboTile(combo: Combo) {
+private fun ComboRow(combo: Combo) {
     Div(attrs = {
-        classes("combo")
+        classes("combo-row")
         attr("data-pips", combo.pips)
     }) {
-        Div(attrs = {
-            classes("guide-band")
-            style { property("background-image", band(combo.pips)) }
-        }) {}
         Div(attrs = { classes("combo-pips") }) {
             combo.pips.forEach { ManaPip(it.toString(), "combo-pip") }
         }
-        Div(attrs = { classes("combo-name") }) { Text(combo.name) }
-        if (combo.note.isNotEmpty()) {
-            Div(attrs = { classes("combo-note") }) { Text(combo.note) }
-        }
+        Span(attrs = { classes("combo-name") }) { Text(combo.name) }
         Span(attrs = { classes("combo-letters") }) { Text(combo.pips) }
     }
 }
