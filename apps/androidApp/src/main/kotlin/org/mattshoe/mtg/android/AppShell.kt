@@ -130,6 +130,8 @@ fun AppShell(
     onApplyEntry: () -> Unit,
     /** The Library's filtered set, copied or downloaded. */
     onExport: (ExportTo) -> Unit = {},
+    /** Fetch the Comprehensive Rules again, after a load that failed. */
+    onLoadRules: () -> Unit = {},
     /** Give that account that role, on Admin Settings. */
     onSetRole: (org.mattshoe.mtg.core.Person, String) -> Unit = { _, _ -> },
     onOpenCard: (CardRow) -> Unit = {},
@@ -426,6 +428,9 @@ fun AppShell(
                         tile = state.guideTile,
                         onOpen = { onState(state.openGuide(it)) },
                         onBack = { onState(state.navigate(View.GUIDE)) },
+                        rules = state.rules,
+                        onRules = { onState(state.copy(rules = it)) },
+                        onLoadRules = onLoadRules,
                     )
 
                     View.FETCH -> FetchListScreen(
