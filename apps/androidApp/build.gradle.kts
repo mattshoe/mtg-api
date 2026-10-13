@@ -278,6 +278,10 @@ dependencies {
     // run it, which is the one thing it must not do.
     androidTestImplementation("androidx.sqlite:sqlite-bundled:2.5.2")
     androidTestImplementation("androidx.test:rules:1.6.1")
+    // `@Config` alone, so a shared screen test can give Robolectric a
+    // tablet-sized screen (see `Tablet`). It is an annotation and
+    // nothing reads it on a device.
+    androidTestImplementation("org.robolectric:annotations:4.14.1")
 
     // The same Compose test API, on the JVM. A test that mounts one
     // Text and asserts it costs about 2.7 seconds on an emulator —

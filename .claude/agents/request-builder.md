@@ -329,6 +329,35 @@ a signed APK — and nothing checks the shipped artifact automatically. So
 do not report "deployed": report what you merged, and say that the deploy
 itself is unverified.
 
+## Every screen is tested on a tablet too
+
+Matt: "you need to test every single feature from this moment forward
+in tablet mode". The carousel was built and tested on a phone-shaped
+screen, and on his folding phone opened out the card was taller than
+the space it had, cut off top and bottom. Every screen test the JVM
+ran was on Robolectric's 320 by 470 default, narrower than it is
+tall, so nothing could have shown it.
+
+So any test of a screen runs on a tablet as well as a phone, on both
+platforms:
+
+- **Android**: wrap the real `AppShell` in `Tablet.Sized(Tablet.UNFOLDED)`
+  and `Tablet.Sized(Tablet.LANDSCAPE)`, from
+  `apps/androidApp/src/sharedTest/.../Tablet.kt`, **and** put
+  `@Config(qualifiers = Tablet.UNFOLDED_QUALIFIERS)` (or `LANDSCAPE_`)
+  on the test. `Sized` is what the device gets; the `@Config` gives
+  Robolectric a real tablet-sized window, because forcing a tablet
+  into its 320 by 470 one shrinks the density and the system bars
+  swell until the layout is nonsense. `Tablet.kt` says more.
+- **Web**: `Tablet.open(Tablet.UNFOLDED)` in
+  `apps/webApp/src/jsTest/.../Tablet.kt` gives an iframe of that size
+  with the real stylesheet. Mount the page into its body.
+  `position: fixed` and `vh` resolve against the frame, which a plain
+  `div` of the same size does not do.
+
+Assert the same measured geometry at each size. `CarouselOnATabletTest`
+on both sides is the example.
+
 ## Happy-path tests are not enough, ever
 
 Matt: "HAPPY PATH ONLY TESTING IS NOT EVER EVER EVER EVER EVER

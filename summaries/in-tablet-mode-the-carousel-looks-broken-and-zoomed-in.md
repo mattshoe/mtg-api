@@ -1,0 +1,3 @@
+What was wrong: On a tablet or an unfolded phone the carousel showed a huge, cropped slice of the card, top and rules text cut off, which looked zoomed in.
+Why: The card was sized to fill the screen's width and then made card-shaped. On a screen nearly as wide as it is tall that made it far taller than the space above the sheet, so it was cut off top and bottom. Every screen test ran on a narrow phone-shaped screen, so nothing caught it.
+Fix: The card now takes the biggest card-shaped size that fits both ways, the width on a phone and the height on a tablet. Phone and website. Screen tests now have tablet sizes on both platforms, and CLAUDE.md, the mtg skill and the builder instructions say every screen gets tested on a tablet from now on.
