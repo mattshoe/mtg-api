@@ -52,13 +52,18 @@ jobs:
           node scripts/guard.mjs 1500 --
           npx vitest run --shard=${{ matrix.shard }}/3
           --reporter=default --reporter=junit
-          --outputFile.junit=.vitest-results/shard-${{ matrix.shard }}.xml
+          --outputFile.junit=test-results/worker/shard-${{ matrix.shard }}.xml
 
+      # `test-results`, not `.vitest-results`. upload-artifact globs with
+      # @actions/glob, which skips hidden paths — so a dot-prefixed
+      # directory uploads nothing and warns rather than failing. All four
+      # uploads here found no files while every test passed, and the only
+      # thing that went red was the job that tried to download them.
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: worker-results-${{ matrix.shard }}
-          path: .vitest-results/*.xml
+          path: test-results/worker/*.xml
 
   # The shell harness runs in node, not workerd, so it is small and
   # stays whole.
@@ -77,12 +82,12 @@ jobs:
         run: >-
           npx vitest run --config vitest.shell.config.js
           --reporter=default --reporter=junit
-          --outputFile.junit=.vitest-shell-results/results.xml
+          --outputFile.junit=test-results/shell/results.xml
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: shell-results
-          path: .vitest-shell-results/*.xml
+          path: test-results/shell/*.xml
 
   # A suite that shrinks is worse than one that fails, because it goes
   # green. The floor is judged on the shards added back together — a
@@ -103,13 +108,13 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           pattern: worker-results-*
-          path: .vitest-results
+          path: test-results/worker
           merge-multiple: true
       - uses: actions/download-artifact@v4
         with:
           name: shell-results
-          path: .vitest-shell-results
+          path: test-results/shell
       # `countFrom` sums every .xml it finds under the directory, so
       # three shard files add up to the whole suite with no arithmetic
       # here.
-      - run: node scripts/check-suite-floor.mjs worker=.vitest-results shell=.vitest-shell-results
+      - run: node scripts/check-suite-floor.mjs worker=test-results/worker shell=test-results/shell
