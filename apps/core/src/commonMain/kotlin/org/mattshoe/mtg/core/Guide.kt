@@ -33,6 +33,7 @@ object Guide {
 
     val tiles: List<GuideTile> = listOf(
         GuideTile(COLOURS, "Colour combinations", "Every name, from Azorius to WUBRG. Guilds, shards, wedges and the rest."),
+        GuideTile(WHEEL, "The colour wheel", "What each colour wants, what it is good at, and who its friends and enemies are."),
     )
 
     fun tile(slug: String): GuideTile? = tiles.firstOrNull { it.slug == slug }
