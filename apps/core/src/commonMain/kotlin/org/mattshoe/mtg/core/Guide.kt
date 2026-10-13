@@ -88,8 +88,20 @@ object Guide {
         ),
     )
 
-    /** Stub. */
-    val list: List<Combo> = emptyList()
+    /**
+     * Every combination as one list, for finding a name at a glance.
+     *
+     * Matt: "just a list of color combos and names, in wubrg order, so
+     * they can easily be scanned to find what i need". Fewest colours
+     * first, then WUBRG within each size, and each one's own letters
+     * in WUBRG order too, so Selesnya is WG here and not GW. No notes:
+     * those stay with the groups underneath.
+     */
+    val list: List<Combo> = colours.flatMap { it.combos }
+        .map { Combo(wubrg(it.pips), it.name) }
+        .sortedWith(compareBy<Combo> { it.pips.length }.thenBy { c -> c.pips.map { "WUBRG".indexOf(it) }.joinToString("") })
+
+    private fun wubrg(pips: String) = "WUBRG".filter { it in pips }
 
     private fun named(pips: String) = Combo(pips, Guild.of(pips) ?: error("no name for $pips"))
 }
