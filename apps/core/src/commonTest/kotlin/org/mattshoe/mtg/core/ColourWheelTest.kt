@@ -35,7 +35,7 @@ class ColourWheelTest {
         assertEquals(setOf("U", "G"), ColourWheel.allies("W").map { it.pip }.toSet(), "white's allies")
         assertEquals(setOf("B", "R"), ColourWheel.enemies("W").map { it.pip }.toSet(), "white's enemies")
         assertEquals(setOf("W", "B"), ColourWheel.allies("U").map { it.pip }.toSet(), "blue's allies")
-        assertEquals(setOf("U", "R"), ColourWheel.enemies("G").map { it.pip }.toSet(), "green's enemies")
+        assertEquals(setOf("U", "B"), ColourWheel.enemies("G").map { it.pip }.toSet(), "green's enemies")
         ColourWheel.colours.forEach { c ->
             val allies = ColourWheel.allies(c.pip).map { it.pip }
             val enemies = ColourWheel.enemies(c.pip).map { it.pip }
