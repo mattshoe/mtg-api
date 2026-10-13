@@ -1,6 +1,5 @@
 package org.mattshoe.mtg.android
 
-import org.junit.Rule
 import android.os.Looper
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -51,9 +50,6 @@ import kotlin.test.assertTrue
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 @RunWith(AndroidJUnit4::class)
 class ConfigChangeKeepsStateTest {
-
-    @get:Rule(order = Int.MIN_VALUE)
-    val retry = Retry()
 
     private val controllers = mutableListOf<ActivityController<MainActivity>>()
 

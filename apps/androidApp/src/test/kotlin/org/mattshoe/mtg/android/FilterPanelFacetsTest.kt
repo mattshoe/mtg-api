@@ -53,9 +53,6 @@ import kotlin.test.assertTrue
 @RunWith(AndroidJUnit4::class)
 class FilterPanelFacetsTest {
 
-    @get:Rule(order = Int.MIN_VALUE)
-    val retry = Retry()
-
     @get:Rule
     val composeRule = createComposeRule()
 

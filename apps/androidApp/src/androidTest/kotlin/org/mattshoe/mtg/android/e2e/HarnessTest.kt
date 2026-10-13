@@ -1,6 +1,5 @@
 package org.mattshoe.mtg.android.e2e
 
-import org.junit.Rule
 import org.mattshoe.mtg.android.Retry
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.After
@@ -22,9 +21,6 @@ import kotlin.test.assertTrue
  */
 @RunWith(AndroidJUnit4::class)
 class HarnessTest {
-
-    @get:Rule(order = Int.MIN_VALUE)
-    val retry = Retry()
 
     private lateinit var fake: FakeWorker
 

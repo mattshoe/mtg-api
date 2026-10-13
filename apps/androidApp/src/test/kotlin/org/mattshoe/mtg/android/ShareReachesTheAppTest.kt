@@ -18,7 +18,6 @@ import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 import org.junit.After
-import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mattshoe.mtg.core.AppState
@@ -43,9 +42,6 @@ import kotlin.test.assertTrue
  */
 @RunWith(AndroidJUnit4::class)
 class ShareReachesTheAppTest {
-
-    @get:Rule(order = Int.MIN_VALUE)
-    val retry = Retry()
 
     private val controllers = mutableListOf<ActivityController<MainActivity>>()
     private val context get() = ApplicationProvider.getApplicationContext<Context>()

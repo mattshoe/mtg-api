@@ -37,9 +37,6 @@ import org.mattshoe.mtg.core.DecksState
 @RunWith(AndroidJUnit4::class)
 class ArtCropAlignmentParityTest {
 
-    @get:Rule(order = Int.MIN_VALUE)
-    val retry = Retry()
-
     @get:Rule
     val rule = createComposeRule()
 

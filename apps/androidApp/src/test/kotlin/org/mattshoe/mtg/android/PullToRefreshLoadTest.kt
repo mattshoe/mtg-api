@@ -12,7 +12,6 @@ import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 import org.junit.After
-import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mattshoe.mtg.core.Account
@@ -38,9 +37,6 @@ import kotlin.test.assertTrue
  */
 @RunWith(AndroidJUnit4::class)
 class PullToRefreshLoadTest {
-
-    @get:Rule(order = Int.MIN_VALUE)
-    val retry = Retry()
 
     private var controller: ActivityController<MainActivity>? = null
 

@@ -31,9 +31,6 @@ import kotlin.test.assertTrue
 @RunWith(AndroidJUnit4::class)
 class WheelOnATabletTest {
 
-    @get:Rule(order = Int.MIN_VALUE)
-    val retry = Retry()
-
     @get:Rule
     val rule = createComposeRule()
 

@@ -55,9 +55,6 @@ import kotlin.test.fail
 @RunWith(AndroidJUnit4::class)
 class NewDeckParityTest {
 
-    @get:Rule(order = Int.MIN_VALUE)
-    val retry = Retry()
-
     @get:Rule
     val rule = createComposeRule()
 
