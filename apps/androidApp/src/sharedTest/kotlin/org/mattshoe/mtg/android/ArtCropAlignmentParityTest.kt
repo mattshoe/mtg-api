@@ -65,7 +65,6 @@ class ArtCropAlignmentParityTest {
                     DecksScreen(
                         DecksState().loaded(listOf(deck("a", "matt", "Alela"))),
                         {},
-                        {},
                     )
                 }
             }
@@ -81,7 +80,7 @@ class ArtCropAlignmentParityTest {
     fun theHeroAndTheCardRowArePhotographedForACropReview() {
         Parity.needsRealRendering()
         rule.setContent {
-            MaterialTheme(colorScheme = darkColorScheme()) { Surface { DecksScreen(opened(), {}, {}) } }
+            MaterialTheme(colorScheme = darkColorScheme()) { Surface { DecksScreen(opened(), {}) } }
         }
         rule.waitForIdle()
         rule.waitUntil(timeoutMillis = 10_000) {

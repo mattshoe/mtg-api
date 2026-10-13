@@ -45,7 +45,6 @@ fun TaskScreen(
     detail: TaskDetail,
     listed: Task?,
     now: Long,
-    onBack: () -> Unit,
     onState: (TaskDetail) -> Unit = {},
     onCancel: () -> Unit = {},
 ) {
@@ -58,8 +57,6 @@ fun TaskScreen(
             .testTag("task-detail"),
         verticalArrangement = Arrangement.spacedBy(Design.GAP.dp),
     ) {
-        Box(Modifier.testTag("task-detail-back")) { Ghost("← Admin Settings") { onBack() } }
-
         Panel(head = task?.title ?: "Task") {
             detail.copy(task = task).facts(now) { ms -> java.util.TimeZone.getDefault().getOffset(ms) / 60_000 }.forEach { (label, value) ->
                 Row(

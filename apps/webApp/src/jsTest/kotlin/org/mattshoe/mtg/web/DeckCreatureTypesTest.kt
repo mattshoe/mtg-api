@@ -67,7 +67,7 @@ class DeckCreatureTypesTest {
         root.style.width = "900px"
         document.body!!.appendChild(root)
         roots += root
-        renderComposable(root = root) { DecksPage(opened(), {}, {}) }
+        renderComposable(root = root) { DecksPage(opened(), {}) }
         return root
     }
 

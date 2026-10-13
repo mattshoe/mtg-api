@@ -298,7 +298,7 @@ class ScreensTest {
     @Test
     fun theAdminActionsAreHiddenWhileLocked() = runTest {
         val decks = DecksState(decks = listOf(deck()), openKey = "alela", cards = listOf(deckCard()))
-        val root = mount { DecksPage(decks, {}, {}, admin = false) }
+        val root = mount { DecksPage(decks, {}, admin = false) }
         settle()
         assertFalse(root.hasButton("Edit list"))
         assertFalse(root.hasButton("Disassemble"))
@@ -308,7 +308,7 @@ class ScreensTest {
     fun theAdminActionsAppearWhenUnlocked() = runTest {
         var edited: Deck? = null
         val decks = DecksState(decks = listOf(deck()), openKey = "alela", cards = listOf(deckCard()))
-        val root = mount { DecksPage(decks, {}, {}, admin = true, onEdit = { edited = it }) }
+        val root = mount { DecksPage(decks, {}, admin = true, onEdit = { edited = it }) }
         settle()
         root.button("Edit list").click()
         settle()
@@ -554,7 +554,7 @@ class CardGridTest {
     fun theDeckTileWearsItsCommandersArt() = runTest {
         val deck = Deck("alela", "Alela — Custom Dimir Faerie Tribal", "matt",
             "Alela, Artful Provocateur", "Five-color (WUBRG)", 3, "abcdef12-3456")
-        val root = mount { DecksPage(DecksState().loaded(listOf(deck)), {}, {}) }
+        val root = mount { DecksPage(DecksState().loaded(listOf(deck)), {}) }
         settle()
         val img = root.querySelector(".deck-banner img") as org.w3c.dom.HTMLImageElement
         assertTrue(img.src.endsWith("/art_crop/front/a/b/abcdef12-3456.jpg"), img.src)

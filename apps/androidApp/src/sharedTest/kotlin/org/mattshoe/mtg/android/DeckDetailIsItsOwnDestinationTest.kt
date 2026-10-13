@@ -4,10 +4,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.activity.ComponentActivity
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
@@ -55,7 +57,7 @@ class DeckDetailIsItsOwnDestinationTest {
     val retry = Retry()
 
     @get:Rule
-    val rule = createComposeRule()
+    val rule = createAndroidComposeRule<ComponentActivity>()
 
     private fun deck(key: String, name: String) = Deck(
         key, name, "matt", "Alela, Artful Provocateur (ELD) 324", "UW", 3, null,
@@ -143,13 +145,13 @@ class DeckDetailIsItsOwnDestinationTest {
             "the deck did not open",
         )
 
-        // And it starts at its own top. The way back is the first
-        // thing in the detail's header, so if the container inherited
-        // the list's offset this is off the top of the screen.
-        val back = rule.onNodeWithText("← Decks").getUnclippedBoundsInRoot()
+        // And it starts at its own top. The share is the first thing
+        // in the detail's header, so if the container inherited the
+        // list's offset this is off the top of the screen.
+        val back = rule.onNode(hasContentDescription("Share this deck")).getUnclippedBoundsInRoot()
         assertTrue(
             back.top.value >= -1f,
-            "the deck detail opened scrolled down — the way back is at ${back.top}, " +
+            "the deck detail opened scrolled down — the share is at ${back.top}, " +
                 "above the top of the screen, because it inherited the list's offset",
         )
     }
@@ -188,7 +190,9 @@ class DeckDetailIsItsOwnDestinationTest {
 
         pressable("Deck Number 29").performScrollTo().performClick()
         rule.waitForIdle()
-        pressable("← Decks").performScrollTo().performClick()
+        // The system back, which is the only way off an open deck now
+        // that its ← Decks button is gone.
+        rule.activity.onBackPressedDispatcher.onBackPressed()
         rule.waitForIdle()
 
         // The other half of the same rule. Splitting the two
@@ -212,8 +216,8 @@ class DeckDetailIsItsOwnDestinationTest {
         rule.waitForIdle()
 
         // Back to the shelf and into a different deck, driven through
-        // the route rather than by pressing `← Decks`. Whether that
-        // button navigates is the previous test's subject and it
+        // the route rather than by pressing back. Whether back
+        // navigates is the previous test's subject and it
         // passes there; what is under test here is only whether deck
         // B inherits deck A's offset, and reading to the foot of a
         // forty-card deck scrolls the detail's own header off the top
@@ -228,11 +232,11 @@ class DeckDetailIsItsOwnDestinationTest {
             rule.onAllNodesWithText("Card Number 0").fetchSemanticsNodes().isNotEmpty(),
             "the second deck did not open",
         )
-        val back = rule.onNodeWithText("← Decks").getUnclippedBoundsInRoot()
+        val back = rule.onNode(hasContentDescription("Share this deck")).getUnclippedBoundsInRoot()
         assertTrue(
             back.top.value >= -1f,
             "the second deck opened at the first deck's offset — " +
-                "the way back is at ${back.top}, above the top of the screen",
+                "the share is at ${back.top}, above the top of the screen",
         )
     }
 }

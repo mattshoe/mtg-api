@@ -103,7 +103,7 @@ class DecksLayoutTest {
         // line under a name, the count under each. The page is one
         // collection, so a group per owner is one group with somebody's
         // name pointlessly over it.
-        val frame = mount(1000) { DecksPage(shelf(), {}, {}) }
+        val frame = mount(1000) { DecksPage(shelf(), {}) }
         settle()
         assertEquals(1, frame.all("div.deck-grid").size, "the decks are still split per owner")
         assertEquals(1, frame.all("div.owner-head").size)
@@ -113,7 +113,7 @@ class DecksLayoutTest {
 
     @Test
     fun theCountIsSeparatedFromTheDecksUnderIt() = runTest {
-        val frame = mount(1000) { DecksPage(shelf(), {}, {}) }
+        val frame = mount(1000) { DecksPage(shelf(), {}) }
         settle()
         if (!Stylesheet.applied()) return@runTest
         val head = frame.all("div.owner-head").first()
@@ -130,7 +130,7 @@ class DecksLayoutTest {
 
     @Test
     fun theCardsInADeckAreRuledOffFromEachOther() = runTest {
-        val frame = mount(1000) { DecksPage(opened(), {}, {}) }
+        val frame = mount(1000) { DecksPage(opened(), {}) }
         settle()
         if (!Stylesheet.applied()) return@runTest
         assertEquals(6, frame.all("div.deck-line").size, "not every card is listed")
@@ -154,7 +154,7 @@ class DecksLayoutTest {
 
     @Test
     fun nothingInAnOpenedDeckSitsFlushAgainstTheThingAboveIt() = runTest {
-        val frame = mount(1000) { DecksPage(opened(), {}, {}) }
+        val frame = mount(1000) { DecksPage(opened(), {}) }
         settle()
         if (!Stylesheet.applied()) return@runTest
         val head = frame.all("div.page-head").first().getBoundingClientRect()
@@ -171,13 +171,14 @@ class DecksLayoutTest {
     }
 
     @Test
-    fun theBackButtonIsInTheHeaderRatherThanFloatingAboveIt() = runTest {
-        val frame = mount(1000) { DecksPage(opened(), {}, {}) }
+    fun theHeaderHasNoBackButton() = runTest {
+        // Matt: "get rid of the 'back' button on all the details pages".
+        val frame = mount(1000) { DecksPage(opened(), {}) }
         settle()
         val head = frame.all("div.page-head").firstOrNull() ?: error("no page head")
         assertTrue(
-            head.textContent.orEmpty().contains("← Decks"),
-            "the back button is not in the header: ${head.textContent}",
+            !head.textContent.orEmpty().contains("← Decks"),
+            "the back button is still in the header: ${head.textContent}",
         )
     }
 
@@ -198,7 +199,7 @@ class DecksLayoutTest {
                     typeLine = "Basic Land — Plains", cmc = 0.0, producedMana = "W"),
             ),
         )
-        val frame = mount(414) { DecksPage(s, {}, {}, admin = true) }
+        val frame = mount(414) { DecksPage(s, {}, admin = true) }
         settle()
         if (!Stylesheet.applied()) return@runTest
         val limit = frame.getBoundingClientRect().right + 1
@@ -210,7 +211,7 @@ class DecksLayoutTest {
 
     @Test
     fun nothingOverflowsTheDecksPageAtPhoneWidth() = runTest {
-        val frame = mount(390) { DecksPage(shelf(), {}, {}) }
+        val frame = mount(390) { DecksPage(shelf(), {}) }
         settle()
         if (!Stylesheet.applied()) return@runTest
         val limit = frame.getBoundingClientRect().right + 1
@@ -224,7 +225,7 @@ class DecksLayoutTest {
 
     @Test
     fun theCommanderGetsABannerAcrossTheTop() = runTest {
-        val frame = mount(1000) { DecksPage(opened(), {}, {}) }
+        val frame = mount(1000) { DecksPage(opened(), {}) }
         settle()
         val hero = frame.all("div.deck-hero").firstOrNull() ?: error("no banner")
         assertTrue(
@@ -242,7 +243,7 @@ class DecksLayoutTest {
         // empty grey band is worse than none.
         val bare = Deck("a", "Sixty", "matt", null, "UW", null, null)
         val s = DecksState().loaded(listOf(bare)).opened("a", listOf(card("Sol Ring", "Artifact")))
-        val frame = mount(1000) { DecksPage(s, {}, {}) }
+        val frame = mount(1000) { DecksPage(s, {}) }
         settle()
         assertEquals(0, frame.all("div.deck-hero").size)
         // The name lives in the header now, so what the page has to
@@ -253,7 +254,7 @@ class DecksLayoutTest {
 
     @Test
     fun theBannerTextSitsOverAWashSoItCanBeRead() = runTest {
-        val frame = mount(1000) { DecksPage(opened(), {}, {}) }
+        val frame = mount(1000) { DecksPage(opened(), {}) }
         settle()
         if (!Stylesheet.applied()) return@runTest
         val hero = frame.all("div.deck-hero").first()
@@ -264,7 +265,7 @@ class DecksLayoutTest {
 
     @Test
     fun anOpenDeckOffersAShare() = runTest {
-        val frame = mount(1000) { DecksPage(opened(), {}, {}) }
+        val frame = mount(1000) { DecksPage(opened(), {}) }
         settle()
         val button = frame.all("button[aria-label='Share this deck']").firstOrNull()
             ?: error("no share button on the deck")
@@ -280,7 +281,7 @@ class DecksLayoutTest {
         // Four ways to hand a deck over, and the menu has to say which
         // is which — "Copy" twice with nothing above it is a coin toss.
         val picked = mutableListOf<Pair<ShareWhat, ExportTo>>()
-        val frame = mount(1000) { DecksPage(opened(), {}, {}, onShare = { w, e -> picked += w to e }) }
+        val frame = mount(1000) { DecksPage(opened(), {}, onShare = { w, e -> picked += w to e }) }
         settle()
         frame.all("button[aria-label='Share this deck']").first().click()
         settle()
@@ -303,7 +304,7 @@ class DecksLayoutTest {
     @Test
     fun eachOfTheFourReportsItself() = runTest {
         val picked = mutableListOf<Pair<ShareWhat, ExportTo>>()
-        val frame = mount(1000) { DecksPage(opened(), {}, {}, onShare = { w, e -> picked += w to e }) }
+        val frame = mount(1000) { DecksPage(opened(), {}, onShare = { w, e -> picked += w to e }) }
         settle()
         repeat(4) { n ->
             frame.all("button[aria-label='Share this deck']").first().click()
@@ -327,7 +328,7 @@ class DecksLayoutTest {
         // The header aligns its own children to the right, and the
         // group labels inherited it — "LINK" hard against the far
         // edge with its two options under the near one.
-        val frame = mount(1000) { DecksPage(opened(), {}, {}) }
+        val frame = mount(1000) { DecksPage(opened(), {}) }
         settle()
         if (!Stylesheet.applied()) return@runTest
         frame.all("button[aria-label='Share this deck']").first().click()
@@ -348,7 +349,7 @@ class DecksLayoutTest {
 
     @Test
     fun aPressOutsideShutsTheShareMenu() = runTest {
-        val frame = mount(1000) { DecksPage(opened(), {}, {}) }
+        val frame = mount(1000) { DecksPage(opened(), {}) }
         settle()
         frame.all("button[aria-label='Share this deck']").first().click()
         settle()
@@ -394,7 +395,7 @@ class DecksLayoutTest {
     @Test
     fun theShareMenuStaysOnScreenWithTheAdminButtonsBesideIt() = runTest {
         listOf(360, 400, 700, 1000).forEach { width ->
-            val frame = column(width) { DecksPage(opened(), {}, {}, admin = true) }
+            val frame = column(width) { DecksPage(opened(), {}, admin = true) }
             settle()
             if (!Stylesheet.applied()) return@runTest
             frame.all("button[aria-label='Share this deck']").first().click()
@@ -419,7 +420,7 @@ class DecksLayoutTest {
     /** Locked, the same. The old test only ever covered this one. */
     @Test
     fun theShareMenuStaysOnScreenAtPhoneWidth() = runTest {
-        val frame = column(400) { DecksPage(opened(), {}, {}) }
+        val frame = column(400) { DecksPage(opened(), {}) }
         settle()
         if (!Stylesheet.applied()) return@runTest
         frame.all("button[aria-label='Share this deck']").first().click()
@@ -448,7 +449,7 @@ class DecksLayoutTest {
 
     @Test
     fun theTokensAreCardsBelowTheList() = runTest {
-        val frame = mount(1000) { DecksPage(withTokens(), {}, {}) }
+        val frame = mount(1000) { DecksPage(withTokens(), {}) }
         settle()
         val heads = frame.all("div.panel-head h2").map { it.textContent.orEmpty() }
         assertEquals("Tokens", heads.last(), "the tokens are not the last thing on the page")
@@ -465,7 +466,7 @@ class DecksLayoutTest {
         // Two 2/2 Birds, one green and one blue, are two tokens. With
         // nothing on the row saying which, they are two identical
         // lines and the list reads as a bug.
-        val frame = mount(1000) { DecksPage(withTokens(), {}, {}) }
+        val frame = mount(1000) { DecksPage(withTokens(), {}) }
         settle()
         val rows = frame.all("div.panel")
             .first { it.textContent.orEmpty().startsWith("Tokens") }
@@ -482,7 +483,7 @@ class DecksLayoutTest {
 
     @Test
     fun aColourlessTokenSaysSoRatherThanShowingNothing() = runTest {
-        val frame = mount(1000) { DecksPage(withTokens(), {}, {}) }
+        val frame = mount(1000) { DecksPage(withTokens(), {}) }
         settle()
         val clue = frame.all("div.deck-line").first { it.textContent.orEmpty().contains("Clue") }
         assertEquals(
@@ -495,7 +496,7 @@ class DecksLayoutTest {
 
     @Test
     fun aTokenYouCanBuyLinksToTcgplayer() = runTest {
-        val frame = mount(1000) { DecksPage(withTokens(), {}, {}) }
+        val frame = mount(1000) { DecksPage(withTokens(), {}) }
         settle()
         val link = frame.all("a.deck-line").firstOrNull() ?: error("no token links at all")
         assertEquals("https://tcg.example/bird", link.getAttribute("href"))
@@ -510,7 +511,7 @@ class DecksLayoutTest {
 
     @Test
     fun aTokenNobodySellsStaysARowRatherThanALinkToNowhere() = runTest {
-        val frame = mount(1000) { DecksPage(withTokens(), {}, {}) }
+        val frame = mount(1000) { DecksPage(withTokens(), {}) }
         settle()
         // One of the three has a listing; the other two are plain.
         assertEquals(1, frame.all("a.deck-line").size)
@@ -522,7 +523,7 @@ class DecksLayoutTest {
 
     @Test
     fun aDeckWithNoTokensHasNoTokenPanel() = runTest {
-        val frame = mount(1000) { DecksPage(opened(), {}, {}) }
+        val frame = mount(1000) { DecksPage(opened(), {}) }
         settle()
         val heads = frame.all("div.panel-head h2").map { it.textContent.orEmpty() }
         assertTrue("Tokens" !in heads, heads.toString())
@@ -532,7 +533,7 @@ class DecksLayoutTest {
 
     @Test
     fun theListIsGroupedByTypeInReadingOrder() = runTest {
-        val frame = mount(1000) { DecksPage(opened(), {}, {}) }
+        val frame = mount(1000) { DecksPage(opened(), {}) }
         settle()
         // The analysis panel heads the page; the groups follow it.
         val headings = frame.all("div.panel-head h2").map { it.textContent.orEmpty() }
@@ -545,7 +546,7 @@ class DecksLayoutTest {
 
     @Test
     fun eachGroupIsAlphabeticalInside() = runTest {
-        val frame = mount(1000) { DecksPage(opened(), {}, {}) }
+        val frame = mount(1000) { DecksPage(opened(), {}) }
         settle()
         val creatures = frame.all("div.panel")
             .first { it.textContent.orEmpty().startsWith("Creatures") }
@@ -557,7 +558,7 @@ class DecksLayoutTest {
 
     @Test
     fun everyCardHasASquareThumbnail() = runTest {
-        val frame = mount(1000) { DecksPage(opened(), {}, {}) }
+        val frame = mount(1000) { DecksPage(opened(), {}) }
         settle()
         val thumbs = frame.all("div.deck-line div.thumb")
         assertEquals(6, thumbs.size, "not every card has one")
@@ -574,7 +575,7 @@ class DecksLayoutTest {
     fun tappingACardAsksForItsDetail() = runTest {
         var asked: Pair<String, String>? = null
         val frame = mount(1000) {
-            DecksPage(opened(), {}, {}, onOpenCard = { c, owner -> asked = c.nameNorm to owner })
+            DecksPage(opened(), {}, onOpenCard = { c, owner -> asked = c.nameNorm to owner })
         }
         settle()
         val row = frame.all("div.deck-line").first { it.textContent.orEmpty().contains("Sol Ring") }
@@ -587,7 +588,7 @@ class DecksLayoutTest {
 
     @Test
     fun aCardRowSaysItIsSomethingYouCanPress() = runTest {
-        val frame = mount(1000) { DecksPage(opened(), {}, {}) }
+        val frame = mount(1000) { DecksPage(opened(), {}) }
         settle()
         val row = frame.all("div.deck-line").first()
         assertEquals("button", row.getAttribute("role"))
@@ -599,7 +600,7 @@ class DecksLayoutTest {
         val s = DecksState()
             .loaded(listOf(deck("a", "matt", "Alela")))
             .opened("a", listOf(DeckCard("Unowned Thing", 1, null, 0, nameNorm = "unowned thing")))
-        val frame = mount(1000) { DecksPage(s, {}, {}) }
+        val frame = mount(1000) { DecksPage(s, {}) }
         settle()
         assertTrue(frame.textContent.orEmpty().contains("Unowned Thing"))
         assertEquals(1, frame.all("div.deck-line div.thumb").size, "no thumbnail box")

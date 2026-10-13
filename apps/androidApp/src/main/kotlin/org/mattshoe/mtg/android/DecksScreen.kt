@@ -92,7 +92,6 @@ private val RowCrop = topBias(32)
 fun DecksScreen(
     state: DecksState,
     onOpen: (Deck) -> Unit,
-    onClose: () -> Unit,
     admin: Boolean = false,
     /**
      * Handed down from `AppShell`, which keeps one of these per deck
@@ -132,7 +131,6 @@ fun DecksScreen(
             open = open,
             scrollState = scrollState,
             admin = admin,
-            onClose = onClose,
             onEdit = onEdit,
             onDisassemble = onDisassemble,
             onRename = onRename,
@@ -193,14 +191,13 @@ internal fun DecksListScreen(
  *
  * Its own destination rather than the shelf, because the address
  * already names this deck — showing the list here would mean the page
- * changed under you twice for one tap, and would hand `← Decks` to
- * the wrong screen.
+ * changed under you twice for one tap, and would hand the back
+ * gesture to the wrong screen.
  */
 @Composable
 internal fun DeckLoadingScreen(
     key: String,
     error: String? = null,
-    onClose: () -> Unit = {},
 ) {
     Column(
         Modifier.fillMaxWidth()
@@ -208,13 +205,6 @@ internal fun DeckLoadingScreen(
             .padding(Design.WRAP_PAD_NARROW.dp),
         verticalArrangement = Arrangement.spacedBy(Design.GAP.dp),
     ) {
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(Design.GAP.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Ghost("← Decks", onClick = onClose)
-        }
         if (error != null) ErrBox(error) else Line("Loading the deck…", Ink3)
     }
 }
@@ -230,7 +220,6 @@ internal fun DeckDetailScreen(
     open: Deck,
     scrollState: ScrollState = rememberScrollState(),
     admin: Boolean = false,
-    onClose: () -> Unit = {},
     onEdit: (Deck) -> Unit = {},
     onDisassemble: (Deck) -> Unit = {},
     onRename: (Deck) -> Unit = {},
@@ -254,7 +243,9 @@ internal fun DeckDetailScreen(
             horizontalArrangement = Arrangement.spacedBy(Design.GAP.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Ghost("← Decks", onClick = onClose)
+            // No "← Decks" before it any more — Matt: "get rid of the
+            // 'back' button on all the details pages". The system back
+            // is the way to the shelf.
             Spacer(Modifier.weight(1f))
             // Anchored to its own button, the way the website
             // anchors `.app-menu.from-right` to `.menu-anchor`.

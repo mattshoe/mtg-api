@@ -293,7 +293,7 @@ class ScreensTest {
             "alela", "Alela — Custom Dimir Faerie Tribal", "matt",
             "Alela, Artful Provocateur", "Five-color (WUBRG)", 3, "abcdef12-3456",
         )
-        content { DecksScreen(DecksState().loaded(listOf(deck)), {}, {}) }
+        content { DecksScreen(DecksState().loaded(listOf(deck)), {}) }
         rule.onNodeWithText("Alela").assertExists()
         rule.onNodeWithText("Alela, Artful Provocateur").assertExists()
         rule.onNodeWithText("bracket 3").assertExists()
@@ -313,7 +313,7 @@ class ScreensTest {
             ),
             usedIn = listOf(DeckUse("alela", "Alela", "matt", 1, "ramp", false)),
         )
-        content { CardSheet(detail) {} }
+        content { CardSheet(detail) }
         rule.onNodeWithText("Sol Ring").assertIsDisplayed()
         // Matt does not want ownership on the card page.
         rule.onAllNodesWithText("owned", substring = true).assertCountEquals(0)
@@ -337,7 +337,7 @@ class ScreensTest {
             printings = listOf(Printing(1, "m3c", null, "409", "nonfoil", 1, null, owner = "matt")),
             usedIn = listOf(DeckUse("p", "Proxy deck", "matt", 1, null, true)),
         )
-        content { CardSheet(detail) {} }
+        content { CardSheet(detail) }
         // The page no longer counts copies, so a proxy is said on its
         // deck row and nothing on the page claims it took a copy.
         rule.onNodeWithText("proxy").assertExists()
@@ -371,7 +371,7 @@ class ScreensTest {
     @Test
     fun theAdminActionsAreHiddenWhileLocked() {
         val decks = DecksState(decks = listOf(deck()), openKey = "alela", cards = listOf(deckCard()))
-        content { DecksScreen(decks, {}, {}, admin = false) }
+        content { DecksScreen(decks, {}, admin = false) }
         rule.onNodeWithText("Edit list").assertDoesNotExistNow()
     }
 
@@ -379,7 +379,7 @@ class ScreensTest {
     fun theAdminActionsAppearWhenUnlocked() {
         var edited: Deck? = null
         val decks = DecksState(decks = listOf(deck()), openKey = "alela", cards = listOf(deckCard()))
-        content { DecksScreen(decks, {}, {}, admin = true, onEdit = { edited = it }) }
+        content { DecksScreen(decks, {}, admin = true, onEdit = { edited = it }) }
         rule.onNodeWithText("Edit list").performScrollTo().performClick()
         rule.runOnIdle { assertEquals("alela", edited?.key) }
     }

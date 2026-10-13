@@ -104,7 +104,6 @@ class FixedWidthNumbersParityTest {
                     DecksScreen(
                         DecksState().loaded(listOf(deck)).opened("a", listOf(card("Soldier", 6))),
                         {},
-                        {},
                     )
                 }
             }

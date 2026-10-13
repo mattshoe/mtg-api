@@ -21,7 +21,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -86,28 +85,28 @@ fun CardSheet(
     /** "- 3 +": how many of it the collection being read holds. Null when it is not yours. */
     stepper: Stepper? = null,
     onCount: (Int) -> Unit = {},
-    // Last, so `CardSheet(card) {}` still means "and this is how you
-    // leave it" — which is how every caller and every test writes it.
-    onClose: () -> Unit,
 ) {
     Column(
         Modifier.fillMaxWidth().testTag("card-sheet").verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        // The name with the share beside it, the same header as the
+        // website's card page. There was a "← Back" row above it —
+        // Matt: "get rid of the 'back' button on all the details pages
+        // and put the share icon inline with title". The system back
+        // is the way off.
         Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TextButton(onClick = onClose) { Text("← Back") }
-            Spacer(Modifier.weight(1f))
-            // The same header shape as the website's card page: back
-            // on the left, the share on the right, nothing between.
+            // Selectable, the same as the web. Copying a card name off
+            // the page is most of what the page is for.
+            SelectionContainer(Modifier.weight(1f)) {
+                Text(card.name, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            }
             ShareCardButton(onShare)
         }
-        // Selectable, the same as the web. Copying a card name off the
-        // page is most of what the page is for.
-        SelectionContainer { Text(card.name, fontSize = 18.sp, fontWeight = FontWeight.SemiBold) }
         when {
             card.busy -> Text("Loading…")
             card.error != null -> Text(card.error!!)
