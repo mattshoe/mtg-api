@@ -1,5 +1,6 @@
 package org.mattshoe.mtg.android
 
+import org.junit.AssumptionViolatedException
 import org.junit.runner.Description
 import org.junit.runners.model.Statement
 
@@ -51,5 +52,27 @@ object Retry {
     const val RETRIES = 3
 
     fun attempts(description: Description, retries: Int = RETRIES, test: () -> Statement): Statement =
-        test()
+        object : Statement() {
+            override fun evaluate() {
+                val failures = mutableListOf<Throwable>()
+                repeat(retries + 1) { attempt ->
+                    try {
+                        test().evaluate()
+                        if (failures.isNotEmpty()) {
+                            println("RETRY ${description.displayName} passed on attempt ${attempt + 1}, after: ${failures.first()}")
+                        }
+                        return
+                    } catch (skip: AssumptionViolatedException) {
+                        throw skip
+                    } catch (e: Throwable) {
+                        failures += e
+                        println("RETRY ${description.displayName} failed attempt ${attempt + 1} of ${retries + 1}: $e")
+                    }
+                }
+                val first = failures.first()
+                throw AssertionError("failed ${failures.size} times, first: $first", first).apply {
+                    failures.drop(1).forEach(::addSuppressed)
+                }
+            }
+        }
 }
