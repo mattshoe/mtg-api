@@ -45,8 +45,12 @@ data class RuleBook(val effective: String = "", val rules: List<Rule> = emptyLis
     }
 
     companion object {
-        /** `100.1.`, `100.1a`, `702.19.`: a number, then the rule. */
-        private val NUMBERED = Regex("""^(\d{3}\.\d+(?:[a-z]+|\.))\s+(.*)$""")
+        /**
+         * `100.1.`, `100.1a`, `702.19.`: a number, then the rule. The dot
+         * is optional either way, because the file misprints it both
+         * ways: `119.1d.` and `606.5`.
+         */
+        private val NUMBERED = Regex("""^(\d{3}\.\d+[a-z]*\.?)\s+(.*)$""")
 
         /** `702. Keyword Abilities`: a section, which every rule after it sits in. */
         private val SECTION = Regex("""^\d{3}\.\s+\S.*$""")
