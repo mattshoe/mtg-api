@@ -136,6 +136,16 @@ class ShareIsPinnedRightTest {
             root.share("Share this deck").click()
             settle()
             val open = root.all("div.app-menu.open").firstOrNull() ?: error("at ${width}px the menu did not open")
+            // Karma's window is narrower than 1000px, and
+            // `elementFromPoint` answers null for a point outside it,
+            // so the last option is brought into view before it is
+            // probed. The window, not `scrollIntoView`, which would
+            // scroll a clipping banner too and hide the very bug this
+            // is for. Everything is measured after the scroll.
+            open.all("button.app-tab").last().getBoundingClientRect().let { r ->
+                window.scrollBy(maxOf(0.0, r.right - window.innerWidth + 8), maxOf(0.0, r.bottom - window.innerHeight + 8))
+            }
+            settle()
             val menu = open.getBoundingClientRect()
             val hero = root.all("div.deck-hero").first().getBoundingClientRect()
             val page = root.getBoundingClientRect()
@@ -146,7 +156,8 @@ class ShareIsPinnedRightTest {
             val top = document.elementFromPoint((last.left + last.right) / 2, (last.top + last.bottom) / 2)
             assertTrue(
                 last.bottom <= hero.bottom || open.contains(top),
-                "at ${width}px the menu's last option is hidden: the banner clips the menu at ${hero.bottom}",
+                "at ${width}px the menu's last option is hidden: the banner clips the menu at ${hero.bottom}, " +
+                    "and what is on top of it is ${top?.tagName ?: "nothing on screen"}",
             )
             roots.forEach { it.remove() }
             roots.clear()
