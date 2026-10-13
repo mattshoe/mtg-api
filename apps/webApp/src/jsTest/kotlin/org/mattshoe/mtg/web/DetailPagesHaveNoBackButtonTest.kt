@@ -133,8 +133,8 @@ class DetailPagesHaveNoBackButtonTest {
         assertTrue(root.textContent.orEmpty().contains("Sol Ring"), "the deck is not showing")
         assertTrue("← Decks" !in root.buttons(), "the open deck still has its ← Decks button: ${root.buttons()}")
         assertTrue(
-            root.all("div.page-head button").any { it.getAttribute("aria-label")?.contains("Share") == true },
-            "the open deck lost the share at its top",
+            root.all("button").any { it.getAttribute("aria-label") == "Share this deck" },
+            "the open deck lost its share",
         )
     }
 

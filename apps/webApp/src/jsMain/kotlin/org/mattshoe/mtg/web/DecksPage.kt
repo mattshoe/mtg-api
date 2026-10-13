@@ -68,32 +68,39 @@ fun DecksPage(
                 }
             }
         } else {
-            // The share and the admin actions are one header row
-            // rather than things stacked flush. No "← Decks" — Matt:
-            // "get rid of the 'back' button on all the details pages".
-            // The browser's back is the way to the shelf.
-            Div(attrs = { classes("page-head") }) {
-                Span(attrs = { classes("spacer") }) {}
-                ShareMenu(onShare)
-                if (admin) {
-                    // Both of these move real cards, and both show the
-                    // server's own dry run before they are allowed to.
-                    Button(attrs = {
-                        classes("btn", "sm")
-                        onClick { onEdit(open) }
-                    }) { Text("Edit list") }
-                    Button(attrs = {
-                        classes("btn", "sm")
-                        onClick { onRename(open) }
-                    }) { Text("Rename") }
-                    Button(attrs = {
-                        classes("btn", "sm", "danger")
-                        onClick { onDisassemble(open) }
-                    }) { Text("Disassemble") }
+            // The share is pinned to the right of the top of the page,
+            // always — Matt: "the share button in all pages at the top
+            // must always be pinned to the right side, and on the deck
+            // details it should be overlayed on the banner image". It
+            // used to lead the admin buttons, which pushed it inward.
+            // On the banner when there is one; at the end of the header
+            // when there is not. No "← Decks": the browser's back is
+            // the way to the shelf.
+            val art = bannerArt(open, state)
+            if (admin || art == null) {
+                Div(attrs = { classes("page-head") }) {
+                    Span(attrs = { classes("spacer") }) {}
+                    if (admin) {
+                        // Both of these move real cards, and both show the
+                        // server's own dry run before they are allowed to.
+                        Button(attrs = {
+                            classes("btn", "sm")
+                            onClick { onEdit(open) }
+                        }) { Text("Edit list") }
+                        Button(attrs = {
+                            classes("btn", "sm")
+                            onClick { onRename(open) }
+                        }) { Text("Rename") }
+                        Button(attrs = {
+                            classes("btn", "sm", "danger")
+                            onClick { onDisassemble(open) }
+                        }) { Text("Disassemble") }
+                    }
+                    if (art == null) ShareMenu(onShare)
                 }
             }
 
-            Banner(open, state)
+            if (art != null) Banner(open, state, art) { ShareMenu(onShare) }
 
             Div(attrs = { classes("stack") }) {
                 DeckStatsPanel(DeckAnalysis.of(state.cards), open.guild, onTribe)
@@ -185,25 +192,35 @@ private fun Tile(deck: Deck, onOpen: (Deck) -> Unit) {
  * deck with no commander (a 60-card list) gets no band at all rather
  * than an empty grey one.
  */
+private fun bannerArt(deck: Deck, state: DecksState): String? =
+    state.commander?.art ?: CardQueries.banner(deck.artId, deck.commanderName)
+
+/*
+ * `share` goes in its top right corner. Beside the band rather than
+ * inside it, because `.deck-hero` clips to its rounded corners and the
+ * share's menu hangs down past the band's bottom edge.
+ */
 @Composable
-private fun Banner(deck: Deck, state: DecksState) {
+private fun Banner(deck: Deck, state: DecksState, art: String, share: @Composable () -> Unit) {
     val cmdr = state.commander
-    val art = cmdr?.art ?: CardQueries.banner(deck.artId, deck.commanderName) ?: return
-    Div(attrs = { classes("deck-hero") }) {
-        Img(src = art, alt = "", attrs = { attr("loading", "lazy") })
-        Div(attrs = { classes("deck-hero-wash") }) {}
-        Div(attrs = { classes("deck-hero-text") }) {
-            Span(attrs = { classes("who") }) { Text(cmdr?.shown ?: deck.commanderName.orEmpty()) }
-            Span(attrs = { classes("what") }) {
-                Text(
-                    listOfNotNull(
-                        deck.bracket?.let { "Bracket $it" },
-                        deck.guild,
-                        "${state.totalCards} cards",
-                    ).joinToString(" · "),
-                )
+    Div(attrs = { classes("deck-hero-wrap") }) {
+        Div(attrs = { classes("deck-hero") }) {
+            Img(src = art, alt = "", attrs = { attr("loading", "lazy") })
+            Div(attrs = { classes("deck-hero-wash") }) {}
+            Div(attrs = { classes("deck-hero-text") }) {
+                Span(attrs = { classes("who") }) { Text(cmdr?.shown ?: deck.commanderName.orEmpty()) }
+                Span(attrs = { classes("what") }) {
+                    Text(
+                        listOfNotNull(
+                            deck.bracket?.let { "Bracket $it" },
+                            deck.guild,
+                            "${state.totalCards} cards",
+                        ).joinToString(" · "),
+                    )
+                }
             }
         }
+        Div(attrs = { classes("deck-hero-share") }) { share() }
     }
 }
 
