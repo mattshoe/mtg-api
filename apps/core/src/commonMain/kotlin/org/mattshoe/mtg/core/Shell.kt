@@ -45,6 +45,14 @@ enum class View(
     FETCH("fetch", "Fetch"),
     /** Behind the profile since the Fetch list took its place in the bar. */
     STATS("stats", "Stats", bar = false),
+    /**
+     * Tips and references, as tiles. See `Guide.kt`.
+     *
+     * Matt: "i want a new section in the bottom nav ... a helpful
+     * little tips and info and references and whatnot". Before Entry,
+     * so signing in adds Entry at the end rather than moving this.
+     */
+    GUIDE("guide", "Guide"),
     // "Mass Entry" wrapped onto two lines under an icon. The screen
     // is unchanged; only what the bar calls it.
     ENTRY("entry", "Entry", gated = true),

@@ -84,6 +84,7 @@ private fun busyOn(s: AppState, v: View): Boolean = when (v) {
     View.CARD -> s.card?.busy == true
     View.ENTRY -> s.entry.busy != null
     View.FETCH -> s.fetch.busy
+    View.GUIDE -> false
 }
 
 private fun errorOn(s: AppState, v: View): String? = when (v) {
@@ -95,6 +96,7 @@ private fun errorOn(s: AppState, v: View): String? = when (v) {
     View.CARD -> s.card?.error
     View.ENTRY -> s.entry.error
     View.FETCH -> s.fetch.error
+    View.GUIDE -> null
 }
 
 /** A state with something on every screen, so a reset shows up. */
@@ -1487,16 +1489,16 @@ class AdminGateTest {
     @Test
     fun theMenuOffersTheUngatedOnesWhileLocked() {
         assertEquals(View.entries.filter { it.inNav && !it.gated }, locked.visible)
-        // Library, Decks, Fetch, and Stats behind the profile.
-        assertEquals(4, locked.visible.size)
+        // Library, Decks, Fetch, Guide, and Stats behind the profile.
+        assertEquals(5, locked.visible.size)
     }
 
     @Test
     fun andEveryOneInTheNavForAnOperator() {
         assertEquals(View.entries.filter { it.inNav }, operator.visible)
-        assertEquals(7, operator.visible.size)
-        // Five for an ordinary account: the admin half is not theirs.
-        assertEquals(5, open.visible.size)
+        assertEquals(8, operator.visible.size)
+        // Six for an ordinary account: the admin half is not theirs.
+        assertEquals(6, open.visible.size)
     }
 
     @Test
@@ -1785,10 +1787,10 @@ class RouteSpellingTest {
 class ViewTableTest {
 
     @Test
-    fun thereAreSevenOfThem() {
-        // Eight, with the Fetch list. Seven with Admin Settings, six
-        // after the Query page went.
-        assertEquals(8, View.entries.size)
+    fun thereAreNineOfThem() {
+        // Nine, with the Guide. Eight with the Fetch list, seven with
+        // Admin Settings, six after the Query page went.
+        assertEquals(9, View.entries.size)
     }
 
     @Test
@@ -1881,7 +1883,8 @@ class FetchingTest {
 
     @Test
     fun andTheOnesThatDoNotAreLeftExactlyAsTheyWere() {
-        listOf(View.ENTRY).forEach {
+        // The Guide is written into the app and never asks the server.
+        listOf(View.ENTRY, View.GUIDE).forEach {
             assertEquals(withACard, withACard.fetching(it), it.slug)
         }
     }
@@ -2029,6 +2032,7 @@ class LoadNeedsTest {
                 View.CARD -> listOf("card")
                 View.ENTRY -> emptyList()
                 View.FETCH -> emptyList()
+                View.GUIDE -> emptyList()
             }
             assertEquals(expected, Load.needs(Route(it)), it.slug)
         }
@@ -2062,7 +2066,8 @@ class LoadNeedsTest {
     fun onlyTheTwoScreensThatFetchNothingAskForNothing() {
         View.entries.forEach {
             // Fetch asks for nothing until a list is pasted and Find is pressed.
-            val quiet = it == View.ENTRY || it == View.FETCH
+            // The Guide is written into the app; it has nothing to ask for.
+            val quiet = it == View.ENTRY || it == View.FETCH || it == View.GUIDE
             assertEquals(quiet, Load.needs(Route(it)).isEmpty(), it.slug)
         }
     }

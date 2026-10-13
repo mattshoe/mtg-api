@@ -115,8 +115,8 @@ class BottomNavParityTest {
     @Test
     fun theBarIsTheThreeYouCanReachWhileLocked() {
         shell()
-        assertEquals(3, tabs().size, "a locked app's bar should be Library, Decks, Fetch")
-        listOf("Library", "Decks", "Fetch").forEach { label ->
+        assertEquals(4, tabs().size, "a locked app's bar should be Library, Decks, Fetch, Guide")
+        listOf("Library", "Decks", "Fetch", "Guide").forEach { label ->
             assertTrue(
                 rule.onAllNodes(hasText(label)).fetchSemanticsNodes().isNotEmpty(),
                 "$label is missing from the bar",
@@ -127,7 +127,7 @@ class BottomNavParityTest {
     @Test
     fun adminAddsEntryAndNothingElse() {
         shell(unlocked())
-        assertEquals(4, tabs().size, "unlocking should add exactly one tab")
+        assertEquals(5, tabs().size, "unlocking should add exactly one tab")
         assertTrue(
             rule.onAllNodes(hasText("Entry")).fetchSemanticsNodes().isNotEmpty(),
             "Mass Entry is not in the bar while unlocked",

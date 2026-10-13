@@ -102,6 +102,31 @@ fun FetchIcon(tint: Color, size: Dp = 22.dp, modifier: Modifier = Modifier) =
         }
     }
 
+/** The Guide: an open book, because it is the page you look things up in. */
+@Composable
+fun GuideIcon(tint: Color, size: Dp = 22.dp, modifier: Modifier = Modifier) =
+    Canvas(modifier.size(size)) {
+        val pen = Pen(this, tint)
+        listOf(3f, 21f).forEach { edge ->
+            val mid = (12f + edge) / 2f
+            pen.path { p ->
+                moveTo(p.at(12f, 6.5f).x, p.at(12f, 6.5f).y)
+                cubicTo(
+                    p.at(12f + (mid - 12f) * 0.6f, 5f).x, p.at(0f, 5f).y,
+                    p.at(mid, 4.5f).x, p.at(0f, 4.5f).y,
+                    p.at(edge, 5.5f).x, p.at(edge, 5.5f).y,
+                )
+                lineTo(p.at(edge, 18.5f).x, p.at(edge, 18.5f).y)
+                cubicTo(
+                    p.at(mid, 17.5f).x, p.at(0f, 17.5f).y,
+                    p.at(12f + (mid - 12f) * 0.6f, 18f).x, p.at(0f, 18f).y,
+                    p.at(12f, 19.5f).x, p.at(12f, 19.5f).y,
+                )
+            }
+        }
+        pen.line(12f, 6.5f, 12f, 19.5f)
+    }
+
 /** Mass entry: a pencil, because it is the screen you write a list into. */
 @Composable
 fun EntryIcon(tint: Color, size: Dp = 22.dp, modifier: Modifier = Modifier) =
@@ -150,6 +175,7 @@ fun NavIcon(view: View, tint: Color, size: Dp = 22.dp, modifier: Modifier = Modi
         View.DECKS -> DecksIcon(tint, size, tagged)
         View.STATS -> StatsIcon(tint, size, tagged)
         View.FETCH -> FetchIcon(tint, size, tagged)
+        View.GUIDE -> GuideIcon(tint, size, tagged)
         View.ENTRY -> EntryIcon(tint, size, tagged)
         else -> LibraryIcon(tint, size, tagged)
     }

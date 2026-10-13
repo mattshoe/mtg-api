@@ -611,6 +611,40 @@ td.mono { font-family: var(--mono); font-size: 12.5px; }
 .tile .n { font: 700 25px/1.1 var(--sans); font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
 .tile .l { color: var(--text-3); font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; margin-top: 4px; }
 
+/* --------------------------------------------------------------- guide */
+/* Tips and references. Tiles on the front page, one page per tile. A
+   strip of the colours across the top of each is decoration; the
+   words and the mana symbols carry the meaning, because Matt is
+   colourblind and a strip of hue alone says nothing to him. */
+.guide-tiles { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.guide-tile, .combo {
+  position: relative; overflow: hidden; text-align: left; color: var(--text);
+  background: linear-gradient(160deg, var(--bg-3), var(--bg-2) 70%);
+  border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .28);
+}
+.guide-tile { display: block; width: 100%; padding: 22px 18px 18px; cursor: pointer; font: inherit; }
+.guide-band { position: absolute; left: 0; right: 0; top: 0; height: 5px; }
+.guide-tile-title { font: 700 18px/1.2 var(--sans); letter-spacing: -.01em; }
+.guide-tile-blurb { color: var(--text-2); font-size: 13px; margin-top: 6px; line-height: 1.4; }
+@media (hover: hover) {
+  .guide-tile:hover { border-color: var(--line-2); transform: translateY(-1px); }
+}
+.guide-back { margin-bottom: 6px; }
+.guide-group { margin: 22px 0 6px; }
+.guide-group-title { font: 700 16px/1.2 var(--sans); margin: 0; }
+.guide-group-about { color: var(--text-3); font-size: 12.5px; margin: 4px 0 12px; }
+.combo-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.combo { padding: 16px 12px 12px; }
+.combo-pips { display: flex; gap: 3px; margin-bottom: 8px; }
+.combo-pips .mana-sym { width: 22px; height: 22px; }
+.combo-name { font: 700 17px/1.15 var(--sans); letter-spacing: -.01em; }
+.combo-note { color: var(--text-2); font-size: 12px; margin-top: 3px; }
+.combo-letters {
+  position: absolute; right: 10px; top: 14px; color: var(--text-3);
+  font: 600 10.5px/1 var(--mono); letter-spacing: .08em;
+}
+
 .bar-row { display: grid; grid-template-columns: 96px 1fr 52px; gap: 10px; align-items: center; margin-bottom: 6px; font-size: 13px; }
 .bar-row .lbl { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bar-track { background: var(--bg-3); border-radius: 4px; height: 17px; overflow: hidden; }

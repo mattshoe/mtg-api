@@ -85,6 +85,7 @@ class AppShellTest {
         assertTrue(tabs.contains("Library"))
         assertTrue(tabs.contains("Decks"))
         assertTrue(tabs.contains("Fetch"))
+        assertTrue(tabs.contains("Guide"))
         assertFalse(tabs.contains("Query"), "the Query page is gone")
         assertFalse(tabs.contains("Entry"), "a gated tab must not be visible")
         assertFalse(tabs.contains("Server Logs"))
@@ -92,7 +93,7 @@ class AppShellTest {
         // hamburger, which is places to go and nothing else.
         assertFalse(tabs.contains("Log in"), "the shared password is back")
         assertTrue(tabs.contains("Sign in with Google"))
-        assertEquals(3, root.querySelectorAll(".app-menu button").length, tabs.toString())
+        assertEquals(4, root.querySelectorAll(".app-menu button").length, tabs.toString())
         assertEquals(1, root.querySelectorAll(".profile-menu .app-lock").length, tabs.toString())
     }
 

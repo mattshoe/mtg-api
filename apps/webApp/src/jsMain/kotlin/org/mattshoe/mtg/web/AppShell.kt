@@ -43,6 +43,8 @@ import org.mattshoe.mtg.core.PeekCard
 import org.mattshoe.mtg.core.ShareWhat
 import org.mattshoe.mtg.core.Route
 import org.mattshoe.mtg.core.View
+import org.mattshoe.mtg.core.openGuide
+import org.mattshoe.mtg.core.guideTile
 import org.w3c.files.File
 
 /**
@@ -221,6 +223,12 @@ fun AppShell(
         )
 
         View.LOGS -> LogsPage(state.logs) { onState(state.copy(logs = it)) }
+
+        View.GUIDE -> GuidePage(
+            tile = state.guideTile,
+            onOpen = { onState(state.openGuide(it)) },
+            onBack = { onState(state.navigate(View.GUIDE)) },
+        )
 
         View.CARD -> CardPage(
             card = state.card ?: CardDetail(name = state.route.rest).loading(),

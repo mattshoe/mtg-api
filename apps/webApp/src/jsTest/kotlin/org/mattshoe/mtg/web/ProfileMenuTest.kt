@@ -177,7 +177,7 @@ class ProfileMenuTest {
         root.press("Menu")
         settle()
         val inMenu = root.buttons(".app-menu")
-        assertEquals(listOf("Library", "Decks", "Fetch", "Entry"), inMenu)
+        assertEquals(listOf("Library", "Decks", "Fetch", "Guide", "Entry"), inMenu)
         assertEquals(0, root.all(".app-menu .app-who").size, "the account is still in the hamburger")
     }
 
