@@ -162,10 +162,17 @@ android {
                 // *previous* run's, so the run looked green. Two things
                 // stop that now.
                 //
-                // One, the task kills itself. Twelve minutes is about
-                // eight times the honest runtime, so this only ever
-                // fires on a hang.
-                it.timeout.set(Duration.ofMinutes(12))
+                // One, the task kills itself. The number is a hang
+                // detector, not a budget: it wants to be far above the
+                // honest runtime and far below forever.
+                //
+                // Twelve minutes stopped being far above it. The suite
+                // is 609 screens tests now and a loaded CI runner took
+                // 12m39s, so the guard fired on a healthy run and the
+                // job went red saying "Timeout has been exceeded" — on
+                // two unrelated branches within the hour. Twenty-five
+                // keeps the same purpose with the growth allowed for.
+                it.timeout.set(Duration.ofMinutes(25))
                 // Two, every test writes its name as it starts and
                 // again as it ends, flushed. The last line with no
                 // matching end is the test that hung — which is the one
