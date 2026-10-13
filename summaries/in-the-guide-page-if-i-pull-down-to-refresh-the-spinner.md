@@ -1,0 +1,3 @@
+What was wrong: On the phone, pulling down on the Guide left the refresh circle parked at the top forever. Mass entry, the server log and Fetch did the same.
+Why: The phone's pull to refresh parks its circle once a pull fires and only puts it away when the page goes from refreshing to not refreshing. Those four pages have nothing to fetch, so they never start refreshing and never stop, and the circle waited for an answer that was never coming.
+Fix: The app now knows which pages have nothing to wait for after a pull, and on those the phone puts the circle away straight after the pull. The website's circle already followed the page and went away, and now has a test on the Guide saying so.

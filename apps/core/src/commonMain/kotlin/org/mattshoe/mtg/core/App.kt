@@ -554,8 +554,15 @@ data class AppState(
         else -> fetching().copy(pulled = view, tasks = tasks.stale())
     }
 
-    /** Whether a pull on this page has a fetch to wait for. */
-    val pullWaits: Boolean get() = true
+    /**
+     * Whether a pull on this page has a fetch to wait for.
+     *
+     * The phone's `PullToRefreshBox` only puts its circle away when
+     * [refreshing] goes from true to false. On the Guide, Entry, the
+     * server log and Fetch it never goes true, so the shell lets go
+     * itself when this says so.
+     */
+    val pullWaits: Boolean get() = refreshed().refreshing
 
     /** Whether a pull on this page is still waiting. The spinner reads this. */
     val refreshing: Boolean get() = pulled == view && pageBusy
