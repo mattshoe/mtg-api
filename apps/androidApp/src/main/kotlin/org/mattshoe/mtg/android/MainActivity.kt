@@ -29,6 +29,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.yield
 import org.mattshoe.mtg.core.Admin
+import kotlinx.coroutines.tasks.await
 import org.mattshoe.mtg.core.AdminToken
 import org.mattshoe.mtg.core.ApiFailure
 import org.mattshoe.mtg.core.AppState
@@ -427,6 +428,11 @@ class MainActivity : ComponentActivity() {
             if (!followLink(intent)) takeShare(intent)
             loadFor(app)
             loadFacets()
+            // And say where to reach this phone. Every start, not once:
+            // Firebase rotates the token on its own and a phone that
+            // goes quiet weeks later with nothing saying why is the
+            // failure worth one extra call a launch.
+            registerForPush()
         }
 
         setContent {
@@ -612,6 +618,39 @@ class MainActivity : ComponentActivity() {
         if (!allowed) return
         app = mark()
         work(block)
+    }
+
+    /**
+     * Ask to be allowed to notify, then tell the Worker where to reach
+     * this phone.
+     *
+     * Three things have to be true and any of them may not be, so each
+     * is a quiet return rather than an error: Android 13 and up need the
+     * person's permission, the phone needs a Firebase token, and the
+     * person needs to be signed in. A phone that cannot be pushed to is
+     * not a broken phone.
+     */
+    private fun registerForPush() {
+        Push.ensureChannel(this)
+        if (android.os.Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            // Asking is all this does. The answer arrives whenever it
+            // arrives, and the next start registers either way — the
+            // token is worth having even before permission is given,
+            // because permission can be given later in Settings.
+            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 0)
+        }
+        val session = app.admin.token ?: return
+        scope.launch {
+            runCatching {
+                val token = com.google.firebase.messaging.FirebaseMessaging.getInstance().token.await()
+                MtgApi().registerDevice(session, token, android.os.Build.MODEL)
+            }.onFailure {
+                android.util.Log.w("MtgPush", "could not register for push: ${it.message}")
+            }
+        }
     }
 
     private fun work(block: suspend () -> AppState) {
