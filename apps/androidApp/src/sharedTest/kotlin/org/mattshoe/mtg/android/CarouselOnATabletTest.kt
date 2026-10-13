@@ -21,6 +21,7 @@ import org.mattshoe.mtg.core.Deck
 import org.mattshoe.mtg.core.DeckCard
 import org.mattshoe.mtg.core.Route
 import org.mattshoe.mtg.core.View
+import org.robolectric.annotation.Config
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -112,8 +113,10 @@ class CarouselOnATabletTest {
     }
 
     @Test
+    @Config(qualifiers = Tablet.UNFOLDED_QUALIFIERS)
     fun theWholeCardShowsOnAFoldingPhoneOpenedOut() = wholeCardShows(Tablet.UNFOLDED)
 
     @Test
+    @Config(qualifiers = Tablet.LANDSCAPE_QUALIFIERS)
     fun theWholeCardShowsOnATabletHeldSideways() = wholeCardShows(Tablet.LANDSCAPE)
 }

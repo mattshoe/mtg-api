@@ -103,9 +103,12 @@ platforms:
 
 - **Android**: wrap the real `AppShell` in `Tablet.Sized(Tablet.UNFOLDED)`
   and `Tablet.Sized(Tablet.LANDSCAPE)`, from
-  `apps/androidApp/src/sharedTest/.../Tablet.kt`. It is
-  `DeviceConfigurationOverride.ForcedSize`, so it runs on the JVM and
-  on a device alike.
+  `apps/androidApp/src/sharedTest/.../Tablet.kt`, **and** put
+  `@Config(qualifiers = Tablet.UNFOLDED_QUALIFIERS)` (or `LANDSCAPE_`)
+  on the test. `Sized` is what the device gets; the `@Config` gives
+  Robolectric a real tablet-sized window, because forcing a tablet
+  into its 320 by 470 one shrinks the density and the system bars
+  swell until the layout is nonsense. `Tablet.kt` says more.
 - **Web**: `Tablet.open(Tablet.UNFOLDED)` in
   `apps/webApp/src/jsTest/.../Tablet.kt` gives an iframe of that size
   with the real stylesheet. Mount the page into its body.
