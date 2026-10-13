@@ -709,6 +709,8 @@ data class AppState(
         // back is the entry box it came from.
         onFetchList && fetch.editing != null -> copy(fetch = fetch.cancelEdit())
         onFetchList -> leaveFetchList()
+        // A Guide tile is a page of the Guide, so back is the tiles.
+        guideTile != null -> navigate(View.GUIDE)
         view != View.DEFAULT -> navigate(View.DEFAULT)
         else -> null
     }

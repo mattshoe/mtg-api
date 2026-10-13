@@ -100,8 +100,8 @@ class GuideTest {
 
     @Test
     fun theGuideAsksTheServerForNothing() {
-        assertEquals(emptyList(), AppState().needs(Route(View.GUIDE)))
-        assertEquals(emptyList(), AppState().needs(Route(View.GUIDE, Guide.COLOURS)))
+        assertEquals(emptyList(), Load.needs(Route(View.GUIDE)))
+        assertEquals(emptyList(), Load.needs(Route(View.GUIDE, Guide.COLOURS)))
         assertTrue(View.GUIDE !in View.COLLECTION)
     }
 }
