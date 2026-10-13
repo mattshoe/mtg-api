@@ -68,6 +68,8 @@ import org.mattshoe.mtg.core.Share
 import org.mattshoe.mtg.core.ShareWhat
 import org.mattshoe.mtg.core.Tweak
 import org.mattshoe.mtg.core.View
+import org.mattshoe.mtg.core.guideTile
+import org.mattshoe.mtg.core.openGuide
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -421,6 +423,12 @@ fun AppShell(
                     }
 
                     View.STATS -> StatsScreen(state.stats)
+
+                    View.GUIDE -> GuideScreen(
+                        tile = state.guideTile,
+                        onOpen = { onState(state.openGuide(it)) },
+                        onBack = { onState(state.navigate(View.GUIDE)) },
+                    )
 
                     View.FETCH -> FetchListScreen(
                         state = state.fetch,
