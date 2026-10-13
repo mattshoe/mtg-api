@@ -8,12 +8,16 @@ export default defineWorkersConfig({
     poolOptions: {
       workers: {
         isolatedStorage: true,
-        // One worker per test file, not one for the whole suite.
-        // `isolatedStorage` already gives each test its own storage,
-        // so serialising the files on top of that bought nothing and
-        // cost four minutes: 287s serial against 39s parallel, the
-        // same 558 tests passing, checked over four consecutive runs.
-        singleWorker: false,
+        // One worker for the whole suite. Parallel was 39s against
+        // 287s serial and was the setting until 13 Oct 2026, when every
+        // CI run on every branch from about 17:00 failed the same way:
+        // workerd dropped its connection ("Network connection lost"),
+        // came back, and the next file found the last one's tables
+        // ("table cards already exists"). A different handful of files
+        // each time, and no code change behind it. Serial passed on
+        // `ci-probe/worker-serial` the same evening. Slower and green
+        // beats fast and red on every pull request.
+        singleWorker: true,
         wrangler: { configPath: './wrangler.toml' },
         miniflare: {
           compatibilityFlags: ['nodejs_compat'],
