@@ -88,6 +88,9 @@ object Guide {
         ),
     )
 
+    /** Stub. */
+    val list: List<Combo> = emptyList()
+
     private fun named(pips: String) = Combo(pips, Guild.of(pips) ?: error("no name for $pips"))
 }
 
