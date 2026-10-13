@@ -554,6 +554,9 @@ data class AppState(
         else -> fetching().copy(pulled = view, tasks = tasks.stale())
     }
 
+    /** Whether a pull on this page has a fetch to wait for. */
+    val pullWaits: Boolean get() = true
+
     /** Whether a pull on this page is still waiting. The spinner reads this. */
     val refreshing: Boolean get() = pulled == view && pageBusy
 
