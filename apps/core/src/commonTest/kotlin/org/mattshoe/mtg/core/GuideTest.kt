@@ -104,4 +104,25 @@ class GuideTest {
         assertEquals(emptyList(), Load.needs(Route(View.GUIDE, Guide.COLOURS)))
         assertTrue(View.GUIDE !in View.COLLECTION)
     }
+
+    @Test
+    fun theListIsEveryCombinationInWubrgOrder() {
+        // Matt: "just a list of color combos and names, in wubrg order,
+        // so they can easily be scanned to find what i need".
+        val pips = Guide.list.map { it.pips }
+        assertEquals(
+            listOf(
+                "W", "U", "B", "R", "G",
+                "WU", "WB", "WR", "WG", "UB", "UR", "UG", "BR", "BG", "RG",
+                "WUB", "WUR", "WUG", "WBR", "WBG", "WRG", "UBR", "UBG", "URG", "BRG",
+                "WUBR", "WUBG", "WURG", "WBRG", "UBRG",
+                "WUBRG",
+            ),
+            pips,
+            "the list is not in WUBRG order",
+        )
+        assertEquals("Selesnya", Guide.list.single { it.pips == "WG" }.name)
+        assertEquals("Glint-Eye", Guide.list.single { it.pips == "UBRG" }.name)
+        assertEquals("Five-colour", Guide.list.last().name)
+    }
 }

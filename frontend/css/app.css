@@ -617,7 +617,7 @@ td.mono { font-family: var(--mono); font-size: 12.5px; }
    words and the mana symbols carry the meaning, because Matt is
    colourblind and a strip of hue alone says nothing to him. */
 .guide-tiles { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
-.guide-tile, .combo {
+.guide-tile {
   position: relative; overflow: hidden; text-align: left; color: var(--text);
   background: linear-gradient(160deg, var(--bg-3), var(--bg-2) 70%);
   border: 1px solid var(--line); border-radius: var(--radius);
@@ -631,19 +631,23 @@ td.mono { font-family: var(--mono); font-size: 12.5px; }
   .guide-tile:hover { border-color: var(--line-2); transform: translateY(-1px); }
 }
 .guide-back { margin-bottom: 6px; }
+/* The colour page: one line per combination, WUBRG order, for scanning. */
+.combo-list { margin: 6px 0 4px; border-top: 1px solid var(--line); }
+.combo-row {
+  display: flex; align-items: center; gap: 12px; min-height: 40px;
+  padding: 6px 4px; border-bottom: 1px solid var(--line);
+}
+.combo-pips { display: flex; gap: 3px; width: 124px; flex: none; }
+.combo-pips .mana-sym { width: 20px; height: 20px; }
+.combo-name { font: 600 15.5px/1.2 var(--sans); flex: 1; min-width: 0; }
+.combo-letters { color: var(--text-3); font: 600 10.5px/1 var(--mono); letter-spacing: .08em; }
+/* What the groups are, underneath the list. */
 .guide-group { margin: 22px 0 6px; }
 .guide-group-title { font: 700 16px/1.2 var(--sans); margin: 0; }
-.guide-group-about { color: var(--text-3); font-size: 12.5px; margin: 4px 0 12px; }
-.combo-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
-.combo { padding: 16px 12px 12px; }
-.combo-pips { display: flex; gap: 3px; margin-bottom: 8px; }
-.combo-pips .mana-sym { width: 22px; height: 22px; }
-.combo-name { font: 700 17px/1.15 var(--sans); letter-spacing: -.01em; }
-.combo-note { color: var(--text-2); font-size: 12px; margin-top: 3px; }
-.combo-letters {
-  position: absolute; right: 10px; top: 14px; color: var(--text-3);
-  font: 600 10.5px/1 var(--mono); letter-spacing: .08em;
-}
+.guide-group-about { color: var(--text-3); font-size: 12.5px; margin: 4px 0 8px; }
+.guide-group-line { font-size: 13.5px; padding: 2px 0; }
+.guide-group-line .combo-letters { display: inline-block; width: 52px; }
+.guide-group-line .combo-note { color: var(--text-2); font-size: 12px; margin-left: 8px; }
 
 /* The colour wheel: five symbols round a circle, allies joined by a
    solid line and enemies by a dashed one. Told apart by the dash and
