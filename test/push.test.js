@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { env } from 'cloudflare:test';
 import { sql, exec, post, call } from './helpers.js';
 import { accessToken, forgetToken, isDead, sendTo, noteFor } from '../src/push.js';
@@ -19,19 +19,24 @@ const CREDS = {
   private_key: null,
 };
 
-beforeEach(async () => {
-  forgetToken();
-  if (!CREDS.private_key) {
-    const pair = await crypto.subtle.generateKey(
-      { name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
-      true,
-      ['sign', 'verify'],
-    );
-    const der = await crypto.subtle.exportKey('pkcs8', pair.privateKey);
-    const b64 = btoa(String.fromCharCode(...new Uint8Array(der))).replace(/(.{64})/g, '$1\n');
-    CREDS.private_key = `-----BEGIN PRIVATE KEY-----\n${b64}\n-----END PRIVATE KEY-----\n`;
-  }
+// Generated once, before anything runs, and deliberately NOT in
+// `beforeEach`. Minting a 2048-bit RSA key takes seconds in workerd, and
+// doing it inside per-test setup put it inside the same hook that loads
+// the schema — which on a CI runner was slow enough to take the pool's
+// isolated storage down with it. Five test files failed with "table
+// cards already exists" and none of them were this one.
+beforeAll(async () => {
+  const pair = await crypto.subtle.generateKey(
+    { name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
+    true,
+    ['sign', 'verify'],
+  );
+  const der = await crypto.subtle.exportKey('pkcs8', pair.privateKey);
+  const b64 = btoa(String.fromCharCode(...new Uint8Array(der))).replace(/(.{64})/g, '$1\n');
+  CREDS.private_key = `-----BEGIN PRIVATE KEY-----\n${b64}\n-----END PRIVATE KEY-----\n`;
 });
+
+beforeEach(() => { forgetToken(); });
 
 describe('getting an access token', () => {
   const tokenStub = (calls) => async (url, init) => {
