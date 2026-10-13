@@ -1,0 +1,1 @@
+The colour combinations page is now one plain list, a line per combination with its mana symbols and name, in WUBRG order for quick scanning. The groups (guilds, shards, wedges, the four-colour names) and what they mean are underneath it. Phone and website.
