@@ -156,8 +156,10 @@ fun CardCarousel(
                     userScrollEnabled = !zoom.zoomed,
                 ) { page ->
                     // Clipped to the page, so a zoomed card does not
-                    // spill over its neighbours or the sheet.
-                    Box(Modifier.clipToBounds()) {
+                    // spill over its neighbours or the sheet. The whole
+                    // page and the card in the middle of it, because on
+                    // a tablet the card is narrower than the page.
+                    Box(Modifier.fillMaxSize().clipToBounds(), contentAlignment = Alignment.Center) {
                         if (page == index) {
                             CardFace(cards[page], zoom, Modifier.pinchZoom(zoom, onZoom))
                         } else {
@@ -219,13 +221,22 @@ private fun Modifier.pinchZoom(zoom: CardZoom, onZoom: (CardZoom) -> Unit): Modi
     }
 }
 
-/** One card, as big as the width allows. */
+/**
+ * One card, as big as the space allows: the width on a phone, the
+ * height on a tablet.
+ *
+ * Matt: "in tablet mode the carousel looks broken and zoomed in". It
+ * was `fillMaxWidth` and then the card's shape, which on a screen
+ * nearly as wide as it is tall made it far taller than the space above
+ * the sheet, and the page cut the top and the rules text off.
+ * `aspectRatio` alone takes the largest card-shaped box that fits both
+ * ways.
+ */
 @Composable
 private fun CardFace(card: PeekCard, zoom: CardZoom = CardZoom(), zoomable: Modifier = Modifier) {
     val url = CardQueries.art(card.scryfallId, "normal")
     Box(
-        zoomable.fillMaxWidth()
-            .aspectRatio(Design.CARD_ASPECT)
+        zoomable.aspectRatio(Design.CARD_ASPECT)
             // After the gesture's `pointerInput`, so the fingers are
             // read against the card where it sits and not where the
             // zoom has drawn it.

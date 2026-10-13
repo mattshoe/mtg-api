@@ -6,6 +6,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pinch
@@ -158,11 +159,19 @@ class CarouselPinchZoomTest {
     }
 
     private fun squeeze() {
+        // Both fingers start on the card. It fits the height it has
+        // rather than the screen's width, so on Robolectric's short
+        // screen it is much narrower than the pager, and a finger at
+        // 35% of the pager's width is beside it. The card's laid-out
+        // width, which a zoom does not change.
+        val card = rule.onNodeWithContentDescription("Cultivate", useUnmergedTree = true)
+            .fetchSemanticsNode().size.width
         rule.onNodeWithTag("carousel-pager").performTouchInput {
+            val from = minOf(width * 0.35f, card * 0.4f)
             pinch(
-                start0 = center + Offset(-width * 0.35f, 0f),
+                start0 = center + Offset(-from, 0f),
                 end0 = center + Offset(-2f, 0f),
-                start1 = center + Offset(width * 0.35f, 0f),
+                start1 = center + Offset(from, 0f),
                 end1 = center + Offset(2f, 0f),
             )
         }
