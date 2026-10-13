@@ -36,11 +36,16 @@ jobs:
           cache: npm
       - run: npm ci
 
-      # The same suite `test` runs, again here rather than trusted from
-      # another workflow: a red test must stop the deploy, and a
-      # separate workflow going green is not a promise about this commit.
-      - name: Test against a real D1 in workerd
-        run: npm test
+      # No tests here. Matt: "MAKE SURE DEPLOYMENT IS NOT STILL RUNNING
+      # THE TEST SUITE BEFORE DEPLOYING!!"
+      #
+      # The suite is proved on the laptop before a merge now — the whole
+      # of it, every suite, which is more than this job ever ran. A
+      # second run here would be ten minutes between a merge and the
+      # thing being live, re-proving what the merge already required.
+      #
+      # This job deploys what is on main. Deciding whether main is fit
+      # to deploy happens before the merge, not after it.
 
       # Schema first. The code that needs a column must not go out ahead
       # of the column — every migration is written to be a no-op when it

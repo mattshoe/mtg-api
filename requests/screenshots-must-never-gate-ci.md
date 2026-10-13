@@ -1,5 +1,5 @@
 ---
-status: ready
+status: cancelled
 ---
 
 # Pictures for Matt to look at must never be able to fail CI
