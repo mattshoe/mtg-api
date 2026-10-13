@@ -182,7 +182,7 @@ class GuideParityTest {
         val cy = centres.sumOf { it.third } / 5
         val radii = centres.map { kotlin.math.hypot(it.second - cx, it.third - cy) }
         assertTrue(radii.min() > 30.0, "the colours are bunched up, not round a wheel: radii $radii")
-        assertTrue(radii.max() - radii.min() < 3.0, "the colours are not on one circle: radii $radii")
+        assertTrue(radii.max() - radii.min() < radii.max() * 0.05, "the colours are not on one circle: radii $radii")
         assertEquals("W", centres.minBy { it.third }.first, "white is not at the top")
         val order = centres.sortedBy { (_, x, y) ->
             val a = kotlin.math.atan2(x - cx, cy - y)

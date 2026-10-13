@@ -66,7 +66,10 @@ class WheelOnATabletTest {
         val cx = xs.average()
         val cy = ys.average()
         val radii = xs.indices.map { hypot(xs[it] - cx, ys[it] - cy) }
-        assertTrue(radii.max() - radii.min() < 3.0, "$on the colours are not on one circle: $radii")
+        // Within 5% of the radius: a tablet forced onto the emulator's screen
+        // runs below one pixel per dp, so each symbol lands on the nearest
+        // whole pixel and the radii spread by about 3dp in 100.
+        assertTrue(radii.max() - radii.min() < radii.max() * 0.05, "$on the colours are not on one circle: $radii")
         assertTrue(radii.min() > 60.0, "$on the wheel is shrunk to a stamp: radius ${radii.min()}")
 
         val wheel = rule.onNodeWithTag("wheel", useUnmergedTree = true).getUnclippedBoundsInRoot()
@@ -78,7 +81,7 @@ class WheelOnATabletTest {
             wheel.bottom - wheel.top <= size.height / 2,
             "$on the wheel is ${wheel.bottom - wheel.top} tall, more than half the screen",
         )
-        assertTrue(abs((wheel.left + wheel.right).value / 2 - cx) < 3.0, "$on the colours are not centred in the wheel")
+        assertTrue(abs((wheel.left + wheel.right).value / 2 - cx) < radii.max() * 0.05, "$on the colours are not centred in the wheel")
 
         val w = rule.onNodeWithTag("wheel-colour-W", useUnmergedTree = true).getUnclippedBoundsInRoot()
         val u = rule.onNodeWithTag("wheel-colour-U", useUnmergedTree = true).getUnclippedBoundsInRoot()
