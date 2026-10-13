@@ -82,7 +82,17 @@ object Parity {
         // test's assertions have already run either way.
         if (!onDevice) return null
         val file = File(shots, "$name.png")
-        val bitmap = captureToImage().asAndroidBitmap()
+        // Nor is a camera that misfires. On CI's emulator the capture
+        // itself fails now and then — a null bitmap, or Compose's two
+        // second wait for a frame running out — and that turned
+        // `ArtCropAlignmentParityTest`, which only takes pictures, red
+        // on device shard 1 for five runs in a row across four branches.
+        val bitmap = try {
+            captureToImage().asAndroidBitmap()
+        } catch (e: Throwable) {
+            println("PARITY no screenshot for $name: $e")
+            return null
+        }
         file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
         return file
     }
