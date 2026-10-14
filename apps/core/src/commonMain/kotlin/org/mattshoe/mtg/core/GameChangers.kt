@@ -22,9 +22,11 @@ object GameChangers {
     const val ABOUT = "Wizards' list of the cards that warp a Commander game on their own. " +
         "Brackets 1 and 2 allow none, bracket 3 allows up to three, and 4 and 5 any number. Tap a card to see it."
 
-    fun count(n: Int): String = ""
+    /** The line above the list while a name is searched. */
+    fun count(n: Int): String = "$n of ${cards.size} cards"
 
-    fun none(query: String): String = ""
+    /** What the page says when no name has every word. */
+    fun none(query: String): String = "No game changer is called \"${GuideSearch.words(query).joinToString(" ")}\"."
 
     val cards: List<DeckCard> = listOf(
         gc("Ad Nauseam", "a9f2c53e-ff58-4aa8-89a6-4f45628cc571", "Instant", "B", "{3}{B}{B}", "rare", 1362L, "2xm", "76"),
@@ -91,6 +93,21 @@ object GameChangers {
     /** Every card in the order the page draws it, so the carousel's next is the next row down. */
     val pageOrder: List<DeckCard> = byType.flatMap { (_, cards) -> cards }
 
+    /**
+     * The sections with only the cards whose name has every word typed,
+     * in any capitals and with or without apostrophes, so "lions eye"
+     * finds Lion's Eye Diamond. A section with none left is not drawn.
+     */
+    fun byType(query: String): List<Pair<DeckGroup, List<DeckCard>>> {
+        val words = GuideSearch.words(plain(query))
+        if (words.isEmpty()) return byType
+        return byType
+            .map { (group, cards) -> group to cards.filter { c -> words.all { plain(c.name).contains(it, ignoreCase = true) } } }
+            .filter { (_, cards) -> cards.isNotEmpty() }
+    }
+
+    private fun plain(s: String): String = s.replace("'", "").replace("’", "")
+
     private fun gc(
         name: String,
         scryfallId: String,
@@ -120,16 +137,19 @@ object GameChangers {
 }
 
 /** The Game Changers page as it stands: every section with a card the search found. */
-val AppState.gameChangers: List<Pair<DeckGroup, List<DeckCard>>> get() = emptyList()
+val AppState.gameChangers: List<Pair<DeckGroup, List<DeckCard>>> get() = GameChangers.byType(gameChangerSearch)
+
+/** What the carousel runs over: the rows on the page, top to bottom. */
+val AppState.gameChangerOrder: List<DeckCard> get() = gameChangers.flatMap { (_, cards) -> cards }
 
 /** Whether a name is typed, so the page says how many it found. */
-val AppState.gameChangersSearching: Boolean get() = false
+val AppState.gameChangersSearching: Boolean get() = GuideSearch.words(gameChangerSearch).isNotEmpty()
 
-fun AppState.searchGameChangers(query: String): AppState = this
+fun AppState.searchGameChangers(query: String): AppState = copy(gameChangerSearch = query)
 
 /**
  * A row of the Game Changers page was tapped: the carousel over the
- * whole list, at that card.
+ * list as it stands, at that card.
  */
 fun AppState.peekGameChanger(card: DeckCard): AppState =
-    peekAt(GameChangers.pageOrder.indexOfFirst { it.nameNorm == card.nameNorm }, PeekOf.GAME_CHANGERS)
+    peekAt(gameChangerOrder.indexOfFirst { it.nameNorm == card.nameNorm }, PeekOf.GAME_CHANGERS)
