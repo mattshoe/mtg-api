@@ -620,6 +620,7 @@ td.mono { font-family: var(--mono); font-size: 12.5px; }
 .guide-search { width: 100%; font-size: 15px; padding: 11px 13px; }
 .guide-search-count { margin: 10px 0; }
 .guide-search-none { margin-top: 10px; }
+.gc-search { width: 100%; font-size: 15px; padding: 11px 13px; }
 .guide-hits { display: flex; flex-direction: column; gap: 10px; }
 .guide-hit {
   display: block; width: 100%; text-align: left; padding: 14px 16px; cursor: pointer; font: inherit; color: var(--text);

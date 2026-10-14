@@ -56,6 +56,8 @@ data class AppState(
     val rules: Rules = Rules(),
     /** What is typed in the Guide's search bar. See `GuideSearch.kt`. */
     val guideSearch: String = "",
+    /** What is typed in the Game Changers page's search bar. See `GameChangers.kt`. */
+    val gameChangerSearch: String = "",
     /** Intake requests and where each one is, for Admin Settings. */
     val tasks: Tasks = Tasks(),
     /** The task being written on Admin Settings' New task page. */
@@ -365,7 +367,7 @@ data class AppState(
             ?: decks.pageOrder
         // Sized only; the Library's own rows are mapped in `peekRun`.
         PeekOf.LIBRARY -> library.rows.map { DeckCard(it.name, 0, null, 0, it.nameNorm) }
-        PeekOf.GAME_CHANGERS -> GameChangers.pageOrder
+        PeekOf.GAME_CHANGERS -> gameChangerOrder
     }
 
     /** Every card the carousel can reach from here, in the order it draws them. */
@@ -418,7 +420,7 @@ data class AppState(
 
             // A reference, not a holding: nothing to count and nothing
             // to swap, so only how much it is played.
-            PeekOf.GAME_CHANGERS -> GameChangers.pageOrder.map { card ->
+            PeekOf.GAME_CHANGERS -> gameChangerOrder.map { card ->
                 PeekCard(
                     title = card.shown,
                     nameNorm = card.nameNorm,
