@@ -386,3 +386,65 @@ describe('a write says so before it runs', () => {
     expect(n, 'one request wrote more than one row').toBe(1);
   });
 });
+
+// Why a push did not arrive has to be readable afterwards.
+//
+// Matt: "I haven't been getting push notifications for deployed tasks."
+// Six tasks reached `deployed`, two admin phones were registered and
+// alive, `FCM_SERVICE_ACCOUNT` was set — and there was nothing anywhere
+// saying what happened when the Worker tried to send. `wrangler tail`
+// showed the POST as Ok and no more, because `tell` returned its result
+// and logged nothing.
+//
+// The result vanished in a race: `tell` ran in one `ctx.waitUntil` and
+// set `entry.detail.push` when it finished, while `writeEntry` ran in
+// another registered at the end of the request. Both start at once and
+// `writeEntry` wins, because `tell` is waiting on Firebase. The field
+// was always written before the thing that fills it had finished.
+//
+// Writing it as its own row is what makes that untimeable. These tests
+// assert the row exists and says what happened, which has nothing to do
+// with how slow Firebase is on the day.
+describe('a push leaves a trace', () => {
+  const settled = () => new Promise((r) => setTimeout(r, 400));
+
+  const pushRow = async () => {
+    const [r] = await sql(
+      "SELECT message, status, detail FROM logs WHERE message LIKE 'push %' ORDER BY id DESC LIMIT 1",
+    );
+    return r;
+  };
+
+  it('writes its own row saying what the attempt came to', async () => {
+    await post('/tasks/status', { name: 'push-trace', title: 'Push trace', status: 'deployed' });
+    await settled();
+    const r = await pushRow();
+    expect(r, 'the push attempt left no row at all').toBeTruthy();
+    // No FCM credentials in the test environment, so the honest answer is
+    // that it was skipped — and saying so is the whole point. A
+    // deployment that cannot send must not look like one that did.
+    expect(r.message).toBe('push skipped: no credentials');
+    expect(JSON.parse(r.detail).push.skipped).toBe('no credentials');
+    expect(JSON.parse(r.detail).name).toBe('push-trace');
+  });
+
+  it('says so for a status not worth a push, rather than going silent', async () => {
+    await post('/tasks/status', { name: 'push-quiet', title: 'Push quiet', status: 'in progress' });
+    await settled();
+    const r = await pushRow();
+    expect(r.message).toBe('push skipped: not worth a push');
+  });
+
+  it('does not hang the row on the request, which is written before the push finishes', async () => {
+    // The old shape in one assertion: the request's own row carries no
+    // push field, because it cannot. Anything reading it for one is
+    // reading a field that was never filled.
+    await post('/tasks/status', { name: 'push-race', title: 'Push race', status: 'deployed' });
+    await settled();
+    const [req] = await sql(
+      "SELECT detail FROM logs WHERE path = '/tasks/status' AND message IS NULL ORDER BY id DESC LIMIT 1",
+    );
+    expect(req, 'no row for the status write itself').toBeTruthy();
+    expect(JSON.parse(req.detail).push, 'the request row is carrying a push result again').toBeUndefined();
+  });
+});
