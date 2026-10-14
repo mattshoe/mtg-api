@@ -100,10 +100,14 @@ class ColourWheelTest {
     @Test
     fun eachClanOfTarkirIsAColourAndItsEnemiesAndIsMissingItsAllies() {
         assertEquals(listOf("Abzan", "Jeskai", "Sultai", "Mardu", "Temur"), ColourWheel.clans.map { it.name }, "the five clans")
-        ColourWheel.clans.zip(ColourWheel.colours).forEach { (clan, centre) ->
+        // Abzan is black and its two enemies, white and green, so it lacks
+        // black's allies, blue and red. Each clan has exactly one such colour.
+        ColourWheel.clans.forEach { clan ->
+            val anchors = ColourWheel.colours.filter { c ->
+                sorted(c.pip + ColourWheel.enemies(c.pip).joinToString("") { it.pip }) == sorted(clan.pips)
+            }
+            val centre = anchors.singleOrNull() ?: error("${clan.name} (${clan.pips}) is not one colour and its two enemies: $anchors")
             val allies = ColourWheel.allies(centre.pip).joinToString("") { it.pip }
-            val enemies = ColourWheel.enemies(centre.pip).joinToString("") { it.pip }
-            assertEquals(sorted(centre.pip + enemies), sorted(clan.pips), "${clan.name} is not ${centre.name} and its enemies")
             assertEquals(sorted(allies), ColourWheel.missing(clan.pips).joinToString("") { it.pip }, "${clan.name} is not missing ${centre.name}'s allies")
             assertEquals(Guild.of(clan.pips), clan.name, "${clan.pips} is named differently from a deck of those colours")
         }
@@ -111,7 +115,10 @@ class ColourWheelTest {
 
     @Test
     fun everyLoreInsertTellsOfTheLandThePeopleAndTheColoursItLacks() {
-        (ColourWheel.shards + ColourWheel.clans).forEach { lore ->
+        val all = ColourWheel.shards + ColourWheel.clans
+        assertEquals(10, all.size, "there are not five shards and five clans to tell of: ${all.map { it.name }}")
+        assertEquals("No Black or Red", ColourWheel.lacking("GWU"), "how Bant's missing colours are said")
+        all.forEach { lore ->
             assertTrue(lore.land.isNotBlank(), "${lore.name} says nothing about its landscape")
             assertTrue(lore.people.isNotBlank(), "${lore.name} says nothing about its culture")
             assertTrue(lore.without.isNotBlank(), "${lore.name} says nothing about the colours it lacks")
