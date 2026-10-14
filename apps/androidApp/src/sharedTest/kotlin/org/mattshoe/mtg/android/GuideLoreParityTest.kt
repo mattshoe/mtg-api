@@ -81,7 +81,7 @@ class GuideLoreParityTest {
         shell(size)
         val on = size?.let { "on a ${it.width} by ${it.height} screen" } ?: "on a phone"
         assertEquals(
-            listOf(Guide.COLOURS, Guide.WHEEL, Guide.RULES, Guide.GAME_CHANGERS, Guide.LORE),
+            Guide.tiles.map { it.slug },
             tiles(),
             "$on the Guide's front page still carries the story tiles one by one",
         )

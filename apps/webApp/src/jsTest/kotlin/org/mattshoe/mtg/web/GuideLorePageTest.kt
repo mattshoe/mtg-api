@@ -83,7 +83,7 @@ class GuideLorePageTest {
         val back = { all("button.guide-back").singleOrNull() ?: error("$on there is no way back") }
 
         assertEquals(
-            listOf(Guide.COLOURS, Guide.WHEEL, Guide.RULES, Guide.GAME_CHANGERS, Guide.LORE).map { Guide.tile(it)!!.title },
+            Guide.tiles.map { it.title },
             titles(),
             "$on the Guide's front page still carries the story tiles one by one",
         )
