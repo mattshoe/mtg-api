@@ -59,6 +59,28 @@ for (const [name, cmd, args] of chosen) {
   done.push(`${name} (${mins}m)`);
 }
 
+// The floors, from the run that just happened.
+//
+// They used to be counted by running the whole suite AGAIN with a junit
+// reporter — three sharded runs on top of the one that had just
+// finished. Four runs to answer one question, and every test opens
+// sockets that macOS holds in TIME_WAIT for fifteen seconds: 15,307 of
+// them against an ephemeral range of 16,384, after which nothing on
+// this machine can open a connection at all and the suite dies in six
+// seconds looking like a code failure.
+//
+// `test:raw` now writes the junit file as it goes, so the numbers are
+// already on disk and this is free.
+if (chosen.some(([n]) => n === 'worker')) {
+  const check = spawnSync('node', ['scripts/check-suite-floor.mjs',
+    'worker=test-results/worker', 'shell=test-results/shell'], { stdio: 'inherit' });
+  if (check.status !== 0) {
+    console.error('\nThe suites passed but a floor did not. Raise it in the same commit:');
+    console.error('  npm run check:floor -- --raise worker=test-results/worker shell=test-results/shell');
+    process.exit(1);
+  }
+}
+
 const mins = ((Date.now() - started) / 60000).toFixed(1);
 console.log('\nEVERY SUITE PASSED');
 done.forEach((d) => console.log(`  ok   ${d}`));
