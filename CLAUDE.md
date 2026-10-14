@@ -205,6 +205,34 @@ thirty-five minutes. It prints a warning saying the run was not a full
 pass, and it is not one. Use it while you are working; never as the
 thing you merge on.
 
+### It resumes, so a fix does not cost you the suites in front of it
+
+Matt: "Why the fuck are these simple tasks running for 3 hours?!" One
+agent had run the whole gate eight times and another four, and that was
+the three hours. It started at suite one every time, so a one-line fix
+to a Kotlin screen re-ran the Worker suite, the core suite and the web
+suite — none of which that line can reach — before getting back to the
+thing that broke.
+
+A suite that passes is now remembered in `.gate/passed.json`, against a
+hash of the files it can actually see. On the next run it is skipped
+while that hash holds, and the output says `already passed on this tree`
+rather than pretending it ran. Suites proved before a failure are kept
+too, so fixing the red one re-runs the red one.
+
+What makes that safe is in `COVERS` at the top of
+`scripts/test-everything.mjs`: a path map per suite, deliberately
+generous. **A suite listed against too much re-runs when it need not,
+which costs minutes. A suite listed against too little is skipped when
+it should have run, which is a suite going green without executing — and
+that is worse than one that fails, because it is believed.** If you add
+a directory the build reads, add it to every suite that could see it.
+Anything no suite claims makes everything run, which is the catch for
+forgetting.
+
+`--fresh` ignores all of it and runs the lot. Resuming fails closed: no
+git, no skipping.
+
 ### What this costs, said plainly
 
 The device suite is 580 tests that only ever run on an emulator. Before,

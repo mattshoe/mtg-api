@@ -53,19 +53,47 @@ if (isGradle && process.env.INTAKE_NO_GRADLE_LOCK !== '1') {
   // `lockf` is BSD (macOS), `flock` is Linux. Use whichever exists and run
   // unlocked if neither does — CI builds one thing at a time anyway, and a
   // missing mutex must not stop a build.
-  // Five minutes, not thirty. A mutex you can sit behind for half an hour is
-  // a stall: one agent's long build becomes another agent's dead time. If the
-  // wait runs out, the build runs anyway and the two contend — slower than
-  // queueing, far better than stopping.
-  const wait = '300';
+  // Long enough to outlast another full gate run, and then build anyway.
+  //
+  // This was five minutes, and the comment here claimed that when the wait
+  // ran out "the build runs anyway and the two contend". It did not: `lockf
+  // -t` exits without running the command, so a second agent running the
+  // gate got
+  //
+  //     lockf: ~/.mtg-gradle.lock: already locked
+  //     FAILED at core after 5.0m. Nothing after it ran.
+  //
+  // — a red with nothing wrong in the code, paid for with a whole re-run.
+  // A gate run holds this lock across its Gradle suites and the device one
+  // alone is seventeen minutes, so five minutes of patience guaranteed the
+  // collision.
+  //
+  // Thirty minutes of patience, and if it really does run out, build
+  // anyway. Two builds contending is slower than queueing and far better
+  // than a suite reporting a failure it did not have, which is what the
+  // comment always said and the code never did.
+  const wait = String(Number(process.env.MTG_GRADLE_LOCK_WAIT) || 1800);
+  // 75 is EX_TEMPFAIL from sysexits.h, which is what `lockf` exits when
+  // it cannot take the lock; `flock` is told to use the same so one
+  // branch handles both. A Gradle build exiting 75 on its own would be
+  // misread as contention, and in ten thousand runs it never has.
+  let locker = null;
   if (existsSync('/usr/bin/lockf')) {
-    // -k keeps the lock file, -t waits this long and then fails loudly
-    // rather than running two builds at once.
-    args = ['-k', '-t', wait, GRADLE_LOCK, cmd, ...args];
-    cmd = '/usr/bin/lockf';
+    // -k keeps the lock file, -t is how long to wait for it.
+    locker = `/usr/bin/lockf -k -t ${wait} ${JSON.stringify(GRADLE_LOCK)}`;
   } else if (existsSync('/usr/bin/flock')) {
-    args = ['-w', wait, GRADLE_LOCK, cmd, ...args];
-    cmd = '/usr/bin/flock';
+    locker = `/usr/bin/flock -w ${wait} -E 75 ${JSON.stringify(GRADLE_LOCK)}`;
+  }
+  if (locker) {
+    const script = `${locker} "$@"\n`
+      + 'rc=$?\n'
+      + 'if [ $rc -eq 75 ]; then\n'
+      + `  echo "guard: gave up waiting for the Gradle lock after ${wait}s; building anyway" >&2\n`
+      + '  exec "$@"\n'
+      + 'fi\n'
+      + 'exit $rc\n';
+    args = ['-c', script, 'guard-lock', cmd, ...args];
+    cmd = '/bin/bash';
   }
 }
 

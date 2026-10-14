@@ -410,6 +410,15 @@ EVERY SUITE PASSED or it tells you which one went red and that nothing
 after it ran. Roughly 35 minutes with the emulator, most of it the
 emulator.
 
+**It resumes.** A suite that passed is remembered against a hash of the
+files it can see, so running it again after a fix re-runs the suite that
+was red and the ones your fix can reach, not all six. That is the
+difference between a fix costing 35 minutes and costing what it should —
+two agents once spent three hours this way, having run the whole gate
+eight times and four times between them. You still run the same command;
+it is just no longer a reason to avoid running it. `--fresh` forces the
+lot, and you do not normally need it.
+
 **All of it. Not the suites your diff reaches — all of them.** That
 rule used to read "only the ones your diff actually reaches", which was
 right when CI ran the rest. CI does not run the rest any more. There is

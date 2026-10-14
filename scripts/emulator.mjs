@@ -50,9 +50,37 @@ function attached() {
     .map(([name]) => name);
 }
 
+/**
+ * The app and its test APK, cleared off before the suite installs them.
+ *
+ * `test:android` passes `leaveApksInstalledAfterRun=true`, so whatever
+ * ran last is still on the phone. The moment the signing key differs —
+ * a release build installed by hand, a regenerated debug keystore —
+ * every install after it dies with
+ *
+ *   INSTALL_FAILED_UPDATE_INCOMPATIBLE: Existing package
+ *   org.mattshoe.mtg.share signatures do not match newer version
+ *
+ * and the device suite is red until a person uninstalls by hand. That
+ * is not something an agent is going to work out at three in the
+ * morning. Two seconds out of seventeen minutes buys the whole failure
+ * away.
+ */
+const PACKAGES = ['org.mattshoe.mtg.share', 'org.mattshoe.mtg.share.test'];
+
+function clearStale() {
+  const listed = run('adb', ['shell', 'pm', 'list', 'packages']).stdout || '';
+  for (const pkg of PACKAGES) {
+    if (!listed.includes(`package:${pkg}`)) continue;
+    const r = run('adb', ['uninstall', pkg]);
+    console.log(`emulator: removed the old ${pkg}${r.status === 0 ? '' : ' (it refused, the suite may still fail to install)'}`);
+  }
+}
+
 const already = attached();
 if (already.length) {
   console.log(`emulator: ${already.join(', ')} already attached`);
+  clearStale();
   process.exit(0);
 }
 
@@ -69,6 +97,7 @@ if (listed.length) {
   const second = attached();
   if (second.length) {
     console.log(`emulator: ${second.join(', ')} attached after an adb restart`);
+    clearStale();
     process.exit(0);
   }
   console.log('emulator: still nothing usable after restarting adb');
@@ -103,6 +132,7 @@ while (Date.now() < until) {
   const r = run('adb', ['shell', 'getprop', 'sys.boot_completed']);
   if ((r.stdout || '').trim() === '1') {
     console.log(`emulator: ${avd} booted`);
+    clearStale();
     process.exit(0);
   }
   await sleep(POLL_MS);
