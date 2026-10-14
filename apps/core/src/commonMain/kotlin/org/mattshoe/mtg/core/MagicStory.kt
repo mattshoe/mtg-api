@@ -92,7 +92,9 @@ object MagicStory {
 
     fun sectionOf(article: StoryArticle): StorySection = sections.first { article in it.articles }
 
-    private val markup = Regex("""\[([^\]]+)]\(([^)]+)\)|\{([^}]+)}""")
+    // Every bracket escaped: JavaScript reads this in unicode mode,
+    // where a bare `]` or `}` is a syntax error, and the site died of it.
+    private val markup = Regex("""\[([^\]]+)\]\(([^)]+)\)|\{([^}]+)\}""")
 
     /** A paragraph as runs of plain words, links and card names. */
     fun spans(paragraph: String): List<StorySpan> {
