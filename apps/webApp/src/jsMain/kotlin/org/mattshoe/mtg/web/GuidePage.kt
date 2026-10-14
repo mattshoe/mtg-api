@@ -13,6 +13,7 @@ import org.mattshoe.mtg.core.Combo
 import org.mattshoe.mtg.core.Design
 import org.mattshoe.mtg.core.Guide
 import org.mattshoe.mtg.core.GuideTile
+import org.mattshoe.mtg.core.WheelLore
 import org.mattshoe.mtg.core.WheelPair
 
 /**
@@ -162,6 +163,45 @@ private fun Wheel() {
     }
     Pairs("Allied pairs", "Side by side on the wheel. They want similar things.", ColourWheel.allied)
     Pairs("Enemy pairs", "Across the wheel. They clash, and a deck of both gets the best of each.", ColourWheel.enemy)
+    Lore(ColourWheel.SHARDS, ColourWheel.SHARDS_ABOUT, ColourWheel.shards)
+    Lore(ColourWheel.CLANS, ColourWheel.CLANS_ABOUT, ColourWheel.clans)
+}
+
+/**
+ * Matt: "lore inserts for the shards of alara and the tribes of
+ * tarkir ... the land scapes and culture with the missing colors of
+ * magic." A card each, everything said in `ColourWheel`. Sibling of
+ * the phone's `Lore` in `GuideScreen`.
+ */
+@Composable
+private fun Lore(title: String, about: String, lore: List<WheelLore>) {
+    Section(attrs = { classes("guide-group") }) {
+        H2(attrs = { classes("guide-group-title") }) { Text(title) }
+        Div(attrs = { classes("guide-group-about") }) { Text(about) }
+        Div(attrs = { classes("wheel-lores") }) {
+            lore.forEach { l ->
+                Div(attrs = {
+                    classes("wheel-lore")
+                    attr("data-pips", l.pips)
+                }) {
+                    Div(attrs = {
+                        classes("guide-band")
+                        style { property("background-image", band(l.pips)) }
+                    }) {}
+                    Div(attrs = { classes("wheel-lore-head") }) {
+                        Div(attrs = { classes("combo-pips") }) {
+                            l.pips.forEach { ManaPip(it.toString(), "combo-pip") }
+                        }
+                        Span(attrs = { classes("wheel-lore-name") }) { Text(l.name) }
+                    }
+                    Div(attrs = { classes("wheel-lore-missing") }) { Text(ColourWheel.lacking(l.pips)) }
+                    Said("The land", l.land, "wheel-lore-land")
+                    Said("The people", l.people, "wheel-lore-people")
+                    Said("Without them", l.without, "wheel-lore-without")
+                }
+            }
+        }
+    }
 }
 
 @Composable

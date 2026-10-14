@@ -675,17 +675,22 @@ td.mono { font-family: var(--mono); font-size: 12.5px; }
 .wheel-key-enemy::before { border-top-style: dashed; }
 .wheel-colours { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
 .wheel-pairs { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
-.wheel-colour, .wheel-pair {
+/* The shards of Alara and clans of Tarkir: a card each, two across on a
+   tablet like the five colours. */
+.wheel-lores { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.wheel-colour, .wheel-pair, .wheel-lore {
   position: relative; overflow: hidden; color: var(--text);
   background: linear-gradient(160deg, var(--bg-3), var(--bg-2) 70%);
   border: 1px solid var(--line); border-radius: var(--radius);
   box-shadow: 0 6px 18px rgba(0, 0, 0, .28);
 }
-.wheel-colour { padding: 18px 14px 14px; }
+.wheel-colour, .wheel-lore { padding: 18px 14px 14px; }
 .wheel-pair { padding: 16px 12px 12px; }
 .wheel-colour-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .wheel-colour-head .mana-sym { width: 26px; height: 26px; }
-.wheel-colour-name, .wheel-pair-name { font: 700 17px/1.15 var(--sans); letter-spacing: -.01em; }
+.wheel-lore-head { display: flex; align-items: center; gap: 8px; }
+.wheel-lore-missing { color: var(--text-3); font-size: 12px; font-weight: 600; margin-top: 4px; }
+.wheel-colour-name, .wheel-pair-name, .wheel-lore-name { font: 700 17px/1.15 var(--sans); letter-spacing: -.01em; }
 .wheel-said { font-size: 13px; line-height: 1.4; margin-top: 6px; color: var(--text-2); }
 .wheel-said-label {
   display: block; color: var(--text-3); font: 600 10.5px/1.4 var(--mono);
