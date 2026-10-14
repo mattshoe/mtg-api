@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.sp
 import org.mattshoe.mtg.core.ColourWheel
 import org.mattshoe.mtg.core.Combo
 import org.mattshoe.mtg.core.DeckCard
+import org.mattshoe.mtg.core.DeckGroup
 import org.mattshoe.mtg.core.GameChangers
 import org.mattshoe.mtg.core.Design
 import org.mattshoe.mtg.core.Guide
@@ -98,6 +99,9 @@ fun GuideScreen(
     hits: List<GuideHit> = emptyList(),
     onHit: (GuideHit) -> Unit = {},
     onGameChanger: (DeckCard) -> Unit = {},
+    gameChangerSearch: String = "",
+    onGameChangerSearch: (String) -> Unit = {},
+    gameChangers: List<Pair<DeckGroup, List<DeckCard>>> = GameChangers.byType,
 ) {
     // The rules page keeps its search bar on screen and scrolls the
     // cards under it, so it is laid out on its own.
@@ -140,7 +144,7 @@ fun GuideScreen(
                 Guide.COLOURS -> Colours()
                 Guide.WHEEL -> Wheel()
                 Guide.LORE -> Lore(era ?: PhyrexianLore.eras.first(), onEra)
-                Guide.GAME_CHANGERS -> GameChangerList(onGameChanger)
+                Guide.GAME_CHANGERS -> GameChangerList(gameChangerSearch, onGameChangerSearch, gameChangers, onGameChanger)
                 else -> story?.let { Story(it, onStory) }
             }
         }
@@ -791,14 +795,33 @@ private fun Card(pips: String, modifier: Modifier, pad: Int, content: @Composabl
  * the story at most, centred, so a tablet does not stretch it.
  */
 @Composable
-private fun GameChangerList(onCard: (DeckCard) -> Unit) {
+private fun GameChangerList(
+    search: String,
+    onSearch: (String) -> Unit,
+    shown: List<Pair<DeckGroup, List<DeckCard>>>,
+    onCard: (DeckCard) -> Unit,
+) {
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
         Column(
             Modifier.widthIn(max = STORY.dp).fillMaxWidth().testTag("gc-list"),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Line(GameChangers.ABOUT, Ink3, size = Design.SMALL)
-            GameChangers.byType.forEach { (group, cards) ->
+            // Matt: "add a name search to the game changers page".
+            Field(
+                value = search,
+                onValueChange = onSearch,
+                placeholder = "Search by name: Rhystic, tutor, mox",
+                modifier = Modifier.testTag("gc-search"),
+            )
+            if (GuideSearch.words(search).isNotEmpty()) {
+                if (shown.isEmpty()) {
+                    Line(GameChangers.none(search), Ink3, modifier = Modifier.testTag("gc-search-none"))
+                } else {
+                    Line(GameChangers.count(shown.sumOf { it.second.size }), Ink3, size = Design.MINI, modifier = Modifier.testTag("gc-search-count"))
+                }
+            }
+            shown.forEach { (group, cards) ->
                 GroupHead(group.title, cards.size.toString(), uppercase = true, banded = true)
                 Panel {
                     cards.forEachIndexed { i, card ->
