@@ -1,0 +1,3 @@
+What was built: The Guide's tiles are in the order Rules, Game Changers, Colour combinations, The colour wheel, then Phyrexia and the ten story tiles as before. One list in the shared core sets it, so the phone and the website show the same order.
+Choices: Only the first four moved. Phyrexia and the story tiles keep their place after them, since the request named only those four. On the phone the wheel is now under the fold, and its page opened wherever the tiles had been scrolled to, back button off screen, so a tile now opens at its own top. The website already did that.
+Liberties: The phone scroll fix was not asked for. The reorder caused it.
