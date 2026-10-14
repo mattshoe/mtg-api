@@ -11,6 +11,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
@@ -78,7 +79,7 @@ class GuideParityTest {
 
     private fun openColours() {
         openGuide()
-        rule.onNodeWithTag("guide-tile-colours").performClick()
+        rule.onNodeWithTag("guide-tile-colours").performScrollTo().performClick()
         rule.waitForIdle()
     }
 
@@ -153,7 +154,7 @@ class GuideParityTest {
         assertEquals("#/guide", held.value.route.toHash())
         rule.onNodeWithTag("guide-tile-colours").assertExists("the back button did not show the tiles")
 
-        rule.onNodeWithTag("guide-tile-colours").performClick()
+        rule.onNodeWithTag("guide-tile-colours").performScrollTo().performClick()
         rule.waitForIdle()
         val back = held.value.back()
         assertNotNull(back, "back from the colour page closed the app")
@@ -169,7 +170,7 @@ class GuideParityTest {
     private fun openWheel() {
         openGuide()
         rule.onNodeWithTag("guide-tile-wheel").assertExists("the Guide has no colour wheel tile")
-        rule.onNodeWithTag("guide-tile-wheel").performClick()
+        rule.onNodeWithTag("guide-tile-wheel").performScrollTo().performClick()
         rule.waitForIdle()
     }
 

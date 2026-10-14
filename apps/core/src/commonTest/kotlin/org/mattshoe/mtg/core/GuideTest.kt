@@ -29,10 +29,15 @@ class GuideTest {
     }
 
     @Test
-    fun theFirstTileIsTheColourCombinations() {
-        val first = Guide.tiles.firstOrNull() ?: error("the Guide has no tiles at all")
-        assertEquals(Guide.COLOURS, first.slug)
-        assertTrue(first.title.isNotBlank() && first.blurb.isNotBlank(), "the tile says nothing: $first")
+    fun theTilesGoRulesGameChangersColourCombinationsThenTheWheel() {
+        // Matt: "reorder the Guide sections such that they stay in order
+        // of: rules, game changers, color combinations, color wheel".
+        assertEquals(
+            listOf(Guide.RULES, Guide.GAME_CHANGERS, Guide.COLOURS, Guide.WHEEL),
+            Guide.tiles.take(4).map { it.slug },
+            "the Guide's first four tiles are in the wrong order: ${Guide.tiles.map { it.title }}",
+        )
+        Guide.tiles.forEach { assertTrue(it.title.isNotBlank() && it.blurb.isNotBlank(), "the tile says nothing: $it") }
     }
 
     @Test

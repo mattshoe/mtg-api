@@ -1,0 +1,1 @@
+The Guide's tiles now go Rules, Game Changers, Colour combinations, then the colour wheel, with Phyrexia and the story after them, on the phone and the website. On the phone a tile opened from further down the list opens at its top.
