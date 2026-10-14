@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -27,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -453,6 +455,26 @@ fun Muted(text: String, modifier: Modifier = Modifier, size: Int = Design.SMALL)
     Text(text, modifier, color = Ink3, fontSize = size.sp)
 }
 
+/** The x at the right of a single-line box. */
+const val CLEAR_TAG = "clear-x"
+
+/**
+ * The x that empties a single-line box, for its `trailingIcon`.
+ *
+ * Matt: "i want all single line text entry fields to have an x on the
+ * right to clear the text". Null while the box is empty, so there is
+ * nothing to press that would do nothing. The web's `Clearable`.
+ */
+fun clearX(value: String, onClear: () -> Unit): (@Composable () -> Unit)? =
+    if (value.isEmpty()) null else {
+        {
+            IconButton(
+                onClick = onClear,
+                modifier = Modifier.testTag(CLEAR_TAG).semantics { contentDescription = "Clear" },
+            ) { Text("×", color = Ink3, fontSize = 20.sp) }
+        }
+    }
+
 /** `.field`, and it has to look like the web's inputs, not Material's. */
 @Composable
 fun Field(
@@ -468,6 +490,7 @@ fun Field(
         onValueChange = onValueChange,
         modifier = modifier.fillMaxWidth(),
         singleLine = singleLine,
+        trailingIcon = if (singleLine) clearX(value) { onValueChange("") } else null,
         shape = RadiusSm,
         textStyle = LocalTextStyle.current.copy(
             fontSize = Design.BODY.sp,

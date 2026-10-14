@@ -170,15 +170,17 @@ private fun Subject(card: org.mattshoe.mtg.core.DeckCard, kind: Tweak?) {
 /** Search the collection for the card coming in. */
 @Composable
 private fun Finder(state: DeckTweak, onState: (DeckTweak) -> Unit, onFind: (String) -> Unit) {
-    Input(type = InputType.Text) {
-        classes("field")
-        placeholder(if (state.kind == Tweak.SWAP) "Swap in…" else "Card name")
-        value(state.term)
-        attr("autocomplete", "off")
-        onInput { e ->
-            val next = state.typed(e.value)
-            onState(next)
-            if (e.value.trim().length >= DeckTweak.MIN_TERM) onFind(e.value)
+    Clearable(state.term, { onState(state.typed("")) }) {
+        Input(type = InputType.Text) {
+            classes("field")
+            placeholder(if (state.kind == Tweak.SWAP) "Swap in…" else "Card name")
+            value(state.term)
+            attr("autocomplete", "off")
+            onInput { e ->
+                val next = state.typed(e.value)
+                onState(next)
+                if (e.value.trim().length >= DeckTweak.MIN_TERM) onFind(e.value)
+            }
         }
     }
 

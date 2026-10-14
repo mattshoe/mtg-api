@@ -116,11 +116,13 @@ private fun FormatStep(s: NewDeck, onState: (NewDeck) -> Unit) {
 
 @Composable
 private fun NameStep(s: NewDeck, onState: (NewDeck) -> Unit) {
-    Input(type = InputType.Text) {
-        classes("field")
-        placeholder("Deck name")
-        value(s.name)
-        onInput { onState(s.rename(it.value)) }
+    Clearable(s.name, { onState(s.rename("")) }) {
+        Input(type = InputType.Text) {
+            classes("field")
+            placeholder("Deck name")
+            value(s.name)
+            onInput { onState(s.rename(it.value)) }
+        }
     }
     if (s.name.isNotBlank()) {
         Div(attrs = { classes("muted", "small") }) { Text("Any name. Another collection may have a deck called the same.") }

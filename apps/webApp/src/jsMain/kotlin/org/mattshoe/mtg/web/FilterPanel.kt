@@ -410,11 +410,13 @@ private fun Seg(options: List<Pair<String, String>>, selected: String, onPick: (
 
 @Composable
 private fun TextBox(value: String, hint: String, onInput: (String) -> Unit) {
-    Input(type = InputType.Text) {
-        classes("field")
-        placeholder(hint)
-        value(value)
-        onInput { onInput(it.value) }
+    Clearable(value, { onInput("") }) {
+        Input(type = InputType.Text) {
+            classes("field")
+            placeholder(hint)
+            value(value)
+            onInput { onInput(it.value) }
+        }
     }
 }
 
@@ -429,31 +431,37 @@ private fun TextBox(value: String, hint: String, onInput: (String) -> Unit) {
  */
 @Composable
 private fun Num(value: String, hint: String, onInput: (String) -> Unit) {
-    Input(type = InputType.Text) {
-        classes("field")
-        placeholder(hint)
-        attr("inputmode", "numeric")
-        value(value)
-        onInput { onInput(it.value) }
+    Clearable(value, { onInput("") }) {
+        Input(type = InputType.Text) {
+            classes("field")
+            placeholder(hint)
+            attr("inputmode", "numeric")
+            value(value)
+            onInput { onInput(it.value) }
+        }
     }
 }
 
 @Composable
 private fun Range(min: String, max: String, onMin: (String) -> Unit, onMax: (String) -> Unit) {
     Div(attrs = { classes("row") }) {
-        Input(type = InputType.Text) {
-            classes("field")
-            placeholder("min")
-            attr("inputmode", "numeric")
-            value(min)
-            onInput { onMin(it.value) }
+        Clearable(min, { onMin("") }) {
+            Input(type = InputType.Text) {
+                classes("field")
+                placeholder("min")
+                attr("inputmode", "numeric")
+                value(min)
+                onInput { onMin(it.value) }
+            }
         }
-        Input(type = InputType.Text) {
-            classes("field")
-            placeholder("max")
-            attr("inputmode", "numeric")
-            value(max)
-            onInput { onMax(it.value) }
+        Clearable(max, { onMax("") }) {
+            Input(type = InputType.Text) {
+                classes("field")
+                placeholder("max")
+                attr("inputmode", "numeric")
+                value(max)
+                onInput { onMax(it.value) }
+            }
         }
     }
 }
@@ -462,11 +470,13 @@ private fun Range(min: String, max: String, onMin: (String) -> Unit, onMax: (Str
 private fun Stat(op: String, value: String, onOp: (String) -> Unit, onValue: (String) -> Unit) {
     Div(attrs = { classes("row") }) {
         Dropdown(listOf(">=" to "≥", "<=" to "≤", "=" to "=", ">" to ">", "<" to "<"), op, onPick = onOp)
-        Input(type = InputType.Text) {
-            classes("field")
-            placeholder("any")
-            value(value)
-            onInput { onValue(it.value) }
+        Clearable(value, { onValue("") }) {
+            Input(type = InputType.Text) {
+                classes("field")
+                placeholder("any")
+                value(value)
+                onInput { onValue(it.value) }
+            }
         }
     }
 }
@@ -539,17 +549,19 @@ private fun Tokens(
     onChange: (List<String>) -> Unit,
 ) {
     Div {
-        Input(type = InputType.Text) {
-            classes("field")
-            placeholder(hint)
-            value(typed)
-            onInput { onTyped(it.value) }
-            onKeyDown { e ->
-                if (e.key == "Enter") {
-                    e.preventDefault()
-                    val v = typed.trim()
-                    if (v.isNotEmpty() && v !in values) onChange(values + v)
-                    onTyped("")
+        Clearable(typed, { onTyped("") }) {
+            Input(type = InputType.Text) {
+                classes("field")
+                placeholder(hint)
+                value(typed)
+                onInput { onTyped(it.value) }
+                onKeyDown { e ->
+                    if (e.key == "Enter") {
+                        e.preventDefault()
+                        val v = typed.trim()
+                        if (v.isNotEmpty() && v !in values) onChange(values + v)
+                        onTyped("")
+                    }
                 }
             }
         }

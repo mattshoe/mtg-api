@@ -196,12 +196,14 @@ private fun FetchListOpen(
                     }) { Text(state.progress) }
                     Span(attrs = { classes("spacer") }) {}
                     Label(forId = "fetch-title", attrs = { classes("muted", "small") }) { Text("Title") }
-                    Input(InputType.Text, attrs = {
-                        id("fetch-title")
-                        value(state.title)
-                        placeholder("Required to save")
-                        onInput { onState(state.titled(it.value)) }
-                    })
+                    Clearable(state.title, { onState(state.titled("")) }) {
+                        Input(InputType.Text, attrs = {
+                            id("fetch-title")
+                            value(state.title)
+                            placeholder("Required to save")
+                            onInput { onState(state.titled(it.value)) }
+                        })
+                    }
                     Button(attrs = {
                         classes("btn")
                         attr("data-fetch-save", "")

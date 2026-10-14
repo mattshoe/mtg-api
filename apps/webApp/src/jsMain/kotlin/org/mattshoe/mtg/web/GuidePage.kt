@@ -123,13 +123,15 @@ private fun GuideTiles(tiles: List<GuideTile>, onOpen: (GuideTile) -> Unit) {
 @Composable
 private fun GuideFind(search: String, onSearch: (String) -> Unit, hits: List<GuideHit>, onHit: (GuideHit) -> Unit) {
     Div(attrs = { classes("guide-find") }) {
-        Input(InputType.Search, attrs = {
-            classes("guide-search")
-            placeholder("Search the articles: Urza, Sylex, Ravnica")
-            attr("aria-label", "Search the Guide's articles")
-            value(search)
-            onInput { onSearch(it.value) }
-        })
+        Clearable(search, { onSearch("") }) {
+            Input(InputType.Search, attrs = {
+                classes("guide-search")
+                placeholder("Search the articles: Urza, Sylex, Ravnica")
+                attr("aria-label", "Search the Guide's articles")
+                value(search)
+                onInput { onSearch(it.value) }
+            })
+        }
         when {
             GuideSearch.words(search).isEmpty() -> {}
             hits.isEmpty() -> Div(attrs = { classes("empty", "guide-search-none") }) { Text(GuideSearch.none(search)) }
@@ -528,13 +530,15 @@ private fun lines(): String {
 @Composable
 private fun RulesSearch(rules: Rules, onRules: (Rules) -> Unit, onLoad: () -> Unit) {
     Div(attrs = { classes("rules-bar") }) {
-        Input(InputType.Search, attrs = {
-            classes("rules-search")
-            placeholder("Search the rules: trample, 702.19, commander tax")
-            attr("aria-label", "Search the rules")
-            value(rules.query)
-            onInput { onRules(rules.searched(it.value)) }
-        })
+        Clearable(rules.query, { onRules(rules.searched("")) }) {
+            Input(InputType.Search, attrs = {
+                classes("rules-search")
+                placeholder("Search the rules: trample, 702.19, commander tax")
+                attr("aria-label", "Search the rules")
+                value(rules.query)
+                onInput { onRules(rules.searched(it.value)) }
+            })
+        }
     }
     val book = rules.book
     when {
@@ -613,13 +617,15 @@ private fun GameChangerList(
     Div(attrs = { classes("gc-list", "stack") }) {
         P(attrs = { classes("muted", "small", "gc-about") }) { Text(GameChangers.ABOUT) }
         // Matt: "add a name search to the game changers page".
-        Input(InputType.Search, attrs = {
-            classes("gc-search")
-            placeholder("Search by name: Rhystic, tutor, mox")
-            attr("aria-label", "Search the Game Changers by name")
-            value(search)
-            onInput { onSearch(it.value) }
-        })
+        Clearable(search, { onSearch("") }) {
+            Input(InputType.Search, attrs = {
+                classes("gc-search")
+                placeholder("Search by name: Rhystic, tutor, mox")
+                attr("aria-label", "Search the Game Changers by name")
+                value(search)
+                onInput { onSearch(it.value) }
+            })
+        }
         if (GuideSearch.words(search).isNotEmpty()) {
             if (shown.isEmpty()) {
                 Div(attrs = { classes("empty", "gc-search-none") }) { Text(GameChangers.none(search)) }

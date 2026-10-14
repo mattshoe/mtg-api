@@ -69,13 +69,15 @@ private fun Everybody(state: People, onSearch: (String) -> Unit, onOpen: (Person
             }
         }
         Div(attrs = { classes("panel-body") }) {
-            Input(InputType.Text, attrs = {
-                classes("field")
-                placeholder("Search by name, address or role")
-                attr("aria-label", "Search accounts")
-                value(state.query)
-                onInput { onSearch(it.value) }
-            })
+            Clearable(state.query, { onSearch("") }) {
+                Input(InputType.Text, attrs = {
+                    classes("field")
+                    placeholder("Search by name, address or role")
+                    attr("aria-label", "Search accounts")
+                    value(state.query)
+                    onInput { onSearch(it.value) }
+                })
+            }
 
             when {
                 state.busy -> Div(attrs = { classes("empty") }) { Text("Loading…") }

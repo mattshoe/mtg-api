@@ -39,12 +39,14 @@ fun PaletteDialog(
             // The scrim closes; a press inside must not.
             onClick { it.stopPropagation() }
         }) {
-            Input(type = InputType.Text) {
-                classes("field")
-                id("palette-input")
-                placeholder("Find a card")
-                value(state.term)
-                onInput { onState(state.typed(it.value)) }
+            Clearable(state.term, { onState(state.typed("")) }) {
+                Input(type = InputType.Text) {
+                    classes("field")
+                    id("palette-input")
+                    placeholder("Find a card")
+                    value(state.term)
+                    onInput { onState(state.typed(it.value)) }
+                }
             }
             Ul(attrs = { classes("palette-list") }) {
                 state.items.forEachIndexed { i, row ->
