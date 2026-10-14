@@ -39,6 +39,9 @@ object Guide {
         GuideTile(WHEEL, "The colour wheel", "What each colour wants, what it is good at, and who its friends and enemies are."),
         // Matt: "i want a guide section on rules". The page is in `Rules.kt`.
         GuideTile(RULES, "Rules", "The Comprehensive Rules, searchable. Every rule that mentions trample, or 702.19, one card each."),
+        // Matt: "a guide section for game changers ... a list of cards
+        // just like a deck page". The list is in `GameChangers.kt`.
+        GuideTile(GAME_CHANGERS, "Game Changers", "The cards Commander's brackets count. Any one of them makes a deck bracket 3 or higher."),
         GuideTile(LORE, "Phyrexia", "The whole story, from the fall of the Thran to the March of the Machine, one era at a time."),
     ) +
         // Matt: "each of those sections should be their own article, with

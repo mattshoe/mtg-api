@@ -416,7 +416,20 @@ data class AppState(
                 )
             }
 
-            PeekOf.GAME_CHANGERS -> emptyList()
+            // A reference, not a holding: nothing to count and nothing
+            // to swap, so only how much it is played.
+            PeekOf.GAME_CHANGERS -> GameChangers.pageOrder.map { card ->
+                PeekCard(
+                    title = card.shown,
+                    nameNorm = card.nameNorm,
+                    scryfallId = card.scryfallId,
+                    typeLine = card.typeLine,
+                    printing = card.printing,
+                    price = null,
+                    tags = listOf(PeekTag.edhrec(card.edhrecRank)),
+                    facts = PeekFact.line(card.typeLine, card.colorIdentity, card.rarity),
+                )
+            }
         }
 
     /**
