@@ -83,7 +83,7 @@ fun GuidePage(
                 Guide.WHEEL -> Wheel()
                 Guide.LORE -> Lore(era ?: PhyrexianLore.eras.first(), onEra)
                 Guide.RULES -> RulesSearch(rules, onRules, onLoadRules)
-                else -> Unit
+                else -> story?.let { Story(it, onStory) }
             }
         }
     }
