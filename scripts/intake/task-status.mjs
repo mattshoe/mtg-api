@@ -430,14 +430,40 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     // them. "Not logged in · Please run /login" is a different problem
     // from "it crashed", and a row that says the first is a row Matt can
     // act on in ten seconds.
-    const said = process.argv.slice(4).join(' ').trim();
-    transition = {
-      name,
-      status: 'paused',
-      note: said
-        ? `stopped: ${said.slice(0, 160)}`
-        : 'stopped with work left in its worktree; it needs a person to pick it up',
-    };
+    // And nothing at all when the agent left a pull request behind.
+    //
+    // This wrote `paused` for any worktree with nobody in it, without
+    // ever looking at what the agent had achieved. Reconcile reads an
+    // open pull request and writes `in review`; this then wrote `paused`
+    // straight over the top, and the next tick did both again.
+    // `the-ui-retry-policy-has-never-worked` went round that loop once a
+    // minute for hours, so the row was wrong half the time. It is the
+    // same shape as the `blocked` flap above, one layer down.
+    //
+    // A worktree with no agent and a pull request open is not stalled:
+    // the agent built it, pushed it and stopped, which is exactly what
+    // `in review` means. Reconcile owns that row. Only a worktree with
+    // nothing to show is this path's business.
+    let shown = [];
+    try {
+      shown = JSON.parse(execFileSync('gh', [
+        'pr', 'list', '--state', 'all', '--limit', '100', '--json', 'state,headRefName',
+      ], { cwd: repo, encoding: 'utf8' }) || '[]');
+    } catch { /* no gh, no network: fall through and say what we know */ }
+    const mine = shown.filter((p) => String(p.headRefName || '').startsWith(`request/${name}-`));
+    if (mine.some((p) => p.state === 'OPEN' || p.state === 'MERGED')) {
+      say(`${name} has a pull request open; reconcile owns that row, not this one`);
+      transition = null;
+    } else {
+      const said = process.argv.slice(4).join(' ').trim();
+      transition = {
+        name,
+        status: 'paused',
+        note: said
+          ? `stopped: ${said.slice(0, 160)}`
+          : 'stopped with work left in its worktree; it needs a person to pick it up',
+      };
+    }
   } else if (cmd === 'settle') {
     let prs = []
     try {

@@ -84,6 +84,37 @@ git -C "$REPO" fetch -q origin main 2>>"$LOG" || say "could not fetch; base may 
 # request had already merged. Ask main, not the laptop.
 filed="$(git -C "$REPO" ls-tree --name-only "$BASE" requests/done/ 2>/dev/null | sed 's|requests/done/||')"
 
+# Sweep the worktrees whose work has shipped.
+#
+# `git worktree prune` above only removes one whose DIRECTORY has gone,
+# which is never how these end: the agent merges, files its request, and
+# leaves the tree sitting there with its branch, its build output and a
+# whole copy of the repo. Fourteen had collected against two live agents
+# and nine of them were for work merged weeks earlier. They were cleared
+# by hand once; that is the part that must not happen twice.
+#
+# Filed under requests/done on main is the only signal used, and it is
+# what makes this safe to do at all: the agent files the request in the
+# same commit it merges, so a filed request is a merged one and the tree
+# holds nothing main does not already have. A worktree whose request is
+# still live is never touched, whatever is in it — that rule predates
+# this one and cost thirty-two uncommitted files to learn.
+#
+# An agent still alive on it is left alone too. Filing happens before the
+# agent finishes talking, so there is a window where the request reads
+# done and the process is still in the tree.
+for wt in "$STATE"/wt/*; do
+  [ -d "$wt" ] || continue
+  n="$(basename "$wt")"
+  printf '%s\n' "$filed" | /usr/bin/grep -qxF "$n.md" || continue
+  pgrep -f "requests/$n.md" >/dev/null 2>&1 && continue
+  b="$(git -C "$wt" rev-parse --abbrev-ref HEAD 2>/dev/null)"
+  if git -C "$REPO" worktree remove --force "$wt" 2>>"$LOG"; then
+    say "swept $n: filed under requests/done on $BASE, nobody in it"
+    [ -n "$b" ] && [ "$b" != HEAD ] && git -C "$REPO" branch -D "$b" >>"$LOG" 2>&1
+  fi
+done
+
 # An empty queue and a broken one must never look the same to this loop.
 # That conflation is the oldest bug in this system and it has come back
 # twice, so the queue is read into a variable where a failure is visible
