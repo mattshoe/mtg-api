@@ -1870,6 +1870,10 @@ select.sort {
 .peek-card { container-type: size; }
 .peek-card img, .peek-blank {
   width: min(100cqw, calc(100cqh * 488 / 680));
+  /* The height pinned as well, not left to `aspect-ratio`: Chrome 155
+     drops the ratio on an image that failed to load and draws it
+     square, smaller than the cell. */
+  height: min(100cqh, calc(100cqw * 680 / 488));
   aspect-ratio: 488 / 680;
 }
 .peek-card img {
