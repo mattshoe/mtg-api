@@ -102,7 +102,7 @@ class PhyrexianLoreTest {
     fun backFromAnyEraIsTheTiles() {
         val deep = AppState().navigate(Route.parse("#/guide/phyrexia/${PhyrexianLore.eras.last().slug}"))
         val back = assertNotNull(deep.back(), "back from an era closed the app")
-        assertEquals("#/guide", back.route.toHash())
+        assertEquals("#/guide/lore", back.route.toHash())
     }
 
     @Test

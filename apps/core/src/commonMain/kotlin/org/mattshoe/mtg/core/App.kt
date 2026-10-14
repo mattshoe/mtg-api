@@ -746,8 +746,9 @@ data class AppState(
         onFetchList -> leaveFetchList()
         // A profile is opened from a section, so back is that section.
         storyPage is StoryPage.Profile -> openStory("")
-        // A Guide tile is a page of the Guide, so back is the tiles.
-        guideTile != null -> navigate(View.GUIDE)
+        // A Guide tile is a page of the Guide, so back is the tiles it
+        // was among: Lore's for a story, the front page's for the rest.
+        guideTile != null -> guideUp()
         view != View.DEFAULT -> navigate(View.DEFAULT)
         else -> null
     }

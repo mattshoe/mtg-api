@@ -35,7 +35,27 @@ object Guide {
     const val LORE = "lore"
     const val GAME_CHANGERS = "game-changers"
 
-    val lore: List<GuideTile> = emptyList()
+    /**
+     * Every story tile, in the order the story happened, roughly.
+     *
+     * Matt: "collapse all the Guide sections on lore (not the color
+     * stuff) into a single top-level one called Lore ... keep them
+     * sorted in roughly chronological order". A section spans eras,
+     * so each sits where most of its story is: the void the planes
+     * float in first, then the Thran, then the Brothers' War and on
+     * to the Omenpaths. Their addresses do not change, so an old
+     * bookmark still opens its story.
+     */
+    val lore: List<GuideTile> by lazy {
+        val phyrexia = GuideTile(PHYREXIA, "Phyrexia", "The whole story, from the fall of the Thran to the March of the Machine, one era at a time.")
+        // Matt: "each of those sections should be their own article, with
+        // its own tabs, just like the phyrexian one". The words are in `MagicStory.kt`.
+        val story = MagicStory.sections.associate { it.slug to GuideTile(it.slug, it.title, it.hook) }
+        listOf(
+            "blind-eternities", "phyrexia-origins", PHYREXIA, "brothers-war", "weatherlight", "planeswalkers",
+            "ravnica", "nicol-bolas", "eldrazi", "innistrad", "new-phyrexia", "omenpaths",
+        ).map { if (it == PHYREXIA) phyrexia else story.getValue(it) }
+    }
 
     val tiles: List<GuideTile> = listOf(
         GuideTile(COLOURS, "Colour combinations", "Every name, from Azorius to WUBRG. Guilds, shards, wedges and the rest."),
@@ -45,13 +65,13 @@ object Guide {
         // Matt: "a guide section for game changers ... a list of cards
         // just like a deck page". The list is in `GameChangers.kt`.
         GuideTile(GAME_CHANGERS, "Game Changers", "The cards Commander's brackets count. Any one of them makes a deck bracket 3 or higher."),
-        GuideTile(LORE, "Phyrexia", "The whole story, from the fall of the Thran to the March of the Machine, one era at a time."),
-    ) +
-        // Matt: "each of those sections should be their own article, with
-        // its own tabs, just like the phyrexian one". The words are in `MagicStory.kt`.
-        MagicStory.sections.map { GuideTile(it.slug, it.title, it.hook) }
+        GuideTile(LORE, "Lore", "The story of Magic, from the Thran to the Omenpaths, in the order it happened."),
+    )
 
-    fun tile(slug: String): GuideTile? = tiles.firstOrNull { it.slug == slug }
+    fun tile(slug: String): GuideTile? = tiles.firstOrNull { it.slug == slug } ?: lore.firstOrNull { it.slug == slug }
+
+    /** The page a tile's way back leads to: Lore for a story, the Guide's front page for the rest. */
+    fun up(tile: GuideTile): GuideTile? = if (tile in lore) tile(LORE) else null
 
     /**
      * Every colour combination there is, one to five, by name.
@@ -134,6 +154,8 @@ val AppState.guideTile: GuideTile? get() = if (view == View.GUIDE) Guide.tile(ro
 /** A tile, at its own address, so back and a bookmark both work. */
 fun AppState.openGuide(tile: GuideTile): AppState = navigate(Route(View.GUIDE, tile.slug))
 
-val AppState.guideUpTo: String get() = "Guide"
+/** What the open tile's back button says: Lore inside a story, Guide everywhere else. */
+val AppState.guideUpTo: String get() = guideTile?.let(Guide::up)?.title ?: View.GUIDE.label
 
-fun AppState.guideUp(): AppState = navigate(View.GUIDE)
+/** Out of the open tile: a story goes back to Lore, everything else to the Guide's front page. */
+fun AppState.guideUp(): AppState = guideTile?.let(Guide::up)?.let(::openGuide) ?: navigate(View.GUIDE)
