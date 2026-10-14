@@ -1123,7 +1123,7 @@ describe('what a worktree is handed', () => {
 // Two tasks sat at `in review` for three hours with no agent alive on
 // them. The only reason it came to light is that Matt asked.
 describe('a worktree with nobody in it', () => {
-  it('marks the task blocked, so somebody knows it needs picking up', () => {
+  it('marks the task paused, so somebody knows it needs picking up', () => {
     build({ requests: { 'a-thing.md': READY('A thing') } })
     // A stopped agent's worktree: it exists, nothing is running in it.
     mkdirSync(join(box.repo, '.intake', 'wt', 'a-thing', 'requests'), { recursive: true })
@@ -1132,8 +1132,14 @@ describe('a worktree with nobody in it', () => {
 
     // task-status.mjs runs for real here and has no credential in a box,
     // so what it writes to the log is the proof it was asked at all.
+    // `paused`, not `blocked`. A worktree with work in it and no agent
+    // is recoverable by definition — another agent picks it up. Blocked
+    // is reserved for what cannot be recovered at all, and writing it
+    // here made tasks flap in and out of it once a minute.
     expect(box.intakeLog(), 'nothing told D1 the task had stalled')
-      .toMatch(/a-thing blocked|blocked was not written/)
+      .toMatch(/a-thing paused|paused was not written/)
+    expect(box.intakeLog(), 'a recoverable stall was called blocked')
+      .not.toMatch(/a-thing blocked/)
     // And still no second agent on it.
     expect(box.log()).not.toContain('claude ')
   })
@@ -1153,5 +1159,43 @@ describe('a worktree with nobody in it', () => {
     } finally {
       alive.kill('SIGKILL')
     }
+  })
+})
+
+// The task row says WHY the agent stopped.
+//
+// One morning every task failed at once and every row said the same
+// thing: "stopped with work left in its worktree". The actual reason was
+// the last line of each agent's own log — "Not logged in · Please run
+// /login", because Matt's Claude session had expired overnight and a
+// headless agent cannot refresh one. Nothing read it, so the rows could
+// not tell a crashed build from a login that needed renewing.
+describe('why an agent stopped', () => {
+  const stopped = (name, lastWords) => {
+    const wt = join(box.repo, '.intake', 'wt', name)
+    mkdirSync(join(wt, 'requests'), { recursive: true })
+    if (lastWords !== undefined) {
+      writeFileSync(join(box.repo, '.intake', `${name}.log`),
+        `{"type":"result","is_error":true,"result":"${lastWords}"}\n`)
+    }
+  }
+
+  it('carries the agent\'s own last words onto the row', () => {
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    stopped('a-thing', 'Not logged in · Please run /login')
+
+    run('dispatch.sh')
+
+    expect(box.intakeLog(), 'the row did not say why it stopped')
+      .toContain('Not logged in')
+  })
+
+  it('still says something useful when the log has no reason in it', () => {
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    stopped('a-thing')
+
+    run('dispatch.sh')
+
+    expect(box.intakeLog()).toMatch(/a-thing paused|paused was not written/)
   })
 })

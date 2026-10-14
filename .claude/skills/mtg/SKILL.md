@@ -118,6 +118,87 @@ platforms:
 Assert the same measured geometry at each size. `CarouselOnATabletTest`
 on both sides is the example.
 
+## `blocked` is permanent, and almost nothing should ever write it
+
+Matt: "A task should NEVER enter blocked unless the process is
+COMPLETELY unrecoverable and the agent can no longer function. It is NOT
+a temporary status, it is a PERMANENT, COMPLETELY UNRESOLVABLE status."
+
+`blocked` is one of the two things that buzzes his phone — the other is
+`deployed`. So it is not a progress report, it is an alarm, and it is
+the last thing a task ever says.
+
+**Write it when the work cannot continue at all and no agent will ever
+make it continue.** A decision only Matt can make. A credential only he
+can supply. A request that contradicts itself.
+
+**Do not write it for anything a retry would fix.** An agent that died,
+a rate limit, a red CI job, a worktree with work in it and nobody
+working — all recoverable, all `paused`, which says exactly that:
+nothing is running, the work is kept, the reason says why. `paused`
+notifies nobody.
+
+It flapped before this rule existed. The dispatcher wrote `blocked` for
+a stalled worktree on every timer firing, reconcile cleared it, the next
+firing wrote it again — once a minute, a push notification each time.
+Two changes stop that: a stalled worktree is `paused`, and nothing takes
+a task back out of `blocked` except the work actually shipping.
+
+That last part is the cost, and it is deliberate: a task you wrongly
+mark `blocked` stays wrong until a person moves it. Which is the right
+price for the only word that is allowed to interrupt him.
+
+## Nothing merges to main without a full green suite, run locally
+
+Matt: "Just disable CI and make a HARD RULE that all tasks MUST have a
+fully passing test suite locally before merging to main. THE ENTIRE test
+suite must pass before merging to main."
+
+CI no longer validates anything. `test.yml` and `apps.yml` are
+`workflow_dispatch` only — runnable by hand, run by nothing. The merge
+gate is a pull request and that is all it is.
+
+So the suite is proved here, on this machine, before the merge:
+
+```
+npm run test:everything
+```
+
+That is worker, shell, core, screens, web and the device emulator, in
+cheapest-first order, stopping at the first failure. It prints
+EVERY SUITE PASSED or it tells you which one went red and that nothing
+after it ran. Roughly 35 minutes with the emulator, most of it the
+emulator.
+
+**All of it. Not the suites your diff reaches — all of them.** That
+rule used to read "only the ones your diff actually reaches", which was
+right when CI ran the rest. CI does not run the rest any more. There is
+nothing behind you.
+
+`--no-device` exists and skips the emulator, which is twenty of those
+thirty-five minutes. It prints a warning saying the run was not a full
+pass, and it is not one. Use it while you are working; never as the
+thing you merge on.
+
+### What this costs, said plainly
+
+The device suite is 580 tests that only ever run on an emulator. Before,
+CI ran them on every pull request and nobody had to think about it. Now
+they run when somebody runs them. If an agent skips that step the tests
+do not fail — they simply never happen, and the first person to find out
+is Matt, with the app in his hand.
+
+That is the trade. It was made deliberately: CI had become slower and
+less reliable than the laptop, and a gate that is red for reasons of its
+own is not a gate.
+
+### Deployment still happens on merge
+
+`worker.yml`, `pages.yml` and `release.yml` still run when main moves,
+and they no longer re-run the suite first. Matt: "MAKE SURE DEPLOYMENT
+IS NOT STILL RUNNING THE TEST SUITE BEFORE DEPLOYING!!" Whether main is
+fit to deploy is decided before the merge, not after it.
+
 ## Happy-path tests are not enough, ever
 
 Matt: "HAPPY PATH ONLY TESTING IS NOT EVER EVER EVER EVER EVER

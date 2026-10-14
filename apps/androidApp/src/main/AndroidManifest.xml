@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Android 13 and up refuse to show a notification until the person
+         has said yes, and refuse silently. Asking is MainActivity's job;
+         this only makes asking possible. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <application android:name=".Images" android:label="@string/app_name"
         android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:theme="@android:style/Theme.Material.NoActionBar">
         <!-- The whole app. The same screens the website has. -->
@@ -56,5 +60,22 @@
                 <data android:mimeType="*/*" />
             </intent-filter>
         </activity>
+
+        <!-- Firebase hands the new token to this when it rotates, which
+             it does on a reinstall, a restore, and sometimes nothing
+             visible at all. Without it a phone goes quiet weeks later
+             and nothing says why. -->
+        <service android:name=".Push" android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+        <!-- What a notification looks like when the app is not open.
+             Without these Android uses the app icon at full bleed, which
+             on a white launcher icon is a white square. -->
+        <meta-data android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@mipmap/ic_launcher" />
+        <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="tasks" />
     </application>
 </manifest>

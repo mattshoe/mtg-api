@@ -4,6 +4,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
@@ -305,12 +306,50 @@ class MtgApi internal constructor(
     private data class TaskSent(val key: String = "")
 
     @Serializable
+    private data class DeviceBody(val token: String, val platform: String, val label: String? = null)
+
+    @Serializable
     private data class TaskCancel(val key: String, val status: String, val note: String)
 
     /**
      * A new task, from Admin Settings, into the Worker's inbox. The key
      * it was filed under. Admin only, server-side.
      */
+    /**
+     * Where to reach this phone.
+     *
+     * Said on every start rather than once: the Firebase token rotates
+     * on a reinstall, a restore, and sometimes nothing visible at all,
+     * and a phone that goes quiet weeks later with nothing saying why is
+     * worse than one extra call a launch. The Worker keys on the token,
+     * so saying the same one twice changes nothing.
+     */
+    suspend fun registerDevice(session: String, token: String, label: String? = null) {
+        val res = http.post("$base/devices") {
+            contentType(ContentType.Application.Json)
+            header("Authorization", "Bearer $session")
+            setBody(DeviceBody(token, "android", label))
+        }
+        if (!res.status.isSuccess()) throw ApiFailure(errorIn(res.bodyAsText(), res.status))
+    }
+
+    /**
+     * Stop pushing to this phone.
+     *
+     * Called on sign-out, before the session is ended, because ending it
+     * first would leave nothing to authorise this with — and a phone
+     * that is signed out but still registered keeps being told about
+     * tasks it no longer has any business knowing.
+     */
+    suspend fun forgetDevice(session: String, token: String) {
+        val res = http.delete("$base/devices") {
+            contentType(ContentType.Application.Json)
+            header("Authorization", "Bearer $session")
+            setBody(DeviceBody(token, "android", null))
+        }
+        if (!res.status.isSuccess()) throw ApiFailure(errorIn(res.bodyAsText(), res.status))
+    }
+
     suspend fun sendTask(session: String, task: NewTask): String {
         val res = http.post("$base/tasks") {
             contentType(ContentType.Application.Json)

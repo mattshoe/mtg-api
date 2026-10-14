@@ -1,8 +1,22 @@
 name: test
 
+
+# Validation does not run here any more.
+#
+# Matt: "Just disable CI and make a HARD RULE that all tasks MUST have a
+# fully passing test suite locally before merging to main."
+#
+# The worker and shell suites are proved on the laptop before a merge, by
+# `npm run test:everything`, and a pull request is still required so
+# there is something to read afterwards. Deployment still runs on a
+# merge; it just no longer re-proves what the merge already required.
+#
+# Left runnable by hand — `gh workflow run test.yml` — because
+# a machine that is not Matt's laptop is still the only place the
+# emulator and a real browser agree with each other, and that is worth
+# having on demand.
 on:
-  push:
-  pull_request:
+  workflow_dispatch:
 
 jobs:
   # The Worker suite, split across three runners.

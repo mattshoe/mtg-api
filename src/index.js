@@ -53,6 +53,8 @@ import { keyFrom, claim, remember, release } from './idempotency.js';
 import { newTask, inbox, received, list as taskList, setStatus, task as oneTask, summary as taskSummary } from './tasks.js';
 import { releases } from './releases.js';
 import { rules } from './rules.js';
+import { remember as rememberDevice, forget as forgetDevice, listDevices } from './devices.js';
+import { tell } from './notify.js';
 import { commanderRank } from './edhrec.js';
 import { preview } from './preview.js';
 // The site's own file, bundled in, so the two hosts cannot disagree.
@@ -306,6 +308,9 @@ const INDEX = {
     'GET /logs': '?min=info&q=&event=&status=error&since=24&limit=100 — admin only',
     'POST /logs/client': '{"level":"info","message":"...","detail":{...}} — admin only',
     'GET /logs/stats': 'counts, slowest routes, retention — admin only',
+    'POST /devices': '{"token","platform":"android","label"?} — where to push to; said by the app on every start, keyed on the token',
+    'DELETE /devices': '{"token"} — stop pushing to a device',
+    'GET /devices': 'which devices are registered, with the tokens shortened; admin only',
     'GET /maintenance': 'what the daily job did last',
     'POST /maintenance': 'run it now — needs admin; {"only":"orphans"} or {"all":true,"wait":true}',
     'GET /s': '/s/<route> — a shared link: Open Graph tags for that deck, card or collection, then on to the site',
@@ -854,12 +859,50 @@ async function route(request, env, ctx, entry) {
       } else if (path === '/tasks/status') {
         out = await setStatus(env.DB, body);
         entry.detail = { key: body.key, name: body.name, status: body.status };
+        // And tell the phones, after the response rather than in front of
+        // it. A task that merged has merged whether or not anybody's
+        // phone found out, so this must never be able to fail the write
+        // or make it wait on Firebase. `tell` decides for itself whether
+        // this transition is worth a buzz — see src/notify.js.
+        if (out.status < 400) {
+          ctx.waitUntil(tell(env, { ...body, ...(out.body?.task || {}) })
+            .then((r) => { entry.detail = { ...entry.detail, push: r }; })
+            .catch(() => {}));
+        }
       } else {
         out = await received(env.DB, body.keys, body.names);
         entry.detail = { keys: body.keys };
       }
       if (out.status >= 400) entry.message = out.body.error;
       return send(out);
+    }
+
+    // Where to reach somebody. A phone says its Firebase token every
+    // time the app starts; the token rotates on its own and the row is
+    // keyed on the token, so there is nothing to keep in step.
+    if (path === '/devices') {
+      const who = await whoAmI(env, request, verifyToken);
+      if (!who.user) return denied('sign in to register a device');
+      if (method === 'POST') {
+        entry.write = true;
+        const { body, error } = await readJson(request);
+        if (error) return json({ error }, 400);
+        const out = await rememberDevice(env.DB, who.user.id, body);
+        entry.detail = { platform: body?.platform || 'android' };
+        return send(out);
+      }
+      if (method === 'DELETE') {
+        const { body, error } = await readJson(request);
+        if (error) return json({ error }, 400);
+        return send(await forgetDevice(env.DB, body?.token));
+      }
+      // Reading the list is an admin's business, not a device's.
+      if (method === 'GET') {
+        if (who.user.role !== 'admin') return json({ error: 'that needs the admin role' }, 403);
+        entry.admin = true;
+        return json({ devices: await listDevices(env.DB) });
+      }
+      return notAllowed('POST');
     }
 
     if (path === '/admin/sql') {

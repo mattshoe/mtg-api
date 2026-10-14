@@ -3,6 +3,7 @@ package org.mattshoe.mtg.android
 import android.graphics.Bitmap
 import android.os.Build
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.captureToImage
 import androidx.test.platform.app.InstrumentationRegistry
@@ -82,15 +83,14 @@ object Parity {
         // test's assertions have already run either way.
         if (!onDevice) return null
         val file = File(shots, "$name.png")
-        // Nor is a camera that misfires. On CI's emulator the capture
-        // itself fails now and then — a null bitmap, or Compose's two
-        // second wait for a frame running out — and that turned
-        // `ArtCropAlignmentParityTest`, which only takes pictures, red
-        // on device shard 1 for five runs in a row across four branches.
+        // A capture that times out is a missing photo, not a failure,
+        // for the same reason. `ArtCropAlignmentParityTest`, which is
+        // nothing but photos, went red on every pull request on
+        // 2026-10-13 waiting 2000ms for the emulator to draw.
         val bitmap = try {
             captureToImage().asAndroidBitmap()
-        } catch (e: Throwable) {
-            println("PARITY no screenshot for $name: $e")
+        } catch (slow: ComposeTimeoutException) {
+            println("PARITY no photo for $name: $slow")
             return null
         }
         file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
