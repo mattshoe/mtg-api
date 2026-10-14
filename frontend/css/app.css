@@ -376,6 +376,24 @@ select { appearance: none; background-image:
 .row { display: flex; gap: 8px; }
 .row > * { flex: 1; min-width: 0; }
 
+/* An x at the right of a single-line box that empties it. Matt: "i want
+   all single line text entry fields to have an x on the right to clear
+   the text". The wrapper takes the box's place, so a `.field`'s gap
+   below moves out to it and the x stays centred on the box itself. */
+.clearable { position: relative; }
+.clearable > input { padding-right: 38px; }
+.clearable > input.field { margin-bottom: 0; }
+.clearable:has(> input.field) { margin-bottom: 13px; }
+.clearable:has(> input.field):last-child { margin-bottom: 0; }
+.clearable > input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+.clear-x {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  width: 30px; height: 30px; padding: 0; border: none; border-radius: 50%;
+  display: grid; place-items: center;
+  background: none; color: var(--text-3); font: inherit; font-size: 19px; line-height: 1; cursor: pointer;
+}
+.clear-x:hover { color: var(--text); background: var(--bg-3); }
+
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 7px;
   padding: 8px 14px; border-radius: var(--radius-sm);
@@ -897,8 +915,9 @@ pre.out {
    to a direct child: as `.palette input` it also flattened the
    password field and every field in the deck dialogs, which is what
    made them look like unpadded grey slabs. */
-.palette > input { border: none; border-radius: 0; border-bottom: 1px solid var(--line); padding: 14px 16px; font-size: 15px; }
-.palette > input:focus { border-color: var(--line); }
+.palette > input, .palette > .clearable > input { border: none; border-radius: 0; border-bottom: 1px solid var(--line); padding: 14px 16px; font-size: 15px; }
+.palette > input:focus, .palette > .clearable > input:focus { border-color: var(--line); }
+.palette > .clearable > input { padding-right: 42px; }
 .palette ul { list-style: none; margin: 0; padding: 0; max-height: 46vh; overflow-y: auto; }
 .palette li { padding: 9px 16px; cursor: pointer; display: flex; gap: 10px; align-items: center; font-size: 13.5px; }
 .palette li.on { background: var(--accent-dim); }

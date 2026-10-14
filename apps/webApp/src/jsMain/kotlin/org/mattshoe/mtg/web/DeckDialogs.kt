@@ -60,11 +60,13 @@ fun DeckEditDialog(
 
                 Div(attrs = { classes("field") }) {
                     Span(attrs = { classes("muted", "small") }) { Text("Commander") }
-                    Input(type = InputType.Text) {
-                        classes("field")
-                        placeholder("e.g. Alela, Cunning Conqueror")
-                        value(state.commander)
-                        onInput { onState(state.typeCommander(it.value)) }
+                    Clearable(state.commander, { onState(state.typeCommander("")) }) {
+                        Input(type = InputType.Text) {
+                            classes("field")
+                            placeholder("e.g. Alela, Cunning Conqueror")
+                            value(state.commander)
+                            onInput { onState(state.typeCommander(it.value)) }
+                        }
                     }
                 }
 
@@ -269,12 +271,14 @@ fun RenameDialog(
                         onClick { onClose() }
                     }) { Text("Done") }
                 } else {
-                    Input(type = InputType.Text) {
-                        classes("field")
-                        placeholder("Deck name")
-                        value(state.name)
-                        onInput { onState(state.typed(it.value)) }
-                        onKeyDown { e -> if (e.key == "Enter" && state.canSave) onSave() }
+                    Clearable(state.name, { onState(state.typed("")) }) {
+                        Input(type = InputType.Text) {
+                            classes("field")
+                            placeholder("Deck name")
+                            value(state.name)
+                            onInput { onState(state.typed(it.value)) }
+                            onKeyDown { e -> if (e.key == "Enter" && state.canSave) onSave() }
+                        }
                     }
                     Div(attrs = { classes("muted", "small") }) {
                         Text("Only the name changes. The deck stays at #/decks/${state.key}")

@@ -76,27 +76,29 @@ fun AutocompleteField(
         classes("ac")
         ref { el -> box[0] = el; onDispose { box[0] = null } }
     }) {
-        Input(type = InputType.Text) {
-            classes("field")
-            extraClasses.forEach { classes(it) }
-            placeholder(hint)
-            attr("autocomplete", "off")
-            attr("role", "combobox")
-            attr("aria-autocomplete", "list")
-            value(state.term)
-            onInput { onState(state.typed(it.value)) }
-            onKeyDown { e ->
-                if (!state.open || state.isEmpty) return@onKeyDown
-                when (e.key) {
-                    "ArrowDown" -> { e.preventDefault(); onState(state.down()) }
-                    "ArrowUp" -> { e.preventDefault(); onState(state.up()) }
-                    "Enter" -> if (state.active >= 0) {
-                        e.preventDefault()
-                        take(state.active)
+        Clearable(state.term, { onState(state.typed("")) }) {
+            Input(type = InputType.Text) {
+                classes("field")
+                extraClasses.forEach { classes(it) }
+                placeholder(hint)
+                attr("autocomplete", "off")
+                attr("role", "combobox")
+                attr("aria-autocomplete", "list")
+                value(state.term)
+                onInput { onState(state.typed(it.value)) }
+                onKeyDown { e ->
+                    if (!state.open || state.isEmpty) return@onKeyDown
+                    when (e.key) {
+                        "ArrowDown" -> { e.preventDefault(); onState(state.down()) }
+                        "ArrowUp" -> { e.preventDefault(); onState(state.up()) }
+                        "Enter" -> if (state.active >= 0) {
+                            e.preventDefault()
+                            take(state.active)
+                        }
+                        // Stopped, so escape closes the list rather than
+                        // whatever overlay the field is sitting in.
+                        "Escape" -> { e.stopPropagation(); onDismiss() }
                     }
-                    // Stopped, so escape closes the list rather than
-                    // whatever overlay the field is sitting in.
-                    "Escape" -> { e.stopPropagation(); onDismiss() }
                 }
             }
         }
