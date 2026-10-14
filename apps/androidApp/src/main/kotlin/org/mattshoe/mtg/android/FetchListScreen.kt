@@ -242,6 +242,10 @@ private fun FetchListOpen(
                             modifier = Modifier.testTag("fetch-also:${card.name}"),
                         )
                     }
+                    // No copy in bulk: it is in a deck, so say which.
+                    card.decksLine?.let {
+                        Line(it, Ink3, Design.MINI, modifier = Modifier.testTag("fetch-decks:${card.name}"))
+                    }
                 }
             }
         }
