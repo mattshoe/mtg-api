@@ -104,6 +104,7 @@ class BlindEternitiesParityTest {
     private fun readsOn(size: DpSize) {
         shell(size, "#/guide/blind-eternities/the-blind-eternities")
         val on = "on a ${size.width} by ${size.height} screen"
+        rule.onNodeWithTag("lore-story", useUnmergedTree = true).assertExists("$on there is no Blind Eternities story")
         val box = rule.onNodeWithTag("lore-story", useUnmergedTree = true).getUnclippedBoundsInRoot()
         val width = box.right - box.left
         assertTrue(width >= 320.dp && width <= 720.dp, "$on the story is $width wide")
