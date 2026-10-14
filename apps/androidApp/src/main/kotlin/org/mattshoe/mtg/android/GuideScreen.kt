@@ -139,7 +139,7 @@ fun GuideScreen(
             when (tile.slug) {
                 Guide.COLOURS -> Colours()
                 Guide.WHEEL -> Wheel()
-                Guide.LORE -> Lore(era ?: PhyrexianLore.eras.first(), onEra)
+                Guide.PHYREXIA -> Lore(era ?: PhyrexianLore.eras.first(), onEra)
                 Guide.GAME_CHANGERS -> GameChangerList(onGameChanger)
                 else -> story?.let { Story(it, onStory) }
             }

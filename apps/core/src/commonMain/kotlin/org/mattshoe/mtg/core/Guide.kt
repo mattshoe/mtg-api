@@ -31,8 +31,11 @@ object Guide {
     const val COLOURS = "colours"
     const val WHEEL = "wheel"
     const val RULES = "rules"
-    const val LORE = "phyrexia"
+    const val PHYREXIA = "phyrexia"
+    const val LORE = "lore"
     const val GAME_CHANGERS = "game-changers"
+
+    val lore: List<GuideTile> = emptyList()
 
     val tiles: List<GuideTile> = listOf(
         GuideTile(COLOURS, "Colour combinations", "Every name, from Azorius to WUBRG. Guilds, shards, wedges and the rest."),
@@ -130,3 +133,7 @@ val AppState.guideTile: GuideTile? get() = if (view == View.GUIDE) Guide.tile(ro
 
 /** A tile, at its own address, so back and a bookmark both work. */
 fun AppState.openGuide(tile: GuideTile): AppState = navigate(Route(View.GUIDE, tile.slug))
+
+val AppState.guideUpTo: String get() = "Guide"
+
+fun AppState.guideUp(): AppState = navigate(View.GUIDE)

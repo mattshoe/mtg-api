@@ -18,7 +18,7 @@ import kotlin.test.assertTrue
 class PhyrexianLoreTest {
 
     private val tile: GuideTile
-        get() = Guide.tile(Guide.LORE) ?: error("the Guide has no Phyrexia tile: ${Guide.tiles.map { it.slug }}")
+        get() = Guide.tile(Guide.PHYREXIA) ?: error("the Guide has no Phyrexia tile: ${Guide.tiles.map { it.slug }}")
 
     @Test
     fun phyrexiaIsATileOfItsOwnAtItsOwnAddress() {

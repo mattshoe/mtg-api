@@ -53,7 +53,7 @@ class MagicStoryTest {
         // like the phyrexian one".
         assertNull(Guide.tiles.firstOrNull { it.title == "The story of Magic" }, "the ten sections are still one tile: ${Guide.tiles.map { it.title }}")
         assertNull(Guide.tile("lore"), "the old one-tile story is still in the Guide")
-        val phyrexia = Guide.tiles.indexOfFirst { it.slug == Guide.LORE }
+        val phyrexia = Guide.tiles.indexOfFirst { it.slug == Guide.PHYREXIA }
         assertEquals(
             MagicStory.sections.map { it.slug },
             Guide.tiles.drop(phyrexia + 1).map { it.slug },
@@ -103,7 +103,7 @@ class MagicStoryTest {
 
     @Test
     fun everyAddressIsUniqueAndAnAddress() {
-        val slugs = MagicStory.articles.map { it.slug } + MagicStory.sections.map { it.slug } + listOf(Guide.COLOURS, Guide.WHEEL, Guide.RULES, Guide.LORE)
+        val slugs = MagicStory.articles.map { it.slug } + MagicStory.sections.map { it.slug } + listOf(Guide.COLOURS, Guide.WHEEL, Guide.RULES, Guide.PHYREXIA)
         assertTrue(MagicStory.articles.size == 55, "${MagicStory.articles.size} articles, which is not all of them")
         assertEquals(slugs.size, slugs.toSet().size, "two things share an address: ${slugs.groupBy { it }.filter { it.value.size > 1 }.keys}")
         MagicStory.articles.forEach { a ->

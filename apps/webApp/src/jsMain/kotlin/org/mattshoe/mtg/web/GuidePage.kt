@@ -77,7 +77,7 @@ fun GuidePage(
             when (tile.slug) {
                 Guide.COLOURS -> Colours()
                 Guide.WHEEL -> Wheel()
-                Guide.LORE -> Lore(era ?: PhyrexianLore.eras.first(), onEra)
+                Guide.PHYREXIA -> Lore(era ?: PhyrexianLore.eras.first(), onEra)
                 Guide.RULES -> RulesSearch(rules, onRules, onLoadRules)
                 Guide.GAME_CHANGERS -> GameChangerList(onGameChanger)
                 else -> story?.let { Story(it, onStory) }
