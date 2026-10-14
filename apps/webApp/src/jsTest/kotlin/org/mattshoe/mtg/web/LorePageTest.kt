@@ -73,7 +73,10 @@ class LorePageTest {
         settle()
         all(".app-menu button.app-tab").first { it.textContent?.trim() == "Guide" }.click()
         settle()
-        val tile = all("button.guide-tile").firstOrNull { it.textContent.orEmpty().contains("Phyrexia") }
+        // Every story is inside Lore.
+        all("button.guide-tile").first { it.querySelector(".guide-tile-title")?.textContent?.trim() == "Lore" }.click()
+        settle()
+        val tile = all("button.guide-tile").firstOrNull { it.querySelector(".guide-tile-title")?.textContent?.trim() == "Phyrexia" }
             ?: error("the Guide has no Phyrexia tile: ${all("button.guide-tile").map { it.textContent }}")
         tile.click()
         settle()
@@ -180,7 +183,7 @@ class LorePageTest {
         settle()
         frame.all("button.guide-back").single().click()
         settle()
-        assertEquals("#/guide", held.value.route.toHash())
+        assertEquals("#/guide/lore", held.value.route.toHash())
         assertTrue(frame.all("button.guide-tile").isNotEmpty(), "back did not show the tiles")
     }
 }
