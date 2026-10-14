@@ -49,6 +49,12 @@ object GuideSearch {
             .map { GuideHit(it.title, it.part, snippet(it, words.first()), it.address) }
     }
 
+    /** The line above the hits. */
+    fun count(n: Int): String = if (n == 1) "1 article" else "$n articles"
+
+    /** What the page says when nothing has every word. */
+    fun none(query: String): String = "No article mentions \"${words(query).joinToString(" ")}\"."
+
     /** The first paragraph with the word in it, cut down to the stretch round it. */
     private fun snippet(article: Article, word: String): String {
         val p = article.paragraphs.first { it.contains(word, ignoreCase = true) }

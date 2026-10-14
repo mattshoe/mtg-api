@@ -100,4 +100,11 @@ class GuideSearchTest {
         val era = searched.searchGuide("Glacian").guideHits.first { it.address == "${Guide.LORE}/thran" }
         assertEquals("thran", searched.openGuideHit(era).loreEra?.slug)
     }
+
+    @Test
+    fun theWordsAboveTheHitsSayHowManyAndTheWordsForNoneSayWhatWasSearched() {
+        assertEquals("1 article", GuideSearch.count(1))
+        assertEquals("12 articles", GuideSearch.count(12))
+        assertEquals("No article mentions \"blue dragon\".", GuideSearch.none("  blue   dragon "))
+    }
 }
