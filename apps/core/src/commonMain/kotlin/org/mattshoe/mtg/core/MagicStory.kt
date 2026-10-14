@@ -80,6 +80,7 @@ object MagicStory {
         storyEldrazi,
         storyInnistrad,
         storyOmenpaths,
+        storyBlindEternities,
     )
 
     val people: List<StoryPerson> get() = storyPeople
