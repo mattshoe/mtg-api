@@ -7,6 +7,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
 import org.junit.Test
@@ -32,7 +35,7 @@ class GuideTileOrderTest {
 
     private val order = listOf("rules", "game-changers", "colours", "wheel")
 
-    private fun tilesInOrder(on: String, sized: @Composable (@Composable () -> Unit) -> Unit) {
+    private fun guide(sized: @Composable (@Composable () -> Unit) -> Unit) {
         rule.setContent {
             sized {
                 MaterialTheme(colorScheme = darkColorScheme()) {
@@ -53,6 +56,10 @@ class GuideTileOrderTest {
             }
         }
         rule.waitForIdle()
+    }
+
+    private fun tilesInOrder(on: String, sized: @Composable (@Composable () -> Unit) -> Unit) {
+        guide(sized)
         val tops = order.map { slug ->
             rule.onNodeWithTag("guide-tile-$slug").assertExists("$on the Guide has no $slug tile")
             rule.onNodeWithTag("guide-tile-$slug").getUnclippedBoundsInRoot().top
@@ -61,6 +68,37 @@ class GuideTileOrderTest {
             assertTrue(b.second > a.second, "$on the ${b.first} tile is drawn at ${b.second}, not under the ${a.first} tile at ${a.second}")
         }
     }
+
+    /**
+     * The wheel is fourth now, under the fold, so a person scrolls to
+     * it. Its page has to open at its own top, back button and all,
+     * not wherever the tiles were scrolled to.
+     */
+    private fun aTileFromFurtherDownOpensAtItsTop(on: String, sized: @Composable (@Composable () -> Unit) -> Unit) {
+        guide(sized)
+        rule.onNodeWithTag("guide-tile-wheel").performScrollTo().performClick()
+        rule.waitForIdle()
+        val screen = rule.onRoot().getUnclippedBoundsInRoot()
+        val back = rule.onNodeWithTag("guide-back").getUnclippedBoundsInRoot()
+        assertTrue(
+            back.top >= screen.top && back.bottom <= screen.bottom,
+            "$on the wheel opened scrolled down, with its back button at ${back.top}, off a screen ${screen.top}..${screen.bottom}",
+        )
+    }
+
+    @Test
+    fun aTileFromFurtherDownOpensAtItsTopOnAPhone() =
+        aTileFromFurtherDownOpensAtItsTop("on a phone") { it() }
+
+    @Test
+    @Config(qualifiers = Tablet.UNFOLDED_QUALIFIERS)
+    fun aTileFromFurtherDownOpensAtItsTopOnAFoldingPhoneOpenedOut() =
+        aTileFromFurtherDownOpensAtItsTop("on a folding phone opened out") { content -> Tablet.Sized(Tablet.UNFOLDED) { content() } }
+
+    @Test
+    @Config(qualifiers = Tablet.LANDSCAPE_QUALIFIERS)
+    fun aTileFromFurtherDownOpensAtItsTopOnATabletHeldSideways() =
+        aTileFromFurtherDownOpensAtItsTop("on a tablet held sideways") { content -> Tablet.Sized(Tablet.LANDSCAPE) { content() } }
 
     @Test
     fun theTilesGoRulesGameChangersColoursThenTheWheelOnAPhone() =
