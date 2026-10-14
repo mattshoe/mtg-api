@@ -28,6 +28,10 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.layout.ContentScale
+import coil3.compose.AsyncImage
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,6 +50,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.mattshoe.mtg.core.ColourWheel
 import org.mattshoe.mtg.core.Combo
+import org.mattshoe.mtg.core.DeckCard
+import org.mattshoe.mtg.core.GameChangers
 import org.mattshoe.mtg.core.Design
 import org.mattshoe.mtg.core.Guide
 import org.mattshoe.mtg.core.GuideHit
@@ -91,6 +97,7 @@ fun GuideScreen(
     onSearch: (String) -> Unit = {},
     hits: List<GuideHit> = emptyList(),
     onHit: (GuideHit) -> Unit = {},
+    onGameChanger: (DeckCard) -> Unit = {},
 ) {
     // The rules page keeps its search bar on screen and scrolls the
     // cards under it, so it is laid out on its own.
@@ -133,6 +140,7 @@ fun GuideScreen(
                 Guide.COLOURS -> Colours()
                 Guide.WHEEL -> Wheel()
                 Guide.LORE -> Lore(era ?: PhyrexianLore.eras.first(), onEra)
+                Guide.GAME_CHANGERS -> GameChangerList(onGameChanger)
                 else -> story?.let { Story(it, onStory) }
             }
         }
@@ -768,6 +776,72 @@ private fun Card(pips: String, modifier: Modifier, pad: Int, content: @Composabl
         Box(Modifier.fillMaxWidth().height(5.dp).background(strip).testTag("guide-band"))
         Column(Modifier.fillMaxWidth().padding(start = pad.dp, end = pad.dp, top = (pad + 4).dp, bottom = pad.dp)) {
             content()
+        }
+    }
+}
+
+/**
+ * The Game Changers, as the deck page draws its list: a banded head
+ * per type with its count, a row per card with its art, name and type
+ * line. A row pops the carousel over the whole list at that card.
+ * Sibling of `GameChangerList` in `GuidePage`.
+ *
+ * Matt: "it should be a list of cards just like a deck page. tapping
+ * any of them should pop a carousel like any other cards". As wide as
+ * the story at most, centred, so a tablet does not stretch it.
+ */
+@Composable
+private fun GameChangerList(onCard: (DeckCard) -> Unit) {
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+        Column(
+            Modifier.widthIn(max = STORY.dp).fillMaxWidth().testTag("gc-list"),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Line(GameChangers.ABOUT, Ink3, size = Design.SMALL)
+            GameChangers.byType.forEach { (group, cards) ->
+                GroupHead(group.title, cards.size.toString(), uppercase = true, banded = true)
+                Panel {
+                    cards.forEachIndexed { i, card ->
+                        if (i > 0) Hairline("gc-rule-${group.title}-$i")
+                        GameChangerRow(card) { onCard(card) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** The deck page's `CardLine`, with no count: nobody holds these, they are a reference. */
+@Composable
+private fun GameChangerRow(card: DeckCard, onOpen: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth()
+            .testTag("gc-row")
+            .clickable { onOpen() }
+            .semantics { contentDescription = card.shown }
+            .padding(vertical = 5.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier.size(40.dp)
+                .background(Bg3, RadiusThumb)
+                .border(1.dp, Line, RadiusThumb)
+                .clip(RadiusThumb),
+        ) {
+            card.art?.let {
+                AsyncImage(
+                    model = it,
+                    contentDescription = null,
+                    modifier = Modifier.size(40.dp),
+                    contentScale = ContentScale.Crop,
+                    alignment = RowCrop,
+                )
+            }
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            Line(card.shown, Ink, Design.SMALL)
+            card.typeLine?.let { Line(it, Ink3, Design.MINI) }
         }
     }
 }

@@ -86,7 +86,7 @@ private val HeroCrop = topBias(34)
  * row's thumbnail is Android's own — the web draws tokens as pills
  * with no art — and takes the same bias as the deck row it resembles.
  */
-private val RowCrop = topBias(32)
+internal val RowCrop = topBias(32)
 
 @Composable
 fun DecksScreen(
@@ -552,7 +552,7 @@ private fun RowAction(card: DeckCard, onTweak: (DeckCard, Tweak?) -> Unit) {
  * `.panel-head` is an `h2` and a count tag, never a bare word.
  */
 @Composable
-private fun GroupHead(
+internal fun GroupHead(
     title: String,
     /** Null where the heading is the count, as the deck shelf's is. */
     count: String?,
@@ -598,7 +598,7 @@ private fun GroupHead(
 
 /** `.deck-line + .deck-line { border-top }`: a rule between rows, not after the last. */
 @Composable
-private fun Hairline(tag: String) {
+internal fun Hairline(tag: String) {
     Box(Modifier.fillMaxWidth().height(1.dp).background(Line).testTag(tag))
 }
 

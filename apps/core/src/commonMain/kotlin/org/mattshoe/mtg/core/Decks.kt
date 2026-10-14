@@ -95,7 +95,7 @@ data class Deck(
 }
 
 /** Which list the carousel is over. */
-enum class PeekOf { DECK, LIBRARY }
+enum class PeekOf { DECK, LIBRARY, GAME_CHANGERS }
 
 /**
  * Which card of a run the carousel is showing, or none.
