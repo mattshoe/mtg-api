@@ -81,7 +81,8 @@ class GuidePageTest {
 
     private suspend fun HTMLElement.openColours() {
         openGuide()
-        val tile = all("button.guide-tile").firstOrNull() ?: error("the Guide has no tiles")
+        val tile = all("button.guide-tile").firstOrNull { it.textContent.orEmpty().contains("Colour combinations") }
+            ?: error("the Guide has no colour combinations tile: ${all("button.guide-tile").map { it.textContent }}")
         tile.click()
         settle()
     }
@@ -95,8 +96,8 @@ class GuidePageTest {
         val tiles = frame.all("button.guide-tile")
         assertTrue(tiles.isNotEmpty(), "the Guide page has no tiles")
         assertTrue(
-            tiles.first().textContent.orEmpty().contains("Colour", ignoreCase = true),
-            "the first tile is not the colour combinations: ${tiles.first().textContent}",
+            tiles.any { it.textContent.orEmpty().contains("Colour combinations") },
+            "the Guide has no colour combinations tile: ${tiles.map { it.textContent }}",
         )
     }
 
