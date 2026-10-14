@@ -56,6 +56,8 @@ data class AppState(
     val rules: Rules = Rules(),
     /** What is typed in the Guide's search bar. See `GuideSearch.kt`. */
     val guideSearch: String = "",
+    /** What is typed in the Game Changers page's search bar. See `GameChangers.kt`. */
+    val gameChangerSearch: String = "",
     /** Intake requests and where each one is, for Admin Settings. */
     val tasks: Tasks = Tasks(),
     /** The task being written on Admin Settings' New task page. */
