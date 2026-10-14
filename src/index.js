@@ -865,9 +865,36 @@ async function route(request, env, ctx, entry) {
         // or make it wait on Firebase. `tell` decides for itself whether
         // this transition is worth a buzz — see src/notify.js.
         if (out.status < 400) {
-          ctx.waitUntil(tell(env, { ...body, ...(out.body?.task || {}) })
-            .then((r) => { entry.detail = { ...entry.detail, push: r }; })
-            .catch(() => {}));
+          // The push gets its OWN row, not a field on this request's.
+          //
+          // It used to set `entry.detail.push` from inside `waitUntil`,
+          // while `writeEntry` ran from another `waitUntil` registered at
+          // the end of the request. Both start together and `writeEntry`
+          // wins, because this one is waiting on Firebase — so the field
+          // was written before the thing that fills it had finished, and
+          // the result went nowhere. Matt: "I haven't been getting push
+          // notifications for deployed tasks", and there was nothing on
+          // disk anywhere saying why.
+          //
+          // A push outlives the request that caused it, so it is its own
+          // event. `console.log` as well, because `wrangler tail` is how
+          // you watch this happen live and it showed only "Ok".
+          ctx.waitUntil((async () => {
+            const task = { ...body, ...(out.body?.task || {}) };
+            const r = await tell(env, task);
+            console.log(`push ${task.name || task.key}: ${JSON.stringify(r)}`);
+            const row = newEntry(request);
+            row.path = '/tasks/status';
+            row.write = true;
+            row.admin = true;
+            row.message = r.skipped ? `push skipped: ${r.skipped}`
+              : r.failed ? `push failed: ${r.failed}`
+                : `push sent to ${r.sent}${r.dead ? `, ${r.dead} dead` : ''}`;
+            row.detail = { name: task.name, status: task.status, push: r };
+            // A push nobody could make is an error on the row, because it
+            // is the only way anyone finds out the phones went quiet.
+            await writeEntry(env, row, r.failed || r.problems ? 500 : 200);
+          })().catch(() => {}));
         }
       } else {
         out = await received(env.DB, body.keys, body.names);
