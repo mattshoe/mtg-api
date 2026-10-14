@@ -73,6 +73,7 @@ fun DeckEditDialog(
                     onValueChange = { onState(state.typeCommander(it)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
+                    trailingIcon = clearX(state.commander) { onState(state.typeCommander("")) },
                     label = { Text("Commander") },
                 )
                 OutlinedTextField(
@@ -235,6 +236,7 @@ fun RenameDialog(
                         onValueChange = { onState(state.typed(it)) },
                         label = { Text("Deck name") },
                         singleLine = true,
+                        trailingIcon = clearX(state.name) { onState(state.typed("")) },
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Text(

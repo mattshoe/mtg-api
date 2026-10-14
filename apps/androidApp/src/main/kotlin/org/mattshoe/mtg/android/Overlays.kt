@@ -53,6 +53,7 @@ fun PaletteDialog(
                     onValueChange = { onState(state.typed(it)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
+                    trailingIcon = clearX(state.term) { onState(state.typed("")) },
                     label = { Text("Name") },
                 )
                 Column(Modifier.verticalScroll(rememberScrollState())) {

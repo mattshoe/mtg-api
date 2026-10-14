@@ -179,6 +179,7 @@ private fun NameStep(s: NewDeck, onState: (NewDeck) -> Unit) {
             onValueChange = { onState(s.rename(it)) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
+            trailingIcon = clearX(s.name) { onState(s.rename("")) },
             label = { Text("Deck name") },
         )
         DeckFoot(s, onState, {}) {

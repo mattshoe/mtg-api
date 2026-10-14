@@ -366,6 +366,7 @@ private fun Finder(state: DeckTweak, onState: (DeckTweak) -> Unit, onFind: (Stri
         },
         modifier = Modifier.fillMaxWidth().testTag("tweak-term"),
         singleLine = true,
+        trailingIcon = clearX(state.term) { onState(state.typed("")) },
         shape = RadiusSm,
         textStyle = LocalTextStyle.current.copy(fontSize = Design.BODY.sp),
         placeholder = {
