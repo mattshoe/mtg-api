@@ -125,7 +125,7 @@ fun GuideScreen(
                 Guide.COLOURS -> Colours()
                 Guide.WHEEL -> Wheel()
                 Guide.LORE -> Lore(era ?: PhyrexianLore.eras.first(), onEra)
-                else -> Unit
+                else -> story?.let { Story(it, onStory) }
             }
         }
     }
