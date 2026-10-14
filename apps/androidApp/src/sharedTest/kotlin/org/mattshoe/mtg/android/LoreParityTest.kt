@@ -64,6 +64,9 @@ class LoreParityTest {
     private fun openLore() {
         rule.onNodeWithContentDescription("Guide").performClick()
         rule.waitForIdle()
+        // Every story is inside Lore.
+        rule.onNodeWithTag("guide-tile-lore").performScrollTo().performClick()
+        rule.waitForIdle()
         rule.onNodeWithTag("guide-tile-phyrexia").assertExists("the Guide has no Phyrexia tile")
         rule.onNodeWithTag("guide-tile-phyrexia").performScrollTo().performClick()
         rule.waitForIdle()
@@ -190,7 +193,7 @@ class LoreParityTest {
         tab("Rath")
         rule.onNodeWithTag("guide-back").performClick()
         rule.waitForIdle()
-        assertEquals("#/guide", held.value.route.toHash())
+        assertEquals("#/guide/lore", held.value.route.toHash())
         rule.onNodeWithTag("guide-tile-phyrexia").assertExists("back did not show the tiles")
     }
 }

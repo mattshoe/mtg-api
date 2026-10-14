@@ -80,6 +80,9 @@ class StoryParityTest {
     private fun openSection(slug: String) {
         rule.onNodeWithContentDescription("Guide").performClick()
         rule.waitForIdle()
+        // Every story is inside Lore.
+        rule.onNodeWithTag("guide-tile-lore").performScrollTo().performClick()
+        rule.waitForIdle()
         rule.onNodeWithTag("guide-tile-$slug").assertExists("the Guide has no tile for $slug")
         rule.onNodeWithTag("guide-tile-$slug").performScrollTo().performClick()
         rule.waitForIdle()
@@ -141,7 +144,9 @@ class StoryParityTest {
         shell()
         rule.onNodeWithContentDescription("Guide").performClick()
         rule.waitForIdle()
-        rule.onNodeWithTag("guide-tile-lore").assertDoesNotExist()
+        // Since then they are all inside Lore.
+        rule.onNodeWithTag("guide-tile-lore").performScrollTo().performClick()
+        rule.waitForIdle()
         MagicStory.sections.forEach { rule.onNodeWithTag("guide-tile-${it.slug}").assertExists("${it.title} is not a tile of its own") }
     }
 
@@ -290,7 +295,7 @@ class StoryParityTest {
         openSection("ravnica")
         rule.onNodeWithTag("guide-back").performClick()
         rule.waitForIdle()
-        assertEquals("#/guide", held.value.route.toHash())
+        assertEquals("#/guide/lore", held.value.route.toHash())
         rule.onNodeWithTag("guide-tile-ravnica").assertExists("back did not show the tiles")
     }
 }
