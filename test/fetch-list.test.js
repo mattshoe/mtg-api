@@ -27,18 +27,17 @@ describe('the Fetch list query', () => {
 
   it('names every real deck a card is in, and no proxy deck', async () => {
     const found = await rows();
-    const sphere = found.find((r) => r.name_norm === "commander's sphere");
-    expect(sphere, "Commander's Sphere did not come back").toBeTruthy();
+    // Arcane Signet is in both of his precons, and in deck 4 as well,
+    // a proxy build. A proxy holds no real card, so it is not named.
+    const signet = found.find((r) => r.name_norm === 'arcane signet');
+    expect(signet, 'Arcane Signet did not come back').toBeTruthy();
+    const names = JSON.parse(signet.decks);
     const [chaos] = await sql('SELECT name FROM decks WHERE id = 1');
     const [elven] = await sql('SELECT name FROM decks WHERE id = 2');
-    expect(JSON.parse(sphere.decks)).toContain(chaos.name);
-    expect(JSON.parse(sphere.decks)).toContain(elven.name);
-
-    // Deck 4 is a proxy build that lists a real Sol Ring. A proxy holds
-    // no real card, so it is not where his Sol Ring is.
-    const sol = found.find((r) => r.name_norm === 'sol ring');
     const [proxy] = await sql('SELECT name FROM decks WHERE id = 4');
-    expect(JSON.parse(sol.decks), 'a proxy deck is named as holding a real card').not.toContain(proxy.name);
+    expect(names).toContain(chaos.name);
+    expect(names).toContain(elven.name);
+    expect(names, 'a proxy deck is named as holding a real card').not.toContain(proxy.name);
   });
 
   it('names no deck for a card no deck holds', async () => {
