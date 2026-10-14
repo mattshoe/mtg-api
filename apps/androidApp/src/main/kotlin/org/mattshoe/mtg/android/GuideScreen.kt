@@ -48,6 +48,8 @@ import org.mattshoe.mtg.core.ColourWheel
 import org.mattshoe.mtg.core.Combo
 import org.mattshoe.mtg.core.Design
 import org.mattshoe.mtg.core.Guide
+import org.mattshoe.mtg.core.GuideHit
+import org.mattshoe.mtg.core.GuideSearch
 import org.mattshoe.mtg.core.GuideTile
 import org.mattshoe.mtg.core.LoreEra
 import org.mattshoe.mtg.core.PhyrexianLore
@@ -85,6 +87,10 @@ fun GuideScreen(
     rules: Rules = Rules(),
     onRules: (Rules) -> Unit = {},
     onLoadRules: () -> Unit = {},
+    search: String = "",
+    onSearch: (String) -> Unit = {},
+    hits: List<GuideHit> = emptyList(),
+    onHit: (GuideHit) -> Unit = {},
 ) {
     // The rules page keeps its search bar on screen and scrolls the
     // cards under it, so it is laid out on its own.
@@ -104,7 +110,9 @@ fun GuideScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         if (tile == null) {
-            Guide.tiles.forEach { t ->
+            GuideFind(search, onSearch, hits, onHit)
+            // While something is searched, what it found stands in for the tiles.
+            if (GuideSearch.words(search).isEmpty()) Guide.tiles.forEach { t ->
                 Card(
                     "WUBRG",
                     Modifier.fillMaxWidth().testTag("guide-tile-${t.slug}").clickable { onOpen(t) },
@@ -128,6 +136,60 @@ fun GuideScreen(
                 else -> story?.let { Story(it, onStory) }
             }
         }
+    }
+}
+
+/**
+ * The search bar over the tiles, and what it found in their place.
+ * Sibling of `GuideFind` in `GuidePage`.
+ *
+ * Matt: "i want to be able to search guide articles on the Guide page
+ * ... searching should show any articles which contain the keywords on
+ * the search bar". What is found is `GuideSearch`'s. As wide as the
+ * story at most, centred, so a tablet does not stretch it.
+ */
+@Composable
+private fun GuideFind(search: String, onSearch: (String) -> Unit, hits: List<GuideHit>, onHit: (GuideHit) -> Unit) {
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+        Column(Modifier.widthIn(max = STORY.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Field(
+                value = search,
+                onValueChange = onSearch,
+                placeholder = "Search the articles: Urza, Sylex, Ravnica",
+                modifier = Modifier.testTag("guide-search"),
+            )
+            when {
+                GuideSearch.words(search).isEmpty() -> {}
+                hits.isEmpty() -> Line(GuideSearch.none(search), Ink3, modifier = Modifier.testTag("guide-search-none"))
+                else -> {
+                    Line(GuideSearch.count(hits.size), Ink3, size = Design.MINI, modifier = Modifier.testTag("guide-search-count"))
+                    Column(Modifier.fillMaxWidth().testTag("guide-hits"), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        hits.forEach { GuideHitCard(it) { onHit(it) } }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** The site's `.guide-hit`: where it is from, its title, and a line round the word, with the accent down the left edge. */
+@Composable
+private fun GuideHitCard(hit: GuideHit, onOpen: () -> Unit) {
+    Column(
+        Modifier.fillMaxWidth()
+            .testTag("guide-hit")
+            .clip(Radius)
+            .background(Brush.linearGradient(listOf(Bg3, Bg2)))
+            .border(1.dp, Line, Radius)
+            .drawBehind { drawRect(Accent, size = Size(3.dp.toPx(), size.height)) }
+            .clickable { onOpen() }
+            .padding(start = 17.dp, end = 14.dp, top = 14.dp, bottom = 14.dp),
+    ) {
+        Line(hit.part, Ink3, size = Design.MINI, modifier = Modifier.testTag("guide-hit-part"))
+        Spacer(Modifier.height(3.dp))
+        Line(hit.title, Ink, size = 16, weight = FontWeight.Bold, modifier = Modifier.testTag("guide-hit-title"))
+        Spacer(Modifier.height(6.dp))
+        Line(hit.snippet, Ink2, size = Design.SMALL, modifier = Modifier.testTag("guide-hit-snippet"))
     }
 }
 

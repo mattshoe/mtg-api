@@ -626,7 +626,7 @@ td.mono { font-family: var(--mono); font-size: 12.5px; }
   background: linear-gradient(160deg, var(--bg-3), var(--bg-2) 70%);
   border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: var(--radius);
 }
-.guide-hit-part { color: var(--text-3); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+.guide-hit-part { color: var(--text-3); font-size: 12px; }
 .guide-hit-title { font: 700 16px/1.25 var(--sans); margin-top: 3px; }
 .guide-hit-snippet { color: var(--text-2); font-size: 13px; line-height: 1.45; margin-top: 6px; }
 .guide-tiles { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }

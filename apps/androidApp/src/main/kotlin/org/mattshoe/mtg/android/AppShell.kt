@@ -45,6 +45,9 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.mattshoe.mtg.core.guideHits
+import org.mattshoe.mtg.core.openGuideHit
+import org.mattshoe.mtg.core.searchGuide
 import org.mattshoe.mtg.core.leaveFetchList
 import org.mattshoe.mtg.core.openFetch
 import org.mattshoe.mtg.core.onFetchList
@@ -456,6 +459,10 @@ fun AppShell(
                         rules = state.rules,
                         onRules = { onState(state.copy(rules = it)) },
                         onLoadRules = onLoadRules,
+                        search = state.guideSearch,
+                        onSearch = { onState(state.searchGuide(it)) },
+                        hits = state.guideHits,
+                        onHit = { onState(state.openGuideHit(it)) },
                     )
 
                     View.FETCH -> FetchListScreen(
