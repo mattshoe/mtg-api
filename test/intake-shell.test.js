@@ -1123,7 +1123,7 @@ describe('what a worktree is handed', () => {
 // Two tasks sat at `in review` for three hours with no agent alive on
 // them. The only reason it came to light is that Matt asked.
 describe('a worktree with nobody in it', () => {
-  it('marks the task blocked, so somebody knows it needs picking up', () => {
+  it('marks the task paused, so somebody knows it needs picking up', () => {
     build({ requests: { 'a-thing.md': READY('A thing') } })
     // A stopped agent's worktree: it exists, nothing is running in it.
     mkdirSync(join(box.repo, '.intake', 'wt', 'a-thing', 'requests'), { recursive: true })
@@ -1132,8 +1132,14 @@ describe('a worktree with nobody in it', () => {
 
     // task-status.mjs runs for real here and has no credential in a box,
     // so what it writes to the log is the proof it was asked at all.
+    // `paused`, not `blocked`. A worktree with work in it and no agent
+    // is recoverable by definition — another agent picks it up. Blocked
+    // is reserved for what cannot be recovered at all, and writing it
+    // here made tasks flap in and out of it once a minute.
     expect(box.intakeLog(), 'nothing told D1 the task had stalled')
-      .toMatch(/a-thing blocked|blocked was not written/)
+      .toMatch(/a-thing paused|paused was not written/)
+    expect(box.intakeLog(), 'a recoverable stall was called blocked')
+      .not.toMatch(/a-thing blocked/)
     // And still no second agent on it.
     expect(box.log()).not.toContain('claude ')
   })
@@ -1190,6 +1196,6 @@ describe('why an agent stopped', () => {
 
     run('dispatch.sh')
 
-    expect(box.intakeLog()).toMatch(/a-thing blocked|blocked was not written/)
+    expect(box.intakeLog()).toMatch(/a-thing paused|paused was not written/)
   })
 })

@@ -181,6 +181,22 @@ function truth(name, now, { ready, held, filed, stalled, alive, cancelled = [], 
   // for a stalled worktree too, and that one is answered by somebody
   // picking the work up, which is exactly what a live agent is. Two tasks
   // read `blocked` while one was merged and the other had an agent on it.
+  // `blocked` is terminal. Matt: "A task should NEVER enter blocked
+  // unless the process is COMPLETELY unrecoverable and the agent can no
+  // longer function. It is NOT a temporary status, it is a PERMANENT,
+  // COMPLETELY UNRESOLVABLE status."
+  //
+  // So nothing here takes it back. It used to be cleared by a live
+  // agent, which is how a task could flap into it and out of it once a
+  // minute — the dispatcher wrote it for a stalled worktree, this
+  // cleared it, the next tick wrote it again. That source is gone
+  // (a stalled worktree is `paused` now) and this is the other half:
+  // once a task is genuinely unrecoverable, it stays said until a
+  // person decides otherwise.
+  //
+  // A merge still outranks it, below, because work that shipped plainly
+  // was not unrecoverable and a row saying otherwise is just wrong.
+  if (now === 'blocked' && !merged) return null
   if (alive.includes(name)) return now === 'in progress' ? null : { status: 'in progress' }
   const isReady = ready.includes(name)
   const isHeld = held.includes(name)
@@ -396,18 +412,28 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     try { text = readFileSync(join(repo, 'requests', `${name}.md`), 'utf8') } catch { /* gone */ }
     transition = started(name, text)
   } else if (cmd === 'stalled') {
-    // The agent's own last words, when the shell found them. "Not logged
-    // in · Please run /login" is a different problem from "it crashed",
-    // and a row that says the first one is a row Matt can act on.
-    // A worktree with no agent in it. There is no resume by design, so
-    // this needs a person — and the task row is the only way to reach
-    // one. Two tasks sat at `in review` for three hours before anybody
-    // noticed, because a dead agent's worktree blocks its request forever
-    // and said nothing.
+    // `paused`, NOT `blocked`.
+    //
+    // A worktree with no agent in it is the definition of recoverable:
+    // the work is sitting there and starting another agent picks it up.
+    // It was writing `blocked` on every timer firing, reconcile was
+    // clearing it, and the next tick wrote it again — so a task flapped
+    // in and out of `blocked` once a minute, and with push notifications
+    // on that is a phone buzzing once a minute. Matt: "The tasks are
+    // constantly flopping in and out of blocked."
+    //
+    // `paused` is the word the vocabulary already has for this: nothing
+    // is running, the work is kept, the reason says why. It is also not
+    // a status anything pushes for.
+    //
+    // The agent's own last words go in the note when the shell found
+    // them. "Not logged in · Please run /login" is a different problem
+    // from "it crashed", and a row that says the first is a row Matt can
+    // act on in ten seconds.
     const said = process.argv.slice(4).join(' ').trim();
     transition = {
       name,
-      status: 'blocked',
+      status: 'paused',
       note: said
         ? `stopped: ${said.slice(0, 160)}`
         : 'stopped with work left in its worktree; it needs a person to pick it up',

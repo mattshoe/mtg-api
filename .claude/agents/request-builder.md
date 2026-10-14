@@ -358,6 +358,36 @@ platforms:
 Assert the same measured geometry at each size. `CarouselOnATabletTest`
 on both sides is the example.
 
+## `blocked` is permanent, and almost nothing should ever write it
+
+Matt: "A task should NEVER enter blocked unless the process is
+COMPLETELY unrecoverable and the agent can no longer function. It is NOT
+a temporary status, it is a PERMANENT, COMPLETELY UNRESOLVABLE status."
+
+`blocked` is one of the two things that buzzes his phone — the other is
+`deployed`. So it is not a progress report, it is an alarm, and it is
+the last thing a task ever says.
+
+**Write it when the work cannot continue at all and no agent will ever
+make it continue.** A decision only Matt can make. A credential only he
+can supply. A request that contradicts itself.
+
+**Do not write it for anything a retry would fix.** An agent that died,
+a rate limit, a red CI job, a worktree with work in it and nobody
+working — all recoverable, all `paused`, which says exactly that:
+nothing is running, the work is kept, the reason says why. `paused`
+notifies nobody.
+
+It flapped before this rule existed. The dispatcher wrote `blocked` for
+a stalled worktree on every timer firing, reconcile cleared it, the next
+firing wrote it again — once a minute, a push notification each time.
+Two changes stop that: a stalled worktree is `paused`, and nothing takes
+a task back out of `blocked` except the work actually shipping.
+
+That last part is the cost, and it is deliberate: a task you wrongly
+mark `blocked` stays wrong until a person moves it. Which is the right
+price for the only word that is allowed to interrupt him.
+
 ## Nothing merges to main without a full green suite, run locally
 
 Matt: "Just disable CI and make a HARD RULE that all tasks MUST have a
