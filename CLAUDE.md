@@ -301,17 +301,15 @@ and say why**. A guard against regression is worth having; counting it
 as proof is not. Six tests this repo shipped were doing the second
 thing.
 
-## What CI does enforce
+## What the gate enforces beyond the tests passing
 
-Not the discipline — the result of it. Three things, and all three
-have caught something real:
+**CI enforces nothing. It does not run.** This section used to open
+"Every test runs on every pull request" and that has been false since
+the day `test.yml` and `apps.yml` became `workflow_dispatch` only. A
+pull request here has no checks at all. `npm run test:everything` is the
+only thing standing between a change and main, and it carries the two
+checks that used to live in CI:
 
-- **Every test runs on every pull request.** `shared`, `web` and
-  `android` in `.github/workflows/apps.yml`, including the emulator.
-  Worth knowing how this was learned: `apps.yml` triggers on
-  `pull_request` and pushes to `main`, so a hundred commits once sat
-  on a branch with no pull request and no CI at all, verified by
-  nothing but a laptop.
 - **Every test that exists actually ran** —
   `scripts/check-test-count.mjs` counts `@Test` in the source and
   compares. Kotlin's incremental compiler once dropped three classes,
@@ -382,6 +380,19 @@ never happened, and caught three agents with it.
 | web, real browser | `npm run test:web` | ~2m30s |
 | one Compose screen test | `./apps/gradlew -p apps :androidApp:testDebugUnitTest --tests 'YourTest'` | seconds |
 
+Those go through `scripts/guard.mjs`, which adds `--daemon` and
+`--configuration-cache` for you. Both matter more than they sound:
+`~/.gradle/gradle.properties` has carried `org.gradle.daemon=false`
+since July 2024, a machine-wide setting the repo cannot override from a
+project file, so every Gradle command here was starting a JVM and
+throwing it away. Gradle said so on every run — "a single-use Daemon
+process will be forked" — and nobody read it. Re-running an unchanged
+`:core` test went from 11.9s to 0.8s, and a real edit on `:androidApp`
+from 46.5s to 24.9s. If you invoke `gradlew` directly rather than
+through an npm script, pass both flags yourself. `MTG_GRADLE_PLAIN=1`
+turns them off when you need to know whether the cache is what is lying
+to you.
+
 The whole Android screens suite is not on that list, on the JVM or on a
 device. Both are in the never-run-locally table below, and the reason is
 underneath it.
@@ -408,6 +419,21 @@ against one machine's speed. Do not raise it to make the suite
 faster; the failure it prevents is a suite that goes green locally
 and red on hardware nobody has.
 
+## Ask for several things at once
+
+Measured across every agent log in this repo: **9,220 tool calls over
+9,220 turns, and not one turn ever made two calls.** A turn costs about
+25 seconds whatever is in it, which is 110 of the 190 hours these tasks
+have taken — more than every command they ran put together.
+
+Independent calls go in one message. Four file reads, three greps and a
+`git status` is one turn, not eight. The test is dependency: if you need
+the first answer to know what to ask second, they are two turns. If you
+are working through a list, they are one.
+
+Suites are the exception and still run one at a time in the foreground,
+because they contend for the same machine.
+
 ## Android state
 
 `MainActivity` must survive a configuration change. State lives in a
@@ -429,10 +455,16 @@ Run the command in the foreground and let it finish. If it is too slow to sit
 through, it is a functional suite and it belongs in the once-at-the-end pass
 or in CI — not in your cycle.
 
-## Commands you may not run locally. Ever.
+## Commands you do not run by hand
 
-CI runs these. Running one yourself costs the minutes beside it and tells you
-nothing CI will not tell you for free.
+`npm run test:everything` runs all of these, in order, behind
+`scripts/guard.mjs` so none of them is subject to your ten-minute tool
+limit. Running one by hand in your TDD cycle costs the minutes beside it
+and tells you nothing about the line you just changed.
+
+This section used to say "CI runs these" and "never run locally". CI
+runs nothing now; the gate runs them, on this machine, and you are the
+one who starts it. The list is what it costs, not what is forbidden.
 
 | never run locally | why | minutes |
 |---|---|---|
@@ -440,7 +472,7 @@ nothing CI will not tell you for free.
 | `npm run test:android` | the same thing | ~17-23 |
 | `./gradlew ... :webApp:jsBrowserTest` | starts a real browser | ~4 |
 | `./gradlew ... --no-daemon ...` | a cold JVM every invocation | +20s each |
-| `:core:jvmTest :core:jsNodeTest :core-net:jvmTest :core-net:jsNodeTest :core:koverVerify` together | this is CI's `shared` job | ~4 |
+| `:core:jvmTest :core:jsNodeTest :core-net:jvmTest :core-net:jsNodeTest :core:koverVerify` together | the whole shared job | ~4 |
 | `npm run test:screens` | the whole worktree compiles cold; this is what killed seven agents | ~12-20 |
 | `:androidApp:testDebugUnitTest` with no `--tests` | the same thing by its real name | ~12-20 |
 
@@ -469,14 +501,14 @@ turn, so the agent dies there and the request is resumed by the next one,
 from cold, forever.
 
 It is not a discipline problem. The command does not fit in the tool, and
-telling an agent to run it is telling it to die. CI runs the same suite on
-every pull request in its own job, `./gradlew :androidApp:testDebugUnitTest`,
-on a machine with no ten-minute ceiling.
+telling an agent to run it is telling it to die.
 
 So: change Compose screens, run **your own test** by name in the cycle —
-`--tests 'YourTest'` is seconds and is not banned — then push and read the
-`android` job. If it is red, fix it and push again. One CI cycle is 7m39s
-and it is the only way that suite can be made to run at all.
+`--tests 'YourTest'` is a second or two now the daemon is on, and is not
+banned — then let `npm run test:everything` run the whole suite once at
+the end. It puts every suite behind `guard.mjs`, which has no
+ten-minute ceiling, and it resumes, so a second run after a fix pays for
+the suite that broke rather than all six.
 
 **What you run in the cycle**, and nothing else:
 
@@ -486,11 +518,9 @@ and it is the only way that suite can be made to run at all.
 npx vitest run test/thing.test.js -t 'the one case'
 ```
 
-**What you run once, at the end, before the pull request:** `npm test` and
-`npm run test:web` — only the ones your diff actually reaches. Not the
-Android screens suite: CI runs that one, and the section above says why
-you cannot. Then push and let CI do the rest. CI is 7m39s; it is not worth
-reproducing on a laptop.
+**What you run once, at the end, before you merge:** `npm run
+test:everything`, all of it, and it must print EVERY SUITE PASSED.
+Nothing runs behind you.
 
 **Never background a command and poll its output.** Not a suite, not a build,
 not anything. Run it in the foreground and let it finish. One agent spent 55%

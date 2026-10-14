@@ -135,6 +135,7 @@ queue="$(cd "$REPO" && node scripts/intake.mjs buildable)" || {
 # candidate rather than returning on the first failure matters: one request
 # with a leftover branch would otherwise block everything behind it.
 file=''
+finishing=''
 while IFS= read -r f; do
   [ -n "$f" ] || continue
   if printf '%s\n' "$filed" | /usr/bin/grep -qxF "$f"; then
@@ -151,6 +152,31 @@ while IFS= read -r f; do
   wt="$STATE/wt/${f%.md}"
   if [ -e "$wt" ]; then
     if ! pgrep -f "requests/${f}" >/dev/null 2>&1; then
+      # Finished and unmerged is not the same as stalled mid-build.
+      #
+      # `i-can-t-tap-done-tasks-to-look-at-the-details` took 52.2 hours
+      # of wall clock and 170 turns of actual work; the rest was its
+      # pull request sitting open with nobody on it. Three tasks account
+      # for 76 of the 190 hours this repo has spent, all the same way.
+      #
+      # An open pull request means the building is done and what is left
+      # is running the gate and merging, which is a bounded job. So it
+      # gets ONE finisher — one, marked on disk and never cleared,
+      # because something picking work back up repeatedly is exactly how
+      # seven agents came to run on a single request in four hours.
+      #
+      # Not while the tree is warm: an agent that died a minute ago may
+      # have left it half written, and the next tick is a minute away.
+      mark="$STATE/${f%.md}.finished-once"
+      if [ ! -e "$mark" ] && [ -z "$(find "$wt" -maxdepth 0 -mmin -10 2>/dev/null)" ]; then
+        b="$(git -C "$wt" rev-parse --abbrev-ref HEAD 2>/dev/null)"
+        if [ -n "$b" ] && [ "$b" != HEAD ] \
+          && gh pr list --head "$b" --state open --json number 2>/dev/null | /usr/bin/grep -q '"number"'; then
+          : > "$mark"
+          file="$f"; branch="$b"; tree="$wt"; finishing=1
+          break
+        fi
+      fi
       # Say WHY it stopped, not just that it did. The agent writes the
       # reason as the last thing in its own log and nothing was reading
       # it: every task failed one morning with "Not logged in · Please
@@ -220,8 +246,22 @@ if [ -f "$HOME/.mtg-agent.env" ]; then
 fi
 [ -n "$AGENT_TOKEN" ] || say "no ~/.mtg-agent.env; the agent cannot act on the API as admin"
 
-say "building $name on $branch"
+if [ -n "$finishing" ]; then
+  say "finishing $name on $branch: its pull request is open and nobody is on it"
+else
+  say "building $name on $branch"
+fi
 node "$REPO/scripts/intake/task-status.mjs" building "$file" >>"$LOG" 2>&1 || true
+
+# A finisher is told what it is, because the work is already written and
+# re-doing it is the wrong instinct. Everything else about the brief
+# applies: the gate is the gate.
+FINISH_PROMPT=""
+if [ -n "$finishing" ]; then
+  FINISH_PROMPT="THIS WORK IS ALREADY BUILT AND PUSHED. Its pull request is open on $branch and the agent that wrote it is gone. You are finishing it, not rebuilding it: read the diff, rebase onto origin/main if it has moved, run 'npm run test:everything' in the foreground, fix whatever is red, and merge on EVERY SUITE PASSED. Do not start the work over. You are the only finisher this request gets.
+
+"
+fi
 
 cd "$tree" || exit 1
 env \
@@ -232,9 +272,9 @@ env \
   MTG_API_TOKEN="$AGENT_TOKEN" \
   INTAKE_BUILDER=1 \
   GH_CONFIG_DIR="${GH_CONFIG_DIR:-$HOME/.config/gh}" \
-  claude -p "You are the request-builder agent. Read .claude/agents/request-builder.md and follow it exactly, then build requests/$name.md.
+  claude -p "${FINISH_PROMPT:-}You are the request-builder agent. Read .claude/agents/request-builder.md and follow it exactly, then build requests/$name.md.
 
-It is yours end to end: build it test-first, open the pull request, wait for CI with \`gh pr checks <n> --watch --fail-fast\` (it blocks — do not use ScheduleWakeup or Monitor, you get no second turn), merge it on green unless the request says 'merge: ask', and move requests/$name.md into requests/done/ in your own commit.
+It is yours end to end: build it test-first, move requests/$name.md into requests/done/ in your own commit, open the pull request, run \`npm run test:everything\` in the foreground and merge on EVERY SUITE PASSED unless the request says 'merge: ask'. There is no CI — do not wait for checks, do not watch the deploy, do not use ScheduleWakeup or Monitor; you get no second turn.
 
 Run tests the way .claude/agents/request-builder.md says: one unit test at a time during the cycle, named, red then green. Then ONCE at the end, before you merge, run 'npm run test:everything' and let it finish. CI does not validate anything any more — that command is the whole gate, it runs every suite including the emulator, and main takes a fully green one. Not the suites your diff reaches. All of them.
 

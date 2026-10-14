@@ -30,7 +30,7 @@ import { describe, it, expect, afterEach } from 'vitest'
 import { spawnSync, spawn } from 'node:child_process'
 import {
   mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync,
-  cpSync, chmodSync,
+  cpSync, chmodSync, utimesSync,
 } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -609,15 +609,21 @@ describe('the agent that gets launched', () => {
     expect(builtRequest()).toContain('--model opus')
   })
 
-  it('is told to wait for CI with a command that blocks, and to merge itself', () => {
-    // The rule was never the problem, the mechanism was: agents told to
-    // "watch CI" ended their turn waiting for a notification that a
-    // headless `claude -p` can never deliver, and three of four died that
-    // way. The prompt has to name a command that blocks in the foreground.
+  it('is told the gate is local and there is no CI to wait for', () => {
+    // This used to assert the opposite, and was right to at the time:
+    // agents told to "watch CI" ended their turn waiting for a
+    // notification a headless `claude -p` can never deliver, so the
+    // prompt had to name a command that blocks in the foreground.
+    //
+    // CI was then switched off entirely. The command stayed in the
+    // prompt and accounts for 18.7 hours over 220 calls across the agent
+    // logs; it now returns "no checks reported" instantly, so it is no
+    // longer slow, just false. The blocking command that matters is the
+    // gate.
     const prompt = builtRequest()
-    expect(prompt).toContain('gh pr checks')
-    expect(prompt).toContain('--watch')
-    expect(prompt).toContain('merge it on green')
+    expect(prompt).toContain('npm run test:everything')
+    expect(prompt, 'still telling agents to wait for CI that does not run').not.toContain('gh pr checks')
+    expect(prompt, 'still telling agents to watch the deploy').not.toContain('run watch')
     expect(prompt).toContain('merge: ask')
   })
 
@@ -1249,6 +1255,106 @@ describe('a worktree with nobody in it', () => {
 // /login", because Matt's Claude session had expired overnight and a
 // headless agent cannot refresh one. Nothing read it, so the rows could
 // not tell a crashed build from a login that needed renewing.
+// Work that is finished and nobody merged.
+//
+// `i-can-t-tap-done-tasks-to-look-at-the-details` took 52.2 hours of
+// wall clock and 170 turns of actual work. The rest was its pull request
+// sitting there as a draft with nobody on it. Three tasks account for 76
+// of the 190 hours this repo has spent, all the same way: the building
+// finished, and then nothing happened.
+//
+// Nothing noticed, because a worktree that already exists is not the
+// dispatcher's to take — that rule is what stopped seven agents running
+// on one request, and it stands. But "an agent is mid-build" and "the
+// work is done and unmerged" are different states, and only the first
+// one wants leaving alone.
+//
+// So: an open pull request, no agent, and the tree untouched for a
+// while, gets ONE finisher. One, guarded by a marker that is never
+// cleared, because a loop here is the failure that cost four hours.
+describe('a pull request nobody finished', () => {
+  const abandoned = (name = 'a-thing') => {
+    const wt = join(box.repo, '.intake', 'wt', name)
+    mkdirSync(join(wt, 'requests'), { recursive: true })
+    // Old enough that nothing is about to touch it.
+    const old = new Date(Date.now() - 60 * 60 * 1000)
+    utimesSync(wt, old, old)
+    return wt
+  }
+
+  it('starts one finisher when the pull request is open and nobody is on it', () => {
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    box.stub('claude', BUILDER)
+    box.stub('gh', `[ "$1 $2" = "pr list" ] && printf '%s\\n' '[{"number":7,"state":"OPEN","headRefName":"request/a-thing-0000000"}]'\nexit 0`)
+    abandoned()
+
+    run('dispatch.sh')
+
+    const launched = box.log().split('\n').find((l) => l.startsWith('claude '))
+    expect(launched, 'nothing was started on an abandoned pull request').toBeTruthy()
+    expect(launched, 'the finisher was not told it is finishing, not building').toMatch(/finish|merge/i)
+  })
+
+  it('starts exactly one, ever, however many times the timer fires', () => {
+    // The whole reason this is allowed to exist. Seven agents once ran
+    // on one request because something kept picking it back up.
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    box.stub('claude', BUILDER)
+    box.stub('gh', `[ "$1 $2" = "pr list" ] && printf '%s\\n' '[{"number":7,"state":"OPEN","headRefName":"request/a-thing-0000000"}]'\nexit 0`)
+    abandoned()
+
+    run('dispatch.sh')
+    const first = box.log().split('\n').filter((l) => l.startsWith('claude ')).length
+    run('dispatch.sh')
+    run('dispatch.sh')
+    const after = box.log().split('\n').filter((l) => l.startsWith('claude ')).length
+
+    expect(first, 'the first tick started nothing').toBe(1)
+    expect(after, 'it started another finisher on a later tick').toBe(1)
+  })
+
+  it('leaves a tree alone while an agent is still in it', () => {
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    box.stub('claude', BUILDER)
+    box.stub('gh', `[ "$1 $2" = "pr list" ] && printf '%s\\n' '[{"number":7,"state":"OPEN","headRefName":"request/a-thing-0000000"}]'\nexit 0`)
+    abandoned()
+    const alive = spawn('/bin/sh', ['-c', 'sleep 30; : requests/a-thing.md'], {
+      detached: true, stdio: 'ignore',
+    })
+    try {
+      run('dispatch.sh')
+      expect(box.log()).not.toContain('claude ')
+    } finally {
+      alive.kill('SIGKILL')
+    }
+  })
+
+  it('leaves a tree alone that was touched a moment ago', () => {
+    // An agent that has just died still has a warm worktree, and the
+    // next tick is a minute away. Waiting costs nothing and starting on
+    // top of a half-written tree costs everything.
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    box.stub('claude', BUILDER)
+    box.stub('gh', `[ "$1 $2" = "pr list" ] && printf '%s\\n' '[{"number":7,"state":"OPEN","headRefName":"request/a-thing-0000000"}]'\nexit 0`)
+    mkdirSync(join(box.repo, '.intake', 'wt', 'a-thing', 'requests'), { recursive: true })
+
+    run('dispatch.sh')
+
+    expect(box.log()).not.toContain('claude ')
+  })
+
+  it('does not finish a tree with no pull request at all', () => {
+    // That one is a stalled build, which is `paused` and wants a person.
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    box.stub('claude', BUILDER)
+    abandoned()
+
+    run('dispatch.sh')
+
+    expect(box.log()).not.toContain('claude ')
+  })
+})
+
 describe('why an agent stopped', () => {
   const stopped = (name, lastWords) => {
     const wt = join(box.repo, '.intake', 'wt', name)
