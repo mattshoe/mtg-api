@@ -3,6 +3,7 @@ package org.mattshoe.mtg.web
 import androidx.compose.runtime.Composable
 import org.jetbrains.compose.web.attributes.InputType
 import org.jetbrains.compose.web.attributes.placeholder
+import org.jetbrains.compose.web.dom.A
 import org.jetbrains.compose.web.dom.Button
 import org.jetbrains.compose.web.dom.Div
 import org.jetbrains.compose.web.dom.Input
@@ -20,6 +21,11 @@ import org.mattshoe.mtg.core.LoreEra
 import org.mattshoe.mtg.core.PhyrexianLore
 import org.mattshoe.mtg.core.Rule
 import org.mattshoe.mtg.core.Rules
+import org.mattshoe.mtg.core.MagicStory
+import org.mattshoe.mtg.core.StoryArticle
+import org.mattshoe.mtg.core.StoryPage
+import org.mattshoe.mtg.core.StoryPerson
+import org.mattshoe.mtg.core.StoryTab
 import org.mattshoe.mtg.core.WheelLore
 import org.mattshoe.mtg.core.WheelPair
 
@@ -37,6 +43,8 @@ fun GuidePage(
     onBack: () -> Unit,
     era: LoreEra? = null,
     onEra: (LoreEra) -> Unit = {},
+    story: StoryPage? = null,
+    onStory: (String) -> Unit = {},
     rules: Rules = Rules(),
     onRules: (Rules) -> Unit = {},
     onLoadRules: () -> Unit = {},
@@ -61,14 +69,19 @@ fun GuidePage(
                 }
             }
         } else {
-            Button(attrs = {
-                classes("btn", "guide-back")
-                onClick { onBack() }
-            }) { Text("‹ Guide") }
+            // Inside an article or a profile, the way out is up to the
+            // story's sections, which `Story` draws, not the tiles.
+            if (story == null || story == StoryPage.Index) {
+                Button(attrs = {
+                    classes("btn", "guide-back")
+                    onClick { onBack() }
+                }) { Text("‹ Guide") }
+            }
             when (tile.slug) {
                 Guide.COLOURS -> Colours()
                 Guide.WHEEL -> Wheel()
                 Guide.LORE -> Lore(era ?: PhyrexianLore.eras.first(), onEra)
+                Guide.STORY -> Story(story ?: StoryPage.Index, onStory)
                 Guide.RULES -> RulesSearch(rules, onRules, onLoadRules)
             }
         }
@@ -293,6 +306,163 @@ private fun Lore(era: LoreEra, onEra: (LoreEra) -> Unit) {
                     kotlinx.browser.window.scrollTo(0.0, 0.0)
                 }
             }) { Text("Read on: ${next.tab} ›") }
+        }
+    }
+}
+
+/**
+ * The story of Magic: the ten sections, an article in tabs, or a
+ * person's profile. Everything said is in `MagicStory`, and where you
+ * are is in the address. Sibling of `Story` in `GuideScreen`.
+ */
+@Composable
+private fun Story(page: StoryPage, onStory: (String) -> Unit) {
+    when (page) {
+        StoryPage.Index -> StoryIndex(onStory)
+        is StoryPage.Reading -> StoryReading(page.article, page.tab, onStory)
+        is StoryPage.Profile -> StoryProfile(page.person, onStory)
+    }
+}
+
+@Composable
+private fun StoryIndex(onStory: (String) -> Unit) {
+    Div(attrs = { classes("story-index") }) {
+        MagicStory.sections.forEachIndexed { i, s ->
+            Section(attrs = {
+                classes("story-section")
+                attr("data-section", s.slug)
+            }) {
+                Div(attrs = { classes("story-section-number") }) { Text("${i + 1}") }
+                H2(attrs = { classes("story-section-title") }) { Text(s.title) }
+                Div(attrs = { classes("story-hook") }) { Text(s.hook) }
+                Div(attrs = { classes("story-articles") }) {
+                    s.articles.forEach { a ->
+                        Button(attrs = {
+                            classes("story-article")
+                            attr("data-article", a.slug)
+                            onClick { onStory(a.slug) }
+                        }) { Text(a.title) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Up to the sections, from an article or a profile. */
+@Composable
+private fun StoryUp(onStory: (String) -> Unit) {
+    Button(attrs = {
+        classes("btn", "story-up")
+        onClick { onStory("") }
+    }) { Text("‹ The story of Magic") }
+}
+
+/**
+ * A paragraph with its links and cards. A link is a real `a` with a
+ * real address, so it can be opened in a new tab, but a tap stays in
+ * the app. Links are underlined, not coloured, because Matt is
+ * colourblind.
+ */
+@Composable
+private fun StoryParagraph(paragraph: String, onStory: (String) -> Unit) {
+    P {
+        MagicStory.spans(paragraph).forEach { s ->
+            val target = s.target
+            when {
+                target != null -> A(href = "#/guide/${Guide.STORY}/$target", attrs = {
+                    classes("lore-link")
+                    attr("data-target", target)
+                    onClick {
+                        it.preventDefault()
+                        onStory(target)
+                        kotlinx.browser.window.scrollTo(0.0, 0.0)
+                    }
+                }) { Text(s.text) }
+                s.card -> Span(attrs = { classes("lore-card") }) { Text(s.text) }
+                else -> Text(s.text)
+            }
+        }
+    }
+}
+
+@Composable
+private fun StoryReading(article: StoryArticle, tab: StoryTab, onStory: (String) -> Unit) {
+    Div(attrs = { classes("story-head") }) {
+        StoryUp(onStory)
+        Div(attrs = { classes("story-kicker") }) { Text(MagicStory.sectionOf(article).title) }
+        H2(attrs = { classes("story-article-title") }) { Text(article.title) }
+    }
+    Div(attrs = {
+        classes("lore-tabs")
+        attr("role", "tablist")
+    }) {
+        article.tabs.forEach { t ->
+            Button(attrs = {
+                classes("lore-tab")
+                attr("role", "tab")
+                attr("aria-selected", (t == tab).toString())
+                onClick { onStory(MagicStory.target(article, t)) }
+            }) { Text(t.tab) }
+        }
+    }
+    Div(attrs = { classes("lore-story") }) {
+        tab.story.forEach { StoryParagraph(it, onStory) }
+        tab.quote?.let { q ->
+            Div(attrs = { classes("lore-quote") }) {
+                Div(attrs = { classes("lore-quote-words") }) { Text(q.words) }
+                Div(attrs = { classes("lore-quote-source") }) { Text(q.source) }
+            }
+        }
+        val nextTab = MagicStory.next(article, tab)
+        val nextArticle = MagicStory.nextArticle(article)
+        val (label, target) = when {
+            nextTab != null -> "Read on: ${nextTab.tab} ›" to MagicStory.target(article, nextTab)
+            nextArticle != null -> "Next: ${nextArticle.title} ›" to nextArticle.slug
+            else -> null to null
+        }
+        if (label != null && target != null) {
+            Button(attrs = {
+                classes("btn", "lore-next")
+                onClick {
+                    onStory(target)
+                    kotlinx.browser.window.scrollTo(0.0, 0.0)
+                }
+            }) { Text(label) }
+        }
+        Section(attrs = { classes("story-sources") }) {
+            H2(attrs = { classes("story-sources-title") }) { Text("Where it is told") }
+            article.sources.forEach { s ->
+                Div(attrs = { classes("story-source") }) {
+                    Span(attrs = { classes("story-source-kind") }) { Text(s.kind) }
+                    Span(attrs = { classes("story-source-name") }) { Text(s.name) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StoryProfile(person: StoryPerson, onStory: (String) -> Unit) {
+    Div(attrs = { classes("story-head") }) { StoryUp(onStory) }
+    Div(attrs = { classes("lore-story", "story-profile") }) {
+        H2(attrs = { classes("lore-title") }) { Text(person.name) }
+        person.profile.forEach { StoryParagraph(it, onStory) }
+        Section(attrs = { classes("story-sources") }) {
+            H2(attrs = { classes("story-sources-title") }) { Text("Appears in") }
+            MagicStory.appearances(person).forEach { a ->
+                Button(attrs = {
+                    classes("story-appears")
+                    attr("data-article", a.slug)
+                    onClick {
+                        onStory(a.slug)
+                        kotlinx.browser.window.scrollTo(0.0, 0.0)
+                    }
+                }) {
+                    Span(attrs = { classes("story-source-kind") }) { Text(MagicStory.sectionOf(a).title) }
+                    Span(attrs = { classes("story-source-name") }) { Text(a.title) }
+                }
+            }
         }
     }
 }
