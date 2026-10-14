@@ -23,6 +23,15 @@ const SUITES = [
   ['web', 'npm', ['run', 'test:web']],
   // Last and slowest. The emulator is the only place the device tests
   // run at all, and with CI gone it is the only place full stop.
+  //
+  // `emulator.mjs` first, because nothing else in this repo ever started
+  // a phone. With none attached Gradle fails in 24 seconds with "No
+  // connected devices!", which reads like a broken change and is not
+  // one — it happened here when an orphaned emulator from a dead agent
+  // exited between two gate runs, four green suites in. The gate is the
+  // one command that decides whether main moves; it cannot depend on
+  // somebody having remembered to boot a phone by hand.
+  ['emulator', 'node', ['scripts/emulator.mjs']],
   ['device', 'npm', ['run', 'test:android']],
 ];
 
@@ -31,7 +40,7 @@ const only = process.argv.slice(2).filter((a) => !a.startsWith('-'));
 // runs nothing for it is the worst possible answer: it prints EVERY
 // SUITE PASSED having run four of six. `shell` is the one people reach
 // for — it lives inside `worker` — so say so rather than shrug.
-const known = new Set(SUITES.map(([n]) => n));
+const known = new Set(SUITES.map(([n]) => n).filter((n) => n !== 'emulator'));
 const unknown = only.filter((n) => !known.has(n));
 if (unknown.length) {
   console.error(`no suite called ${unknown.join(', ')}. There is: ${[...known].join(', ')}.`);
@@ -40,7 +49,11 @@ if (unknown.length) {
 }
 const skipDevice = process.argv.includes('--no-device');
 const chosen = SUITES.filter(([name]) => (
-  (only.length === 0 || only.includes(name)) && !(skipDevice && name === 'device')
+  // `emulator` is the device suite's preflight, so asking for one asks
+  // for the other and skipping one skips both. It is not a suite anybody
+  // chooses on its own.
+  (only.length === 0 || only.includes(name) || (name === 'emulator' && only.includes('device')))
+  && !(skipDevice && (name === 'device' || name === 'emulator'))
 ));
 
 const started = Date.now();
