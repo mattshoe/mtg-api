@@ -54,6 +54,8 @@ data class AppState(
     val releases: Releases = Releases(),
     /** The Guide's rules page: the Comprehensive Rules, once fetched, and what was searched. */
     val rules: Rules = Rules(),
+    /** What is typed in the Guide's search bar. See `GuideSearch.kt`. */
+    val guideSearch: String = "",
     /** Intake requests and where each one is, for Admin Settings. */
     val tasks: Tasks = Tasks(),
     /** The task being written on Admin Settings' New task page. */

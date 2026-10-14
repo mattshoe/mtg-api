@@ -44,6 +44,9 @@ import org.mattshoe.mtg.core.ShareWhat
 import org.mattshoe.mtg.core.Route
 import org.mattshoe.mtg.core.View
 import org.mattshoe.mtg.core.openGuide
+import org.mattshoe.mtg.core.openGuideHit
+import org.mattshoe.mtg.core.searchGuide
+import org.mattshoe.mtg.core.guideHits
 import org.mattshoe.mtg.core.guideTile
 import org.mattshoe.mtg.core.loreEra
 import org.mattshoe.mtg.core.openEra
@@ -241,6 +244,10 @@ fun AppShell(
             rules = state.rules,
             onRules = { onState(state.copy(rules = it)) },
             onLoadRules = onLoadRules,
+            search = state.guideSearch,
+            onSearch = { onState(state.searchGuide(it)) },
+            hits = state.guideHits,
+            onHit = { onState(state.openGuideHit(it)) },
         )
 
         View.CARD -> CardPage(

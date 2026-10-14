@@ -616,6 +616,19 @@ td.mono { font-family: var(--mono); font-size: 12.5px; }
    strip of the colours across the top of each is decoration; the
    words and the mana symbols carry the meaning, because Matt is
    colourblind and a strip of hue alone says nothing to him. */
+.guide-find { max-width: 680px; margin: 0 auto 14px; }
+.guide-search { width: 100%; font-size: 15px; padding: 11px 13px; }
+.guide-search-count { margin: 10px 0; }
+.guide-search-none { margin-top: 10px; }
+.guide-hits { display: flex; flex-direction: column; gap: 10px; }
+.guide-hit {
+  display: block; width: 100%; text-align: left; padding: 14px 16px; cursor: pointer; font: inherit; color: var(--text);
+  background: linear-gradient(160deg, var(--bg-3), var(--bg-2) 70%);
+  border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: var(--radius);
+}
+.guide-hit-part { color: var(--text-3); font-size: 12px; }
+.guide-hit-title { font: 700 16px/1.25 var(--sans); margin-top: 3px; }
+.guide-hit-snippet { color: var(--text-2); font-size: 13px; line-height: 1.45; margin-top: 6px; }
 .guide-tiles { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
 .guide-tile {
   position: relative; overflow: hidden; text-align: left; color: var(--text);
