@@ -18,8 +18,8 @@ import kotlin.test.assertTrue
  * The story of Magic on a tablet, the website's half.
  *
  * Matt: "you need to test every single feature from this moment
- * forward in tablet mode". On a wide screen the sections and the
- * article must not run the full width, where a line is too long to
+ * forward in tablet mode". On a wide screen a section and a
+ * profile must not run the full width, where a line is too long to
  * read, and the tabs must sit on the screen. The phone's
  * `StoryOnATabletTest` is the same claim.
  */
@@ -65,33 +65,34 @@ class StoryOnATabletTest {
         )
     }
 
-    private suspend fun anArticleReads(size: Pair<Int, Int>) {
-        val all = open(size, "#/guide/lore/the-war")
+    private suspend fun aSectionReads(size: Pair<Int, Int>) {
+        val all = open(size, "#/guide/brothers-war/the-war")
         val on = "on a ${size.first} by ${size.second} screen"
         val page = all(".guide").single().getBoundingClientRect()
         readable(on, "the story", all(".lore-story").singleOrNull()?.getBoundingClientRect() ?: error("$on there is no story"), page)
         val tabs = all(".lore-tabs [role=tab]").map { it.getBoundingClientRect() }
-        assertTrue(tabs.size >= 2, "$on there are ${tabs.size} tabs")
+        assertTrue(tabs.size == 6, "$on Brothers' War has ${tabs.size} tabs, not its six articles")
         assertTrue(tabs.first().left >= 0, "$on the first tab is off the left edge")
+        assertTrue(tabs.all { it.right <= size.first }, "$on a tab runs off the side")
         assertTrue(all(".lore-tabs").single().getBoundingClientRect().right <= size.first, "$on the tab row runs off the side")
     }
 
-    private suspend fun theSectionsRead(size: Pair<Int, Int>) {
-        val all = open(size, "#/guide/lore")
+    private suspend fun aProfileReads(size: Pair<Int, Int>) {
+        val all = open(size, "#/guide/brothers-war/who/urza")
         val on = "on a ${size.first} by ${size.second} screen"
         val page = all(".guide").single().getBoundingClientRect()
-        readable(on, "the sections", all(".story-index").singleOrNull()?.getBoundingClientRect() ?: error("$on there are no sections"), page)
+        readable(on, "the profile", all(".story-profile").singleOrNull()?.getBoundingClientRect() ?: error("$on there is no profile"), page)
     }
 
     @Test
-    fun anArticleReadsOnAFoldingPhoneOpenedOut() = runTest { anArticleReads(Tablet.UNFOLDED) }
+    fun aSectionReadsOnAFoldingPhoneOpenedOut() = runTest { aSectionReads(Tablet.UNFOLDED) }
 
     @Test
-    fun anArticleReadsOnATabletHeldSideways() = runTest { anArticleReads(Tablet.LANDSCAPE) }
+    fun aSectionReadsOnATabletHeldSideways() = runTest { aSectionReads(Tablet.LANDSCAPE) }
 
     @Test
-    fun theSectionsReadOnAFoldingPhoneOpenedOut() = runTest { theSectionsRead(Tablet.UNFOLDED) }
+    fun aProfileReadsOnAFoldingPhoneOpenedOut() = runTest { aProfileReads(Tablet.UNFOLDED) }
 
     @Test
-    fun theSectionsReadOnATabletHeldSideways() = runTest { theSectionsRead(Tablet.LANDSCAPE) }
+    fun aProfileReadsOnATabletHeldSideways() = runTest { aProfileReads(Tablet.LANDSCAPE) }
 }

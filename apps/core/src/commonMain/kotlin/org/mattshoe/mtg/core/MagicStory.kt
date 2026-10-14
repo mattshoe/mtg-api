@@ -35,16 +35,16 @@ data class StoryPerson(val slug: String, val name: String, val names: List<Strin
 /** A run of words: plain, a link to [target], or a card's name. */
 data class StorySpan(val text: String, val target: String? = null, val card: Boolean = false)
 
-/** What the lore tile is showing. */
+/** What a section's tile is showing. */
 sealed interface StoryPage {
-    /** The ten sections and their articles. */
-    data object Index : StoryPage
+    /** The section whose tile this is. */
+    val section: StorySection
 
-    /** An article, open at one of its tabs. */
-    data class Reading(val article: StoryArticle, val tab: StoryTab) : StoryPage
+    /** An article, open as a tab of its section. */
+    data class Reading(override val section: StorySection, val article: StoryArticle) : StoryPage
 
-    /** A person's profile, and every article they are in. */
-    data class Profile(val person: StoryPerson) : StoryPage
+    /** A person's profile, reached from [section], and every article they are in. */
+    data class Profile(override val section: StorySection, val person: StoryPerson) : StoryPage
 }
 
 /**
@@ -130,47 +130,60 @@ object MagicStory {
     /** Every article a person appears in, in story order. */
     fun appearances(person: StoryPerson): List<StoryArticle> = articles.filter { mentions(it, person) }
 
-    /** The page a link target opens, or null when it names nothing. */
-    fun page(target: String): StoryPage? {
+    /** A section, by its tile's slug. */
+    fun section(slug: String): StorySection? = sections.firstOrNull { it.slug == slug }
+
+    /**
+     * The page a link target opens from [section], or null when it
+     * names nothing. A person opens inside the section they were
+     * reached from. A part of an article, `the-war/kroog`, opens the
+     * article, which tells all its parts in one tab.
+     */
+    fun page(section: StorySection, target: String): StoryPage? {
         val parts = target.split('/')
-        if (parts.first() == WHO) return person(parts.getOrNull(1).orEmpty())?.let { StoryPage.Profile(it) }
+        if (parts.first() == WHO) return person(parts.getOrNull(1).orEmpty())?.let { StoryPage.Profile(section, it) }
         val article = article(parts.first()) ?: return null
-        val tab = if (parts.size > 1) article.tabs.firstOrNull { it.slug == parts[1] } ?: article.tabs.first() else article.tabs.first()
-        return StoryPage.Reading(article, tab)
+        return StoryPage.Reading(sectionOf(article), article)
     }
 
-    /** The link target of an article at a tab: its slug alone for the first tab. */
-    fun target(article: StoryArticle, tab: StoryTab = article.tabs.first()): String =
-        if (tab == article.tabs.first()) article.slug else "${article.slug}/${tab.slug}"
+    /** Where a link target lives, after `#/guide/`: its article's section, or this one for a person. */
+    fun address(section: StorySection, target: String): String = when (val page = page(section, target)) {
+        is StoryPage.Reading -> "${page.section.slug}/${page.article.slug}"
+        is StoryPage.Profile -> "${section.slug}/${target(page.person)}"
+        null -> section.slug
+    }
 
     /** A person's link target. */
     fun target(person: StoryPerson): String = "$WHO/${person.slug}"
-
-    /** The tab after this one in the article, or null on its last. */
-    fun next(article: StoryArticle, tab: StoryTab): StoryTab? = article.tabs.getOrNull(article.tabs.indexOf(tab) + 1)
 
     /** The article after this one, across sections, or null at the very end. */
     fun nextArticle(article: StoryArticle): StoryArticle? = articles.getOrNull(articles.indexOf(article) + 1)
 }
 
 /**
- * What the lore tile shows, or null anywhere else. The address after
- * `#/guide/lore/` is a link target, so a bookmark, back and a link all
- * mean the same thing; one that names nothing is the index, not a
- * blank page.
+ * What a section's tile shows, or null anywhere else.
+ *
+ * Matt: "each of those sections should be their own article, with
+ * its own tabs, just like the phyrexian one". So a section is a Guide
+ * tile and its articles are its tabs, `#/guide/brothers-war/koilos`.
+ * An address that names nothing in this section is its first tab,
+ * not a blank page.
  */
 val AppState.storyPage: StoryPage?
     get() {
-        if (guideTile?.slug != Guide.STORY) return null
+        val section = guideTile?.let { MagicStory.section(it.slug) } ?: return null
+        val first = StoryPage.Reading(section, section.articles.first())
         val target = route.rest.substringAfter('/', "")
-        if (target.isEmpty()) return StoryPage.Index
-        return MagicStory.page(target) ?: StoryPage.Index
+        if (target.isEmpty()) return first
+        return when (val page = MagicStory.page(section, target)) {
+            is StoryPage.Reading -> if (page.section == section) page else first
+            is StoryPage.Profile -> page
+            null -> first
+        }
     }
 
-/** A link target, at its own address. Empty is the index. */
-fun AppState.openStory(target: String): AppState =
-    navigate(Route(View.GUIDE, if (target.isEmpty()) Guide.STORY else "${Guide.STORY}/$target"))
-
-/** An article at a tab, at its own address. */
-fun AppState.openStory(article: StoryArticle, tab: StoryTab = article.tabs.first()): AppState =
-    openStory(MagicStory.target(article, tab))
+/** A link target, at its own address. Empty is the section's first tab. */
+fun AppState.openStory(target: String): AppState {
+    val section = storyPage?.section ?: MagicStory.page(MagicStory.sections.first(), target)?.section ?: return this
+    return navigate(Route(View.GUIDE, if (target.isEmpty()) section.slug else MagicStory.address(section, target)))
+}

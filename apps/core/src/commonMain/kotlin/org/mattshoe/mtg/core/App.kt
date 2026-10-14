@@ -726,8 +726,8 @@ data class AppState(
         // back is the entry box it came from.
         onFetchList && fetch.editing != null -> copy(fetch = fetch.cancelEdit())
         onFetchList -> leaveFetchList()
-        // An article or a profile is a page of the story, so back is its sections.
-        storyPage.let { it != null && it != StoryPage.Index } -> openStory("")
+        // A profile is opened from a section, so back is that section.
+        storyPage is StoryPage.Profile -> openStory("")
         // A Guide tile is a page of the Guide, so back is the tiles.
         guideTile != null -> navigate(View.GUIDE)
         view != View.DEFAULT -> navigate(View.DEFAULT)

@@ -184,7 +184,7 @@ jobs:
   #
   # One emulator spent 6:34 running 469 tests, and before that it
   # downloaded a system image and cold-booted. Now each shard runs a
-  # third of them — `numShards` and `shardIndex` are AndroidJUnitRunner's
+  # quarter of them — `numShards` and `shardIndex` are AndroidJUnitRunner's
   # own, so the split is by test and the runner decides it — and the
   # system image and a booted snapshot come out of a cache that
   # `emulator-cache.yml` fills from main.
@@ -196,10 +196,10 @@ jobs:
     timeout-minutes: 45
     strategy:
       # One shard failing must not cancel the others: each one is a
-      # third of what `android` counts.
+      # quarter of what `android` counts.
       fail-fast: false
       matrix:
-        shard: [0, 1, 2]
+        shard: [0, 1, 2, 3]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4

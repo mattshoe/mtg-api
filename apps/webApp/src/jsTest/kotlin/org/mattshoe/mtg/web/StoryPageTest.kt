@@ -23,6 +23,11 @@ import kotlin.test.assertTrue
 /**
  * The story of Magic, in a real browser, through the real menu and shell.
  *
+ * Matt, after the first cut: "you put all of it in one single article.
+ * each of those sections should be their own article, with its own
+ * tabs, just like the phyrexian one". So a section is a tile and its
+ * articles are its tabs.
+ *
  * Matt: "Add Magic the Gathering lore content to the Guide. 10
  * sections ... Every article has its own tabs ... When an article
  * mentions something covered in another article, link to it ...
@@ -72,22 +77,15 @@ class StoryPageTest {
     private fun HTMLElement.all(css: String): List<HTMLElement> =
         querySelectorAll(css).let { n -> (0 until n.length).mapNotNull { n[it] as? HTMLElement } }
 
-    /** The menu, Guide, then the story's tile: the way a person gets there. */
-    private suspend fun HTMLElement.openStory() {
+    /** The menu, Guide, then a section's own tile: the way a person gets there. */
+    private suspend fun HTMLElement.openSection(title: String) {
         all("button.nav-burger").single().click()
         settle()
         all(".app-menu button.app-tab").first { it.textContent?.trim() == "Guide" }.click()
         settle()
-        val tile = all("button.guide-tile").firstOrNull { it.textContent.orEmpty().contains("The story of Magic") }
-            ?: error("the Guide has no story tile: ${all("button.guide-tile").map { it.textContent }}")
+        val tile = all("button.guide-tile").firstOrNull { it.all(".guide-tile-title").singleOrNull()?.textContent?.trim() == title }
+            ?: error("the Guide has no tile for $title: ${all(".guide-tile-title").map { it.textContent }}")
         tile.click()
-        settle()
-    }
-
-    private suspend fun HTMLElement.openArticle(slug: String) {
-        val button = all("button.story-article").firstOrNull { it.getAttribute("data-article") == slug }
-            ?: error("the sections have no button for $slug")
-        button.click()
         settle()
     }
 
@@ -98,110 +96,121 @@ class StoryPageTest {
     }
 
     private fun HTMLElement.tabs() = all(".lore-tabs [role=tab]")
+    private fun HTMLElement.open() = tabs().filter { it.getAttribute("aria-selected") == "true" }.map { it.textContent.orEmpty().trim() }
     private fun HTMLElement.story() = all(".lore-story p").joinToString(" ") { it.textContent.orEmpty() }
 
-    /** The first tab of an article whose narration links to [target]. */
-    private fun tabLinking(article: String, target: String) =
-        MagicStory.article(article)!!.tabs.firstOrNull { t -> t.story.any { p -> MagicStory.spans(p).any { it.target == target } } }
-            ?: error("$article never links to $target")
-
     @Test
-    fun theTileOpensOnTheTenSectionsEachWithAHookAndItsArticles() = runTest {
+    fun everySectionIsATileOfItsOwnAndThereIsNoOneArticleOfThemAll() = runTest {
         val frame = mount()
         settle()
-        frame.openStory()
-        assertEquals("#/guide/lore", held.value.route.toHash())
-        val sections = frame.all(".story-section")
-        assertEquals(10, sections.size, "the story has ${sections.size} sections")
-        assertEquals("Brothers' War", sections.first().all(".story-section-title").single().textContent?.trim())
-        assertEquals("Omenpath Era", sections.last().all(".story-section-title").single().textContent?.trim())
-        sections.forEach { s ->
-            val name = s.all(".story-section-title").single().textContent
-            assertTrue(s.all(".story-hook").single().textContent.orEmpty().isNotBlank(), "$name has no hook on screen")
-            assertTrue(s.all("button.story-article").size >= 4, "$name lists ${s.all("button.story-article").size} articles")
+        frame.openSection("Brothers' War")
+        val titles = run {
+            frame.all("button.guide-back").single().click()
+            settle()
+            frame.all(".guide-tile-title").map { it.textContent.orEmpty().trim() }
         }
-        assertEquals(MagicStory.articles.size, frame.all("button.story-article").size, "not every article is on the page")
+        assertTrue("The story of Magic" !in titles, "the ten sections are still one tile: $titles")
+        MagicStory.sections.forEach { s -> assertTrue(s.title in titles, "${s.title} is not a tile of its own: $titles") }
+        val war = frame.all("button.guide-tile").first { it.textContent.orEmpty().contains("Brothers' War") }
+        assertTrue(MagicStory.sections.first().hook in war.textContent.orEmpty(), "the tile does not carry the section's hook")
     }
 
     @Test
-    fun anArticleOpensOnItsFirstTabWithTabsOfItsOwn() = runTest {
+    fun aSectionOpensLikePhyrexiaWithItsArticlesAsItsTabs() = runTest {
         val frame = mount()
         settle()
-        frame.openStory()
-        frame.openArticle("the-war")
-        assertEquals("#/guide/lore/the-war", held.value.route.toHash(), "the article is not in the address")
-        assertEquals("The War", frame.all(".story-article-title").single().textContent?.trim())
-        assertTrue(frame.all("button.guide-back").isEmpty(), "the article offers a way back to the tiles, past its own sections")
-        val tabs = frame.tabs()
-        assertTrue(tabs.size >= 2, "The War has ${tabs.size} tabs")
-        assertEquals("true", tabs.first().getAttribute("aria-selected"), "the first tab is not the open one")
-        assertTrue(tabs.drop(1).all { it.getAttribute("aria-selected") == "false" }, "more than one tab reads as open")
+        frame.openSection("Brothers' War")
+        val war = MagicStory.sections.first()
+        assertEquals("#/guide/${war.slug}", held.value.route.toHash())
+        assertEquals(war.articles.map { it.title }, frame.tabs().map { it.textContent.orEmpty().trim() }, "the tabs are not the section's articles")
+        assertEquals(listOf(war.articles.first().title), frame.open(), "the first tab is not the one open")
+        assertEquals(1, frame.all("button.guide-back").size, "there is no way back to the Guide, as Phyrexia has")
+        assertTrue(frame.all(".story-section").isEmpty(), "the old page of all ten sections is still drawn")
         assertTrue(frame.all(".lore-story p").size >= 2, "the story is not paragraphs")
+    }
+
+    @Test
+    fun tappingATabTellsThatArticleInstead() = runTest {
+        val frame = mount()
+        settle()
+        frame.openSection("Brothers' War")
+        val before = frame.story()
+        frame.openTab("The War")
+        assertEquals("#/guide/brothers-war/the-war", held.value.route.toHash(), "the tab is not in the address")
+        assertEquals(listOf("The War"), frame.open(), "The War does not read as the open tab")
+        assertTrue(frame.story() != before, "the second tab tells the same story as the first")
         assertTrue("Mishra" in frame.story(), "The War does not tell of Mishra: ${frame.story().take(200)}")
     }
 
     @Test
-    fun tappingATabTellsThatPartOfTheStoryInstead() = runTest {
+    fun aTabTellsEveryPartOfItsArticleUnderItsOwnHeading() = runTest {
         val frame = mount()
         settle()
-        frame.openStory()
-        frame.openArticle("the-war")
-        val before = frame.story()
-        val second = frame.tabs()[1]
-        val label = second.textContent.orEmpty().trim()
-        second.click()
-        settle()
-        assertTrue(held.value.route.toHash().startsWith("#/guide/lore/the-war/"), "the tab is not in the address: ${held.value.route.toHash()}")
-        assertEquals("true", frame.tabs().first { it.textContent.orEmpty().trim() == label }.getAttribute("aria-selected"))
-        assertEquals("false", frame.tabs().first().getAttribute("aria-selected"), "the first tab still reads as open")
-        assertTrue(frame.story() != before, "the second tab tells the same story as the first")
+        frame.openSection("Brothers' War")
+        frame.openTab("Koilos")
+        val koilos = MagicStory.article("koilos")!!
+        assertEquals(koilos.tabs.map { it.tab }, frame.all(".story-part-title").map { it.textContent.orEmpty().trim() }, "the tab does not tell every part of Koilos")
+        assertEquals(koilos.tabs.sumOf { it.story.size }, frame.all(".lore-story p").size, "a paragraph of Koilos is missing")
     }
 
     @Test
-    fun aLinkInTheStoryOpensTheArticleItNamesAndIsUnderlined() = runTest {
+    fun aLinkInTheStoryOpensTheArticleInItsOwnSectionAndIsUnderlined() = runTest {
         val frame = mount()
         settle()
-        frame.openStory()
-        frame.openArticle("rath-stronghold")
-        val tab = tabLinking("rath-stronghold", "rath-made")
-        frame.openTab(tab.tab)
+        frame.openSection("Weatherlight Saga")
+        frame.openTab(MagicStory.article("rath-stronghold")!!.title)
         val link = frame.all(".lore-story a.lore-link").firstOrNull { it.getAttribute("data-target") == "rath-made" }
-            ?: error("the ${tab.tab} tab shows no link to the other Rath")
+            ?: error("Rath in the Weatherlight Saga shows no link to the other Rath")
         val look = window.getComputedStyle(link)
         assertTrue("underline" in look.textDecorationLine, "a link is told apart only by colour: ${look.textDecorationLine}")
+        assertEquals("#/guide/phyrexia-origins/rath-made", link.getAttribute("href")?.substringAfter('#')?.let { "#$it" }, "the link does not name the article's own section")
         link.click()
         settle()
-        assertEquals("#/guide/lore/rath-made", held.value.route.toHash(), "the link did not open the other Rath")
-        assertEquals("Rath", frame.all(".story-article-title").single().textContent?.trim())
-        assertEquals("Phyrexia's Origins", frame.all(".story-kicker").single().textContent?.trim(), "the other Rath does not say which section it is in")
+        assertEquals("#/guide/phyrexia-origins/rath-made", held.value.route.toHash(), "the link did not open the other Rath")
+        assertEquals(MagicStory.sections.first { it.slug == "phyrexia-origins" }.articles.map { it.title }, frame.tabs().map { it.textContent.orEmpty().trim() }, "the tabs are not Phyrexia's Origins")
+        assertEquals(listOf("Rath"), frame.open())
     }
 
     @Test
     fun aNameOpensTheirProfileWhichListsEveryArticleTheyAreIn() = runTest {
         val frame = mount()
         settle()
-        frame.openStory()
-        frame.openArticle("the-war")
-        frame.openTab(tabLinking("the-war", "who/urza").tab)
+        frame.openSection("Brothers' War")
+        frame.openTab("The War")
         frame.all(".lore-story a.lore-link").first { it.getAttribute("data-target") == "who/urza" }.click()
         settle()
-        assertEquals("#/guide/lore/who/urza", held.value.route.toHash(), "Urza's name did not open his profile")
+        assertEquals("#/guide/brothers-war/who/urza", held.value.route.toHash(), "Urza's name did not open his profile")
         val page = held.value.storyPage as? StoryPage.Profile ?: error("the app is not showing a profile: ${held.value.storyPage}")
         assertTrue(frame.all(".story-profile p").isNotEmpty(), "the profile says nothing")
         val listed = frame.all("button.story-appears").map { it.getAttribute("data-article") }
         assertEquals(MagicStory.appearances(page.person).map { it.slug }, listed, "the profile does not list every article Urza is in")
-        assertTrue("sylex-blast" in listed, "Urza's profile leaves out the Sylex Blast")
         frame.all("button.story-appears").first { it.getAttribute("data-article") == "sylex-blast" }.click()
         settle()
-        assertEquals("#/guide/lore/sylex-blast", held.value.route.toHash(), "a listed article does not open")
+        assertEquals("#/guide/brothers-war/sylex-blast", held.value.route.toHash(), "a listed article does not open")
+    }
+
+    @Test
+    fun upFromAProfileIsTheSectionItWasOpenedFrom() = runTest {
+        val frame = mount()
+        settle()
+        frame.openSection("Brothers' War")
+        frame.openTab("The War")
+        frame.all(".lore-story a.lore-link").first { it.getAttribute("data-target") == "who/urza" }.click()
+        settle()
+        val up = frame.all("button.story-up").singleOrNull() ?: error("a profile has no way back up")
+        assertTrue("Brothers' War" in up.textContent.orEmpty(), "up does not name the section: ${up.textContent}")
+        up.click()
+        settle()
+        assertEquals("#/guide/brothers-war", held.value.route.toHash())
+        assertEquals(listOf("The Thran"), frame.open(), "up did not show the section")
     }
 
     @Test
     fun theSourcesComeAtTheEndOutsideTheNarration() = runTest {
         val frame = mount()
         settle()
-        frame.openStory()
-        frame.openArticle("the-war")
+        frame.openSection("Brothers' War")
+        frame.openTab("The War")
         val sources = frame.all(".story-sources").singleOrNull() ?: error("The War says nowhere where it is told")
         assertEquals(MagicStory.article("the-war")!!.sources.size, sources.all(".story-source").size, "not every source is listed")
         val lastParagraph = frame.all(".lore-story p").last().getBoundingClientRect()
@@ -210,32 +219,29 @@ class StoryPageTest {
     }
 
     @Test
-    fun readOnGoesTabByTabThenOnToTheNextArticle() = runTest {
+    fun readOnGoesTabByTabThenOnToTheNextSection() = runTest {
         val frame = mount()
         settle()
-        frame.openStory()
-        frame.openArticle("the-war")
-        val war = MagicStory.article("the-war")!!
-        war.tabs.drop(1).forEach { t ->
+        frame.openSection("Brothers' War")
+        val war = MagicStory.sections.first()
+        war.articles.drop(1).forEach { a ->
             frame.all("button.lore-next").single().click()
             settle()
-            assertEquals("true", frame.tabs().first { it.textContent.orEmpty().trim() == t.tab }.getAttribute("aria-selected"), "Read on did not open ${t.tab}")
+            assertEquals(listOf(a.title), frame.open(), "Read on did not open ${a.title}")
         }
-        val next = frame.all("button.lore-next").singleOrNull() ?: error("the last tab of The War has no way on")
-        assertTrue("Argoth" in next.textContent.orEmpty(), "the end of The War does not lead to Argoth: ${next.textContent}")
+        val next = frame.all("button.lore-next").singleOrNull() ?: error("the last tab of the Brothers' War has no way on")
+        assertTrue("Phyrexia's Origins" in next.textContent.orEmpty(), "the end of the Brothers' War does not lead to the next section: ${next.textContent}")
         next.click()
         settle()
-        assertEquals("#/guide/lore/argoth", held.value.route.toHash())
+        assertEquals("#/guide/phyrexia-origins/halcyon", held.value.route.toHash())
     }
 
     @Test
     fun cardsAreSetApartFromTheNarration() = runTest {
         val frame = mount()
         settle()
-        frame.openStory()
-        val article = MagicStory.articles.first { a -> a.tabs.first().story.any { p -> MagicStory.spans(p).any { it.card } } }
-        frame.openArticle(article.slug)
-        val card = frame.all(".lore-story .lore-card").firstOrNull() ?: error("${article.title} names a card and none is on the page")
+        frame.openSection("Brothers' War")
+        val card = frame.all(".lore-story .lore-card").firstOrNull() ?: error("The Thran names a card and none is on the page")
         assertEquals("italic", window.getComputedStyle(card).fontStyle, "a card's name is not set apart")
     }
 
@@ -243,8 +249,8 @@ class StoryPageTest {
     fun itIsSetForReadingNotForScanning() = runTest {
         val frame = mount()
         settle()
-        frame.openStory()
-        frame.openArticle("koilos")
+        frame.openSection("Brothers' War")
+        frame.openTab("Koilos")
         val look = window.getComputedStyle(frame.all(".lore-story p").first())
         val size = look.fontSize.removeSuffix("px").toDouble()
         val line = look.lineHeight.removeSuffix("px").toDoubleOrNull() ?: error("the story has no set line height: ${look.lineHeight}")
@@ -254,15 +260,10 @@ class StoryPageTest {
     }
 
     @Test
-    fun upFromAnArticleIsTheSectionsAndBackFromThereIsTheTiles() = runTest {
+    fun backFromASectionIsTheTiles() = runTest {
         val frame = mount()
         settle()
-        frame.openStory()
-        frame.openArticle("argoth")
-        frame.all("button.story-up").single().click()
-        settle()
-        assertEquals("#/guide/lore", held.value.route.toHash())
-        assertEquals(10, frame.all(".story-section").size, "up did not show the sections")
+        frame.openSection("Ravnica")
         frame.all("button.guide-back").single().click()
         settle()
         assertEquals("#/guide", held.value.route.toHash())

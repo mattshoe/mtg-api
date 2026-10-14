@@ -8,6 +8,7 @@ import org.jetbrains.compose.web.dom.Button
 import org.jetbrains.compose.web.dom.Div
 import org.jetbrains.compose.web.dom.Input
 import org.jetbrains.compose.web.dom.H2
+import org.jetbrains.compose.web.dom.H3
 import org.jetbrains.compose.web.dom.P
 import org.jetbrains.compose.web.dom.Section
 import org.jetbrains.compose.web.dom.Span
@@ -25,7 +26,7 @@ import org.mattshoe.mtg.core.MagicStory
 import org.mattshoe.mtg.core.StoryArticle
 import org.mattshoe.mtg.core.StoryPage
 import org.mattshoe.mtg.core.StoryPerson
-import org.mattshoe.mtg.core.StoryTab
+import org.mattshoe.mtg.core.StorySection
 import org.mattshoe.mtg.core.WheelLore
 import org.mattshoe.mtg.core.WheelPair
 
@@ -69,9 +70,9 @@ fun GuidePage(
                 }
             }
         } else {
-            // Inside an article or a profile, the way out is up to the
-            // story's sections, which `Story` draws, not the tiles.
-            if (story == null || story == StoryPage.Index) {
+            // Inside a profile, the way out is up to the section it was
+            // opened from, which `StoryProfile` draws, not the tiles.
+            if (story !is StoryPage.Profile) {
                 Button(attrs = {
                     classes("btn", "guide-back")
                     onClick { onBack() }
@@ -81,8 +82,8 @@ fun GuidePage(
                 Guide.COLOURS -> Colours()
                 Guide.WHEEL -> Wheel()
                 Guide.LORE -> Lore(era ?: PhyrexianLore.eras.first(), onEra)
-                Guide.STORY -> Story(story ?: StoryPage.Index, onStory)
                 Guide.RULES -> RulesSearch(rules, onRules, onLoadRules)
+                else -> story?.let { Story(it, onStory) }
             }
         }
     }
@@ -311,51 +312,20 @@ private fun Lore(era: LoreEra, onEra: (LoreEra) -> Unit) {
 }
 
 /**
- * The story of Magic: the ten sections, an article in tabs, or a
+ * A section of the story of Magic, one tile of the Guide: a row of
+ * tabs, one per article, then the article set for reading, or a
  * person's profile. Everything said is in `MagicStory`, and where you
  * are is in the address. Sibling of `Story` in `GuideScreen`.
+ *
+ * Matt: "each of those sections should be their own article, with its
+ * own tabs, just like the phyrexian one".
  */
 @Composable
 private fun Story(page: StoryPage, onStory: (String) -> Unit) {
     when (page) {
-        StoryPage.Index -> StoryIndex(onStory)
-        is StoryPage.Reading -> StoryReading(page.article, page.tab, onStory)
-        is StoryPage.Profile -> StoryProfile(page.person, onStory)
+        is StoryPage.Reading -> StoryReading(page.section, page.article, onStory)
+        is StoryPage.Profile -> StoryProfile(page.section, page.person, onStory)
     }
-}
-
-@Composable
-private fun StoryIndex(onStory: (String) -> Unit) {
-    Div(attrs = { classes("story-index") }) {
-        MagicStory.sections.forEachIndexed { i, s ->
-            Section(attrs = {
-                classes("story-section")
-                attr("data-section", s.slug)
-            }) {
-                Div(attrs = { classes("story-section-number") }) { Text("${i + 1}") }
-                H2(attrs = { classes("story-section-title") }) { Text(s.title) }
-                Div(attrs = { classes("story-hook") }) { Text(s.hook) }
-                Div(attrs = { classes("story-articles") }) {
-                    s.articles.forEach { a ->
-                        Button(attrs = {
-                            classes("story-article")
-                            attr("data-article", a.slug)
-                            onClick { onStory(a.slug) }
-                        }) { Text(a.title) }
-                    }
-                }
-            }
-        }
-    }
-}
-
-/** Up to the sections, from an article or a profile. */
-@Composable
-private fun StoryUp(onStory: (String) -> Unit) {
-    Button(attrs = {
-        classes("btn", "story-up")
-        onClick { onStory("") }
-    }) { Text("‹ The story of Magic") }
 }
 
 /**
@@ -365,12 +335,12 @@ private fun StoryUp(onStory: (String) -> Unit) {
  * colourblind.
  */
 @Composable
-private fun StoryParagraph(paragraph: String, onStory: (String) -> Unit) {
+private fun StoryParagraph(section: StorySection, paragraph: String, onStory: (String) -> Unit) {
     P {
         MagicStory.spans(paragraph).forEach { s ->
             val target = s.target
             when {
-                target != null -> A(href = "#/guide/${Guide.STORY}/$target", attrs = {
+                target != null -> A(href = "#/guide/${MagicStory.address(section, target)}", attrs = {
                     classes("lore-link")
                     attr("data-target", target)
                     onClick {
@@ -387,45 +357,40 @@ private fun StoryParagraph(paragraph: String, onStory: (String) -> Unit) {
 }
 
 @Composable
-private fun StoryReading(article: StoryArticle, tab: StoryTab, onStory: (String) -> Unit) {
-    Div(attrs = { classes("story-head") }) {
-        StoryUp(onStory)
-        Div(attrs = { classes("story-kicker") }) { Text(MagicStory.sectionOf(article).title) }
-        H2(attrs = { classes("story-article-title") }) { Text(article.title) }
-    }
+private fun StoryReading(section: StorySection, article: StoryArticle, onStory: (String) -> Unit) {
     Div(attrs = {
         classes("lore-tabs")
         attr("role", "tablist")
     }) {
-        article.tabs.forEach { t ->
+        section.articles.forEach { a ->
             Button(attrs = {
                 classes("lore-tab")
                 attr("role", "tab")
-                attr("aria-selected", (t == tab).toString())
-                onClick { onStory(MagicStory.target(article, t)) }
-            }) { Text(t.tab) }
+                attr("aria-selected", (a == article).toString())
+                onClick { onStory(a.slug) }
+            }) { Text(a.title) }
         }
     }
     Div(attrs = { classes("lore-story") }) {
-        tab.story.forEach { StoryParagraph(it, onStory) }
-        tab.quote?.let { q ->
-            Div(attrs = { classes("lore-quote") }) {
-                Div(attrs = { classes("lore-quote-words") }) { Text(q.words) }
-                Div(attrs = { classes("lore-quote-source") }) { Text(q.source) }
+        H2(attrs = { classes("lore-title") }) { Text(article.title) }
+        // An article's parts, told one after another under their own
+        // headings, so the tab reads as one chapter as Phyrexia's do.
+        article.tabs.forEach { part ->
+            H3(attrs = { classes("story-part-title") }) { Text(part.tab) }
+            part.story.forEach { StoryParagraph(section, it, onStory) }
+            part.quote?.let { q ->
+                Div(attrs = { classes("lore-quote") }) {
+                    Div(attrs = { classes("lore-quote-words") }) { Text(q.words) }
+                    Div(attrs = { classes("lore-quote-source") }) { Text(q.source) }
+                }
             }
         }
-        val nextTab = MagicStory.next(article, tab)
-        val nextArticle = MagicStory.nextArticle(article)
-        val (label, target) = when {
-            nextTab != null -> "Read on: ${nextTab.tab} ›" to MagicStory.target(article, nextTab)
-            nextArticle != null -> "Next: ${nextArticle.title} ›" to nextArticle.slug
-            else -> null to null
-        }
-        if (label != null && target != null) {
+        MagicStory.nextArticle(article)?.let { next ->
+            val label = if (next in section.articles) "Read on: ${next.title} ›" else "Next: ${MagicStory.sectionOf(next).title} ›"
             Button(attrs = {
                 classes("btn", "lore-next")
                 onClick {
-                    onStory(target)
+                    onStory(next.slug)
                     kotlinx.browser.window.scrollTo(0.0, 0.0)
                 }
             }) { Text(label) }
@@ -443,11 +408,14 @@ private fun StoryReading(article: StoryArticle, tab: StoryTab, onStory: (String)
 }
 
 @Composable
-private fun StoryProfile(person: StoryPerson, onStory: (String) -> Unit) {
-    Div(attrs = { classes("story-head") }) { StoryUp(onStory) }
+private fun StoryProfile(section: StorySection, person: StoryPerson, onStory: (String) -> Unit) {
+    Button(attrs = {
+        classes("btn", "story-up")
+        onClick { onStory("") }
+    }) { Text("‹ ${section.title}") }
     Div(attrs = { classes("lore-story", "story-profile") }) {
         H2(attrs = { classes("lore-title") }) { Text(person.name) }
-        person.profile.forEach { StoryParagraph(it, onStory) }
+        person.profile.forEach { StoryParagraph(section, it, onStory) }
         Section(attrs = { classes("story-sources") }) {
             H2(attrs = { classes("story-sources-title") }) { Text("Appears in") }
             MagicStory.appearances(person).forEach { a ->

@@ -16,8 +16,10 @@ import kotlin.test.assertTrue
  */
 class MagicStoryTest {
 
-    private val tile: GuideTile
-        get() = Guide.tile(Guide.STORY) ?: error("the Guide has no lore tile: ${Guide.tiles.map { it.slug }}")
+    private fun tile(section: StorySection): GuideTile =
+        Guide.tile(section.slug) ?: error("${section.title} is not a tile of its own: ${Guide.tiles.map { it.slug }}")
+
+    private fun section(title: String): StorySection = MagicStory.sections.first { it.title == title }
 
     private val asked = listOf(
         "Brothers' War" to listOf("The Thran", "Koilos", "The War", "Argoth", "Sylex Blast", "Ice Age"),
@@ -44,12 +46,39 @@ class MagicStoryTest {
     private val text: (StoryArticle) -> String = { a -> a.tabs.joinToString(" ") { t -> t.story.joinToString(" ") { MagicStory.plain(it) } } }
 
     @Test
-    fun theStoryIsATileOfItsOwnAtItsOwnAddress() {
-        assertTrue(tile.blurb.isNotBlank(), "the tile says nothing under its title")
-        val open = AppState().navigate(View.GUIDE).openGuide(tile)
-        assertEquals("#/guide/lore", open.route.toHash())
-        assertEquals(StoryPage.Index, open.storyPage, "opening the tile does not land on the sections")
-        assertEquals(tile.title, open.title, "the header does not name the page")
+    fun everySectionIsATileOfItsOwnLikePhyrexiaNotOneArticleOfThemAll() {
+        // Matt: "you put all of it in one single article. each of those
+        // sections should be their own article, with its own tabs, just
+        // like the phyrexian one".
+        assertNull(Guide.tiles.firstOrNull { it.title == "The story of Magic" }, "the ten sections are still one tile: ${Guide.tiles.map { it.title }}")
+        assertNull(Guide.tile("lore"), "the old one-tile story is still in the Guide")
+        val phyrexia = Guide.tiles.indexOfFirst { it.slug == Guide.LORE }
+        assertEquals(
+            MagicStory.sections.map { it.slug },
+            Guide.tiles.drop(phyrexia + 1).map { it.slug },
+            "the sections are not tiles of their own, in order, after Phyrexia",
+        )
+        MagicStory.sections.forEach { s ->
+            val t = tile(s)
+            assertEquals(s.title, t.title, "${s.slug}'s tile is not named for its section")
+            assertEquals(s.hook, t.blurb, "${s.title}'s tile does not carry its hook")
+            val open = AppState().navigate(View.GUIDE).openGuide(t)
+            assertEquals("#/guide/${s.slug}", open.route.toHash())
+            assertEquals(StoryPage.Reading(s, s.articles.first()), open.storyPage, "${s.title} does not open on its first tab")
+            assertEquals(s.title, open.title, "the header does not name ${s.title}")
+        }
+    }
+
+    @Test
+    fun aSectionsTabsAreItsArticlesInOrder() {
+        val war = section("Brothers' War")
+        val open = AppState().navigate(Route.parse("#/guide/${war.slug}"))
+        war.articles.forEach { a ->
+            val tabbed = open.openStory(a.slug)
+            assertEquals("#/guide/${war.slug}/${a.slug}", tabbed.route.toHash(), "${a.title} is not a tab of ${war.title} at its own address")
+            assertEquals(StoryPage.Reading(war, a), tabbed.storyPage)
+            assertEquals(war.title, tabbed.title, "the header stops naming the section on ${a.title}")
+        }
     }
 
     @Test
@@ -73,7 +102,7 @@ class MagicStoryTest {
 
     @Test
     fun everyAddressIsUniqueAndAnAddress() {
-        val slugs = MagicStory.articles.map { it.slug } + MagicStory.sections.map { it.slug }
+        val slugs = MagicStory.articles.map { it.slug } + MagicStory.sections.map { it.slug } + listOf(Guide.COLOURS, Guide.WHEEL, Guide.RULES, Guide.LORE)
         assertTrue(MagicStory.articles.size == 51, "${MagicStory.articles.size} articles, which is not all of them")
         assertEquals(slugs.size, slugs.toSet().size, "two things share an address: ${slugs.groupBy { it }.filter { it.value.size > 1 }.keys}")
         MagicStory.articles.forEach { a ->
@@ -133,13 +162,13 @@ class MagicStoryTest {
     fun everyLinkGoesSomewhere() {
         MagicStory.articles.forEach { a ->
             MagicStory.links(a).forEach { target ->
-                val page = assertNotNull(MagicStory.page(target), "${a.title} links to $target, which is nothing")
+                val page = assertNotNull(MagicStory.page(MagicStory.sectionOf(a), target), "${a.title} links to $target, which is nothing")
                 if (page is StoryPage.Reading) assertTrue(page.article != a, "${a.title} links to itself")
             }
         }
         MagicStory.people.forEach { p ->
             p.profile.flatMap { MagicStory.spans(it) }.mapNotNull { it.target }.forEach {
-                assertNotNull(MagicStory.page(it), "${p.name}'s profile links to $it, which is nothing")
+                assertNotNull(MagicStory.page(MagicStory.sections.first(), it), "${p.name}'s profile links to $it, which is nothing")
             }
         }
     }
@@ -238,56 +267,61 @@ class MagicStoryTest {
     }
 
     @Test
-    fun anArticleAndATabAndAPersonAreEachTheirOwnAddress() {
-        val war = titled("Brothers' War", "The War")
-        val second = war.tabs[1]
-        val open = AppState().navigate(View.GUIDE).openGuide(tile).openStory(war)
-        assertEquals("#/guide/lore/${war.slug}", open.route.toHash())
-        assertEquals(StoryPage.Reading(war, war.tabs.first()), open.storyPage)
-        assertEquals(tile.title, open.title, "the header stops naming the page inside an article")
+    fun aLinkOpensTheArticleInItsOwnSectionAndAPersonInThisOne() {
+        val war = section("Brothers' War")
+        val origins = section("Phyrexia's Origins")
+        val here = AppState().navigate(Route.parse("#/guide/${war.slug}/the-war"))
+        val rath = here.openStory("rath-made")
+        assertEquals("#/guide/${origins.slug}/rath-made", rath.route.toHash(), "a link to another section's article stays in this one")
+        assertEquals(StoryPage.Reading(origins, MagicStory.article("rath-made")!!), rath.storyPage)
 
-        val tabbed = open.openStory(war, second)
-        assertEquals("#/guide/lore/${war.slug}/${second.slug}", tabbed.route.toHash())
-        assertEquals(StoryPage.Reading(war, second), tabbed.storyPage)
-        assertEquals(StoryPage.Reading(war, second), AppState().navigate(Route.parse("#/guide/lore/${war.slug}/${second.slug}")).storyPage, "a bookmark does not land on its tab")
+        val part = MagicStory.article("koilos")!!.tabs[1]
+        assertEquals("#/guide/${war.slug}/koilos", here.openStory("koilos/${part.slug}").route.toHash(), "a link to a part of an article does not open the article")
 
         val urza = MagicStory.people.first { it.name.startsWith("Urza") }
-        val who = AppState().navigate(Route.parse("#/guide/lore/who/${urza.slug}"))
-        assertEquals(StoryPage.Profile(urza), who.storyPage, "a person's address is not their profile")
+        val who = here.openStory(MagicStory.target(urza))
+        assertEquals("#/guide/${war.slug}/who/${urza.slug}", who.route.toHash(), "a person's profile is not opened inside the section it was reached from")
+        assertEquals(StoryPage.Profile(war, urza), who.storyPage)
+        assertEquals(StoryPage.Profile(war, urza), AppState().navigate(Route.parse("#/guide/${war.slug}/who/${urza.slug}")).storyPage, "a bookmark of a profile does not land on it")
     }
 
     @Test
-    fun anAddressThatNamesNothingIsTheSectionsNotABlankPage() {
-        assertEquals(StoryPage.Index, AppState().navigate(Route.parse("#/guide/lore/nowhere")).storyPage)
-        assertEquals(StoryPage.Index, AppState().navigate(Route.parse("#/guide/lore/who/nobody")).storyPage)
-        val war = titled("Brothers' War", "The War")
-        assertEquals(StoryPage.Reading(war, war.tabs.first()), AppState().navigate(Route.parse("#/guide/lore/${war.slug}/nowhere")).storyPage, "a stale tab is not its article")
+    fun anAddressThatNamesNothingIsTheSectionsFirstTabNotABlankPage() {
+        val war = section("Brothers' War")
+        val first = StoryPage.Reading(war, war.articles.first())
+        assertEquals(first, AppState().navigate(Route.parse("#/guide/${war.slug}/nowhere")).storyPage)
+        assertEquals(first, AppState().navigate(Route.parse("#/guide/${war.slug}/who/nobody")).storyPage)
+        assertEquals(first, AppState().navigate(Route.parse("#/guide/${war.slug}/rath-made")).storyPage, "an article from another section shows under this one")
+        val koilos = MagicStory.article("koilos")!!
+        assertEquals(StoryPage.Reading(war, koilos), AppState().navigate(Route.parse("#/guide/${war.slug}/koilos/${koilos.tabs[1].slug}")).storyPage, "an address with a part in it is not its article")
     }
 
     @Test
     fun noOtherPageHasAStory() {
         assertNull(AppState().navigate(Route.parse("#/guide/phyrexia")).storyPage, "the Phyrexia page has a story page")
+        assertNull(AppState().navigate(Route.parse("#/guide/lore")).storyPage, "the old one-tile story is still there")
         assertNull(AppState().navigate(View.GUIDE).storyPage, "the tiles have a story page")
         assertNull(AppState().storyPage, "the Library has a story page")
     }
 
     @Test
-    fun backFromAnArticleOrAProfileIsTheSectionsAndBackFromThereIsTheTiles() {
-        val last = MagicStory.articles.last()
-        val deep = AppState().navigate(Route.parse("#/guide/lore/${last.slug}/${last.tabs.last().slug}"))
-        val up = assertNotNull(deep.back(), "back from an article closed the app")
-        assertEquals("#/guide/lore", up.route.toHash(), "back from an article is not the sections")
-        val who = AppState().navigate(Route.parse("#/guide/lore/who/${MagicStory.people.first().slug}"))
-        assertEquals("#/guide/lore", who.back()?.route?.toHash(), "back from a profile is not the sections")
-        assertEquals("#/guide", up.back()?.route?.toHash(), "back from the sections is not the tiles")
+    fun backFromATabIsTheTilesAndBackFromAProfileIsItsSection() {
+        val last = MagicStory.sections.last()
+        val deep = AppState().navigate(Route.parse("#/guide/${last.slug}/${last.articles.last().slug}"))
+        assertEquals("#/guide", deep.back()?.route?.toHash(), "back from a section's tab is not the tiles, as it is on Phyrexia")
+        val war = MagicStory.sections.first()
+        val who = AppState().navigate(Route.parse("#/guide/${war.slug}/who/${MagicStory.people.first().slug}"))
+        assertEquals("#/guide/${war.slug}", who.back()?.route?.toHash(), "back from a profile is not the section it was opened in")
     }
 
     @Test
-    fun readOnGoesTabByTabThenToTheNextArticleAndEndsAtTheEnd() {
-        val first = MagicStory.articles.first()
-        first.tabs.zipWithNext().forEach { (a, b) -> assertEquals(b, MagicStory.next(first, a), "${first.title}: ${a.tab} does not lead on to ${b.tab}") }
-        assertNull(MagicStory.next(first, first.tabs.last()), "the last tab leads on to another tab")
-        assertEquals(MagicStory.articles[1], MagicStory.nextArticle(first))
+    fun readOnGoesArticleByArticleThenToTheNextSectionAndEndsAtTheEnd() {
+        val war = MagicStory.sections.first()
+        war.articles.zipWithNext().forEach { (a, b) -> assertEquals(b, MagicStory.nextArticle(a), "${a.title} does not lead on to ${b.title}") }
+        val after = MagicStory.sections[1]
+        assertEquals(after.articles.first(), MagicStory.nextArticle(war.articles.last()), "the end of a section does not lead to the next one")
+        val open = AppState().navigate(Route.parse("#/guide/${war.slug}/${war.articles.last().slug}")).openStory(after.articles.first().slug)
+        assertEquals("#/guide/${after.slug}/${after.articles.first().slug}", open.route.toHash())
         val last = MagicStory.articles.last()
         assertIs<StoryArticle>(last)
         assertNull(MagicStory.nextArticle(last), "the last article leads somewhere")
