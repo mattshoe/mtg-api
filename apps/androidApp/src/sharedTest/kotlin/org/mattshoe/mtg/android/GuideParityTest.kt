@@ -231,6 +231,30 @@ class GuideParityTest {
         listOf("Azorius", "Gruul", "Izzet", "Orzhov").forEach { assertTrue(it in names, "$it is not on the page: $names") }
     }
 
+    // Matt: "we should add lore inserts for the shards of alara and the
+    // tribes of tarkir. information that talks about the land scapes and
+    // culture with the missing colors of magic."
+
+    @Test
+    fun theWheelTellsTheLoreOfEachShardAndClanAndTheColoursEachLacks() {
+        shell()
+        openWheel()
+        assertEquals(
+            listOf("Bant", "Esper", "Grixis", "Jund", "Naya", "Abzan", "Jeskai", "Sultai", "Mardu", "Temur"),
+            texts("wheel-lore-name"),
+            "the shards and clans on the wheel page",
+        )
+        val bant = texts("wheel-lore-missing-GWU").joinToString(" ")
+        assertTrue("Black" in bant && "Red" in bant, "Bant should say it has no black or red: \"$bant\"")
+        val abzan = texts("wheel-lore-missing-WBG").joinToString(" ")
+        assertTrue("Blue" in abzan && "Red" in abzan, "Abzan should say it has no blue or red: \"$abzan\"")
+        listOf("wheel-lore-land", "wheel-lore-people", "wheel-lore-without").forEach { part ->
+            val said = texts(part)
+            assertEquals(10, said.size, "not every shard and clan has $part: $said")
+            said.forEach { assertTrue(it.isNotBlank(), "a shard or clan has nothing in $part") }
+        }
+    }
+
     @Test
     fun backFromTheWheelIsTheTiles() {
         shell()

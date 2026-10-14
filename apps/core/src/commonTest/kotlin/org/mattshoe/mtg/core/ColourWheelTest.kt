@@ -78,4 +78,54 @@ class ColourWheelTest {
         assertTrue(words.contains("enem", ignoreCase = true), "the opening never says enemy: $words")
         assertNotNull(Guide.tile(Guide.COLOURS), "the colour combinations tile is gone")
     }
+
+    // Matt: "we should add lore inserts for the shards of alara and the
+    // tribes of tarkir. information that talks about the land scapes and
+    // culture with the missing colors of magic."
+
+    private fun sorted(p: String) = "WUBRG".filter { it in p }
+
+    @Test
+    fun eachShardOfAlaraIsAColourAndItsAlliesAndIsMissingItsEnemies() {
+        assertEquals(listOf("Bant", "Esper", "Grixis", "Jund", "Naya"), ColourWheel.shards.map { it.name }, "the five shards")
+        ColourWheel.shards.zip(ColourWheel.colours).forEach { (shard, centre) ->
+            val allies = ColourWheel.allies(centre.pip).joinToString("") { it.pip }
+            val enemies = ColourWheel.enemies(centre.pip).joinToString("") { it.pip }
+            assertEquals(sorted(centre.pip + allies), sorted(shard.pips), "${shard.name} is not ${centre.name} and its allies")
+            assertEquals(sorted(enemies), ColourWheel.missing(shard.pips).joinToString("") { it.pip }, "${shard.name} is not missing ${centre.name}'s enemies")
+            assertEquals(Guild.of(shard.pips), shard.name, "${shard.pips} is named differently from a deck of those colours")
+        }
+    }
+
+    @Test
+    fun eachClanOfTarkirIsAColourAndItsEnemiesAndIsMissingItsAllies() {
+        assertEquals(listOf("Abzan", "Jeskai", "Sultai", "Mardu", "Temur"), ColourWheel.clans.map { it.name }, "the five clans")
+        // Abzan is black and its two enemies, white and green, so it lacks
+        // black's allies, blue and red. Each clan has exactly one such colour.
+        ColourWheel.clans.forEach { clan ->
+            val anchors = ColourWheel.colours.filter { c ->
+                sorted(c.pip + ColourWheel.enemies(c.pip).joinToString("") { it.pip }) == sorted(clan.pips)
+            }
+            val centre = anchors.singleOrNull() ?: error("${clan.name} (${clan.pips}) is not one colour and its two enemies: $anchors")
+            val allies = ColourWheel.allies(centre.pip).joinToString("") { it.pip }
+            assertEquals(sorted(allies), ColourWheel.missing(clan.pips).joinToString("") { it.pip }, "${clan.name} is not missing ${centre.name}'s allies")
+            assertEquals(Guild.of(clan.pips), clan.name, "${clan.pips} is named differently from a deck of those colours")
+        }
+    }
+
+    @Test
+    fun everyLoreInsertTellsOfTheLandThePeopleAndTheColoursItLacks() {
+        val all = ColourWheel.shards + ColourWheel.clans
+        assertEquals(10, all.size, "there are not five shards and five clans to tell of: ${all.map { it.name }}")
+        assertEquals("No Black or Red", ColourWheel.lacking("GWU"), "how Bant's missing colours are said")
+        all.forEach { lore ->
+            assertTrue(lore.land.isNotBlank(), "${lore.name} says nothing about its landscape")
+            assertTrue(lore.people.isNotBlank(), "${lore.name} says nothing about its culture")
+            assertTrue(lore.without.isNotBlank(), "${lore.name} says nothing about the colours it lacks")
+            val heading = ColourWheel.lacking(lore.pips)
+            ColourWheel.missing(lore.pips).forEach {
+                assertTrue(it.name in heading, "${lore.name}'s heading \"$heading\" does not name ${it.name}, which it lacks")
+            }
+        }
+    }
 }

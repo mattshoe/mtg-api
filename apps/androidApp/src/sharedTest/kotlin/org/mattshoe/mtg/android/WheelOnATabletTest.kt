@@ -87,6 +87,13 @@ class WheelOnATabletTest {
         val u = rule.onNodeWithTag("wheel-colour-U", useUnmergedTree = true).getUnclippedBoundsInRoot()
         assertEquals(w.top, u.top, "$on blue is under white, so the page is one long column on a wide screen")
         assertTrue(u.right <= size.width, "$on blue runs off the side: ${u.right}")
+
+        // The lore of the shards and clans, under the pairs: two across
+        // on a wide screen, as the five colours are, and on the screen.
+        val bant = rule.onNodeWithTag("wheel-lore-GWU", useUnmergedTree = true).getUnclippedBoundsInRoot()
+        val esper = rule.onNodeWithTag("wheel-lore-WUB", useUnmergedTree = true).getUnclippedBoundsInRoot()
+        assertEquals(bant.top, esper.top, "$on Esper is under Bant, so the lore is one long column on a wide screen")
+        assertTrue(bant.left.value >= 0f && esper.right <= size.width, "$on the lore runs off the side: ${bant.left} to ${esper.right}")
     }
 
     @Test

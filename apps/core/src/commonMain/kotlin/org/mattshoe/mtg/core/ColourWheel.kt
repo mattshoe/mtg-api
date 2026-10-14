@@ -7,6 +7,12 @@ data class WheelColour(val pip: String, val name: String, val wants: String, val
 data class WheelPair(val pips: String, val name: String, val why: String)
 
 /**
+ * A shard of Alara or a clan of Tarkir: its land, its people, and
+ * what it is like without the two colours it lacks.
+ */
+data class WheelLore(val pips: String, val name: String, val land: String, val people: String, val without: String)
+
+/**
  * The colour wheel, for the Guide.
  *
  * Matt: "i want a guide section on the color wheel. i know nothing
@@ -77,6 +83,102 @@ object ColourWheel {
         WheelPair("RW", "Boros", "Red wants freedom, white wants rules. Together, an army that charges in."),
         WheelPair("GU", "Simic", "Green takes the world as it is, blue wants to improve it. Together, engineered nature."),
     )
+
+    const val SHARDS = "The shards of Alara"
+    const val SHARDS_ABOUT = "Alara was one world, split into five. Each shard kept a colour and its two allies, and lost its two enemies."
+    const val CLANS = "The clans of Tarkir"
+    const val CLANS_ABOUT = "Each clan is a colour and its two enemies, so each one lives without a pair of allied colours."
+
+    /**
+     * The five shards of Alara, one for each colour in WUBRG order.
+     *
+     * Matt: "we should add lore inserts for the shards of alara and the
+     * tribes of tarkir. information that talks about the land scapes
+     * and culture with the missing colors of magic."
+     *
+     * Alara was one world, split into five. Each shard kept a colour and
+     * its two allies and lost its two enemies, so each is what a world
+     * looks like with two colours gone.
+     */
+    val shards: List<WheelLore> = listOf(
+        WheelLore(
+            "GWU", "Bant",
+            land = "Rolling green fields and farmland under a bright sky, dotted with castles and walled cities.",
+            people = "Knights, monks and angels in a strict order of castes. Honour is everything, and a deed earns you a sigil that shows your worth.",
+            without = "No black and no red, so no greed, no rage and hardly any death magic. Even its wars were fought by rules of honour, and it had all but forgotten what evil looked like.",
+        ),
+        WheelLore(
+            "WUB", "Esper",
+            land = "Misty plains and gleaming cities of glass and metal, where the land itself is shaped by mages.",
+            people = "Wizards and scholars who graft etherium, a magical blue metal, into their own bodies to perfect them. Sphinxes and the Mechanists lead the pursuit of knowledge.",
+            without = "No red and no green, so nothing wild or impulsive is allowed. Nature is a flaw to be fixed and feeling is kept under control.",
+        ),
+        WheelLore(
+            "UBR", "Grixis",
+            land = "A dark, dying wasteland of ash and ruins. Living things are rare and the life energy they carry is precious.",
+            people = "Necromancers, demons and liches rule over hordes of the dead. The few living people hide, and are hunted for the life inside them.",
+            without = "No green and no white, so no growth, no healing and no one looking out for anyone else. Life itself is running out.",
+        ),
+        WheelLore(
+            "BRG", "Jund",
+            land = "Volcanoes, steaming jungles and tar pits, with dragons at the top of the food chain.",
+            people = "Human hunting clans, viashino and goblins, all fighting to survive another day. Strength is the only law.",
+            without = "No white and no blue, so no laws, no plans and no thought for tomorrow. Eat or be eaten.",
+        ),
+        WheelLore(
+            "RGW", "Naya",
+            land = "Endless jungle and mountains, where giant beasts taller than the trees roam free.",
+            people = "Elves who worship the giant beasts as gods, leonin nacatl, and humans in jungle cities. They live close to nature and its old ways.",
+            without = "No blue and no black, so no hunger for knowledge or power. Little technology and few schemes, just a simple life in the wild.",
+        ),
+    )
+
+    /**
+     * The five clans of Tarkir, in the order the cards list them.
+     *
+     * Each clan is a colour and its two enemies, and lacks that colour's
+     * two allies: Abzan is black with white and green, and has no blue
+     * or red. These are the clans under the khans, before the dragons
+     * took over, which is where the names come from.
+     */
+    val clans: List<WheelLore> = listOf(
+        WheelLore(
+            "WBG", "Abzan",
+            land = "Harsh deserts and salt flats, where the clan builds stone fortresses to hold out against the wastes.",
+            people = "Big families bound by the Kin-Tree, honouring the spirits of their ancestors. Endurance is what they prize: they hold the line and do not break.",
+            without = "No blue and no red, so little interest in new ideas or sudden moves. Tradition and patience win out, and they stand their ground.",
+        ),
+        WheelLore(
+            "URW", "Jeskai",
+            land = "High mountain monasteries among peaks and waterfalls.",
+            people = "Monks and martial artists who train mind and body together, seeking enlightenment. Cunning is what they prize: outthink the enemy.",
+            without = "No black and no green, so no selfish greed and no trust in raw instinct. Discipline over appetite.",
+        ),
+        WheelLore(
+            "BGU", "Sultai",
+            land = "Steaming jungle swamps and rivers, full of grand palaces and sunken temples.",
+            people = "Naga and their rakshasa masters, living in luxury on the work of zombie servants. Ruthlessness is what they prize: whatever works.",
+            without = "No white and no red, so no mercy, no fairness and no passion. Cold, rich and decadent.",
+        ),
+        WheelLore(
+            "RWB", "Mardu",
+            land = "Wide open grassy steppes, crossed by roaming war camps.",
+            people = "A nomad horde of humans, orcs and goblins who live to raid. Speed is what they prize: strike first, strike fast, and win glory in battle.",
+            without = "No green and no blue, so no patience, no plans and no place to settle. They are always on the move.",
+        ),
+        WheelLore(
+            "GUR", "Temur",
+            land = "Frozen tundra and snowy mountains, wild and cold.",
+            people = "Bear riders, ainok and shamans who whisper to the land. Savagery is what they prize: the strength of the wild.",
+            without = "No white and no black, so no rulers and no cruelty or ambition. Loose families living free in the wild.",
+        ),
+    )
+
+    /** The colours a combination does not have, in WUBRG order. */
+    fun missing(pips: String): List<WheelColour> = colours.filter { it.pip !in pips.uppercase() }
+
+    /** "No Black or Red": how a page says the colours a shard or clan lacks. */
+    fun lacking(pips: String): String = "No " + missing(pips).joinToString(" or ") { it.name }
 
     private fun at(i: Int): WheelColour = colours[(i + colours.size) % colours.size]
 

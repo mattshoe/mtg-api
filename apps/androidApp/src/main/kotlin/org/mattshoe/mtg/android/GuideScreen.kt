@@ -52,6 +52,7 @@ import org.mattshoe.mtg.core.PhyrexianLore
 import org.mattshoe.mtg.core.Rule
 import org.mattshoe.mtg.core.Rules
 import org.mattshoe.mtg.core.WheelColour
+import org.mattshoe.mtg.core.WheelLore
 import org.mattshoe.mtg.core.WheelPair
 
 /**
@@ -237,6 +238,45 @@ private fun Wheel() {
             Pairs("Allied pairs", "Side by side on the wheel. They want similar things.", ColourWheel.allied)
             Spacer(Modifier.height(12.dp))
             Pairs("Enemy pairs", "Across the wheel. They clash, and a deck of both gets the best of each.", ColourWheel.enemy)
+            Spacer(Modifier.height(12.dp))
+            WheelLores(ColourWheel.SHARDS, ColourWheel.SHARDS_ABOUT, ColourWheel.shards, across)
+            Spacer(Modifier.height(12.dp))
+            WheelLores(ColourWheel.CLANS, ColourWheel.CLANS_ABOUT, ColourWheel.clans, across)
+        }
+    }
+}
+
+/**
+ * Matt: "lore inserts for the shards of alara and the tribes of
+ * tarkir ... the land scapes and culture with the missing colors of
+ * magic." A card each, everything said in `ColourWheel`. Sibling of
+ * the site's `WheelLores` in `GuidePage`.
+ */
+@Composable
+private fun WheelLores(title: String, about: String, lore: List<WheelLore>, across: Int) {
+    Group(title, about)
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        lore.chunked(across).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                row.forEach { l ->
+                    Card(l.pips, Modifier.weight(1f).testTag("wheel-lore-${l.pips}"), pad = 14) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                            l.pips.forEach { ManaSymbol(it.toString(), size = 22.dp, text = 12.sp) }
+                            Spacer(Modifier.width(5.dp))
+                            Line(l.name, Ink, size = 17, weight = FontWeight.Bold, modifier = Modifier.testTag("wheel-lore-name"))
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Line(
+                            ColourWheel.lacking(l.pips), Ink3, size = Design.MINI, weight = FontWeight.SemiBold,
+                            modifier = Modifier.testTag("wheel-lore-missing-${l.pips}"),
+                        )
+                        Said("The land", l.land, "wheel-lore-land")
+                        Said("The people", l.people, "wheel-lore-people")
+                        Said("Without them", l.without, "wheel-lore-without")
+                    }
+                }
+                repeat(across - row.size) { Spacer(Modifier.weight(1f)) }
+            }
         }
     }
 }
