@@ -33,7 +33,7 @@ afterEach(() => { if (root) rmSync(root, { recursive: true, force: true }); root
  * writes, so a test can say "nothing attached" and then "attached" without
  * timing anything.
  */
-function sdk({ attached = [], avds = ['Pixel_9'], bootsAfter = 0, unauthorized = false } = {}) {
+function sdk({ attached = [], avds = ['Pixel_9'], bootsAfter = 0, unauthorized = false, installed = false } = {}) {
   root = mkdtempSync(join(tmpdir(), 'emu-'))
   const bin = join(root, 'bin')
   mkdirSync(bin, { recursive: true })
@@ -47,26 +47,34 @@ function sdk({ attached = [], avds = ['Pixel_9'], bootsAfter = 0, unauthorized =
   writeFileSync(join(bin, 'adb'), `#!/bin/bash
 printf 'adb %s\\n' "$*" >> ${JSON.stringify(calls)}
 n=$(cat ${JSON.stringify(state)})
-case "$1 $2" in
-  "devices "*|"devices")
+case "$1" in
+  devices)
     echo "List of devices attached"
     [ "$n" = "1" ] && echo "emulator-5554	device"
     [ "$n" = "2" ] && echo "emulator-5554	unauthorized"
     exit 0 ;;
+  kill-server)
+    # Restarting adb is what clears an unauthorized emulator.
+    [ "$n" = "2" ] && echo 1 > ${JSON.stringify(state)}
+    exit 0 ;;
+  start-server|wait-for-device)
+    exit 0 ;;
+  uninstall)
+    echo Success; exit 0 ;;
+  shell)
+    if [ "$2" = "pm" ]; then
+      if [ ${JSON.stringify(installed ? '1' : '0')} = 1 ]; then
+        echo "package:org.mathoe.other"
+        echo "package:org.mattshoe.mtg.share"
+        echo "package:org.mattshoe.mtg.share.test"
+      fi
+      exit 0
+    fi
+    # getprop sys.boot_completed: boots after the test's chosen polls.
+    seen=$(grep -c 'adb shell getprop' ${JSON.stringify(calls)})
+    if [ "$seen" -gt ${JSON.stringify(String(bootsAfter))} ]; then echo 1; else echo 0; fi
+    exit 0 ;;
 esac
-if [ "$1" = "kill-server" ]; then
-  # Restarting adb is what clears an unauthorized emulator.
-  [ "$n" = "2" ] && echo 1 > ${JSON.stringify(state)}
-  exit 0
-fi
-if [ "$1" = "start-server" ]; then exit 0; fi
-if [ "$1" = "wait-for-device" ]; then exit 0; fi
-if [ "$1" = "shell" ]; then
-  # Boots after however many polls the test asked for.
-  seen=$(grep -c 'adb shell' ${JSON.stringify(calls)})
-  if [ "$seen" -gt ${JSON.stringify(String(bootsAfter))} ]; then echo 1; else echo 0; fi
-  exit 0
-fi
 exit 0
 `)
   writeFileSync(join(bin, 'emulator'), `#!/bin/bash
@@ -119,6 +127,33 @@ describe('the gate makes sure there is a phone', () => {
     expect(box.calls()).toContain('adb kill-server')
     expect(box.calls(), 'it booted a second emulator next to the live one')
       .not.toContain('emulator -avd')
+  })
+
+  it('clears a stale install before the suite tries to replace it', () => {
+    // What killed a device run: the emulator still had the app on it from
+    // an earlier build signed with a different key, and every install
+    // after that died with
+    //
+    //   INSTALL_FAILED_UPDATE_INCOMPATIBLE: Existing package
+    //   org.mattshoe.mtg.share signatures do not match newer version
+    //
+    // The suite stays red until somebody uninstalls by hand, which is not
+    // a thing an agent at 3am is going to work out. `test:android` passes
+    // `leaveApksInstalledAfterRun=true`, so the stale copy is there by
+    // design; removing it costs a couple of seconds out of seventeen
+    // minutes and takes the whole failure away.
+    const box = sdk({ attached: ['emulator-5554'], installed: true })
+    const r = box.run()
+    expect(r.status, r.stderr).toBe(0)
+    expect(box.calls()).toContain('adb uninstall org.mattshoe.mtg.share')
+    expect(box.calls()).toContain('adb uninstall org.mattshoe.mtg.share.test')
+  })
+
+  it('does not bother uninstalling what is not there', () => {
+    const box = sdk({ attached: ['emulator-5554'], installed: false })
+    const r = box.run()
+    expect(r.status, r.stderr).toBe(0)
+    expect(box.calls()).not.toContain('adb uninstall org.mattshoe.mtg.share')
   })
 
   it('fails with a sentence a person can act on when the SDK has no AVD', () => {
