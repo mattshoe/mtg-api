@@ -71,6 +71,9 @@ export default defineWorkersConfig({
       // Same reason: drives a real script against a throwaway git repo.
       'test/intake-shell.test.js', 'test/release-note.test.js', 'test/tags-script.test.js',
       'test/next-version.test.js', 'test/intake-inbox.test.js', 'test/intake-task-status.test.js',
+      // Drives scripts/emulator.mjs with a stubbed adb on PATH, so it needs
+      // node:child_process too.
+      'test/emulator-script.test.js',
     ],
     setupFiles: ['./test/setup.js'],
     // A stuck test fails; it does not hang the run. Without these a

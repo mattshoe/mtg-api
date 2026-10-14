@@ -37,9 +37,6 @@ import kotlin.test.assertTrue
 @RunWith(AndroidJUnit4::class)
 class NewTaskParityTest {
 
-    @get:Rule(order = Int.MIN_VALUE)
-    val retry = Retry()
-
     @get:Rule
     val rule = createComposeRule()
 

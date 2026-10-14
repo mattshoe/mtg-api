@@ -26,6 +26,11 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.android.controller.ActivityController
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import org.mattshoe.mtg.core.openTaskKey
 
 /**
  * A task's page, through the real `MainActivity`: an address naming a
@@ -38,8 +43,11 @@ import kotlin.test.assertTrue
 @RunWith(AndroidJUnit4::class)
 class TaskDetailLoadTest {
 
-    @get:Rule(order = Int.MIN_VALUE)
-    val retry = Retry()
+    // The activity is built by hand here, so the rule has nothing to
+    // launch — it only gives the tests a handle on the Compose tree
+    // the activity puts up.
+    @get:Rule
+    val compose = androidx.compose.ui.test.junit4.createEmptyComposeRule()
 
     private var controller: ActivityController<MainActivity>? = null
 
@@ -131,5 +139,36 @@ class TaskDetailLoadTest {
         val up = statusWrites.single()
         assertTrue("\"key\":\"ef56gh78\"" in up && "\"status\":\"cancelled\"" in up, "what went up: $up")
         assertEquals(false, activity.stateForTesting().taskDetail!!.cancelling, "the page still says it is cancelling")
+    }
+
+    /**
+     * Matt: "i can't tap done tasks to look at the details". The real
+     * app: Admin Settings, Done opened, the done row pressed. Sibling
+     * of the web's `AppDriverTest.tappingADoneTaskOpensItsPage`.
+     */
+    @Test
+    fun tappingADoneTaskOpensItsPage() {
+        val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        context.getSharedPreferences("mtg", android.content.Context.MODE_PRIVATE)
+            .edit().putString(AdminToken.KEY, "t").commit()
+        val link = Intent(Intent.ACTION_VIEW, Uri.parse("https://mtg.mattshoe.org/#/admin"))
+        val built = Robolectric.buildActivity(MainActivity::class.java, link)
+        controller = built
+        val activity = built.get()
+        activity.useForTesting(MtgApi.withEngine("https://example.invalid", client()))
+        built.create().start().resume().visible()
+
+        until(activity, "the task list") { it.tasks.rows.isNotEmpty() }
+        compose.onNodeWithTag("tasks-done-toggle").performScrollTo().performClick()
+        compose.waitForIdle()
+        compose.onNodeWithTag("task-done").performScrollTo().performClick()
+        compose.waitForIdle()
+        until(activity, "the done task's page") { it.taskDetail?.body != null }
+        val s = activity.stateForTesting()
+        assertEquals("ab12cd34", s.openTaskKey, "tapping the done task did not open it: ${s.route}")
+        assertTrue(
+            compose.onAllNodes(hasTestTag("task-detail-body")).fetchSemanticsNodes().isNotEmpty(),
+            "the done task's page is not on screen",
+        )
     }
 }

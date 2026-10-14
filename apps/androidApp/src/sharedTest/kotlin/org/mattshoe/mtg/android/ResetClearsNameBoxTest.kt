@@ -34,9 +34,6 @@ import kotlin.test.assertEquals
 @RunWith(AndroidJUnit4::class)
 class ResetClearsNameBoxTest {
 
-    @get:Rule(order = Int.MIN_VALUE)
-    val retry = Retry()
-
     @get:Rule
     val rule = createAndroidComposeRule<ComponentActivity>()
 
