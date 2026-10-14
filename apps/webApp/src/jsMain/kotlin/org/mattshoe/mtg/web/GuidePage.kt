@@ -17,6 +17,8 @@ import org.mattshoe.mtg.core.ColourWheel
 import org.mattshoe.mtg.core.Combo
 import org.mattshoe.mtg.core.Design
 import org.mattshoe.mtg.core.Guide
+import org.mattshoe.mtg.core.GuideHit
+import org.mattshoe.mtg.core.GuideSearch
 import org.mattshoe.mtg.core.GuideTile
 import org.mattshoe.mtg.core.LoreEra
 import org.mattshoe.mtg.core.PhyrexianLore
@@ -49,26 +51,16 @@ fun GuidePage(
     rules: Rules = Rules(),
     onRules: (Rules) -> Unit = {},
     onLoadRules: () -> Unit = {},
+    search: String = "",
+    onSearch: (String) -> Unit = {},
+    hits: List<GuideHit> = emptyList(),
+    onHit: (GuideHit) -> Unit = {},
 ) {
     Div(attrs = { classes("wrap", "guide") }) {
         if (tile == null) {
-            Div(attrs = { classes("guide-tiles") }) {
-                Guide.tiles.forEach { t ->
-                    Button(attrs = {
-                        classes("guide-tile")
-                        onClick { onOpen(t) }
-                    }) {
-                        // The five colours, as a strip of light across
-                        // the top: decoration, so the words carry it.
-                        Div(attrs = {
-                            classes("guide-band")
-                            style { property("background-image", band("WUBRG")) }
-                        }) {}
-                        Div(attrs = { classes("guide-tile-title") }) { Text(t.title) }
-                        Div(attrs = { classes("guide-tile-blurb") }) { Text(t.blurb) }
-                    }
-                }
-            }
+            GuideFind(search, onSearch, hits, onHit)
+            // While something is searched, what it found stands in for the tiles.
+            if (GuideSearch.words(search).isEmpty()) GuideTiles(onOpen)
         } else {
             // Inside a profile, the way out is up to the section it was
             // opened from, which `StoryProfile` draws, not the tiles.
@@ -84,6 +76,70 @@ fun GuidePage(
                 Guide.LORE -> Lore(era ?: PhyrexianLore.eras.first(), onEra)
                 Guide.RULES -> RulesSearch(rules, onRules, onLoadRules)
                 else -> story?.let { Story(it, onStory) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GuideTiles(onOpen: (GuideTile) -> Unit) {
+    Div(attrs = { classes("guide-tiles") }) {
+        Guide.tiles.forEach { t ->
+            Button(attrs = {
+                classes("guide-tile")
+                onClick { onOpen(t) }
+            }) {
+                // The five colours, as a strip of light across
+                // the top: decoration, so the words carry it.
+                Div(attrs = {
+                    classes("guide-band")
+                    style { property("background-image", band("WUBRG")) }
+                }) {}
+                Div(attrs = { classes("guide-tile-title") }) { Text(t.title) }
+                Div(attrs = { classes("guide-tile-blurb") }) { Text(t.blurb) }
+            }
+        }
+    }
+}
+
+/**
+ * The search bar over the tiles, and what it found in their place.
+ *
+ * Matt: "i want to be able to search guide articles on the Guide page
+ * ... searching should show any articles which contain the keywords on
+ * the search bar". What is found is `GuideSearch`'s.
+ */
+@Composable
+private fun GuideFind(search: String, onSearch: (String) -> Unit, hits: List<GuideHit>, onHit: (GuideHit) -> Unit) {
+    Div(attrs = { classes("guide-find") }) {
+        Input(InputType.Search, attrs = {
+            classes("guide-search")
+            placeholder("Search the articles: Urza, Sylex, Ravnica")
+            attr("aria-label", "Search the Guide's articles")
+            value(search)
+            onInput { onSearch(it.value) }
+        })
+        when {
+            GuideSearch.words(search).isEmpty() -> {}
+            hits.isEmpty() -> Div(attrs = { classes("empty", "guide-search-none") }) { Text(GuideSearch.none(search)) }
+            else -> GuideHits(hits, onHit)
+        }
+    }
+}
+
+@Composable
+private fun GuideHits(hits: List<GuideHit>, onHit: (GuideHit) -> Unit) {
+    Div(attrs = { classes("muted", "small", "guide-search-count") }) { Text(GuideSearch.count(hits.size)) }
+    Div(attrs = { classes("guide-hits") }) {
+        hits.forEach { hit ->
+            Button(attrs = {
+                classes("guide-hit")
+                attr("data-address", hit.address)
+                onClick { onHit(hit) }
+            }) {
+                Div(attrs = { classes("guide-hit-part") }) { Text(hit.part) }
+                Div(attrs = { classes("guide-hit-title") }) { Text(hit.title) }
+                Div(attrs = { classes("guide-hit-snippet") }) { Text(hit.snippet) }
             }
         }
     }
