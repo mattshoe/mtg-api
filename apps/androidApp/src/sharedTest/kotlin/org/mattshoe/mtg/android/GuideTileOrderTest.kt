@@ -7,7 +7,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -78,11 +77,13 @@ class GuideTileOrderTest {
         guide(sized)
         rule.onNodeWithTag("guide-tile-wheel").performScrollTo().performClick()
         rule.waitForIdle()
-        val screen = rule.onRoot().getUnclippedBoundsInRoot()
+        // Against the page it scrolls in, not the root: on a device a
+        // forced tablet size is drawn scaled, and the root is not.
+        val page = rule.onNodeWithTag("guide").getUnclippedBoundsInRoot()
         val back = rule.onNodeWithTag("guide-back").getUnclippedBoundsInRoot()
         assertTrue(
-            back.top >= screen.top && back.bottom <= screen.bottom,
-            "$on the wheel opened scrolled down, with its back button at ${back.top}, off a screen ${screen.top}..${screen.bottom}",
+            back.top >= page.top && back.bottom <= page.bottom,
+            "$on the wheel opened scrolled down, with its back button at ${back.top}, off a page ${page.top}..${page.bottom}",
         )
     }
 
