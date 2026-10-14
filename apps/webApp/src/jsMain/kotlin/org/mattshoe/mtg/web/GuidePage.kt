@@ -16,6 +16,8 @@ import org.mattshoe.mtg.core.Combo
 import org.mattshoe.mtg.core.Design
 import org.mattshoe.mtg.core.Guide
 import org.mattshoe.mtg.core.GuideTile
+import org.mattshoe.mtg.core.LoreEra
+import org.mattshoe.mtg.core.PhyrexianLore
 import org.mattshoe.mtg.core.Rule
 import org.mattshoe.mtg.core.Rules
 import org.mattshoe.mtg.core.WheelPair
@@ -32,6 +34,8 @@ fun GuidePage(
     tile: GuideTile?,
     onOpen: (GuideTile) -> Unit,
     onBack: () -> Unit,
+    era: LoreEra? = null,
+    onEra: (LoreEra) -> Unit = {},
     rules: Rules = Rules(),
     onRules: (Rules) -> Unit = {},
     onLoadRules: () -> Unit = {},
@@ -63,6 +67,7 @@ fun GuidePage(
             when (tile.slug) {
                 Guide.COLOURS -> Colours()
                 Guide.WHEEL -> Wheel()
+                Guide.LORE -> Lore(era ?: PhyrexianLore.eras.first(), onEra)
                 Guide.RULES -> RulesSearch(rules, onRules, onLoadRules)
             }
         }
@@ -207,6 +212,47 @@ private fun Pairs(title: String, about: String, pairs: List<WheelPair>) {
                     Div(attrs = { classes("combo-note") }) { Text(p.why) }
                 }
             }
+        }
+    }
+}
+
+/**
+ * The story of Phyrexia: a row of tabs, one per era, then the era's
+ * chapter set for reading. Everything said is in `PhyrexianLore`, and
+ * the open tab is in the address. Sibling of `Lore` in `GuideScreen`.
+ */
+@Composable
+private fun Lore(era: LoreEra, onEra: (LoreEra) -> Unit) {
+    Div(attrs = {
+        classes("lore-tabs")
+        attr("role", "tablist")
+    }) {
+        PhyrexianLore.eras.forEach { e ->
+            Button(attrs = {
+                classes("lore-tab")
+                attr("role", "tab")
+                attr("aria-selected", (e == era).toString())
+                onClick { onEra(e) }
+            }) { Text(e.tab) }
+        }
+    }
+    Div(attrs = { classes("lore-story") }) {
+        H2(attrs = { classes("lore-title") }) { Text(era.title) }
+        era.story.forEach { P { Text(it) } }
+        era.quote?.let { q ->
+            Div(attrs = { classes("lore-quote") }) {
+                Div(attrs = { classes("lore-quote-words") }) { Text(q.words) }
+                Div(attrs = { classes("lore-quote-source") }) { Text(q.source) }
+            }
+        }
+        PhyrexianLore.next(era)?.let { next ->
+            Button(attrs = {
+                classes("btn", "lore-next")
+                onClick {
+                    onEra(next)
+                    kotlinx.browser.window.scrollTo(0.0, 0.0)
+                }
+            }) { Text("Read on: ${next.tab} ›") }
         }
     }
 }

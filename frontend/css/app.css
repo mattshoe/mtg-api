@@ -718,6 +718,37 @@ td.mono { font-family: var(--mono); font-size: 12.5px; }
   letter-spacing: .08em; text-transform: uppercase;
 }
 
+/* The story of Phyrexia: a row of era tabs over a chapter set for
+   reading. One column no wider than a book's page, so a tablet does
+   not stretch a line past reading. The open tab is told apart by
+   lightness and an underline, not by a hue. The row scrolls sideways
+   on a phone rather than wrapping into a pile. */
+.lore-tabs, .lore-story { max-width: 680px; margin-left: auto; margin-right: auto; }
+.lore-tabs {
+  display: flex; gap: 4px; overflow-x: auto; margin-top: 6px; margin-bottom: 18px;
+  border-bottom: 1px solid var(--line); scrollbar-width: none;
+}
+.lore-tab {
+  flex: none; white-space: nowrap; padding: 10px 12px; cursor: pointer;
+  background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  color: var(--text-3); font: 600 13.5px/1.2 var(--sans);
+}
+.lore-tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--text); }
+.lore-title {
+  font: 700 24px/1.25 "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  letter-spacing: -.01em; margin: 6px 0 14px;
+}
+.lore-story p {
+  font: 17px/1.7 "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  color: var(--text); margin: 0 0 1.1em;
+}
+.lore-quote {
+  margin: 24px 0; padding: 4px 0 4px 18px; border-left: 3px solid var(--line-2);
+}
+.lore-quote-words { font: italic 18px/1.6 "Iowan Old Style", "Palatino Linotype", Georgia, serif; color: var(--text); }
+.lore-quote-source { color: var(--text-3); font-size: 12.5px; margin-top: 6px; }
+.lore-next { margin: 10px 0 24px; }
+
 .bar-row { display: grid; grid-template-columns: 96px 1fr 52px; gap: 10px; align-items: center; margin-bottom: 6px; font-size: 13px; }
 .bar-row .lbl { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bar-track { background: var(--bg-3); border-radius: 4px; height: 17px; overflow: hidden; }
@@ -1865,6 +1896,10 @@ select.sort {
 .peek-card { container-type: size; }
 .peek-card img, .peek-blank {
   width: min(100cqw, calc(100cqh * 488 / 680));
+  /* The height pinned as well, not left to `aspect-ratio`: Chrome 155
+     drops the ratio on an image that failed to load and draws it
+     square, smaller than the cell. */
+  height: min(100cqh, calc(100cqw * 680 / 488));
   aspect-ratio: 488 / 680;
 }
 .peek-card img {
