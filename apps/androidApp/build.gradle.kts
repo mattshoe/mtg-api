@@ -27,7 +27,10 @@ android {
         // the one already on the phone. Locally it stays put.
         versionCode = (System.getenv("MTG_VERSION_CODE") ?: "4").toInt()
         versionName = System.getenv("MTG_VERSION_NAME") ?: "2.1.0"
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // AndroidJUnitRunner, pointing AndroidJUnit4 at a class runner
+        // that retries a failed UI test on a fresh instance. See
+        // `Retry.kt` in sharedTest.
+        testInstrumentationRunner = "org.mattshoe.mtg.android.RetryingInstrumentationRunner"
     }
     // Kept outside the repo, in ~/.mtg-android.env, so the key and its
     // password are never in git. Android refuses to upgrade an app
@@ -107,6 +110,10 @@ android {
             // `needsRealRendering` and runs on a device.
             all {
                 it.maxHeapSize = "2g"
+                // AndroidJUnit4 delegates to whatever runner this names,
+                // so every UI test class runs through one that retries a
+                // failure on a fresh instance. See `Retry.kt` in sharedTest.
+                it.systemProperty("android.junit.runner", "org.mattshoe.mtg.android.RetryingRobolectricRunner")
                 // Fork a fresh JVM every few classes.
                 //
                 // `ComposeRootRegistry` holds every Compose root ever

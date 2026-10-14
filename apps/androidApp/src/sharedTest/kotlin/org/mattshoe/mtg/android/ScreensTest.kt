@@ -80,9 +80,6 @@ import kotlin.test.assertNull
 @RunWith(AndroidJUnit4::class)
 class ScreensTest {
 
-    @get:Rule(order = Int.MIN_VALUE)
-    val retry = Retry()
-
     @get:Rule
     val rule = createComposeRule()
 

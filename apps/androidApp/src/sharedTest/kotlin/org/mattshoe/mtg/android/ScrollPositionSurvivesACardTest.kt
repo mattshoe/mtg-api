@@ -48,9 +48,6 @@ import org.mattshoe.mtg.core.View
 @RunWith(AndroidJUnit4::class)
 class ScrollPositionSurvivesACardTest {
 
-    @get:Rule(order = Int.MIN_VALUE)
-    val retry = Retry()
-
     @get:Rule
     val rule = createAndroidComposeRule<ComponentActivity>()
 

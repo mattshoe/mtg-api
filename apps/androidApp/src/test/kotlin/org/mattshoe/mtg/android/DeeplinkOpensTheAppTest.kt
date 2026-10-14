@@ -1,6 +1,5 @@
 package org.mattshoe.mtg.android
 
-import org.junit.Rule
 import android.content.Intent
 import android.net.Uri
 import android.os.Looper
@@ -45,9 +44,6 @@ import kotlin.test.assertTrue
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 @RunWith(AndroidJUnit4::class)
 class DeeplinkOpensTheAppTest {
-
-    @get:Rule(order = Int.MIN_VALUE)
-    val retry = Retry()
 
     private val controllers = mutableListOf<ActivityController<MainActivity>>()
 

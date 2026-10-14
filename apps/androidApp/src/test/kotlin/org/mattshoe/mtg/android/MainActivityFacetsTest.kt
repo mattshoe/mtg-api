@@ -24,7 +24,6 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
-import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mattshoe.mtg.core.MtgApi
@@ -49,9 +48,6 @@ import kotlin.test.assertTrue
 @OptIn(androidx.compose.ui.test.ExperimentalTestApi::class, kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 @RunWith(AndroidJUnit4::class)
 class MainActivityFacetsTest {
-
-    @get:Rule(order = Int.MIN_VALUE)
-    val retry = Retry()
 
 
     /**
