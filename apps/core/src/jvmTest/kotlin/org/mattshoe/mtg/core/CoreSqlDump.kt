@@ -87,6 +87,11 @@ class CoreSqlDump {
         case("stats per owner", StatsQueries.perOwner())
         Load.card("sol ring").forEachIndexed { i, s -> case("card detail $i", s) }
         case("palette find", Load.find("sol"))
+        // `test/fetch-list.test.js` asserts on the decks these rows name.
+        case(
+            "fetch list",
+            FetchList.query(listOf("sol ring", "arcane signet", "commander's sphere", "cultivate"), "m4tt0001")!!,
+        )
         FacetQueries.all.forEachIndexed { i, s -> case("facet $i", s) }
         FacetQueries.everything.forEachIndexed { i, s -> case("facet lists, batch $i", s) }
         // `parseQueryBox` answers with a WHERE fragment rather than a
