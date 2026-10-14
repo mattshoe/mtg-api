@@ -84,6 +84,11 @@ object ColourWheel {
         WheelPair("GU", "Simic", "Green takes the world as it is, blue wants to improve it. Together, engineered nature."),
     )
 
+    const val SHARDS = "The shards of Alara"
+    const val SHARDS_ABOUT = "Alara was one world, split into five. Each shard kept a colour and its two allies, and lost its two enemies."
+    const val CLANS = "The clans of Tarkir"
+    const val CLANS_ABOUT = "Each clan is a colour and its two enemies, so each one lives without a pair of allied colours."
+
     /**
      * The five shards of Alara, one for each colour in WUBRG order.
      *
