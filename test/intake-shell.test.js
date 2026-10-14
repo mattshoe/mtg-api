@@ -721,6 +721,80 @@ describe('a worktree that is already there', () => {
   })
 })
 
+// The one case where a worktree IS swept, and why it is the only one.
+//
+// Fourteen worktrees had piled up against two live agents. Nine of them
+// were for requests main had already filed under done — work that
+// shipped weeks ago — and each one still held its branch, its build
+// directories and a full copy of the tree. `git worktree prune` does not
+// touch them, because prune is only for a worktree whose directory has
+// gone; these all had their directories. They were cleared by hand, which
+// is the part that must not happen again.
+//
+// Filed under done on main is what makes this safe: the agent files the
+// request as part of the same commit it merges, so a filed request is a
+// merged one, and there is nothing left in the tree that main does not
+// have. Everything else about the old rule stands — an unfiled worktree
+// is never touched, whatever state it is in.
+describe('a worktree whose work has already shipped', () => {
+  function shipped() {
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    const branch = 'request/a-thing-0000000'
+    const tree = box.path('.intake/wt/a-thing')
+    box.git('worktree', 'add', '-q', '-b', branch, tree, 'main')
+    // The dispatcher's own copies, which is all a finished worktree has
+    // left in it. They must not count as work.
+    writeFileSync(join(tree, 'CLAUDE.md'), 'copied in by the dispatcher\n')
+    box.commitOnBase('requests/done/a-thing.md', 'Merged as #1.\n')
+    return { branch, tree }
+  }
+
+  it('is swept, with its branch, once main has the request filed under done', () => {
+    const { branch, tree } = shipped()
+
+    run('dispatch.sh')
+
+    expect(existsSync(tree), 'a shipped worktree was left on disk').toBe(false)
+    const branches = spawnSync('git', ['-C', box.repo, 'branch', '--list', branch], { encoding: 'utf8' })
+    expect(branches.stdout.trim(), 'the branch outlived its worktree').toBe('')
+    expect(box.intakeLog()).toContain('swept a-thing')
+  })
+
+  it('is left alone while an agent is still in it', () => {
+    // The agent files the request in the commit it merges, and then keeps
+    // going: it still has to say so and shut down. Sweeping it there would
+    // delete the tree out from under a live process, which is the exact
+    // way work was lost before any of this existed.
+    const { tree } = shipped()
+    // Compound, deliberately. `sh -c 'sleep 30 # marker'` is one simple
+    // command, so the shell execs sleep over itself and the marker is gone
+    // from the process list — which is the only thing pgrep can match. Both
+    // tests here faked a live agent that way and neither was looking at one.
+    const alive = spawn('/bin/sh', ['-c', 'sleep 30; : requests/a-thing.md'], {
+      detached: true, stdio: 'ignore',
+    })
+    try {
+      run('dispatch.sh')
+      expect(existsSync(tree), 'swept a worktree with an agent still in it').toBe(true)
+    } finally {
+      alive.kill('SIGKILL')
+    }
+  })
+
+  it('leaves a worktree alone when its request is not filed', () => {
+    // The whole safety of the sweep is that filed means merged. A request
+    // still live is work that may exist nowhere else.
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    const tree = box.path('.intake/wt/a-thing')
+    box.git('worktree', 'add', '-q', '-b', 'request/a-thing-0000000', tree, 'main')
+    writeFileSync(join(tree, 'precious.txt'), 'the only copy\n')
+
+    run('dispatch.sh')
+
+    expect(existsSync(join(tree, 'precious.txt'))).toBe(true)
+  })
+})
+
 describe('what the agent is launched with', () => {
   // The deny list is string matching, and string matching was attacked with
   // eighteen spellings a model would reach for first — `eval`, `bash -c`,
@@ -1150,12 +1224,17 @@ describe('a worktree with nobody in it', () => {
     mkdirSync(join(wt, 'requests'), { recursive: true })
     // A process whose command line names the request, which is how the
     // dispatcher tells a live agent from a dead one.
-    const alive = spawn('/bin/sh', ['-c', 'sleep 30 # requests/a-thing.md'], {
+    // Compound, deliberately. `sh -c 'sleep 30 # marker'` is one simple
+    // command, so the shell execs sleep over itself and the marker is gone
+    // from the process list — which is the only thing pgrep can match. Both
+    // tests here faked a live agent that way and neither was looking at one.
+    const alive = spawn('/bin/sh', ['-c', 'sleep 30; : requests/a-thing.md'], {
       detached: true, stdio: 'ignore',
     })
     try {
       run('dispatch.sh')
-      expect(box.log()).not.toContain('stalled')
+      expect(box.intakeLog(), 'a live agent was called stalled')
+        .not.toMatch(/a-thing paused/)
     } finally {
       alive.kill('SIGKILL')
     }
