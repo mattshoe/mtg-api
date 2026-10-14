@@ -2076,3 +2076,7 @@ select.sort {
   font-weight: 400;
   color: var(--text-3);
 }
+
+/* The Guide's Game Changers: a deck page's list, as wide as the story at most, centred. */
+.gc-list { max-width: 680px; margin: 0 auto; }
+.gc-about { margin: 0; }

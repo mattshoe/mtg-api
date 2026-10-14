@@ -9,12 +9,15 @@ import org.jetbrains.compose.web.dom.Div
 import org.jetbrains.compose.web.dom.Input
 import org.jetbrains.compose.web.dom.H2
 import org.jetbrains.compose.web.dom.H3
+import org.jetbrains.compose.web.dom.Img
 import org.jetbrains.compose.web.dom.P
 import org.jetbrains.compose.web.dom.Section
 import org.jetbrains.compose.web.dom.Span
 import org.jetbrains.compose.web.dom.Text
 import org.mattshoe.mtg.core.ColourWheel
 import org.mattshoe.mtg.core.Combo
+import org.mattshoe.mtg.core.DeckCard
+import org.mattshoe.mtg.core.GameChangers
 import org.mattshoe.mtg.core.Design
 import org.mattshoe.mtg.core.Guide
 import org.mattshoe.mtg.core.GuideHit
@@ -55,6 +58,7 @@ fun GuidePage(
     onSearch: (String) -> Unit = {},
     hits: List<GuideHit> = emptyList(),
     onHit: (GuideHit) -> Unit = {},
+    onGameChanger: (DeckCard) -> Unit = {},
 ) {
     Div(attrs = { classes("wrap", "guide") }) {
         if (tile == null) {
@@ -75,6 +79,7 @@ fun GuidePage(
                 Guide.WHEEL -> Wheel()
                 Guide.LORE -> Lore(era ?: PhyrexianLore.eras.first(), onEra)
                 Guide.RULES -> RulesSearch(rules, onRules, onLoadRules)
+                Guide.GAME_CHANGERS -> GameChangerList(onGameChanger)
                 else -> story?.let { Story(it, onStory) }
             }
         }
@@ -581,4 +586,51 @@ private fun band(pips: String): String {
     val colours = pips.map { Design.css(Design.pip(it.toString())) }
     if (colours.size == 1) return "linear-gradient(90deg, ${colours[0]}, ${colours[0]})"
     return "linear-gradient(90deg, ${colours.joinToString(", ")})"
+}
+
+/**
+ * The Game Changers, as a deck page draws its list: a panel per type,
+ * a row per card with its art, name and type line. A row pops the
+ * carousel over the whole list at that card.
+ *
+ * Matt: "it should be a list of cards just like a deck page. tapping
+ * any of them should pop a carousel like any other cards". The list
+ * and its order are `GameChangers`'.
+ */
+@Composable
+private fun GameChangerList(onCard: (DeckCard) -> Unit) {
+    Div(attrs = { classes("gc-list", "stack") }) {
+        P(attrs = { classes("muted", "small", "gc-about") }) { Text(GameChangers.ABOUT) }
+        GameChangers.byType.forEach { (group, cards) ->
+            Div(attrs = { classes("panel") }) {
+                Div(attrs = { classes("panel-head") }) {
+                    H2 { Text(group.title) }
+                    Span(attrs = { classes("spacer") }) {}
+                    Span(attrs = { classes("tag", "mini") }) { Text(cards.size.toString()) }
+                }
+                Div(attrs = { classes("panel-body") }) {
+                    cards.forEach { card ->
+                        Div(attrs = {
+                            classes("deck-line")
+                            attr("role", "button")
+                            attr("tabindex", "0")
+                            attr("title", card.shown)
+                            onClick { onCard(card) }
+                            onKeyDown { e -> if (e.key == "Enter" || e.key == " ") onCard(card) }
+                        }) {
+                            Div(attrs = { classes("thumb") }) {
+                                card.art?.let { Img(src = it, alt = "", attrs = { attr("loading", "lazy") }) }
+                            }
+                            Div(attrs = { classes("line-text") }) {
+                                Div(attrs = { classes("line-top") }) {
+                                    Span(attrs = { classes("t-name") }) { Text(card.shown) }
+                                }
+                                card.typeLine?.let { Span(attrs = { classes("line-type") }) { Text(it) } }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

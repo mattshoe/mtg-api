@@ -18,6 +18,10 @@ package org.mattshoe.mtg.core
  */
 object GameChangers {
 
+    /** The line over the list, the same on both shells. */
+    const val ABOUT = "Wizards' list of the cards that warp a Commander game on their own. " +
+        "Brackets 1 and 2 allow none, bracket 3 allows up to three, and 4 and 5 any number. Tap a card to see it."
+
     val cards: List<DeckCard> = listOf(
         gc("Ad Nauseam", "a9f2c53e-ff58-4aa8-89a6-4f45628cc571", "Instant", "B", "{3}{B}{B}", "rare", 1362L, "2xm", "76"),
         gc("Ancient Tomb", "bd3d4b4b-cf31-4f89-8140-9650edb03c7b", "Land", "", "", "rare", 69L, "uma", "236"),

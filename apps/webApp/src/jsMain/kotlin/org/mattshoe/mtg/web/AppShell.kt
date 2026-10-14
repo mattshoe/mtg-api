@@ -45,6 +45,7 @@ import org.mattshoe.mtg.core.Route
 import org.mattshoe.mtg.core.View
 import org.mattshoe.mtg.core.openGuide
 import org.mattshoe.mtg.core.openGuideHit
+import org.mattshoe.mtg.core.peekGameChanger
 import org.mattshoe.mtg.core.searchGuide
 import org.mattshoe.mtg.core.guideHits
 import org.mattshoe.mtg.core.guideTile
@@ -248,6 +249,7 @@ fun AppShell(
             onSearch = { onState(state.searchGuide(it)) },
             hits = state.guideHits,
             onHit = { onState(state.openGuideHit(it)) },
+            onGameChanger = { onState(state.peekGameChanger(it)) },
         )
 
         View.CARD -> CardPage(
