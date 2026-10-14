@@ -27,13 +27,18 @@ import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.MagicStory
 import org.mattshoe.mtg.core.StoryPage
 import org.mattshoe.mtg.core.storyPage
-import org.mattshoe.mtg.core.StoryTab
+import org.mattshoe.mtg.core.StoryArticle
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
  * The story of Magic, through the real shell and its real bottom bar.
+ *
+ * Matt, after the first cut: "you put all of it in one single article.
+ * each of those sections should be their own article, with its own
+ * tabs, just like the phyrexian one". So a section is a tile and its
+ * articles are its tabs.
  *
  * Matt: "Add Magic the Gathering lore content to the Guide. 10
  * sections ... Every article has its own tabs ... When an article
@@ -71,17 +76,12 @@ class StoryParityTest {
         rule.waitForIdle()
     }
 
-    private fun openStory() {
+    /** The bottom bar's Guide, then a section's own tile: the way a person gets there. */
+    private fun openSection(slug: String) {
         rule.onNodeWithContentDescription("Guide").performClick()
         rule.waitForIdle()
-        rule.onNodeWithTag("guide-tile-lore").assertExists("the Guide has no story tile")
-        rule.onNodeWithTag("guide-tile-lore").performScrollTo().performClick()
-        rule.waitForIdle()
-    }
-
-    private fun openArticle(slug: String) {
-        rule.onNodeWithTag("story-article-$slug").assertExists("the sections have no button for $slug")
-        rule.onNodeWithTag("story-article-$slug").performScrollTo().performClick()
+        rule.onNodeWithTag("guide-tile-$slug").assertExists("the Guide has no tile for $slug")
+        rule.onNodeWithTag("guide-tile-$slug").performScrollTo().performClick()
         rule.waitForIdle()
     }
 
@@ -110,26 +110,21 @@ class StoryParityTest {
         return results.firstOrNull()
     }
 
-    /** The first tab of an article whose narration links to [target]. */
-    private fun tabLinking(article: String, target: String): StoryTab =
-        MagicStory.article(article)!!.tabs.firstOrNull { t -> t.story.any { p -> MagicStory.spans(p).any { it.target == target } } }
-            ?: error("$article never links to $target")
-
-    /** Where in the open tab a link to [target] is: its paragraph and the offset of its first letter. */
-    private fun linkIn(tab: StoryTab, target: String): Pair<Int, Int> {
-        tab.story.forEachIndexed { i, p ->
+    /** Where in an open article a link to [target] is: its paragraph, counted across every part, and the offset of its first letter. */
+    private fun linkIn(article: StoryArticle, target: String): Pair<Int, Int> {
+        article.tabs.flatMap { it.story }.forEachIndexed { i, p ->
             var at = 0
             MagicStory.spans(p).forEach { s ->
                 if (s.target == target) return i to at
                 at += s.text.length
             }
         }
-        error("${tab.tab} has no link to $target")
+        error("${article.title} has no link to $target")
     }
 
     /** Taps the words of a link, where they are drawn. */
-    private fun tapLink(tab: StoryTab, target: String) {
-        val (paragraph, offset) = linkIn(tab, target)
+    private fun tapLink(article: StoryArticle, target: String) {
+        val (paragraph, offset) = linkIn(article, target)
         val node = rule.onAllNodes(hasTestTag("lore-paragraph"), useUnmergedTree = true)[paragraph]
         node.performScrollTo()
         rule.waitForIdle()
@@ -142,66 +137,68 @@ class StoryParityTest {
     }
 
     @Test
-    fun theTileOpensOnTheTenSectionsEachWithAHookAndItsArticles() {
+    fun everySectionIsATileOfItsOwnAndThereIsNoOneArticleOfThemAll() {
         shell()
-        openStory()
-        assertEquals("#/guide/lore", held.value.route.toHash())
-        assertEquals(10, rule.onAllNodes(hasTestTag("story-section"), useUnmergedTree = true).fetchSemanticsNodes().size, "the story is not ten sections")
-        val hooks = texts("story-hook")
-        assertEquals(10, hooks.size, "not every section has its hook on screen")
-        assertTrue(hooks.all { it.isNotBlank() }, "a hook is blank")
-        MagicStory.articles.forEach { rule.onNodeWithTag("story-article-${it.slug}").assertExists("${it.title} is not on the page") }
+        rule.onNodeWithContentDescription("Guide").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithTag("guide-tile-lore").assertDoesNotExist()
+        MagicStory.sections.forEach { rule.onNodeWithTag("guide-tile-${it.slug}").assertExists("${it.title} is not a tile of its own") }
     }
 
     @Test
-    fun anArticleOpensOnItsFirstTabWithTabsOfItsOwn() {
+    fun aSectionOpensLikePhyrexiaWithItsArticlesAsItsTabs() {
         shell()
-        openStory()
-        openArticle("the-war")
-        assertEquals("#/guide/lore/the-war", held.value.route.toHash(), "the article is not in the address")
-        assertEquals(listOf("The War"), texts("story-article-title"))
-        rule.onNodeWithTag("guide-back").assertDoesNotExist()
-        val names = texts("lore-tab")
-        assertTrue(names.size >= 2, "The War has ${names.size} tabs")
-        assertEquals(listOf(true) + List(names.size - 1) { false }, selected(), "the first tab is not the one open tab")
+        val war = MagicStory.sections.first()
+        openSection(war.slug)
+        assertEquals("#/guide/${war.slug}", held.value.route.toHash())
+        assertEquals(war.articles.map { it.title }, texts("lore-tab"), "the tabs are not the section's articles")
+        assertEquals(listOf(true) + List(war.articles.size - 1) { false }, selected(), "the first tab is not the one open tab")
+        rule.onNodeWithTag("guide-back").assertExists("there is no way back to the Guide, as Phyrexia has")
+        rule.onNodeWithTag("story-section").assertDoesNotExist()
         assertTrue(texts("lore-paragraph").size >= 2, "the story is not paragraphs")
+    }
+
+    @Test
+    fun tappingATabTellsThatArticleInstead() {
+        shell()
+        openSection("brothers-war")
+        val before = story()
+        tab("The War")
+        assertEquals("#/guide/brothers-war/the-war", held.value.route.toHash(), "the tab is not in the address")
+        assertEquals(texts("lore-tab").map { it == "The War" }, selected(), "The War is not the one open tab")
+        assertTrue(story() != before, "the second tab tells the same story as the first")
         assertTrue("Mishra" in story(), "The War does not tell of Mishra: ${story().take(200)}")
     }
 
     @Test
-    fun tappingATabTellsThatPartOfTheStoryInstead() {
+    fun aTabTellsEveryPartOfItsArticleUnderItsOwnHeading() {
         shell()
-        openStory()
-        openArticle("the-war")
-        val before = story()
-        val second = texts("lore-tab")[1]
-        tab(second)
-        assertTrue(held.value.route.toHash().startsWith("#/guide/lore/the-war/"), "the tab is not in the address: ${held.value.route.toHash()}")
-        assertEquals(texts("lore-tab").map { it == second }, selected(), "$second is not the one open tab")
-        assertTrue(story() != before, "the second tab tells the same story as the first")
+        openSection("brothers-war")
+        tab("Koilos")
+        val koilos = MagicStory.article("koilos")!!
+        assertEquals(koilos.tabs.map { it.tab.uppercase() }, texts("story-part-title"), "the tab does not tell every part of Koilos")
+        assertEquals(koilos.tabs.sumOf { it.story.size }, texts("lore-paragraph").size, "a paragraph of Koilos is missing")
     }
 
     @Test
-    fun aLinkInTheStoryOpensTheArticleItNamesAndIsUnderlined() {
+    fun aLinkInTheStoryOpensTheArticleInItsOwnSectionAndIsUnderlined() {
         shell()
-        openStory()
-        openArticle("rath-stronghold")
-        val t = tabLinking("rath-stronghold", "rath-made")
-        tab(t.tab)
-        tapLink(t, "rath-made")
-        assertEquals("#/guide/lore/rath-made", held.value.route.toHash(), "the link did not open the other Rath")
-        assertEquals(listOf("Rath"), texts("story-article-title"))
+        openSection("weatherlight")
+        val rath = MagicStory.article("rath-stronghold")!!
+        tab(rath.title)
+        tapLink(rath, "rath-made")
+        assertEquals("#/guide/phyrexia-origins/rath-made", held.value.route.toHash(), "the link did not open the other Rath")
+        assertEquals(MagicStory.sections.first { it.slug == "phyrexia-origins" }.articles.map { it.title }, texts("lore-tab"), "the tabs are not Phyrexia's Origins")
+        assertEquals(texts("lore-tab").map { it == "Rath" }, selected())
     }
 
     @Test
     fun aNameOpensTheirProfileWhichListsEveryArticleTheyAreIn() {
         shell()
-        openStory()
-        openArticle("the-war")
-        val t = tabLinking("the-war", "who/urza")
-        tab(t.tab)
-        tapLink(t, "who/urza")
-        assertEquals("#/guide/lore/who/urza", held.value.route.toHash(), "Urza's name did not open his profile")
+        openSection("brothers-war")
+        tab("The War")
+        tapLink(MagicStory.article("the-war")!!, "who/urza")
+        assertEquals("#/guide/brothers-war/who/urza", held.value.route.toHash(), "Urza's name did not open his profile")
         val page = held.value.storyPage as? StoryPage.Profile ?: error("the app is not showing a profile: ${held.value.storyPage}")
         assertTrue(texts("lore-paragraph").isNotEmpty(), "the profile says nothing")
         MagicStory.appearances(page.person).forEach {
@@ -209,14 +206,28 @@ class StoryParityTest {
         }
         rule.onNodeWithTag("story-appears-sylex-blast").performScrollTo().performClick()
         rule.waitForIdle()
-        assertEquals("#/guide/lore/sylex-blast", held.value.route.toHash(), "a listed article does not open")
+        assertEquals("#/guide/brothers-war/sylex-blast", held.value.route.toHash(), "a listed article does not open")
+    }
+
+    @Test
+    fun upFromAProfileIsTheSectionItWasOpenedFrom() {
+        shell()
+        openSection("brothers-war")
+        tab("The War")
+        tapLink(MagicStory.article("the-war")!!, "who/urza")
+        val up = texts("story-up").singleOrNull() ?: error("a profile has no way back up")
+        assertTrue("Brothers' War" in up, "up does not name the section: $up")
+        rule.onNodeWithTag("story-up").performClick()
+        rule.waitForIdle()
+        assertEquals("#/guide/brothers-war", held.value.route.toHash())
+        assertEquals(texts("lore-tab").map { it == "The Thran" }, selected(), "up did not show the section")
     }
 
     @Test
     fun theSourcesComeAtTheEndOutsideTheNarration() {
         shell()
-        openStory()
-        openArticle("the-war")
+        openSection("brothers-war")
+        tab("The War")
         val sources = rule.onAllNodes(hasTestTag("story-source"), useUnmergedTree = true).fetchSemanticsNodes()
         assertEquals(MagicStory.article("the-war")!!.sources.size, sources.size, "not every source is listed")
         val paragraphs = rule.onAllNodes(hasTestTag("lore-paragraph"), useUnmergedTree = true)
@@ -226,33 +237,33 @@ class StoryParityTest {
     }
 
     @Test
-    fun readOnGoesTabByTabThenOnToTheNextArticle() {
+    fun readOnGoesTabByTabThenOnToTheNextSection() {
         shell()
-        openStory()
-        openArticle("the-war")
-        val war = MagicStory.article("the-war")!!
-        war.tabs.drop(1).forEach { t ->
+        val war = MagicStory.sections.first()
+        openSection(war.slug)
+        war.articles.drop(1).forEach { a ->
             rule.onNodeWithTag("lore-next").performScrollTo().performClick()
             rule.waitForIdle()
-            assertEquals(texts("lore-tab").map { it == t.tab }, selected(), "Read on did not open ${t.tab}")
+            assertEquals(texts("lore-tab").map { it == a.title }, selected(), "Read on did not open ${a.title}")
         }
-        val label = texts("lore-next").singleOrNull() ?: error("the last tab of The War has no way on")
-        assertTrue("Argoth" in label, "the end of The War does not lead to Argoth: $label")
+        val label = texts("lore-next").singleOrNull() ?: error("the last tab of the Brothers' War has no way on")
+        assertTrue("Phyrexia's Origins" in label, "the end of the Brothers' War does not lead to the next section: $label")
         rule.onNodeWithTag("lore-next").performScrollTo().performClick()
         rule.waitForIdle()
-        assertEquals("#/guide/lore/argoth", held.value.route.toHash())
+        assertEquals("#/guide/phyrexia-origins/halcyon", held.value.route.toHash())
     }
 
     @Test
     fun cardsAreSetApartFromTheNarration() {
         shell()
-        openStory()
-        val article = MagicStory.articles.first { a -> a.tabs.first().story.any { p -> MagicStory.spans(p).any { it.card } } }
-        openArticle(article.slug)
-        val i = article.tabs.first().story.indexOfFirst { p -> MagicStory.spans(p).any { it.card } }
+        openSection("brothers-war")
+        val article = MagicStory.sections.first().articles.first()
+        val paragraphs = article.tabs.flatMap { it.story }
+        val i = paragraphs.indexOfFirst { p -> MagicStory.spans(p).any { it.card } }
+        assertTrue(i >= 0, "${article.title} names no card")
         val node = rule.onAllNodes(hasTestTag("lore-paragraph"), useUnmergedTree = true)[i]
         val layout = assertNotNull(node.textLayout(), "the paragraph has no text layout")
-        val name = MagicStory.spans(article.tabs.first().story[i]).first { it.card }.text
+        val name = MagicStory.spans(paragraphs[i]).first { it.card }.text
         val at = layout.layoutInput.text.text.indexOf(name)
         assertTrue(at >= 0, "$name is not in the paragraph on screen")
         val style = layout.layoutInput.text.spanStyles.firstOrNull { at in it.start until it.end }?.item
@@ -262,8 +273,8 @@ class StoryParityTest {
     @Test
     fun itIsSetForReadingNotForScanning() {
         shell()
-        openStory()
-        openArticle("koilos")
+        openSection("brothers-war")
+        tab("Koilos")
         val style = rule.onAllNodes(hasTestTag("lore-paragraph"), useUnmergedTree = true)[0].textLayout()?.layoutInput?.style
         assertNotNull(style, "the story has no text layout")
         assertTrue(style.fontSize.value >= 15f, "the story is ${style.fontSize}, too small to read a chapter in")
@@ -274,17 +285,12 @@ class StoryParityTest {
     }
 
     @Test
-    fun upFromAnArticleIsTheSectionsAndBackFromThereIsTheTiles() {
+    fun backFromASectionIsTheTiles() {
         shell()
-        openStory()
-        openArticle("argoth")
-        rule.onNodeWithTag("story-up").performClick()
-        rule.waitForIdle()
-        assertEquals("#/guide/lore", held.value.route.toHash())
-        assertEquals(10, rule.onAllNodes(hasTestTag("story-section"), useUnmergedTree = true).fetchSemanticsNodes().size, "up did not show the sections")
+        openSection("ravnica")
         rule.onNodeWithTag("guide-back").performClick()
         rule.waitForIdle()
         assertEquals("#/guide", held.value.route.toHash())
-        rule.onNodeWithTag("guide-tile-lore").assertExists("back did not show the tiles")
+        rule.onNodeWithTag("guide-tile-ravnica").assertExists("back did not show the tiles")
     }
 }

@@ -57,7 +57,7 @@ import org.mattshoe.mtg.core.MagicStory
 import org.mattshoe.mtg.core.StoryArticle
 import org.mattshoe.mtg.core.StoryPage
 import org.mattshoe.mtg.core.StoryPerson
-import org.mattshoe.mtg.core.StoryTab
+import org.mattshoe.mtg.core.StorySection
 import org.mattshoe.mtg.core.WheelColour
 import org.mattshoe.mtg.core.WheelLore
 import org.mattshoe.mtg.core.WheelPair
@@ -116,16 +116,16 @@ fun GuideScreen(
                 }
             }
         } else {
-            // Inside an article or a profile, the way out is up to the
-            // story's sections, which `Story` draws, not the tiles.
-            if (story == null || story == StoryPage.Index) {
+            // Inside a profile, the way out is up to the section it was
+            // opened from, which `StoryProfile` draws, not the tiles.
+            if (story !is StoryPage.Profile) {
                 Btn("‹ Guide", modifier = Modifier.testTag("guide-back")) { onBack() }
             }
             when (tile.slug) {
                 Guide.COLOURS -> Colours()
                 Guide.WHEEL -> Wheel()
                 Guide.LORE -> Lore(era ?: PhyrexianLore.eras.first(), onEra)
-                Guide.STORY -> Story(story ?: StoryPage.Index, onStory)
+                else -> Unit
             }
         }
     }
@@ -435,58 +435,24 @@ private fun Lore(era: LoreEra, onEra: (LoreEra) -> Unit) {
 }
 
 /**
- * The story of Magic: the ten sections, an article in tabs, or a
+ * A section of the story of Magic, one tile of the Guide: a row of
+ * tabs, one per article, then the article set for reading, or a
  * person's profile. Everything said is in `MagicStory`, and where you
  * are is in the address. Sibling of `Story` in the site's `GuidePage`.
+ *
+ * Matt: "each of those sections should be their own article, with its
+ * own tabs, just like the phyrexian one".
  */
 @Composable
 private fun Story(page: StoryPage, onStory: (String) -> Unit) {
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
         Column(Modifier.widthIn(max = STORY.dp).fillMaxWidth()) {
             when (page) {
-                StoryPage.Index -> StoryIndex(onStory)
-                is StoryPage.Reading -> StoryReading(page.article, page.tab, onStory)
-                is StoryPage.Profile -> StoryProfile(page.person, onStory)
+                is StoryPage.Reading -> StoryReading(page.section, page.article, onStory)
+                is StoryPage.Profile -> StoryProfile(page.section, page.person, onStory)
             }
         }
     }
-}
-
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
-@Composable
-private fun StoryIndex(onStory: (String) -> Unit) {
-    Column(Modifier.fillMaxWidth().testTag("story-index")) {
-        MagicStory.sections.forEachIndexed { i, s ->
-            Column(Modifier.fillMaxWidth().padding(vertical = 16.dp).testTag("story-section")) {
-                Line("${i + 1}", Ink3, size = Design.MINI, fontFamily = FontFamily.Monospace)
-                androidx.compose.material3.Text(
-                    s.title, color = Ink, fontSize = 22.sp, lineHeight = 28.sp,
-                    fontWeight = FontWeight.Bold, fontFamily = FontFamily.Serif,
-                )
-                Spacer(Modifier.height(6.dp))
-                androidx.compose.material3.Text(
-                    s.hook, Modifier.testTag("story-hook"), color = Ink2, fontSize = 16.sp, lineHeight = 25.sp,
-                    fontFamily = FontFamily.Serif, fontStyle = FontStyle.Italic,
-                )
-                Spacer(Modifier.height(12.dp))
-                androidx.compose.foundation.layout.FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    s.articles.forEach { a ->
-                        Btn(a.title, modifier = Modifier.testTag("story-article-${a.slug}")) { onStory(a.slug) }
-                    }
-                }
-            }
-            Box(Modifier.fillMaxWidth().height(1.dp).background(Line))
-        }
-    }
-}
-
-/** Up to the sections, from an article or a profile. */
-@Composable
-private fun StoryUp(onStory: (String) -> Unit) {
-    Btn("‹ The story of Magic", modifier = Modifier.testTag("story-up")) { onStory("") }
 }
 
 /**
@@ -519,27 +485,19 @@ private fun StoryParagraph(paragraph: String, onStory: (String) -> Unit, tag: St
 }
 
 @Composable
-private fun StoryReading(article: StoryArticle, tab: StoryTab, onStory: (String) -> Unit) {
-    StoryUp(onStory)
-    Spacer(Modifier.height(14.dp))
-    Line(MagicStory.sectionOf(article).title.uppercase(), Ink3, size = Design.MINI, fontFamily = FontFamily.Monospace)
-    androidx.compose.material3.Text(
-        article.title, Modifier.testTag("story-article-title"), color = Ink,
-        fontSize = 26.sp, lineHeight = 32.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Serif,
-    )
-    Spacer(Modifier.height(6.dp))
+private fun StoryReading(section: StorySection, article: StoryArticle, onStory: (String) -> Unit) {
     Row(
         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).testTag("lore-tabs"),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        article.tabs.forEach { t ->
-            val open = t == tab
+        section.articles.forEach { a ->
+            val open = a == article
             // Told apart by lightness and an underline, not by a hue.
             Column(Modifier.width(IntrinsicSize.Max)) {
                 Line(
-                    t.tab, if (open) Ink else Ink3, size = 14, weight = FontWeight.SemiBold, maxLines = 1,
+                    a.title, if (open) Ink else Ink3, size = 14, weight = FontWeight.SemiBold, maxLines = 1,
                     modifier = Modifier
-                        .selectable(selected = open, role = Role.Tab) { onStory(MagicStory.target(article, t)) }
+                        .selectable(selected = open, role = Role.Tab) { onStory(a.slug) }
                         .padding(horizontal = 12.dp, vertical = 10.dp)
                         .testTag("lore-tab"),
                 )
@@ -549,31 +507,36 @@ private fun StoryReading(article: StoryArticle, tab: StoryTab, onStory: (String)
     }
     Box(Modifier.fillMaxWidth().height(1.dp).background(Line))
     Column(Modifier.fillMaxWidth().padding(top = 18.dp).testTag("lore-story")) {
-        tab.story.forEach { StoryParagraph(it, onStory) }
-        tab.quote?.let { q ->
-            Row(Modifier.fillMaxWidth().padding(vertical = 12.dp).height(IntrinsicSize.Min).testTag("lore-quote")) {
-                Box(Modifier.width(3.dp).fillMaxHeight().background(Line2))
-                Spacer(Modifier.width(18.dp))
-                Column {
-                    androidx.compose.material3.Text(
-                        q.words, color = Ink, fontSize = 18.sp, lineHeight = 29.sp,
-                        fontFamily = FontFamily.Serif, fontStyle = FontStyle.Italic,
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Line(q.source, Ink3, size = Design.MINI, modifier = Modifier.testTag("lore-quote-source"))
+        androidx.compose.material3.Text(
+            article.title, Modifier.testTag("lore-title"), color = Ink,
+            fontSize = 24.sp, lineHeight = 30.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Serif,
+        )
+        // An article's parts, told one after another under their own
+        // headings, so the tab reads as one chapter as Phyrexia's do.
+        article.tabs.forEachIndexed { i, part ->
+            Spacer(Modifier.height(if (i == 0) 8.dp else 14.dp))
+            Line(part.tab.uppercase(), Ink3, size = Design.MINI, fontFamily = FontFamily.Monospace, modifier = Modifier.testTag("story-part-title"))
+            Spacer(Modifier.height(10.dp))
+            part.story.forEach { StoryParagraph(it, onStory) }
+            part.quote?.let { q ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 12.dp).height(IntrinsicSize.Min).testTag("lore-quote")) {
+                    Box(Modifier.width(3.dp).fillMaxHeight().background(Line2))
+                    Spacer(Modifier.width(18.dp))
+                    Column {
+                        androidx.compose.material3.Text(
+                            q.words, color = Ink, fontSize = 18.sp, lineHeight = 29.sp,
+                            fontFamily = FontFamily.Serif, fontStyle = FontStyle.Italic,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Line(q.source, Ink3, size = Design.MINI, modifier = Modifier.testTag("lore-quote-source"))
+                    }
                 }
             }
         }
-        val nextTab = MagicStory.next(article, tab)
-        val nextArticle = MagicStory.nextArticle(article)
-        val next = when {
-            nextTab != null -> "Read on: " + nextTab.tab + " ›" to MagicStory.target(article, nextTab)
-            nextArticle != null -> "Next: " + nextArticle.title + " ›" to nextArticle.slug
-            else -> null
-        }
-        next?.let { (label, target) ->
+        MagicStory.nextArticle(article)?.let { next ->
+            val label = if (next in section.articles) "Read on: " + next.title + " ›" else "Next: " + MagicStory.sectionOf(next).title + " ›"
             Spacer(Modifier.height(10.dp))
-            Btn(label, modifier = Modifier.testTag("lore-next")) { onStory(target) }
+            Btn(label, modifier = Modifier.testTag("lore-next")) { onStory(next.slug) }
         }
         Spacer(Modifier.height(20.dp))
         Box(Modifier.fillMaxWidth().height(1.dp).background(Line))
@@ -591,9 +554,9 @@ private fun StoryReading(article: StoryArticle, tab: StoryTab, onStory: (String)
 }
 
 @Composable
-private fun StoryProfile(person: StoryPerson, onStory: (String) -> Unit) {
-    StoryUp(onStory)
-    Column(Modifier.fillMaxWidth().padding(top = 18.dp).testTag("lore-story")) {
+private fun StoryProfile(section: StorySection, person: StoryPerson, onStory: (String) -> Unit) {
+    Btn("‹ " + section.title, modifier = Modifier.testTag("story-up")) { onStory("") }
+    Column(Modifier.fillMaxWidth().padding(top = 18.dp).testTag("story-profile")) {
         androidx.compose.material3.Text(
             person.name, Modifier.testTag("lore-title"), color = Ink,
             fontSize = 24.sp, lineHeight = 30.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Serif,
