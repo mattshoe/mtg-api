@@ -453,6 +453,9 @@ fun Muted(text: String, modifier: Modifier = Modifier, size: Int = Design.SMALL)
     Text(text, modifier, color = Ink3, fontSize = size.sp)
 }
 
+/** The x at the right of a single-line box. */
+const val CLEAR_TAG = "clear-x"
+
 /** `.field`, and it has to look like the web's inputs, not Material's. */
 @Composable
 fun Field(
