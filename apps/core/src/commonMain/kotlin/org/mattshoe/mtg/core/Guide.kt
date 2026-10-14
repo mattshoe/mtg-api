@@ -32,7 +32,6 @@ object Guide {
     const val WHEEL = "wheel"
     const val RULES = "rules"
     const val LORE = "phyrexia"
-    const val STORY = "lore"
 
     val tiles: List<GuideTile> = listOf(
         GuideTile(COLOURS, "Colour combinations", "Every name, from Azorius to WUBRG. Guilds, shards, wedges and the rest."),
@@ -40,9 +39,10 @@ object Guide {
         // Matt: "i want a guide section on rules". The page is in `Rules.kt`.
         GuideTile(RULES, "Rules", "The Comprehensive Rules, searchable. Every rule that mentions trample, or 702.19, one card each."),
         GuideTile(LORE, "Phyrexia", "The whole story, from the fall of the Thran to the March of the Machine, one era at a time."),
-        // Matt: "Add Magic the Gathering lore content to the Guide". The words are in `MagicStory.kt`.
-        GuideTile(STORY, "The story of Magic", "Ten sagas, from the Brothers' War to the Edge of Eternities, told like a history, one tab at a time."),
-    )
+    ) +
+        // Matt: "each of those sections should be their own article, with
+        // its own tabs, just like the phyrexian one". The words are in `MagicStory.kt`.
+        MagicStory.sections.map { GuideTile(it.slug, it.title, it.hook) }
 
     fun tile(slug: String): GuideTile? = tiles.firstOrNull { it.slug == slug }
 

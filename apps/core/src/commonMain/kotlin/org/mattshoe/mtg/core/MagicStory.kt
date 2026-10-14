@@ -130,10 +130,28 @@ object MagicStory {
     /** Every article a person appears in, in story order. */
     fun appearances(person: StoryPerson): List<StoryArticle> = articles.filter { mentions(it, person) }
 
+    /** A section, by its tile's slug. */
     fun section(slug: String): StorySection? = sections.firstOrNull { it.slug == slug }
 
-    /** The page a link target opens from [section], or null when it names nothing. */
-    fun page(section: StorySection, target: String): StoryPage? = null
+    /**
+     * The page a link target opens from [section], or null when it
+     * names nothing. A person opens inside the section they were
+     * reached from. A part of an article, `the-war/kroog`, opens the
+     * article, which tells all its parts in one tab.
+     */
+    fun page(section: StorySection, target: String): StoryPage? {
+        val parts = target.split('/')
+        if (parts.first() == WHO) return person(parts.getOrNull(1).orEmpty())?.let { StoryPage.Profile(section, it) }
+        val article = article(parts.first()) ?: return null
+        return StoryPage.Reading(sectionOf(article), article)
+    }
+
+    /** Where a link target lives, after `#/guide/`: its article's section, or this one for a person. */
+    fun address(section: StorySection, target: String): String = when (val page = page(section, target)) {
+        is StoryPage.Reading -> "${page.section.slug}/${page.article.slug}"
+        is StoryPage.Profile -> "${section.slug}/${target(page.person)}"
+        null -> section.slug
+    }
 
     /** A person's link target. */
     fun target(person: StoryPerson): String = "$WHO/${person.slug}"
@@ -142,8 +160,30 @@ object MagicStory {
     fun nextArticle(article: StoryArticle): StoryArticle? = articles.getOrNull(articles.indexOf(article) + 1)
 }
 
-/** What a section's tile shows, or null anywhere else. */
-val AppState.storyPage: StoryPage? get() = null
+/**
+ * What a section's tile shows, or null anywhere else.
+ *
+ * Matt: "each of those sections should be their own article, with
+ * its own tabs, just like the phyrexian one". So a section is a Guide
+ * tile and its articles are its tabs, `#/guide/brothers-war/koilos`.
+ * An address that names nothing in this section is its first tab,
+ * not a blank page.
+ */
+val AppState.storyPage: StoryPage?
+    get() {
+        val section = guideTile?.let { MagicStory.section(it.slug) } ?: return null
+        val first = StoryPage.Reading(section, section.articles.first())
+        val target = route.rest.substringAfter('/', "")
+        if (target.isEmpty()) return first
+        return when (val page = MagicStory.page(section, target)) {
+            is StoryPage.Reading -> if (page.section == section) page else first
+            is StoryPage.Profile -> page
+            null -> first
+        }
+    }
 
-/** A link target, at its own address. */
-fun AppState.openStory(target: String): AppState = this
+/** A link target, at its own address. Empty is the section's first tab. */
+fun AppState.openStory(target: String): AppState {
+    val section = storyPage?.section ?: MagicStory.page(MagicStory.sections.first(), target)?.section ?: return this
+    return navigate(Route(View.GUIDE, if (target.isEmpty()) section.slug else MagicStory.address(section, target)))
+}
