@@ -154,8 +154,16 @@ val AppState.guideTile: GuideTile? get() = if (view == View.GUIDE) Guide.tile(ro
 /** A tile, at its own address, so back and a bookmark both work. */
 fun AppState.openGuide(tile: GuideTile): AppState = navigate(Route(View.GUIDE, tile.slug))
 
-/** What the open tile's back button says: Lore inside a story, Guide everywhere else. */
-val AppState.guideUpTo: String get() = guideTile?.let(Guide::up)?.title ?: View.GUIDE.label
+/**
+ * Where the open tile's way back leads: Lore for a story, the front
+ * page for the rest. A story opened from a search goes back to the
+ * search, which is still typed in, rather than to a Lore page the
+ * person never passed through.
+ */
+private val AppState.guideAbove: GuideTile? get() = if (guideSearching) null else guideTile?.let(Guide::up)
 
-/** Out of the open tile: a story goes back to Lore, everything else to the Guide's front page. */
-fun AppState.guideUp(): AppState = guideTile?.let(Guide::up)?.let(::openGuide) ?: navigate(View.GUIDE)
+/** What the open tile's back button says. */
+val AppState.guideUpTo: String get() = guideAbove?.title ?: View.GUIDE.label
+
+/** Out of the open tile, one level up. */
+fun AppState.guideUp(): AppState = guideAbove?.let(::openGuide) ?: navigate(View.GUIDE)

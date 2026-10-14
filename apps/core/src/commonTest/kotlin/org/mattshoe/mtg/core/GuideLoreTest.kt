@@ -71,6 +71,17 @@ class GuideLoreTest {
     }
 
     @Test
+    fun aStoryOpenedFromASearchGoesBackToTheSearch() {
+        val searched = AppState().navigate(View.GUIDE).searchGuide("Sylex")
+        val hit = searched.guideHits.first { it.title == "Sylex Blast" }
+        val open = searched.openGuideHit(hit)
+        assertEquals("Guide", open.guideUpTo, "a story opened from a search does not say it goes back to the search")
+        val back = assertNotNull(open.back())
+        assertEquals("#/guide", back.route.toHash(), "back from a hit went to Lore, away from the hits")
+        assertEquals(listOf("Sylex Blast"), back.guideHits.map { it.title }.filter { it == "Sylex Blast" }, "back lost the search")
+    }
+
+    @Test
     fun theReferencesStillGoBackToTheGuide() {
         val wheel = AppState().navigate(View.GUIDE).openGuide(assertNotNull(Guide.tile(Guide.WHEEL)))
         assertEquals("Guide", wheel.guideUpTo)
