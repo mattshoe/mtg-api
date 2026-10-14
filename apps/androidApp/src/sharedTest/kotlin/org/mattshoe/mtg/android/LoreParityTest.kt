@@ -15,7 +15,6 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.text.TextLayoutResult
-import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
 import org.junit.Test
@@ -137,7 +136,13 @@ class LoreParityTest {
         openLore()
         val boxes = tabs().fetchSemanticsNodes().indices.map { tabs()[it].getUnclippedBoundsInRoot() }
         assertEquals(1, boxes.map { it.top }.toSet().size, "the tabs wrap onto more than one row, so they are a pile, not a tab bar")
-        boxes.forEach { assertTrue(it.bottom - it.top <= 48.dp, "a tab is ${it.bottom - it.top} tall, so its label wraps") }
+        // Lines, not a height in dp: the JVM's font is taller than a
+        // phone's, and a 14sp label measured 55dp there on one line.
+        tabTexts().forEachIndexed { i, name ->
+            val layout = assertNotNull(tabs()[i].textLayout(), "the $name tab has no text layout")
+            assertEquals(1, layout.lineCount, "the $name tab's label runs to ${layout.lineCount} lines")
+            assertTrue(!layout.isLineEllipsized(0) && !layout.hasVisualOverflow, "the $name tab's label is cut short")
+        }
         val screen = rule.onNodeWithTag("guide").getUnclippedBoundsInRoot()
         assertTrue(boxes.last().right > screen.right, "every tab fits on a phone already, so this proves nothing about scrolling")
         // The last era has to be reachable, by scrolling the row.
