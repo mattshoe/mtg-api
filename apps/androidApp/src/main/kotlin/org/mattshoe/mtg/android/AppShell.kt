@@ -464,6 +464,7 @@ fun AppShell(
                         onSearch = { onState(state.searchGuide(it)) },
                         hits = state.guideHits,
                         onHit = { onState(state.openGuideHit(it)) },
+                        onGameChanger = { onState(state.peekGameChanger(it)) },
                     )
 
                     View.FETCH -> FetchListScreen(
