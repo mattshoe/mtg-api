@@ -30,11 +30,14 @@ data class ComboGroup(val title: String, val about: String, val combos: List<Com
 object Guide {
     const val COLOURS = "colours"
     const val WHEEL = "wheel"
+    const val RULES = "rules"
     const val LORE = "phyrexia"
 
     val tiles: List<GuideTile> = listOf(
         GuideTile(COLOURS, "Colour combinations", "Every name, from Azorius to WUBRG. Guilds, shards, wedges and the rest."),
         GuideTile(WHEEL, "The colour wheel", "What each colour wants, what it is good at, and who its friends and enemies are."),
+        // Matt: "i want a guide section on rules". The page is in `Rules.kt`.
+        GuideTile(RULES, "Rules", "The Comprehensive Rules, searchable. Every rule that mentions trample, or 702.19, one card each."),
         GuideTile(LORE, "Phyrexia", "The whole story, from the fall of the Thran to the March of the Machine, one era at a time."),
     )
 

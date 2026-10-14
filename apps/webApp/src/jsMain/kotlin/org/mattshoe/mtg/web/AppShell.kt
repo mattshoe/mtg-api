@@ -68,6 +68,8 @@ fun AppShell(
     onPreviewEntry: () -> Unit,
     onApplyEntry: () -> Unit,
     onExport: (ExportTo) -> Unit = {},
+    /** Fetch the Comprehensive Rules again, after a load that failed. */
+    onLoadRules: () -> Unit = {},
     /** Give that account that role, on Admin Settings. */
     onSetRole: (org.mattshoe.mtg.core.Person, String) -> Unit = { _, _ -> },
     onOpenCard: (CardRow) -> Unit = {},
@@ -232,6 +234,9 @@ fun AppShell(
             onBack = { onState(state.navigate(View.GUIDE)) },
             era = state.loreEra,
             onEra = { onState(state.openEra(it)) },
+            rules = state.rules,
+            onRules = { onState(state.copy(rules = it)) },
+            onLoadRules = onLoadRules,
         )
 
         View.CARD -> CardPage(
