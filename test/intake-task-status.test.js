@@ -297,6 +297,49 @@ describe('deployed is written from the deploy runs of the merge commit', () => {
       .toEqual([{ name: 'superseded', status: 'deployed', ...times, pr: url(83), note: 'live: the site, the APK' }])
   })
 
+  it('a failed deploy that a later green one carried live stops reading merged forever', () => {
+    // Six guide tasks sat at `merged` with "deploy failed: the site"
+    // for a day. They were on main and live: the `pages` workflow had
+    // been broken for eight hours — GitHub Pages was switched off on the
+    // repo — and once it was fixed, a later run published main, these
+    // merges included.
+    //
+    // Nothing moved them, because this only ever looked at runs whose
+    // headSha is exactly the merge commit. A deploy is cumulative: main
+    // is published whole, so a green deploy of any commit that CONTAINS
+    // the merge means the merge is live. Without that, one bad afternoon
+    // of CI pins a task at `merged` permanently and it never buzzes the
+    // phone it was supposed to.
+    const runs = [
+      run('pages', 'abc', 'failure'),
+      run('release', 'abc', 'success'),
+      // Later, from a commit further along main that has 'abc' behind it.
+      run('pages', 'later', 'success', '2026-10-09T11:00:00Z'),
+    ]
+    const contains = (ancestor, descendant) => ancestor === 'abc' && descendant === 'later'
+    expect(reconcile(seen({
+      filed: ['rescued'], prs: { rescued: [merged(84, 'abc')] }, runs, contains,
+      rows: [row('rescued', 'merged')],
+    })))
+      .toEqual([{ name: 'rescued', status: 'deployed', ...times, pr: url(84), note: 'live: the site, the APK' }])
+  })
+
+  it('does not call it live off a later deploy of something that does not contain it', () => {
+    // The guard on the above. A green deploy from a sibling branch, or
+    // from a commit that predates the merge, says nothing about it.
+    const runs = [
+      run('pages', 'abc', 'failure'),
+      run('release', 'abc', 'success'),
+      run('pages', 'elsewhere', 'success', '2026-10-09T11:00:00Z'),
+    ]
+    const contains = () => false
+    expect(reconcile(seen({
+      filed: ['still-broken'], prs: { 'still-broken': [merged(85, 'abc')] }, runs, contains,
+      rows: [row('still-broken', 'merged')],
+    })))
+      .toEqual([{ name: 'still-broken', status: 'merged', ...times, pr: url(85), note: 'deploy failed: the site' }])
+  })
+
   it('a merge that set off no deploy at all says so rather than waiting at merged forever', () => {
     const runs = [run('release', 'other', 'success', '2026-10-09T07:00:00Z')]
     expect(reconcile(seen({ filed: ['docs'], prs: { docs: [merged(84, 'abc')] }, runs, rows: [row('docs', 'merged')] })))

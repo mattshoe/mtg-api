@@ -59,7 +59,7 @@ const SETTLE_MS = 15 * 60 * 1000
  * where the runs cannot tell: none were asked for, the merge is older
  * than every run seen, or it is too new for its runs to have started.
  */
-export function deployment(pr, { runs, now } = {}) {
+export function deployment(pr, { runs, now, contains } = {}) {
   const sha = pr?.mergeCommit?.oid
   if (!runs || !sha) return null
   const mine = runs.filter((r) => r.headSha === sha && DEPLOYS[r.workflowName])
@@ -69,7 +69,26 @@ export function deployment(pr, { runs, now } = {}) {
     if (!(pr.mergedAt >= oldest) || !(age > SETTLE_MS)) return null
     return { status: 'merged', note: 'nothing to deploy: no deploy ran for this merge' }
   }
+  // A later green run of the same workflow, from a commit that has this
+  // merge behind it, means this merge is live. A deploy publishes main
+  // whole — it is not a per-commit artefact — so once the site has gone
+  // out from anything containing the change, the change is on the site.
+  //
+  // Without this, six guide tasks sat at `merged` saying "deploy failed:
+  // the site" for a day while being live. GitHub Pages had been switched
+  // off on the repo for eight hours; when it came back, a later run
+  // published main and those merges with it, and nothing here could see
+  // that because it only ever matched the exact merge commit. One bad
+  // afternoon of CI pinned them permanently, and `deployed` is one of
+  // the two statuses that buzzes Matt's phone, so they never did.
+  const carried = (r) => Boolean(contains) && runs.some((n) => (
+    n.workflowName === r.workflowName
+    && n.createdAt > r.createdAt
+    && (n.conclusion === 'success' || n.conclusion === 'skipped')
+    && contains(sha, n.headSha)
+  ))
   const live = (r) => r.conclusion === 'success' || r.conclusion === 'skipped'
+    || carried(r)
     || (r.conclusion === 'cancelled'
       && runs.some((n) => n.workflowName === r.workflowName && n.createdAt > r.createdAt && live(n)))
   const what = (rs) => Object.keys(DEPLOYS).filter((w) => rs.some((r) => r.workflowName === w))
@@ -129,6 +148,9 @@ export function outcome(prs, { withdrawn = false, cancelled = false } = {}) {
  */
 export function reconcile({
   rows = [], ready = [], held = [], filed = [], stalled = [], alive = [], prs = {}, branches = [], runs, now, cancelled = [],
+  // Whether one commit has another behind it. Supplied by the caller so
+  // this stays a pure function; git answers it for real.
+  contains,
 }) {
   const byName = new Map(rows.filter((r) => r.name).map((r) => [r.name, r]))
   const names = new Set([
@@ -137,7 +159,7 @@ export function reconcile({
   const out = []
   for (const name of names) {
     const row = byName.get(name)
-    const found = truth(name, row?.status, { ready, held, filed, stalled, alive, cancelled, prs: prs[name] || [], runs, at: now })
+    const found = truth(name, row?.status, { ready, held, filed, stalled, alive, cancelled, prs: prs[name] || [], runs, at: now, contains })
     if (!found) continue
     const { deploy, ...t } = found
     const backfill = t.started_at && !row?.started_at
@@ -160,10 +182,10 @@ function shipped(pr, now, deploys) {
 }
 
 /** What one task's row should say, or null to leave it as it is. */
-function truth(name, now, { ready, held, filed, stalled, alive, cancelled = [], prs, runs, at }) {
+function truth(name, now, { ready, held, filed, stalled, alive, cancelled = [], prs, runs, at, contains }) {
   const merged = prs.find((p) => p.state === 'MERGED')
   const landed = now === 'merged' || now === 'deployed'
-  const deploys = { runs, now: at }
+  const deploys = { runs, now: at, contains }
   // Filed under done/ is the strongest evidence there is that it finished.
   if (filed.includes(name)) {
     if (merged) return shipped(merged, now, deploys)
@@ -393,7 +415,25 @@ async function reconcileNow({ repo, token, base = API }) {
     runs = JSON.parse(execFileSync('gh', ['run', 'list', '--branch', 'main', '--event', 'push', '--limit', '300',
       '--json', 'headSha,workflowName,status,conclusion,createdAt'], { cwd: repo, encoding: 'utf8' }))
   } catch { /* no deploy runs to read */ }
-  const wrote = reconcile({ rows, ready, held, filed, stalled, alive, prs, branches, runs, cancelled })
+  // Does one commit have another behind it. Answered by git, cached,
+  // and false whenever git cannot say — a commit this clone has never
+  // fetched must not be read as "contains", or a task goes `deployed`
+  // on no evidence.
+  const seen = new Map()
+  const contains = (ancestor, descendant) => {
+    if (!ancestor || !descendant) return false
+    const key = `${ancestor} ${descendant}`
+    if (seen.has(key)) return seen.get(key)
+    let yes = false
+    try {
+      execFileSync('git', ['merge-base', '--is-ancestor', ancestor, descendant],
+        { cwd: repo, stdio: 'ignore' })
+      yes = true
+    } catch { yes = false }
+    seen.set(key, yes)
+    return yes
+  }
+  const wrote = reconcile({ rows, ready, held, filed, stalled, alive, prs, branches, runs, cancelled, contains })
   for (const t of wrote) await report(t, { token, base })
   return wrote
 }
