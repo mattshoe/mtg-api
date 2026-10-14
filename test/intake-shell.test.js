@@ -1277,4 +1277,25 @@ describe('why an agent stopped', () => {
 
     expect(box.intakeLog()).toMatch(/a-thing paused|paused was not written/)
   })
+
+  it('says nothing at all when the agent left a pull request behind', () => {
+    // The flap this caused: reconcile reads an open pull request and
+    // writes `in review`, then this path sees a worktree with nobody in
+    // it and writes `paused` straight over the top, and the next tick
+    // does both again. `the-ui-retry-policy-has-never-worked` went round
+    // that loop once a minute for hours and the row was wrong half the
+    // time.
+    //
+    // A worktree with no agent and an open pull request is not stalled.
+    // The agent finished, pushed, and stopped — which is what `in review`
+    // means. Only a worktree with nothing to show is stalled.
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    stopped('a-thing', 'all done')
+    box.stub('gh', `[ "$1 $2" = "pr list" ] && printf '%s\\n' '[{"number":7,"state":"OPEN","headRefName":"request/a-thing-0000000"}]'\nexit 0`)
+
+    run('dispatch.sh')
+
+    expect(box.intakeLog(), 'a finished agent was called stalled')
+      .not.toMatch(/a-thing paused/)
+  })
 })
