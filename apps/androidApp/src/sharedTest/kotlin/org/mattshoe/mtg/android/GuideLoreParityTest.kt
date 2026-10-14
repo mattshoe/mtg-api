@@ -71,7 +71,7 @@ class GuideLoreParityTest {
     private fun tiles(): List<String> = rule.onAllNodes(
         SemanticsMatcher("a Guide tile") { it.config.getOrNull(SemanticsProperties.TestTag)?.startsWith("guide-tile-") == true },
     ).fetchSemanticsNodes()
-        .sortedBy { it.boundsInRoot.top }
+        .sortedBy { it.positionInRoot.y }
         .map { it.config[SemanticsProperties.TestTag].removePrefix("guide-tile-") }
 
     private fun back(): String = rule.onNodeWithTag("guide-back").fetchSemanticsNode().config

@@ -44,6 +44,8 @@ import org.mattshoe.mtg.core.ShareWhat
 import org.mattshoe.mtg.core.Route
 import org.mattshoe.mtg.core.View
 import org.mattshoe.mtg.core.openGuide
+import org.mattshoe.mtg.core.guideUp
+import org.mattshoe.mtg.core.guideUpTo
 import org.mattshoe.mtg.core.openGuideHit
 import org.mattshoe.mtg.core.peekGameChanger
 import org.mattshoe.mtg.core.searchGuide
@@ -237,7 +239,8 @@ fun AppShell(
         View.GUIDE -> GuidePage(
             tile = state.guideTile,
             onOpen = { onState(state.openGuide(it)) },
-            onBack = { onState(state.navigate(View.GUIDE)) },
+            onBack = { onState(state.guideUp()) },
+            upTo = state.guideUpTo,
             era = state.loreEra,
             onEra = { onState(state.openEra(it)) },
             story = state.storyPage,

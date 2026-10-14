@@ -98,6 +98,7 @@ fun GuideScreen(
     hits: List<GuideHit> = emptyList(),
     onHit: (GuideHit) -> Unit = {},
     onGameChanger: (DeckCard) -> Unit = {},
+    upTo: String = "Guide",
 ) {
     // The rules page keeps its search bar on screen and scrolls the
     // cards under it, so it is laid out on its own.
@@ -108,7 +109,7 @@ fun GuideScreen(
     val scroll = rememberScrollState()
     // A new era is a new chapter, so it starts at the top, as the
     // site's Read on does.
-    LaunchedEffect(era?.slug, story) { scroll.scrollTo(0) }
+    LaunchedEffect(tile?.slug, era?.slug, story) { scroll.scrollTo(0) }
     Column(
         Modifier.fillMaxWidth()
             .verticalScroll(scroll)
@@ -119,24 +120,15 @@ fun GuideScreen(
         if (tile == null) {
             GuideFind(search, onSearch, hits, onHit)
             // While something is searched, what it found stands in for the tiles.
-            if (GuideSearch.words(search).isEmpty()) Guide.tiles.forEach { t ->
-                Card(
-                    "WUBRG",
-                    Modifier.fillMaxWidth().testTag("guide-tile-${t.slug}").clickable { onOpen(t) },
-                    pad = 18,
-                ) {
-                    Line(t.title, Ink, size = 18, weight = FontWeight.Bold)
-                    Spacer(Modifier.height(6.dp))
-                    Line(t.blurb, Ink2, size = Design.SMALL)
-                }
-            }
+            if (GuideSearch.words(search).isEmpty()) Guide.tiles.forEach { GuideTileCard(it, onOpen) }
         } else {
             // Inside a profile, the way out is up to the section it was
             // opened from, which `StoryProfile` draws, not the tiles.
             if (story !is StoryPage.Profile) {
-                Btn("‹ Guide", modifier = Modifier.testTag("guide-back")) { onBack() }
+                Btn("‹ $upTo", modifier = Modifier.testTag("guide-back")) { onBack() }
             }
             when (tile.slug) {
+                Guide.LORE -> Guide.lore.forEach { GuideTileCard(it, onOpen) }
                 Guide.COLOURS -> Colours()
                 Guide.WHEEL -> Wheel()
                 Guide.PHYREXIA -> Lore(era ?: PhyrexianLore.eras.first(), onEra)
@@ -144,6 +136,20 @@ fun GuideScreen(
                 else -> story?.let { Story(it, onStory) }
             }
         }
+    }
+}
+
+/** One tile, on the front page or in Lore. Sibling of `GuideTiles` in `GuidePage`. */
+@Composable
+private fun GuideTileCard(t: GuideTile, onOpen: (GuideTile) -> Unit) {
+    Card(
+        "WUBRG",
+        Modifier.fillMaxWidth().testTag("guide-tile-${t.slug}").clickable { onOpen(t) },
+        pad = 18,
+    ) {
+        Line(t.title, Ink, size = 18, weight = FontWeight.Bold)
+        Spacer(Modifier.height(6.dp))
+        Line(t.blurb, Ink2, size = Design.SMALL)
     }
 }
 
