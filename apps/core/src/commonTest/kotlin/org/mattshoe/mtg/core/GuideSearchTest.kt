@@ -18,7 +18,7 @@ class GuideSearchTest {
     /** Everything an article says, read here the plain way, so the test does not lean on the search's own reading. */
     private val texts: Map<String, String> =
         PhyrexianLore.eras.associate { e ->
-            "${Guide.LORE}/${e.slug}" to (listOf(e.tab, e.title) + e.story + listOfNotNull(e.quote?.words)).joinToString(" ")
+            "${Guide.PHYREXIA}/${e.slug}" to (listOf(e.tab, e.title) + e.story + listOfNotNull(e.quote?.words)).joinToString(" ")
         } + MagicStory.sections.flatMap { s ->
             s.articles.map { a ->
                 "${s.slug}/${a.slug}" to (listOf(a.title) + a.tabs.flatMap { t ->
@@ -42,7 +42,7 @@ class GuideSearchTest {
     @Test
     fun aPhyrexiaEraIsAnArticleToo() {
         val hits = AppState().searchGuide("Glacian").guideHits
-        val thran = hits.firstOrNull { it.address == "${Guide.LORE}/thran" }
+        val thran = hits.firstOrNull { it.address == "${Guide.PHYREXIA}/thran" }
         assertNotNull(thran, "the Phyrexia era that tells of Glacian is not found: ${hits.map { it.address }}")
         assertEquals("Phyrexia", thran.part)
     }
@@ -97,7 +97,7 @@ class GuideSearchTest {
         val back = opened.navigate(View.GUIDE)
         assertEquals("Sylex", back.guideSearch, "back to the Guide lost what was searched")
 
-        val era = searched.searchGuide("Glacian").guideHits.first { it.address == "${Guide.LORE}/thran" }
+        val era = searched.searchGuide("Glacian").guideHits.first { it.address == "${Guide.PHYREXIA}/thran" }
         assertEquals("thran", searched.openGuideHit(era).loreEra?.slug)
     }
 

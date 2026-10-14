@@ -123,9 +123,9 @@ object PhyrexianLore {
 
 /** The era on screen, when the Phyrexia tile is open: the one in the address, or the first. */
 val AppState.loreEra: LoreEra?
-    get() = if (guideTile?.slug == Guide.LORE) {
+    get() = if (guideTile?.slug == Guide.PHYREXIA) {
         PhyrexianLore.era(route.rest.substringAfter('/', "")) ?: PhyrexianLore.eras.first()
     } else null
 
 /** An era, at its own address, `#/guide/phyrexia/<slug>`. */
-fun AppState.openEra(era: LoreEra): AppState = navigate(Route(View.GUIDE, "${Guide.LORE}/${era.slug}"))
+fun AppState.openEra(era: LoreEra): AppState = navigate(Route(View.GUIDE, "${Guide.PHYREXIA}/${era.slug}"))

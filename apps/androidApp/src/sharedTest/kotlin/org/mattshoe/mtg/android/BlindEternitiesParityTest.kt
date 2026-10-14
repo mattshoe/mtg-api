@@ -70,6 +70,9 @@ class BlindEternitiesParityTest {
     private fun openTheBlindEternities() {
         rule.onNodeWithContentDescription("Guide").performClick()
         rule.waitForIdle()
+        // Every story is inside Lore.
+        rule.onNodeWithTag("guide-tile-lore").performScrollTo().performClick()
+        rule.waitForIdle()
         rule.onNodeWithTag("guide-tile-blind-eternities").assertExists("the Guide has no Blind Eternities tile")
         rule.onNodeWithTag("guide-tile-blind-eternities").performScrollTo().performClick()
         rule.waitForIdle()

@@ -83,6 +83,8 @@ import org.mattshoe.mtg.core.openEra
 import org.mattshoe.mtg.core.openStory
 import org.mattshoe.mtg.core.storyPage
 import org.mattshoe.mtg.core.openGuide
+import org.mattshoe.mtg.core.guideUp
+import org.mattshoe.mtg.core.guideUpTo
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -454,7 +456,8 @@ fun AppShell(
                     View.GUIDE -> GuideScreen(
                         tile = state.guideTile,
                         onOpen = { onState(state.openGuide(it)) },
-                        onBack = { onState(state.navigate(View.GUIDE)) },
+                        onBack = { onState(state.guideUp()) },
+                        upTo = state.guideUpTo,
                         era = state.loreEra,
                         onEra = { onState(state.openEra(it)) },
                         story = state.storyPage,

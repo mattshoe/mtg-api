@@ -87,7 +87,7 @@ class GuideSearchParityTest {
         texts("guide-hit-snippet").forEach { assertTrue(it.contains("sylex", ignoreCase = true), "a hit does not show where the word is: \"$it\"") }
         assertEquals(hits.size, texts("guide-hit-part").count { it.isNotBlank() }, "a hit does not say where it is from")
         assertEquals(listOf("${hits.size} articles"), texts("guide-search-count"))
-        assertTrue(rule.onAllNodes(hasTestTag("guide-tile-phyrexia")).fetchSemanticsNodes().isEmpty(), "the tiles are still there under the hits")
+        assertTrue(rule.onAllNodes(hasTestTag("guide-tile-lore")).fetchSemanticsNodes().isEmpty(), "the tiles are still there under the hits")
 
         val bar = rule.onNodeWithTag("guide-search").getUnclippedBoundsInRoot()
         val first = rule.onAllNodes(hasTestTag("guide-hit"))[0].getUnclippedBoundsInRoot()
@@ -139,6 +139,6 @@ class GuideSearchParityTest {
         assertEquals(listOf("No article mentions \"xyzzyplugh\"."), texts("guide-search-none"))
         assertTrue(hits().isEmpty())
         search("")
-        rule.onNodeWithTag("guide-tile-phyrexia").assertExists("clearing the search did not bring the tiles back")
+        rule.onNodeWithTag("guide-tile-lore").assertExists("clearing the search did not bring the tiles back")
     }
 }

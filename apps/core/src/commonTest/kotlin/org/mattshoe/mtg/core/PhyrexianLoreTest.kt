@@ -18,7 +18,7 @@ import kotlin.test.assertTrue
 class PhyrexianLoreTest {
 
     private val tile: GuideTile
-        get() = Guide.tile(Guide.LORE) ?: error("the Guide has no Phyrexia tile: ${Guide.tiles.map { it.slug }}")
+        get() = Guide.tile(Guide.PHYREXIA) ?: error("the Guide has no Phyrexia tile: ${Guide.tiles.map { it.slug }}")
 
     @Test
     fun phyrexiaIsATileOfItsOwnAtItsOwnAddress() {
@@ -102,7 +102,7 @@ class PhyrexianLoreTest {
     fun backFromAnyEraIsTheTiles() {
         val deep = AppState().navigate(Route.parse("#/guide/phyrexia/${PhyrexianLore.eras.last().slug}"))
         val back = assertNotNull(deep.back(), "back from an era closed the app")
-        assertEquals("#/guide", back.route.toHash())
+        assertEquals("#/guide/lore", back.route.toHash())
     }
 
     @Test

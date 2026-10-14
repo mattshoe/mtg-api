@@ -52,12 +52,11 @@ class MagicStoryTest {
         // sections should be their own article, with its own tabs, just
         // like the phyrexian one".
         assertNull(Guide.tiles.firstOrNull { it.title == "The story of Magic" }, "the ten sections are still one tile: ${Guide.tiles.map { it.title }}")
-        assertNull(Guide.tile("lore"), "the old one-tile story is still in the Guide")
-        val phyrexia = Guide.tiles.indexOfFirst { it.slug == Guide.LORE }
+        // Since then they live in Lore, in the order the story happened: `GuideLoreTest`.
         assertEquals(
-            MagicStory.sections.map { it.slug },
-            Guide.tiles.drop(phyrexia + 1).map { it.slug },
-            "the sections are not tiles of their own, in order, after Phyrexia",
+            MagicStory.sections.map { it.slug }.toSet(),
+            Guide.lore.map { it.slug }.toSet() - Guide.PHYREXIA,
+            "the sections are not tiles of their own in Lore",
         )
         MagicStory.sections.forEach { s ->
             val t = tile(s)
@@ -103,7 +102,7 @@ class MagicStoryTest {
 
     @Test
     fun everyAddressIsUniqueAndAnAddress() {
-        val slugs = MagicStory.articles.map { it.slug } + MagicStory.sections.map { it.slug } + listOf(Guide.COLOURS, Guide.WHEEL, Guide.RULES, Guide.LORE)
+        val slugs = MagicStory.articles.map { it.slug } + MagicStory.sections.map { it.slug } + listOf(Guide.COLOURS, Guide.WHEEL, Guide.RULES, Guide.PHYREXIA)
         assertTrue(MagicStory.articles.size == 55, "${MagicStory.articles.size} articles, which is not all of them")
         assertEquals(slugs.size, slugs.toSet().size, "two things share an address: ${slugs.groupBy { it }.filter { it.value.size > 1 }.keys}")
         MagicStory.articles.forEach { a ->
@@ -309,7 +308,7 @@ class MagicStoryTest {
     fun backFromATabIsTheTilesAndBackFromAProfileIsItsSection() {
         val last = MagicStory.sections.last()
         val deep = AppState().navigate(Route.parse("#/guide/${last.slug}/${last.articles.last().slug}"))
-        assertEquals("#/guide", deep.back()?.route?.toHash(), "back from a section's tab is not the tiles, as it is on Phyrexia")
+        assertEquals("#/guide/lore", deep.back()?.route?.toHash(), "back from a section's tab is not the Lore tiles, as it is on Phyrexia")
         val war = MagicStory.sections.first()
         val who = AppState().navigate(Route.parse("#/guide/${war.slug}/who/${MagicStory.people.first().slug}"))
         assertEquals("#/guide/${war.slug}", who.back()?.route?.toHash(), "back from a profile is not the section it was opened in")

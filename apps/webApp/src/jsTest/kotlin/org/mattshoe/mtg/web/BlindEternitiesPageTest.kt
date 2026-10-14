@@ -80,6 +80,9 @@ class BlindEternitiesPageTest {
         settle()
         all(".app-menu button.app-tab").first { it.textContent?.trim() == "Guide" }.click()
         settle()
+        // Every story is inside Lore.
+        all("button.guide-tile").first { it.querySelector(".guide-tile-title")?.textContent?.trim() == "Lore" }.click()
+        settle()
         val tile = all("button.guide-tile").firstOrNull { it.all(".guide-tile-title").singleOrNull()?.textContent?.trim() == "The Blind Eternities" }
             ?: error("the Guide has no Blind Eternities tile: ${all(".guide-tile-title").map { it.textContent }}")
         tile.click()

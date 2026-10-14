@@ -63,12 +63,13 @@ fun GuidePage(
     gameChangerSearch: String = "",
     onGameChangerSearch: (String) -> Unit = {},
     gameChangers: List<Pair<DeckGroup, List<DeckCard>>> = GameChangers.byType,
+    upTo: String = "Guide",
 ) {
     Div(attrs = { classes("wrap", "guide") }) {
         if (tile == null) {
             GuideFind(search, onSearch, hits, onHit)
             // While something is searched, what it found stands in for the tiles.
-            if (GuideSearch.words(search).isEmpty()) GuideTiles(onOpen)
+            if (GuideSearch.words(search).isEmpty()) GuideTiles(Guide.tiles, onOpen)
         } else {
             // Inside a profile, the way out is up to the section it was
             // opened from, which `StoryProfile` draws, not the tiles.
@@ -76,12 +77,13 @@ fun GuidePage(
                 Button(attrs = {
                     classes("btn", "guide-back")
                     onClick { onBack() }
-                }) { Text("‹ Guide") }
+                }) { Text("‹ $upTo") }
             }
             when (tile.slug) {
+                Guide.LORE -> GuideTiles(Guide.lore, onOpen)
                 Guide.COLOURS -> Colours()
                 Guide.WHEEL -> Wheel()
-                Guide.LORE -> Lore(era ?: PhyrexianLore.eras.first(), onEra)
+                Guide.PHYREXIA -> Lore(era ?: PhyrexianLore.eras.first(), onEra)
                 Guide.RULES -> RulesSearch(rules, onRules, onLoadRules)
                 Guide.GAME_CHANGERS -> GameChangerList(gameChangerSearch, onGameChangerSearch, gameChangers, onGameChanger)
                 else -> story?.let { Story(it, onStory) }
@@ -91,9 +93,9 @@ fun GuidePage(
 }
 
 @Composable
-private fun GuideTiles(onOpen: (GuideTile) -> Unit) {
+private fun GuideTiles(tiles: List<GuideTile>, onOpen: (GuideTile) -> Unit) {
     Div(attrs = { classes("guide-tiles") }) {
-        Guide.tiles.forEach { t ->
+        tiles.forEach { t ->
             Button(attrs = {
                 classes("guide-tile")
                 onClick { onOpen(t) }
