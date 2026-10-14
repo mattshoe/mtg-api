@@ -1,5 +1,6 @@
 package org.mattshoe.mtg.web
 
+import org.mattshoe.mtg.core.onRules
 import org.mattshoe.mtg.core.TaskDetail
 import org.mattshoe.mtg.core.openTaskKey
 import org.mattshoe.mtg.core.taskCancelled
@@ -277,6 +278,7 @@ object MtgApp {
                     app = next
                     if (next.view != was.view || next.route.rest != was.route.rest) loadFor(next)
                 },
+                onLoadRules = { loadRules() },
                 // Every one of these marks itself busy *here*, before
                 // the coroutine starts, rather than inside it.
                 // Launching first and setting the flag in the suspend
@@ -710,7 +712,33 @@ object MtgApp {
                 intoPage(View.CARD) { loadCard(ref.nameNorm, label) }
             } ?: Unit
 
+            View.GUIDE -> if (s.onRules) loadRules()
+
             else -> Unit
+        }
+    }
+
+    /**
+     * The Comprehensive Rules, for the Guide's rules page: the whole
+     * text file, relayed by the Worker, parsed here by `RuleBook`.
+     * Once per visit to the app; a load under way or already done is
+     * left alone. A failure clears the spinner and says why, and Try
+     * again comes back here. Sibling of Android's `loadRules`.
+     */
+    private fun loadRules() {
+        if (app.rules.busy || app.rules.book != null) return
+        app = app.copy(rules = app.rules.loading())
+        scope.launch {
+            app = try {
+                // Asked first, then copied, so a search typed while it
+                // loaded is kept. See `loadPeople`.
+                val text = api.rules()
+                app.copy(rules = app.rules.loaded(text))
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                app.copy(rules = app.rules.failed(e.message ?: "that did not work"))
+            }
         }
     }
 

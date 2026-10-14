@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -20,11 +22,19 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.platform.testTag
@@ -37,6 +47,10 @@ import org.mattshoe.mtg.core.Combo
 import org.mattshoe.mtg.core.Design
 import org.mattshoe.mtg.core.Guide
 import org.mattshoe.mtg.core.GuideTile
+import org.mattshoe.mtg.core.LoreEra
+import org.mattshoe.mtg.core.PhyrexianLore
+import org.mattshoe.mtg.core.Rule
+import org.mattshoe.mtg.core.Rules
 import org.mattshoe.mtg.core.WheelColour
 import org.mattshoe.mtg.core.WheelLore
 import org.mattshoe.mtg.core.WheelPair
@@ -53,10 +67,29 @@ import org.mattshoe.mtg.core.WheelPair
  * which is exactly where a test would go looking.
  */
 @Composable
-fun GuideScreen(tile: GuideTile?, onOpen: (GuideTile) -> Unit, onBack: () -> Unit) {
+fun GuideScreen(
+    tile: GuideTile?,
+    onOpen: (GuideTile) -> Unit,
+    onBack: () -> Unit,
+    era: LoreEra? = null,
+    onEra: (LoreEra) -> Unit = {},
+    rules: Rules = Rules(),
+    onRules: (Rules) -> Unit = {},
+    onLoadRules: () -> Unit = {},
+) {
+    // The rules page keeps its search bar on screen and scrolls the
+    // cards under it, so it is laid out on its own.
+    if (tile?.slug == Guide.RULES) {
+        RulesSearch(rules, onRules, onLoadRules, onBack)
+        return
+    }
+    val scroll = rememberScrollState()
+    // A new era is a new chapter, so it starts at the top, as the
+    // site's Read on does.
+    LaunchedEffect(era?.slug) { scroll.scrollTo(0) }
     Column(
         Modifier.fillMaxWidth()
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scroll)
             .padding(Design.WRAP_PAD_NARROW.dp)
             .testTag("guide"),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -78,6 +111,7 @@ fun GuideScreen(tile: GuideTile?, onOpen: (GuideTile) -> Unit, onBack: () -> Uni
             when (tile.slug) {
                 Guide.COLOURS -> Colours()
                 Guide.WHEEL -> Wheel()
+                Guide.LORE -> Lore(era ?: PhyrexianLore.eras.first(), onEra)
             }
         }
     }
@@ -205,9 +239,9 @@ private fun Wheel() {
             Spacer(Modifier.height(12.dp))
             Pairs("Enemy pairs", "Across the wheel. They clash, and a deck of both gets the best of each.", ColourWheel.enemy)
             Spacer(Modifier.height(12.dp))
-            Lore(ColourWheel.SHARDS, ColourWheel.SHARDS_ABOUT, ColourWheel.shards, across)
+            WheelLores(ColourWheel.SHARDS, ColourWheel.SHARDS_ABOUT, ColourWheel.shards, across)
             Spacer(Modifier.height(12.dp))
-            Lore(ColourWheel.CLANS, ColourWheel.CLANS_ABOUT, ColourWheel.clans, across)
+            WheelLores(ColourWheel.CLANS, ColourWheel.CLANS_ABOUT, ColourWheel.clans, across)
         }
     }
 }
@@ -216,10 +250,10 @@ private fun Wheel() {
  * Matt: "lore inserts for the shards of alara and the tribes of
  * tarkir ... the land scapes and culture with the missing colors of
  * magic." A card each, everything said in `ColourWheel`. Sibling of
- * the site's `Lore` in `GuidePage`.
+ * the site's `WheelLores` in `GuidePage`.
  */
 @Composable
-private fun Lore(title: String, about: String, lore: List<WheelLore>, across: Int) {
+private fun WheelLores(title: String, about: String, lore: List<WheelLore>, across: Int) {
     Group(title, about)
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         lore.chunked(across).forEach { row ->
@@ -316,11 +350,184 @@ private fun Pairs(title: String, about: String, pairs: List<WheelPair>) {
     }
 }
 
+/**
+ * The story of Phyrexia: a row of tabs, one per era, then the era's
+ * chapter set for reading. Everything said is in `PhyrexianLore`, and
+ * the open tab is in the address. Sibling of `Lore` in `GuidePage`.
+ *
+ * One column no wider than the site's 680px, centred, so a tablet
+ * does not stretch a line past reading. The tab row scrolls sideways
+ * on a phone rather than wrapping into a pile.
+ */
+@Composable
+private fun Lore(era: LoreEra, onEra: (LoreEra) -> Unit) {
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+        Column(Modifier.widthIn(max = STORY.dp).fillMaxWidth()) {
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).testTag("lore-tabs"),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                PhyrexianLore.eras.forEach { e ->
+                    val open = e == era
+                    // Told apart by lightness and an underline, not by
+                    // a hue, because Matt is colourblind.
+                    Column(Modifier.width(IntrinsicSize.Max)) {
+                        Line(
+                            e.tab, if (open) Ink else Ink3, size = 14, weight = FontWeight.SemiBold, maxLines = 1,
+                            modifier = Modifier
+                                .selectable(selected = open, role = Role.Tab) { onEra(e) }
+                                .padding(horizontal = 12.dp, vertical = 10.dp)
+                                .testTag("lore-tab"),
+                        )
+                        Box(Modifier.fillMaxWidth().height(2.dp).background(if (open) Ink else androidx.compose.ui.graphics.Color.Transparent))
+                    }
+                }
+            }
+            Box(Modifier.fillMaxWidth().height(1.dp).background(Line))
+            Column(Modifier.fillMaxWidth().padding(top = 18.dp).testTag("lore-story")) {
+                androidx.compose.material3.Text(
+                    era.title, Modifier.testTag("lore-title"), color = Ink,
+                    fontSize = 24.sp, lineHeight = 30.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Serif,
+                )
+                Spacer(Modifier.height(14.dp))
+                era.story.forEach {
+                    androidx.compose.material3.Text(
+                        it, Modifier.padding(bottom = 18.dp).testTag("lore-paragraph"), color = Ink,
+                        fontSize = 17.sp, lineHeight = 29.sp, fontFamily = FontFamily.Serif,
+                    )
+                }
+                era.quote?.let { q ->
+                    Row(Modifier.fillMaxWidth().padding(vertical = 12.dp).height(IntrinsicSize.Min).testTag("lore-quote")) {
+                        Box(Modifier.width(3.dp).fillMaxHeight().background(Line2))
+                        Spacer(Modifier.width(18.dp))
+                        Column {
+                            androidx.compose.material3.Text(
+                                q.words, color = Ink, fontSize = 18.sp, lineHeight = 29.sp,
+                                fontFamily = FontFamily.Serif, fontStyle = FontStyle.Italic,
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            Line(q.source, Ink3, size = Design.MINI, modifier = Modifier.testTag("lore-quote-source"))
+                        }
+                    }
+                }
+                PhyrexianLore.next(era)?.let { next ->
+                    Spacer(Modifier.height(10.dp))
+                    Btn("Read on: " + next.tab + " ›", modifier = Modifier.testTag("lore-next")) { onEra(next) }
+                    Spacer(Modifier.height(24.dp))
+                }
+            }
+        }
+    }
+}
+
+/** The story's widest, the same as the site's `.lore-story`. */
+private const val STORY = 680
+
 /** The wheel's width, the same as the site's `.wheel`. */
 private const val WHEEL = 260
 
 /** How far out the symbols sit, as a share of the wheel's radius: the site's 38% of its width. */
 private const val RADIUS = 0.76
+
+/**
+ * The Comprehensive Rules, searched as you type. Sibling of the site's
+ * `RulesSearch`.
+ *
+ * Matt: "the page it navigates to should have a search bar at the top
+ * ... show each rule result in a nice stylish card view so it's clear
+ * which rules are which ... i want each rule to be collapsible, but
+ * expanded my default". The file is fetched once, through the Worker,
+ * and `RuleBook` parses and searches it here, on the phone.
+ *
+ * A plain scrolling column, not a lazy one, for the reason the tiles
+ * give: a page of results is at most `Rules.SHOWN` cards.
+ */
+@Composable
+private fun RulesSearch(rules: Rules, onRules: (Rules) -> Unit, onLoad: () -> Unit, onBack: () -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(Design.WRAP_PAD_NARROW.dp).testTag("guide")) {
+        Btn("‹ Guide", modifier = Modifier.testTag("guide-back")) { onBack() }
+        Spacer(Modifier.height(10.dp))
+        Field(
+            value = rules.query,
+            onValueChange = { onRules(rules.searched(it)) },
+            placeholder = "Search the rules: trample, 702.19, commander tax",
+            modifier = Modifier.testTag("rules-search"),
+        )
+        Spacer(Modifier.height(10.dp))
+        Column(
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            val book = rules.book
+            when {
+                rules.busy -> Line("Loading the Comprehensive Rules…", Ink3, modifier = Modifier.testTag("rules-busy"))
+                rules.error != null -> {
+                    Line("Could not load the rules: ${rules.error}", Bad, modifier = Modifier.testTag("rules-err"))
+                    Btn("Try again", modifier = Modifier.testTag("rules-retry")) { onLoad() }
+                }
+                book == null -> Line("The rules have not loaded yet.", Ink3)
+                rules.query.isBlank() -> {
+                    Line("Type a word or a rule number to find every rule that mentions it.", Ink2, modifier = Modifier.testTag("rules-hint"))
+                    if (book.effective.isNotEmpty()) Line(book.effective, Ink3, size = Design.MINI)
+                }
+                rules.total == 0 -> Line("No rule mentions \"${rules.query.trim()}\".", Ink3, modifier = Modifier.testTag("rules-none"))
+                else -> {
+                    Line(rules.count, Ink3, size = Design.MINI, modifier = Modifier.testTag("rules-count"))
+                    rules.hits.forEach { r -> RuleCard(r, rules.isOpen(r)) { onRules(rules.toggled(r)) } }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The site's `.rule-card`: the number as the heading, heavy and in the
+ * accent, with a rule of it down the left edge; a tap on the heading
+ * folds the text and examples away.
+ */
+@Composable
+private fun RuleCard(rule: Rule, open: Boolean, onToggle: () -> Unit) {
+    Box(
+        Modifier.fillMaxWidth()
+            .testTag("rule-${rule.number}")
+            .clip(Radius)
+            .background(Brush.linearGradient(listOf(Bg3, Bg2)))
+            .border(1.dp, Line, Radius)
+            .drawBehind { drawRect(Accent, size = Size(3.dp.toPx(), size.height)) },
+    ) {
+        Column(Modifier.fillMaxWidth()) {
+            Row(
+                Modifier.fillMaxWidth()
+                    .clickable { onToggle() }
+                    .testTag("rule-head")
+                    .padding(start = 17.dp, end = 14.dp, top = 12.dp, bottom = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Line(
+                    rule.shownNumber, Accent, size = 15, weight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace, modifier = Modifier.testTag("rule-number"),
+                )
+                Line(rule.section, Ink3, size = Design.MINI, maxLines = 1, modifier = Modifier.weight(1f))
+                Line(if (open) "▾" else "▸", Ink2)
+            }
+            if (open) {
+                Column(
+                    Modifier.fillMaxWidth().padding(start = 17.dp, end = 14.dp, bottom = 13.dp).testTag("rule-body"),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Line(rule.text, Ink, size = Design.BODY, modifier = Modifier.testTag("rule-text"))
+                    rule.examples.forEach { e ->
+                        Line(
+                            e, Ink2, size = Design.SMALL,
+                            modifier = Modifier.fillMaxWidth().clip(RadiusSm).background(Bg).padding(8.dp).testTag("rule-example"),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
 
 /**
  * The site's `.guide-tile` and `.combo`: a raised surface with the

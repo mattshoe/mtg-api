@@ -1,5 +1,6 @@
 package org.mattshoe.mtg.android
 
+import org.mattshoe.mtg.core.onRules
 import org.mattshoe.mtg.core.TaskDetail
 import org.mattshoe.mtg.core.openTaskKey
 import org.mattshoe.mtg.core.taskCancelled
@@ -244,6 +245,9 @@ class MainActivity : ComponentActivity() {
     /** `cancelTask`, for a test that cannot press a button through the activity. */
     internal fun cancelTaskForTesting(key: String) = cancelTask(key)
 
+    /** What the rules page's Try again does, for the same reason. */
+    internal fun loadRulesForTesting() = loadRules()
+
     /** `shareDeck`, for a test that cannot see a private method. */
     internal fun shareDeckForTesting(what: ShareWhat, where: ExportTo): AppState {
         app = shareDeck(what, where)
@@ -465,6 +469,7 @@ class MainActivity : ComponentActivity() {
                             app = next
                             if (next.view != was.view || next.route.rest != was.route.rest) loadFor(next)
                         },
+                        onLoadRules = { loadRules() },
                         onSetRole = { person, role ->
                             // One row at a time: the press greys out
                             // the row it was made on and leaves the
@@ -751,7 +756,33 @@ class MainActivity : ComponentActivity() {
                 intoPage(View.CARD) { loadCard(ref.nameNorm, label) }
             } ?: Unit
 
+            View.GUIDE -> if (s.onRules) loadRules()
+
             else -> Unit
+        }
+    }
+
+    /**
+     * The Comprehensive Rules, for the Guide's rules page: the whole
+     * text file, relayed by the Worker, parsed here by `RuleBook`.
+     * Once per run of the app; a load under way or already done is
+     * left alone. A failure clears the spinner and says why, and Try
+     * again comes back here. Sibling of the website's `loadRules`.
+     */
+    private fun loadRules() {
+        if (app.rules.busy || app.rules.book != null) return
+        app = app.copy(rules = app.rules.loading())
+        scope.launch {
+            app = try {
+                // Asked first, then copied, so a search typed while it
+                // loaded is kept. See `loadPeople`.
+                val text = api.rules()
+                app.copy(rules = app.rules.loaded(text))
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                app.copy(rules = app.rules.failed(e.message ?: "that did not work"))
+            }
         }
     }
 

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import signingKey from './fixtures/signing-key.json';
 import { env } from 'cloudflare:test';
+import { STATUSES } from '../src/tasks.js';
 import { sql, exec, post, call } from './helpers.js';
 import { accessToken, forgetToken, isDead, sendTo, noteFor } from '../src/push.js';
 import { tell, credsFrom } from '../src/notify.js';
@@ -90,6 +91,10 @@ describe('a token Firebase has given up on', () => {
 });
 
 describe('what a transition says on a phone', () => {
+  // Matt, an hour after the first version shipped: "the push
+  // notifications are way too fucking spammy. I only want to be
+  // notified when a task CANNOT be recovered, or when a task is
+  // deployed."
   it('says a task is live when it deploys', () => {
     expect(noteFor({ title: 'Pinch zoom', status: 'deployed' }).title).toBe('Pinch zoom is live');
   });
@@ -100,11 +105,21 @@ describe('what a transition says on a phone', () => {
     expect(n.body).toBe('Not logged in');
   });
 
-  // The thing that decides whether notifications stay turned on.
-  it('says nothing for the statuses that happen all day', () => {
-    expect(noteFor({ title: 'X', status: 'in progress' })).toBeNull();
-    expect(noteFor({ title: 'X', status: 'in review' })).toBeNull();
-    expect(noteFor({ title: 'X', status: 'pending' })).toBeNull();
+  // Everything else, by name. A notification nobody wants is how
+  // notifications get turned off, and then the two that matter are
+  // gone too.
+  it.each(['merged', 'cancelled', 'in progress', 'in review', 'pending', 'paused'])(
+    'says nothing for %s',
+    (status) => {
+      expect(noteFor({ title: 'X', status })).toBeNull();
+    },
+  );
+
+  // The whole vocabulary, so a status added later is silent until
+  // somebody decides it is worth a buzz.
+  it('sends for exactly two of the eight statuses', () => {
+    const loud = STATUSES.filter((s) => noteFor({ title: 'X', status: s }) !== null);
+    expect(loud.sort()).toEqual(['blocked', 'deployed']);
   });
 });
 
@@ -144,7 +159,7 @@ describe('telling the phones', () => {
   const withCreds = { DB: env.DB, FCM_SERVICE_ACCOUNT: null };
 
   it('does nothing at all without credentials, and says so', async () => {
-    const r = await tell({ DB: env.DB }, { title: 'X', status: 'merged' });
+    const r = await tell({ DB: env.DB }, { title: 'X', status: 'deployed' });
     expect(r.skipped).toBe('no credentials');
   });
 
@@ -179,7 +194,7 @@ describe('telling the phones', () => {
       ? Response.json({ access_token: 'at', expires_in: 3600 })
       : Response.json({ error: { status: 'UNREGISTERED' } }, { status: 404 }));
 
-    const r = await tell(withCreds, { title: 'X', status: 'merged' }, { fetch: f });
+    const r = await tell(withCreds, { title: 'X', status: 'deployed' }, { fetch: f });
 
     expect(r.dead).toBe(1);
     expect(await adminDevices(env.DB)).toEqual([]);
@@ -200,7 +215,7 @@ describe('telling the phones', () => {
       return Response.json({ name: 'ok' });
     };
 
-    const r = await tell(withCreds, { title: 'X', status: 'merged' }, { fetch: f });
+    const r = await tell(withCreds, { title: 'X', status: 'deployed' }, { fetch: f });
 
     expect(sent, 'a broken device stopped the working one').toEqual(['tok-good']);
     expect(r.sent).toBe(1);
@@ -211,7 +226,7 @@ describe('telling the phones', () => {
     const [u] = await sql("SELECT id FROM users WHERE slug = 'm4tt0001'");
     await remember(env.DB, u.id, { token: 'tok-x', platform: 'android' });
     const f = async () => { throw new Error('nothing works'); };
-    await expect(tell(withCreds, { title: 'X', status: 'merged' }, { fetch: f })).resolves.toBeTruthy();
+    await expect(tell(withCreds, { title: 'X', status: 'deployed' }, { fetch: f })).resolves.toBeTruthy();
   });
 });
 
@@ -248,7 +263,7 @@ describe('only admins are pushed to, proved end to end', () => {
   const CREDS_ENV = () => ({ DB: env.DB, FCM_SERVICE_ACCOUNT: JSON.stringify(CREDS) });
 
   /** Every token Firebase was asked to deliver to, in one send. */
-  async function tokensSentTo(task = { title: 'A task', status: 'merged' }) {
+  async function tokensSentTo(task = { title: 'A task', status: 'deployed' }) {
     const sent = [];
     const f = async (url, init) => {
       if (String(url).includes('oauth2')) {
@@ -397,7 +412,7 @@ describe('a role change while somebody is signed in', () => {
       sent.push(JSON.parse(init.body).message.token);
       return Response.json({ name: 'ok' });
     };
-    await tell(CREDS_ENV(), { title: 'A task', status: 'merged' }, { fetch: f });
+    await tell(CREDS_ENV(), { title: 'A task', status: 'deployed' }, { fetch: f });
     return sent.sort();
   }
 

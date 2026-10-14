@@ -1,8 +1,11 @@
 package org.mattshoe.mtg.web
 
 import androidx.compose.runtime.Composable
+import org.jetbrains.compose.web.attributes.InputType
+import org.jetbrains.compose.web.attributes.placeholder
 import org.jetbrains.compose.web.dom.Button
 import org.jetbrains.compose.web.dom.Div
+import org.jetbrains.compose.web.dom.Input
 import org.jetbrains.compose.web.dom.H2
 import org.jetbrains.compose.web.dom.P
 import org.jetbrains.compose.web.dom.Section
@@ -13,6 +16,10 @@ import org.mattshoe.mtg.core.Combo
 import org.mattshoe.mtg.core.Design
 import org.mattshoe.mtg.core.Guide
 import org.mattshoe.mtg.core.GuideTile
+import org.mattshoe.mtg.core.LoreEra
+import org.mattshoe.mtg.core.PhyrexianLore
+import org.mattshoe.mtg.core.Rule
+import org.mattshoe.mtg.core.Rules
 import org.mattshoe.mtg.core.WheelLore
 import org.mattshoe.mtg.core.WheelPair
 
@@ -24,7 +31,16 @@ import org.mattshoe.mtg.core.WheelPair
  * the site cannot list different names for the same colours.
  */
 @Composable
-fun GuidePage(tile: GuideTile?, onOpen: (GuideTile) -> Unit, onBack: () -> Unit) {
+fun GuidePage(
+    tile: GuideTile?,
+    onOpen: (GuideTile) -> Unit,
+    onBack: () -> Unit,
+    era: LoreEra? = null,
+    onEra: (LoreEra) -> Unit = {},
+    rules: Rules = Rules(),
+    onRules: (Rules) -> Unit = {},
+    onLoadRules: () -> Unit = {},
+) {
     Div(attrs = { classes("wrap", "guide") }) {
         if (tile == null) {
             Div(attrs = { classes("guide-tiles") }) {
@@ -52,6 +68,8 @@ fun GuidePage(tile: GuideTile?, onOpen: (GuideTile) -> Unit, onBack: () -> Unit)
             when (tile.slug) {
                 Guide.COLOURS -> Colours()
                 Guide.WHEEL -> Wheel()
+                Guide.LORE -> Lore(era ?: PhyrexianLore.eras.first(), onEra)
+                Guide.RULES -> RulesSearch(rules, onRules, onLoadRules)
             }
         }
     }
@@ -163,18 +181,18 @@ private fun Wheel() {
     }
     Pairs("Allied pairs", "Side by side on the wheel. They want similar things.", ColourWheel.allied)
     Pairs("Enemy pairs", "Across the wheel. They clash, and a deck of both gets the best of each.", ColourWheel.enemy)
-    Lore(ColourWheel.SHARDS, ColourWheel.SHARDS_ABOUT, ColourWheel.shards)
-    Lore(ColourWheel.CLANS, ColourWheel.CLANS_ABOUT, ColourWheel.clans)
+    WheelLores(ColourWheel.SHARDS, ColourWheel.SHARDS_ABOUT, ColourWheel.shards)
+    WheelLores(ColourWheel.CLANS, ColourWheel.CLANS_ABOUT, ColourWheel.clans)
 }
 
 /**
  * Matt: "lore inserts for the shards of alara and the tribes of
  * tarkir ... the land scapes and culture with the missing colors of
  * magic." A card each, everything said in `ColourWheel`. Sibling of
- * the phone's `Lore` in `GuideScreen`.
+ * the phone's `WheelLores` in `GuideScreen`.
  */
 @Composable
-private fun Lore(title: String, about: String, lore: List<WheelLore>) {
+private fun WheelLores(title: String, about: String, lore: List<WheelLore>) {
     Section(attrs = { classes("guide-group") }) {
         H2(attrs = { classes("guide-group-title") }) { Text(title) }
         Div(attrs = { classes("guide-group-about") }) { Text(about) }
@@ -238,6 +256,47 @@ private fun Pairs(title: String, about: String, pairs: List<WheelPair>) {
     }
 }
 
+/**
+ * The story of Phyrexia: a row of tabs, one per era, then the era's
+ * chapter set for reading. Everything said is in `PhyrexianLore`, and
+ * the open tab is in the address. Sibling of `Lore` in `GuideScreen`.
+ */
+@Composable
+private fun Lore(era: LoreEra, onEra: (LoreEra) -> Unit) {
+    Div(attrs = {
+        classes("lore-tabs")
+        attr("role", "tablist")
+    }) {
+        PhyrexianLore.eras.forEach { e ->
+            Button(attrs = {
+                classes("lore-tab")
+                attr("role", "tab")
+                attr("aria-selected", (e == era).toString())
+                onClick { onEra(e) }
+            }) { Text(e.tab) }
+        }
+    }
+    Div(attrs = { classes("lore-story") }) {
+        H2(attrs = { classes("lore-title") }) { Text(era.title) }
+        era.story.forEach { P { Text(it) } }
+        era.quote?.let { q ->
+            Div(attrs = { classes("lore-quote") }) {
+                Div(attrs = { classes("lore-quote-words") }) { Text(q.words) }
+                Div(attrs = { classes("lore-quote-source") }) { Text(q.source) }
+            }
+        }
+        PhyrexianLore.next(era)?.let { next ->
+            Button(attrs = {
+                classes("btn", "lore-next")
+                onClick {
+                    onEra(next)
+                    kotlinx.browser.window.scrollTo(0.0, 0.0)
+                }
+            }) { Text("Read on: ${next.tab} ›") }
+        }
+    }
+}
+
 /** How far out the symbols sit, as a percentage of the wheel's width. */
 private const val RADIUS = 38.0
 
@@ -249,6 +308,78 @@ private fun lines(): String {
     val allies = (0 until 5).joinToString("") { line(it, (it + 1) % 5, "wheel-ally") }
     val enemies = (0 until 5).joinToString("") { line(it, (it + 2) % 5, "wheel-enemy") }
     return "<svg viewBox=\"0 0 100 100\">$allies$enemies</svg>"
+}
+
+/**
+ * The Comprehensive Rules, searched as you type. Sibling of Android's
+ * `RulesSearch`.
+ *
+ * Matt: "the page it navigates to should have a search bar at the top
+ * ... show each rule result in a nice stylish card view so it's clear
+ * which rules are which ... i want each rule to be collapsible, but
+ * expanded my default". The file is fetched once, through the Worker,
+ * and `RuleBook` parses and searches it here, on the device.
+ */
+@Composable
+private fun RulesSearch(rules: Rules, onRules: (Rules) -> Unit, onLoad: () -> Unit) {
+    Div(attrs = { classes("rules-bar") }) {
+        Input(InputType.Search, attrs = {
+            classes("rules-search")
+            placeholder("Search the rules: trample, 702.19, commander tax")
+            attr("aria-label", "Search the rules")
+            value(rules.query)
+            onInput { onRules(rules.searched(it.value)) }
+        })
+    }
+    val book = rules.book
+    when {
+        rules.busy -> Div(attrs = { classes("empty", "rules-loading") }) { Text("Loading the Comprehensive Rules…") }
+        rules.error != null -> Div(attrs = { classes("rules-failed") }) {
+            Div(attrs = { classes("err") }) { Text("Could not load the rules: ${rules.error}") }
+            Button(attrs = {
+                classes("btn", "rules-retry")
+                onClick { onLoad() }
+            }) { Text("Try again") }
+        }
+        book == null -> Div(attrs = { classes("empty") }) { Text("The rules have not loaded yet.") }
+        rules.query.isBlank() -> Div(attrs = { classes("empty", "rules-hint") }) {
+            Text("Type a word or a rule number to find every rule that mentions it.")
+            if (book.effective.isNotEmpty()) Div(attrs = { classes("muted", "small") }) { Text(book.effective) }
+        }
+        rules.total == 0 -> Div(attrs = { classes("empty") }) { Text("No rule mentions \"${rules.query.trim()}\".") }
+        else -> {
+            Div(attrs = { classes("muted", "small", "rules-count") }) { Text(rules.count) }
+            Div(attrs = { classes("rules-list") }) {
+                rules.hits.forEach { r -> RuleCard(r, rules.isOpen(r)) { onRules(rules.toggled(r)) } }
+            }
+        }
+    }
+}
+
+/** One rule: its number as the heading, a tap on that to fold it, then its text and examples. */
+@Composable
+private fun RuleCard(rule: Rule, open: Boolean, onToggle: () -> Unit) {
+    Div(attrs = {
+        classes("rule-card")
+        attr("data-rule", rule.number)
+        attr("data-open", open.toString())
+    }) {
+        Button(attrs = {
+            classes("rule-head")
+            attr("aria-expanded", open.toString())
+            onClick { onToggle() }
+        }) {
+            Span(attrs = { classes("rule-number") }) { Text(rule.shownNumber) }
+            Span(attrs = { classes("rule-section") }) { Text(rule.section) }
+            Span(attrs = { classes("rule-chevron") }) { Text(if (open) "▾" else "▸") }
+        }
+        if (open) {
+            Div(attrs = { classes("rule-body") }) {
+                Div(attrs = { classes("rule-text") }) { Text(rule.text) }
+                rule.examples.forEach { e -> Div(attrs = { classes("rule-example") }) { Text(e) } }
+            }
+        }
+    }
 }
 
 /** The colours left to right, each its own stretch of the strip. */
