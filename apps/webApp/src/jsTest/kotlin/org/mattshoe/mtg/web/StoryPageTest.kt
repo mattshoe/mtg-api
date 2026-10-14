@@ -10,6 +10,7 @@ import org.jetbrains.compose.web.renderComposable
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.MagicStory
 import org.mattshoe.mtg.core.StoryPage
+import org.mattshoe.mtg.core.storyPage
 import org.w3c.dom.HTMLElement
 import org.w3c.dom.get
 import kotlin.js.Promise

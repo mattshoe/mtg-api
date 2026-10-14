@@ -26,6 +26,7 @@ import org.junit.runner.RunWith
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.MagicStory
 import org.mattshoe.mtg.core.StoryPage
+import org.mattshoe.mtg.core.storyPage
 import org.mattshoe.mtg.core.StoryTab
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
