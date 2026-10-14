@@ -101,3 +101,69 @@ class GameChangersTest {
         assertEquals(53, s.peekRun.size)
     }
 }
+
+/**
+ * Searching the Game Changers by name.
+ *
+ * Matt: "add a name search to the game changers page". A card is found
+ * when every word typed is in its name, in any capitals and with or
+ * without its apostrophes. The page keeps a deck list's sections, with
+ * only the ones that still have a card in them, and the carousel runs
+ * over what is found, so its next is still the next row down.
+ */
+class GameChangerSearchTest {
+
+    private val onThePage = AppState().navigate(Route.parse("#/guide/${Guide.GAME_CHANGERS}"))
+
+    private fun names(s: AppState) = s.gameChangers.flatMap { (_, cards) -> cards.map { it.name } }
+
+    @Test
+    fun nothingTypedIsTheWholeList() {
+        assertEquals(GameChangers.byType, onThePage.gameChangers, "with nothing typed the page is not every game changer")
+        assertEquals(GameChangers.byType, onThePage.searchGameChangers("   ").gameChangers, "spaces alone filtered the list")
+        assertTrue(!onThePage.searchGameChangers("  ").gameChangersSearching, "spaces alone count as a search")
+    }
+
+    @Test
+    fun aWordFindsEveryCardWithItInItsName() {
+        val s = onThePage.searchGameChangers("tutor")
+        assertTrue(s.gameChangersSearching, "typing tutor is not a search")
+        assertEquals(
+            listOf("Enlightened Tutor", "Mystical Tutor", "Vampiric Tutor", "Worldly Tutor", "Demonic Tutor"),
+            names(s),
+            "the tutors are not what the search found, in the page's order",
+        )
+        assertEquals(listOf("Instants", "Sorceries"), s.gameChangers.map { it.first.title }, "a section with no tutor in it is still on the page")
+    }
+
+    @Test
+    fun everyWordMustBeInTheNameInAnyCapitalsAndApostrophesDoNotMatter() {
+        assertEquals(listOf("Vampiric Tutor"), names(onThePage.searchGameChangers("TUTOR vamp")))
+        assertEquals(listOf("Lion's Eye Diamond"), names(onThePage.searchGameChangers("lions eye")), "an apostrophe left out finds nothing")
+        assertEquals(listOf("Gaea's Cradle"), names(onThePage.searchGameChangers("gaea’s")), "a curly apostrophe finds nothing")
+        assertEquals(listOf("Tergrid, God of Fright // Tergrid's Lantern"), names(onThePage.searchGameChangers("lantern")), "the back face is not searched")
+    }
+
+    @Test
+    fun aNameNoGameChangerHasFindsNothingAndSaysSo() {
+        val s = onThePage.searchGameChangers("sol ring")
+        assertEquals(emptyList(), s.gameChangers, "Sol Ring found something")
+        assertEquals("No game changer is called \"sol ring\".", GameChangers.none(s.gameChangerSearch))
+    }
+
+    @Test
+    fun theWordsAboveTheListSayHowManyWereFound() {
+        assertEquals("1 of 53 cards", GameChangers.count(1))
+        assertEquals("5 of 53 cards", GameChangers.count(5))
+    }
+
+    @Test
+    fun theCarouselRunsOverWhatWasFound() {
+        val s = onThePage.searchGameChangers("tutor")
+        val worldly = s.gameChangers.flatMap { it.second }.first { it.name == "Worldly Tutor" }
+        val peeked = s.peekGameChanger(worldly)
+        assertEquals("Worldly Tutor", peeked.peeked?.title, "the carousel is not on the card that was tapped")
+        assertEquals("4 of 5", peeked.peekPlace, "the carousel is over every game changer, not the ones found")
+        assertEquals("Demonic Tutor", peeked.peekTo(4).peeked?.title, "the next card is not the next row down")
+    }
+}

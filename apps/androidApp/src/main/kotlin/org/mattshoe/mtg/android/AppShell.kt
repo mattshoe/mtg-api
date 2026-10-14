@@ -48,6 +48,8 @@ import androidx.compose.ui.unit.sp
 import org.mattshoe.mtg.core.guideHits
 import org.mattshoe.mtg.core.openGuideHit
 import org.mattshoe.mtg.core.peekGameChanger
+import org.mattshoe.mtg.core.gameChangers
+import org.mattshoe.mtg.core.searchGameChangers
 import org.mattshoe.mtg.core.searchGuide
 import org.mattshoe.mtg.core.leaveFetchList
 import org.mattshoe.mtg.core.openFetch
@@ -468,6 +470,9 @@ fun AppShell(
                         hits = state.guideHits,
                         onHit = { onState(state.openGuideHit(it)) },
                         onGameChanger = { onState(state.peekGameChanger(it)) },
+                        gameChangerSearch = state.gameChangerSearch,
+                        onGameChangerSearch = { onState(state.searchGameChangers(it)) },
+                        gameChangers = state.gameChangers,
                     )
 
                     View.FETCH -> FetchListScreen(

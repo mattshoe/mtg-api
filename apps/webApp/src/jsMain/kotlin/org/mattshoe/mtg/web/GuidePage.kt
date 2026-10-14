@@ -17,6 +17,7 @@ import org.jetbrains.compose.web.dom.Text
 import org.mattshoe.mtg.core.ColourWheel
 import org.mattshoe.mtg.core.Combo
 import org.mattshoe.mtg.core.DeckCard
+import org.mattshoe.mtg.core.DeckGroup
 import org.mattshoe.mtg.core.GameChangers
 import org.mattshoe.mtg.core.Design
 import org.mattshoe.mtg.core.Guide
@@ -59,6 +60,9 @@ fun GuidePage(
     hits: List<GuideHit> = emptyList(),
     onHit: (GuideHit) -> Unit = {},
     onGameChanger: (DeckCard) -> Unit = {},
+    gameChangerSearch: String = "",
+    onGameChangerSearch: (String) -> Unit = {},
+    gameChangers: List<Pair<DeckGroup, List<DeckCard>>> = GameChangers.byType,
     upTo: String = "Guide",
 ) {
     Div(attrs = { classes("wrap", "guide") }) {
@@ -81,7 +85,7 @@ fun GuidePage(
                 Guide.WHEEL -> Wheel()
                 Guide.PHYREXIA -> Lore(era ?: PhyrexianLore.eras.first(), onEra)
                 Guide.RULES -> RulesSearch(rules, onRules, onLoadRules)
-                Guide.GAME_CHANGERS -> GameChangerList(onGameChanger)
+                Guide.GAME_CHANGERS -> GameChangerList(gameChangerSearch, onGameChangerSearch, gameChangers, onGameChanger)
                 else -> story?.let { Story(it, onStory) }
             }
         }
@@ -600,10 +604,30 @@ private fun band(pips: String): String {
  * and its order are `GameChangers`'.
  */
 @Composable
-private fun GameChangerList(onCard: (DeckCard) -> Unit) {
+private fun GameChangerList(
+    search: String,
+    onSearch: (String) -> Unit,
+    shown: List<Pair<DeckGroup, List<DeckCard>>>,
+    onCard: (DeckCard) -> Unit,
+) {
     Div(attrs = { classes("gc-list", "stack") }) {
         P(attrs = { classes("muted", "small", "gc-about") }) { Text(GameChangers.ABOUT) }
-        GameChangers.byType.forEach { (group, cards) ->
+        // Matt: "add a name search to the game changers page".
+        Input(InputType.Search, attrs = {
+            classes("gc-search")
+            placeholder("Search by name: Rhystic, tutor, mox")
+            attr("aria-label", "Search the Game Changers by name")
+            value(search)
+            onInput { onSearch(it.value) }
+        })
+        if (GuideSearch.words(search).isNotEmpty()) {
+            if (shown.isEmpty()) {
+                Div(attrs = { classes("empty", "gc-search-none") }) { Text(GameChangers.none(search)) }
+            } else {
+                Div(attrs = { classes("muted", "small", "gc-search-count") }) { Text(GameChangers.count(shown.sumOf { it.second.size })) }
+            }
+        }
+        shown.forEach { (group, cards) ->
             Div(attrs = { classes("panel") }) {
                 Div(attrs = { classes("panel-head") }) {
                     H2 { Text(group.title) }
