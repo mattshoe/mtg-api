@@ -120,7 +120,7 @@ class StoryPageTest {
             assertTrue(s.all(".story-hook").single().textContent.orEmpty().isNotBlank(), "$name has no hook on screen")
             assertTrue(s.all("button.story-article").size >= 4, "$name lists ${s.all("button.story-article").size} articles")
         }
-        assertEquals(48, frame.all("button.story-article").size, "not every article is on the page")
+        assertEquals(MagicStory.articles.size, frame.all("button.story-article").size, "not every article is on the page")
     }
 
     @Test

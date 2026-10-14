@@ -74,7 +74,7 @@ class MagicStoryTest {
     @Test
     fun everyAddressIsUniqueAndAnAddress() {
         val slugs = MagicStory.articles.map { it.slug } + MagicStory.sections.map { it.slug }
-        assertTrue(MagicStory.articles.size >= 48, "${MagicStory.articles.size} articles, which is not all of them")
+        assertTrue(MagicStory.articles.size == 51, "${MagicStory.articles.size} articles, which is not all of them")
         assertEquals(slugs.size, slugs.toSet().size, "two things share an address: ${slugs.groupBy { it }.filter { it.value.size > 1 }.keys}")
         MagicStory.articles.forEach { a ->
             assertTrue(a.slug.matches(Regex("[a-z0-9-]+")) && a.slug != MagicStory.WHO, "${a.slug} is not an address")
