@@ -111,8 +111,9 @@ fun GuideScreen(
     }
     val scroll = rememberScrollState()
     // A new era is a new chapter, so it starts at the top, as the
-    // site's Read on does.
-    LaunchedEffect(era?.slug, story) { scroll.scrollTo(0) }
+    // site's Read on does. So does a tile opened from further down the
+    // tiles, which the site gets from `Scroll.top` on a new address.
+    LaunchedEffect(tile?.slug, era?.slug, story) { scroll.scrollTo(0) }
     Column(
         Modifier.fillMaxWidth()
             .verticalScroll(scroll)
