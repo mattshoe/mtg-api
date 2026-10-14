@@ -1,0 +1,3 @@
+What was built: On the Fetch list page, a card whose every copy is held by a deck now has a line under it naming the deck, like "In deck: Chaos Incarnate" or "In decks: A, B". Phone and website.
+Choices: Bulk is counted the way the rest of the app counts it, copies owned minus copies real decks hold, so proxy and PROPOSED decks are never named. The decks come back in the same query that files the list, so Find makes no extra call.
+Liberties: A card with even one spare copy in bulk names no deck, since that copy is in the binder. A card not owned at all stays in Not in your collection and names no deck, because a deck cannot hold a real copy he does not own.
