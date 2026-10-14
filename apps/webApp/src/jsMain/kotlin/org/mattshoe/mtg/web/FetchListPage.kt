@@ -273,6 +273,13 @@ private fun FetchListOpen(
                                 attr("data-fetch-also", "")
                             }) { Text(card.alsoCheckLine) }
                         }
+                        // No copy in bulk: it is in a deck, so say which.
+                        card.decksLine?.let { line ->
+                            Div(attrs = {
+                                classes("muted", "small", "fetch-also")
+                                attr("data-fetch-decks", "")
+                            }) { Text(line) }
+                        }
                     }
                 }
             }
