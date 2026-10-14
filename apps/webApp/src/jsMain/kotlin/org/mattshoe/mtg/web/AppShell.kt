@@ -47,6 +47,8 @@ import org.mattshoe.mtg.core.openGuide
 import org.mattshoe.mtg.core.guideTile
 import org.mattshoe.mtg.core.loreEra
 import org.mattshoe.mtg.core.openEra
+import org.mattshoe.mtg.core.openStory
+import org.mattshoe.mtg.core.storyPage
 import org.w3c.files.File
 
 /**
@@ -234,6 +236,8 @@ fun AppShell(
             onBack = { onState(state.navigate(View.GUIDE)) },
             era = state.loreEra,
             onEra = { onState(state.openEra(it)) },
+            story = state.storyPage,
+            onStory = { onState(state.openStory(it)) },
             rules = state.rules,
             onRules = { onState(state.copy(rules = it)) },
             onLoadRules = onLoadRules,

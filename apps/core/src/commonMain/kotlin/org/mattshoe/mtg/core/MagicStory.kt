@@ -137,6 +137,13 @@ object MagicStory {
         return StoryPage.Reading(article, tab)
     }
 
+    /** The link target of an article at a tab: its slug alone for the first tab. */
+    fun target(article: StoryArticle, tab: StoryTab = article.tabs.first()): String =
+        if (tab == article.tabs.first()) article.slug else "${article.slug}/${tab.slug}"
+
+    /** A person's link target. */
+    fun target(person: StoryPerson): String = "$WHO/${person.slug}"
+
     /** The tab after this one in the article, or null on its last. */
     fun next(article: StoryArticle, tab: StoryTab): StoryTab? = article.tabs.getOrNull(article.tabs.indexOf(tab) + 1)
 
@@ -164,4 +171,4 @@ fun AppState.openStory(target: String): AppState =
 
 /** An article at a tab, at its own address. */
 fun AppState.openStory(article: StoryArticle, tab: StoryTab = article.tabs.first()): AppState =
-    openStory(if (tab == article.tabs.first()) article.slug else "${article.slug}/${tab.slug}")
+    openStory(MagicStory.target(article, tab))

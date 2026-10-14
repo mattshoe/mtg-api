@@ -754,6 +754,33 @@ td.mono { font-family: var(--mono); font-size: 12.5px; }
 .lore-quote-source { color: var(--text-3); font-size: 12.5px; margin-top: 6px; }
 .lore-next { margin: 10px 0 24px; }
 
+/* The story of Magic. Links are told apart by an underline and cards
+   by italics, never by a hue alone, because Matt is colourblind. */
+.story-index, .story-head { max-width: 680px; margin-left: auto; margin-right: auto; }
+.story-section { padding: 18px 0 20px; border-bottom: 1px solid var(--line); }
+.story-section-number { color: var(--text-3); font: 600 11px/1.4 var(--mono); letter-spacing: .08em; }
+.story-section-title { font: 700 22px/1.25 "Iowan Old Style", "Palatino Linotype", Georgia, serif; margin: 2px 0 6px; }
+.story-hook { font: italic 16px/1.6 "Iowan Old Style", "Palatino Linotype", Georgia, serif; color: var(--text-2); margin-bottom: 12px; }
+.story-articles { display: flex; flex-wrap: wrap; gap: 8px; }
+.story-article {
+  padding: 8px 12px; cursor: pointer; color: var(--text);
+  background: var(--bg-3); border: 1px solid var(--line); border-radius: var(--radius);
+  font: 600 13.5px/1.2 var(--sans);
+}
+.story-head { margin-top: 6px; }
+.story-kicker { color: var(--text-3); font: 600 11px/1.4 var(--mono); letter-spacing: .08em; text-transform: uppercase; margin-top: 14px; }
+.story-article-title { font: 700 26px/1.25 "Iowan Old Style", "Palatino Linotype", Georgia, serif; margin: 4px 0 4px; }
+.lore-link { color: var(--text); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+.lore-card { font-style: italic; }
+.story-sources { margin: 18px 0 30px; padding-top: 14px; border-top: 1px solid var(--line); }
+.story-sources-title { font: 600 11px/1.4 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); margin: 0 0 8px; }
+.story-source, .story-appears {
+  display: flex; gap: 10px; align-items: baseline; width: 100%; text-align: left;
+  padding: 5px 0; font-size: 13.5px; line-height: 1.45; color: var(--text-2);
+}
+.story-appears { background: none; border: 0; border-bottom: 1px solid var(--line); padding: 10px 0; cursor: pointer; color: var(--text); }
+.story-source-kind { flex: none; width: 84px; color: var(--text-3); font: 600 10.5px/1.6 var(--mono); letter-spacing: .06em; text-transform: uppercase; }
+
 .bar-row { display: grid; grid-template-columns: 96px 1fr 52px; gap: 10px; align-items: center; margin-bottom: 6px; font-size: 13px; }
 .bar-row .lbl { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bar-track { background: var(--bg-3); border-radius: 4px; height: 17px; overflow: hidden; }
