@@ -56,7 +56,9 @@ function build() {
   writeFileSync(join(repo, 'scripts', 'emulator.mjs'), 'process.exit(0)\n')
   // The floor check runs only after the worker suite and reads junit
   // files that do not exist here.
-  writeFileSync(join(repo, 'scripts', 'check-suite-floor.mjs'), 'process.exit(0)\n')
+  const floorRan = join(root, 'floor.txt')
+  writeFileSync(join(repo, 'scripts', 'check-suite-floor.mjs'),
+    `import { writeFileSync as w } from 'node:fs'\nw(${JSON.stringify(floorRan)}, 'ran')\n`)
 
   writeFileSync(join(repo, 'src', 'index.js'), 'worker\n')
   writeFileSync(join(repo, 'test', 'a.test.js'), 'test\n')
@@ -85,6 +87,8 @@ exit 0
   box = {
     root,
     repo,
+    floorChecked: () => existsSync(floorRan),
+    clearFloor: () => { try { rmSync(floorRan) } catch { /* never ran */ } },
     calls: () => readFileSync(calls, 'utf8').split('\n').filter(Boolean),
     clearCalls: () => writeFileSync(calls, ''),
     fail: (...names) => writeFileSync(failing, names.map((n) => `test:${n}`).join('\n')),
@@ -185,6 +189,46 @@ describe('the gate skips what it already proved', () => {
     expect(r.status, r.stderr).toBe(0)
     expect(ran(b), 'an unclaimed file did not force a full run')
       .toEqual(['worker', 'core', 'screens', 'web', 'device'])
+  })
+
+  it('still checks the floors when the worker suite actually ran', () => {
+    // The floor check is gated on the worker suite having run, because it
+    // reads the junit that run writes. Skipping it when worker was
+    // skipped is right; skipping it when worker RAN is a gate that
+    // quietly stopped checking that no suite shrank — which is the exact
+    // failure floors exist to catch, and it goes green.
+    const b = build()
+    const r = b.run()
+    expect(r.status, r.stderr).toBe(0)
+    expect(b.floorChecked(), 'the floors were never checked on a run that ran everything').toBe(true)
+  })
+
+  it('checks the floors when the worker suite re-runs, not just on a cold first run', () => {
+    // The one that caught the bug. On a first run nothing is remembered,
+    // so the floor check runs for a reason that has nothing to do with
+    // the gating. The case that matters is worker re-running against a
+    // stamp that already exists: `settled('worker')` was re-evaluated
+    // AFTER the loop had already stamped worker as passed, so it read
+    // true and the floors were silently never checked. A gate that stops
+    // noticing a shrinking suite is the exact failure floors exist for,
+    // and it goes green.
+    const b = build()
+    b.run()
+    b.clearFloor()
+    b.edit('src/index.js', 'worker, edited\n')
+    const r = b.run()
+    expect(r.status, r.stderr).toBe(0)
+    expect(ran(b), 'worker did not re-run, so this proves nothing').toContain('worker')
+    expect(b.floorChecked(), 'the floors went unchecked on a run where worker ran').toBe(true)
+  })
+
+  it('does not check the floors off a junit file the skipped run never wrote', () => {
+    const b = build()
+    b.run()
+    b.clearFloor()
+    const r = b.run()
+    expect(r.status, r.stderr).toBe(0)
+    expect(b.floorChecked(), 'it checked floors against a stale junit file').toBe(false)
   })
 
   it('runs everything when told to, however much it remembers', () => {

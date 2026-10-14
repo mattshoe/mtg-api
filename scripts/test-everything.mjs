@@ -212,7 +212,11 @@ if (now) {
 //
 // `test:raw` now writes the junit file as it goes, so the numbers are
 // already on disk and this is free.
-if (chosen.some(([n]) => n === 'worker') && !settled('worker')) {
+// Whether worker RAN, not whether it is settled now — the loop has
+// already stamped it by this point, so asking `settled` here always says
+// yes and the floors were silently never checked. A gate that stops
+// noticing a shrinking suite is the exact failure floors exist for.
+if (chosen.some(([n]) => n === 'worker') && !skipped.includes('worker')) {
   const check = spawnSync('node', ['scripts/check-suite-floor.mjs',
     'worker=test-results/worker', 'shell=test-results/shell'], { stdio: 'inherit' });
   if (check.status !== 0) {
