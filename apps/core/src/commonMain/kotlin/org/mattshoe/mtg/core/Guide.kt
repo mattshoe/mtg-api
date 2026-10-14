@@ -32,6 +32,7 @@ object Guide {
     const val WHEEL = "wheel"
     const val RULES = "rules"
     const val LORE = "phyrexia"
+    const val GAME_CHANGERS = "game-changers"
 
     val tiles: List<GuideTile> = listOf(
         GuideTile(COLOURS, "Colour combinations", "Every name, from Azorius to WUBRG. Guilds, shards, wedges and the rest."),

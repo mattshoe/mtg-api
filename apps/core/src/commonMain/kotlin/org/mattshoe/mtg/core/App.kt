@@ -365,6 +365,7 @@ data class AppState(
             ?: decks.pageOrder
         // Sized only; the Library's own rows are mapped in `peekRun`.
         PeekOf.LIBRARY -> library.rows.map { DeckCard(it.name, 0, null, 0, it.nameNorm) }
+        PeekOf.GAME_CHANGERS -> GameChangers.pageOrder
     }
 
     /** Every card the carousel can reach from here, in the order it draws them. */
@@ -414,6 +415,8 @@ data class AppState(
                     facts = PeekFact.line(row.typeLine, row.colorIdentity, row.rarity),
                 )
             }
+
+            PeekOf.GAME_CHANGERS -> emptyList()
         }
 
     /**
