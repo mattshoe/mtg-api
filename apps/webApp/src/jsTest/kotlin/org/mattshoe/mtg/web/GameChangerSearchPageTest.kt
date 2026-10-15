@@ -75,7 +75,7 @@ class GameChangerSearchPageTest {
         settle()
         all(".app-menu button.app-tab").first { it.textContent?.trim() == "Guide" }.click()
         settle()
-        all("button.guide-tile").first { it.textContent.orEmpty().contains("Game Changers") }.click()
+        all("button.guide-tile").first { it.querySelector(".guide-tile-title")?.textContent == "Game Changers" }.click()
         settle()
     }
 

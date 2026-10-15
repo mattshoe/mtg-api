@@ -80,7 +80,7 @@ class GameChangersPageTest {
             ?: error("the menu offers no Guide")
         item.click()
         settle()
-        val tile = all("button.guide-tile").firstOrNull { it.textContent.orEmpty().contains("Game Changers") }
+        val tile = all("button.guide-tile").firstOrNull { it.querySelector(".guide-tile-title")?.textContent == "Game Changers" }
             ?: error("the Guide has no Game Changers tile: ${all("button.guide-tile").map { it.textContent }}")
         tile.click()
         settle()
