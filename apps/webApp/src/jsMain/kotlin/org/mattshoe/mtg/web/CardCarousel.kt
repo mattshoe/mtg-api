@@ -58,6 +58,8 @@ fun CardCarousel(
     onCount: (Int) -> Unit = {},
     /** The Found box, over a fetch list. See `PeekCard.tick`. */
     onTick: () -> Unit = {},
+    /** Remove beside the Found box, over a fetch list. See `AppState.peekRemove`. */
+    onRemove: () -> Unit = {},
 ) {
     if (cards.isEmpty()) return
     val index = at.coerceIn(0, cards.size - 1)
@@ -128,7 +130,7 @@ fun CardCarousel(
             onDispose { }
         }
 
-        Sheet(card, place, admin, index, cards.size, zoom.zoomed, onSwipe, onDetails, onTweak, stepper, onCount, onTick)
+        Sheet(card, place, admin, index, cards.size, zoom.zoomed, onSwipe, onDetails, onTweak, stepper, onCount, onTick, onRemove)
     }
 }
 
@@ -190,6 +192,7 @@ private fun Sheet(
     stepper: Stepper?,
     onCount: (Int) -> Unit,
     onTick: () -> Unit,
+    onRemove: () -> Unit,
 ) {
     Div(attrs = { classes("peek-sheet") }) {
         Div(attrs = { classes("peek-head") }) {
@@ -255,6 +258,13 @@ private fun Sheet(
                     classes("tag", "info")
                     attr("data-peek-progress", "")
                 }) { Text(tick.progress) }
+                // Off the list, and on to the next card. Matt: "i
+                // should keep my place in the carousel, just moved
+                // forward one card to the next".
+                IconAction(
+                    "Remove " + card.title + " from the list", Glyph.BIN,
+                    attrs = { attr("data-peek-remove", card.title) },
+                ) { onRemove() }
             }
         }
 
