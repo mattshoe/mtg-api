@@ -74,7 +74,7 @@ class BracketsParityTest {
         }
         val open = (1..5).filter { rules(it).isNotEmpty() }
         assertTrue(open.isEmpty(), "$on these brackets start open: $open")
-        (1..5).forEach { assertTrue(card(it).height < 120.dp, "$on bracket $it is ${card(it).height} tall shut") }
+        (1..5).forEach { assertTrue(card(it).bottom - card(it).top < 120.dp, "$on bracket $it is ${card(it).bottom - card(it).top} tall shut") }
     }
 
     @Test
