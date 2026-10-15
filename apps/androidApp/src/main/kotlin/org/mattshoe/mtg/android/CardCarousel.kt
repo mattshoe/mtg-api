@@ -90,6 +90,8 @@ fun CardCarousel(
     onCount: (Int) -> Unit = {},
     /** The Found box, over a fetch list. See `PeekCard.tick`. */
     onTick: () -> Unit = {},
+    /** Remove beside the Found box, over a fetch list. See `AppState.peekRemove`. */
+    onRemove: () -> Unit = {},
 ) {
     if (cards.isEmpty()) return
     val index = at.coerceIn(0, cards.lastIndex)
@@ -183,6 +185,7 @@ fun CardCarousel(
                 stepper = stepper,
                 onCount = onCount,
                 onTick = onTick,
+                onRemove = onRemove,
             )
         }
     }
@@ -299,6 +302,7 @@ private fun CardSheet(
     stepper: Stepper?,
     onCount: (Int) -> Unit,
     onTick: () -> Unit,
+    onRemove: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -405,6 +409,13 @@ private fun CardSheet(
                 }
                 Box(Modifier.weight(1f))
                 Box(Modifier.testTag("carousel-progress")) { Tag(tick.progress, Info) }
+                // Off the list, and on to the next card. Matt: "i
+                // should keep my place in the carousel, just moved
+                // forward one card to the next".
+                IconAction(
+                    "Remove " + card.title + " from the list", Glyph.BIN,
+                    modifier = Modifier.testTag("carousel-remove"),
+                ) { onRemove() }
             }
         }
 

@@ -52,6 +52,7 @@ import org.mattshoe.mtg.core.peekBanned
 import org.mattshoe.mtg.core.searchBanned
 import org.mattshoe.mtg.core.banned
 import org.mattshoe.mtg.core.peekFetch
+import org.mattshoe.mtg.core.peekRemove
 import org.mattshoe.mtg.core.peekTick
 import org.mattshoe.mtg.core.gameChangers
 import org.mattshoe.mtg.core.searchGameChangers
@@ -655,6 +656,7 @@ fun AppShell(
                 stepper = state.peekStepper,
                 onCount = { by -> state.peekStep(by)?.let(onCount) },
                 onTick = { onState(state.peekTick()) },
+                onRemove = { onState(state.peekRemove()) },
             )
         }
     }
