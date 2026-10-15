@@ -66,6 +66,9 @@ fun GuidePage(
     onGameChangerSearch: (String) -> Unit = {},
     gameChangers: List<Pair<DeckGroup, List<DeckCard>>> = GameChangers.byType,
     onBanned: (BanList, DeckCard) -> Unit = { _, _ -> },
+    bannedSearch: String = "",
+    onBannedSearch: (String) -> Unit = {},
+    banned: List<BanList> = Banned.lists,
     upTo: String = "Guide",
 ) {
     Div(attrs = { classes("wrap", "guide") }) {
@@ -89,7 +92,7 @@ fun GuidePage(
                 Guide.PHYREXIA -> Lore(era ?: PhyrexianLore.eras.first(), onEra)
                 Guide.RULES -> RulesSearch(rules, onRules, onLoadRules)
                 Guide.GAME_CHANGERS -> GameChangerList(gameChangerSearch, onGameChangerSearch, gameChangers, onGameChanger)
-                Guide.BANNED -> BannedList(onBanned)
+                Guide.BANNED -> BannedList(bannedSearch, onBannedSearch, banned, onBanned)
                 else -> story?.let { Story(it, onStory) }
             }
         }
@@ -657,12 +660,36 @@ private fun GameChangerList(
  * format with its count, a line saying what the format is, and a row
  * per card. A row pops the carousel over every list at that row.
  * Sibling of `BannedList` in `GuideScreen`; the lists are `Banned`'s.
+ *
+ * Matt: "the banned cards should have a search field". A name leaves
+ * only the formats that ban it, as the Game Changers search does.
  */
 @Composable
-private fun BannedList(onCard: (BanList, DeckCard) -> Unit) {
+private fun BannedList(
+    search: String,
+    onSearch: (String) -> Unit,
+    shown: List<BanList>,
+    onCard: (BanList, DeckCard) -> Unit,
+) {
     Div(attrs = { classes("ban-list", "stack") }) {
         P(attrs = { classes("muted", "small", "gc-about") }) { Text(Banned.ABOUT) }
-        Banned.lists.forEach { list ->
+        Clearable(search, { onSearch("") }) {
+            Input(InputType.Search, attrs = {
+                classes("gc-search", "ban-search")
+                placeholder("Search by name: Lotus, Crypt, Oko")
+                attr("aria-label", "Search the banned cards by name")
+                value(search)
+                onInput { onSearch(it.value) }
+            })
+        }
+        if (GuideSearch.words(search).isNotEmpty()) {
+            if (shown.isEmpty()) {
+                Div(attrs = { classes("empty", "ban-search-none") }) { Text(Banned.none(search)) }
+            } else {
+                Div(attrs = { classes("muted", "small", "ban-search-count") }) { Text(Banned.count(shown)) }
+            }
+        }
+        shown.forEach { list ->
             Div(attrs = { classes("panel", "ban-format") }) {
                 Div(attrs = { classes("panel-head") }) {
                     H2 { Text(list.format) }
