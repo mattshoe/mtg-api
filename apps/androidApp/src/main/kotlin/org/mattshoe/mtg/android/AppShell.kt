@@ -49,6 +49,8 @@ import org.mattshoe.mtg.core.guideHits
 import org.mattshoe.mtg.core.openGuideHit
 import org.mattshoe.mtg.core.peekGameChanger
 import org.mattshoe.mtg.core.peekBanned
+import org.mattshoe.mtg.core.searchBanned
+import org.mattshoe.mtg.core.banned
 import org.mattshoe.mtg.core.peekFetch
 import org.mattshoe.mtg.core.peekTick
 import org.mattshoe.mtg.core.gameChangers
@@ -474,6 +476,9 @@ fun AppShell(
                         onHit = { onState(state.openGuideHit(it)) },
                         onGameChanger = { onState(state.peekGameChanger(it)) },
                         onBanned = { list, card -> onState(state.peekBanned(list, card)) },
+                        bannedSearch = state.bannedSearch,
+                        onBannedSearch = { onState(state.searchBanned(it)) },
+                        banned = state.banned,
                         gameChangerSearch = state.gameChangerSearch,
                         onGameChangerSearch = { onState(state.searchGameChangers(it)) },
                         gameChangers = state.gameChangers,

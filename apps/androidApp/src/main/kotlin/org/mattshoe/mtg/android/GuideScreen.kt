@@ -105,6 +105,9 @@ fun GuideScreen(
     onGameChangerSearch: (String) -> Unit = {},
     gameChangers: List<Pair<DeckGroup, List<DeckCard>>> = GameChangers.byType,
     onBanned: (BanList, DeckCard) -> Unit = { _, _ -> },
+    bannedSearch: String = "",
+    onBannedSearch: (String) -> Unit = {},
+    banned: List<BanList> = Banned.lists,
     upTo: String = "Guide",
 ) {
     // The rules page keeps its search bar on screen and scrolls the
@@ -141,7 +144,7 @@ fun GuideScreen(
                 Guide.WHEEL -> Wheel()
                 Guide.PHYREXIA -> Lore(era ?: PhyrexianLore.eras.first(), onEra)
                 Guide.GAME_CHANGERS -> GameChangerList(gameChangerSearch, onGameChangerSearch, gameChangers, onGameChanger)
-                Guide.BANNED -> BannedList(onBanned)
+                Guide.BANNED -> BannedList(bannedSearch, onBannedSearch, banned, onBanned)
                 else -> story?.let { Story(it, onStory) }
             }
         }
@@ -850,16 +853,37 @@ private fun GameChangerList(
  * head per format with its count, a line saying what the format is,
  * and a row per card. A row pops the carousel over every list at that
  * row. Sibling of `BannedList` in `GuidePage`; the lists are `Banned`'s.
+ *
+ * Matt: "the banned cards should have a search field". A name leaves
+ * only the formats that ban it, as the Game Changers search does.
  */
 @Composable
-private fun BannedList(onCard: (BanList, DeckCard) -> Unit) {
+private fun BannedList(
+    search: String,
+    onSearch: (String) -> Unit,
+    shown: List<BanList>,
+    onCard: (BanList, DeckCard) -> Unit,
+) {
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
         Column(
             Modifier.widthIn(max = STORY.dp).fillMaxWidth().testTag("ban-list"),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Line(Banned.ABOUT, Ink3, size = Design.SMALL)
-            Banned.lists.forEach { list ->
+            Field(
+                value = search,
+                onValueChange = onSearch,
+                placeholder = "Search by name: Lotus, Crypt, Oko",
+                modifier = Modifier.testTag("ban-search"),
+            )
+            if (GuideSearch.words(search).isNotEmpty()) {
+                if (shown.isEmpty()) {
+                    Line(Banned.none(search), Ink3, modifier = Modifier.testTag("ban-search-none"))
+                } else {
+                    Line(Banned.count(shown), Ink3, size = Design.MINI, modifier = Modifier.testTag("ban-search-count"))
+                }
+            }
+            shown.forEach { list ->
                 Column(Modifier.fillMaxWidth().testTag("ban-format-${list.format}"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     GroupHead(list.format, Banned.count(list), uppercase = true, banded = true)
                     Line(list.about, Ink3, size = Design.SMALL)

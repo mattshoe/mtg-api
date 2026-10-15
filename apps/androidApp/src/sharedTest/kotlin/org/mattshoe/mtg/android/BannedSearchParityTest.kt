@@ -102,7 +102,14 @@ class BannedSearchParityTest {
         val at = rule.onAllNodes(hasText("Banned in Commander and Legacy"), useUnmergedTree = true)[0].getUnclippedBoundsInRoot()
         assertTrue(at.right <= width + 0.5.dp && at.left >= 0.dp, "$on the ban runs off the side: ${at.left}..${at.right} on $width")
         assertTrue(at.bottom <= height + 0.5.dp, "$on the ban runs off the bottom: ${at.bottom} on $height")
-        assertTrue(at.right - at.left > 60.dp, "$on the ban is squeezed to ${at.right - at.left}")
+        // Its words are twice EDHREC's, so squeezed into one row beside
+        // it the ban comes out narrower. Robolectric measures text at
+        // about a dp a letter, so this bites on the device run.
+        val edhrec = rule.onAllNodes(hasText("EDHREC", substring = true), useUnmergedTree = true)[0].getUnclippedBoundsInRoot()
+        assertTrue(
+            at.right - at.left >= edhrec.right - edhrec.left,
+            "$on the ban is squeezed to ${at.right - at.left}, narrower than EDHREC's ${edhrec.right - edhrec.left}",
+        )
     }
 
     @Test
