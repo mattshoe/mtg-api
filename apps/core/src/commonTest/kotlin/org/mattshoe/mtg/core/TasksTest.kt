@@ -33,10 +33,11 @@ class TasksTest {
         statusAt: String? = null,
         note: String? = null,
         pr: String? = null,
+        created: String = "2026-10-01T00:00:00.000Z",
     ) =
         """{"key":"$key","name":null,"title":"$title","status":"$status","pr":${quoted(pr)},
             "status_at":${quoted(statusAt)},"note":${quoted(note)},
-            "created_at":"2026-10-01T00:00:00.000Z",
+            "created_at":"$created",
             "started_at":${quoted(started)},"finished_at":${quoted(finished)}}"""
 
     private val body = listOf(
@@ -79,11 +80,24 @@ class TasksTest {
         assertEquals("paused", statusOf("Builder died"))
     }
 
-    /** Matt's eight, and no `stopped`, `failing`, `building`, `queued`, `done` or `closed`. */
+    /**
+     * Matt's nine, and no `stopped`, `failing`, `building`, `done` or
+     * `closed`.
+     *
+     * This read "eight" and listed `queued` among the words nobody was
+     * to invent, which was right: it was not one Matt had asked for.
+     * He has now — "you need a queued state reflected in the app UI to
+     * indicate which tasks have not been picked up yet" — so it is a
+     * word, and the point of this test is unchanged. The vocabulary is
+     * his, and a tenth still needs him to say it.
+     */
     @Test
-    fun theStatusesAreMattsEightWords() {
+    fun theStatusesAreMattsNineWords() {
         assertEquals(
-            setOf("pending", "in progress", "blocked", "paused", "in review", "merged", "deployed", "cancelled"),
+            setOf(
+                "pending", "queued", "in progress", "blocked", "paused",
+                "in review", "merged", "deployed", "cancelled",
+            ),
             TaskStatus.entries.map { it.word }.toSet(),
         )
     }
@@ -310,4 +324,41 @@ class TasksTest {
     fun theTasksPanelKnowsWhatTimeItIs() {
         assertEquals(42L, Tasks().at(42L).now)
     }
+    /**
+     * Matt: "you need a queued state reflected in the app UI to indicate
+     * which tasks have not been picked up yet. First come first serve."
+     *
+     * One task runs at a time now, so the rest of the queue is the part
+     * of the list a person actually wants to read: what is waiting and
+     * in what order it will be taken. `queued` is that state, and it
+     * sorts by when it was sent rather than by title, because the order
+     * is the whole point of showing it.
+     */
+    @Test
+    fun queuedTasksComeLastAndInTheOrderTheyWereSent() {
+        val tasks = Tasks().loaded(
+            Tasks.decode(
+                """{"tasks":[""" + listOf(
+                    row("q2", "Second in", "queued", created = "2026-10-09T11:00:00.000Z"),
+                    row("live", "The one running", "in progress", "2026-10-09T12:00:00.000Z"),
+                    row("q1", "First in", "queued", created = "2026-10-09T10:00:00.000Z"),
+                    row("q3", "Third in", "queued", created = "2026-10-09T12:30:00.000Z"),
+                ).joinToString(",") + "]}",
+            ),
+        )
+        assertEquals(
+            listOf("The one running", "First in", "Second in", "Third in"),
+            tasks.active.map { it.title },
+            "the queue is not in the order it was sent, or is not behind the running one",
+        )
+    }
+
+    @Test
+    fun queuedIsAStatusTheAppUnderstands() {
+        // An unknown status word drops the row entirely, which would
+        // make a queued task invisible rather than merely unsorted.
+        assertEquals(TaskStatus.QUEUED, TaskStatus.of("queued"))
+        assertEquals(false, TaskStatus.QUEUED.finished)
+    }
+
 }

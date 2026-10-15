@@ -187,7 +187,7 @@ export async function received(db, keys, names = {}) {
  * and a cancelled task is never collected.
  */
 export const STATUSES = [
-  'pending', 'in progress', 'blocked', 'paused', 'in review', 'merged', 'deployed', 'cancelled',
+  'pending', 'queued', 'in progress', 'blocked', 'paused', 'in review', 'merged', 'deployed', 'cancelled',
 ];
 const FINISHED = new Set(['merged', 'deployed', 'cancelled']);
 

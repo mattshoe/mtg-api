@@ -434,6 +434,42 @@ are working through a list, they are one.
 Suites are the exception and still run one at a time in the foreground,
 because they contend for the same machine.
 
+This rule lived here alone for a while and did nothing: five agents then
+ran 184, 153, 103, 86 and 54 tool calls over exactly that many turns,
+0% batched, every one of them. It is in the dispatcher's launch prompt
+now as well, which is the one text an agent cannot skip. If it is still
+0% next time it is measured, the rule is not the fix and something else
+has to be.
+
+## One agent at a time, and a queue you can see
+
+Matt: "I thought you optimized things. I have several tasks in flight,
+all exceeding 2 hours already."
+
+Five were running. Each had already spent 20 to 46 minutes inside `npm
+run test:everything`, and the gate needs the machine to itself — it
+holds `~/.mtg-gradle.lock` across its Gradle suites and the device one
+alone is twenty minutes. Five exclusive 25-minute slots is two hours of
+queueing before anybody does any work. Arithmetic, not inefficiency,
+and making individual commands faster does not touch it.
+
+Matt: "Update it so only ONE task runs at a time. A very very SIMPLE
+queue system. NOTHING FANCY. JUST ONE AT A TIME."
+
+So `dispatch.sh` starts nothing while one is already working.
+`MTG_AGENT_CAP` raises it without an edit, for when the machine is not
+the constraint. On a 16GB laptop it also costs memory: a gate run was
+killed by the system while an agent's device suite held the emulator.
+
+The queue is the request folder, oldest file first — "First come first
+serve" — and `queued` is the status a ready request waits in, so the
+app shows what has not been picked up. `pending` is a different thing
+and stays: that is a task sent from the phone which the laptop has not
+collected yet. Both shells already print `status.word`, so the word
+turning up in the list needed no UI code; `Tasks.active` sorts queued
+rows by when they were sent rather than by title, because with one
+running the order is the only thing worth showing.
+
 ## An action is an icon, not the word for it
 
 Matt: "The agents keep doing stupid shit like using text instead of
