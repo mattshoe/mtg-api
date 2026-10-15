@@ -2120,6 +2120,40 @@ select.sort {
 .gc-list, .ban-list { max-width: 680px; margin: 0 auto; }
 .gc-about { margin: 0; }
 .ban-about { margin: 0; padding: 0 0 6px; }
+/* The brackets: a card each, shut until tapped. The number is big and
+   heavy so the five read at a glance; inside, each rule is a mark and a
+   word, a cross, a tilde or a tick, never a hue alone. */
+.bracket-list { max-width: 680px; margin: 0 auto; }
+.bracket-card {
+  background: linear-gradient(160deg, var(--bg-3), var(--bg-2) 70%);
+  border: 1px solid var(--line); border-left: 3px solid var(--accent);
+  border-radius: var(--radius); box-shadow: 0 6px 18px rgba(0, 0, 0, .28); overflow: hidden;
+}
+.bracket-head {
+  display: flex; align-items: center; gap: 14px; width: 100%; padding: 12px 14px;
+  background: none; border: 0; color: var(--text); font: inherit; text-align: left; cursor: pointer;
+}
+.bracket-number {
+  flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%;
+  background: var(--bg); border: 1px solid var(--line); color: var(--accent); font: 800 20px/1 var(--sans);
+}
+.bracket-titles { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.bracket-name { font: 700 16px/1.2 var(--sans); }
+.bracket-tagline { color: var(--text-3); font-size: 12.5px; }
+.bracket-body { padding: 0 14px 14px 68px; }
+.bracket-about { margin: 0 0 6px; font-size: 14px; line-height: 1.5; color: var(--text-2); }
+.bracket-games { font-size: 12.5px; color: var(--text-3); font-style: italic; margin-bottom: 10px; }
+.bracket-rules { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.bracket-rule {
+  display: grid; grid-template-columns: 22px 1fr auto; align-items: baseline; column-gap: 10px;
+  padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px;
+}
+.bracket-mark { font-weight: 800; text-align: center; color: var(--text-2); }
+.bracket-rule[data-allowed="no"] .bracket-mark { color: var(--text-3); }
+.bracket-rule[data-allowed="yes"] .bracket-mark { color: var(--text); }
+.bracket-rule-short { font-weight: 700; white-space: nowrap; }
+.bracket-rule-detail { grid-column: 2 / 4; color: var(--text-3); font-size: 12.5px; margin-top: 2px; }
+@media (max-width: 480px) { .bracket-body { padding-left: 14px; } }
 
 /* An action drawn rather than written: at least 40px to hit, whatever
    `.btn.sm` or `.chip.mini` would make it, with the glyph at the size

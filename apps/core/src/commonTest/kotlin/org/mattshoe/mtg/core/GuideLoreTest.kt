@@ -20,7 +20,7 @@ class GuideLoreTest {
     @Test
     fun theFrontPageIsTheReferencesAndOneLoreTile() {
         assertEquals(
-            setOf(Guide.COLOURS, Guide.WHEEL, Guide.RULES, Guide.GAME_CHANGERS, Guide.BANNED, Guide.LORE),
+            setOf(Guide.COLOURS, Guide.WHEEL, Guide.RULES, Guide.GAME_CHANGERS, Guide.BANNED, Guide.BRACKETS, Guide.LORE),
             Guide.tiles.map { it.slug }.toSet(),
             "the front page still carries the story tiles one by one",
         )

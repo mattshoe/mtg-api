@@ -1,6 +1,10 @@
 package org.mattshoe.mtg.web
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import org.jetbrains.compose.web.attributes.InputType
 import org.jetbrains.compose.web.attributes.placeholder
 import org.jetbrains.compose.web.dom.A
@@ -21,6 +25,8 @@ import org.mattshoe.mtg.core.DeckGroup
 import org.mattshoe.mtg.core.GameChangers
 import org.mattshoe.mtg.core.BanList
 import org.mattshoe.mtg.core.Banned
+import org.mattshoe.mtg.core.Bracket
+import org.mattshoe.mtg.core.Brackets
 import org.mattshoe.mtg.core.Design
 import org.mattshoe.mtg.core.Guide
 import org.mattshoe.mtg.core.GuideHit
@@ -93,6 +99,7 @@ fun GuidePage(
                 Guide.RULES -> RulesSearch(rules, onRules, onLoadRules)
                 Guide.GAME_CHANGERS -> GameChangerList(gameChangerSearch, onGameChangerSearch, gameChangers, onGameChanger)
                 Guide.BANNED -> BannedList(bannedSearch, onBannedSearch, banned, onBanned)
+                Guide.BRACKETS -> BracketList()
                 else -> story?.let { Story(it, onStory) }
             }
         }
@@ -699,6 +706,68 @@ private fun BannedList(
                 Div(attrs = { classes("panel-body") }) {
                     P(attrs = { classes("muted", "small", "ban-about") }) { Text(list.about) }
                     list.cards.forEach { card -> ReferenceRow(card) { onCard(list, card) } }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Commander's brackets, one card each, lowest first, every one shut
+ * until it is tapped. Sibling of `BracketList` in `GuideScreen`; the
+ * brackets are `Brackets`'.
+ *
+ * Matt: "each bracket section should have its own tile or section or
+ * card or something, and each should be collapsed by default so the
+ * use has to open the bracket they're concerned with".
+ */
+@Composable
+private fun BracketList() {
+    var open by remember { mutableStateOf(emptySet<Int>()) }
+    Div(attrs = { classes("bracket-list", "stack") }) {
+        P(attrs = { classes("muted", "small", "gc-about") }) { Text(Brackets.ABOUT) }
+        Brackets.all.forEach { b ->
+            BracketCard(b, b.number in open) { open = if (b.number in open) open - b.number else open + b.number }
+        }
+    }
+}
+
+/** One bracket: its number big, its name and one line, a tap to open its rules. */
+@Composable
+private fun BracketCard(bracket: Bracket, open: Boolean, onToggle: () -> Unit) {
+    Div(attrs = {
+        classes("bracket-card")
+        attr("data-bracket", bracket.number.toString())
+        attr("data-open", open.toString())
+    }) {
+        Button(attrs = {
+            classes("bracket-head")
+            attr("aria-expanded", open.toString())
+            onClick { onToggle() }
+        }) {
+            Span(attrs = { classes("bracket-number") }) { Text(bracket.number.toString()) }
+            Span(attrs = { classes("bracket-titles") }) {
+                Span(attrs = { classes("bracket-name") }) { Text(bracket.name) }
+                Span(attrs = { classes("bracket-tagline") }) { Text(bracket.tagline) }
+            }
+            Span(attrs = { classes("rule-chevron") }) { Text(if (open) "▾" else "▸") }
+        }
+        if (open) {
+            Div(attrs = { classes("bracket-body") }) {
+                P(attrs = { classes("bracket-about") }) { Text(bracket.about) }
+                Div(attrs = { classes("bracket-games") }) { Text(bracket.games) }
+                Div(attrs = { classes("bracket-rules") }) {
+                    bracket.rules.forEach { r ->
+                        Div(attrs = {
+                            classes("bracket-rule")
+                            attr("data-allowed", r.allowed.name.lowercase())
+                        }) {
+                            Span(attrs = { classes("bracket-mark") }) { Text(r.allowed.mark) }
+                            Span(attrs = { classes("bracket-rule-topic") }) { Text(r.topic) }
+                            Span(attrs = { classes("bracket-rule-short") }) { Text(r.short) }
+                            if (r.detail.isNotEmpty()) Div(attrs = { classes("bracket-rule-detail") }) { Text(r.detail) }
+                        }
+                    }
                 }
             }
         }

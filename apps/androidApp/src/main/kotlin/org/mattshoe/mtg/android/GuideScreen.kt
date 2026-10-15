@@ -27,6 +27,10 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -55,6 +59,9 @@ import org.mattshoe.mtg.core.DeckGroup
 import org.mattshoe.mtg.core.GameChangers
 import org.mattshoe.mtg.core.BanList
 import org.mattshoe.mtg.core.Banned
+import org.mattshoe.mtg.core.Allowed
+import org.mattshoe.mtg.core.Bracket
+import org.mattshoe.mtg.core.Brackets
 import org.mattshoe.mtg.core.Design
 import org.mattshoe.mtg.core.Guide
 import org.mattshoe.mtg.core.GuideHit
@@ -145,6 +152,7 @@ fun GuideScreen(
                 Guide.PHYREXIA -> Lore(era ?: PhyrexianLore.eras.first(), onEra)
                 Guide.GAME_CHANGERS -> GameChangerList(gameChangerSearch, onGameChangerSearch, gameChangers, onGameChanger)
                 Guide.BANNED -> BannedList(bannedSearch, onBannedSearch, banned, onBanned)
+                Guide.BRACKETS -> BracketList()
                 else -> story?.let { Story(it, onStory) }
             }
         }
@@ -891,6 +899,97 @@ private fun BannedList(
                         list.cards.forEachIndexed { i, card ->
                             if (i > 0) Hairline("ban-rule-${list.format}-$i")
                             ReferenceRow(card, "ban-row-${list.format}") { onCard(list, card) }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Commander's brackets, one card each, lowest first, every one shut
+ * until it is tapped. Sibling of `BracketList` in `GuidePage`; the
+ * brackets are `Brackets`'.
+ *
+ * Matt: "each bracket section should have its own tile or section or
+ * card or something, and each should be collapsed by default so the
+ * use has to open the bracket they're concerned with".
+ */
+@Composable
+private fun BracketList() {
+    var open by rememberSaveable { mutableStateOf(listOf<Int>()) }
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+        Column(
+            Modifier.widthIn(max = STORY.dp).fillMaxWidth().testTag("bracket-list"),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Line(Brackets.ABOUT, Ink3, size = Design.SMALL)
+            Brackets.all.forEach { b ->
+                BracketCard(b, b.number in open) { open = if (b.number in open) open - b.number else open + b.number }
+            }
+        }
+    }
+}
+
+/** The site's `.bracket-card`: its number big, its name and one line, a tap to open its rules. */
+@Composable
+private fun BracketCard(bracket: Bracket, open: Boolean, onToggle: () -> Unit) {
+    val n = bracket.number
+    Box(
+        Modifier.fillMaxWidth()
+            .testTag("bracket-card-$n")
+            .clip(Radius)
+            .background(Brush.linearGradient(listOf(Bg3, Bg2)))
+            .border(1.dp, Line, Radius)
+            .drawBehind { drawRect(Accent, size = Size(3.dp.toPx(), size.height)) },
+    ) {
+        Column(Modifier.fillMaxWidth()) {
+            Row(
+                Modifier.fillMaxWidth()
+                    .clickable { onToggle() }
+                    .testTag("bracket-head-$n")
+                    .padding(start = 17.dp, end = 14.dp, top = 12.dp, bottom = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Box(
+                    Modifier.size(40.dp).clip(CircleShape).background(Bg).border(1.dp, Line, CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Line(n.toString(), Accent, size = 20, weight = FontWeight.ExtraBold, modifier = Modifier.testTag("bracket-number"))
+                }
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Line(bracket.name, Ink, size = 16, weight = FontWeight.Bold)
+                    Line(bracket.tagline, Ink3, size = Design.MINI)
+                }
+                Line(if (open) "▾" else "▸", Ink2)
+            }
+            if (open) {
+                Column(
+                    Modifier.fillMaxWidth().padding(start = 17.dp, end = 14.dp, bottom = 14.dp).testTag("bracket-body-$n"),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Line(bracket.about, Ink2, size = Design.BODY)
+                    Line(bracket.games, Ink3, size = Design.MINI)
+                    Spacer(Modifier.height(4.dp))
+                    bracket.rules.forEach { r ->
+                        Hairline("bracket-line-$n-${r.topic}")
+                        Column(
+                            Modifier.fillMaxWidth()
+                                .testTag("bracket-rule-$n")
+                                .semantics(mergeDescendants = true) { contentDescription = "${r.allowed.mark} ${r.topic}: ${r.short}" }
+                                .padding(vertical = 4.dp),
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                val ink = when (r.allowed) { Allowed.NO -> Ink3; Allowed.SOME -> Ink2; Allowed.YES -> Ink }
+                                Box(Modifier.width(22.dp), contentAlignment = Alignment.Center) {
+                                    Line(r.allowed.mark, ink, size = Design.BODY, weight = FontWeight.ExtraBold)
+                                }
+                                Line(r.topic, Ink, size = Design.BODY, modifier = Modifier.weight(1f))
+                                Line(r.short, Ink, size = Design.BODY, weight = FontWeight.Bold, maxLines = 1)
+                            }
+                            if (r.detail.isNotEmpty()) Line(r.detail, Ink3, size = Design.MINI, modifier = Modifier.padding(start = 32.dp))
                         }
                     }
                 }
