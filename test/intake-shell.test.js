@@ -606,16 +606,16 @@ describe('how many agents at a time', () => {
   it('starts nothing at all while one is already working', () => {
     build({
       requests: {
-        'a-thing.md': READY('A thing'),
-        'b-thing.md': READY('B thing'),
+        'cap-one.md': READY('A thing'),
+        'cap-two.md': READY('B thing'),
       },
     })
     box.stub('claude', BUILDER)
-    const one = busy('a-thing')
+    const one = busy('cap-one')
     try {
       run('dispatch.sh')
       expect(box.log(), 'a second agent was started').not.toContain('claude ')
-      expect(existsSync(box.path('.intake/wt/b-thing')), 'b-thing was claimed anyway').toBe(false)
+      expect(existsSync(box.path('.intake/wt/cap-two')), 'cap-two was claimed anyway').toBe(false)
       expect(box.intakeLog()).toMatch(/already working|at a time/i)
     } finally {
       one.kill('SIGKILL')
@@ -628,27 +628,27 @@ describe('how many agents at a time', () => {
     // to look right and not a promise of anything. With one agent at a
     // time the order IS the feature, so it is sorted by when the
     // request file was written.
-    build({ requests: { 'newer.md': READY('Newer'), 'older.md': READY('Older') } })
+    build({ requests: { 'cap-newer.md': READY('Newer'), 'cap-older.md': READY('Older') } })
     box.stub('claude', BUILDER)
     const old = new Date(Date.now() - 60 * 60 * 1000)
-    utimesSync(join(box.repo, 'requests', 'older.md'), old, old)
+    utimesSync(join(box.repo, 'requests', 'cap-older.md'), old, old)
 
     run('dispatch.sh')
 
-    expect(box.log(), 'it did not start the one that was sent first').toContain('requests/older.md')
+    expect(box.log(), 'it did not start the one that was sent first').toContain('requests/cap-older.md')
   })
 
   it('starts one the moment nothing is running', () => {
-    build({ requests: { 'a-thing.md': READY('A thing') } })
+    build({ requests: { 'cap-one.md': READY('A thing') } })
     box.stub('claude', BUILDER)
     run('dispatch.sh')
     expect(box.log()).toContain('claude ')
   })
 
   it('takes the cap from the environment, so it can be raised without an edit', () => {
-    build({ requests: { 'a-thing.md': READY('A thing'), 'b-thing.md': READY('B thing') } })
+    build({ requests: { 'cap-one.md': READY('A thing'), 'cap-two.md': READY('B thing') } })
     box.stub('claude', BUILDER)
-    const one = busy('a-thing')
+    const one = busy('cap-one')
     try {
       run('dispatch.sh', { env: { MTG_AGENT_CAP: '2' } })
       expect(box.log(), 'the cap in the environment was ignored').toContain('claude ')
@@ -661,12 +661,12 @@ describe('how many agents at a time', () => {
     // Holding back dispatch must not hold back the bookkeeping. Status
     // froze once for exactly this reason and Matt watched a row read
     // `in progress` for three hours with nothing running.
-    build({ requests: { 'a-thing.md': READY('A thing'), 'b-thing.md': READY('B thing') } })
+    build({ requests: { 'cap-one.md': READY('A thing'), 'cap-two.md': READY('B thing') } })
     box.stub('claude', BUILDER)
-    const tree = box.path('.intake/wt/done-thing')
-    box.git('worktree', 'add', '-q', '-b', 'request/done-thing-0000000', tree, 'main')
-    box.commitOnBase('requests/done/done-thing.md', 'Merged as #1.\n')
-    const one = busy('a-thing')
+    const tree = box.path('.intake/wt/cap-done')
+    box.git('worktree', 'add', '-q', '-b', 'request/cap-done-0000000', tree, 'main')
+    box.commitOnBase('requests/done/cap-done.md', 'Merged as #1.\n')
+    const one = busy('cap-one')
     try {
       run('dispatch.sh')
       expect(existsSync(tree), 'the sweep did not run while waiting').toBe(false)
@@ -1384,7 +1384,7 @@ describe('a worktree with nobody in it', () => {
 // while, gets ONE finisher. One, guarded by a marker that is never
 // cleared, because a loop here is the failure that cost four hours.
 describe('a pull request nobody finished', () => {
-  const abandoned = (name = 'a-thing') => {
+  const abandoned = (name = 'fin-one') => {
     const wt = join(box.repo, '.intake', 'wt', name)
     mkdirSync(join(wt, 'requests'), { recursive: true })
     // Old enough that nothing is about to touch it.
@@ -1394,9 +1394,9 @@ describe('a pull request nobody finished', () => {
   }
 
   it('starts one finisher when the pull request is open and nobody is on it', () => {
-    build({ requests: { 'a-thing.md': READY('A thing') } })
+    build({ requests: { 'fin-one.md': READY('A thing') } })
     box.stub('claude', BUILDER)
-    box.stub('gh', `[ "$1 $2" = "pr list" ] && printf '%s\\n' '[{"number":7,"state":"OPEN","headRefName":"request/a-thing-0000000"}]'\nexit 0`)
+    box.stub('gh', `[ "$1 $2" = "pr list" ] && printf '%s\\n' '[{"number":7,"state":"OPEN","headRefName":"request/fin-one-0000000"}]'\nexit 0`)
     abandoned()
 
     run('dispatch.sh')
@@ -1409,9 +1409,9 @@ describe('a pull request nobody finished', () => {
   it('starts exactly one, ever, however many times the timer fires', () => {
     // The whole reason this is allowed to exist. Seven agents once ran
     // on one request because something kept picking it back up.
-    build({ requests: { 'a-thing.md': READY('A thing') } })
+    build({ requests: { 'fin-one.md': READY('A thing') } })
     box.stub('claude', BUILDER)
-    box.stub('gh', `[ "$1 $2" = "pr list" ] && printf '%s\\n' '[{"number":7,"state":"OPEN","headRefName":"request/a-thing-0000000"}]'\nexit 0`)
+    box.stub('gh', `[ "$1 $2" = "pr list" ] && printf '%s\\n' '[{"number":7,"state":"OPEN","headRefName":"request/fin-one-0000000"}]'\nexit 0`)
     abandoned()
 
     run('dispatch.sh')
@@ -1425,11 +1425,11 @@ describe('a pull request nobody finished', () => {
   })
 
   it('leaves a tree alone while an agent is still in it', () => {
-    build({ requests: { 'a-thing.md': READY('A thing') } })
+    build({ requests: { 'fin-one.md': READY('A thing') } })
     box.stub('claude', BUILDER)
-    box.stub('gh', `[ "$1 $2" = "pr list" ] && printf '%s\\n' '[{"number":7,"state":"OPEN","headRefName":"request/a-thing-0000000"}]'\nexit 0`)
+    box.stub('gh', `[ "$1 $2" = "pr list" ] && printf '%s\\n' '[{"number":7,"state":"OPEN","headRefName":"request/fin-one-0000000"}]'\nexit 0`)
     abandoned()
-    const alive = spawn('/bin/sh', ['-c', 'sleep 30; : requests/a-thing.md'], {
+    const alive = spawn('/bin/sh', ['-c', 'sleep 30; : requests/fin-one.md'], {
       detached: true, stdio: 'ignore',
     })
     try {
@@ -1444,10 +1444,10 @@ describe('a pull request nobody finished', () => {
     // An agent that has just died still has a warm worktree, and the
     // next tick is a minute away. Waiting costs nothing and starting on
     // top of a half-written tree costs everything.
-    build({ requests: { 'a-thing.md': READY('A thing') } })
+    build({ requests: { 'fin-one.md': READY('A thing') } })
     box.stub('claude', BUILDER)
-    box.stub('gh', `[ "$1 $2" = "pr list" ] && printf '%s\\n' '[{"number":7,"state":"OPEN","headRefName":"request/a-thing-0000000"}]'\nexit 0`)
-    mkdirSync(join(box.repo, '.intake', 'wt', 'a-thing', 'requests'), { recursive: true })
+    box.stub('gh', `[ "$1 $2" = "pr list" ] && printf '%s\\n' '[{"number":7,"state":"OPEN","headRefName":"request/fin-one-0000000"}]'\nexit 0`)
+    mkdirSync(join(box.repo, '.intake', 'wt', 'fin-one', 'requests'), { recursive: true })
 
     run('dispatch.sh')
 
@@ -1456,7 +1456,7 @@ describe('a pull request nobody finished', () => {
 
   it('does not finish a tree with no pull request at all', () => {
     // That one is a stalled build, which is `paused` and wants a person.
-    build({ requests: { 'a-thing.md': READY('A thing') } })
+    build({ requests: { 'fin-one.md': READY('A thing') } })
     box.stub('claude', BUILDER)
     abandoned()
 
