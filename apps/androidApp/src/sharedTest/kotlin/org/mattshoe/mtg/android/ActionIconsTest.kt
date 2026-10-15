@@ -15,6 +15,8 @@ import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.DpSize
@@ -207,7 +209,29 @@ class ActionIconsTest {
         drawn("Remove", TRASH_ICON_TAG, size)
     }
 
+    // ---------------------------------------------------------- library
+
+    private fun theColourFilterClearsWithAnX(size: DpSize?) {
+        val held = shell(AppState(admin = signedIn, route = Route(View.LIBRARY)), size)
+        rule.onNodeWithTag("header-colour").performScrollTo().performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("all five").performScrollTo().performClick()
+        rule.waitForIdle()
+        assertEquals(listOf("W", "U", "B", "R", "G"), held.value.library.filters.colors, on(size))
+        drawn("Clear colours", CROSS_ICON_TAG, size)
+        press("Clear colours")
+        assertTrue(held.value.library.filters.colors.isEmpty(), "${on(size)} the x did not clear the colours")
+    }
+
     // ------------------------------------------------------------ tests
+
+    @Test fun theColourFilterClearsWithAnX() = theColourFilterClearsWithAnX(null)
+
+    @Test @Config(qualifiers = Tablet.UNFOLDED_QUALIFIERS)
+    fun theColourFilterClearsWithAnXOnAFoldingPhoneOpenedOut() = theColourFilterClearsWithAnX(Tablet.UNFOLDED)
+
+    @Test @Config(qualifiers = Tablet.LANDSCAPE_QUALIFIERS)
+    fun theColourFilterClearsWithAnXOnATabletHeldSideways() = theColourFilterClearsWithAnX(Tablet.LANDSCAPE)
 
     @Test fun theFetchListsRemoveIsABinAndEditIsAPencil() = theFetchListsRemoveIsABinAndEditIsAPencil(null)
 

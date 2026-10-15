@@ -201,7 +201,26 @@ class ActionIconsTest {
         open(opened().peekCard(commander), size).drawn("Remove", "trash")
     }
 
+    // ---------------------------------------------------------- library
+
+    private suspend fun theColourFilterClearsWithAnX(size: Pair<Int, Int>) {
+        val p = open(AppState(admin = signedIn, route = Route(View.LIBRARY)), size)
+        (p.doc.querySelector("details[data-facet=colour] summary") ?: error("${p.on} the Library has no Colour group"))
+            .unsafeCast<HTMLElement>().click()
+        settle(p.s.window)
+        p.all("button").single { it.textContent?.trim() == "all five" }.click()
+        settle(p.s.window)
+        assertEquals(listOf("W", "U", "B", "R", "G"), p.held.value.library.filters.colors, p.on)
+        p.drawn("Clear colours", "close").click()
+        settle(p.s.window)
+        assertTrue(p.held.value.library.filters.colors.isEmpty(), "${p.on} the x did not clear the colours")
+    }
+
     // ------------------------------------------------------------ tests
+
+    @Test fun theColourFilterClearsWithAnXOnAPhone() = runTest { theColourFilterClearsWithAnX(phone) }
+    @Test fun theColourFilterClearsWithAnXOnAFoldingPhoneOpenedOut() = runTest { theColourFilterClearsWithAnX(Tablet.UNFOLDED) }
+    @Test fun theColourFilterClearsWithAnXOnATabletHeldSideways() = runTest { theColourFilterClearsWithAnX(Tablet.LANDSCAPE) }
 
     @Test fun theFetchListsRemoveIsABinAndEditIsAPencilOnAPhone() = runTest { theFetchListsRemoveIsABinAndEditIsAPencil(phone) }
     @Test fun theFetchListsRemoveIsABinAndEditIsAPencilOnAFoldingPhoneOpenedOut() = runTest { theFetchListsRemoveIsABinAndEditIsAPencil(Tablet.UNFOLDED) }
