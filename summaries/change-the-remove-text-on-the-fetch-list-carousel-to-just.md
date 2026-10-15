@@ -1,0 +1,3 @@
+What was built: nothing new landed from this branch. #161 (actions-must-be-icons-not-words) merged first and drew the same buttons, the Fetch list's Remove bin included, on phone and website. This branch's own version conflicted with it file for file, so the merge took main's side throughout.
+Choices: kept #161's code and tests whole rather than splicing two versions of the same icons. Dropped this branch's release note, since #161's already says it.
+Liberties: none, the request was already built by #161.
