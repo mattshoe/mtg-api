@@ -44,9 +44,9 @@ class FetchListCarouselTest {
         assertTrue(Overlay.CARD_PEEK in open.overlays, "tapping Sol Ring opened no carousel")
         assertEquals(PeekOf.FETCH, open.peek.of, "the carousel is not over the fetch list")
         assertEquals("Sol Ring", open.peeked?.title, "the carousel opened on another card")
-        // Page order: Artifacts (Arcane Signet, then Sol Ring at uncommon), then Instants.
-        assertEquals(listOf("Arcane Signet", "Sol Ring", "Counterspell"), open.peekRun.map { it.title })
-        assertEquals("2 of 3", open.peekPlace)
+        // Page order: Instants, then Artifacts (Arcane Signet at common, Sol Ring at uncommon).
+        assertEquals(listOf("Counterspell", "Arcane Signet", "Sol Ring"), open.peekRun.map { it.title })
+        assertEquals("3 of 3", open.peekPlace)
     }
 
     @Test
@@ -86,9 +86,9 @@ class FetchListCarouselTest {
 
     @Test
     fun swipingThenTickingTicksTheCardSwipedTo() {
-        val s = found().let { it.peekFetch(card(it, "Arcane Signet")) }
+        val s = found().let { it.peekFetch(card(it, "Counterspell")) }
         val next = s.peekTo(1).peekTick().peekTo(2).peekTick()
-        assertEquals(setOf("Sol Ring", "Counterspell"), next.fetch.ticked)
+        assertEquals(setOf("Arcane Signet", "Sol Ring"), next.fetch.ticked)
         assertEquals("2 of 3 found", next.fetch.progress)
     }
 

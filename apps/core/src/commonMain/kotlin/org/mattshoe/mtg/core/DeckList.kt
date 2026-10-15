@@ -152,6 +152,29 @@ object DeckList {
         return (lines.take(at) + lines.drop(at + 1)).joinToString("\n").trim()
     }
 
+    /**
+     * The same list with every line naming one of [keys] taken out.
+     *
+     * Every printing of it, since a list can name a card twice with
+     * different set codes, and nothing else: comments, headers and a
+     * CSV's header stay where they were.
+     */
+    fun without(raw: String, keys: Set<String>): String {
+        val text = raw.noBom()
+        val lines = text.lines()
+        if (looksLikeCsv(text)) {
+            val headerAt = lines.indexOfFirst { it.isNotBlank() }
+            val cols = splitCsv(lines[headerAt]).map { c -> c.filter { it.isLetter() }.lowercase() }
+            val nameAt = cols.indexOfFirst { it == "name" || it == "cardname" }
+            return lines.filterIndexed { i, row ->
+                i <= headerAt || row.isBlank() || cardKey(splitCsv(row).getOrNull(nameAt).orEmpty()) !in keys
+            }.joinToString("\n").trim()
+        }
+        return lines.filterNot { line ->
+            isCardLine(line) && line.trim().let { cardKey(it.removePrefix(QTY.find(it)?.value.orEmpty())) } in keys
+        }.joinToString("\n").trim()
+    }
+
     /** name → how many, over a plain decklist. */
     private fun listCounts(lines: List<String>): Map<String, Int> {
         val out = mutableMapOf<String, Int>()
