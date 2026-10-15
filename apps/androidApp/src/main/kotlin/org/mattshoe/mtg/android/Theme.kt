@@ -335,6 +335,31 @@ fun Ghost(label: String, on: Boolean = false, enabled: Boolean = true, onClick: 
     }
 }
 
+/**
+ * `.btn.icon-only`: an action drawn rather than written. Matt: "stop
+ * using text for buttons when an icon would suffice". [label] is what
+ * a screen reader says, so the word is still there for whoever needs
+ * it. `test/icon-actions.test.js` fails a new `Ghost("Remove")`.
+ */
+@Composable
+fun IconAction(
+    label: String,
+    enabled: Boolean = true,
+    danger: Boolean = false,
+    modifier: Modifier = Modifier,
+    icon: @Composable (Color) -> Unit,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier.sizeIn(minWidth = TouchTarget, minHeight = TouchTarget)
+            .semantics(mergeDescendants = true) { contentDescription = label }
+            .pressable(enabled, onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        icon(if (!enabled) Ink3 else if (danger) Bad else Ink2)
+    }
+}
+
 /** `.tag`: a small stated fact, not a control. */
 @Composable
 fun Tag(label: String, tone: Color = Ink2) {

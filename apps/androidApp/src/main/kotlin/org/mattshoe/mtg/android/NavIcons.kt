@@ -143,6 +143,51 @@ fun EntryIcon(tint: Color, size: Dp = 22.dp, modifier: Modifier = Modifier) =
         pen.line(13f, 7f, 17f, 11f)
     }
 
+/**
+ * Remove and delete: a bin. Matt: "Instead of an X icon or trash icon,
+ * just using the text 'remove'". The website's `.icon-trash` is the
+ * same numbers.
+ */
+@Composable
+fun TrashIcon(tint: Color, size: Dp = 20.dp, modifier: Modifier = Modifier) =
+    Canvas(modifier.size(size).testTag(TRASH_ICON_TAG)) {
+        val pen = Pen(this, tint)
+        pen.line(4f, 6.5f, 20f, 6.5f)
+        pen.path { p ->
+            moveTo(p.at(9f, 6.5f).x, p.at(9f, 6.5f).y)
+            lineTo(p.at(9f, 4f).x, p.at(9f, 4f).y)
+            lineTo(p.at(15f, 4f).x, p.at(15f, 4f).y)
+            lineTo(p.at(15f, 6.5f).x, p.at(15f, 6.5f).y)
+        }
+        pen.path { p ->
+            moveTo(p.at(6f, 6.5f).x, p.at(6f, 6.5f).y)
+            lineTo(p.at(7f, 20f).x, p.at(7f, 20f).y)
+            lineTo(p.at(17f, 20f).x, p.at(17f, 20f).y)
+            lineTo(p.at(18f, 6.5f).x, p.at(18f, 6.5f).y)
+        }
+        pen.line(10f, 10.5f, 10f, 16.5f)
+        pen.line(14f, 10.5f, 14f, 16.5f)
+    }
+
+/** Edit and rename: the pencil Mass entry's tab draws. `.icon-edit`. */
+@Composable
+fun PencilIcon(tint: Color, size: Dp = 20.dp, modifier: Modifier = Modifier) =
+    EntryIcon(tint, size, modifier.testTag(PENCIL_ICON_TAG))
+
+/** Clear, and taking a thing back off: an x. `.icon-close`. */
+@Composable
+fun CrossIcon(tint: Color, size: Dp = 20.dp, modifier: Modifier = Modifier) =
+    Canvas(modifier.size(size).testTag(CROSS_ICON_TAG)) {
+        val pen = Pen(this, tint)
+        pen.line(6f, 6f, 18f, 18f)
+        pen.line(18f, 6f, 6f, 18f)
+    }
+
+/** What each action icon answers to in a test. */
+const val TRASH_ICON_TAG = "icon-trash"
+const val PENCIL_ICON_TAG = "icon-pencil"
+const val CROSS_ICON_TAG = "icon-cross"
+
 /** Who you are: a head and shoulders. */
 @Composable
 fun ProfileIcon(tint: Color, size: Dp = 22.dp, modifier: Modifier = Modifier) =
