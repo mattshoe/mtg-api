@@ -636,10 +636,6 @@ fun AppState.peekFetch(card: FetchCard): AppState =
     peekAt(fetch.pageOrder.indexOfFirst { it.name == card.name }, PeekOf.FETCH)
 
 /**
- * The Found box on the carousel's sheet. The page's own tick, so the
- * count on one is the count on the other.
- */
-/**
  * Remove on the carousel's sheet: the card on show off the list, the
  * same remove as the page's row. Matt: "i should keep my place in the
  * carousel, just moved forward one card to the next (unless i remove
@@ -655,6 +651,10 @@ fun AppState.peekRemove(): AppState {
     return left.copy(peek = peek.copy(at = peek.at.coerceAtMost(last), zoom = CardZoom()))
 }
 
+/**
+ * The Found box on the carousel's sheet. The page's own tick, so the
+ * count on one is the count on the other.
+ */
 fun AppState.peekTick(): AppState {
     if (peek.of != PeekOf.FETCH) return this
     val name = peeked?.title ?: return this
