@@ -6,10 +6,13 @@ import androidx.compose.runtime.DisposableEffectResult
 import androidx.compose.runtime.DisposableEffectScope
 import androidx.compose.runtime.remember
 import kotlinx.browser.window
+import org.jetbrains.compose.web.attributes.InputType
 import org.jetbrains.compose.web.attributes.disabled
 import org.jetbrains.compose.web.dom.Button
 import org.jetbrains.compose.web.dom.Div
 import org.jetbrains.compose.web.dom.Img
+import org.jetbrains.compose.web.dom.Input
+import org.jetbrains.compose.web.dom.Label
 import org.jetbrains.compose.web.dom.Span
 import org.jetbrains.compose.web.dom.Text
 import org.mattshoe.mtg.core.CardQueries
@@ -53,6 +56,8 @@ fun CardCarousel(
     /** "- 3 +" for the card on show, or null when there is nothing you may change. */
     stepper: Stepper? = null,
     onCount: (Int) -> Unit = {},
+    /** The Found box, over a fetch list. See `PeekCard.tick`. */
+    onTick: () -> Unit = {},
 ) {
     if (cards.isEmpty()) return
     val index = at.coerceIn(0, cards.size - 1)
@@ -123,7 +128,7 @@ fun CardCarousel(
             onDispose { }
         }
 
-        Sheet(card, place, admin, index, cards.size, zoom.zoomed, onSwipe, onDetails, onTweak, stepper, onCount)
+        Sheet(card, place, admin, index, cards.size, zoom.zoomed, onSwipe, onDetails, onTweak, stepper, onCount, onTick)
     }
 }
 
@@ -184,6 +189,7 @@ private fun Sheet(
     onTweak: (DeckCard, Tweak) -> Unit,
     stepper: Stepper?,
     onCount: (Int) -> Unit,
+    onTick: () -> Unit,
 ) {
     Div(attrs = { classes("peek-sheet") }) {
         Div(attrs = { classes("peek-head") }) {
@@ -229,6 +235,28 @@ private fun Sheet(
         // Over a deck it is the deck's count, anywhere else the
         // collection's. `:core` decided which.
         stepper?.let { CountStepper(it, onCount) }
+
+        // Over a fetch list: the page's own box, so a swipe and a tick
+        // work down the list. Matt: "so i can swipe through and check
+        // them off as i swipe". The count is the page's too.
+        card.tick?.let { tick ->
+            Div(attrs = { classes("flex-wrap", "peek-found") }) {
+                Label(attrs = { classes("flex-wrap", "fetch-tick") }) {
+                    Input(InputType.Checkbox, attrs = {
+                        attr("data-peek-tick", card.title)
+                        attr("aria-label", "Found " + card.title)
+                        checked(tick.ticked)
+                        onChange { onTick() }
+                    })
+                    Span { Text("Found") }
+                }
+                Span(attrs = { classes("spacer") }) {}
+                Span(attrs = {
+                    classes("tag", "info")
+                    attr("data-peek-progress", "")
+                }) { Text(tick.progress) }
+            }
+        }
 
         Div(attrs = { classes("peek-acts") }) {
             // Arrows as well as the swipe: a mouse has no swipe, and
