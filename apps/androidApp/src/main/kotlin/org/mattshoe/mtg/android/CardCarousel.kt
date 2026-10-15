@@ -10,6 +10,9 @@ import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -90,6 +93,8 @@ fun CardCarousel(
     onCount: (Int) -> Unit = {},
     /** The Found box, over a fetch list. See `PeekCard.tick`. */
     onTick: () -> Unit = {},
+    /** Remove beside the Found box, over a fetch list. See `AppState.peekRemove`. */
+    onRemove: () -> Unit = {},
 ) {
     if (cards.isEmpty()) return
     val index = at.coerceIn(0, cards.lastIndex)
@@ -183,6 +188,7 @@ fun CardCarousel(
                 stepper = stepper,
                 onCount = onCount,
                 onTick = onTick,
+                onRemove = onRemove,
             )
         }
     }
@@ -299,6 +305,7 @@ private fun CardSheet(
     stepper: Stepper?,
     onCount: (Int) -> Unit,
     onTick: () -> Unit,
+    onRemove: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -405,6 +412,20 @@ private fun CardSheet(
                 }
                 Box(Modifier.weight(1f))
                 Box(Modifier.testTag("carousel-progress")) { Tag(tick.progress, Info) }
+                // Off the list, and on to the next card. Matt: "i
+                // should keep my place in the carousel, just moved
+                // forward one card to the next".
+                Box(
+                    Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .clickable(role = Role.Button) { onRemove() }
+                        .semantics { contentDescription = "Remove " + card.title + " from the list" }
+                        .testTag("carousel-remove"),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    TrashIcon(Ink2, size = 20.dp, modifier = Modifier.testTag("trash-icon"))
+                }
             }
         }
 

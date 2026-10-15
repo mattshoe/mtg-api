@@ -93,7 +93,7 @@ class FetchListCarouselRemoveTest {
     private fun on(size: DpSize?) = if (size == null) "on a phone" else "on a ${size.width} by ${size.height} screen"
 
     private fun shows(text: String, under: String): Boolean =
-        rule.onAllNodes(hasText(text) and hasAnyAncestor(hasTestTag(under)), useUnmergedTree = true)
+        rule.onAllNodes(hasText(text) and (hasTestTag(under) or hasAnyAncestor(hasTestTag(under))), useUnmergedTree = true)
             .fetchSemanticsNodes().isNotEmpty()
 
     private fun removeKeepsYourPlace(size: DpSize?) {

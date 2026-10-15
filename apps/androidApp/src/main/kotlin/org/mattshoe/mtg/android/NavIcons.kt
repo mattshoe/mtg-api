@@ -160,6 +160,31 @@ fun ProfileIcon(tint: Color, size: Dp = 22.dp, modifier: Modifier = Modifier) =
     }
 
 /**
+ * A bin, for taking a thing away: a lid, a handle and a can with two
+ * ribs. The website's `.icon-trash` is the same shape.
+ */
+@Composable
+fun TrashIcon(tint: Color, size: Dp = 22.dp, modifier: Modifier = Modifier) =
+    Canvas(modifier.size(size)) {
+        val pen = Pen(this, tint)
+        pen.line(4f, 6.5f, 20f, 6.5f)
+        pen.path { p ->
+            moveTo(p.at(9.5f, 6.5f).x, p.at(9.5f, 6.5f).y)
+            lineTo(p.at(9.5f, 4f).x, p.at(9.5f, 4f).y)
+            lineTo(p.at(14.5f, 4f).x, p.at(14.5f, 4f).y)
+            lineTo(p.at(14.5f, 6.5f).x, p.at(14.5f, 6.5f).y)
+        }
+        pen.path { p ->
+            moveTo(p.at(6f, 6.5f).x, p.at(6f, 6.5f).y)
+            lineTo(p.at(7f, 20f).x, p.at(7f, 20f).y)
+            lineTo(p.at(17f, 20f).x, p.at(17f, 20f).y)
+            lineTo(p.at(18f, 6.5f).x, p.at(18f, 6.5f).y)
+        }
+        pen.line(10f, 10.5f, 10f, 16.5f)
+        pen.line(14f, 10.5f, 14f, 16.5f)
+    }
+
+/**
  * The icon for a view, by the view.
  *
  * One place, so a tab cannot be added to `Admin.bar` and then drawn
