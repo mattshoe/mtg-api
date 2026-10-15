@@ -28,7 +28,7 @@ class BannedSearchTest {
     @Test
     fun aNameLeavesOnlyTheFormatsThatBanItWithOnlyThoseCards() {
         val s = onThePage.searchBanned("black lotus")
-        assertTrue(s.bannedSearching)
+        assertTrue(s.bannedSearching, "a name typed is not a search")
         assertEquals(
             listOf("Commander" to listOf("Black Lotus"), "Legacy" to listOf("Black Lotus")),
             s.shown(),
@@ -41,15 +41,15 @@ class BannedSearchTest {
     fun everyWordHasToBeThereInAnyCapitalsWithOrWithoutApostrophes() {
         val names = { q: String -> onThePage.searchBanned(q).banned.flatMap { it.cards.map { c -> c.name } }.toSet() }
         assertEquals(setOf("Mana Crypt"), names("CRYPT mana"))
-        assertTrue("Lion's Eye Diamond" in names("lions eye"), "an apostrophe left out finds nothing: ${names("lions eye")}")
-        assertTrue("Lion's Eye Diamond" in names("lion’s eye"), "a curly apostrophe finds nothing: ${names("lion’s eye")}")
+        assertTrue("Brago's Favor" in names("bragos favor"), "an apostrophe left out finds nothing: ${names("bragos favor")}")
+        assertTrue("Brago's Favor" in names("brago’s favor"), "a curly apostrophe finds nothing: ${names("brago’s favor")}")
     }
 
     @Test
     fun aNameNothingBansSaysSo() {
-        val s = onThePage.searchBanned("sol ring")
-        assertTrue(s.banned.isEmpty(), "Sol Ring found a list: ${s.shown()}")
-        assertEquals("No banned card is called \"sol ring\".", Banned.none(s.bannedSearch))
+        val s = onThePage.searchBanned("llanowar elves")
+        assertTrue(s.banned.isEmpty(), "Llanowar Elves found a list: ${s.shown()}")
+        assertEquals("No banned card is called \"llanowar elves\".", Banned.none(s.bannedSearch))
     }
 
     @Test
@@ -72,7 +72,7 @@ class BannedSearchTest {
 
         val crypt = assertNotNull(onThePage.peekBanned(commander, commander.cards.first { it.name == "Mana Crypt" }).peeked)
         assertEquals(
-            listOf("Banned in Commander"),
+            listOf("Banned in Commander and Legacy"),
             crypt.tags.filter { it.text.startsWith("Banned") }.map { it.text },
         )
     }
@@ -81,15 +81,15 @@ class BannedSearchTest {
     fun aDeckOrGameChangerCarouselSaysWhereItsCardIsBannedTooAndNothingForALegalCard() {
         val deck = listOf(
             DeckCard("Mana Crypt", 1, null, 1, "mana crypt", "Artifact", "11111111-2222-3333-4444-555555555555"),
-            DeckCard("Sol Ring", 1, null, 1, "sol ring", "Artifact", "11111111-2222-3333-4444-555555555556"),
+            DeckCard("Llanowar Elves", 1, null, 1, "llanowar elves", "Creature — Elf Druid", "11111111-2222-3333-4444-555555555556"),
         )
         val s = AppState().copy(decks = AppState().decks.opened("abcd1234", deck))
         val crypt = s.peekCard(deck[0]).peeked
         assertEquals("Mana Crypt", crypt?.title)
-        assertTrue(crypt!!.tags.any { it.text == "Banned in Commander" }, "a deck's Mana Crypt does not say it is banned: ${crypt.tags}")
+        assertTrue(crypt!!.tags.any { it.text == "Banned in Commander and Legacy" }, "a deck's Mana Crypt does not say it is banned: ${crypt.tags}")
         val ring = s.peekCard(deck[1]).peeked
-        assertEquals("Sol Ring", ring?.title)
-        assertTrue(ring!!.tags.none { it.text.startsWith("Banned") }, "Sol Ring claims a ban: ${ring.tags}")
+        assertEquals("Llanowar Elves", ring?.title)
+        assertTrue(ring!!.tags.none { it.text.startsWith("Banned") }, "Llanowar Elves claims a ban: ${ring.tags}")
 
         val study = AppState().peekGameChanger(GameChangers.cards.first { it.name == "Rhystic Study" }).peeked
         assertTrue(study!!.tags.none { it.text.startsWith("Banned") }, "Rhystic Study is on no ban list and claims a ban: ${study.tags}")
