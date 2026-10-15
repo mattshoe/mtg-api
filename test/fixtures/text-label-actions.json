@@ -1,14 +1,5 @@
 {
   "backlog": [
-    "apps/androidApp/src/main/kotlin/org/mattshoe/mtg/android/CardCarousel.kt:Remove",
-    "apps/androidApp/src/main/kotlin/org/mattshoe/mtg/android/DecksScreen.kt:Edit list",
-    "apps/androidApp/src/main/kotlin/org/mattshoe/mtg/android/DecksScreen.kt:Rename",
-    "apps/androidApp/src/main/kotlin/org/mattshoe/mtg/android/FetchListScreen.kt:Delete",
-    "apps/androidApp/src/main/kotlin/org/mattshoe/mtg/android/FetchListScreen.kt:Edit",
-    "apps/androidApp/src/main/kotlin/org/mattshoe/mtg/android/FetchListScreen.kt:Remove",
-    "apps/androidApp/src/main/kotlin/org/mattshoe/mtg/android/FilterSheet.kt:clear",
-    "apps/androidApp/src/main/kotlin/org/mattshoe/mtg/android/MassEntryScreen.kt:Clear",
-    "apps/androidApp/src/main/kotlin/org/mattshoe/mtg/android/NewTaskScreen.kt:Remove",
     "apps/webApp/src/jsMain/kotlin/org/mattshoe/mtg/web/CardCarousel.kt:Remove",
     "apps/webApp/src/jsMain/kotlin/org/mattshoe/mtg/web/DecksPage.kt:Edit list",
     "apps/webApp/src/jsMain/kotlin/org/mattshoe/mtg/web/DecksPage.kt:Rename",

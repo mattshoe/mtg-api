@@ -12,8 +12,10 @@ import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -29,6 +31,9 @@ import org.mattshoe.mtg.core.Account
 import org.mattshoe.mtg.core.Admin
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.Deck
+import org.mattshoe.mtg.core.Direction
+import org.mattshoe.mtg.core.MassEntry
+import org.mattshoe.mtg.core.Step
 import org.mattshoe.mtg.core.DeckCard
 import org.mattshoe.mtg.core.DeckList
 import org.mattshoe.mtg.core.EntryHistory
@@ -70,10 +75,10 @@ class ActionIconsTest {
 
     private val me = Admin().signIn(Account("matt", role = "admin"), "t")
 
-    private fun card(name: String) = DeckCard(
+    private fun card(name: String, role: String? = null) = DeckCard(
         name = name,
         qty = 1,
-        role = null,
+        role = role,
         owned = 3,
         nameNorm = name.lowercase(),
         typeLine = "Creature",
@@ -86,7 +91,7 @@ class ActionIconsTest {
             it.copy(
                 decks = it.decks
                     .loaded(listOf(Deck("alela", "Alela", "matt", null, "UW", 3, null)))
-                    .opened("alela", listOf(card("Bloodghast"), card("Cultivate"), card("Sol Ring"))),
+                    .opened("alela", listOf(card("Alela, Artful Provocateur", role = "commander"), card("Cultivate"), card("Sol Ring"))),
             )
         }
 
@@ -136,7 +141,13 @@ class ActionIconsTest {
     private fun drawn(label: String, glyph: Glyph, size: DpSize?, did: () -> Boolean) {
         val on = if (size == null) "on a phone" else "on a ${size.width} by ${size.height} screen"
         val nodes = rule.onAllNodes(hasContentDescription(label) and hasClickAction()).fetchSemanticsNodes()
-        assertEquals(1, nodes.size, "$on there is no button a screen reader calls \"$label\"")
+        if (nodes.size != 1) {
+            val buttons = rule.onAllNodes(hasClickAction()).fetchSemanticsNodes().map {
+                it.config.getOrNull(SemanticsProperties.ContentDescription)?.joinToString()
+                    ?: it.config.getOrNull(SemanticsProperties.Text)?.joinToString { t -> t.text }
+            }
+            error("$on there are ${nodes.size} buttons a screen reader calls \"$label\"; the buttons are $buttons")
+        }
         runCatching { action(label).performScrollTo() }
         rule.waitForIdle()
 
@@ -162,8 +173,12 @@ class ActionIconsTest {
     // ---------------------------------------------------------- the carousel
 
     private fun removeFromTheCarousel(size: DpSize?) {
-        shell(onADeck().peekAt(0), size)
-        drawn("Remove", Glyph.BIN, size) { pressed == "REMOVE Bloodghast" }
+        // The commander: on any other row the stepper's minus is the
+        // remove, and the sheet offers only Swap.
+        shell(onADeck(), size)
+        rule.onNode(hasText("Alela, Artful Provocateur") and hasClickAction()).performScrollTo().performClick()
+        rule.waitForIdle()
+        drawn("Remove", Glyph.BIN, size) { pressed == "REMOVE Alela, Artful Provocateur" }
     }
 
     @Test fun theCarouselsRemoveIsABinOnAPhone() = removeFromTheCarousel(null)
@@ -260,7 +275,8 @@ class ActionIconsTest {
             it.copy(library = it.library.copy(filters = it.library.filters.copy(colors = listOf("W", "U"))))
         }
         shell(start, size)
-        rule.onNodeWithTag("header-${Facet.COLOUR.id}").performScrollTo().performClick()
+        // A group with a filter in force opens by itself.
+        if (rule.onAllNodes(hasContentDescription("Clear the colours")).fetchSemanticsNodes().isEmpty()) rule.onNodeWithTag("header-${Facet.COLOUR.id}").performScrollTo().performClick()
         rule.waitForIdle()
         drawn("Clear the colours", Glyph.CROSS, size) { held.value.library.filters.colors.isEmpty() }
     }
@@ -277,7 +293,9 @@ class ActionIconsTest {
 
     private fun clearTheHistory(size: DpSize?) {
         val history = EntryHistory(listOf(HistoryEntry("2026-10-12T09:30:00Z", "add", "matt", 3, "3 Sol Ring")))
-        shell(AppState(admin = me, history = history).navigate(Route(View.ENTRY)), size)
+        // The history is on the step with the box, which it puts an old list back into.
+        val entry = MassEntry(step = Step.LIST, direction = Direction.ADD)
+        shell(AppState(admin = me, history = history, entry = entry).navigate(Route(View.ENTRY)), size)
         drawn("Clear history", Glyph.BIN, size) { pressed == "clear history" }
     }
 
