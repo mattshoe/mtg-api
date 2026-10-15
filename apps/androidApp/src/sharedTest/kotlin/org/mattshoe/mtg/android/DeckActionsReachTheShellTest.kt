@@ -164,7 +164,7 @@ class DeckActionsReachTheShellTest {
     fun renameReachesTheShell() {
         val asked = mutableListOf<String>()
         shell(onAskRename = { asked += it })
-        rule.onNodeWithText("Rename").performClick()
+        rule.onNodeWithContentDescription("Rename").performClick()
         rule.waitForIdle()
         assertEquals(listOf("alela"), asked, "Rename was pressed and the shell heard nothing")
     }

@@ -8,6 +8,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -193,6 +194,11 @@ class CountStepperTest {
         listOf("Count", "Remove").forEach {
             assertTrue(!onTheSheet(it), "the sheet still offers \"$it\" beside the stepper")
         }
+        // Remove is a bin now, so it is looked for by what it is called.
+        assertTrue(
+            rule.onAllNodes(hasContentDescription("Remove") and hasAnyAncestor(hasTestTag("carousel-sheet"))).fetchSemanticsNodes().isEmpty(),
+            "the sheet still offers Remove beside the stepper",
+        )
         assertTrue(!onTheSheet("× in deck", substring = true), "the sheet still says how many beside the stepper")
     }
 

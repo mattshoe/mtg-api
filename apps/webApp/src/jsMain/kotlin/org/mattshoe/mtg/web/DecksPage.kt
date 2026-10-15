@@ -83,14 +83,8 @@ fun DecksPage(
                     if (admin) {
                         // Both of these move real cards, and both show the
                         // server's own dry run before they are allowed to.
-                        Button(attrs = {
-                            classes("btn", "sm")
-                            onClick { onEdit(open) }
-                        }) { Text("Edit list") }
-                        Button(attrs = {
-                            classes("btn", "sm")
-                            onClick { onRename(open) }
-                        }) { Text("Rename") }
+                        IconAction("Edit list", Glyph.PENCIL, look = listOf("btn", "sm")) { onEdit(open) }
+                        IconAction("Rename", Glyph.RENAME, look = listOf("btn", "sm")) { onRename(open) }
                         Button(attrs = {
                             classes("btn", "sm", "danger")
                             onClick { onDisassemble(open) }

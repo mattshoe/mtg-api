@@ -112,11 +112,7 @@ private fun FetchListRoot(
                         }) { Text(s.title) }
                         Span(attrs = { classes("muted", "small") }) { Text(s.at.take(10)) }
                         Span(attrs = { classes("spacer") }) {}
-                        Button(attrs = {
-                            classes("btn", "sm", "ghost")
-                            attr("aria-label", "Delete " + s.title)
-                            onClick { onState(state.delete(s.id)) }
-                        }) { Text("Delete") }
+                        IconAction("Delete " + s.title, Glyph.BIN) { onState(state.delete(s.id)) }
                     }
                 }
             }
@@ -144,12 +140,12 @@ private fun FetchListOpen(
             H2 { Text(state.title.ifBlank { "Fetch list" }) }
             Span(attrs = { classes("spacer") }) {}
             if (state.list.isNotBlank() && state.editing == null) {
-                Button(attrs = {
-                    classes("btn")
-                    attr("data-fetch-edit", "")
-                    if (state.busy) disabled()
-                    onClick { onState(state.edit()) }
-                }) { Text("Edit") }
+                IconAction(
+                    "Edit", Glyph.PENCIL,
+                    look = listOf("btn"),
+                    enabled = !state.busy,
+                    attrs = { attr("data-fetch-edit", "") },
+                ) { onState(state.edit()) }
             }
         }
         Div(attrs = { classes("panel-body") }) {
@@ -331,15 +327,10 @@ private fun FetchListOpen(
  */
 @Composable
 private fun RemoveButton(name: String, onRemove: () -> Unit) {
-    Button(attrs = {
-        classes("btn", "sm", "ghost")
-        attr("data-fetch-remove", name)
-        attr("aria-label", "Remove $name from the list")
-        onClick {
-            it.stopPropagation()
-            onRemove()
-        }
-    }) { Text("Remove") }
+    IconAction("Remove $name from the list", Glyph.CROSS, attrs = { attr("data-fetch-remove", name) }) {
+        it.stopPropagation()
+        onRemove()
+    }
 }
 
 /**

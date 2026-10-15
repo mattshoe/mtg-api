@@ -83,10 +83,10 @@ class ScreensTest {
     }
 
     private fun HTMLElement.button(label: String) =
-        buttons().first { it.textContent?.trim() == label }
+        buttons().first { (it.textContent?.trim() == label || it.getAttribute("aria-label") == label) }
 
     private fun HTMLElement.hasButton(label: String) =
-        buttons().any { it.textContent?.trim() == label }
+        buttons().any { (it.textContent?.trim() == label || it.getAttribute("aria-label") == label) }
 
     private fun HTMLElement.text() = textContent.orEmpty()
 

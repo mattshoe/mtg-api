@@ -180,3 +180,72 @@ fun NavIcon(view: View, tint: Color, size: Dp = 22.dp, modifier: Modifier = Modi
         else -> LibraryIcon(tint, size, tagged)
     }
 }
+
+/**
+ * The drawings that stand in for an action's word.
+ *
+ * Matt: "Instead of an X icon or trash icon, just using the text
+ * 'remove', same with share and edit etc etc. This looks terrible and
+ * dated." The website's `Glyph` is the same four, the same shapes.
+ */
+enum class Glyph(val tag: String) {
+    BIN("glyph-bin"),
+    PENCIL("glyph-pencil"),
+    CROSS("glyph-cross"),
+    RENAME("glyph-rename"),
+}
+
+/**
+ * One of the [Glyph]s, on the same grid and at the same weight as the
+ * nav icons. The numbers are the ones in `app.css`'s `.icon-bin`,
+ * `.icon-pencil`, `.icon-close` and `.icon-rename`.
+ */
+@Composable
+fun GlyphIcon(glyph: Glyph, tint: Color, size: Dp = 18.dp, modifier: Modifier = Modifier) =
+    Canvas(modifier.size(size).testTag(glyph.tag)) {
+        val pen = Pen(this, tint)
+        when (glyph) {
+            // A lid with a handle, and a can narrowing to its foot.
+            Glyph.BIN -> {
+                pen.line(4f, 6.5f, 20f, 6.5f)
+                pen.path { p ->
+                    moveTo(p.at(9f, 6.5f).x, p.at(9f, 6.5f).y)
+                    lineTo(p.at(9f, 4f).x, p.at(9f, 4f).y)
+                    lineTo(p.at(15f, 4f).x, p.at(15f, 4f).y)
+                    lineTo(p.at(15f, 6.5f).x, p.at(15f, 6.5f).y)
+                }
+                pen.path { p ->
+                    moveTo(p.at(6f, 6.5f).x, p.at(6f, 6.5f).y)
+                    lineTo(p.at(7f, 20f).x, p.at(7f, 20f).y)
+                    lineTo(p.at(17f, 20f).x, p.at(17f, 20f).y)
+                    lineTo(p.at(18f, 6.5f).x, p.at(18f, 6.5f).y)
+                }
+                pen.line(10f, 10f, 10f, 16.5f)
+                pen.line(14f, 10f, 14f, 16.5f)
+            }
+            // `EntryIcon`'s pencil.
+            Glyph.PENCIL -> {
+                pen.path { p ->
+                    moveTo(p.at(4f, 20f).x, p.at(4f, 20f).y)
+                    lineTo(p.at(4f, 16f).x, p.at(4f, 16f).y)
+                    lineTo(p.at(16f, 4f).x, p.at(16f, 4f).y)
+                    lineTo(p.at(20f, 8f).x, p.at(20f, 8f).y)
+                    lineTo(p.at(8f, 20f).x, p.at(8f, 20f).y)
+                    close()
+                }
+                pen.line(13f, 7f, 17f, 11f)
+            }
+            Glyph.CROSS -> {
+                pen.line(6f, 6f, 18f, 18f)
+                pen.line(18f, 6f, 6f, 18f)
+            }
+            // A name box with the text cursor in it, so it is not a
+            // second pencil beside Edit list's.
+            Glyph.RENAME -> {
+                pen.box(2.5f, 7f, 12.5f, 10f)
+                pen.line(18.5f, 4f, 18.5f, 20f)
+                pen.line(16.5f, 4f, 20.5f, 4f)
+                pen.line(16.5f, 20f, 20.5f, 20f)
+            }
+        }
+    }
