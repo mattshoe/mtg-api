@@ -28,6 +28,7 @@ import org.mattshoe.mtg.core.Banned
 import org.mattshoe.mtg.core.Guide
 import org.mattshoe.mtg.core.Overlay
 import org.mattshoe.mtg.core.Route
+import org.mattshoe.mtg.core.searchBanned
 import org.robolectric.annotation.Config
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -147,9 +148,11 @@ class BannedSearchParityTest {
     }
 
     private fun searchReads(size: DpSize) {
-        shell(AppState().navigate(Route.parse("#/guide/${Guide.BANNED}"))) { content -> Tablet.Sized(size) { content() } }
+        // Searched before the page opens, not typed: on the emulator held
+        // sideways the keyboard typing leaves up covers the rows and
+        // takes the tap. The phone's test above types it.
+        shell(AppState().navigate(Route.parse("#/guide/${Guide.BANNED}")).searchBanned("mana crypt")) { content -> Tablet.Sized(size) { content() } }
         val on = "on a ${size.width} by ${size.height} screen"
-        search("mana crypt")
         assertEquals(listOf("Commander", "Legacy"), sections().map { it.first }, "$on searching mana crypt did not leave Commander and Legacy")
         val page = rule.onNodeWithTag("guide").getUnclippedBoundsInRoot()
         val list = rule.onNodeWithTag("ban-list").getUnclippedBoundsInRoot()
