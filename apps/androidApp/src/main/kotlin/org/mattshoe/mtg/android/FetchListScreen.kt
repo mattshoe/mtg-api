@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,6 +35,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.mattshoe.mtg.core.DeckList
+import org.mattshoe.mtg.core.FetchCard
 import org.mattshoe.mtg.core.Design
 import org.mattshoe.mtg.core.FetchListState
 import kotlin.math.cos
@@ -60,6 +62,7 @@ fun FetchListScreen(
     onSave: () -> Unit,
     onOpen: (String) -> Unit,
     onBack: () -> Unit,
+    onPeek: (FetchCard) -> Unit = {},
 ) {
     Column(
         Modifier.fillMaxWidth()
@@ -68,7 +71,7 @@ fun FetchListScreen(
             .testTag(if (onList) "fetch-page" else "fetch"),
         verticalArrangement = Arrangement.spacedBy(Design.GAP.dp),
     ) {
-        if (onList) FetchListOpen(state, onState, onFind, onSave, onBack)
+        if (onList) FetchListOpen(state, onState, onFind, onSave, onBack, onPeek)
         else FetchListRoot(state, onState, onFind, onOpen)
     }
 }
@@ -127,6 +130,7 @@ private fun FetchListOpen(
     onFind: () -> Unit,
     onSave: () -> Unit,
     onBack: () -> Unit,
+    onPeek: (FetchCard) -> Unit = {},
 ) {
     Panel {
         Row(
@@ -210,21 +214,29 @@ private fun FetchListOpen(
             section.cards.forEach { card ->
                 val ticked = state.isTicked(card.name)
                 Column(Modifier.fillMaxWidth().testTag("fetch-card:${card.name}")) {
-                    // The whole row is the box, so a thumb anywhere on
-                    // the card ticks it.
+                    // The box ticks it. Anywhere else on the row opens
+                    // the carousel over the list at this card. Matt:
+                    // "tapping the row (outside checkbox) should show
+                    // the carousel".
                     Row(
                         Modifier.fillMaxWidth()
-                            .toggleable(value = ticked, role = Role.Checkbox) { onState(state.tick(card.name)) }
-                            .semantics { contentDescription = "Found ${card.name}" }
-                            .testTag("fetch-tick:${card.name}"),
+                            .clickable { onPeek(card) }
+                            .testTag("fetch-row:${card.name}"),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Checkbox(
-                            checked = ticked,
-                            onCheckedChange = null,
-                            colors = CheckboxDefaults.colors(checkedColor = Accent, uncheckedColor = Ink3),
-                        )
+                        Box(
+                            Modifier
+                                .toggleable(value = ticked, role = Role.Checkbox) { onState(state.tick(card.name)) }
+                                .semantics { contentDescription = "Found ${card.name}" }
+                                .testTag("fetch-tick:${card.name}"),
+                        ) {
+                            Checkbox(
+                                checked = ticked,
+                                onCheckedChange = null,
+                                colors = CheckboxDefaults.colors(checkedColor = Accent, uncheckedColor = Ink3),
+                            )
+                        }
                         Line("${card.want}×", Ink3, Design.BODY)
                         Line(
                             card.name,
@@ -233,6 +245,7 @@ private fun FetchListOpen(
                             modifier = Modifier.weight(1f),
                         )
                         if (card.have < card.want) Tag("have ${card.have}", Warn)
+                        RemoveButton(card.name) { onState(state.remove(card)) }
                     }
                     if (card.alsoCheck.isNotEmpty()) {
                         Line(
@@ -262,9 +275,22 @@ private fun FetchListOpen(
                     Line("${m.short}×", Ink3, Design.BODY)
                     Line(m.name, Ink, Design.BODY, modifier = Modifier.weight(1f))
                     if (m.have > 0) Line("you have ${m.have}", Ink3, Design.MINI)
+                    RemoveButton(m.name) { onState(state.remove(m)) }
                 }
             }
         }
+    }
+}
+
+/**
+ * Takes the card off the list, text and all. Matt: "make sure doing so
+ * actually edits the deck list text as well". Its own press, so it
+ * opens no carousel on the way.
+ */
+@Composable
+private fun RemoveButton(name: String, onRemove: () -> Unit) {
+    Box(Modifier.testTag("fetch-remove:$name").semantics(mergeDescendants = true) { contentDescription = "Remove $name from the list" }) {
+        Ghost("Remove") { onRemove() }
     }
 }
 

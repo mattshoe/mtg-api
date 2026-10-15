@@ -48,6 +48,8 @@ import androidx.compose.ui.unit.sp
 import org.mattshoe.mtg.core.guideHits
 import org.mattshoe.mtg.core.openGuideHit
 import org.mattshoe.mtg.core.peekGameChanger
+import org.mattshoe.mtg.core.peekFetch
+import org.mattshoe.mtg.core.peekTick
 import org.mattshoe.mtg.core.gameChangers
 import org.mattshoe.mtg.core.searchGameChangers
 import org.mattshoe.mtg.core.searchGuide
@@ -483,6 +485,7 @@ fun AppShell(
                         onSave = onSaveFetch,
                         onOpen = { onState(state.openFetch(it)) },
                         onBack = { onState(state.leaveFetchList()) },
+                        onPeek = { onState(state.peekFetch(it)) },
                     )
 
 
@@ -644,6 +647,7 @@ fun AppShell(
                 onZoom = { onState(state.peekZoom(it)) },
                 stepper = state.peekStepper,
                 onCount = { by -> state.peekStep(by)?.let(onCount) },
+                onTick = { onState(state.peekTick()) },
             )
         }
     }
