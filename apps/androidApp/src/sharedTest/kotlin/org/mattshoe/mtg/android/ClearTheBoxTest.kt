@@ -3,6 +3,7 @@ package org.mattshoe.mtg.android
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsNodeInteraction
@@ -11,7 +12,7 @@ import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
@@ -98,7 +99,22 @@ class ClearTheBoxTest {
         assertTrue(middle.value in -3f..3f, "$on the x is $middle off the middle of $box")
         assertTrue(mark.right - mark.left >= 40.dp, "$on the x is ${mark.right - mark.left} wide, too small to hit")
 
-        x(box).performClick()
+        // Pressed by its semantics action, not by screen coordinate.
+        //
+        // `Tablet.Sized` lays the content out at tablet coordinates
+        // inside whatever window the device actually has. On the
+        // emulator that is a Pixel 9: the root is 411dp wide while this
+        // x sits at 936..977dp, so `performClick` aimed a tap at a
+        // point physically off the screen and nothing received it. The
+        // box still held "Sylex" and the test read it as the app
+        // failing to clear.
+        //
+        // Robolectric gives a window that really is 1280x800, which is
+        // why the same case passes there and failed only on a device.
+        // The bounds asserted just above are what prove the x is where
+        // a finger would find it; this step is about what pressing it
+        // does.
+        x(box).performSemanticsAction(SemanticsActions.OnClick)
         rule.waitForIdle()
         assertEquals("", typed(box), "$on pressing the x left \"${typed(box)}\" in $box")
         rule.onNodeWithTag(results).assertDoesNotExist()
