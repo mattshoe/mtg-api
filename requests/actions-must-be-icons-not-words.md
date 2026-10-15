@@ -23,13 +23,16 @@ They pair up across platforms, so do them in pairs:
 
 | Android | Web | label |
 |---|---|---|
-| `CardCarousel.kt` | `CardCarousel.kt` | Remove |
+| `CardCarousel.kt` | — | Remove |
 | `DecksScreen.kt` | `DecksPage.kt` | Edit list, Rename |
-| — | `DeckDialogs.kt` | Edit list, Rename deck |
-| `FetchListScreen.kt` | `FetchListPage.kt` | Delete, Edit |
+| `FetchListScreen.kt` | `FetchListPage.kt` | Delete, Edit, Remove |
 | `FilterSheet.kt` | `FilterPanel.kt` | clear |
 | `MassEntryScreen.kt` | `MassEntryPage.kt` | Clear |
 | `NewTaskScreen.kt` | `NewTaskPage.kt` | Remove |
+
+The web's `CardCarousel.kt` has a `Text("Remove")` too; the detector
+only flags what it is sure about, so trust the rule over the list and
+fix both halves of every pair you touch.
 
 Icons go where the existing ones live: `NavIcons.kt` on Android,
 `Icons.kt` plus a CSS mask on the web. Four new shapes cover the lot —
@@ -39,10 +42,10 @@ exists.
 Keep the word as `contentDescription` / `aria-label`. An icon with no
 label reads as nothing at all to a screen reader.
 
-Check the `DeckDialogs.kt` ones before changing them: if the dialog
-itself asks "Rename this deck?", the button under it should stay a
-word, and the right move is to take it off the list with a line in the
-commit saying why.
+`DeckDialogs.kt` has "Edit list" and "Rename deck" as well. Check what
+they are before touching them: if the dialog itself asks "Rename this
+deck?", the button under it should stay a word, because at that point
+the word is the content.
 
 **This is a tablet-and-phone change on both platforms**, so it wants
 the geometry tests at both sizes like everything else here: the icon
