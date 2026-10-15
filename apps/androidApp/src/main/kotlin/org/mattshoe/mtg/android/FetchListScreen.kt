@@ -115,7 +115,7 @@ private fun FetchListRoot(
                 ) {
                     Box(Modifier.weight(1f)) { Ghost(s.title) { onOpen(s.id) } }
                     Line(s.at.take(10), Ink3, Design.MINI)
-                    IconAction("Delete ${s.title}", icon = { TrashIcon(it) }) { onState(state.delete(s.id)) }
+                    IconAction("Delete ${s.title}", Glyph.BIN) { onState(state.delete(s.id)) }
                 }
             }
         }
@@ -147,7 +147,9 @@ private fun FetchListOpen(
                 modifier = Modifier.weight(1f).testTag("fetch-page-title"),
             )
             if (state.list.isNotBlank() && state.editing == null) {
-                IconAction("Edit", enabled = !state.busy, modifier = Modifier.testTag("fetch-edit"), icon = { PencilIcon(it) }) { onState(state.edit()) }
+                Box(Modifier.testTag("fetch-edit")) {
+                    IconAction("Edit", Glyph.PENCIL, enabled = !state.busy, bordered = true) { onState(state.edit()) }
+                }
             }
         }
         state.editing?.let { text ->
@@ -289,11 +291,9 @@ private fun FetchListOpen(
  */
 @Composable
 private fun RemoveButton(name: String, onRemove: () -> Unit) {
-    IconAction(
-        "Remove $name from the list",
-        modifier = Modifier.testTag("fetch-remove:$name"),
-        icon = { TrashIcon(it) },
-    ) { onRemove() }
+    // The tag on the button itself: the card's row merges what is
+    // inside it, and a tag on a plain box round this went with it.
+    IconAction("Remove $name from the list", Glyph.CROSS, modifier = Modifier.testTag("fetch-remove:$name")) { onRemove() }
 }
 
 /**

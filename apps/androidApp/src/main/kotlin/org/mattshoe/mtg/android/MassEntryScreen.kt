@@ -355,6 +355,6 @@ private fun HistoryPanel(
                 Ghost("Reuse") { onReuse(e) }
             }
         }
-        IconAction("Clear history", icon = { CrossIcon(it) }, onClick = onClear)
+        IconAction("Clear history", Glyph.BIN, onClick = onClear)
     }
 }

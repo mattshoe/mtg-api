@@ -50,6 +50,7 @@ function build() {
   mkdirSync(join(repo, 'apps', 'core'), { recursive: true })
   mkdirSync(join(repo, 'apps', 'androidApp'), { recursive: true })
   mkdirSync(join(repo, 'apps', 'webApp'), { recursive: true })
+  mkdirSync(join(repo, 'apps', 'webApp', 'src', 'jsMain', 'kotlin'), { recursive: true })
 
   cpSync(join(REPO, 'scripts', 'test-everything.mjs'), join(repo, 'scripts', 'test-everything.mjs'))
   // The real preflight talks to an SDK; this one only has to succeed.
@@ -65,6 +66,7 @@ function build() {
   writeFileSync(join(repo, 'apps', 'core', 'Core.kt'), 'core\n')
   writeFileSync(join(repo, 'apps', 'androidApp', 'Screen.kt'), 'screen\n')
   writeFileSync(join(repo, 'apps', 'webApp', 'Web.kt'), 'web\n')
+  writeFileSync(join(repo, 'apps', 'webApp', 'src', 'jsMain', 'kotlin', 'Page.kt'), 'page\n')
   writeFileSync(join(repo, 'package.json'), '{"name":"x"}\n')
   writeFileSync(join(repo, 'README.md'), 'readme\n')
   writeFileSync(join(repo, '.gitignore'), '.gate/\n')
@@ -149,6 +151,16 @@ describe('the gate skips what it already proved', () => {
     const again = ran(b)
     expect(again).toContain('worker')
     expect(again, 'core re-ran for a Worker edit').not.toContain('core')
+  })
+
+  it('re-runs the worker suite when a screen changes, because icon-actions.test.js reads every one', () => {
+    const b = build()
+    b.run()
+    b.clearCalls()
+    b.edit('apps/webApp/src/jsMain/kotlin/Page.kt', 'Text("Remove")\n')
+    const r = b.run()
+    expect(r.status, r.stderr).toBe(0)
+    expect(ran(b), 'a new word-labelled button would go unpoliced').toContain('worker')
   })
 
   it('does not remember a suite that failed', () => {

@@ -336,27 +336,38 @@ fun Ghost(label: String, on: Boolean = false, enabled: Boolean = true, onClick: 
 }
 
 /**
- * `.btn.icon-only`: an action drawn rather than written. Matt: "stop
- * using text for buttons when an icon would suffice". [label] is what
- * a screen reader says, so the word is still there for whoever needs
- * it. `test/icon-actions.test.js` fails a new worded one.
+ * An action drawn rather than written: a bin, a pencil, a cross.
+ *
+ * Matt: "Instead of an X icon or trash icon, just using the text
+ * 'remove' ... This looks terrible and dated." The word stays, as what
+ * a screen reader says. [bordered] for one that sits among [Btn]s, so
+ * the row keeps one shape of button. The web's `IconAction`.
  */
 @Composable
 fun IconAction(
     label: String,
+    glyph: Glyph,
     enabled: Boolean = true,
     danger: Boolean = false,
+    bordered: Boolean = false,
     modifier: Modifier = Modifier,
-    icon: @Composable (Color) -> Unit,
     onClick: () -> Unit,
 ) {
     Box(
         modifier.sizeIn(minWidth = TouchTarget, minHeight = TouchTarget)
-            .semantics(mergeDescendants = true) { contentDescription = label }
+            .semantics { contentDescription = label }
             .pressable(enabled, onClick),
         contentAlignment = Alignment.Center,
     ) {
-        icon(if (!enabled) Ink3 else if (danger) Bad else Ink2)
+        val face = if (bordered) {
+            Modifier.background(Bg3, RadiusSm)
+                .border(1.dp, if (danger) Bad.copy(alpha = 0.6f) else Line2, RadiusSm)
+        } else {
+            Modifier
+        }
+        Box(face.padding(8.dp)) {
+            GlyphIcon(glyph, if (!enabled) Ink3 else if (danger) Bad else Ink2)
+        }
     }
 }
 

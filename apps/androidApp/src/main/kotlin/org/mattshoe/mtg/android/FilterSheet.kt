@@ -261,7 +261,7 @@ private fun ColourGroup(f: Filters, onChange: (Filters) -> Unit) {
     FRow("Colours") {
         Pips("colors", f.colors) { c -> onChange(f.copy(colors = f.colors.toggle(c))) }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            IconAction("Clear colours", icon = { CrossIcon(it) }) { onChange(f.copy(colors = emptyList())) }
+            IconAction("Clear the colours", Glyph.CROSS) { onChange(f.copy(colors = emptyList())) }
             Ghost("all five") { onChange(f.copy(colors = COLOR_LETTERS)) }
             Ghost("colourless") {
                 onChange(f.copy(colors = listOf("C"), colorMode = ColorMode.EXACTLY))

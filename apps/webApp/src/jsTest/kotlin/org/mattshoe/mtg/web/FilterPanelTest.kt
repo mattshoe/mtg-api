@@ -222,9 +222,9 @@ class FilterPanelTest {
         fun buttons() = root.querySelectorAll("button")
             .let { n -> (0 until n.length).mapNotNull { n[it] as? HTMLButtonElement } }
 
-        fun button(label: String) = buttons().first { it.textContent?.trim() == label }
+        fun button(label: String) = buttons().first { (it.textContent?.trim() == label || it.getAttribute("aria-label") == label) }
 
-        fun has(label: String) = buttons().any { it.textContent?.trim() == label }
+        fun has(label: String) = buttons().any { (it.textContent?.trim() == label || it.getAttribute("aria-label") == label) }
 
         fun pip(colour: String) = root.querySelector("button.pip[data-c=$colour]") as HTMLButtonElement
 
@@ -248,7 +248,7 @@ class FilterPanelTest {
             val boxes = root.querySelectorAll("label.check")
             (0 until boxes.length)
                 .map { boxes[it] as HTMLElement }
-                .first { it.textContent?.trim() == label }
+                .first { (it.textContent?.trim() == label || it.getAttribute("aria-label") == label) }
                 .let { (it.querySelector("input") as HTMLInputElement).click() }
         }
 
@@ -343,8 +343,7 @@ class FilterPanelTest {
         settle()
         p.button("all five").click(); settle()
         assertEquals(listOf("W", "U", "B", "R", "G"), p.filters().colors)
-        p.buttons()
-            .single { it.getAttribute("aria-label") == "Clear colours" }.click(); settle()
+        p.button("Clear the colours").click(); settle()
         assertEquals(emptyList(), p.filters().colors)
         p.button("colourless").click(); settle()
         assertEquals(listOf("C"), p.filters().colors)
@@ -571,7 +570,7 @@ class FilterApplyTest {
         fun buttons() = root.querySelectorAll("button")
             .let { n -> (0 until n.length).mapNotNull { n[it] as? HTMLButtonElement } }
 
-        fun button(label: String) = buttons().first { it.textContent?.trim() == label }
+        fun button(label: String) = buttons().first { (it.textContent?.trim() == label || it.getAttribute("aria-label") == label) }
         fun pip(c: String) = root.querySelector("button.pip[data-c=$c]") as HTMLButtonElement
 
         /** What the app would actually ask the database for. */

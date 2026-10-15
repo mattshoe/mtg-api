@@ -124,8 +124,7 @@ class ParityWithThePhoneTest {
         }
 
     private fun button(label: String): HTMLButtonElement? =
-        // An action drawn as an icon says its word through aria-label.
-        buttons().firstOrNull { it.textContent?.trim() == label || it.getAttribute("aria-label") == label }
+        buttons().firstOrNull { (it.textContent?.trim() == label || it.getAttribute("aria-label") == label) }
 
     /**
      * One of the wizard's option rows, by its label.

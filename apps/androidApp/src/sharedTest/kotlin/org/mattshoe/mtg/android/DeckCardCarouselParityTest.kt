@@ -5,8 +5,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyAncestor
-import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -159,8 +159,12 @@ class DeckCardCarouselParityTest {
         rule.waitForIdle()
     }
 
+    /** A drawn action, found by what a screen reader calls it. */
+    private fun named(label: String) =
+        rule.onAllNodes(hasContentDescription(label)).fetchSemanticsNodes().isNotEmpty()
+
     private fun says(text: String) =
-        rule.onAllNodes(hasText(text) or hasContentDescription(text)).fetchSemanticsNodes().isNotEmpty()
+        rule.onAllNodes(hasText(text)).fetchSemanticsNodes().isNotEmpty()
 
     private fun peeking() = shell(onADeck()).also { tap("Cultivate") }
 
@@ -253,6 +257,7 @@ class DeckCardCarouselParityTest {
         listOf("Count", "Swap", "Remove").forEach {
             assertTrue(!says(it), "a locked app is offered \"$it\"")
         }
+        assertTrue(!named("Remove"), "a locked app is offered Remove")
     }
 
     @Test
@@ -361,6 +366,7 @@ class DeckCardCarouselParityTest {
         listOf("Count", "Swap", "Remove").forEach {
             assertTrue(!says(it), "the Library's sheet offers \"$it\"")
         }
+        assertTrue(!named("Remove"), "the Library's sheet offers Remove")
     }
 
     @Test

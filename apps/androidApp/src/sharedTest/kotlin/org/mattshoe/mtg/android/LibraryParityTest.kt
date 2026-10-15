@@ -359,7 +359,7 @@ class LibraryParityTest {
         fold(Facet.COLOUR)
         pressText("all five")
         assertEquals(listOf("W", "U", "B", "R", "G"), f().colors)
-        rule.onNodeWithContentDescription("Clear colours").performScrollTo().performClick()
+        rule.onNodeWithContentDescription("Clear the colours").performScrollTo().performClick()
         rule.waitForIdle()
         assertEquals(emptyList(), f().colors)
         pressText("colourless")
