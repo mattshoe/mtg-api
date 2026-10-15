@@ -181,7 +181,10 @@ class ShareIsPinnedRightTest {
                     head.right - s.right <= 1,
                     "$at the share is not pinned right: ${head.right - s.right}px short of the header's right edge",
                 )
-                assertTrue(s.top - head.top <= 1, "$at the share is not on the header's first line")
+                // Edit list and Rename are 40px icons now and the share is
+                // centred beside them, so it starts a few px down. A
+                // second line could not start before 40px.
+                assertTrue(s.top - head.top < 40, "$at the share is not on the header's first line: ${s.top - head.top}px down")
                 roots.forEach { it.remove() }
                 roots.clear()
             }

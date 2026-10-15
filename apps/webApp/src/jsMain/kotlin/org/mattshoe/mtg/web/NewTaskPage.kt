@@ -70,12 +70,7 @@ fun NewTaskPage(
                     }) {
                         Span(attrs = { classes("task-file-name") }) { Text(f.name) }
                         Span(attrs = { classes("muted", "small") }) { Text(f.shownSize) }
-                        Button(attrs = {
-                            classes("btn", "sm", "ghost")
-                            attr("aria-label", "Remove ${f.name}")
-                            if (task.busy) disabled()
-                            onClick { onState(task.remove(f.name)) }
-                        }) { Text("Remove") }
+                        IconAction("Remove ${f.name}", Glyph.CROSS, enabled = !task.busy) { onState(task.remove(f.name)) }
                     }
                 }
                 Div(attrs = { classes("muted", "small") }) {

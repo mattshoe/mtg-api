@@ -290,9 +290,7 @@ private fun Sheet(
                         Tweak.SWAP -> Button(attrs = { classes("btn", "sm"); onClick { onTweak(row, how) } }) {
                             Text("Swap")
                         }
-                        Tweak.REMOVE -> Button(attrs = { classes("btn", "sm", "danger"); onClick { onTweak(row, how) } }) {
-                            Text("Remove")
-                        }
+                        Tweak.REMOVE -> IconAction("Remove", Glyph.BIN, look = listOf("btn", "sm", "danger")) { onTweak(row, how) }
                         Tweak.ADD -> Unit
                     }
                 }

@@ -1,14 +1,5 @@
 {
   "backlog": [
-    "apps/webApp/src/jsMain/kotlin/org/mattshoe/mtg/web/CardCarousel.kt:Remove",
-    "apps/webApp/src/jsMain/kotlin/org/mattshoe/mtg/web/DecksPage.kt:Edit list",
-    "apps/webApp/src/jsMain/kotlin/org/mattshoe/mtg/web/DecksPage.kt:Rename",
-    "apps/webApp/src/jsMain/kotlin/org/mattshoe/mtg/web/FetchListPage.kt:Delete",
-    "apps/webApp/src/jsMain/kotlin/org/mattshoe/mtg/web/FetchListPage.kt:Edit",
-    "apps/webApp/src/jsMain/kotlin/org/mattshoe/mtg/web/FetchListPage.kt:Remove",
-    "apps/webApp/src/jsMain/kotlin/org/mattshoe/mtg/web/FilterPanel.kt:clear",
-    "apps/webApp/src/jsMain/kotlin/org/mattshoe/mtg/web/MassEntryPage.kt:Clear",
-    "apps/webApp/src/jsMain/kotlin/org/mattshoe/mtg/web/NewTaskPage.kt:Remove"
   ],
   "confirmations": {
     "apps/androidApp/src/main/kotlin/org/mattshoe/mtg/android/DeckDialogs.kt:Rename": "the button under a dialog titled Rename deck, holding the new name: the word is the content",
