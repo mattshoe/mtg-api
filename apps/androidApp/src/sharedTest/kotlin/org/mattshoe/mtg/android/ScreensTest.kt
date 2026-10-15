@@ -370,6 +370,7 @@ class ScreensTest {
         val decks = DecksState(decks = listOf(deck()), openKey = "alela", cards = listOf(deckCard()))
         content { DecksScreen(decks, {}, admin = false) }
         rule.onNodeWithText("Edit list").assertDoesNotExistNow()
+        rule.onNodeWithContentDescription("Edit list").assertDoesNotExistNow()
     }
 
     @Test
@@ -377,7 +378,7 @@ class ScreensTest {
         var edited: Deck? = null
         val decks = DecksState(decks = listOf(deck()), openKey = "alela", cards = listOf(deckCard()))
         content { DecksScreen(decks, {}, admin = true, onEdit = { edited = it }) }
-        rule.onNodeWithText("Edit list").performScrollTo().performClick()
+        rule.onNodeWithContentDescription("Edit list").performScrollTo().performClick()
         rule.runOnIdle { assertEquals("alela", edited?.key) }
     }
 

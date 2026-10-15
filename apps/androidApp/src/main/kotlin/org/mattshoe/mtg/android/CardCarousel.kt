@@ -420,7 +420,7 @@ private fun CardSheet(
                     when (how) {
                         Tweak.QUANTITY -> Btn("Count") { onTweak(row, how) }
                         Tweak.SWAP -> Btn("Swap") { onTweak(row, how) }
-                        Tweak.REMOVE -> Btn("Remove", danger = true) { onTweak(row, how) }
+                        Tweak.REMOVE -> IconAction("Remove", Glyph.BIN, danger = true, bordered = true) { onTweak(row, how) }
                         Tweak.ADD -> Unit
                     }
                 }

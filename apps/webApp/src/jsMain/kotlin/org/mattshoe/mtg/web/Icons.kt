@@ -1,7 +1,12 @@
 package org.mattshoe.mtg.web
 
 import androidx.compose.runtime.Composable
+import org.jetbrains.compose.web.attributes.AttrsScope
+import org.jetbrains.compose.web.attributes.disabled
+import org.jetbrains.compose.web.dom.Button
 import org.jetbrains.compose.web.dom.Span
+import org.w3c.dom.HTMLButtonElement
+import androidx.compose.web.events.SyntheticMouseEvent
 
 /**
  * Icons, with no network and no icon font.
@@ -51,4 +56,52 @@ fun ProfileIcon() {
         classes("icon", "icon-profile")
         attr("aria-hidden", "true")
     }) {}
+}
+
+/**
+ * The drawings that stand in for an action's word.
+ *
+ * Matt: "Instead of an X icon or trash icon, just using the text
+ * 'remove', same with share and edit etc etc. This looks terrible and
+ * dated." The phone's `Glyph` is the same four, the same shapes; the
+ * cross is the close mark the website already had.
+ */
+enum class Glyph(val css: String) {
+    BIN("icon-bin"),
+    PENCIL("icon-pencil"),
+    CROSS("icon-close"),
+    RENAME("icon-rename"),
+}
+
+/**
+ * An action drawn rather than written.
+ *
+ * The word stays as `aria-label`, and as `title` so a mouse can ask
+ * what it is. [look] is the button it replaces, `btn sm ghost` by
+ * default; `.action` squares it off at 40px at least. The phone's
+ * `IconAction`.
+ */
+@Composable
+fun IconAction(
+    label: String,
+    glyph: Glyph,
+    look: List<String> = listOf("btn", "sm", "ghost"),
+    enabled: Boolean = true,
+    attrs: AttrsScope<HTMLButtonElement>.() -> Unit = {},
+    onClick: (SyntheticMouseEvent) -> Unit,
+) {
+    Button(attrs = {
+        classes(look + "action")
+        attr("type", "button")
+        attr("aria-label", label)
+        attr("title", label)
+        if (!enabled) disabled()
+        attrs()
+        onClick { onClick(it) }
+    }) {
+        Span(attrs = {
+            classes("icon", glyph.css)
+            attr("aria-hidden", "true")
+        }) {}
+    }
 }

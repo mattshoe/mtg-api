@@ -320,10 +320,7 @@ private fun HistoryPanel(
         Div(attrs = { classes("panel-head") }) {
             H2 { Text("Recent") }
             Span(attrs = { classes("spacer") }) {}
-            Button(attrs = {
-                classes("btn", "sm", "ghost")
-                onClick { onClear() }
-            }) { Text("Clear") }
+            IconAction("Clear history", Glyph.BIN) { onClear() }
         }
         Div(attrs = { classes("panel-body") }) {
             history.recent.forEach { e ->

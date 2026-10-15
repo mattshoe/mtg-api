@@ -77,6 +77,34 @@ class TasksPanelTest {
         ),
     )
 
+    /**
+     * A queue: one running, three waiting, sent in a known order.
+     *
+     * Matt: "you need a queued state reflected in the app UI to
+     * indicate which tasks have not been picked up yet. First come
+     * first serve."
+     */
+    private val queue = Tasks().loaded(
+        listOf(
+            Task("request/q2-2222222", "Second in", TaskStatus.QUEUED, null, createdAt = "2026-10-09T11:00:00Z"),
+            Task("request/live-111111", "The one running", TaskStatus.IN_PROGRESS, null),
+            Task("request/q3-3333333", "Third in", TaskStatus.QUEUED, null, createdAt = "2026-10-09T12:00:00Z"),
+            Task("request/q1-1111111", "First in", TaskStatus.QUEUED, null, createdAt = "2026-10-09T10:00:00Z"),
+        ),
+    )
+
+    @Test
+    fun theQueueShowsBehindTheRunningTaskInTheOrderItWasSent() = runTest {
+        val root = mount(adminSettings(queue))
+        settle()
+        val rows = root.all("[data-task]").filter { it.shown() }.map { it.textContent.orEmpty() }
+        assertEquals(4, rows.size, "the queue is not listed: ${root.textContent}")
+        assertTrue("The one running" in rows[0] && "in progress" in rows[0], rows[0])
+        assertTrue("First in" in rows[1] && "queued" in rows[1], "first sent is not first in the queue: ${rows[1]}")
+        assertTrue("Second in" in rows[2], rows[2])
+        assertTrue("Third in" in rows[3], rows[3])
+    }
+
     private fun HTMLElement.all(selector: String): List<HTMLElement> {
         val found = querySelectorAll(selector)
         return (0 until found.length).map { found[it] as HTMLElement }

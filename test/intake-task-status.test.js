@@ -130,9 +130,9 @@ describe('what the dispatcher puts right on every run', () => {
       .toEqual([{ name: 'card-page', status: 'paused', note: 'held by Matt' }])
   })
 
-  it('a ready request nobody has a row for is pending, and a paused one let go is pending again', () => {
+  it('a ready request nobody has a row for is queued, and a paused one let go is queued again', () => {
     expect(reconcile(seen({ ready: ['new-one', 'let-go'], rows: [row('let-go', 'paused')] })))
-      .toEqual([{ name: 'new-one', status: 'pending' }, { name: 'let-go', status: 'pending' }])
+      .toEqual([{ name: 'new-one', status: 'queued' }, { name: 'let-go', status: 'queued' }])
   })
 
   it('an in progress row with no agent alive in its worktree is paused, and says the agent stopped', () => {
@@ -140,7 +140,7 @@ describe('what the dispatcher puts right on every run', () => {
       .toEqual([{ name: 'died', status: 'paused', note: 'the agent stopped; its work is kept in the worktree' }])
   })
 
-  it('a stalled one already paused is not let go to pending while its worktree waits', () => {
+  it('a stalled one already paused is not let go to queued while its worktree waits', () => {
     expect(reconcile(seen({ ready: ['kept'], stalled: ['kept'], rows: [row('kept', 'paused')] }))).toEqual([])
   })
 
@@ -160,15 +160,30 @@ describe('what the dispatcher puts right on every run', () => {
   })
 
   it('a task the laptop has not collected yet has no name, and is not cancelled for having no file', () => {
-    expect(reconcile(seen({ rows: [{ key: 'k1', name: null, status: 'pending' }] }))).toEqual([])
+    expect(reconcile(seen({ rows: [{ key: 'k1', name: null, status: 'queued' }] }))).toEqual([])
   })
 
   it('a row that already says the right thing is not written again', () => {
-    expect(reconcile(seen({ held: ['h'], ready: ['r'], rows: [row('h', 'paused'), row('r', 'pending')] }))).toEqual([])
+    expect(reconcile(seen({ held: ['h'], ready: ['r'], rows: [row('h', 'paused'), row('r', 'queued')] }))).toEqual([])
   })
 
   it('an agent at work is left alone', () => {
-    expect(reconcile(seen({ ready: ['busy'], rows: [row('busy', 'in progress')] }))).toEqual([])
+    // At work means in `alive` — a process whose argv names the
+    // request. That is the only evidence anything is running.
+    expect(reconcile(seen({ ready: ['busy'], alive: ['busy'], rows: [row('busy', 'in progress')] }))).toEqual([])
+  })
+
+  it('a row that says in progress with nothing running is put back in the queue', () => {
+    // This used to be the case above, and it asserted the opposite: a
+    // row reading `in progress` was trusted whether or not anything was
+    // running. That is the lie Matt caught — "a row read `in progress`
+    // for three hours after I had switched the system off".
+    //
+    // With one task at a time it is worse than a lie, it is the queue
+    // reading as busy when it is idle. No agent and no worktree means
+    // ready and waiting, which is `queued`.
+    expect(reconcile(seen({ ready: ['busy'], rows: [row('busy', 'in progress')] })))
+      .toEqual([{ name: 'busy', status: 'queued' }])
   })
 })
 
@@ -183,8 +198,8 @@ describe('reconcile tells the truth', () => {
   const seen = (over = {}) => ({ rows: [], ready: [], held: [], filed: [], stalled: [], alive: [], prs: {}, branches: [], ...over })
   const pr = (state, n, more = {}) => ({ state, url: 'https://github.com/mattshoe/mtg-api/pull/' + n, ...more })
 
-  it('a task with an agent alive on it is in progress, not pending', () => {
-    expect(reconcile(seen({ ready: ['card-page'], alive: ['card-page'], rows: [row('card-page', 'pending')] })))
+  it('a task with an agent alive on it is in progress, not queued', () => {
+    expect(reconcile(seen({ ready: ['card-page'], alive: ['card-page'], rows: [row('card-page', 'queued')] })))
       .toEqual([{ name: 'card-page', status: 'in progress' }])
   })
 

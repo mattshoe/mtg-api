@@ -1090,6 +1090,22 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
   -webkit-mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.1' stroke-linecap='round'><path d='M6 6l12 12'/><path d='M18 6L6 18'/></svg>");
   mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.1' stroke-linecap='round'><path d='M6 6l12 12'/><path d='M18 6L6 18'/></svg>");
 }
+/* Actions, drawn rather than written. The same lines the phone's
+   `GlyphIcon` draws, on the same grid at the same weight. */
+.icon-bin {
+  -webkit-mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'><path d='M4 6.5h16'/><path d='M9 6.5V4h6v2.5'/><path d='M6 6.5l1 13.5h10l1-13.5'/><path d='M10 10v6.5'/><path d='M14 10v6.5'/></svg>");
+  mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'><path d='M4 6.5h16'/><path d='M9 6.5V4h6v2.5'/><path d='M6 6.5l1 13.5h10l1-13.5'/><path d='M10 10v6.5'/><path d='M14 10v6.5'/></svg>");
+}
+.icon-pencil {
+  -webkit-mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'><path d='M4 20v-4L16 4l4 4L8 20z'/><path d='M13 7l4 4'/></svg>");
+  mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'><path d='M4 20v-4L16 4l4 4L8 20z'/><path d='M13 7l4 4'/></svg>");
+}
+/* A name box with the text cursor in it, so Rename beside Edit list is
+   not a second pencil. */
+.icon-rename {
+  -webkit-mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'><rect x='2.5' y='7' width='12.5' height='10' rx='2'/><path d='M18.5 4v16'/><path d='M16.5 4h4'/><path d='M16.5 20h4'/></svg>");
+  mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'><rect x='2.5' y='7' width='12.5' height='10' rx='2'/><path d='M18.5 4v16'/><path d='M16.5 4h4'/><path d='M16.5 20h4'/></svg>");
+}
 
 .btn.icon-only { padding: 0; width: 30px; height: 30px; display: inline-grid; place-items: center; }
 
@@ -2104,3 +2120,12 @@ select.sort {
 .gc-list, .ban-list { max-width: 680px; margin: 0 auto; }
 .gc-about { margin: 0; }
 .ban-about { margin: 0; padding: 0 0 6px; }
+
+/* An action drawn rather than written: at least 40px to hit, whatever
+   `.btn.sm` or `.chip.mini` would make it, with the glyph at the size
+   of the text it replaced. Last, so neither of those wins on order. */
+.btn.action, .btn.sm.action, .chip.action {
+  min-width: 40px; min-height: 40px; padding: 0;
+  display: inline-grid; place-items: center;
+}
+.action .icon { width: 18px; height: 18px; }

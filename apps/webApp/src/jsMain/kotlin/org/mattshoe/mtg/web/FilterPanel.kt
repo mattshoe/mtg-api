@@ -206,10 +206,9 @@ private fun Colour(f: Filters, onChange: (Filters) -> Unit) {
     Row("Colours") {
         Pips(f.colors) { c -> onChange(f.copy(colors = f.colors.toggle(c))) }
         Div(attrs = { classes("chips") }) {
-            Button(attrs = {
-                classes("chip", "mini")
-                onClick { onChange(f.copy(colors = emptyList())) }
-            }) { Text("clear") }
+            IconAction("Clear the colours", Glyph.CROSS, look = listOf("chip", "mini")) {
+                onChange(f.copy(colors = emptyList()))
+            }
             Button(attrs = {
                 classes("chip", "mini")
                 onClick { onChange(f.copy(colors = COLOR_LETTERS)) }

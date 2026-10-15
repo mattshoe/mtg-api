@@ -11,7 +11,7 @@
 // too — it used to re-implement `triaged` and `needs-matt` with grep, and
 // the two implementations disagreed.
 
-import { readFileSync, readdirSync } from 'node:fs'
+import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { join, basename } from 'node:path'
 
@@ -215,8 +215,29 @@ function read(dir, file) {
   try { return readFileSync(join(dir, file), 'utf8') } catch { return '' }
 }
 
+/**
+ * The requests in a folder, oldest first.
+ *
+ * Matt: "First come first serve." This was bare `readdirSync`, which is
+ * filesystem order — near enough to insertion order on APFS to look
+ * right and not a promise of anything. With one task running at a time
+ * the order IS the feature, so it is sorted by when the file was
+ * written, which is when the request was made.
+ *
+ * A file whose time cannot be read sorts last rather than throwing: a
+ * queue that refuses to answer is worse than one in an odd order.
+ */
 function listing(dir) {
-  try { return readdirSync(dir) } catch { return [] }
+  try {
+    return readdirSync(dir)
+      .map((f) => {
+        let at = Infinity
+        try { at = statSync(join(dir, f)).mtimeMs } catch { /* sorts last */ }
+        return { f, at }
+      })
+      .sort((a, b) => a.at - b.at || a.f.localeCompare(b.f))
+      .map((e) => e.f)
+  } catch { return [] }
 }
 
 if (process.argv[1] && process.argv[1].endsWith('intake.mjs')) {
