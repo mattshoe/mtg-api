@@ -55,6 +55,31 @@ class FetchListCarouselTest {
         assertEquals("cs-1", s.peeked?.scryfallId, "the carousel has no picture of Counterspell")
     }
 
+    /**
+     * Matt: "i want to see the card on the carousel, not the card name
+     * and no art". A list saved, or left open, before the query asked
+     * for a printing comes back with no id, so the art is asked for by
+     * name rather than drawing the name on a grey card.
+     */
+    @Test
+    fun aListKeptFromBeforeStillShowsTheCard() {
+        val old = owned.map { it.copy(scryfallId = null) }
+        val f = FetchListState(list = list).found(FetchList.build(DeckList.entries(list), old))
+        val s = AppState(route = Route(View.FETCH, FetchListState.PAGE), fetch = f)
+            .let { it.peekFetch(card(it, "Sol Ring")) }
+        assertEquals(
+            "https://api.scryfall.com/cards/named?exact=Sol%20Ring&format=image&version=normal",
+            s.peeked?.art,
+            "a list with no printing shows Sol Ring's name and no art",
+        )
+    }
+
+    @Test
+    fun theCarouselDrawsThePrintingItHas() {
+        val s = found().let { it.peekFetch(card(it, "Counterspell")) }
+        assertEquals("https://cards.scryfall.io/normal/front/c/s/cs-1.jpg", s.peeked?.art)
+    }
+
     @Test
     fun theQueryAsksForAPrintingToDraw() {
         val sql = FetchList.query(listOf("sol ring"), "e7de0cb1")!!.sql

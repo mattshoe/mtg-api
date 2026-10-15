@@ -166,7 +166,10 @@ data class PeekCard(
     val facts: List<PeekFact> = emptyList(),
     /** The Found box, over a fetch list, and null over anything else. */
     val tick: PeekTick? = null,
-)
+) {
+    /** The picture to draw, or null for the card's name on a blank. */
+    val art: String? get() = null
+}
 
 /** The fetch list's box on the carousel's sheet, and the count beside it. */
 data class PeekTick(val ticked: Boolean, val progress: String)
