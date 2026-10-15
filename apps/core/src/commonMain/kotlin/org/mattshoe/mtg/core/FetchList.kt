@@ -92,6 +92,10 @@ data class OwnedPrinting(
     val qty: Int,
     /** The `color_identity` column: letters in any order, or nothing for colourless. */
     val identity: String? = null,
+    /** Copies of this name that real decks hold, the same on every rarity's row. */
+    val inDecks: Int = 0,
+    /** The real decks holding it, by name. */
+    val decks: List<String> = emptyList(),
 )
 
 /**
@@ -155,8 +159,17 @@ data class FetchCard(
     val want: Int,
     val have: Int,
     val alsoCheck: List<FetchRarity> = emptyList(),
+    /** The decks holding it, when no copy is left in bulk. */
+    val decks: List<String> = emptyList(),
 ) {
     val alsoCheckLine: String get() = "Also check: " + alsoCheck.joinToString(", ") { it.label }
+
+    /** `In deck: Alela`, or null with a copy still in bulk. */
+    val decksLine: String? get() = when (decks.size) {
+        0 -> null
+        1 -> "In deck: " + decks.single()
+        else -> "In decks: " + decks.joinToString(", ")
+    }
 }
 
 /**
@@ -250,11 +263,14 @@ object FetchList {
                 (printed[e.key] ?: printed[rows.first().nameNorm]).orEmpty().map { FetchRarity.of(it) }
             val also = elsewhere.filter { it != primary && it != FetchRarity.UNKNOWN }.distinct().sortedBy { it.ordinal }
             val first = rows.first()
+            // Bulk is what no real deck holds — `card_usage.free`. With
+            // none left the card is in a deck, so say which.
+            val decks = if (have - first.inDecks <= 0) first.decks else emptyList()
             filed += Filed(
                 FetchType.of(first.types),
                 ColorIdentity.printed(first.identity),
                 primary,
-                FetchCard(first.name, e.qty, have, also),
+                FetchCard(first.name, e.qty, have, also, decks),
             )
             if (have < e.qty) missing += MissingCard(first.name, e.qty - have, have)
         }
@@ -280,6 +296,11 @@ object FetchList {
      * deck is a hundred cards. A double-faced card is matched by its
      * front face too, because that is how a list writes it.
      *
+     * `in_decks` and `decks` are the copies real decks hold and their
+     * names, by the rule `card_usage` counts by: not a proxy, not
+     * PROPOSED, and a slot backed by a card the owner holds. They are
+     * per name, so every rarity's row carries the same.
+     *
      * Null with no collection to look in. An empty owner is never
      * every owner — see `Owners`.
      */
@@ -288,7 +309,12 @@ object FetchList {
         val names = keys.distinct()
         val json = Json.encodeToString(ListSerializer(String.serializer()), names)
         return Sql(
-            """SELECT c.name_norm, c.name, c.face1, c.types, c.colors, c.color_identity, c.rarity, SUM(c.qty) AS qty
+            """SELECT c.name_norm, c.name, c.face1, c.types, c.colors, c.color_identity, c.rarity, SUM(c.qty) AS qty,
+                      (SELECT COALESCE(SUM(dc.qty), 0) FROM deck_cards dc JOIN decks d ON d.id = dc.deck_id
+                        WHERE $REAL_DECK) AS in_decks,
+                      (SELECT json_group_array(name) FROM (
+                         SELECT DISTINCT d.name FROM deck_cards dc JOIN decks d ON d.id = dc.deck_id
+                          WHERE $REAL_DECK ORDER BY d.name)) AS decks
                  FROM cards c
                 WHERE ${Owners.owns("c.owner_id")}
                   AND (c.name_norm IN (SELECT value FROM json_each(?2))
@@ -297,6 +323,11 @@ object FetchList {
             listOf(owner, json),
         )
     }
+
+    /** A deck slot that holds one of this owner's real copies of `c`. */
+    private const val REAL_DECK =
+        "dc.name_norm = c.name_norm AND d.owner_id = c.owner_id AND d.is_proxy = 0 " +
+            "AND (d.status IS NULL OR d.status NOT LIKE 'PROPOSED%') AND dc.in_collection = 1"
 
     fun decode(cols: List<String>, rows: List<JsonArray>): List<OwnedPrinting> {
         val at = cols.withIndex().associate { (i, n) -> n to i }
@@ -315,6 +346,9 @@ object FetchList {
                 rarity = str("rarity"),
                 qty = str("qty")?.toDoubleOrNull()?.toInt() ?: 0,
                 identity = str("color_identity"),
+                inDecks = str("in_decks")?.toDoubleOrNull()?.toInt() ?: 0,
+                decks = str("decks")?.let { runCatching { Json.decodeFromString(ListSerializer(String.serializer()), it) }.getOrNull() }
+                    .orEmpty(),
             )
         }
     }

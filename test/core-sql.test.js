@@ -35,7 +35,10 @@ describe('every statement the core emits', () => {
     // time, which is after every Kotlin assertion has passed.
     const wrong = [];
     for (const c of cases) {
-      const holes = (c.sql.match(/\?/g) || []).length;
+      // SQLite's own numbering: `?2` is the second value however many
+      // times it appears, and a bare `?` is one past the highest so far.
+      let holes = 0;
+      for (const [, n] of c.sql.matchAll(/\?(\d*)/g)) holes = n ? Math.max(holes, Number(n)) : holes + 1;
       if (holes !== c.params.length) {
         wrong.push(`${c.name}: ${holes} holes, ${c.params.length} params`);
       }
