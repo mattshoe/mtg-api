@@ -14,6 +14,7 @@ import org.jetbrains.compose.web.dom.Span
 import org.jetbrains.compose.web.dom.Text
 import org.jetbrains.compose.web.dom.TextArea
 import org.mattshoe.mtg.core.DeckList
+import org.mattshoe.mtg.core.FetchCard
 import org.mattshoe.mtg.core.FetchListState
 
 /**
@@ -38,12 +39,13 @@ fun FetchListPage(
     onSave: () -> Unit,
     onOpen: (String) -> Unit,
     onBack: () -> Unit,
+    onPeek: (FetchCard) -> Unit = {},
 ) {
     Div(attrs = {
         classes("wrap", "fetch")
         attr("data-fetch", if (onList) "list" else "root")
     }) {
-        if (onList) FetchListOpen(state, onState, onFind, onSave, onBack)
+        if (onList) FetchListOpen(state, onState, onFind, onSave, onBack, onPeek)
         else FetchListRoot(state, onState, onFind, onOpen)
     }
 }
@@ -130,6 +132,7 @@ private fun FetchListOpen(
     onFind: () -> Unit,
     onSave: () -> Unit,
     onBack: () -> Unit,
+    onPeek: (FetchCard) -> Unit = {},
 ) {
     Div(attrs = { classes("panel", "fetch-top") }) {
         Div(attrs = { classes("panel-head") }) {
@@ -251,13 +254,20 @@ private fun FetchListOpen(
                         if (ticked) classes("ticked")
                         attr("data-fetch-card", card.name)
                     }) {
-                        // The whole row is the box's label, so a thumb
-                        // anywhere on the card ticks it.
-                        Label(attrs = { classes("flex-wrap", "fetch-tick") }) {
+                        // The box ticks it. Anywhere else on the row
+                        // opens the carousel over the list at this
+                        // card. Matt: "tapping the row (outside
+                        // checkbox) should show the carousel".
+                        Div(attrs = {
+                            classes("flex-wrap", "fetch-tick")
+                            attr("data-fetch-row", card.name)
+                            onClick { onPeek(card) }
+                        }) {
                             Input(InputType.Checkbox, attrs = {
                                 attr("data-fetch-tick", card.name)
                                 attr("aria-label", "Found " + card.name)
                                 checked(ticked)
+                                onClick { it.stopPropagation() }
                                 onChange { onState(state.tick(card.name)) }
                             })
                             Span(attrs = { classes("fetch-qty") }) { Text("${card.want}×") }
@@ -266,6 +276,7 @@ private fun FetchListOpen(
                             if (card.have < card.want) {
                                 Span(attrs = { classes("tag", "warn") }) { Text("have ${card.have}") }
                             }
+                            RemoveButton(card.name) { onState(state.remove(card)) }
                         }
                         if (card.alsoCheck.isNotEmpty()) {
                             Div(attrs = {
@@ -305,11 +316,30 @@ private fun FetchListOpen(
                         Span { Text(m.name) }
                         Span(attrs = { classes("spacer") }) {}
                         if (m.have > 0) Span(attrs = { classes("muted", "small") }) { Text("you have ${m.have}") }
+                        RemoveButton(m.name) { onState(state.remove(m)) }
                     }
                 }
             }
         }
     }
+}
+
+/**
+ * Takes the card off the list, text and all. Matt: "make sure doing so
+ * actually edits the deck list text as well". Its own press, so it
+ * opens no carousel on the way.
+ */
+@Composable
+private fun RemoveButton(name: String, onRemove: () -> Unit) {
+    Button(attrs = {
+        classes("btn", "sm", "ghost")
+        attr("data-fetch-remove", name)
+        attr("aria-label", "Remove $name from the list")
+        onClick {
+            it.stopPropagation()
+            onRemove()
+        }
+    }) { Text("Remove") }
 }
 
 /**

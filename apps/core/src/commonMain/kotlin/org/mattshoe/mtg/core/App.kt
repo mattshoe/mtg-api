@@ -368,6 +368,7 @@ data class AppState(
         // Sized only; the Library's own rows are mapped in `peekRun`.
         PeekOf.LIBRARY -> library.rows.map { DeckCard(it.name, 0, null, 0, it.nameNorm) }
         PeekOf.GAME_CHANGERS -> gameChangerOrder
+        PeekOf.FETCH -> fetch.pageOrder.map { DeckCard(it.name, it.want, null, it.have, it.nameNorm) }
     }
 
     /** Every card the carousel can reach from here, in the order it draws them. */
@@ -431,6 +432,28 @@ data class AppState(
                     tags = listOf(PeekTag.edhrec(card.edhrecRank)),
                     facts = PeekFact.line(card.typeLine, card.colorIdentity, card.rarity),
                 )
+            }
+
+            // The list's own facts, and the box that ticks it found.
+            PeekOf.FETCH -> fetch.result?.sections.orEmpty().flatMap { section ->
+                section.cards.map { card ->
+                    PeekCard(
+                        title = card.name,
+                        nameNorm = card.nameNorm.ifEmpty { card.name.lowercase() },
+                        scryfallId = card.scryfallId,
+                        typeLine = card.types,
+                        printing = null,
+                        price = null,
+                        tags = listOfNotNull(
+                            PeekTag("${card.want}× on the list"),
+                            PeekTag("have ${card.have}", bad = true).takeIf { card.have < card.want },
+                            card.alsoCheck.takeIf { it.isNotEmpty() }?.let { PeekTag(card.alsoCheckLine) },
+                            card.decksLine?.let { PeekTag(it) },
+                        ),
+                        facts = PeekFact.line(card.types ?: section.type.label, section.colors, section.rarity.slug),
+                        tick = PeekTick(fetch.isTicked(card.name), fetch.progress),
+                    )
+                }
             }
         }
 
