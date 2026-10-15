@@ -53,6 +53,8 @@ import org.mattshoe.mtg.core.Combo
 import org.mattshoe.mtg.core.DeckCard
 import org.mattshoe.mtg.core.DeckGroup
 import org.mattshoe.mtg.core.GameChangers
+import org.mattshoe.mtg.core.BanList
+import org.mattshoe.mtg.core.Banned
 import org.mattshoe.mtg.core.Design
 import org.mattshoe.mtg.core.Guide
 import org.mattshoe.mtg.core.GuideHit
@@ -102,6 +104,7 @@ fun GuideScreen(
     gameChangerSearch: String = "",
     onGameChangerSearch: (String) -> Unit = {},
     gameChangers: List<Pair<DeckGroup, List<DeckCard>>> = GameChangers.byType,
+    onBanned: (BanList, DeckCard) -> Unit = { _, _ -> },
     upTo: String = "Guide",
 ) {
     // The rules page keeps its search bar on screen and scrolls the
@@ -138,6 +141,7 @@ fun GuideScreen(
                 Guide.WHEEL -> Wheel()
                 Guide.PHYREXIA -> Lore(era ?: PhyrexianLore.eras.first(), onEra)
                 Guide.GAME_CHANGERS -> GameChangerList(gameChangerSearch, onGameChangerSearch, gameChangers, onGameChanger)
+                Guide.BANNED -> BannedList(onBanned)
                 else -> story?.let { Story(it, onStory) }
             }
         }
@@ -833,7 +837,37 @@ private fun GameChangerList(
                 Panel {
                     cards.forEachIndexed { i, card ->
                         if (i > 0) Hairline("gc-rule-${group.title}-$i")
-                        GameChangerRow(card) { onCard(card) }
+                        ReferenceRow(card, "gc-row") { onCard(card) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Every format's ban list, top to bottom, Commander first: a banded
+ * head per format with its count, a line saying what the format is,
+ * and a row per card. A row pops the carousel over every list at that
+ * row. Sibling of `BannedList` in `GuidePage`; the lists are `Banned`'s.
+ */
+@Composable
+private fun BannedList(onCard: (BanList, DeckCard) -> Unit) {
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+        Column(
+            Modifier.widthIn(max = STORY.dp).fillMaxWidth().testTag("ban-list"),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Line(Banned.ABOUT, Ink3, size = Design.SMALL)
+            Banned.lists.forEach { list ->
+                Column(Modifier.fillMaxWidth().testTag("ban-format-${list.format}"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    GroupHead(list.format, Banned.count(list), uppercase = true, banded = true)
+                    Line(list.about, Ink3, size = Design.SMALL)
+                    Panel {
+                        list.cards.forEachIndexed { i, card ->
+                            if (i > 0) Hairline("ban-rule-${list.format}-$i")
+                            ReferenceRow(card, "ban-row-${list.format}") { onCard(list, card) }
+                        }
                     }
                 }
             }
@@ -843,10 +877,10 @@ private fun GameChangerList(
 
 /** The deck page's `CardLine`, with no count: nobody holds these, they are a reference. */
 @Composable
-private fun GameChangerRow(card: DeckCard, onOpen: () -> Unit) {
+private fun ReferenceRow(card: DeckCard, tag: String, onOpen: () -> Unit) {
     Row(
         Modifier.fillMaxWidth()
-            .testTag("gc-row")
+            .testTag(tag)
             .clickable { onOpen() }
             .semantics { contentDescription = card.shown }
             .padding(vertical = 5.dp),

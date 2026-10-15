@@ -471,6 +471,7 @@ fun AppShell(
                         hits = state.guideHits,
                         onHit = { onState(state.openGuideHit(it)) },
                         onGameChanger = { onState(state.peekGameChanger(it)) },
+                        onBanned = { list, card -> onState(state.peekBanned(list, card)) },
                         gameChangerSearch = state.gameChangerSearch,
                         onGameChangerSearch = { onState(state.searchGameChangers(it)) },
                         gameChangers = state.gameChangers,
