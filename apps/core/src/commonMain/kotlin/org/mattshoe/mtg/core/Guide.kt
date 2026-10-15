@@ -64,6 +64,9 @@ object Guide {
     val tiles: List<GuideTile> = listOf(
         // Matt: "i want a guide section on rules". The page is in `Rules.kt`.
         GuideTile(RULES, "Rules", "The Comprehensive Rules, searchable. Every rule that mentions trample, or 702.19, one card each."),
+        // Matt: "create a guide section which shows the rules on
+        // brackets". The brackets are in `Brackets.kt`.
+        GuideTile(BRACKETS, "Brackets", "Commander's five brackets, one to five. What each allows: Game Changers, combos, land denial, extra turns."),
         // Matt: "a guide section for game changers ... a list of cards
         // just like a deck page". The list is in `GameChangers.kt`.
         GuideTile(GAME_CHANGERS, "Game Changers", "The cards Commander's brackets count. Any one of them makes a deck bracket 3 or higher."),
