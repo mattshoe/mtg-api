@@ -25,6 +25,54 @@ object Banned {
     /** The heading's count: how many cards a format bans. */
     fun count(list: BanList): String = list.cards.size.toString()
 
+    /** The line above the lists while a name is searched: rows found, of every row. */
+    fun count(found: List<BanList>): String = "${found.sumOf { it.cards.size }} of ${pageOrder.size} cards"
+
+    /** What the page says when no name has every word. */
+    fun none(query: String): String = "No banned card is called \"${GuideSearch.words(query).joinToString(" ")}\"."
+
+    /**
+     * The lists with only the cards whose name has every word typed, in
+     * any capitals and with or without apostrophes, as the Game Changers
+     * search does. A format with none left is not drawn.
+     */
+    fun lists(query: String): List<BanList> {
+        val words = GuideSearch.words(plain(query))
+        if (words.isEmpty()) return lists
+        return lists
+            .map { l -> l.copy(cards = l.cards.filter { c -> words.all { plain(c.name).contains(it, ignoreCase = true) } }) }
+            .filter { it.cards.isNotEmpty() }
+    }
+
+    private fun plain(s: String): String = s.replace("'", "").replace("’", "")
+
+    /**
+     * Every format that bans a card, in the page's order. By its front
+     * face, in any capitals, so a deck's or the Library's two-faced card
+     * finds the list's.
+     */
+    fun formatsOf(name: String): List<String> = byName[front(name)].orEmpty()
+
+    private fun front(name: String): String = name.substringBefore(" // ").trim().lowercase()
+
+    private val byName: Map<String, List<String>> by lazy {
+        lists.flatMap { l -> l.cards.map { front(it.name) to l.format } }
+            .groupBy({ it.first }, { it.second })
+    }
+
+    /**
+     * The carousel's line for a banned card, "Banned in Commander and
+     * Legacy", on every carousel, and nothing for a card no format bans.
+     * Matt: "the carousel should show which formats for which s card is
+     * banned".
+     */
+    fun tag(name: String): PeekTag? {
+        val formats = formatsOf(name)
+        if (formats.isEmpty()) return null
+        val said = if (formats.size == 1) formats[0] else formats.dropLast(1).joinToString(", ") + " and " + formats.last()
+        return PeekTag("Banned in $said", bad = true)
+    }
+
     val lists: List<BanList> by lazy {
         listOf(
             ban("Commander", "Wizards' list for Commander. Every ante card and every Conspiracy is on it too.", commander()),
@@ -608,12 +656,23 @@ object Banned {
 
 /**
  * A row of the banned cards page was tapped: the carousel over every
- * list, at that row. Found by its place in its own list, because one
+ * list the search left, at that row. Found by its place in its own list, because one
  * card can be banned in several formats and the first Black Lotus on
  * the page is Commander's.
  */
 fun AppState.peekBanned(list: BanList, card: DeckCard): AppState {
-    val at = list.cards.indexOf(card)
+    // The lists as they stand, so a search leaves the carousel over
+    // what it found. By format: each read of `banned` is a new list.
+    val shown = banned
+    val at = shown.firstOrNull { it.format == list.format }?.cards?.indexOf(card) ?: -1
     if (at < 0) return this
-    return peekAt(Banned.lists.takeWhile { it !== list }.sumOf { it.cards.size } + at, PeekOf.BANNED)
+    return peekAt(shown.takeWhile { it.format != list.format }.sumOf { it.cards.size } + at, PeekOf.BANNED)
 }
+
+/** The banned cards page as it stands: every format with a card the search found. */
+val AppState.banned: List<BanList> get() = Banned.lists(bannedSearch)
+
+/** Whether a name is typed, so the page says how many it found. */
+val AppState.bannedSearching: Boolean get() = GuideSearch.words(bannedSearch).isNotEmpty()
+
+fun AppState.searchBanned(query: String): AppState = copy(bannedSearch = query)

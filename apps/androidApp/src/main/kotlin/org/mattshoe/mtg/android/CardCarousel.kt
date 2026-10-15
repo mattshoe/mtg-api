@@ -359,10 +359,13 @@ private fun CardSheet(
             place?.let { Line(it, Ink3, Design.MINI, modifier = Modifier.testTag("carousel-place")) }
         }
 
-        Row(
+        // Wraps, as the site's `.peek-tags` does: "Banned in Commander
+        // and Legacy" beside the EDHREC rank was squeezed to a sliver
+        // in one row on every screen.
+        FlowRow(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             // Already worded by `:core`, because what a run can
             // state about a card differs — a deck knows how many it

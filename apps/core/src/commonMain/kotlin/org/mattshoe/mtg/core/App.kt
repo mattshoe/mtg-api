@@ -58,6 +58,8 @@ data class AppState(
     val guideSearch: String = "",
     /** What is typed in the Game Changers page's search bar. See `GameChangers.kt`. */
     val gameChangerSearch: String = "",
+    /** What is typed in the banned cards page's search bar. See `Banned.kt`. */
+    val bannedSearch: String = "",
     /** Intake requests and where each one is, for Admin Settings. */
     val tasks: Tasks = Tasks(),
     /** The task being written on Admin Settings' New task page. */
@@ -368,7 +370,7 @@ data class AppState(
         // Sized only; the Library's own rows are mapped in `peekRun`.
         PeekOf.LIBRARY -> library.rows.map { DeckCard(it.name, 0, null, 0, it.nameNorm) }
         PeekOf.GAME_CHANGERS -> gameChangerOrder
-        PeekOf.BANNED -> Banned.pageOrder
+        PeekOf.BANNED -> banned.flatMap { it.cards }
         PeekOf.FETCH -> fetch.pageOrder.map { DeckCard(it.name, it.want, null, it.have, it.nameNorm) }
     }
 
@@ -393,6 +395,7 @@ data class AppState(
                         PeekTag("${card.owned} owned", bad = card.short > 0),
                         commanderRanks[card.shown]?.rank?.let { PeekTag.commander(it) },
                         PeekTag.edhrec(card.edhrecRank),
+                        Banned.tag(card.name),
                     ),
                     inDeck = card,
                     stepped = stepped,
@@ -414,6 +417,7 @@ data class AppState(
                         row.free?.let { PeekTag("$it free") },
                         commanderRanks[row.fullName]?.rank?.let { PeekTag.commander(it) },
                         PeekTag.edhrec(row.edhrecRank),
+                        Banned.tag(row.name),
                     ),
                     stepped = stepped,
                     facts = PeekFact.line(row.typeLine, row.colorIdentity, row.rarity),
@@ -430,7 +434,7 @@ data class AppState(
                     typeLine = card.typeLine,
                     printing = card.printing,
                     price = null,
-                    tags = listOf(PeekTag.edhrec(card.edhrecRank)),
+                    tags = listOfNotNull(PeekTag.edhrec(card.edhrecRank), Banned.tag(card.name)),
                     facts = PeekFact.line(card.typeLine, card.colorIdentity, card.rarity),
                 )
             }
@@ -450,6 +454,7 @@ data class AppState(
                             PeekTag("have ${card.have}", bad = true).takeIf { card.have < card.want },
                             card.alsoCheck.takeIf { it.isNotEmpty() }?.let { PeekTag(card.alsoCheckLine) },
                             card.decksLine?.let { PeekTag(it) },
+                            Banned.tag(card.name),
                         ),
                         facts = PeekFact.line(card.types ?: section.type.label, section.colors, section.rarity.slug),
                         tick = PeekTick(fetch.isTicked(card.name), fetch.progress),
