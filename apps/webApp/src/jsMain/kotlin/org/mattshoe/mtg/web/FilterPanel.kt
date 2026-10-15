@@ -208,8 +208,10 @@ private fun Colour(f: Filters, onChange: (Filters) -> Unit) {
         Div(attrs = { classes("chips") }) {
             Button(attrs = {
                 classes("chip", "mini")
+                attr("aria-label", "Clear colours")
+                attr("title", "Clear colours")
                 onClick { onChange(f.copy(colors = emptyList())) }
-            }) { Text("clear") }
+            }) { CloseIcon() }
             Button(attrs = {
                 classes("chip", "mini")
                 onClick { onChange(f.copy(colors = COLOR_LETTERS)) }
