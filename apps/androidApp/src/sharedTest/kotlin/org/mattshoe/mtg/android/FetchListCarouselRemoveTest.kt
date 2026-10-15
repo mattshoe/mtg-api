@@ -118,7 +118,7 @@ class FetchListCarouselRemoveTest {
             "$on Remove is a word, not an icon",
         )
         assertTrue(
-            rule.onAllNodes(hasTestTag("trash-icon") and hasAnyAncestor(hasTestTag("carousel-remove")), useUnmergedTree = true)
+            rule.onAllNodes(hasTestTag(Glyph.BIN.tag) and hasAnyAncestor(hasTestTag("carousel-remove")), useUnmergedTree = true)
                 .fetchSemanticsNodes().isNotEmpty(),
             "$on Remove has no bin drawn on it",
         )

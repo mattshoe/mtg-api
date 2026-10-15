@@ -10,9 +10,6 @@ import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -415,17 +412,10 @@ private fun CardSheet(
                 // Off the list, and on to the next card. Matt: "i
                 // should keep my place in the carousel, just moved
                 // forward one card to the next".
-                Box(
-                    Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .clickable(role = Role.Button) { onRemove() }
-                        .semantics { contentDescription = "Remove " + card.title + " from the list" }
-                        .testTag("carousel-remove"),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    TrashIcon(Ink2, size = 20.dp, modifier = Modifier.testTag("trash-icon"))
-                }
+                IconAction(
+                    "Remove " + card.title + " from the list", Glyph.BIN,
+                    modifier = Modifier.testTag("carousel-remove"),
+                ) { onRemove() }
             }
         }
 
