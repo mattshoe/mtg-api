@@ -339,7 +339,7 @@ fun Ghost(label: String, on: Boolean = false, enabled: Boolean = true, onClick: 
  * `.btn.icon-only`: an action drawn rather than written. Matt: "stop
  * using text for buttons when an icon would suffice". [label] is what
  * a screen reader says, so the word is still there for whoever needs
- * it. `test/icon-actions.test.js` fails a new `Ghost("Remove")`.
+ * it. `test/icon-actions.test.js` fails a new worded one.
  */
 @Composable
 fun IconAction(

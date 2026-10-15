@@ -6,6 +6,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -159,7 +160,7 @@ class DeckCardCarouselParityTest {
     }
 
     private fun says(text: String) =
-        rule.onAllNodes(hasText(text)).fetchSemanticsNodes().isNotEmpty()
+        rule.onAllNodes(hasText(text) or hasContentDescription(text)).fetchSemanticsNodes().isNotEmpty()
 
     private fun peeking() = shell(onADeck()).also { tap("Cultivate") }
 

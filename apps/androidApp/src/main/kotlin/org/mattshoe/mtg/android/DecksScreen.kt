@@ -277,7 +277,7 @@ internal fun DeckDetailScreen(
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 Btn("Edit list") { onEdit(open) }
-                Btn("Rename") { onRename(open) }
+                IconAction("Rename", icon = { PencilIcon(it) }) { onRename(open) }
                 Btn("Disassemble", danger = true) { onDisassemble(open) }
             }
         }

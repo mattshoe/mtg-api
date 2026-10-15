@@ -73,7 +73,9 @@ fun NewTaskScreen(
                         Muted(f.shownSize)
                     }
                     Box(Modifier.testTag("task-file-remove-${f.name}")) {
-                        Ghost("Remove", enabled = !task.busy) { onState(task.remove(f.name)) }
+                        IconAction("Remove ${f.name}", enabled = !task.busy, icon = { CrossIcon(it) }) {
+                            onState(task.remove(f.name))
+                        }
                     }
                 }
             }

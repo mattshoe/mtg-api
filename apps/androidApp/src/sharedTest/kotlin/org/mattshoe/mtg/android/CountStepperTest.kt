@@ -9,6 +9,7 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.performClick
@@ -162,7 +163,8 @@ class CountStepperTest {
     }
 
     private fun onTheSheet(text: String, substring: Boolean = false) = rule.onAllNodes(
-        hasText(text, substring = substring) and hasAnyAncestor(hasTestTag("carousel-sheet")),
+        (hasText(text, substring = substring) or hasContentDescription(text, substring = substring)) and
+            hasAnyAncestor(hasTestTag("carousel-sheet")),
         useUnmergedTree = true,
     ).fetchSemanticsNodes().isNotEmpty()
 

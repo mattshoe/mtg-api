@@ -97,7 +97,8 @@ class ActionIconsTest {
         val on = on(size)
         val buttons = rule.onAllNodes(hasContentDescription(label) and hasClickAction()).fetchSemanticsNodes()
         assertEquals(1, buttons.size, "$on there is no one button that says \"$label\" to a screen reader")
-        rule.onNode(hasContentDescription(label) and hasClickAction()).performScrollTo()
+        // Not every button sits in something that scrolls: the carousel sheet does not.
+        runCatching { rule.onNode(hasContentDescription(label) and hasClickAction()).performScrollTo() }
         val words = rule.onAllNodes(hasText(label.substringBefore(' '), substring = true) and hasAnyAncestor(hasContentDescription(label)), useUnmergedTree = true)
             .fetchSemanticsNodes()
             .flatMap { n -> n.config.getOrNull(SemanticsProperties.Text).orEmpty().map { it.text } }

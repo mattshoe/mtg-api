@@ -377,7 +377,7 @@ class DecksParityTest {
         content { DecksScreen(opened(), {}, admin = false) }
         Parity.check(
             Parity.Fact("no edit") { !says("Edit list") },
-            Parity.Fact("no rename") { !says("Rename") },
+            Parity.Fact("no rename") { !says("Rename") && described("Rename") == 0 },
             Parity.Fact("no disassemble") { !says("Disassemble") },
             Parity.Fact("no add") { !says("+ Add a card") },
             Parity.Fact("not one ⋯ on any row") {
@@ -401,7 +401,7 @@ class DecksParityTest {
             )
         }
         rule.onNodeWithText("Edit list").assertExists()
-        rule.onNodeWithText("Rename").performScrollTo().performClick()
+        rule.onNodeWithContentDescription("Rename").performScrollTo().performClick()
         rule.runOnIdle { assertEquals("a", renamed?.key) }
         assertNull(edited, "Rename pressed the edit button")
     }
