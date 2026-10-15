@@ -148,7 +148,7 @@ class CountStepperTest {
     private fun sheetButton(label: String): HTMLButtonElement? =
         document.querySelectorAll(".peek-sheet button").let { l -> (0 until l.length).map { l[it] } }
             .filterIsInstance<HTMLButtonElement>()
-            .firstOrNull { it.textContent?.trim() == label }
+            .firstOrNull { it.textContent?.trim() == label || it.getAttribute("aria-label") == label }
 
     @Test
     fun theCarouselsStepperIsNoTallerThanTheButtonsUnderIt() = runTest {

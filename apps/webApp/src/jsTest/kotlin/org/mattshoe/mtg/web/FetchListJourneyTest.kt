@@ -167,7 +167,8 @@ class FetchListJourneyTest {
         querySelectorAll(css).let { n -> (0 until n.length).mapNotNull { n[it] as? HTMLElement } }
 
     private fun HTMLElement.button(label: String): HTMLButtonElement =
-        all("button").filterIsInstance<HTMLButtonElement>().firstOrNull { it.textContent?.trim() == label }
+        all("button").filterIsInstance<HTMLButtonElement>()
+            .firstOrNull { it.textContent?.trim() == label || it.getAttribute("aria-label") == label }
             ?: error("no button labelled \"$label\"")
 
     private fun type(el: HTMLElement, text: String) {
