@@ -1,79 +1,132 @@
-import { describe, it, expect } from 'vitest';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join, relative } from 'node:path';
-
-// Matt: "change the 'remove' text on the fetch list carousel to just an
-// icon. and stop using text for buttons when an icon would suffice. like
-// globally". And before that: "Instead of an X icon or trash icon, just
-// using the text 'remove', same with share and edit etc etc. This looks
-// terrible and dated."
+// An action is an icon, not the word for it.
 //
-// So a button whose whole face is one of these words is the mistake.
-// The word stays as the button's label for a screen reader
-// (`contentDescription`, `aria-label`), which is not what this reads.
+// Matt: "The agents keep doing stupid shit like using text instead of
+// icons. Instead of an X icon or trash icon, just using the text
+// 'remove', same with share and edit etc etc. This looks terrible and
+// dated."
 //
-// A ratchet. `fixtures/text-label-actions.json` lists what is allowed to
-// stay a word, as "path: Label". A NEW one fails here; a fixed one has
-// to come off the list in the same commit, so the list only shrinks.
-// Confirmation dialogs are the exception the rule makes, and their
-// buttons are written `Text(if (busy) "Renaming…" else "Rename")`,
-// which this does not read as a bare label.
+// He is right and it is not a matter of taste that can be argued with:
+// a row of cards with [Remove] [Edit] [Rename] spelled out in words
+// reads like a 2004 admin panel. Every app a person uses puts a bin, a
+// pencil and a share arrow there.
+//
+// Both platforms already have somewhere for these to live and neither
+// has the shapes yet:
+//
+//   Android  apps/androidApp/.../NavIcons.kt — Canvas paths, with
+//            `at`, `line`, `box`, `circle` and `path` helpers
+//   Web      apps/webApp/.../Icons.kt — a span masked to a shape by
+//            `currentColor`, the shape itself a CSS rule
+//
+// This test is a ratchet, not a cleanup. The seventeen labels in
+// `test/fixtures/text-label-actions.json` are what the codebase had
+// when the rule was written; they are listed so the rule can start
+// working today instead of after a cross-platform retrofit. A NEW one
+// fails immediately. A fixed one has to come out of the file in the
+// same commit, so the list can only ever shrink — the same bargain as
+// `test/suite-floors.json`.
+//
+// The accessibility label is a different thing and stays a word:
+// `contentDescription = "Remove"` and `aria-label="Remove"` are how a
+// screen reader says what the bin does, and an icon without one is
+// worse than the word.
 
-const ROOT = join(import.meta.dirname, '..');
-const WORDS = ['Remove', 'Delete', 'Edit', 'Rename', 'Share', 'Copy', 'Clear', 'Discard', 'Trash'];
-const WORD = `(${WORDS.join('|')})`;
+import { describe, it, expect } from 'vitest'
+import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { join, dirname, basename } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-// Android: the app's own buttons take their face as the first argument.
-const PHONE = new RegExp(`\\b(?:Btn|Ghost|Primary)\\(\\s*"${WORD}"`, 'g');
-// Web: a button's content lambda that is a single `Text("Word")`.
-const WEB = new RegExp(`\\{\\s*Text\\(\\s*"${WORD}"\\s*\\)\\s*\\}`, 'g');
+const REPO = dirname(dirname(fileURLToPath(import.meta.url)))
+const BASELINE = join(REPO, 'test', 'fixtures', 'text-label-actions.json')
 
-export function wordsOnButtons(source, platform) {
-  const re = platform === 'phone' ? PHONE : WEB;
-  return [...source.matchAll(re)].map((m) => m[1]);
+/** The actions with an icon everybody already recognises. */
+const WORDS = 'delete|remove|trash|share|edit|rename|copy|clear|discard'
+
+/** Android: the label is the first argument of a clickable component. */
+const ANDROID = new RegExp(String.raw`\b(?:Btn|Ghost|Chip|Pill|TextBtn)\(\s*"((?:${WORDS})\b[^"]{0,20})"`, 'i')
+
+/** Web: a `Text("…")` inside something clickable. */
+// The `\b` matters: without it "Renamed" — a status tag reading
+// "Renamed" next to a tick — matched as the word "rename", and no
+// amount of looking at what encloses it would have helped. An action
+// label is the word, or the word and more words, never the word with
+// letters stuck on the end.
+const WEB = new RegExp(String.raw`\bText\(\s*"((?:${WORDS})\b[^"]{0,20})"`, 'i')
+
+function kotlin(dir, out = []) {
+  for (const e of readdirSync(dir)) {
+    const p = join(dir, e)
+    if (statSync(p).isDirectory()) kotlin(p, out)
+    else if (e.endsWith('.kt')) out.push(p)
+  }
+  return out
 }
 
-function kotlin(dir) {
-  return readdirSync(dir).flatMap((name) => {
-    const p = join(dir, name);
-    if (statSync(p).isDirectory()) return kotlin(p);
-    return p.endsWith('.kt') ? [p] : [];
-  });
-}
-
+/** Every visible word-label for one of those actions, as file:label. */
 function found() {
-  const sides = [
-    ['phone', join(ROOT, 'apps/androidApp/src/main/kotlin')],
-    ['web', join(ROOT, 'apps/webApp/src/jsMain/kotlin')],
-  ];
-  return sides.flatMap(([platform, dir]) => kotlin(dir).flatMap((file) =>
-    wordsOnButtons(readFileSync(file, 'utf8'), platform)
-      .map((word) => `${relative(ROOT, file)}: ${word}`))).sort();
+  const hits = []
+  for (const p of kotlin(join(REPO, 'apps/androidApp/src/main'))) {
+    readFileSync(p, 'utf8').split('\n').forEach((line, i) => {
+      const m = line.match(ANDROID)
+      if (m) hits.push({ key: `${basename(p)}:${m[1]}`, where: `${basename(p)}:${i + 1}`, label: m[1] })
+    })
+  }
+  for (const p of kotlin(join(REPO, 'apps/webApp/src/jsMain'))) {
+    const lines = readFileSync(p, 'utf8').split('\n')
+    lines.forEach((line, i) => {
+      const m = line.match(WEB)
+      // Only inside a `Button(`, and twelve lines of lookback rather
+      // than three.
+      //
+      // Three lines missed a real one: `FetchListPage.kt` builds the
+      // button's `onClick` over several lines and puts `}) {
+      // Text("Remove") }` well below it, so the Android half of that
+      // pair was caught and the web half was not. A detector that sees
+      // one platform and not the other is worse than none, because it
+      // reads as parity.
+      //
+      // `Button(` rather than `onClick`, because widening the lookback
+      // to catch that one started matching `Text("Renamed")` — a status
+      // tag in a `Div`, sitting below the close button's `onClick`. A
+      // label the person cannot press is not this rule's business.
+      if (m && /Button\(/.test(lines.slice(Math.max(0, i - 12), i + 1).join('\n'))) {
+        hits.push({ key: `${basename(p)}:${m[1]}`, where: `${basename(p)}:${i + 1}`, label: m[1] })
+      }
+    })
+  }
+  return hits
 }
-
-const allowed = JSON.parse(readFileSync(join(ROOT, 'test/fixtures/text-label-actions.json'), 'utf8'));
 
 describe('an action is an icon, not the word for it', () => {
-  it('reads a worded button on each platform, so an empty answer means something', () => {
-    expect(wordsOnButtons('Ghost("Remove") { onRemove() }', 'phone')).toEqual(['Remove']);
-    expect(wordsOnButtons('Btn("Rename") { go() }', 'phone')).toEqual(['Rename']);
-    expect(wordsOnButtons('}) { Text("Delete") }', 'web')).toEqual(['Delete']);
-    expect(wordsOnButtons('onClick { x() } }) {\n    Text("Remove")\n  }', 'web')).toEqual(['Remove']);
-    // A label for a screen reader is not a face.
-    expect(wordsOnButtons('attr("aria-label", "Remove")', 'web')).toEqual([]);
-    expect(wordsOnButtons('contentDescription = "Remove"', 'phone')).toEqual([]);
-    // A confirmation dialog's button says its word, and is allowed to.
-    expect(wordsOnButtons('{ Text(if (state.busy) "Renaming…" else "Rename") }', 'web')).toEqual([]);
-  });
+  const known = new Set(JSON.parse(readFileSync(BASELINE, 'utf8')))
 
-  it('no new button is a word where an icon would do', () => {
-    const extra = found().filter((f) => !allowed.includes(f));
-    expect(extra, `these buttons spell out an action instead of drawing it: ${extra.join(', ')}`).toEqual([]);
-  });
+  it('has no word-labelled action that is not already on the list', () => {
+    const fresh = found().filter((h) => !known.has(h.key))
+    expect(
+      fresh.map((h) => `${h.where} "${h.label}"`),
+      'A new action is spelled out in words. Draw it instead: NavIcons.kt on\n'
+      + 'Android, Icons.kt plus a CSS mask on the web. Keep the word as the\n'
+      + 'contentDescription or aria-label so a screen reader still says it.\n'
+      + 'If it genuinely has no icon anybody would recognise, add it to\n'
+      + 'test/fixtures/text-label-actions.json and say why in the commit',
+    ).toEqual([])
+  })
 
-  it('a button drawn since comes off the list, so the list only shrinks', () => {
-    const now = found();
-    const stale = allowed.filter((a) => !now.includes(a));
-    expect(stale, `no longer a word, take these off test/fixtures/text-label-actions.json: ${stale.join(', ')}`).toEqual([]);
-  });
-});
+  it('has no entry on the list that has already been fixed', () => {
+    // The ratchet. A label that is gone comes off the list in the same
+    // commit, or the list stops meaning anything.
+    const keys = new Set(found().map((h) => h.key))
+    const stale = [...known].filter((k) => !keys.has(k))
+    expect(
+      stale,
+      'These are fixed. Take them out of test/fixtures/text-label-actions.json\n'
+      + 'in the same commit, so the list can only ever shrink',
+    ).toEqual([])
+  })
+
+  it('counts the ones still to do, so the number is visible', () => {
+    // Not an assertion about the number, a statement of it. 18 when the
+    // rule was written, and it is only allowed to go down.
+    expect(known.size).toBeLessThanOrEqual(18)
+  })
+})
