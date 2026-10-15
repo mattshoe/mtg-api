@@ -19,6 +19,8 @@ import org.mattshoe.mtg.core.Combo
 import org.mattshoe.mtg.core.DeckCard
 import org.mattshoe.mtg.core.DeckGroup
 import org.mattshoe.mtg.core.GameChangers
+import org.mattshoe.mtg.core.BanList
+import org.mattshoe.mtg.core.Banned
 import org.mattshoe.mtg.core.Design
 import org.mattshoe.mtg.core.Guide
 import org.mattshoe.mtg.core.GuideHit
@@ -63,6 +65,7 @@ fun GuidePage(
     gameChangerSearch: String = "",
     onGameChangerSearch: (String) -> Unit = {},
     gameChangers: List<Pair<DeckGroup, List<DeckCard>>> = GameChangers.byType,
+    onBanned: (BanList, DeckCard) -> Unit = { _, _ -> },
     upTo: String = "Guide",
 ) {
     Div(attrs = { classes("wrap", "guide") }) {
@@ -86,6 +89,7 @@ fun GuidePage(
                 Guide.PHYREXIA -> Lore(era ?: PhyrexianLore.eras.first(), onEra)
                 Guide.RULES -> RulesSearch(rules, onRules, onLoadRules)
                 Guide.GAME_CHANGERS -> GameChangerList(gameChangerSearch, onGameChangerSearch, gameChangers, onGameChanger)
+                Guide.BANNED -> BannedList(onBanned)
                 else -> story?.let { Story(it, onStory) }
             }
         }
@@ -641,28 +645,58 @@ private fun GameChangerList(
                     Span(attrs = { classes("tag", "mini") }) { Text(cards.size.toString()) }
                 }
                 Div(attrs = { classes("panel-body") }) {
-                    cards.forEach { card ->
-                        Div(attrs = {
-                            classes("deck-line")
-                            attr("role", "button")
-                            attr("tabindex", "0")
-                            attr("title", card.shown)
-                            onClick { onCard(card) }
-                            onKeyDown { e -> if (e.key == "Enter" || e.key == " ") onCard(card) }
-                        }) {
-                            Div(attrs = { classes("thumb") }) {
-                                card.art?.let { Img(src = it, alt = "", attrs = { attr("loading", "lazy") }) }
-                            }
-                            Div(attrs = { classes("line-text") }) {
-                                Div(attrs = { classes("line-top") }) {
-                                    Span(attrs = { classes("t-name") }) { Text(card.shown) }
-                                }
-                                card.typeLine?.let { Span(attrs = { classes("line-type") }) { Text(it) } }
-                            }
-                        }
-                    }
+                    cards.forEach { card -> ReferenceRow(card) { onCard(card) } }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Every format's ban list, top to bottom, Commander first: a panel per
+ * format with its count, a line saying what the format is, and a row
+ * per card. A row pops the carousel over every list at that row.
+ * Sibling of `BannedList` in `GuideScreen`; the lists are `Banned`'s.
+ */
+@Composable
+private fun BannedList(onCard: (BanList, DeckCard) -> Unit) {
+    Div(attrs = { classes("ban-list", "stack") }) {
+        P(attrs = { classes("muted", "small", "gc-about") }) { Text(Banned.ABOUT) }
+        Banned.lists.forEach { list ->
+            Div(attrs = { classes("panel", "ban-format") }) {
+                Div(attrs = { classes("panel-head") }) {
+                    H2 { Text(list.format) }
+                    Span(attrs = { classes("spacer") }) {}
+                    Span(attrs = { classes("tag", "mini") }) { Text(Banned.count(list)) }
+                }
+                Div(attrs = { classes("panel-body") }) {
+                    P(attrs = { classes("muted", "small", "ban-about") }) { Text(list.about) }
+                    list.cards.forEach { card -> ReferenceRow(card) { onCard(list, card) } }
+                }
+            }
+        }
+    }
+}
+
+/** A deck page's row with no count: a card to look at, not one anybody holds. */
+@Composable
+private fun ReferenceRow(card: DeckCard, onOpen: () -> Unit) {
+    Div(attrs = {
+        classes("deck-line")
+        attr("role", "button")
+        attr("tabindex", "0")
+        attr("title", card.shown)
+        onClick { onOpen() }
+        onKeyDown { e -> if (e.key == "Enter" || e.key == " ") onOpen() }
+    }) {
+        Div(attrs = { classes("thumb") }) {
+            card.art?.let { Img(src = it, alt = "", attrs = { attr("loading", "lazy") }) }
+        }
+        Div(attrs = { classes("line-text") }) {
+            Div(attrs = { classes("line-top") }) {
+                Span(attrs = { classes("t-name") }) { Text(card.shown) }
+            }
+            card.typeLine?.let { Span(attrs = { classes("line-type") }) { Text(it) } }
         }
     }
 }

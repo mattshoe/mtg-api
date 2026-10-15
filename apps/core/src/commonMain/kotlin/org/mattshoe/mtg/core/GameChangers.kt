@@ -108,14 +108,14 @@ object GameChangers {
 
     private fun plain(s: String): String = s.replace("'", "").replace("’", "")
 
-    private fun gc(
+    internal fun gc(
         name: String,
         scryfallId: String,
         typeLine: String,
         identity: String,
         manaCost: String,
         rarity: String,
-        edhrecRank: Long,
+        edhrecRank: Long?,
         set: String,
         number: String,
     ) = DeckCard(

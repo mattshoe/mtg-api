@@ -37,7 +37,7 @@ class GuideTileOrderTest {
         Promise<Unit> { r, _ -> w.requestAnimationFrame { r(Unit) } }.await()
     }
 
-    private val order = listOf("Rules", "Game Changers", "Colour combinations", "The colour wheel")
+    private val order = listOf("Rules", "Game Changers", "Banned cards", "Colour combinations", "The colour wheel")
 
     private suspend fun tilesInOrder(size: Pair<Int, Int>) {
         val s = Tablet.open(size).also { screen = it }

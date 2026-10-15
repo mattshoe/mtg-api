@@ -32,7 +32,7 @@ class GuideTileOrderTest {
     @get:Rule
     val rule = createComposeRule()
 
-    private val order = listOf("rules", "game-changers", "colours", "wheel")
+    private val order = listOf("rules", "game-changers", "banned", "colours", "wheel")
 
     private fun guide(sized: @Composable (@Composable () -> Unit) -> Unit) {
         rule.setContent {

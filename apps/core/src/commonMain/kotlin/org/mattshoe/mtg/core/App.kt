@@ -368,6 +368,7 @@ data class AppState(
         // Sized only; the Library's own rows are mapped in `peekRun`.
         PeekOf.LIBRARY -> library.rows.map { DeckCard(it.name, 0, null, 0, it.nameNorm) }
         PeekOf.GAME_CHANGERS -> gameChangerOrder
+        PeekOf.BANNED -> Banned.pageOrder
         PeekOf.FETCH -> fetch.pageOrder.map { DeckCard(it.name, it.want, null, it.have, it.nameNorm) }
     }
 
@@ -421,7 +422,7 @@ data class AppState(
 
             // A reference, not a holding: nothing to count and nothing
             // to swap, so only how much it is played.
-            PeekOf.GAME_CHANGERS -> gameChangerOrder.map { card ->
+            PeekOf.GAME_CHANGERS, PeekOf.BANNED -> runFor(peek.of).map { card ->
                 PeekCard(
                     title = card.shown,
                     nameNorm = card.nameNorm,

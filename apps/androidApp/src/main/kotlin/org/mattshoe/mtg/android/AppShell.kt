@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.sp
 import org.mattshoe.mtg.core.guideHits
 import org.mattshoe.mtg.core.openGuideHit
 import org.mattshoe.mtg.core.peekGameChanger
+import org.mattshoe.mtg.core.peekBanned
 import org.mattshoe.mtg.core.peekFetch
 import org.mattshoe.mtg.core.peekTick
 import org.mattshoe.mtg.core.gameChangers
@@ -472,6 +473,7 @@ fun AppShell(
                         hits = state.guideHits,
                         onHit = { onState(state.openGuideHit(it)) },
                         onGameChanger = { onState(state.peekGameChanger(it)) },
+                        onBanned = { list, card -> onState(state.peekBanned(list, card)) },
                         gameChangerSearch = state.gameChangerSearch,
                         onGameChangerSearch = { onState(state.searchGameChangers(it)) },
                         gameChangers = state.gameChangers,
