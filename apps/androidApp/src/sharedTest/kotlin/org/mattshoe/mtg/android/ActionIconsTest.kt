@@ -159,10 +159,13 @@ class ActionIconsTest {
         val box = action(label).getUnclippedBoundsInRoot()
         assertTrue(box.right - box.left >= 40.dp, "$on \"$label\" is ${box.right - box.left} wide, too narrow to hit")
         assertTrue(box.bottom - box.top >= 40.dp, "$on \"$label\" is ${box.bottom - box.top} tall, too short to hit")
-        val screen = rule.onRoot().getUnclippedBoundsInRoot()
+        // Against the size the screen was forced to, not the root: on a
+        // device `Tablet.Sized` lays a tablet out inside a phone's
+        // window, so the root is the phone. See ClearTheBoxTest.
+        val right = size?.width ?: rule.onRoot().getUnclippedBoundsInRoot().right
         assertTrue(
-            box.left >= screen.left && box.right <= screen.right,
-            "$on \"$label\" runs off the screen: ${box.left}..${box.right} on ${screen.left}..${screen.right}",
+            box.left >= 0.dp && box.right <= right,
+            "$on \"$label\" runs off the screen: ${box.left}..${box.right} on 0..$right",
         )
 
         action(label).performSemanticsAction(SemanticsActions.OnClick)
@@ -176,7 +179,7 @@ class ActionIconsTest {
         // The commander: on any other row the stepper's minus is the
         // remove, and the sheet offers only Swap.
         shell(onADeck(), size)
-        rule.onNode(hasText("Alela, Artful Provocateur") and hasClickAction()).performScrollTo().performClick()
+        rule.onNode(hasText("Alela, Artful Provocateur") and hasClickAction()).performScrollTo().performSemanticsAction(SemanticsActions.OnClick)
         rule.waitForIdle()
         drawn("Remove", Glyph.BIN, size) { pressed == "REMOVE Alela, Artful Provocateur" }
     }
@@ -229,7 +232,8 @@ class ActionIconsTest {
         shell(AppState(admin = me).navigate(Route(View.FETCH)), size)
         rule.onNodeWithTag("fetch-list").performTextInput("1 Counterspell\n1 Black Lotus")
         rule.waitForIdle()
-        rule.onNodeWithTag("fetch-find").performClick()
+        rule.onNode((hasTestTag("fetch-find") or hasAnyAncestor(hasTestTag("fetch-find"))) and hasClickAction())
+            .performSemanticsAction(SemanticsActions.OnClick)
         rule.waitForIdle()
         assertTrue(held.value.fetch.result != null, "Find cards did nothing, so there is no list to edit")
     }
@@ -276,7 +280,7 @@ class ActionIconsTest {
         }
         shell(start, size)
         // A group with a filter in force opens by itself.
-        if (rule.onAllNodes(hasContentDescription("Clear the colours")).fetchSemanticsNodes().isEmpty()) rule.onNodeWithTag("header-${Facet.COLOUR.id}").performScrollTo().performClick()
+        if (rule.onAllNodes(hasContentDescription("Clear the colours")).fetchSemanticsNodes().isEmpty()) rule.onNodeWithTag("header-${Facet.COLOUR.id}").performScrollTo().performSemanticsAction(SemanticsActions.OnClick)
         rule.waitForIdle()
         drawn("Clear the colours", Glyph.CROSS, size) { held.value.library.filters.colors.isEmpty() }
     }
