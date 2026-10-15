@@ -1091,6 +1091,17 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
   mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.1' stroke-linecap='round'><path d='M6 6l12 12'/><path d='M18 6L6 18'/></svg>");
 }
 
+/* Remove and delete: a bin, the shape the phone's `TrashIcon` draws. */
+.icon-trash {
+  -webkit-mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'><path d='M4 6.5h16'/><path d='M9 6.5V4h6v2.5'/><path d='M6 6.5L7 20h10l1-13.5'/><path d='M10 10.5v6'/><path d='M14 10.5v6'/></svg>");
+  mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'><path d='M4 6.5h16'/><path d='M9 6.5V4h6v2.5'/><path d='M6 6.5L7 20h10l1-13.5'/><path d='M10 10.5v6'/><path d='M14 10.5v6'/></svg>");
+}
+/* Edit and rename: a pencil, the shape the phone's `EntryIcon` draws. */
+.icon-edit {
+  -webkit-mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'><path d='M4 20v-4L16 4l4 4L8 20z'/><path d='M13 7l4 4'/></svg>");
+  mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'><path d='M4 20v-4L16 4l4 4L8 20z'/><path d='M13 7l4 4'/></svg>");
+}
+
 .btn.icon-only { padding: 0; width: 30px; height: 30px; display: inline-grid; place-items: center; }
 
 /* --------------------------------------------------------- mana art */

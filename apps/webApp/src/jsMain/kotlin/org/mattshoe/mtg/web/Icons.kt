@@ -52,3 +52,25 @@ fun ProfileIcon() {
         attr("aria-hidden", "true")
     }) {}
 }
+
+/**
+ * Remove and delete: a bin. Matt: "Instead of an X icon or trash icon,
+ * just using the text 'remove'". The phone's `TrashIcon` is the same
+ * numbers.
+ */
+@Composable
+fun TrashIcon() {
+    Span(attrs = {
+        classes("icon", "icon-trash")
+        attr("aria-hidden", "true")
+    }) {}
+}
+
+/** Edit and rename: the pencil the phone's Mass entry tab draws. */
+@Composable
+fun EditIcon() {
+    Span(attrs = {
+        classes("icon", "icon-edit")
+        attr("aria-hidden", "true")
+    }) {}
+}

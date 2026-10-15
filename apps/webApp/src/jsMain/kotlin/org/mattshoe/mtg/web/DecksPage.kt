@@ -88,9 +88,11 @@ fun DecksPage(
                             onClick { onEdit(open) }
                         }) { Text("Edit list") }
                         Button(attrs = {
-                            classes("btn", "sm")
+                            classes("btn", "sm", "icon-only")
+                            attr("aria-label", "Rename")
+                            attr("title", "Rename")
                             onClick { onRename(open) }
-                        }) { Text("Rename") }
+                        }) { EditIcon() }
                         Button(attrs = {
                             classes("btn", "sm", "danger")
                             onClick { onDisassemble(open) }

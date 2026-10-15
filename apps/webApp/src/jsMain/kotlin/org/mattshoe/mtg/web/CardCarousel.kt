@@ -290,9 +290,12 @@ private fun Sheet(
                         Tweak.SWAP -> Button(attrs = { classes("btn", "sm"); onClick { onTweak(row, how) } }) {
                             Text("Swap")
                         }
-                        Tweak.REMOVE -> Button(attrs = { classes("btn", "sm", "danger"); onClick { onTweak(row, how) } }) {
-                            Text("Remove")
-                        }
+                        Tweak.REMOVE -> Button(attrs = {
+                            classes("btn", "sm", "danger", "icon-only")
+                            attr("aria-label", "Remove")
+                            attr("title", "Remove")
+                            onClick { onTweak(row, how) }
+                        }) { TrashIcon() }
                         Tweak.ADD -> Unit
                     }
                 }

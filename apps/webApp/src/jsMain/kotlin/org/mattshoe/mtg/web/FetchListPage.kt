@@ -113,10 +113,11 @@ private fun FetchListRoot(
                         Span(attrs = { classes("muted", "small") }) { Text(s.at.take(10)) }
                         Span(attrs = { classes("spacer") }) {}
                         Button(attrs = {
-                            classes("btn", "sm", "ghost")
+                            classes("btn", "sm", "ghost", "icon-only")
                             attr("aria-label", "Delete " + s.title)
+                            attr("title", "Delete")
                             onClick { onState(state.delete(s.id)) }
-                        }) { Text("Delete") }
+                        }) { TrashIcon() }
                     }
                 }
             }
@@ -145,11 +146,13 @@ private fun FetchListOpen(
             Span(attrs = { classes("spacer") }) {}
             if (state.list.isNotBlank() && state.editing == null) {
                 Button(attrs = {
-                    classes("btn")
+                    classes("btn", "icon-only")
                     attr("data-fetch-edit", "")
+                    attr("aria-label", "Edit")
+                    attr("title", "Edit")
                     if (state.busy) disabled()
                     onClick { onState(state.edit()) }
-                }) { Text("Edit") }
+                }) { EditIcon() }
             }
         }
         Div(attrs = { classes("panel-body") }) {
@@ -332,14 +335,15 @@ private fun FetchListOpen(
 @Composable
 private fun RemoveButton(name: String, onRemove: () -> Unit) {
     Button(attrs = {
-        classes("btn", "sm", "ghost")
+        classes("btn", "sm", "ghost", "icon-only")
         attr("data-fetch-remove", name)
         attr("aria-label", "Remove $name from the list")
+        attr("title", "Remove")
         onClick {
             it.stopPropagation()
             onRemove()
         }
-    }) { Text("Remove") }
+    }) { TrashIcon() }
 }
 
 /**
