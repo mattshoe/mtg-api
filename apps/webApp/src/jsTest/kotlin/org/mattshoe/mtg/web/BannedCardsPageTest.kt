@@ -99,7 +99,7 @@ class BannedCardsPageTest {
         assertEquals(formats, sections.map { it.first }, "the formats are not Commander, then Standard, then the rest")
         sections.zip(Banned.lists).forEach { (drawn, list) ->
             assertEquals(list.cards.size.toString(), drawn.second, "${drawn.first}'s heading does not say how many it bans")
-            assertEquals(list.cards.map { it.name }, drawn.third, "${drawn.first} does not list its ban list")
+            assertEquals(list.cards.map { it.shown }, drawn.third, "${drawn.first} does not list its ban list")
         }
         assertEquals(Banned.lists.size, frame.all(".ban-list .ban-about").size, "not every format says what it is")
 

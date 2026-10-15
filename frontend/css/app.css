@@ -2100,5 +2100,6 @@ select.sort {
 }
 
 /* The Guide's Game Changers: a deck page's list, as wide as the story at most, centred. */
-.gc-list { max-width: 680px; margin: 0 auto; }
+.gc-list, .ban-list { max-width: 680px; margin: 0 auto; }
 .gc-about { margin: 0; }
+.ban-about { margin: 0; padding: 0 0 6px; }

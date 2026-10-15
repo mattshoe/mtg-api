@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.sp
 import org.mattshoe.mtg.core.guideHits
 import org.mattshoe.mtg.core.openGuideHit
 import org.mattshoe.mtg.core.peekGameChanger
+import org.mattshoe.mtg.core.peekBanned
 import org.mattshoe.mtg.core.gameChangers
 import org.mattshoe.mtg.core.searchGameChangers
 import org.mattshoe.mtg.core.searchGuide
