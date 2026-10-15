@@ -639,7 +639,21 @@ fun AppState.peekFetch(card: FetchCard): AppState =
  * The Found box on the carousel's sheet. The page's own tick, so the
  * count on one is the count on the other.
  */
-fun AppState.peekRemove(): AppState = this
+/**
+ * Remove on the carousel's sheet: the card on show off the list, the
+ * same remove as the page's row. Matt: "i should keep my place in the
+ * carousel, just moved forward one card to the next (unless i remove
+ * the last obviously)". The same position is the next card now; past
+ * the end it is the one before. Nothing left shuts the carousel.
+ */
+fun AppState.peekRemove(): AppState {
+    if (peek.of != PeekOf.FETCH || !peek.open) return this
+    val card = fetch.pageOrder.getOrNull(peek.at) ?: return this
+    val left = copy(fetch = fetch.remove(card))
+    val last = left.fetch.pageOrder.lastIndex
+    if (last < 0) return left.closing(Overlay.CARD_PEEK)
+    return left.copy(peek = peek.copy(at = peek.at.coerceAtMost(last), zoom = CardZoom()))
+}
 
 fun AppState.peekTick(): AppState {
     if (peek.of != PeekOf.FETCH) return this
