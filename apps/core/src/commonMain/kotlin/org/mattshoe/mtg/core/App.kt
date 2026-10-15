@@ -453,6 +453,7 @@ data class AppState(
                         ),
                         facts = PeekFact.line(card.types ?: section.type.label, section.colors, section.rarity.slug),
                         tick = PeekTick(fetch.isTicked(card.name), fetch.progress),
+                        artByName = true,
                     )
                 }
             }

@@ -465,12 +465,14 @@ object CardQueries {
      * collection has no printing to take an id from — which happens
      * for a proxy deck whose commander nobody owns.
      */
-    fun banner(artId: String?, commanderName: String?): String? {
-        art(artId, "art_crop")?.let { return it }
-        val name = commanderName?.trim().orEmpty()
-        if (name.isEmpty()) return null
-        return "https://api.scryfall.com/cards/named?exact=" +
-            percent(name) + "&format=image&version=art_crop"
+    fun banner(artId: String?, commanderName: String?): String? =
+        art(artId, "art_crop") ?: named(commanderName, "art_crop")
+
+    /** Scryfall's image of a card by its name, for a card with no id to hand. */
+    fun named(name: String?, version: String): String? {
+        val n = name?.trim().orEmpty()
+        if (n.isEmpty()) return null
+        return "https://api.scryfall.com/cards/named?exact=" + percent(n) + "&format=image&version=" + version
     }
 
     /** No `encodeURIComponent` on Android or iOS, so by hand. */

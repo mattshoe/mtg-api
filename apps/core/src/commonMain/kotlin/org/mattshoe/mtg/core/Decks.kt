@@ -166,9 +166,17 @@ data class PeekCard(
     val facts: List<PeekFact> = emptyList(),
     /** The Found box, over a fetch list, and null over anything else. */
     val tick: PeekTick? = null,
+    /**
+     * With no printing, ask Scryfall for the card by its name. A fetch
+     * list kept from before it asked for a printing has none, and Matt:
+     * "i want to see the card on the carousel, not the card name and
+     * no art".
+     */
+    val artByName: Boolean = false,
 ) {
     /** The picture to draw, or null for the card's name on a blank. */
-    val art: String? get() = null
+    val art: String? get() =
+        CardQueries.art(scryfallId, "normal") ?: if (artByName) CardQueries.named(title, "normal") else null
 }
 
 /** The fetch list's box on the carousel's sheet, and the count beside it. */
