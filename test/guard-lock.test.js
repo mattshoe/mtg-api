@@ -20,7 +20,7 @@
 
 import { describe, it, expect, afterEach } from 'vitest'
 import { spawnSync, spawn } from 'node:child_process'
-import { mkdtempSync, rmSync, existsSync, readFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync, chmodSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
@@ -61,6 +61,65 @@ function underAHeldLock({ waitSeconds, holdSeconds = 30 }) {
     }),
   }
 }
+
+// Every Gradle command in this repo was starting a fresh JVM.
+//
+// `~/.gradle/gradle.properties` has carried `org.gradle.daemon=false`
+// since July 2024 — a machine-wide setting with nothing to do with this
+// project — and the user home file beats a project one, so nothing in
+// the repo could turn it back on. Gradle said as much on every single
+// run and nobody read it: "To honour the JVM settings for this build a
+// single-use Daemon process will be forked... Daemon will be stopped at
+// the end of the build."
+//
+// So a narrow test, the thing the TDD cycle runs constantly, cost 11.9s
+// of which 10.0s was Gradle starting up. Agents spent 22.3 measured
+// hours on narrow tests.
+//
+// A command-line flag is the one thing that outranks the home file, and
+// guard already wraps every Gradle invocation. With `--daemon` and
+// `--configuration-cache`: 11.9s to 0.8s re-running unchanged, and
+// 46.5s to 24.9s for a real edit on :androidApp.
+describe('how Gradle is invoked', () => {
+  const shown = (extraEnv = {}) => {
+    root = mkdtempSync(join(tmpdir(), 'guard-'))
+    const seen = join(root, 'argv.txt')
+    const fake = join(root, 'gradlew')
+    // Written directly: building this through a shell let the outer
+    // shell eat the "$*" before the fake ever saw it, and the test then
+    // asserted against an empty file.
+    writeFileSync(fake, `#!/bin/bash\nprintf '%s\\n' "$*" > ${JSON.stringify(seen)}\n`)
+    chmodSync(fake, 0o755)
+    const r = spawnSync('node', [GUARD, '60', '--', fake, ':core:jvmTest'], {
+      encoding: 'utf8',
+      timeout: 60_000,
+      env: { ...process.env, INTAKE_GRADLE_LOCK: join(root, 'l.lock'), ...extraEnv },
+    })
+    return { r, argv: existsSync(seen) ? readFileSync(seen, 'utf8') : '' }
+  }
+
+  it('asks for the daemon, because the user home file switched it off', () => {
+    const { r, argv } = shown()
+    expect(r.status, r.stderr).toBe(0)
+    expect(argv, 'no --daemon, so every invocation forks a single-use JVM').toContain('--daemon')
+  })
+
+  it('asks for the configuration cache, which is most of what is left', () => {
+    const { argv } = shown()
+    expect(argv).toContain('--configuration-cache')
+  })
+
+  it('keeps the task and its arguments', () => {
+    const { argv } = shown()
+    expect(argv).toContain(':core:jvmTest')
+  })
+
+  it('can be switched off, for working out whether it is the cache lying to you', () => {
+    const { argv } = shown({ MTG_GRADLE_PLAIN: '1' })
+    expect(argv).not.toContain('--configuration-cache')
+    expect(argv).toContain(':core:jvmTest')
+  })
+})
 
 describe('waiting for the Gradle lock', () => {
   it('runs the build anyway when the wait runs out, rather than failing red', () => {

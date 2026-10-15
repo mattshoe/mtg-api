@@ -106,13 +106,42 @@ one builder died of it: its gradle run was killed, never wrote a `BUILD`
 line, and the agent sat in two `until` loops polling that file for two
 hours while thirty files of its work sat uncommitted.
 
-A single command that blocks until it has an answer is not a hand-rolled
-loop and is exactly what you want — `gh pr checks --watch` below is the
-case that matters.
+A single command that blocks until it has an answer is not a
+hand-rolled loop and is exactly what you want — `npm run
+test:everything` is the case that matters.
 
 Run a suite in the **foreground** and let it finish. It takes the minutes
 it takes. **Never background a build and never schedule anything.** You
 get one turn: see "Where your turn ends".
+
+## Ask for several things at once
+
+Measured across every agent log in this repo: **9,220 tool calls over
+9,220 turns. Not one turn ever made two calls.** A turn costs about 25
+seconds of model latency whatever is in it, and that adds up to 110 of
+the 190 hours these tasks have taken — more than every command they ran
+put together.
+
+So when calls do not depend on each other, put them in **one** message.
+Reading four files, grepping three patterns, checking git status and the
+PR list — that is one turn, not eight.
+
+```
+# One turn.
+Read src/cards.js  +  Read test/cards.test.js  +  Grep "allInChunks"
+```
+
+```
+# Also one turn, when you genuinely need a shell.
+cat a.kt b.kt; grep -rn thing src/; git log --oneline -5
+```
+
+The rule is dependency, not caution: if you need the first answer to
+know what to ask second, they are two turns and that is fine. If you are
+just working through a list, it is one.
+
+This does not apply to suites. Those still run one at a time, in the
+foreground, because they contend for the same machine.
 
 **Read the BUILD line, never the exit code.** A Gradle run
 has exited 0 over `BUILD FAILED` more than once. Grep for
@@ -235,47 +264,41 @@ which suite, which part — is the difference between "working" and
 
 ## Where your turn ends
 
-**You wait for CI and you merge your own work.** Green CI is the gate, not
-a human and not the dispatcher. Matt, on being asked for permission to
-merge a green pull request:
+**You merge your own work.** The gate is the local suite, not a human and
+not the dispatcher. Matt, on being asked for permission to merge:
 
 > "WHAT THE FUCK ARE YOU ASKING MY PERMISSION FOR?!?! THAT'S WHAT FUCKING
 > CI IS FOR!!!!"
 
-The thing that went wrong before was never that rule, it was the
-mechanism. Builders were told to "watch CI", and the `apps` job takes
-thirteen to seventeen minutes, so three of four ended their turn waiting
-for something to tell them it had finished. One called ScheduleWakeup and
-stopped. Another's last line was "I'll pick up from that notification".
-In a headless `claude -p` run **there is no next turn**: nothing wakes
-you, no notification arrives, and the dispatcher will not start a second
-builder on a worktree that already exists. 154 minutes of agent
-wall-clock across four builders produced zero merged pull requests.
+**Do not wait for CI. There is no CI.** `test.yml` and `apps.yml` are
+`workflow_dispatch` only and nothing triggers them, so a pull request
+here has no checks at all and never will. This page used to say to wait
+with `gh pr checks <n> --watch --fail-fast`; across the agent logs that
+command accounts for **18.7 hours over 220 calls**, and it is now simply
+a lie — it returns "no checks reported" instantly.
 
-So wait with a command that **blocks in the foreground** and sits in your
-own turn until it returns:
+So: run the gate, then merge.
 
 ```
-gh pr checks <n> --watch --fail-fast
-```
-
-Then confirm every check **passed**, which is not the same as none having
-failed — a skipped, cancelled or neutral check satisfies "nothing red":
-
-```
-gh pr checks <n> --json name,state --jq '[.[]|select(.state!="SUCCESS")]|length'   # must be 0
+npm run test:everything        # must print EVERY SUITE PASSED
 gh pr merge <n> --squash
 ```
 
-Never `--admin`. Never with a check pending, skipped or cancelled. Not
-`--delete-branch` either: it makes `gh` check out the base branch in the
-worktree you are standing in. `--admin` and a push to `main` are both
-refused by the PreToolUse hook in `.claude/settings.json`, so trying
-produces a blocked tool call rather than a bad outcome — but do not try.
+Never `--admin`. Not `--delete-branch` either: it makes `gh` check out
+the base branch in the worktree you are standing in. `--admin` and a
+push to `main` are both refused by the PreToolUse hook in
+`.claude/settings.json`, so trying produces a blocked tool call rather
+than a bad outcome — but do not try.
 
-If CI comes back red, that is still your work. Read the failing job,
-write or correct the test that proves the cause, fix it, push, and watch
-again. There is no fix-only builder coming after you.
+**Do not watch the deploy either.** `gh run watch` accounts for another
+10.7 hours across the logs and tells you nothing: `task-status.mjs
+reconcile` runs every minute, reads the deploy runs itself, and moves
+the row to `deployed`. Merging is where your turn ends.
+
+If the gate comes back red, that is still your work. Read the failure,
+write or correct the test that proves the cause, fix it, and run the
+gate again — it resumes, so you pay for the suite that broke and not
+the ones in front of it.
 
 **Do NOT call ScheduleWakeup or Monitor, do not background a build, and
 do not write a wait loop of your own.** One foreground command at a time.
@@ -638,18 +661,23 @@ Run the command in the foreground and let it finish. If it is too slow to sit
 through, it is a functional suite and it belongs in the once-at-the-end pass
 or in CI — not in your cycle.
 
-## Commands you may not run locally. Ever.
+## Commands you do not run by hand
 
-CI runs these. Running one yourself costs the minutes beside it and tells you
-nothing CI will not tell you for free.
+`npm run test:everything` runs all of these, in order, behind
+`scripts/guard.mjs`, so none of them is subject to your ten-minute tool
+limit. Running one yourself inside the cycle costs the minutes beside it
+and tells you nothing about the line you just changed.
 
-| never run locally | why | minutes |
+This said "CI runs these" and "never run locally". CI runs nothing now.
+The list is what each costs, not what is forbidden.
+
+| not in your cycle | why | minutes |
 |---|---|---|
 | `./gradlew ... :androidApp:connectedDebugAndroidTest` | the emulator | ~17-23 |
 | `npm run test:android` | the same thing | ~17-23 |
 | `./gradlew ... :webApp:jsBrowserTest` | starts a real browser | ~4 |
 | `./gradlew ... --no-daemon ...` | a cold JVM every invocation | +20s each |
-| `:core:jvmTest :core:jsNodeTest :core-net:jvmTest :core-net:jsNodeTest :core:koverVerify` together | this is CI's `shared` job | ~4 |
+| `:core:jvmTest :core:jsNodeTest :core-net:jvmTest :core-net:jsNodeTest :core:koverVerify` together | the whole shared job | ~4 |
 
 One agent ran the emulator suite, `jsBrowserTest`, the whole `shared` job four
 times with `--no-daemon`, and the Worker suite — inside its TDD cycle, for a
@@ -663,10 +691,9 @@ two-file change. 26 minutes before it opened a pull request.
 npx vitest run test/thing.test.js -t 'the one case'
 ```
 
-**What you run once, at the end, before the pull request:** `npm test` and
-`npm run test:web` — only the ones your diff actually reaches. Never the
-Android screens suite; it is CI's. Then push and let CI do the rest. CI is 7m39s; it is not
-worth reproducing on a laptop.
+**What you run once, at the end, before you merge:** `npm run
+test:everything`, all of it, and it must print EVERY SUITE PASSED.
+Nothing runs behind you.
 
 **Never background a command and poll its output.** Not a suite, not a build,
 not anything. Run it in the foreground and let it finish. One agent spent 55%

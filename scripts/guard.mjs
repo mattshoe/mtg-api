@@ -49,6 +49,35 @@ let [cmd, ...args] = process.argv.slice(split + 1);
 const GRADLE_LOCK = process.env.INTAKE_GRADLE_LOCK
   || join(process.env.HOME || '/tmp', '.mtg-gradle.lock');
 const isGradle = /(^|\/)gradlew?$/.test(cmd) || args.some((a) => /(^|\/)gradlew?$/.test(a));
+
+// Make Gradle keep its JVM, and skip configuring the build it already
+// configured.
+//
+// `~/.gradle/gradle.properties` has carried `org.gradle.daemon=false`
+// since July 2024 — a machine-wide setting with nothing to do with this
+// repository — and the user home file outranks a project one, so
+// nothing committed here could turn it back on. Every single Gradle
+// command was therefore starting a JVM and throwing it away, and Gradle
+// said so on every run: "To honour the JVM settings for this build a
+// single-use Daemon process will be forked... Daemon will be stopped at
+// the end of the build." Nobody read it.
+//
+// The cost: a narrow test, which is what the TDD cycle runs over and
+// over, took 11.9 seconds of which 10.0 was Gradle starting up. Agents
+// spent 22.3 measured hours on narrow tests.
+//
+// A command-line flag is the only thing that outranks the home file.
+// Measured after: 11.9s to 0.8s re-running an unchanged :core test, and
+// 46.5s to 24.9s for a real edit on :androidApp.
+//
+// MTG_GRADLE_PLAIN=1 turns both off, for when you need to know whether
+// the configuration cache is what is lying to you.
+if (isGradle && process.env.MTG_GRADLE_PLAIN !== '1') {
+  const already = (f) => args.some((a) => a === f || a.startsWith(`${f}=`));
+  for (const flag of ['--daemon', '--configuration-cache']) {
+    if (!already(flag)) args = [...args, flag];
+  }
+}
 if (isGradle && process.env.INTAKE_NO_GRADLE_LOCK !== '1') {
   // `lockf` is BSD (macOS), `flock` is Linux. Use whichever exists and run
   // unlocked if neither does — CI builds one thing at a time anyway, and a
