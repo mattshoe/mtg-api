@@ -180,3 +180,17 @@ fun NavIcon(view: View, tint: Color, size: Dp = 22.dp, modifier: Modifier = Modi
         else -> LibraryIcon(tint, size, tagged)
     }
 }
+
+/**
+ * The drawings that stand in for an action's word.
+ *
+ * Matt: "Instead of an X icon or trash icon, just using the text
+ * 'remove', same with share and edit etc etc. This looks terrible and
+ * dated." The website's `Glyph` is the same four, the same shapes.
+ */
+enum class Glyph(val tag: String) {
+    BIN("glyph-bin"),
+    PENCIL("glyph-pencil"),
+    CROSS("glyph-cross"),
+    RENAME("glyph-rename"),
+}
