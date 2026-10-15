@@ -1,0 +1,19 @@
+[
+  "CardCarousel.kt:Remove",
+  "DeckDialogs.kt:Edit list",
+  "DeckDialogs.kt:Rename deck",
+  "DecksPage.kt:Edit list",
+  "DecksPage.kt:Rename",
+  "DecksScreen.kt:Edit list",
+  "DecksScreen.kt:Rename",
+  "FetchListPage.kt:Delete",
+  "FetchListPage.kt:Edit",
+  "FetchListScreen.kt:Delete",
+  "FetchListScreen.kt:Edit",
+  "FilterPanel.kt:clear",
+  "FilterSheet.kt:clear",
+  "MassEntryPage.kt:Clear",
+  "MassEntryScreen.kt:Clear",
+  "NewTaskPage.kt:Remove",
+  "NewTaskScreen.kt:Remove"
+]

@@ -661,6 +661,48 @@ Run the command in the foreground and let it finish. If it is too slow to sit
 through, it is a functional suite and it belongs in the once-at-the-end pass
 or in CI — not in your cycle.
 
+## An action is an icon, not the word for it
+
+Matt: "The agents keep doing stupid shit like using text instead of
+icons. Instead of an X icon or trash icon, just using the text
+'remove', same with share and edit etc etc. This looks terrible and
+dated."
+
+A row of cards with `[Remove] [Edit] [Rename]` spelled out reads like a
+2004 admin panel. Every app a person actually uses puts a bin, a pencil
+and a share arrow there. So **delete, remove, trash, share, edit,
+rename, copy, clear and discard are drawn, not written.**
+
+Both platforms already have somewhere for them to live:
+
+- **Android** — `apps/androidApp/.../NavIcons.kt`. Canvas paths with
+  `at`, `line`, `box`, `circle` and `path` helpers. The nav icons are
+  the examples to copy.
+- **Web** — `apps/webApp/.../Icons.kt`. A `<span>` masked to a shape by
+  `currentColor`, the shape itself one CSS rule. Not an inline `<svg>`:
+  Compose HTML builds elements in the HTML namespace and an `<svg>`
+  there renders as nothing at all, which is what the first attempt did.
+  Not an `<img>` either — it cannot take the colour of the text around
+  it, so it would not dim with its button.
+
+Draw it on **both** platforms in the same change, the same shape, like
+every other piece of parity in this repo.
+
+**The accessibility label stays a word.** `contentDescription =
+"Remove"` on Android, `aria-label="Remove"` on the web. An icon with no
+label is worse than the word, because a screen reader then reads
+nothing at all.
+
+Confirmation dialogs are the exception: when the whole dialog asks
+"Delete this deck?", the button underneath says `Delete` in words,
+because at that point the word *is* the content.
+
+`test/icon-actions.test.js` holds this. It is a ratchet, not a
+cleanup: the labels in `test/fixtures/text-label-actions.json` are what
+the codebase had when the rule was written, so a NEW one fails
+immediately, and a fixed one comes off the list in the same commit. The
+list can only ever shrink.
+
 ## Commands you do not run by hand
 
 `npm run test:everything` runs all of these, in order, behind
