@@ -1,8 +1,1 @@
-{
-  "backlog": [
-  ],
-  "confirmations": {
-    "apps/androidApp/src/main/kotlin/org/mattshoe/mtg/android/DeckDialogs.kt:Rename": "the button under a dialog titled Rename deck, holding the new name: the word is the content",
-    "apps/webApp/src/jsMain/kotlin/org/mattshoe/mtg/web/DeckDialogs.kt:Rename": "the button under a dialog titled Rename deck, holding the new name: the word is the content"
-  }
-}
+[]
