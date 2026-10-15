@@ -101,6 +101,11 @@ class FetchListCarouselTest {
         assertEquals(PeekOf.FETCH, p.held.value.peek.of)
         assertFalse(p.held.value.fetch.isTicked("Sol Ring"), "${p.on} tapping the row ticked the box as well")
         assertEquals("Sol Ring", p.one(".peek-sheet .peek-name", "the carousel is not drawn").textContent)
+        // The list here has no printing, as one kept from before does.
+        assertTrue(p.all(".peek-blank").isEmpty(), "${p.on} the carousel draws Sol Ring's name and no art")
+        val img = p.all(".peek-card img").firstOrNull { it.getAttribute("alt") == "Sol Ring" }
+            ?: error("${p.on} the carousel has no picture of Sol Ring")
+        assertTrue("Sol%20Ring" in img.getAttribute("src").orEmpty(), "${p.on} the picture is not Sol Ring: ${img.getAttribute("src")}")
 
         val box = p.one("[data-peek-tick]", "the carousel's sheet has no Found box").unsafeCast<HTMLInputElement>()
         val r = box.getBoundingClientRect()
@@ -138,6 +143,9 @@ class FetchListCarouselTest {
         val remove = p.one("[data-fetch-remove=\"Counterspell\"]", "Counterspell has no Remove")
         val r = remove.getBoundingClientRect()
         assertTrue(r.width > 8.0 && r.right <= size.first + 0.5, "${p.on} Remove is not drawn on screen: $r")
+        // An x, like a normal app, and not the word.
+        assertEquals("×", remove.textContent?.trim(), "${p.on} Remove is the word, not an x")
+        assertTrue(r.width <= 44.0, "${p.on} the x is ${r.width} wide, the width of a word")
         remove.click()
         settle(p.w)
         assertFalse(Overlay.CARD_PEEK in p.held.value.overlays, "${p.on} Remove opened the carousel")
