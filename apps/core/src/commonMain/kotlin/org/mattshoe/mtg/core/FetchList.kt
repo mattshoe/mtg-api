@@ -639,6 +639,8 @@ fun AppState.peekFetch(card: FetchCard): AppState =
  * The Found box on the carousel's sheet. The page's own tick, so the
  * count on one is the count on the other.
  */
+fun AppState.peekRemove(): AppState = this
+
 fun AppState.peekTick(): AppState {
     if (peek.of != PeekOf.FETCH) return this
     val name = peeked?.title ?: return this
