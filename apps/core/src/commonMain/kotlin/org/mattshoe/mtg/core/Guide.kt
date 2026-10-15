@@ -34,6 +34,7 @@ object Guide {
     const val PHYREXIA = "phyrexia"
     const val LORE = "lore"
     const val GAME_CHANGERS = "game-changers"
+    const val BANNED = "banned"
 
     /**
      * Every story tile, in the order the story happened, roughly.
@@ -65,6 +66,9 @@ object Guide {
         // Matt: "a guide section for game changers ... a list of cards
         // just like a deck page". The list is in `GameChangers.kt`.
         GuideTile(GAME_CHANGERS, "Game Changers", "The cards Commander's brackets count. Any one of them makes a deck bracket 3 or higher."),
+        // Matt: "add a guide section below game Changers for banned
+        // cards". The lists are in `Banned.kt`.
+        GuideTile(BANNED, "Banned cards", "Every format's ban list. Commander first, then Standard, Pioneer, Modern, Legacy, Vintage and Pauper."),
         GuideTile(COLOURS, "Colour combinations", "Every name, from Azorius to WUBRG. Guilds, shards, wedges and the rest."),
         GuideTile(WHEEL, "The colour wheel", "What each colour wants, what it is good at, and who its friends and enemies are."),
         GuideTile(LORE, "Lore", "The story of Magic, from the Thran to the Omenpaths, in the order it happened."),
