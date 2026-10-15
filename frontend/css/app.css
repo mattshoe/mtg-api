@@ -1987,6 +1987,7 @@ select.sort {
 .peek-facts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; color: var(--text-3); }
 .peek-place { font-size: 12px; color: var(--text-3); white-space: nowrap; }
 .peek-tags { display: flex; gap: 8px; flex-wrap: wrap; }
+.peek-found { gap: 8px; align-items: center; }
 .peek-acts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 
 /* "- 3 +" under a card: minus, the number, plus, and what the number

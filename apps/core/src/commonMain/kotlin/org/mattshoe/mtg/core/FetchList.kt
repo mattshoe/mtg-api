@@ -96,6 +96,8 @@ data class OwnedPrinting(
     val inDecks: Int = 0,
     /** The real decks holding it, by name. */
     val decks: List<String> = emptyList(),
+    /** One printing of it, for the carousel's picture. */
+    val scryfallId: String? = null,
 )
 
 /**
@@ -161,6 +163,13 @@ data class FetchCard(
     val alsoCheck: List<FetchRarity> = emptyList(),
     /** The decks holding it, when no copy is left in bulk. */
     val decks: List<String> = emptyList(),
+    /** How the list names it, which is what Remove takes out of the text. Empty on a list saved before. */
+    val key: String = "",
+    val nameNorm: String = "",
+    /** One printing, for the carousel's picture. */
+    val scryfallId: String? = null,
+    /** The `types` column, for the line under the carousel's name. */
+    val types: String? = null,
 ) {
     val alsoCheckLine: String get() = "Also check: " + alsoCheck.joinToString(", ") { it.label }
 
@@ -197,7 +206,7 @@ data class FetchSection(
 
 /** A card the collection does not have enough of. `short` is how many are missing. */
 @Serializable
-data class MissingCard(val name: String, val short: Int, val have: Int = 0)
+data class MissingCard(val name: String, val short: Int, val have: Int = 0, val key: String = "")
 
 @Serializable
 data class FetchResult(
@@ -247,7 +256,7 @@ object FetchList {
         entries.forEach { e ->
             val rows = byName[e.key] ?: byFace[e.key]
             if (rows.isNullOrEmpty()) {
-                missing += MissingCard(e.name, e.qty)
+                missing += MissingCard(e.name, e.qty, key = e.key)
                 return@forEach
             }
             val have = rows.sumOf { it.qty }
@@ -270,9 +279,15 @@ object FetchList {
                 FetchType.of(first.types),
                 ColorIdentity.printed(first.identity),
                 primary,
-                FetchCard(first.name, e.qty, have, also, decks),
+                FetchCard(
+                    first.name, e.qty, have, also, decks,
+                    key = e.key,
+                    nameNorm = first.nameNorm,
+                    scryfallId = rows.firstNotNullOfOrNull { it.scryfallId },
+                    types = first.types,
+                ),
             )
-            if (have < e.qty) missing += MissingCard(first.name, e.qty - have, have)
+            if (have < e.qty) missing += MissingCard(first.name, e.qty - have, have, e.key)
         }
 
         val sections = filed
@@ -310,6 +325,7 @@ object FetchList {
         val json = Json.encodeToString(ListSerializer(String.serializer()), names)
         return Sql(
             """SELECT c.name_norm, c.name, c.face1, c.types, c.colors, c.color_identity, c.rarity, SUM(c.qty) AS qty,
+                      MIN(c.scryfall_id) AS scryfall_id,
                       (SELECT COALESCE(SUM(dc.qty), 0) FROM deck_cards dc JOIN decks d ON d.id = dc.deck_id
                         WHERE $REAL_DECK) AS in_decks,
                       (SELECT json_group_array(name) FROM (
@@ -349,6 +365,7 @@ object FetchList {
                 inDecks = str("in_decks")?.toDoubleOrNull()?.toInt() ?: 0,
                 decks = str("decks")?.let { runCatching { Json.decodeFromString(ListSerializer(String.serializer()), it) }.getOrNull() }
                     .orEmpty(),
+                scryfallId = str("scryfall_id"),
             )
         }
     }
@@ -403,6 +420,30 @@ data class FetchListState(
     val progress: String get() {
         val names = result?.sections?.flatMap { s -> s.cards.map { it.name } } ?: return ""
         return "${names.count { it in ticked }} of ${names.size} found"
+    }
+
+    /**
+     * A card off the list: out of the text Edit opens and Find reads,
+     * out of the filing, the missing and the ticks. Matt: "make sure
+     * doing so actually edits the deck list text as well".
+     */
+    fun remove(card: FetchCard): FetchListState = removing(card.name, setOf(card.key, card.nameNorm))
+
+    fun remove(card: MissingCard): FetchListState = removing(card.name, setOf(card.key))
+
+    private fun removing(name: String, keys: Set<String>): FetchListState {
+        val r = result ?: return this
+        val gone = (keys + name.lowercase()).filter { it.isNotEmpty() }.toSet()
+        return copy(
+            list = DeckList.without(list, gone),
+            result = r.copy(
+                sections = r.sections
+                    .map { s -> s.copy(cards = s.cards.filter { it.name != name }) }
+                    .filter { it.cards.isNotEmpty() },
+                missing = r.missing.filter { it.name != name },
+            ),
+            ticked = ticked - name,
+        ).synced()
     }
 
     fun edit() = copy(editing = list)
@@ -582,3 +623,24 @@ fun AppState.openFetch(id: String): AppState {
 
 /** Back to the entry box and the saved lists. An open Edit is dropped. */
 fun AppState.leaveFetchList(): AppState = navigate(Route(View.FETCH)).copy(fetch = fetch.cancelEdit())
+
+/** Every card filed on the list page, top to bottom: what the carousel runs over. */
+val FetchListState.pageOrder: List<FetchCard> get() = result?.sections?.flatMap { it.cards }.orEmpty()
+
+/**
+ * A row of the list tapped outside its box: the carousel over the
+ * list, at that card. Matt: "tapping the row (outside checkbox) should
+ * show the carousel".
+ */
+fun AppState.peekFetch(card: FetchCard): AppState =
+    peekAt(fetch.pageOrder.indexOfFirst { it.name == card.name }, PeekOf.FETCH)
+
+/**
+ * The Found box on the carousel's sheet. The page's own tick, so the
+ * count on one is the count on the other.
+ */
+fun AppState.peekTick(): AppState {
+    if (peek.of != PeekOf.FETCH) return this
+    val name = peeked?.title ?: return this
+    return copy(fetch = fetch.tick(name))
+}

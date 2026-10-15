@@ -22,6 +22,9 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -85,6 +88,8 @@ fun CardCarousel(
     /** "- 3 +" for the card on show, or null when there is nothing you may change. */
     stepper: Stepper? = null,
     onCount: (Int) -> Unit = {},
+    /** The Found box, over a fetch list. See `PeekCard.tick`. */
+    onTick: () -> Unit = {},
 ) {
     if (cards.isEmpty()) return
     val index = at.coerceIn(0, cards.lastIndex)
@@ -177,6 +182,7 @@ fun CardCarousel(
                 onTweak = onTweak,
                 stepper = stepper,
                 onCount = onCount,
+                onTick = onTick,
             )
         }
     }
@@ -292,6 +298,7 @@ private fun CardSheet(
     onTweak: (org.mattshoe.mtg.core.DeckCard, Tweak) -> Unit,
     stepper: Stepper?,
     onCount: (Int) -> Unit,
+    onTick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -368,6 +375,35 @@ private fun CardSheet(
         // Over a deck it is the deck's count, anywhere else the
         // collection's. `:core` decided which.
         stepper?.let { CountStepper(it, onCount) }
+
+        // Over a fetch list: the page's own box, so a swipe and a tick
+        // work down the list. Matt: "so i can swipe through and check
+        // them off as i swipe". The count is the page's too.
+        card.tick?.let { tick ->
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(
+                    Modifier
+                        .toggleable(value = tick.ticked, role = Role.Checkbox) { onTick() }
+                        .semantics { contentDescription = "Found ${card.title}" }
+                        .testTag("carousel-tick"),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(
+                        checked = tick.ticked,
+                        onCheckedChange = null,
+                        colors = CheckboxDefaults.colors(checkedColor = Accent, uncheckedColor = Ink3),
+                    )
+                    Line("Found", Ink, Design.BODY)
+                }
+                Box(Modifier.weight(1f))
+                Box(Modifier.testTag("carousel-progress")) { Tag(tick.progress, Info) }
+            }
+        }
 
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),

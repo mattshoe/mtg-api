@@ -95,7 +95,7 @@ data class Deck(
 }
 
 /** Which list the carousel is over. */
-enum class PeekOf { DECK, LIBRARY, GAME_CHANGERS, BANNED }
+enum class PeekOf { DECK, LIBRARY, GAME_CHANGERS, FETCH, BANNED }
 
 /**
  * Which card of a run the carousel is showing, or none.
@@ -164,7 +164,12 @@ data class PeekCard(
     val stepped: Boolean = false,
     /** "Type • {R}{G} • Rarity" under the name. See [PeekFact.line]. */
     val facts: List<PeekFact> = emptyList(),
+    /** The Found box, over a fetch list, and null over anything else. */
+    val tick: PeekTick? = null,
 )
+
+/** The fetch list's box on the carousel's sheet, and the count beside it. */
+data class PeekTick(val ticked: Boolean, val progress: String)
 
 /**
  * One part of the line under the carousel's name. Matt: "Type •
