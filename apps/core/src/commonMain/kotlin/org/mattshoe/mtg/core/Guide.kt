@@ -35,6 +35,7 @@ object Guide {
     const val LORE = "lore"
     const val GAME_CHANGERS = "game-changers"
     const val BANNED = "banned"
+    const val BRACKETS = "brackets"
 
     /**
      * Every story tile, in the order the story happened, roughly.
