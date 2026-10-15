@@ -233,6 +233,38 @@ forgetting.
 `--fresh` ignores all of it and runs the lot. Resuming fails closed: no
 git, no skipping.
 
+### The phone runs what needs a phone
+
+Matt: "26 minutes is way too fucking long for validations. That is like
+enterprise application length and we are FAR from that." And: "Can't we
+move the majority of that into compose tests in the jvm? Only run
+CRITICAL flows on an emulator."
+
+They were already JVM Compose tests. Everything in `sharedTest/` ran
+**twice**: once on Robolectric as `screens`, 703 tests in 2.4 minutes,
+and again on the emulator as `device`, 659 tests in 19 minutes. Same
+source, same assertions, eight times slower, because the device run was
+defined by directory rather than by need.
+
+Two kinds of test need hardware and `scripts/device-classes.mjs` works
+them out from the source:
+
+- **Anything calling `Parity.needsRealRendering()`** — those SKIP on the
+  JVM, so the phone is their only run. Taken per METHOD, not per class:
+  by class it was 279 tests and ten and a half minutes, because one
+  gated test drags along every other test in its file.
+- **Everything in `androidTest/`** — the journeys that launch the real
+  activity over a real socket.
+
+**19 minutes to 1m47s**, 35 tests. `npm run test:android:all` still runs
+the lot for before a release.
+
+The list derives itself, so a new gated test is on the phone the moment
+it is written. `test/device-classes.test.js` holds the dangerous part:
+a gated test left off that list runs **nowhere** — skipped on the JVM,
+never asked for on the phone — and would not go red, it would simply
+stop existing.
+
 ### What this costs, said plainly
 
 The device suite is 580 tests that only ever run on an emulator. Before,
@@ -546,8 +578,8 @@ one who starts it. The list is what it costs, not what is forbidden.
 
 | never run locally | why | minutes |
 |---|---|---|
-| `./gradlew ... :androidApp:connectedDebugAndroidTest` | the emulator | ~17-23 |
-| `npm run test:android` | the same thing | ~17-23 |
+| `./gradlew ... :androidApp:connectedDebugAndroidTest` | the whole emulator suite | ~17-23 |
+| `npm run test:android:all` | the same thing | ~17-23 |
 | `./gradlew ... :webApp:jsBrowserTest` | starts a real browser | ~4 |
 | `./gradlew ... --no-daemon ...` | a cold JVM every invocation | +20s each |
 | `:core:jvmTest :core:jsNodeTest :core-net:jvmTest :core-net:jsNodeTest :core:koverVerify` together | the whole shared job | ~4 |
