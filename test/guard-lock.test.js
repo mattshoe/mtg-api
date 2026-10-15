@@ -153,6 +153,34 @@ describe('waiting for the Gradle lock', () => {
     expect(r.stderr, 'it announced giving up on a lock that was free').not.toMatch(/gave up waiting/i)
   })
 
+  it('never waits for the lock longer than it is allowed to live', () => {
+    // The gate reported "FAILED at core after 15.0m" with nothing
+    // wrong: `test:core` is `guard.mjs 900`, the lock wait was 1800,
+    // and an agent held the lock. So the guard killed its own command
+    // while that command was still queueing for a lock it would have
+    // given up on and built anyway nine hundred seconds later.
+    //
+    // A wait longer than the guard's own ceiling cannot ever finish.
+    // It has to leave time to actually run the build.
+    const src = readFileSync(GUARD, 'utf8')
+    expect(src, 'the lock wait is not bounded by the guard timeout')
+      .toMatch(/Math\.min\(/)
+
+    root = mkdtempSync(join(tmpdir(), 'guard-'))
+    const seen = join(root, 'argv.txt')
+    const fake = join(root, 'gradlew')
+    writeFileSync(fake, `#!/bin/bash\nprintf '%s\\n' "$*" > ${JSON.stringify(seen)}\n`)
+    chmodSync(fake, 0o755)
+    // A sixty second guard must not ask for a thirty minute wait.
+    const r = spawnSync('node', [GUARD, '60', '--', fake, 'build'], {
+      encoding: 'utf8', timeout: 60_000,
+      env: { ...process.env, INTAKE_GRADLE_LOCK: join(root, 'l.lock') },
+    })
+    expect(r.status, r.stderr).toBe(0)
+    const asked = Number((r.stderr.match(/after (\d+)s/) || [])[1] || 0)
+    expect(asked, `it asked to wait ${asked}s inside a 60s ceiling`).toBeLessThan(60)
+  })
+
   it('waits long enough by default to outlast another full gate run', () => {
     // The device suite alone is seventeen minutes and it holds the lock
     // for all of it. Five minutes of patience guaranteed the collision.

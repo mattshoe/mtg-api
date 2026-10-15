@@ -236,7 +236,15 @@ function truth(name, now, { ready, held, filed, stalled, alive, cancelled = [], 
     if (FINISHED.has(now) || now === 'in review' || now === 'blocked') return null
     if (stalled.includes(name)) return now === 'paused' ? null : { status: 'paused', note: STOPPED }
     if (prs.length) return now === 'paused' ? null : outcome(prs)
-    return now === 'in progress' ? null : { status: 'pending' }
+    // Sent, ready, and waiting its turn.
+    //
+    // Matt: "you need a queued state reflected in the app UI to
+    // indicate which tasks have not been picked up yet. First come
+    // first serve." One task runs at a time now, so most of the list is
+    // the queue, and `pending` did not say that — `pending` is a task
+    // the laptop has not collected from the app inbox yet, which is a
+    // different thing and still exists.
+    return now === 'queued' ? null : { status: 'queued' }
   }
   // A worktree, a branch or a row with no request file anywhere.
   if (FINISHED.has(now)) return null

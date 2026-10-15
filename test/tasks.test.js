@@ -197,14 +197,19 @@ describe('task status', () => {
   })
 
   it('every status Matt asked for is one the Worker takes', async () => {
-    for (const status of ['pending', 'in progress', 'blocked', 'paused', 'in review', 'merged', 'deployed', 'cancelled']) {
+    for (const status of ['pending', 'queued', 'in progress', 'blocked', 'paused', 'in review', 'merged', 'deployed', 'cancelled']) {
       const r = await post('/tasks/status', { name: 'every-one', title: 'Every one', status })
       expect(r.status, status + ' was refused: ' + r.body.error).toBe(200)
     }
   })
 
   it('there is no failing and no stopped: red CI is still in review, a dead agent is paused', async () => {
-    for (const status of ['failing', 'stopped', 'closed', 'building', 'queued', 'done']) {
+    // `queued` was on this list and is not any more. It was right to be:
+    // the vocabulary is Matt's and nothing invents a word for him. He
+    // asked for this one — "you need a queued state reflected in the app
+    // UI to indicate which tasks have not been picked up yet" — once
+    // only one task could run at a time. The rest stand.
+    for (const status of ['failing', 'stopped', 'closed', 'building', 'done']) {
       const r = await post('/tasks/status', { name: 'no-churn', title: 'No churn', status })
       expect(r.status, status + ' was taken, and Matt said there is no such state').toBe(400)
     }

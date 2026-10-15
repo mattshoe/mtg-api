@@ -233,6 +233,38 @@ forgetting.
 `--fresh` ignores all of it and runs the lot. Resuming fails closed: no
 git, no skipping.
 
+### The phone runs what needs a phone
+
+Matt: "26 minutes is way too fucking long for validations. That is like
+enterprise application length and we are FAR from that." And: "Can't we
+move the majority of that into compose tests in the jvm? Only run
+CRITICAL flows on an emulator."
+
+They were already JVM Compose tests. Everything in `sharedTest/` ran
+**twice**: once on Robolectric as `screens`, 703 tests in 2.4 minutes,
+and again on the emulator as `device`, 659 tests in 19 minutes. Same
+source, same assertions, eight times slower, because the device run was
+defined by directory rather than by need.
+
+Two kinds of test need hardware and `scripts/device-classes.mjs` works
+them out from the source:
+
+- **Anything calling `Parity.needsRealRendering()`** — those SKIP on the
+  JVM, so the phone is their only run. Taken per METHOD, not per class:
+  by class it was 279 tests and ten and a half minutes, because one
+  gated test drags along every other test in its file.
+- **Everything in `androidTest/`** — the journeys that launch the real
+  activity over a real socket.
+
+**19 minutes to 1m47s**, 35 tests. `npm run test:android:all` still runs
+the lot for before a release.
+
+The list derives itself, so a new gated test is on the phone the moment
+it is written. `test/device-classes.test.js` holds the dangerous part:
+a gated test left off that list runs **nowhere** — skipped on the JVM,
+never asked for on the phone — and would not go red, it would simply
+stop existing.
+
 ### What this costs, said plainly
 
 The device suite is 580 tests that only ever run on an emulator. Before,
@@ -434,6 +466,42 @@ are working through a list, they are one.
 Suites are the exception and still run one at a time in the foreground,
 because they contend for the same machine.
 
+This rule lived here alone for a while and did nothing: five agents then
+ran 184, 153, 103, 86 and 54 tool calls over exactly that many turns,
+0% batched, every one of them. It is in the dispatcher's launch prompt
+now as well, which is the one text an agent cannot skip. If it is still
+0% next time it is measured, the rule is not the fix and something else
+has to be.
+
+## One agent at a time, and a queue you can see
+
+Matt: "I thought you optimized things. I have several tasks in flight,
+all exceeding 2 hours already."
+
+Five were running. Each had already spent 20 to 46 minutes inside `npm
+run test:everything`, and the gate needs the machine to itself — it
+holds `~/.mtg-gradle.lock` across its Gradle suites and the device one
+alone is twenty minutes. Five exclusive 25-minute slots is two hours of
+queueing before anybody does any work. Arithmetic, not inefficiency,
+and making individual commands faster does not touch it.
+
+Matt: "Update it so only ONE task runs at a time. A very very SIMPLE
+queue system. NOTHING FANCY. JUST ONE AT A TIME."
+
+So `dispatch.sh` starts nothing while one is already working.
+`MTG_AGENT_CAP` raises it without an edit, for when the machine is not
+the constraint. On a 16GB laptop it also costs memory: a gate run was
+killed by the system while an agent's device suite held the emulator.
+
+The queue is the request folder, oldest file first — "First come first
+serve" — and `queued` is the status a ready request waits in, so the
+app shows what has not been picked up. `pending` is a different thing
+and stays: that is a task sent from the phone which the laptop has not
+collected yet. Both shells already print `status.word`, so the word
+turning up in the list needed no UI code; `Tasks.active` sorts queued
+rows by when they were sent rather than by title, because with one
+running the order is the only thing worth showing.
+
 ## An action is an icon, not the word for it
 
 Matt: "The agents keep doing stupid shit like using text instead of
@@ -510,8 +578,8 @@ one who starts it. The list is what it costs, not what is forbidden.
 
 | never run locally | why | minutes |
 |---|---|---|
-| `./gradlew ... :androidApp:connectedDebugAndroidTest` | the emulator | ~17-23 |
-| `npm run test:android` | the same thing | ~17-23 |
+| `./gradlew ... :androidApp:connectedDebugAndroidTest` | the whole emulator suite | ~17-23 |
+| `npm run test:android:all` | the same thing | ~17-23 |
 | `./gradlew ... :webApp:jsBrowserTest` | starts a real browser | ~4 |
 | `./gradlew ... --no-daemon ...` | a cold JVM every invocation | +20s each |
 | `:core:jvmTest :core:jsNodeTest :core-net:jvmTest :core-net:jsNodeTest :core:koverVerify` together | the whole shared job | ~4 |

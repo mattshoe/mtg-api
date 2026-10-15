@@ -33,7 +33,7 @@ afterEach(() => { if (root) rmSync(root, { recursive: true, force: true }); root
  * writes, so a test can say "nothing attached" and then "attached" without
  * timing anything.
  */
-function sdk({ attached = [], avds = ['Pixel_9'], bootsAfter = 0, unauthorized = false, installed = false } = {}) {
+function sdk({ attached = [], avds = ['Pixel_9'], bootsAfter = 0, unauthorized = false, installed = false, hang = false } = {}) {
   root = mkdtempSync(join(tmpdir(), 'emu-'))
   const bin = join(root, 'bin')
   mkdirSync(bin, { recursive: true })
@@ -60,6 +60,7 @@ case "$1" in
   start-server|wait-for-device)
     exit 0 ;;
   uninstall)
+    ${hang ? 'sleep 300' : 'true'}
     echo Success; exit 0 ;;
   shell)
     if [ "$2" = "pm" ]; then
@@ -89,10 +90,10 @@ exit 0
   return {
     bin,
     calls: () => readFileSync(calls, 'utf8'),
-    run: () => spawnSync('node', [SCRIPT], {
+    run: (extra = {}) => spawnSync('node', [SCRIPT], {
       encoding: 'utf8',
       timeout: 60_000,
-      env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, MTG_EMULATOR_POLL_MS: '10' },
+      env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, MTG_EMULATOR_POLL_MS: '10', ...extra },
     }),
   }
 }
@@ -154,6 +155,25 @@ describe('the gate makes sure there is a phone', () => {
     const r = box.run()
     expect(r.status, r.stderr).toBe(0)
     expect(box.calls()).not.toContain('adb uninstall org.mattshoe.mtg.share')
+  })
+
+  it('gives up on an adb that has wedged, rather than hanging the gate behind it', () => {
+    // What happened: the preflight printed "emulator-5554 already
+    // attached", then sat there. The gate reported "FAILED at emulator
+    // after 27.2m" — the emulator had gone `unauthorized` underneath
+    // it and `adb uninstall` never returned, because none of these
+    // calls had a timeout.
+    //
+    // A hang is the worst failure this script can have. It holds the
+    // one machine, says nothing, and the twenty-five minutes behind it
+    // never happen.
+    const box = sdk({ attached: ['emulator-5554'], installed: true, hang: true })
+    const started = Date.now()
+    const r = box.run({ MTG_ADB_TIMEOUT_MS: '1500' })
+    const took = (Date.now() - started) / 1000
+    expect(took, `it hung for ${took}s instead of giving up`).toBeLessThan(60)
+    expect(`${r.stderr}${r.stdout}`, 'it did not say adb had stopped answering')
+      .toMatch(/not answering|timed out|wedged/i)
   })
 
   it('fails with a sentence a person can act on when the SDK has no AVD', () => {

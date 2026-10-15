@@ -101,7 +101,20 @@ if (isGradle && process.env.INTAKE_NO_GRADLE_LOCK !== '1') {
   // anyway. Two builds contending is slower than queueing and far better
   // than a suite reporting a failure it did not have, which is what the
   // comment always said and the code never did.
-  const wait = String(Number(process.env.MTG_GRADLE_LOCK_WAIT) || 1800);
+  // Never longer than this guard is allowed to live, minus enough time
+  // to actually run the build.
+  //
+  // The gate reported "FAILED at core after 15.0m" with nothing wrong:
+  // `test:core` is `guard.mjs 900`, the lock wait was 1800, and an
+  // agent held the lock. The guard killed its own command while that
+  // command was still queueing for a lock it would have given up on
+  // and built anyway, nine hundred seconds later. A wait longer than
+  // the ceiling above it can never finish.
+  const asked = Number(process.env.MTG_GRADLE_LOCK_WAIT) || 1800;
+  const room = Number.isFinite(seconds) && seconds > 0
+    ? Math.max(5, Math.floor(seconds * 0.6))
+    : asked;
+  const wait = String(Math.min(asked, room));
   // 75 is EX_TEMPFAIL from sysexits.h, which is what `lockf` exits when
   // it cannot take the lock; `flock` is told to use the same so one
   // branch handles both. A Gradle build exiting 75 on its own would be

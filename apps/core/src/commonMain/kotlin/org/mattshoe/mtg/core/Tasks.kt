@@ -20,6 +20,21 @@ enum class TaskStatus(val word: String, val finished: Boolean) {
     IN_PROGRESS("in progress", false),
     IN_REVIEW("in review", false),
     PENDING("pending", false),
+    /**
+     * Sent, ready, and waiting its turn.
+     *
+     * Matt: "Update it so only ONE task runs at a time. A very very
+     * SIMPLE queue system. NOTHING FANCY. JUST ONE AT A TIME", and
+     * "you need a queued state reflected in the app UI to indicate
+     * which tasks have not been picked up yet. First come first
+     * serve."
+     *
+     * Last in the enum of the unfinished ones, because the list sorts
+     * by ordinal and nothing is further from done than not started.
+     * `PENDING` is a different thing and stays: that is a task sent
+     * from the app which the laptop has not collected yet.
+     */
+    QUEUED("queued", false),
     MERGED("merged", true),
     DEPLOYED("deployed", true),
     CANCELLED("cancelled", true),
@@ -106,8 +121,16 @@ data class Tasks(
      */
     val fresh: Boolean = false,
 ) {
+    // Queued rows sort by when they were sent, not by title: first come
+    // first serve is the whole reason for showing the queue, and a list
+    // in alphabetical order would say nothing about what runs next.
+    // Everything else keeps the title order it had.
     val active: List<Task> get() = rows.filterNot { it.status.finished }
-        .sortedWith(compareBy<Task> { it.status.ordinal }.thenBy { it.title.lowercase() })
+        .sortedWith(
+            compareBy<Task> { it.status.ordinal }
+                .thenBy { if (it.status == TaskStatus.QUEUED) it.createdAt.orEmpty() else "" }
+                .thenBy { it.title.lowercase() },
+        )
 
     /** "ordered by the time which they completed, most recent first". */
     val done: List<Task> get() = rows.filter { it.status.finished }.sortedByDescending { it.finishedAt.orEmpty() }

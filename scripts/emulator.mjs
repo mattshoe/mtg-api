@@ -37,7 +37,26 @@ const POLL_MS = Number(process.env.MTG_EMULATOR_POLL_MS || 2000);
 // gate until somebody notices.
 const BOOT_CEILING_MS = 10 * 60 * 1000;
 
-const run = (cmd, args) => spawnSync(cmd, args, { encoding: 'utf8', env });
+/**
+ * Every adb call has a ceiling, because a hang is the worst failure
+ * this script can have.
+ *
+ * The gate once reported "FAILED at emulator after 27.2m": the
+ * preflight said "emulator-5554 already attached", the emulator then
+ * went `unauthorized` underneath it, and `adb uninstall` never
+ * returned. It held the one machine, said nothing, and the
+ * twenty-five minutes of suite behind it never happened.
+ *
+ * Thirty seconds is far more than any of these need — `adb devices`
+ * and an uninstall are instant against a healthy phone — so crossing
+ * it means the phone is not healthy, which is worth saying out loud.
+ */
+const ADB_CEILING_MS = Number(process.env.MTG_ADB_TIMEOUT_MS) || 30_000;
+const run = (cmd, args) => spawnSync(cmd, args, {
+  encoding: 'utf8', env, timeout: ADB_CEILING_MS,
+});
+/** Did that call run out of time rather than answer? */
+const wedged = (r) => r?.error?.code === 'ETIMEDOUT' || r?.signal === 'SIGTERM';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** Devices adb will actually install to. `offline` and `unauthorized` are not. */
@@ -69,10 +88,21 @@ function attached() {
 const PACKAGES = ['org.mattshoe.mtg.share', 'org.mattshoe.mtg.share.test'];
 
 function clearStale() {
-  const listed = run('adb', ['shell', 'pm', 'list', 'packages']).stdout || '';
+  const r = run('adb', ['shell', 'pm', 'list', 'packages']);
+  if (wedged(r)) {
+    console.error('emulator: adb is not answering (listing packages ran out of time).');
+    console.error('The phone is wedged. `adb kill-server` and restart the emulator.');
+    process.exit(6);
+  }
+  const listed = r.stdout || '';
   for (const pkg of PACKAGES) {
     if (!listed.includes(`package:${pkg}`)) continue;
     const r = run('adb', ['uninstall', pkg]);
+    if (wedged(r)) {
+      console.error(`emulator: adb is not answering (uninstall ${pkg} ran out of time).`);
+      console.error('The phone is wedged. `adb kill-server` and restart the emulator.');
+      process.exit(6);
+    }
     console.log(`emulator: removed the old ${pkg}${r.status === 0 ? '' : ' (it refused, the suite may still fail to install)'}`);
   }
 }

@@ -115,6 +115,40 @@ for wt in "$STATE"/wt/*; do
   fi
 done
 
+# One agent at a time.
+#
+# Matt: "I thought you optimized things. I have several tasks in flight,
+# all exceeding 2 hours already." Five were running, and each had
+# already spent 20 to 46 minutes inside `npm run test:everything`.
+#
+# The gate needs the machine to itself: it holds ~/.mtg-gradle.lock
+# across its Gradle suites and the device one alone is twenty minutes.
+# Five exclusive 25-minute slots is two hours of queueing before anybody
+# does any work. That is arithmetic, not inefficiency, and making the
+# individual commands faster — which the daemon fix did — does not touch
+# it. They fight for memory too: a gate run was killed by the system
+# while an agent's device suite held the emulator, on a 16GB laptop.
+#
+# Matt: "Update it so only ONE task runs at a time. A very very SIMPLE
+# queue system. NOTHING FANCY. JUST ONE AT A TIME". So one, and the
+# queue is the request folder it already reads, oldest first.
+#
+# Everything above this line still runs on every tick — cancel,
+# reconcile, the sweep — because freezing the bookkeeping behind
+# dispatch is how a row came to read `in progress` for three hours with
+# nothing running.
+CAP="${MTG_AGENT_CAP:-1}"
+working=0
+for wt in "$STATE"/wt/*; do
+  [ -d "$wt" ] || continue
+  n="$(basename "$wt")"
+  pgrep -f "requests/$n.md" >/dev/null 2>&1 && working=$((working + 1))
+done
+if [ "$working" -ge "$CAP" ]; then
+  say "$working already working; $CAP at a time, so nothing started"
+  exit 0
+fi
+
 # An empty queue and a broken one must never look the same to this loop.
 # That conflation is the oldest bug in this system and it has come back
 # twice, so the queue is read into a variable where a failure is visible
@@ -279,6 +313,8 @@ It is yours end to end: build it test-first, move requests/$name.md into request
 Run tests the way .claude/agents/request-builder.md says: one unit test at a time during the cycle, named, red then green. Then ONCE at the end, before you merge, run 'npm run test:everything' and let it finish. CI does not validate anything any more — that command is the whole gate, it runs every suite including the emulator, and main takes a fully green one. Not the suites your diff reaches. All of them.
 
 During the CYCLE never run a whole suite — your Bash tool stops every command at 10 minutes and a cold worktree compile is longer than that. Run your own test by name, --tests 'YourTest'. The full run at the end goes through 'npm run test:everything', which puts every suite behind scripts/guard.mjs so none of them is subject to your tool's limit.
+
+Ask for several things at once. Independent tool calls go in ONE message: four file reads, three greps and a git status is one message, not eight. Five agents were measured at 184, 153, 103, 86 and 54 tool calls over exactly that many turns — 0% batched, every one of them — and a turn costs about 25 seconds whatever is in it, which came to more time than every command they ran put together. The test is dependency: if you need the first answer to decide what to ask second, those are two messages and that is fine. If you are working through a list, it is one. Suites are the exception and still run one at a time in the foreground.
 
 Never background a command and poll its output, and never background a suite. One agent spent 55% of its run inside polling loops and another spent twelve minutes reading its own background task files. Run it in the foreground and let it finish.
 
