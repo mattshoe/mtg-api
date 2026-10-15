@@ -60,6 +60,8 @@ const COVERS = {
     'src/', 'test/', 'frontend/', 'migrations/', 'schema.sql',
     'wrangler.toml', 'vitest.config.js', 'vitest.shell.config.js',
     'package.json', 'package-lock.json', 'scripts/', '.eslintrc', 'eslint.config.js',
+    // test/icon-actions.test.js reads every button off the two shells.
+    'apps/androidApp/src/main/', 'apps/webApp/src/jsMain/',
   ],
   core: [
     'apps/core/', 'apps/core-net/', 'apps/build.gradle.kts', 'apps/settings.gradle.kts',
