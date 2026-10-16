@@ -103,6 +103,9 @@ class TasksPanelTest {
         assertTrue("First in" in rows[1] && "queued" in rows[1], "first sent is not first in the queue: ${rows[1]}")
         assertTrue("Second in" in rows[2], rows[2])
         assertTrue("Third in" in rows[3], rows[3])
+        // Matt: "queue time should not be included in the total time".
+        // Nothing has picked these up, so there is no time to show.
+        rows.drop(1).forEach { assertEquals(emptyList(), durations(it), "a queued task counts its time in the queue: '$it'") }
     }
 
     private fun HTMLElement.all(selector: String): List<HTMLElement> {
@@ -150,7 +153,8 @@ class TasksPanelTest {
     /**
      * Matt: "Why does it say \"3m for 3m\" and \"17m for 7m\"?!?!?!" and
      * "just show the total fucking time". One duration, since it was
-     * created; not since it started, not how long in this status.
+     * picked up from the queue; not since it was sent, not how long in
+     * this status.
      */
     @Test
     fun aLiveTaskShowsOneDurationTheTimeSinceItWasCreated() = runTest {
@@ -167,13 +171,13 @@ class TasksPanelTest {
         val root = mount(adminSettings(running))
         settle()
         val row = root.all("[data-task]").singleOrNull { it.shown() }?.textContent.orEmpty()
-        assertEquals(listOf("17m"), durations(row), "the row should say one duration, 17m since it was created: '$row'")
+        assertEquals(listOf("12m"), durations(row), "the row should say one duration, 12m since it was picked up, not 17m since it was sent: '$row'")
         assertTrue("for " !in row, "the row still says how long it has been in its status: '$row'")
     }
 
     /**
      * Matt: "drop the pr number and only show that on details!" A paused
-     * row still says why, and how long since it was created.
+     * row still says why, and how long since it was picked up.
      */
     @Test
     fun aPausedTaskSaysWhyAndNoRowNamesItsPullRequest() = runTest {
@@ -182,7 +186,8 @@ class TasksPanelTest {
             listOf(
                 Task(
                     "k1", "Builder died", TaskStatus.PAUSED, null,
-                    statusAt = "2026-10-08T11:30:00Z", note = "agent crashed", createdAt = "2026-10-08T09:55:00Z",
+                    startedAt = "2026-10-08T10:00:00Z", statusAt = "2026-10-08T11:30:00Z", note = "agent crashed",
+                    createdAt = "2026-10-08T09:00:00Z",
                 ),
                 Task(
                     "k2", "Waiting on CI", TaskStatus.IN_REVIEW, null,
@@ -195,7 +200,7 @@ class TasksPanelTest {
         val rows = root.all("[data-task]").filter { it.shown() }.map { it.textContent.orEmpty() }
         val paused = rows.singleOrNull { "Builder died" in it } ?: error("the paused task is not listed: $rows")
         assertTrue("paused" in paused && "agent crashed" in paused, "the paused task does not say why: '$paused'")
-        assertEquals(listOf("2h 05m"), durations(paused), "the paused task should say one duration since it was created: '$paused'")
+        assertEquals(listOf("2h 00m"), durations(paused), "the paused task should say one duration since it was picked up: '$paused'")
         val review = rows.singleOrNull { "Waiting on CI" in it } ?: error("the task in review is not listed: $rows")
         assertTrue("PR" !in review && "142" !in review, "the task in review still names its pull request on the row: '$review'")
     }
@@ -203,10 +208,10 @@ class TasksPanelTest {
     /**
      * Matt: "Done tasks should show how long they took, not a UTC
      * timestamp", and "are the completed ones going to show it too???"
-     * Created to finished, frozen, in the same place a live one counts.
+     * Picked up to finished, frozen, in the same place a live one counts.
      */
     @Test
-    fun aDoneTaskSaysHowLongItTookFromCreatedToFinished() = runTest {
+    fun aDoneTaskSaysHowLongItTookFromPickedUpToFinished() = runTest {
         val finished = Tasks().loaded(
             listOf(
                 Task(
@@ -219,8 +224,8 @@ class TasksPanelTest {
         val root = mount(adminSettings(finished))
         settle()
         val done = root.all("[data-task-done]").singleOrNull { it.shown() }?.textContent.orEmpty()
-        assertTrue("took 3h 05m" in done, "the done task does not say how long it took from created to finished: '$done'")
-        assertEquals(listOf("3h 05m"), durations(done), "the done task should say one duration: '$done'")
+        assertTrue("took 2h 05m" in done, "the done task does not say how long it took from picked up to finished: '$done'")
+        assertEquals(listOf("2h 05m"), durations(done), "the done task should say one duration: '$done'")
         assertTrue("UTC" !in done && "2026-10-08" !in done, "the done task still shows when it finished: '$done'")
         assertTrue("PR" !in done, "the done task still names its pull request on the row: '$done'")
     }
