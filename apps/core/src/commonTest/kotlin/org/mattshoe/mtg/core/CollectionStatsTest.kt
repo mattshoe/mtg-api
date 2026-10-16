@@ -49,7 +49,7 @@ class CollectionStatsTest {
         assertEquals(45.5, b.value)
         assertEquals(10, b.unpriced, "the ten unpriced Forests")
         assertEquals(2, b.foils)
-        assertEquals(3, b.sets)
+        assertEquals(2, b.sets, "Bloomburrow and Commander")
     }
 
     @Test

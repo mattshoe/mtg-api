@@ -82,6 +82,51 @@ object StatsQueries {
         emptyList(),
     )
 
+    /**
+     * Every stack in the collection, with what the charts need of it.
+     *
+     * Its own LIMIT, because the server caps a statement without one
+     * at 5,000 rows and Matt's collection is over 6,000 printings: the
+     * charts would have been quietly about most of it.
+     */
+    fun cards(scope: StatsScope): Sql {
+        val w = if (scope.owner == null) "1=1" else Owners.owns("c.owner_id")
+        return Sql(
+            """SELECT c.name, c.qty, c.finish, c.cmc, c.type_line, c.color_identity,
+                      c.rarity, c.set_name, substr(c.released_at, 1, 4) AS year, c.artist,
+                      cp.price
+                 FROM cards c
+                 LEFT JOIN card_prices cp ON cp.card_id = c.id
+                WHERE $w
+                LIMIT 50000""",
+            scope.params,
+        )
+    }
+
+    fun decodeCards(cols: List<String>, rows: List<JsonArray>): List<StatCard> {
+        val at = cols.withIndex().associate { (i, n) -> n to i }
+        return rows.map { row ->
+            fun str(n: String): String? {
+                val v = at[n]?.let { row.getOrNull(it) } ?: return null
+                if (v is JsonNull) return null
+                return (v as? JsonPrimitive)?.content
+            }
+            StatCard(
+                name = str("name").orEmpty(),
+                qty = str("qty")?.toDoubleOrNull()?.toInt() ?: 0,
+                foil = str("finish").let { it != null && it != "nonfoil" },
+                manaValue = str("cmc")?.toDoubleOrNull() ?: 0.0,
+                typeLine = str("type_line").orEmpty(),
+                identity = str("color_identity").orEmpty().uppercase(),
+                rarity = str("rarity").orEmpty(),
+                setName = str("set_name").orEmpty(),
+                year = str("year").orEmpty(),
+                artist = str("artist").orEmpty(),
+                price = str("price")?.toDoubleOrNull(),
+            )
+        }
+    }
+
     fun decode(cols: List<String>, rows: List<JsonArray>): Totals {
         val at = cols.withIndex().associate { (i, n) -> n to i }
         val row = rows.firstOrNull() ?: return Totals()
@@ -110,9 +155,31 @@ data class StatsState(
     val totals: Totals = Totals(),
     val busy: Boolean = false,
     val error: String? = null,
+    /** Every stack in the collection. The charts are worked out from these, here. */
+    val cards: List<StatCard> = emptyList(),
+    val tab: StatTab = StatTab.ALL,
+    val filter: StatFilter = StatFilter(),
 ) {
+    /** What the page draws: the cards on [tab], under [filter]. */
+    val breakdown: CollectionBreakdown by lazy { CollectionAnalysis.of(cards, tab, filter) }
+
+    /** The tabs worth offering, with how many copies each holds under [filter]. */
+    val tabs: List<Pair<StatTab, Int>> by lazy { CollectionAnalysis.tabs(cards, filter) }
+
+    /** The rarities the collection has, for the filter's chips, in rarity order. */
+    val rarities: List<String> by lazy {
+        listOf("common", "uncommon", "rare", "mythic", "special", "bonus").filter { r -> cards.any { it.rarity == r } }
+    }
+
     fun scopedTo(owner: String?) = copy(scope = StatsScope(owner), error = null)
     fun loading() = copy(busy = true, error = null)
     fun loaded(t: Totals) = copy(totals = t, busy = false, error = null)
+    fun loaded(t: Totals, cards: List<StatCard>) = copy(totals = t, cards = cards, busy = false, error = null)
+    fun onTab(t: StatTab) = copy(tab = t)
+    fun toggleColour(pip: Pip) = copy(filter = filter.toggle(pip))
+    fun toggleRarity(r: String) = copy(filter = filter.toggleRarity(r))
+
+    /** Back to every colour and rarity, on the same tab. */
+    fun clearFilters() = copy(filter = StatFilter())
     fun failed(message: String) = copy(busy = false, error = message)
 }
