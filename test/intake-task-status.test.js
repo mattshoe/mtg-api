@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { spawn, execFileSync } from 'node:child_process'
+import { spawn, spawnSync, execFileSync } from 'node:child_process'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const REPO = dirname(dirname(fileURLToPath(import.meta.url)))
 import { outcome, titleOf, started, report, reconcile, requestOfBranch, cancels, cancelFile, stop, whoIsWorking } from '../scripts/intake/task-status.mjs'
 import { statusOf, buildable, branchFor } from '../scripts/intake.mjs'
 
@@ -544,5 +550,56 @@ describe('who is working', () => {
     expect(whoIsWorking({
       repo: '/nowhere', known: ['a-thing'], run: run([]), branch: 'request/a-thing-0000000',
     }).stalled).toEqual([])
+  })
+})
+
+/**
+ * A copy of this repo somewhere else must not write to the real board.
+ *
+ * Matt: "Why do you keep queuing up a task called 'a thing'?!" Because
+ * a throwaway test repo under /tmp ran the dispatcher with the real
+ * HOME, found `~/.mtg-agent.env`, and wrote to production. Its
+ * `requests/` folder held one file, so its reconcile saw every real
+ * task as having no request file and marked them withdrawn — which
+ * cancelled two of his tickets and killed an agent mid-build.
+ *
+ * The guard is the repository's own identity: the real one has this
+ * git remote. A scratch copy does not, and must refuse rather than
+ * guess.
+ */
+describe('writing task status from somewhere that is not the real repo', () => {
+  const run = (cwd, env = {}) => spawnSync('node', [
+    join(REPO, 'scripts', 'intake', 'task-status.mjs'), 'reconcile',
+  ], { encoding: 'utf8', cwd, timeout: 30_000, env: { ...process.env, ...env } })
+
+  it('refuses when a real credential is reached from a repo that is not the real one', () => {
+    // The precise shape of the accident: a credential found in the
+    // home directory, from a tree that is not the mtg-api checkout.
+    const tmp = mkdtempSync(join(tmpdir(), 'notreal-'))
+    try {
+      spawnSync('git', ['init', '-q', tmp])
+      mkdirSync(join(tmp, 'requests'), { recursive: true })
+      writeFileSync(join(tmp, '.mtg-agent.env'), 'MTG_AGENT_TOKEN=pretend\n')
+      const r = run(tmp, { HOME: tmp, MTG_REPO: tmp })
+      expect(`${r.stdout}${r.stderr}`, 'a scratch copy was allowed to write to production')
+        .toMatch(/not the mtg-api checkout|refusing/i)
+    } finally {
+      rmSync(tmp, { recursive: true, force: true })
+    }
+  })
+
+  it('says nothing about the repo when there is no credential to misuse', () => {
+    // A test box has its own HOME and no token. The guard must not
+    // fire there, or it would quietly disable the suite that proves
+    // the dispatcher works.
+    const tmp = mkdtempSync(join(tmpdir(), 'nocred-'))
+    try {
+      spawnSync('git', ['init', '-q', tmp])
+      mkdirSync(join(tmp, 'requests'), { recursive: true })
+      const r = run(tmp, { HOME: tmp, MTG_REPO: tmp })
+      expect(`${r.stdout}${r.stderr}`).not.toMatch(/refusing to write/i)
+    } finally {
+      rmSync(tmp, { recursive: true, force: true })
+    }
   })
 })

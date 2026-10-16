@@ -502,7 +502,41 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const name = basename(String(file || ''), '.md')
   const stamp = new Date().toTimeString().slice(0, 8)
   const say = (line) => console.log(`${stamp}  task-status: ${line}`)
+
+  // Only the real checkout may write to the real board.
+  //
+  // Matt: "Why do you keep queuing up a task called 'a thing'?!" A
+  // throwaway test repo under /tmp ran the dispatcher with the real
+  // HOME, found `~/.mtg-agent.env`, and wrote to production. Worse
+  // than the stray row: its `requests/` folder held one file, so its
+  // reconcile saw every real task as having no request file and marked
+  // them withdrawn — which cancelled two of his tickets and killed an
+  // agent that was mid-build.
+  //
+  // The credential is in the home directory, so it follows you
+  // anywhere. The repository does not: the real one has this remote,
+  // and a scratch copy has none.
+  //
+  // Checked only when a credential was actually found, which is the
+  // precise shape of the accident — a real token reached from the
+  // wrong tree. A test box has its own HOME and no token, so it is not
+  // affected, and the check cannot quietly disable the suite.
   const token = await writeToken()
+  if (token) {
+    const where = process.env.MTG_REPO || repo
+    const remote = (() => {
+      try {
+        return execFileSync('git', ['remote', 'get-url', 'origin'], {
+          cwd: where, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
+        }).trim()
+      } catch { return '' }
+    })()
+    if (!/[:/]mattshoe\/mtg-api(\.git)?$/.test(remote)) {
+      console.error(`${stamp}  task-status: refusing to write: ${where} is not the mtg-api checkout`
+        + `${remote ? ` (origin is ${remote})` : ' (it has no origin)'}`)
+      process.exit(9)
+    }
+  }
 
   let transition
   if (cmd === 'building') {
