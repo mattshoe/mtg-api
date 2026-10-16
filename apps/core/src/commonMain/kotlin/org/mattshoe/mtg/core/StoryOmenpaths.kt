@@ -37,7 +37,7 @@ internal val storyOmenpaths = StorySection(
                 StoryTab(
                     "roads-without-maps", "Roads Without Maps",
                     listOf(
-                        "The new Omenpaths were not like Kaldheim's round ones. These were triangles, or swirling sets of interlocking triangles, said to be the strongest shape for holding up the weight of the Multiverse. Nissa saw one on Zhalfir as a hovering blue light that pulsed to the song of the leylines, its edges ragged like cloth cut by a careless blade. On Eldraine a boy named Kellan found one standing free in the woods like a cloudy mirror. On Ixalan they hung as sparkling rings wider than a person, floating above the ground and full of turning light.",
+                        "The new Omenpaths were not like Kaldheim's round ones. These were triangles, or swirling sets of interlocking triangles, said to be the strongest shape for holding up the weight of the Multiverse. Nissa saw one on Zhalfir as a hovering blue light that pulsed to the song of the leylines, its edges ragged like cloth cut by a careless blade. [On Eldraine](wilds-of-eldraine) a boy named Kellan found one standing free in the woods like a cloudy mirror. On Ixalan they hung as sparkling rings wider than a person, floating above the ground and full of turning light.",
                         "They came in every size and temper. Some were tiny and some were vast. Some stayed and some vanished. Some wandered across the land, some led only one way, and a traveller who stepped through had no promise of ever finding a road back. Not every plane connected to every other, so a journey could take many crossings. For the first time since [the Mending](the-mending) shut down every planar machine in existence, ordinary people could leave their worlds, and they did, in their thousands.",
                         "People began to tame them. Saheeli tracked down Ixalan from elsewhere in less than a year. A path between Strixhaven on Arcavios and Ixalan proved regular enough for couriers to run letters back and forth. The planners of Avishkar, the world once called Kaladesh, sorted the paths into three plain grades. Evergreen paths had opened in the invasion's wake and never closed. Deciduous paths opened and shut on a reliable cycle, like seasons. Instanced paths were everything else, from one that stayed open for days to one that lasted a few seconds. The scheme was never meant for scholars, but it spread across the Multiverse anyway.",
                         "Kellan was the proof of what had changed. He was half fae, the son of the planeswalker Oko, and he had no spark at all, yet he walked from Eldraine to Ixalan to Ravnica looking for the father he had never met, and every step was through an Omenpath. The card that shows him, {Kellan, Planar Trailblazer}, names what he had become, a traveller between worlds with no spark to carry him. Nobody needed to be special to cross the Multiverse any more. They only needed to be brave, or desperate, or greedy, and the Multiverse was about to find out how many people were all three.",
@@ -72,6 +72,74 @@ internal val storyOmenpaths = StorySection(
             ),
         ),
         StoryArticle(
+            "wilds-of-eldraine", "Wilds of Eldraine",
+            listOf(
+                StoryTab(
+                    "the-wicked-slumber", "The Wicked Slumber",
+                    listOf(
+                        "The [invasion](invasion-of-the-multiverse) came to Eldraine quietly. It began in the Wilds, the dark fae forests beyond the Realm's castles, and nobody noticed until it was too late. Within days of Realmbreaker's branches arriving, the courts of the Realm had fallen. High King Algenus Kenrith and Queen Linden were killed, and Ayara of Locthwain was compleated along with her guards and her whole castle.",
+                        "Talion, the fae Lord of the Wilds, came home from a long journey to find his world being eaten. He made an alliance he would not otherwise have made, with three witch sisters named Agatha, Eriette and Hylda, and together they cast a curse over the whole plane. It was the {Wicked Slumber}, and every Phyrexian on Eldraine fell asleep where it stood and was destroyed. For their help Talion paid each witch with a fae treasure that swelled her power, a soul cauldron for Agatha, a charmed glass apple for Eriette and a crown of winter for Hylda.",
+                        "The invasion ended and the curse did not. Eriette spread it to the living, meaning to build a kingdom where everyone obeyed her, and it took farmers, knights and fae alike, Talion's own child Obyra among them. The sleepers lay wrapped in strands of violet mist, animals slept in the fields, and whole villages were drowned in rivers of violet. Will Kenrith ruled as acting king and ordered every sleeper laid in a {Glass Casket}, guarded in case they ever woke. He and his twin Rowan had also lost the spark they shared, one more loss among the [Sparks Lost](sparks-lost), though at first they did not know it.",
+                    ),
+                    quote = StoryQuote(
+                        "'Twas the cruelest of ironies: the realm, in desperate need of rest, gripped by endless sleep that offered no comfort.",
+                        "Polluted Bonds, Enchanting Tales",
+                    ),
+                ),
+                StoryTab(
+                    "talions-bargain", "Talion's Bargain",
+                    listOf(
+                        "Six months after the invasion the Realm was coming apart. Will met the knight Imodane in single combat, and Rowan cut a rift so deep into a nearby mountain that it has been called Stormcutter Mountain ever since. The twins wanted the same thing, their home whole again, and could not agree on anything else. Will took up his father's sword and looked for peace. Rowan, trained as a mage at Strixhaven, believed she could gather enough power to put everything back the way it was.",
+                        "In the village of Orrinshire lived a sixteen year old boy named Kellan. His mother Alyse was human and had married a shepherd named Ronald, but Kellan's father had been one of the fae, and everybody knew it. Other young people in the village roughed him up and mocked him for it, and some of them blamed him for the Slumber itself. He dreamed of being a hero all the same.",
+                        "Talion had already sent Imodane to kill the three witches, and Agatha had caught her. So the fae lord turned to Kellan instead. He offered him a quest to end the Wicked Slumber, and as payment, the truth about the father he had never known. He gave the boy two magical basket hilts that lit with blades of ethereal light, sharp as thorns and supple enough to crack like a whip. {Talion, the Kindly Lord} was not known for kindness, but Kellan wanted the answer badly enough to say yes, and {Kellan, the Fae-Blooded} set out into the Wilds.",
+                    ),
+                ),
+                StoryTab(
+                    "agathas-cauldron", "Agatha's Cauldron",
+                    listOf(
+                        "In the town of Edgewall Kellan met Ruby, a scout in a red hood who was searching for her lost brother Peter. They went on together to Dunbarrow, where Kellan hoped to find the first witch and Ruby hoped to find her brother. On the road they were hunted by a knight in a wolf's shape, the Wolf Knight, and only got away by running straight through a pack of Witchstalkers. {Ruby, Daring Tracker} kept them alive through most of it.",
+                        "They came at last to a cabin in the woods. It belonged to Agatha the Hungry, the first of the three sisters, and inside it they found the knight Imodane, still her prisoner. Kellan fought the witch and pushed her into her own cauldron. {Agatha of the Vile Cauldron} died in it, and Imodane went free. When Agatha died, her enchantment on the Wolf Knight broke, and the monster that had chased them through the forest turned back into a boy. It was Peter.",
+                        "Kellan carried the witch's cauldron back to Talion as proof, and the fae lord sent him upward. With a vedalken named Troyan, a traveller from a city far away, as their guide, Kellan and Ruby climbed a beanstalk into the clouds and the giants' realm of Stormkeld, the climb the card {Up the Beanstalk} remembers. There a mirror showed them where the second witch was hiding, in a castle of ice on Loch Laurent.",
+                    ),
+                ),
+                StoryTab(
+                    "the-frozen-heart", "The Frozen Heart",
+                    listOf(
+                        "Loch Laurent was frozen hard, and the ice belonged to Cruel Hylda. Frost warriors rose out of it to stop them, and it was there, fighting for his life, that Kellan finally learned how to use the hilts Talion had given him. But the Slumber was thick in that country. A mile short of the castle, Kellan lay down in the snow and fell into the same sleep as everyone else.",
+                        "Hylda did not kill them. The witch who could freeze anything took mercy on the two of them. She woke Kellan, and then she took off the crown of winter that Talion had given her and handed it over. Without it {Hylda of the Icy Crown} could freeze no one, and the crown was proof that she had given up. With it she gave them something worse, the truth of the curse. Talion had not only paid the witches to cast it. He had cast it with them.",
+                        "Kellan had been sent to kill the women his patron had made into weapons, by the fae lord whose own hand was on the spell. Whether that made Talion a liar or only a fae was a question Kellan had no answer to, and he still wanted the one Talion had promised. Two witches were done. The last was the most dangerous, and she had taken Castle Ardenvale for herself.",
+                    ),
+                ),
+                StoryTab(
+                    "the-ardent-queen", "The Ardent Queen",
+                    listOf(
+                        "While Kellan was crossing the Wilds, Rowan Kenrith was looking for a cure of her own. She enlisted Royse, a spiderlike fae weaver, and in an abandoned castle she dreamed of her dead parents, who urged her to go home to Castle Ardenvale. When she got there, the castle was not empty. Eriette had claimed it after the invasion and named herself the Ardent Queen, and in its ruins she had raised a court out of the sleepers, who rose and moved at her will.",
+                        "Beside her stood Ashiok, a planeswalker who still had a spark and who used the nightmares of the sleeping against those still awake. Between them they told Rowan two things she had not known. Her spark was gone. And Eriette was her aunt. Long ago a witch had enthralled High King Algenus and lived with him for a year, and the twins were her children. She had killed them as newborns for their blood, Algenus had killed her, and Linden had given up the power of her sword to bring the babies back to life. That witch had been a sister to Agatha, Hylda and Eriette.",
+                        "Eriette offered Rowan what she wanted most, power, regard and the means to keep Eldraine safe. Rowan took it. She began to learn sleep magic from her aunt and how to command the sleepers, which is the moment {Twisted Fealty} shows. {Eriette of the Charmed Apple} had her niece, {Ashiok, Wicked Manipulator} had a kingdom of dreams to feed on, and when her brother came for the castle, Rowan would be on the wrong side of the wall.",
+                    ),
+                ),
+                StoryTab(
+                    "broken-oaths", "Broken Oaths",
+                    listOf(
+                        "Talion gave Kellan and Ruby ponies and sent them to steal into Ardenvale and finish the last witch. Rowan found them first. She warned them to turn around and go home, and when they would not, she knocked them both out. They were her prisoners when Will and his knights attacked the castle, and the sleepers rose to fight for their queen.",
+                        "In the chaos Kellan and Ruby got free. When Ashiok appeared, Kellan did not try to beat the planeswalker alone. He threw himself at Ashiok and held them in place just long enough for Will to land a bolt of ice square in their chest. {Will, Scion of Peace} won the castle back. His knights took Eriette prisoner, but Rowan escaped. The curse was broken, and across Eldraine the sleepers began to wake.",
+                        "Kellan went to Talion one last time and turned down his reward. He did not want the truth from the fae lord who had lied to him. He went home to Orrinshire and asked his mother instead, and Alyse told him. His father was Oko, a fae planeswalker, who had come back to Eldraine a few years before and reached out to her again, and she had chosen to stay with her son.",
+                        "Eriette did not stay in her cell for long. Someone wearing Ashiok's face came for her and freed her, and it was not Ashiok at all but [Jace Beleren](who/jace), who took her off the plane to a heist on [Thunder Junction](thunder-junction). And in the woods one day Kellan found an [Omenpath](the-omenpaths) standing free among the trees like a cloudy mirror. He had no spark, and he did not need one. He stepped through to go and look for his father, and his road led on to Ixalan.",
+                    ),
+                ),
+            ),
+            listOf(
+                StorySource("Set", "Wilds of Eldraine"),
+                StorySource("Set", "March of the Machine"),
+                StorySource("Story", "Wilds of Eldraine, Episodes 1 to 5, by K. Arsenault Rivera, Magic Story on magic.wizards.com"),
+                StorySource("Story", "March of the Machine, Eldraine, The Adventures of Rankle, Master of Love, by Jenna Helland, Magic Story on magic.wizards.com"),
+                StorySource("Reference", "MTG Wiki: Wilds of Eldraine"),
+                StorySource("Reference", "MTG Wiki: Wicked Slumber"),
+                StorySource("Reference", "MTG Wiki: Kellan"),
+                StorySource("Reference", "MTG Wiki: Eriette"),
+            ),
+        ),
+        StoryArticle(
             "thunder-junction", "Thunder Junction",
             listOf(
                 StoryTab(
@@ -95,7 +163,7 @@ internal val storyOmenpaths = StorySection(
                 StoryTab(
                     "the-train", "The Train",
                     listOf(
-                        "In the saloon Kellan recognised two faces he knew from trouble on Eldraine, Eriette and Ashiok. Oko told him grudges from other planes did not count on Thunder Junction. Kaervek studied the stolen key and found it was not Thran or Phyrexian, but as old as either or older, and he warned that it might be more than a key. Nobody knew where the vault actually was. Annie knew a scholar of ancient artifacts named Nolan, and the Sterling Company had hired him to study the key. He was riding a guarded train into Prosperity.",
+                        "In the saloon Kellan recognised two faces he knew from [trouble on Eldraine](wilds-of-eldraine), Eriette and Ashiok. Oko told him grudges from other planes did not count on Thunder Junction. Kaervek studied the stolen key and found it was not Thran or Phyrexian, but as old as either or older, and he warned that it might be more than a key. Nobody knew where the vault actually was. Annie knew a scholar of ancient artifacts named Nolan, and the Sterling Company had hired him to study the key. He was riding a guarded train into Prosperity.",
                         "Oko promised Kellan that no innocents would be hurt. The plan was for Breeches to blow a bridge and stop the train while Gisa raised zombies aboard as a distraction, all of it coordinated through Ashiok's voice in their heads. Gisa raised her dead too soon. The zombies overran the cars and reached the driver, and instead of stopping, the train sped up toward the broken bridge. Oko and Kellan crossed the roof to the prisoner car and got Nolan out, and Annie rode alongside to haul the scholar and a wounded Umezawa onto Fortune's back.",
                         "Then Oko jumped, and told his son the passengers could not be saved. When Kellan refused to come, Oko rode away from the Sterling reinforcements without him. Kellan threw golden vines around the last car and held it while the front of the train hung out over the canyon. Annie came back for him. She held off the Sterling riders while the passengers climbed out, and then the train went over the edge and burst in the canyon below.",
                         "At camp, Oko said he had left because he trusted Kellan to finish the job. Ashiok drew Nolan's memories out of his head like silver threads. The key was only one of six pieces, and Akul wore the other five on a medallion around his neck. A map to his town, Tarnation, lay buried in a prospectors' graveyard called Thief's Folly. Gisa and Geralf came back bruised with the map, and it showed that the vault hung in the air over Akul's town.",
