@@ -104,7 +104,9 @@ class CollectionStatsParityTest {
     private fun exists(t: String) = rule.onAllNodesWithTag(t, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
 
     private fun pressed(t: String): Boolean =
-        tag(t).fetchSemanticsNode().config.getOrElse(SemanticsProperties.ToggleableState) { null } ==
+        tag(t).fetchSemanticsNode().config.let { c ->
+            if (SemanticsProperties.ToggleableState in c) c[SemanticsProperties.ToggleableState] else null
+        } ==
             androidx.compose.ui.state.ToggleableState.On
 
     private fun press(t: String) {

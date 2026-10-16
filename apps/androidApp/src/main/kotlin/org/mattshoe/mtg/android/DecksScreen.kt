@@ -801,9 +801,13 @@ private val CurveFill = Brush.verticalGradient(
  * not say.
  */
 @Composable
-private fun Curve(s: org.mattshoe.mtg.core.DeckStats) {
+private fun Curve(s: org.mattshoe.mtg.core.DeckStats) =
+    CurveOf(s.curve, "Median ${s.medianManaValueText}. Lands excluded.")
+
+@Composable
+private fun CurveOf(curve: List<Bar>, note: String) {
     Line("Mana curve".uppercase(), Ink3, Design.MINI, FontWeight.SemiBold)
-    val most = s.curve.maxOfOrNull { it.value } ?: 0
+    val most = curve.maxOfOrNull { it.value } ?: 0
     Row(
         Modifier.fillMaxWidth().height(CURVE_HEIGHT).padding(top = 10.dp).testTag("curve"),
         // `.curve { gap: 6px }`. Five was a dp narrower than the
@@ -812,7 +816,7 @@ private fun Curve(s: org.mattshoe.mtg.core.DeckStats) {
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.Bottom,
     ) {
-        s.curve.forEach { bar ->
+        curve.forEach { bar ->
             Column(
                 Modifier.weight(1f).fillMaxHeight(),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -894,7 +898,7 @@ private fun Curve(s: org.mattshoe.mtg.core.DeckStats) {
             }
         }
     }
-    Line("Median ${s.medianManaValueText}. Lands excluded.", Ink3, Design.MINI)
+    Line(note, Ink3, Design.MINI)
 }
 
 /**
@@ -971,9 +975,17 @@ private fun Ring(
     modifier: Modifier = Modifier,
     ring: androidx.compose.ui.unit.Dp = 76.dp,
     numbered: List<org.mattshoe.mtg.core.RingSlice> = emptyList(),
+) = RingOf(which.caption, which.tag, bars, modifier, ring, numbered)
+
+@Composable
+private fun RingOf(
+    caption: String,
+    key: String,
+    bars: List<Bar>,
+    modifier: Modifier = Modifier,
+    ring: androidx.compose.ui.unit.Dp = 76.dp,
+    numbered: List<org.mattshoe.mtg.core.RingSlice> = emptyList(),
 ) {
-    val caption = which.caption
-    val key = which.tag
     val total = bars.sumOf { it.value }
     // Nothing to split: a colourless deck has no colour chart.
     if (total <= 0) {
@@ -1145,10 +1157,11 @@ private fun Figure(
     k: String,
     tint: androidx.compose.ui.graphics.Color = Ink,
     hint: String = "",
+    modifier: Modifier = Modifier,
 ) {
     val told = if (hint.isEmpty()) "$n $k" else "$n $k — $hint"
     Column(
-        Modifier.semantics { contentDescription = told }
+        modifier.semantics { contentDescription = told }
             // The web's `.figures` grid draws a 1px seam between cells
             // with a `--line` background under a 1px gap; a hairline
             // border around each cell is the same seam without a grid
@@ -1197,6 +1210,8 @@ private fun Bars(
     note: String = "Of $total cards.",
     tag: String = "hbar",
     onTap: ((String) -> Unit)? = null,
+    /** How a bar's number reads: a count, or dollars on the Stats screen. */
+    shown: (Int) -> String = { "$it" },
 ) {
     // `.stats-card > h3 { text-transform: uppercase }` on the web.
     Line(title.uppercase(), Ink3, Design.MINI, FontWeight.SemiBold)
@@ -1218,7 +1233,7 @@ private fun Bars(
                         .testTag("$tag-${bar.label}"),
                 )
             }
-            Line("${bar.value}", Ink3, Design.MINI)
+            Line(shown(bar.value), Ink3, Design.MINI)
         }
     }
     Line(note, Ink3, Design.MINI)
@@ -1292,3 +1307,26 @@ private fun TokenList(tokens: List<org.mattshoe.mtg.core.TokenCard>) {
         )
     }
 }
+
+// The deck page's chart pieces, lent to the Stats screen so the two
+// draw a bar, a ring and a curve the same way. The web's `StatBars`
+// and friends in `DeckStatsPanel.kt`.
+
+@Composable
+internal fun StatFigure(n: String, k: String, hint: String = "", modifier: Modifier = Modifier) =
+    Figure(n, k, hint = hint, modifier = modifier)
+
+@Composable
+internal fun StatBars(title: String, bars: List<Bar>, total: Int, note: String, shown: (Int) -> String = { "$it" }) =
+    Bars(title, bars, total, note, tag = "stat-bar-$title", shown = shown)
+
+@Composable
+internal fun StatRing(
+    caption: String,
+    bars: List<Bar>,
+    modifier: Modifier = Modifier,
+    numbered: List<org.mattshoe.mtg.core.RingSlice> = emptyList(),
+) = RingOf(caption, caption, bars, modifier, ring = if (numbered.isEmpty()) 120.dp else 160.dp, numbered = numbered)
+
+@Composable
+internal fun StatCurve(curve: List<Bar>, note: String) = CurveOf(curve, note)
