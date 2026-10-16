@@ -114,24 +114,30 @@ class TasksTest {
     /**
      * Matt: "Why does it say \"3m for 3m\" and \"17m for 7m\"?!?!?!" and
      * "I don't give a fuck good long is been in the fucking status just
-     * show the total fucking time!!!!" One duration, since it was
-     * created, whatever it started at or has been in since.
+     * show the total fucking time!!!!" One duration, and then: "tasks
+     * should only show the amount of time it takes after it is picked
+     * up from the queue. queue time should not be included in the
+     * total time". So it counts from when a builder started it, not
+     * from when it was sent, whatever status it has been in since.
      */
     @Test
-    fun aLiveTaskShowsOneDurationTheTotalTimeSinceItWasCreated() {
+    fun aLiveTaskShowsOneDurationTheTimeSinceItWasPickedUp() {
         val t = Task(
             "k", "reconcile tells the truth", TaskStatus.IN_PROGRESS, null,
             startedAt = "2026-10-08T09:05:00Z", statusAt = "2026-10-08T09:10:00Z",
             createdAt = "2026-10-08T09:00:00Z",
         )
-        assertEquals("17m", t.elapsed(Tasks.epochMillis("2026-10-08T09:17:00Z")!!))
+        assertEquals(
+            "12m", t.elapsed(Tasks.epochMillis("2026-10-08T09:17:00Z")!!),
+            "the five minutes it sat in the queue are still counted",
+        )
     }
 
     @Test
-    fun theTimeSinceItWasCreatedIsWhatTheWorkerWrote() {
+    fun theTimeSinceItWasPickedUpIsWhatTheWorkerWrote() {
         val t = decoded().single { it.title == "Builder died" }
-        assertEquals("2026-10-01T00:00:00.000Z", t.createdAt)
-        assertEquals("7d 12h", t.elapsed(Tasks.epochMillis("2026-10-08T12:00:00Z")!!))
+        assertEquals("2026-10-07T08:00:00.000Z", t.startedAt)
+        assertEquals("1d 4h", t.elapsed(Tasks.epochMillis("2026-10-08T12:00:00Z")!!), "it counted from when it was sent")
     }
 
     /** The pull request stays on the task for its details page, not in the list. */
@@ -146,12 +152,16 @@ class TasksTest {
         assertEquals("needs the Cloudflare token", decoded().single { it.title == "Needs Matt" }.note)
     }
 
-    /** Matt: four stopped tasks all read `building`. A held one says paused, and how long it has existed. */
+    /**
+     * Matt: four stopped tasks all read `building`. A held one says
+     * paused, and one no builder ever picked up has no time to show:
+     * all of it is queue time.
+     */
     @Test
-    fun aTaskHeldBackIsPausedAndStillSaysHowOldItIs() {
+    fun aTaskHeldBackBeforeItStartedIsPausedAndCountsNoTime() {
         val held = decoded().single { it.title == "On hold" }
         assertEquals("paused", held.status.word)
-        assertEquals("7d 11h", held.elapsed(Tasks.epochMillis("2026-10-08T11:00:00Z")!!))
+        assertNull(held.elapsed(Tasks.epochMillis("2026-10-08T11:00:00Z")!!), "a task never picked up counted its time in the queue")
     }
 
     @Test
@@ -161,7 +171,7 @@ class TasksTest {
         assertEquals("2026-10-01T09:00:00.000Z", t.startedAt)
         assertEquals("2026-10-01T10:00:00.000Z", t.finishedAt)
         assertEquals("2026-10-01T00:00:00.000Z", t.createdAt)
-        assertEquals("took 10h 00m", t.took)
+        assertEquals("took 1h 00m", t.took, "it took from when it was sent, not from when it was picked up")
     }
 
     @Test
@@ -201,17 +211,18 @@ class TasksTest {
     /**
      * Matt: "Done tasks should show how long they took, not a UTC
      * timestamp", and "are the completed ones going to show it too???"
-     * Created to finished, frozen, in the same words a live one counts in.
+     * Picked up to finished, frozen, in the same words a live one counts
+     * in. One cancelled before anything picked it up took nothing.
      */
     @Test
-    fun aFinishedTaskSaysHowLongItTookFromCreatedToFinished() {
+    fun aFinishedTaskSaysHowLongItTookFromPickedUpToFinished() {
         val shipped = Task(
             "k1", "Shipped", TaskStatus.MERGED, "2026-10-08T13:05:00Z",
             startedAt = "2026-10-08T11:00:00Z", createdAt = "2026-10-08T10:00:00Z",
         )
-        assertEquals("took 3h 05m", shipped.took)
+        assertEquals("took 2h 05m", shipped.took, "the hour it sat in the queue is still counted")
         val dropped = Task("k2", "Dropped", TaskStatus.CANCELLED, "2026-10-08T10:12:00Z", createdAt = "2026-10-08T10:00:00Z")
-        assertEquals("took 12m", dropped.took)
+        assertNull(dropped.took, "a task cancelled in the queue counted its queue time")
     }
 
     /**
@@ -235,12 +246,20 @@ class TasksTest {
         assertNull(Task("k1", "Going", TaskStatus.IN_PROGRESS, null, createdAt = "2026-10-08T10:00:00Z").took)
     }
 
-    /** Every live task has an age, paused and pending as much as running. */
+    /**
+     * A task that was picked up keeps counting from then, paused as much
+     * as running. One still waiting its turn shows no time at all.
+     */
     @Test
-    fun aPausedOrPendingTaskSaysHowLongSinceItWasCreated() {
+    fun aPausedTaskCountsFromItsStartAndAWaitingOneCountsNothing() {
         val now = Tasks.epochMillis("2026-10-08T12:00:00Z")!!
-        assertEquals("2h 00m", Task("k", "Died", TaskStatus.PAUSED, null, createdAt = "2026-10-08T10:00:00Z").elapsed(now))
-        assertEquals("2h 00m", Task("k", "Waiting", TaskStatus.PENDING, null, createdAt = "2026-10-08T10:00:00Z").elapsed(now))
+        val sent = "2026-10-08T09:00:00Z"
+        assertEquals(
+            "2h 00m",
+            Task("k", "Died", TaskStatus.PAUSED, null, startedAt = "2026-10-08T10:00:00Z", createdAt = sent).elapsed(now),
+        )
+        assertNull(Task("k", "Waiting", TaskStatus.PENDING, null, createdAt = sent).elapsed(now), "a pending task counted its queue time")
+        assertNull(Task("k", "In line", TaskStatus.QUEUED, null, createdAt = sent).elapsed(now), "a queued task counted its queue time")
     }
 
     @Test
@@ -257,9 +276,9 @@ class TasksTest {
     }
 
     @Test
-    fun anActiveTaskSaysHowLongSinceItWasCreated() {
+    fun anActiveTaskSaysHowLongSinceItWasPickedUp() {
         val start = "2026-10-08T09:15:00Z"
-        val t = Task("k1", "Going", TaskStatus.IN_PROGRESS, null, createdAt = start)
+        val t = Task("k1", "Going", TaskStatus.IN_PROGRESS, null, startedAt = start, createdAt = "2026-10-08T08:00:00Z")
         val at = Tasks.epochMillis(start)!!
         assertEquals("just started", t.elapsed(at + 30_000))
         assertEquals("12m", t.elapsed(at + 12 * 60_000))

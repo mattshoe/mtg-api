@@ -1679,17 +1679,17 @@ class AppDriverTest {
     }
 
     /**
-     * The running task counts from the start the dispatcher wrote to the
-     * browser's own clock. `TasksPanelTest` hands the page a `now`;
+     * The running task counts from the start the dispatcher wrote, when
+     * it was picked up from the queue, to the browser's own clock. `TasksPanelTest` hands the page a `now`;
      * this is the page finding one for itself.
      */
     @Test
-    fun aRunningTaskOnAdminSettingsCountsFromItsFirstCommitToNow() = runTest {
+    fun aRunningTaskOnAdminSettingsCountsFromWhenItWasPickedUpToNow() = runTest {
         role = "admin"
         val root = mount("#/admin")
         waitFor("a task on Admin Settings") { root.all("[data-task]").isNotEmpty() }
         val text = root.all("[data-task]").first().textContent.orEmpty()
-        assertTrue("2h 00m" in text, "the running task does not count from its creation to now: '$text'")
+        assertTrue("1h 00m" in text, "the running task does not count from when it was picked up to now: '$text'")
     }
 
     /**

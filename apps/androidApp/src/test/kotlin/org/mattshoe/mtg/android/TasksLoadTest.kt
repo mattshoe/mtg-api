@@ -119,12 +119,12 @@ class TasksLoadTest {
     }
 
     /**
-     * The running task counts from when it was created to the phone's
+     * The running task counts from when it was picked up to the phone's
      * own clock. `TasksParityTest` hands the screen a `now`;
      * this is the app finding one for itself.
      */
     @Test
-    fun aRunningTaskCountsFromItsCreationToNow() {
+    fun aRunningTaskCountsFromWhenItWasPickedUpToNow() {
         val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
         context.getSharedPreferences("mtg", android.content.Context.MODE_PRIVATE)
             .edit().putString(AdminToken.KEY, "t").commit()
@@ -138,6 +138,6 @@ class TasksLoadTest {
 
         val tasks = activity.stateForTesting().tasks
         val task = tasks.rows.singleOrNull() ?: error("nothing loaded the tasks: $tasks")
-        assertEquals("2h 00m", task.elapsed(tasks.now), "the running task does not count from its creation to now: $tasks")
+        assertEquals("1h 00m", task.elapsed(tasks.now), "the running task does not count from when it was picked up to now: $tasks")
     }
 }

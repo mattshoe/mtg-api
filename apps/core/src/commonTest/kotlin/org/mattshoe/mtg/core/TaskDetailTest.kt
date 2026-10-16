@@ -91,7 +91,7 @@ class TaskDetailTest {
             listOf(
                 "Status" to "in review",
                 "Why" to "CI running",
-                "Time so far" to "2h 05m",
+                "Time so far" to "2h 00m",
                 "Request" to "requests/bigger-buttons.md",
                 "Sent" to "2026-10-08 06:00",
             ),

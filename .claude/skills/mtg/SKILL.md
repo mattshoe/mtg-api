@@ -681,9 +681,11 @@ Each row carries its detail with it: `status_at` (when it entered this
 status — a repeat write of the same status does not move it), `note`
 (why), `pr` (the pull request), `created_at`, `started_at`, `finished_at`.
 A row shows ONE duration and the note, nothing else: `Task.elapsed(now)`
-is how long since it was created while it is live, `Task.took` is created
-to finished once it is done. Matt, on "17m for 7m": "just show the total
-fucking time". The pull request belongs on the details page, not the row.
+is how long since it was picked up (`started_at`) while it is live,
+`Task.took` is picked up to finished once it is done, and a task nothing
+has picked up shows no time at all. Matt, on "17m for 7m": "just show the
+total fucking time", and later: "queue time should not be included in the
+total time". The pull request belongs on the details page, not the row.
 
 ### Who writes each transition
 

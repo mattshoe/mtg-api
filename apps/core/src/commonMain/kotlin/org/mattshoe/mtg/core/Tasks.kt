@@ -63,7 +63,7 @@ data class Task(
     val status: TaskStatus,
     /** When it finished, as the Worker wrote it. Sorts as text because it is ISO. */
     val finishedAt: String?,
-    /** When a builder first started on it. */
+    /** When a builder first picked it up from the queue: the one clock the row counts from. */
     val startedAt: String? = null,
     /** When it entered this status. */
     val statusAt: String? = null,
@@ -71,12 +71,12 @@ data class Task(
     val note: String? = null,
     /** Its pull request's address, once it has one. For the details page, not the row. */
     val pr: String? = null,
-    /** When it was sent: the one clock the row counts from. */
+    /** When it was sent. The queue sorts by it; no duration counts from it. */
     val createdAt: String? = null,
 ) {
     /**
      * Matt: "Done tasks should show how long they took, not a UTC
-     * timestamp". Created to finished, frozen.
+     * timestamp". Picked up to finished, frozen.
      */
     val took: String? get() {
         if (!status.finished) return null
@@ -87,18 +87,19 @@ data class Task(
     /**
      * Matt: "Why does it say \"3m for 3m\" and \"17m for 7m\"?!?!?!" and
      * "just show the total fucking time!!!!" How long since it was
-     * created, for every live task, whatever status it is in. A
+     * picked up, for every live task, whatever status it is in. A
      * finished one says `took` instead.
      */
     fun elapsed(now: Long): String? = if (status.finished) null else span(now)
 
     /**
-     * From when it was created, or from its start if that is earlier:
-     * reconcile makes a row the first time it writes a status, so one
-     * filed after the fact was "created" after its pull request opened.
+     * From when a builder picked it up, never from when it was sent.
+     * Matt: "tasks should only show the amount of time it takes after
+     * it is picked up from the queue. queue time should not be included
+     * in the total time". One nothing has picked up has no time to show.
      */
     private fun span(to: Long): String? {
-        val start = listOfNotNull(createdAt, startedAt).mapNotNull { Tasks.epochMillis(it) }.minOrNull() ?: return null
+        val start = startedAt?.let { Tasks.epochMillis(it) } ?: return null
         return between(start, to)
     }
 
