@@ -1378,6 +1378,23 @@ describe('a pull request nobody finished', () => {
     }
   })
 
+  it('does not finish a tree with work in it that nobody pushed', () => {
+    // A dirty tree holds something that exists nowhere else. A finisher
+    // would build on top of a half-written file and then merge it. The
+    // per-task arrangement guarded this by asking whether the directory
+    // had been touched in the last ten minutes, which was a guess at
+    // this question; whether the tree is clean is the answer to it.
+    abandoned()
+    withPr()
+    writeFileSync(join(box.repo, '.intake', 'agent', 'CLAUDE.md'), 'half an edit\n')
+    const before = box.log()
+
+    run('dispatch.sh')
+
+    expect(box.log().replace(before, ''), 'it finished on top of unpushed work').not.toContain('claude ')
+    expect(box.intakeLog()).toMatch(/nobody working/)
+  })
+
   it('does not finish a tree whose branch has no pull request at all', () => {
     // That one is a stalled build, which is `paused` and wants a
     // person, not an agent started on top of it.

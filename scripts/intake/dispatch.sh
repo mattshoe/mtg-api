@@ -263,8 +263,15 @@ if [ "$dirty" -gt 0 ] || [ -n "$(cd "$REPO" && node scripts/intake/task-status.m
   # the gate and a merge, which is a bounded job. One finisher, marked
   # on disk and never cleared — something picking work back up over and
   # over is how seven agents came to run on a single request.
+  #
+  # Only on a CLEAN tree. A dirty one holds work that is not pushed
+  # anywhere, and a finisher would build on top of a half-written file
+  # and then merge it. The per-task arrangement guarded this with "has
+  # the directory been touched in the last ten minutes", which was a
+  # guess at the same question; whether the tree is clean is the
+  # answer to it.
   mark="$STATE/${stuck:-unknown}.finished-once"
-  if [ -n "$stuck" ] && [ ! -e "$mark" ] \
+  if [ -n "$stuck" ] && [ "$dirty" -eq 0 ] && [ ! -e "$mark" ] \
     && gh pr list --head "$cur" --state open --json number 2>/dev/null | /usr/bin/grep -q '"number"'; then
     : > "$mark"
     file="$stuck.md"; branch="$cur"; finishing=1
