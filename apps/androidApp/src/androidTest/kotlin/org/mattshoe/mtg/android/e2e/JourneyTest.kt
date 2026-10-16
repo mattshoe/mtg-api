@@ -160,13 +160,30 @@ internal class JourneyTest : E2eTest() {
             compose.onAllNodesWithText("Copy").fetchSemanticsNodes().size == 2
         }
         compose.onAllNodesWithText("Copy")[1].performClick()
-        compose.waitForIdle()
+        until("pressing Copy under Deck list did not copy the deck: ${state().toast}") {
+            state().toast?.endsWith("cards copied") == true
+        }
 
+        // Read once the menu's popup has gone: Android only lets the
+        // app with window focus read the clipboard, and while the popup
+        // is up it holds the focus.
+        until("the share menu never closed") {
+            compose.onAllNodesWithText("Copy").fetchSemanticsNodes().isEmpty()
+        }
         var copied = ""
-        compose.runOnUiThread {
-            val clip = compose.activity.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
-                as android.content.ClipboardManager
-            copied = clip.primaryClip?.getItemAt(0)?.text?.toString().orEmpty()
+        val automation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
+        automation.adoptShellPermissionIdentity("android.permission.READ_CLIPBOARD_IN_BACKGROUND")
+        try {
+            until("the clipboard is empty") {
+                compose.runOnUiThread {
+                    val clip = compose.activity.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                        as android.content.ClipboardManager
+                    copied = clip.primaryClip?.getItemAt(0)?.text?.toString().orEmpty()
+                }
+                copied.isNotEmpty()
+            }
+        } finally {
+            automation.dropShellPermissionIdentity()
         }
         val line = copied.lines().firstOrNull { it.contains("Sol Ring") }
         assertEquals(
