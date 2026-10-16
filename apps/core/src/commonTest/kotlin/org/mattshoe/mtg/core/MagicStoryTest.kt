@@ -32,7 +32,7 @@ class MagicStoryTest {
         "Eldrazi and Zendikar" to listOf("The Binding", "Rise", "Battle for Zendikar", "Emrakul on Innistrad"),
         "Innistrad" to listOf("Helvault", "Avacyn Restored", "Shadows", "Eldritch Moon", "Eternal Night"),
         "Omenpath Era" to listOf(
-            "The Omenpaths", "Thunder Junction", "Bloomburrow", "Duskmourn", "Aetherdrift", "Tarkir Dragonstorm", "Edge of Eternities",
+            "The Omenpaths", "Wilds of Eldraine", "Thunder Junction", "Bloomburrow", "Duskmourn", "Aetherdrift", "Tarkir Dragonstorm", "Edge of Eternities",
         ),
         "The Blind Eternities" to listOf("The Multiverse", "The Blind Eternities", "Crossing the Void", "Planes Made and Unmade"),
     )
@@ -103,7 +103,7 @@ class MagicStoryTest {
     @Test
     fun everyAddressIsUniqueAndAnAddress() {
         val slugs = MagicStory.articles.map { it.slug } + MagicStory.sections.map { it.slug } + listOf(Guide.COLOURS, Guide.WHEEL, Guide.RULES, Guide.PHYREXIA)
-        assertTrue(MagicStory.articles.size == 55, "${MagicStory.articles.size} articles, which is not all of them")
+        assertTrue(MagicStory.articles.size == 56, "${MagicStory.articles.size} articles, which is not all of them")
         assertEquals(slugs.size, slugs.toSet().size, "two things share an address: ${slugs.groupBy { it }.filter { it.value.size > 1 }.keys}")
         MagicStory.articles.forEach { a ->
             assertTrue(a.slug.matches(Regex("[a-z0-9-]+")) && a.slug != MagicStory.WHO, "${a.slug} is not an address")
