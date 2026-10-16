@@ -181,6 +181,51 @@ class ExportTest {
     }
 
     @Test
+    fun aCopiedDeckSaysWhichPrintingEachCardIs() {
+        // Matt: "it only contains the card name and the quantity".
+        // A deck card is one printing the collection holds, so the
+        // copied list names it the way Moxfield and Archidekt write it.
+        assertEquals(
+            "1 Alela, Cunning Conqueror (WOE) 191\n\n3 Sol Ring (M3C) 409",
+            Export.deck(
+                listOf(
+                    inDeck("Sol Ring", 3).copy(setCode = "m3c", collectorNumber = "409"),
+                    inDeck("Alela, Cunning Conqueror", role = "commander").copy(setCode = "woe", collectorNumber = "191"),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun aSetWithNoCollectorNumberStillGivesTheSet() {
+        assertEquals("1 Opt (XLN)", Export.deck(listOf(inDeck("Opt").copy(setCode = "xln"))))
+    }
+
+    @Test
+    fun aCardNobodyOwnsHasNoPrintingToGive() {
+        // The deck wants it and no collection has it, so there is no
+        // printing to name. A blank set is not "()".
+        assertEquals(
+            "1 Opt\n1 Sol Ring",
+            Export.deck(listOf(inDeck("Opt").copy(setCode = " ", collectorNumber = "1"), inDeck("Sol Ring"))),
+        )
+    }
+
+    @Test
+    fun aDeckWithPrintingsPastesBackAsTheSameCards() {
+        val text = Export.deck(
+            listOf(
+                inDeck("Sol Ring", 3).copy(setCode = "m3c", collectorNumber = "409"),
+                inDeck("Alela", role = "commander").copy(setCode = "woe", collectorNumber = "191"),
+            ),
+        )
+        assertEquals(
+            listOf(DeckList.Entry(1, "Alela"), DeckList.Entry(3, "Sol Ring")),
+            DeckList.entries(text),
+        )
+    }
+
+    @Test
     fun anEmptyDeckExportsNothing() {
         assertEquals("", Export.deck(emptyList()))
     }
