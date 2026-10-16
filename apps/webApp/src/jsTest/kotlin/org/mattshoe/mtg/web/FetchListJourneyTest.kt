@@ -118,6 +118,8 @@ class FetchListJourneyTest {
                         ),
                     )
                 }
+            } else if ("$url".contains("/c/")) {
+                Promise.resolve(collectionAt("$url"))
             } else {
                 realFetch(url, init)
             }

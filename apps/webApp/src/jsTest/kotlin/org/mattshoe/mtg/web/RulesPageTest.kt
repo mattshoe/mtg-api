@@ -90,6 +90,8 @@ class RulesPageTest {
                         ResponseInit(status = 200, headers = js("({'Content-Type':'application/json'})")),
                     ),
                 )
+            } else if ("$url".contains("/c/")) {
+                Promise.resolve(collectionAt("$url"))
             } else {
                 realFetch!!(url, init)
             }
