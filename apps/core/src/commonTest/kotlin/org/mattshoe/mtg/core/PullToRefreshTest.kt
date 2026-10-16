@@ -99,13 +99,21 @@ class PullToRefreshTest {
             Route(View.GUIDE),
             Route(View.GUIDE, Guide.COLOURS),
             Route(View.ENTRY),
-            Route(View.LOGS),
             Route(View.FETCH),
         ).forEach { route ->
             assertFalse(AppState(route = route).pullWaits, "a pull on ${route.view} ${route.rest} waits for a fetch that never comes")
         }
         assertTrue(library().pullWaits, "a pull on the Library does not wait for its rows")
         assertTrue(AppState(route = Route(View.STATS)).pullWaits, "a pull on Stats does not wait for its totals")
+    }
+
+    @Test
+    fun aPullOnTheServerLogAsksForItAgain() {
+        // Matt: "the server logs page shows no logs". It had no loader,
+        // so a pull there was let go at once with nothing asked for.
+        val pulled = AppState(route = Route(View.LOGS)).refreshed()
+        assertTrue(pulled.logs.busy, "a pull on the server log fetches nothing")
+        assertTrue(pulled.refreshing, "a pull on the server log does not wait for its lines")
     }
 
     @Test
