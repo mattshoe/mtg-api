@@ -59,6 +59,7 @@ internal val storyPeople: List<StoryPerson> = listOf(
         "elesh-norn", "Elesh Norn", listOf("Norn"),
         listOf(
             "The Grand Cenobite of the Machine Orthodoxy, the white faction of New Phyrexia. She rose among the [Praetors](praetors) after the fall of Mirrodin and made herself Mother of Machines.",
+            "Her greatest work was Atraxa, a captured Mirran angel she had compleated to be the praetors' voice. Every praetor but Urabrask gave a part of their faction to her, so Atraxa is white, blue, black and green with no red. Once Norn ruled alone, Atraxa became her herald and general.",
             "She led the [Invasion of the Multiverse](invasion-of-the-multiverse), sending the Realmbreaker's roots into every plane at once, and fell when it failed.",
         ),
     ),
