@@ -93,10 +93,13 @@ object MagicStory {
      * words are in the `Set*.kt` files beside this one, a set to a file.
      */
     val sets: List<StorySection> = listOf(
+        setWildsOfEldraine,
         setMurdersAtKarlovManor,
         setOutlawsOfThunderJunction,
+        setBloomburrow,
         setDuskmourn,
         setAetherdrift,
+        setLorwynEclipsed,
     )
 
     val people: List<StoryPerson> get() = storyPeople

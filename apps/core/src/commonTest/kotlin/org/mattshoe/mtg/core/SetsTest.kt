@@ -32,6 +32,7 @@ class SetsTest {
         "dft" to "Aetherdrift",
         "tdm" to "Tarkir: Dragonstorm",
         "eoe" to "Edge of Eternities",
+        "ecl" to "Lorwyn Eclipsed",
     )
 
     private fun words(a: StoryArticle) = a.tabs.sumOf { t -> t.story.sumOf { MagicStory.plain(it).split(Regex("\\s+")).size } }
