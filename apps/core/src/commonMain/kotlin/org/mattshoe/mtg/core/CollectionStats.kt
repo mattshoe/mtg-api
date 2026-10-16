@@ -162,12 +162,19 @@ object CollectionAnalysis {
             }
         }.toSet()
 
-    /** Every tab with something in it under these filters, and how many copies. The landing tab always. */
+    /**
+     * Every tab the collection has cards for, and how many copies each
+     * holds under these filters. The landing tab always.
+     *
+     * Which tabs there are is decided before the filters, so picking a
+     * colour changes the numbers and never moves a tab out from under
+     * the finger reaching for it.
+     */
     fun tabs(cards: List<StatCard>, filter: StatFilter): List<Pair<StatTab, Int>> {
         val kept = cards.filter(filter::keeps)
         return StatTab.entries.mapNotNull { tab ->
-            val n = kept.filter(tab::holds).sumOf { it.qty }
-            if (n > 0 || tab == StatTab.ALL) tab to n else null
+            if (tab != StatTab.ALL && cards.none(tab::holds)) return@mapNotNull null
+            tab to kept.filter(tab::holds).sumOf { it.qty }
         }
     }
 

@@ -79,6 +79,16 @@ class CollectionStatsTest {
     }
 
     @Test
+    fun aFilterChangesTheTabsCountsButNotWhichTabsThereAre() {
+        // Red has no creatures. The tab stays, says nought, and opens
+        // on "nothing matches" rather than jumping out from under a
+        // finger reaching for it.
+        val tabs = CollectionAnalysis.tabs(pile, StatFilter().toggle(Pip.R))
+        assertEquals(0, tabs.firstOrNull { it.first == StatTab.CREATURE }?.second, "the Creatures tab under red: $tabs")
+        assertEquals(5, tabs.first().second)
+    }
+
+    @Test
     fun aColourFilterKeepsCardsWhoseIdentityHasThatColour() {
         val red = CollectionAnalysis.of(pile, filter = StatFilter().toggle(Pip.R))
         assertEquals(listOf("Kolaghan's Command", "Lightning Bolt"), red.names.sorted())

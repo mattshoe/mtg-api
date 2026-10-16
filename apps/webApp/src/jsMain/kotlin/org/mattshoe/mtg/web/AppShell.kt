@@ -200,7 +200,7 @@ fun AppShell(
             onTweak = onTweak,
         )
 
-        View.STATS -> StatsPage(state.stats)
+        View.STATS -> StatsPage(state.stats) { onState(state.copy(stats = it)) }
 
         View.FETCH -> FetchListPage(
             state = state.fetch,
