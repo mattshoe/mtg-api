@@ -28,7 +28,7 @@ object GuideSearch {
     private val articles: List<Article> by lazy {
         PhyrexianLore.eras.map { e ->
             Article(e.tab, "Phyrexia", "${Guide.PHYREXIA}/${e.slug}", listOf(e.tab, e.title) + e.story + listOfNotNull(e.quote?.words))
-        } + MagicStory.sections.flatMap { s ->
+        } + (MagicStory.sections + MagicStory.sets).flatMap { s ->
             s.articles.map { a ->
                 Article(
                     a.title, s.title, "${s.slug}/${a.slug}",
