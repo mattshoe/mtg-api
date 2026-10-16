@@ -92,7 +92,9 @@ object MagicStory {
      * tabs, so the shells draw it with what they already have. The
      * words are in the `Set*.kt` files beside this one, a set to a file.
      */
-    val sets: List<StorySection> = emptyList()
+    val sets: List<StorySection> = listOf(
+        setDuskmourn,
+    )
 
     val people: List<StoryPerson> get() = storyPeople
 
