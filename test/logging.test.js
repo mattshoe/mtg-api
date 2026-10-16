@@ -2,8 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { env } from 'cloudflare:test';
 import {
   get, post, postAnon, postAs, call, sql, count, adminToken,
-  TEST_PASSWORD, stubScryfall,
+  TEST_PASSWORD, stubScryfall, mattSession,
 } from './helpers.js';
+import { newSession } from '../src/accounts.js';
 import {
   levelFor, eventFor, buildLogQuery, pruneLogs, logStats, RETENTION_DAYS,
   newEntry, startEntry, writeEntry, IN_FLIGHT,
@@ -167,6 +168,25 @@ describe('the log is admin-only', () => {
       sql: "SELECT COUNT(*) FROM cards WHERE name = 'logs'",
     });
     expect(r.status).toBe(200);
+  });
+
+  // Matt: "the server logs page shows no logs". The app holds a session,
+  // never the operator's password, so a gate that only knew the password
+  // refused every admin who opened the page.
+  it('an account with the admin role reads the log with its session', async () => {
+    const session = await mattSession();
+    const r = await authed('/logs?limit=5', session);
+    expect(r.status, `an admin's session was refused: ${JSON.stringify(r.body)}`).toBe(200);
+    expect(Array.isArray(r.body.rows)).toBe(true);
+    expect((await authed('/logs/stats', session)).status).toBe(200);
+  });
+
+  it('an account without it is told no, by name rather than as a stranger', async () => {
+    const session = await newSession(env.DB, 3);
+    const r = await authed('/logs?limit=5', session);
+    expect(r.status).toBe(403);
+    expect(r.body.error).toMatch(/admin/);
+    expect(r.body.rows).toBeUndefined();
   });
 
   it('with a token the log reads fine', async () => {

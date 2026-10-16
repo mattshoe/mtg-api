@@ -562,9 +562,15 @@ async function route(request, env, ctx, entry) {
     if (path === '/logs' || path === '/logs/stats') {
     if (method !== 'GET') return notAllowed('GET');
     // The log carries IP addresses and the SQL people ran, so unlike every
-    // other read here it needs a token.
-    const v = await verifyToken(env, bearer(request));
-    if (!v.ok) return denied(v.reason);
+    // other read here it needs a token: the operator's, or a session
+    // with the admin role. The app only ever holds the second, and a
+    // gate that knew only the first showed every admin an empty page.
+    const who = await whoAmI(env, request, verifyToken);
+    if (!who.operator && who.user?.role !== 'admin') {
+      if (who.user) return json({ error: 'the server log needs the admin role' }, 403);
+      const v = await verifyToken(env, who.bearer);
+      return denied(v.reason);
+    }
     entry.admin = true;
 
     if (path === '/logs/stats') {

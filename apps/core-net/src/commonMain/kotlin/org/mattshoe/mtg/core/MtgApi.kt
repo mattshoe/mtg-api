@@ -379,6 +379,17 @@ class MtgApi internal constructor(
     }
 
     /**
+     * The server's request log, newest first, info and above. Admin
+     * only, server-side.
+     */
+    suspend fun logs(session: String): List<LogLine> {
+        val res = http.get("$base/logs?min=info&limit=200") { header("Authorization", "Bearer $session") }
+        val text = res.bodyAsText()
+        if (!res.status.isSuccess()) throw ApiFailure(errorIn(text, res.status))
+        return LogQueries.fromJson(text)
+    }
+
+    /**
      * Cancel a task: its row says cancelled, and the laptop kills its
      * agent off that. Admin only, server-side.
      */

@@ -595,11 +595,11 @@ data class AppState(
      * `loadFor` skips a search whose rows already answer the filters,
      * which is right on the way back from a card and wrong here.
      *
-     * Entry is a form and the server log has no loader yet, so a pull
-     * on either has nothing to wait for and ends at once.
+     * Entry is a form, so a pull there has nothing to wait for and
+     * ends at once.
      */
     fun refreshed(): AppState = when (view) {
-        View.ENTRY, View.LOGS, View.FETCH, View.GUIDE -> this
+        View.ENTRY, View.FETCH, View.GUIDE -> this
         View.CARD -> if (card == null) this else fetching().copy(pulled = view)
         View.LIBRARY -> copy(library = library.copy(loadedFor = null)).fetching().copy(pulled = view)
         else -> fetching().copy(pulled = view, tasks = tasks.stale())
