@@ -1,0 +1,3 @@
+What was wrong: Admin Settings on the website said "Could not load tasks: that needs the admin or agent role", and the accounts list said the same.
+Why: The website keeps your sign-in in a cookie on the API's address, and a browser only sends that cookie to another site when the call asks it to. The check for who you are asked, which is why Admin Settings showed up at all, but every other call went through the shared client, which never asked. So the API saw a stranger.
+Fix: The website's client now sends the cookie with every call to the API, and only to the API, so Scryfall lookups are untouched. The phone sends its sign-in a different way and was never affected.
