@@ -11,15 +11,22 @@
 # their worktree had no apps/local.properties, so every Android command
 # failed in sixteen seconds with nowhere to go, and because the
 # instructions told them to run a suite that cannot finish inside their
-# ten-minute tool limit. Both of those are fixed. None of the machinery
-# was ever the problem, and every bug Matt saw today lived in it.
+# ten-minute tool limit. Both of those are fixed, and the worktrees that
+# caused the first are gone.
 #
 # Matt: "I just want a fucking request to start a fucking agent."
 #
-# There is no lock because `git worktree add -b` is the lock: the second
-# dispatcher to ask for the same branch is refused by git, atomically. That
-# is also what makes parallel free-for-all work — each tick takes whatever
-# request has no worktree yet.
+# One task at a time, in one checkout, on a feature branch.
+#
+# There used to be a worktree per request, and `git worktree add -b` was
+# the lock: the second dispatcher to ask for the same branch is refused
+# by git, atomically, which is what made a parallel free-for-all safe.
+# There is an explicit cap now, so that trick is not needed, and the
+# isolation it bought was from a working copy nobody has. Matt: "I HAVE
+# NO FUCKING WORKING COPY... THE CODE IS YOUR RESPONSIBILITY NOT MINE".
+#
+# What it cost was every module compiling from nothing in each new
+# directory, inside an agent whose tool kills a command at ten minutes.
 #
 # The agent does the work: it reads the request, builds it, opens the pull
 # request, waits for CI, merges on green, and moves the request file into
@@ -50,9 +57,9 @@ if [ -f "$STATE/disabled" ]; then
   exit 0
 fi
 
-# A linked worktree's .git is a file. The agent edits its own request file,
-# which fires the hook, which would otherwise start a dispatcher inside the
-# agent's own worktree.
+# A linked worktree's .git is a file. Nothing runs in a worktree any
+# more, but the guard stays: it costs a line and it is what stops a
+# dispatcher starting inside one if anybody adds them back.
 [ -d "$REPO/.git" ] || exit 0
 
 mkdir -p "$STATE"
@@ -74,6 +81,7 @@ node "$REPO/scripts/intake/task-status.mjs" cancel >>"$LOG" 2>&1 || true
 # withdrawn one cancelled. It may not stop a build.
 node "$REPO/scripts/intake/task-status.mjs" reconcile >>"$LOG" 2>&1 || true
 
+# Leftovers from the worktree era. Harmless when there are none.
 git -C "$REPO" worktree prune
 git -C "$REPO" fetch -q origin main 2>>"$LOG" || say "could not fetch; base may be stale"
 
@@ -84,36 +92,46 @@ git -C "$REPO" fetch -q origin main 2>>"$LOG" || say "could not fetch; base may 
 # request had already merged. Ask main, not the laptop.
 filed="$(git -C "$REPO" ls-tree --name-only "$BASE" requests/done/ 2>/dev/null | sed 's|requests/done/||')"
 
-# Sweep the worktrees whose work has shipped.
+# Put the checkout back on main once a task has shipped.
 #
-# `git worktree prune` above only removes one whose DIRECTORY has gone,
-# which is never how these end: the agent merges, files its request, and
-# leaves the tree sitting there with its branch, its build output and a
-# whole copy of the repo. Fourteen had collected against two live agents
-# and nine of them were for work merged weeks earlier. They were cleared
-# by hand once; that is the part that must not happen twice.
+# Matt: "Why do you need worktrees?!?! Can't you just use a fucking
+# branch?!" and "I HAVE NO FUCKING WORKING COPY... THE CODE IS YOUR
+# RESPONSIBILITY NOT MINE". He is right on both counts. The worktree
+# existed because `git worktree add -b` is refused atomically for a
+# branch that already exists, which made it the lock in a free-for-all;
+# there is an explicit cap of one now, so the lock is not needed. The
+# isolation it bought was from a working copy nobody has.
 #
-# Filed under requests/done on main is the only signal used, and it is
-# what makes this safe to do at all: the agent files the request in the
-# same commit it merges, so a filed request is a merged one and the tree
-# holds nothing main does not already have. A worktree whose request is
-# still live is never touched, whatever is in it — that rule predates
-# this one and cost thirty-two uncommitted files to learn.
+# What it cost was the whole remaining problem: a NEW directory per task
+# has no `build/`, so every module compiled from nothing inside an agent
+# whose tool kills any command at ten minutes. Measured on one task —
+# worktree cut at 12:45, :core first built 12:48, :webApp 12:49,
+# :androidApp 12:55 — ten minutes of cold compile paid inside turns that
+# are not allowed to last that long, so they died and paid again. Three
+# narrow test runs hit exactly 10.0 minutes.
 #
-# An agent still alive on it is left alone too. Filing happens before the
-# agent finishes talking, so there is a window where the request reads
-# done and the process is still in the tree.
-for wt in "$STATE"/wt/*; do
-  [ -d "$wt" ] || continue
-  n="$(basename "$wt")"
-  printf '%s\n' "$filed" | /usr/bin/grep -qxF "$n.md" || continue
-  pgrep -f "requests/$n.md" >/dev/null 2>&1 && continue
-  b="$(git -C "$wt" rev-parse --abbrev-ref HEAD 2>/dev/null)"
-  if git -C "$REPO" worktree remove --force "$wt" 2>>"$LOG"; then
-    say "swept $n: filed under requests/done on $BASE, nobody in it"
-    [ -n "$b" ] && [ "$b" != HEAD ] && git -C "$REPO" branch -D "$b" >>"$LOG" 2>&1
-  fi
-done
+# So: one checkout, a feature branch per task, build directories that
+# stay warm. A narrow test here is about a second.
+#
+# Filed under requests/done on main is the signal that a branch is
+# finished with, the same one the worktree sweep used: the agent files
+# its request in the commit it merges, so filed means merged and the
+# branch holds nothing main does not have.
+cur="$(git -C "$STATE/agent" rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)"
+case "$cur" in
+  request/*)
+    done_name="$(cd "$REPO" && node scripts/intake/task-status.mjs request-of "$cur" 2>/dev/null)"
+    if [ -n "$done_name" ] \
+      && printf '%s\n' "$filed" | /usr/bin/grep -qxF "$done_name.md" \
+      && ! pgrep -f "requests/$done_name.md" >/dev/null 2>&1; then
+      if git -C "$STATE/agent" switch -q --detach "$BASE" 2>>"$LOG"; then
+        say "back on main: $done_name is filed under requests/done"
+        git -C "$REPO" branch -D "$cur" >>"$LOG" 2>&1
+        cur=HEAD
+      fi
+    fi
+    ;;
+esac
 
 # One agent at a time.
 #
@@ -138,14 +156,18 @@ done
 # dispatch is how a row came to read `in progress` for three hours with
 # nothing running.
 CAP="${MTG_AGENT_CAP:-1}"
+# One tree means at most one agent, and it is working if the tree is on
+# a request branch and a process names that request. This used to walk
+# `.intake/wt/*`, which no longer exists — so the count was always
+# zero, and a live agent read as a stalled one.
 working=0
-for wt in "$STATE"/wt/*; do
-  [ -d "$wt" ] || continue
-  n="$(basename "$wt")"
-  pgrep -f "requests/$n.md" >/dev/null 2>&1 && working=$((working + 1))
-done
+on="$(git -C "$STATE/agent" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+busy_with="$(cd "$REPO" && node scripts/intake/task-status.mjs request-of "${on:-}" 2>/dev/null)"
+if [ -n "$busy_with" ] && pgrep -f "requests/$busy_with.md" >/dev/null 2>&1; then
+  working=1
+fi
 if [ "$working" -ge "$CAP" ]; then
-  say "$working already working; $CAP at a time, so nothing started"
+  say "$busy_with is still building; $CAP at a time, so nothing started"
   exit 0
 fi
 
@@ -165,109 +187,141 @@ queue="$(cd "$REPO" && node scripts/intake.mjs buildable)" || {
   exit 1
 }
 
-# Take the first ready request that has no worktree yet. Trying each
-# candidate rather than returning on the first failure matters: one request
-# with a leftover branch would otherwise block everything behind it.
 file=''
+branch=''
 finishing=''
-while IFS= read -r f; do
-  [ -n "$f" ] || continue
-  if printf '%s\n' "$filed" | /usr/bin/grep -qxF "$f"; then
-    say "skipping ${f%.md}: already filed under requests/done on ${BASE}"
-    continue
+
+# ONE tree, reused forever, not one per task.
+#
+# Matt: "Why do you need worktrees?!?! Can't you just use a fucking
+# branch?!" The per-task worktree was the whole remaining problem: a new
+# directory has no `build/`, so every module compiled from nothing
+# inside an agent whose tool kills a command at ten minutes. Measured on
+# one task — tree cut 12:45, :core built 12:48, :webApp 12:49,
+# :androidApp 12:55 — and three of its test runs died at exactly 10.0
+# minutes.
+#
+# Reuse is what fixes that, not removal. This tree is made once and then
+# switched between branches, so its build directories stay warm and a
+# narrow test costs about a second instead of nine minutes.
+#
+# It is a second directory rather than the clone itself because the
+# clone is where the coordinating session works — editing, running the
+# gate — and two things cannot sit on different branches in one
+# checkout. Not because anybody has a working copy to protect: "I HAVE
+# NO FUCKING WORKING COPY... THE CODE IS YOUR RESPONSIBILITY NOT MINE".
+TREE="$STATE/agent"
+if [ ! -e "$TREE" ]; then
+  if git -C "$REPO" worktree add -q --detach "$TREE" "$BASE" 2>>"$LOG"; then
+    say "made the agent tree at $TREE; its first build is cold and every one after is not"
+    [ -d "$REPO/node_modules" ] && ln -s "$REPO/node_modules" "$TREE/node_modules"
+    # A linked worktree's `.git` is a FILE, so its exclude list is not
+    # at `.git/info/exclude`. Ask git where it is.
+    ex="$(git -C "$TREE" rev-parse --git-path info/exclude 2>/dev/null)"
+    [ -n "$ex" ] && mkdir -p "$(dirname "$ex")" && printf 'node_modules\n' >> "$ex"
+  else
+    say "NEEDS YOU: could not make the agent tree at $TREE"
+    exit 1
   fi
-  # A worktree already there means an agent is on it, or one stopped on it.
-  # Either way this is not the dispatcher's to take — but the second case
-  # has to SAY so. A dead agent's worktree blocked its request forever and
-  # silently: two tasks sat at `in review` for three hours with nothing
-  # running, and the only reason anyone found out was Matt asking. There is
-  # no resume by design, so a stalled one needs a person, and the way to
-  # reach a person is the task row.
-  wt="$STATE/wt/${f%.md}"
-  if [ -e "$wt" ]; then
-    if ! pgrep -f "requests/${f}" >/dev/null 2>&1; then
-      # Finished and unmerged is not the same as stalled mid-build.
-      #
-      # `i-can-t-tap-done-tasks-to-look-at-the-details` took 52.2 hours
-      # of wall clock and 170 turns of actual work; the rest was its
-      # pull request sitting open with nobody on it. Three tasks account
-      # for 76 of the 190 hours this repo has spent, all the same way.
-      #
-      # An open pull request means the building is done and what is left
-      # is running the gate and merging, which is a bounded job. So it
-      # gets ONE finisher — one, marked on disk and never cleared,
-      # because something picking work back up repeatedly is exactly how
-      # seven agents came to run on a single request in four hours.
-      #
-      # Not while the tree is warm: an agent that died a minute ago may
-      # have left it half written, and the next tick is a minute away.
-      mark="$STATE/${f%.md}.finished-once"
-      if [ ! -e "$mark" ] && [ -z "$(find "$wt" -maxdepth 0 -mmin -10 2>/dev/null)" ]; then
-        b="$(git -C "$wt" rev-parse --abbrev-ref HEAD 2>/dev/null)"
-        if [ -n "$b" ] && [ "$b" != HEAD ] \
-          && gh pr list --head "$b" --state open --json number 2>/dev/null | /usr/bin/grep -q '"number"'; then
-          : > "$mark"
-          file="$f"; branch="$b"; tree="$wt"; finishing=1
-          break
-        fi
-      fi
-      # Say WHY it stopped, not just that it did. The agent writes the
-      # reason as the last thing in its own log and nothing was reading
-      # it: every task failed one morning with "Not logged in · Please
-      # run /login" — Matt's Claude session had expired overnight and a
-      # headless agent cannot refresh it — and all the rows said was
-      # "stopped with work left in its worktree". The reason was on disk
-      # the whole time.
-      why="$(tail -c 2000 "$STATE/${f%.md}.log" 2>/dev/null | tr -d '\0' \
+fi
+# The SDK path, and only that.
+#
+# `apps/local.properties` is gitignored, so it lives in the clone and
+# in no worktree, and without it NO Gradle task touching :androidApp
+# runs — it dies in sixteen seconds on "SDK location not found", which
+# is half of why agents used to die. Untracked, so copying it leaves
+# the tree clean.
+#
+# CLAUDE.md and `.claude/` used to be copied here too, because a tree
+# cut days ago handed the agent the law as it stood then. That reason
+# is gone: every task switches the tree to a branch off current main,
+# so the instructions are already current. Copying them was also
+# deadlocking the dispatcher — they are tracked files, so the copy made
+# the tree dirty, and the next run refused to start anything because
+# the tree was dirty. Six ticks in a row said "1 changed files and
+# nobody working" about a file it had changed itself.
+mkdir -p "$TREE/apps" 2>/dev/null
+cp "$REPO/apps/local.properties" "$TREE/apps/local.properties" 2>/dev/null || true
+
+# The tree has to be clean before anything new starts.
+#
+# With one checkout and no worktrees, a task that stopped leaves its
+# branch checked out with its work on it. Starting the next request on
+# top of that would discard somebody's unpushed commits, which is the
+# one thing the worktree arrangement got right and cost thirty-two
+# uncommitted files to learn.
+#
+# So a checkout that is not on a clean main is a stalled task: say which
+# one and why, and stop. Agents are told to commit and push before their
+# first test run and after every part that passes, so this is rare, and
+# when it happens it is loud rather than silent.
+cur="$(git -C "$TREE" rev-parse --abbrev-ref HEAD 2>/dev/null)"
+dirty="$(git -C "$TREE" status --porcelain 2>/dev/null | /usr/bin/grep -cv '^?? ')"
+if [ "$dirty" -gt 0 ] || [ -n "$(cd "$REPO" && node scripts/intake/task-status.mjs request-of "$cur" 2>/dev/null)" ]; then
+  stuck="$(cd "$REPO" && node scripts/intake/task-status.mjs request-of "$cur" 2>/dev/null)"
+  # An open pull request means the building is done and what is left is
+  # the gate and a merge, which is a bounded job. One finisher, marked
+  # on disk and never cleared — something picking work back up over and
+  # over is how seven agents came to run on a single request.
+  mark="$STATE/${stuck:-unknown}.finished-once"
+  if [ -n "$stuck" ] && [ ! -e "$mark" ] \
+    && gh pr list --head "$cur" --state open --json number 2>/dev/null | /usr/bin/grep -q '"number"'; then
+    : > "$mark"
+    file="$stuck.md"; branch="$cur"; finishing=1
+  else
+    say "the agent tree is on $cur with $dirty changed files and nobody working; left alone"
+    if [ -n "$stuck" ]; then
+      why="$(tail -c 2000 "$STATE/$stuck.log" 2>/dev/null | tr -d '\0' \
         | sed -n 's/.*"result":"\([^"]\{1,120\}\)".*/\1/p' | tail -1)"
-      node "$REPO/scripts/intake/task-status.mjs" stalled "$f" "$why" >>"$LOG" 2>&1 || true
+      node "$REPO/scripts/intake/task-status.mjs" stalled "$stuck.md" "$why" >>"$LOG" 2>&1 || true
     fi
-    continue
+    exit 0
   fi
-  b="$(cd "$REPO" && node scripts/intake.mjs branch "$f")" || continue
-  if git -C "$REPO" worktree add -q -b "$b" "$wt" "$BASE" 2>>"$LOG"; then
-    file="$f"; branch="$b"; tree="$wt"; break
-  fi
-  say "skipping ${f%.md}: no worktree on $b (the branch may already exist)"
-done <<EOF
+fi
+
+# Take the first ready request main has not already filed.
+if [ -z "$finishing" ]; then
+  file=''
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    if printf '%s\n' "$filed" | /usr/bin/grep -qxF "$f"; then
+      say "skipping ${f%.md}: already filed under requests/done on ${BASE}"
+      continue
+    fi
+    b="$(cd "$REPO" && node scripts/intake.mjs branch "$f")" || continue
+    if git -C "$TREE" switch -q -C "$b" "$BASE" 2>>"$LOG"; then
+      file="$f"; branch="$b"; break
+    fi
+    say "skipping ${f%.md}: could not start $b"
+  done <<EOF
 $queue
 EOF
+fi
 
 [ -n "$file" ] || exit 0
 name="${file%.md}"
 
-# node_modules, shared rather than installed. A cold worktree costs `npm
-# ci` — measured at 5 minutes, and one agent spent exactly that before it
-# could run a single test. A symlink makes it free.
-if [ -d "$REPO/node_modules" ] && [ ! -e "$tree/node_modules" ]; then
-  ln -s "$REPO/node_modules" "$tree/node_modules"
-  # and keep it out of git: it showed up as untracked in a worktree, so
-  # `git add -A` would have committed a symlink to somebody's home.
-  printf 'node_modules\n' >> "$tree/.git/info/exclude" 2>/dev/null || true
-fi
+# Nothing to hand over any more.
+#
+# A worktree needed `node_modules` symlinked (an `npm ci` cost five
+# minutes), `apps/local.properties` copied in (without the SDK path NO
+# Gradle task touching :androidApp runs at all — it dies in sixteen
+# seconds on "SDK location not found", which is half of why agents used
+# to die), and CLAUDE.md and `.claude/` refreshed, because a tree cut
+# days ago handed the agent the law as it stood then.
+#
+# One checkout has all of it already, always current. That whole class
+# of failure is gone with the worktrees.
 
-# The Android SDK path. Without it NO Gradle task touching :androidApp runs
-# in a worktree — not the suite, not one test by name; it dies in sixteen
-# seconds on "SDK location not found". It is gitignored, as it has to be,
-# so it exists in the clone and in no worktree. All three live worktrees
-# were missing it, which is why no agent could ever check its own Android
-# work, and is half of why they kept dying.
-mkdir -p "$tree/apps" 2>/dev/null
-cp "$REPO/apps/local.properties" "$tree/apps/local.properties" 2>/dev/null || true
-
-# The instructions, as they are NOW. An agent reads CLAUDE.md and .claude/
-# out of the tree it works in, so a worktree cut days ago hands it the law
-# as it stood then — and main had just banned the suite that was killing
-# agents while their own worktrees still said to run it.
-cp "$REPO/CLAUDE.md" "$tree/CLAUDE.md" 2>/dev/null || true
-cp -R "$REPO/.claude/." "$tree/.claude/" 2>/dev/null || true
-
-# Hand over the LIVE request file, not the one the worktree was cut from.
-# Without this the agent reads main's copy: four requests sat at `status:
-# hold` on main while the live files said `ready`, so every agent correctly
-# refused to build and stopped. The file Matt is looking at is the file the
-# agent must read.
-cp "$REQUESTS/$file" "$tree/requests/$file" 2>>"$LOG" \
+# Hand over the LIVE request file, not the one the branch was cut from.
+#
+# The tree branches off main, so its copy is whatever was committed.
+# Four requests once sat at `status: hold` on main while the live files
+# said `ready`: every agent read the committed copy, correctly refused
+# to build, and stopped, so the queue looked broken when it was obeying.
+# The file Matt is looking at is the file the agent must read.
+mkdir -p "$TREE/requests" 2>/dev/null
+cp "$REQUESTS/$file" "$TREE/requests/$file" 2>>"$LOG" \
   || say "could not hand over $file; the agent will read the committed copy"
 
 # Agents authenticate as their own service account, `intake-agent`, with
@@ -297,7 +351,7 @@ if [ -n "$finishing" ]; then
 "
 fi
 
-cd "$tree" || exit 1
+cd "$TREE" || exit 1
 env \
   -u CLOUDFLARE_API_TOKEN -u CLOUDFLARE_ACCOUNT_ID -u CLOUDFLARE_API_KEY \
   -u CLOUDFLARE_EMAIL -u CF_API_TOKEN -u CF_ACCOUNT_ID -u CF_EMAIL \

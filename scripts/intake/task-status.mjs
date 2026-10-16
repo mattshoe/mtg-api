@@ -459,6 +459,13 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     let text = ''
     try { text = readFileSync(join(repo, 'requests', `${name}.md`), 'utf8') } catch { /* gone */ }
     transition = started(name, text)
+  } else if (cmd === 'request-of') {
+    // The request a branch belongs to, for the dispatcher deciding
+    // whether the checkout can go back to main. `file` is the branch
+    // here, which reads oddly and keeps the CLI to one shape.
+    const of = requestOfBranch(String(file || ''))
+    if (of) console.log(of)
+    transition = null
   } else if (cmd === 'stalled') {
     // `paused`, NOT `blocked`.
     //
