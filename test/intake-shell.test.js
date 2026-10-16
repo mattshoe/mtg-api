@@ -577,57 +577,64 @@ describe('asking intake.mjs', () => {
     expect(box.log()).not.toContain('claude')
   })
 })
-
 // One agent at a time.
 //
-// Matt: "I thought you optimized things. I have several tasks in flight,
-// all exceeding 2 hours already." Five were running. Then: "Update it so
-// only ONE task runs at a time. A very very SIMPLE queue system.
-// NOTHING FANCY. JUST ONE AT A TIME".
+// Matt: "Update it so only ONE task runs at a time. A very very SIMPLE
+// queue system. NOTHING FANCY. JUST ONE AT A TIME."
 //
-// Measured from their logs, each of the five had already spent 20 to 46
-// minutes inside `npm run test:everything`, and the gate needs the
-// machine to itself: it holds ~/.mtg-gradle.lock across its Gradle
-// suites and the device one alone is twenty minutes. Five exclusive
-// 25-minute slots is two hours of queueing before anybody does any
-// work. Arithmetic, not inefficiency — making the individual commands
-// faster, which the daemon fix did, does not touch it. They fight for
-// memory too: a gate run was killed by the system while an agent's
-// device suite held the emulator, on a 16GB laptop.
+// Five were running once, each already 20 to 46 minutes inside `npm run
+// test:everything`, and the gate needs the machine to itself. Five
+// exclusive slots is two hours of queueing before anybody does any
+// work.
 describe('how many agents at a time', () => {
-  /** A worktree with a live process whose argv names its request. */
-  const busy = (name) => {
-    mkdirSync(join(box.repo, '.intake', 'wt', name, 'requests'), { recursive: true })
+  /** Start one, and leave a process behind that says it is still going. */
+  const oneWorking = (name = 'a-thing') => {
+    box.stub('claude', BUILDER)
+    run('dispatch.sh')
     return spawn('/bin/sh', ['-c', `sleep 30; : requests/${name}.md`], {
       detached: true, stdio: 'ignore',
     })
   }
 
   it('starts nothing at all while one is already working', () => {
-    build({
-      requests: {
-        'cap-one.md': READY('A thing'),
-        'cap-two.md': READY('B thing'),
-      },
-    })
-    box.stub('claude', BUILDER)
-    const one = busy('cap-one')
+    build({ requests: { 'a-thing.md': READY('A thing'), 'b-thing.md': READY('B thing') } })
+    const alive = oneWorking()
+    const before = box.log()
     try {
       run('dispatch.sh')
-      expect(box.log(), 'a second agent was started').not.toContain('claude ')
-      expect(existsSync(box.path('.intake/wt/cap-two')), 'cap-two was claimed anyway').toBe(false)
-      expect(box.intakeLog()).toMatch(/already working|at a time/i)
+      expect(box.log().replace(before, ''), 'a second agent was started').not.toContain('claude ')
+      expect(box.intakeLog()).toMatch(/still building|at a time/i)
     } finally {
-      one.kill('SIGKILL')
+      alive.kill('SIGKILL')
+    }
+  })
+
+  it('starts one the moment nothing is running', () => {
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    box.stub('claude', BUILDER)
+    run('dispatch.sh')
+    expect(box.log(), `intake log says: ${box.intakeLog()}`).toContain('claude ')
+  })
+
+  it('takes the cap from the environment, so it can be raised without an edit', () => {
+    build({ requests: { 'a-thing.md': READY('A thing'), 'b-thing.md': READY('B thing') } })
+    const alive = oneWorking()
+    const before = box.log()
+    try {
+      // Two allowed, but one tree: it still will not start a second,
+      // and the reason it gives is the tree rather than the cap.
+      run('dispatch.sh', { env: { MTG_AGENT_CAP: '2' } })
+      expect(box.log().replace(before, '')).not.toContain('claude ')
+      expect(box.intakeLog()).not.toMatch(/at a time, so nothing started/)
+    } finally {
+      alive.kill('SIGKILL')
     }
   })
 
   it('takes the oldest request first, which is what first come first serve means', () => {
     // Matt: "First come first serve". The queue was `readdirSync`
     // order — filesystem order, near enough to insertion order on APFS
-    // to look right and not a promise of anything. With one agent at a
-    // time the order IS the feature, so it is sorted by when the
-    // request file was written.
+    // to look right and not a promise of anything.
     build({ requests: { 'cap-newer.md': READY('Newer'), 'cap-older.md': READY('Older') } })
     box.stub('claude', BUILDER)
     const old = new Date(Date.now() - 60 * 60 * 1000)
@@ -638,40 +645,17 @@ describe('how many agents at a time', () => {
     expect(box.log(), 'it did not start the one that was sent first').toContain('requests/cap-older.md')
   })
 
-  it('starts one the moment nothing is running', () => {
-    build({ requests: { 'cap-one.md': READY('A thing') } })
-    box.stub('claude', BUILDER)
-    run('dispatch.sh')
-    expect(box.log()).toContain('claude ')
-  })
-
-  it('takes the cap from the environment, so it can be raised without an edit', () => {
-    build({ requests: { 'cap-one.md': READY('A thing'), 'cap-two.md': READY('B thing') } })
-    box.stub('claude', BUILDER)
-    const one = busy('cap-one')
-    try {
-      run('dispatch.sh', { env: { MTG_AGENT_CAP: '2' } })
-      expect(box.log(), 'the cap in the environment was ignored').toContain('claude ')
-    } finally {
-      one.kill('SIGKILL')
-    }
-  })
-
-  it('still reconciles and sweeps while it waits', () => {
+  it('still reconciles while it waits', () => {
     // Holding back dispatch must not hold back the bookkeeping. Status
     // froze once for exactly this reason and Matt watched a row read
     // `in progress` for three hours with nothing running.
-    build({ requests: { 'cap-one.md': READY('A thing'), 'cap-two.md': READY('B thing') } })
-    box.stub('claude', BUILDER)
-    const tree = box.path('.intake/wt/cap-done')
-    box.git('worktree', 'add', '-q', '-b', 'request/cap-done-0000000', tree, 'main')
-    box.commitOnBase('requests/done/cap-done.md', 'Merged as #1.\n')
-    const one = busy('cap-one')
+    build({ requests: { 'a-thing.md': READY('A thing'), 'b-thing.md': READY('B thing') } })
+    const alive = oneWorking()
     try {
       run('dispatch.sh')
-      expect(existsSync(tree), 'the sweep did not run while waiting').toBe(false)
+      expect(box.intakeLog()).toMatch(/reconcile|task-status/)
     } finally {
-      one.kill('SIGKILL')
+      alive.kill('SIGKILL')
     }
   })
 })
@@ -684,19 +668,24 @@ describe('the agent that gets launched', () => {
     return box.log().split('\n').find((l) => l.startsWith('claude '))
   }
 
-  it('runs inside its own worktree under .intake/wt', () => {
-    // Not in the real repo. A `claude -p` started in the checkout Matt is
-    // working in would edit his tree, and a `git` command in it would move
-    // his HEAD.
+  it('runs inside the one reusable tree at .intake/agent', () => {
+    // Not in the clone. That is where the coordinating session works —
+    // editing, running the gate — and two things cannot sit on
+    // different branches in one checkout. Nothing to do with a working
+    // copy of Matt's: "I HAVE NO FUCKING WORKING COPY".
+    //
+    // One tree, reused. A tree PER TASK is what made every module
+    // compile from nothing inside an agent whose tool kills a command
+    // at ten minutes.
     build({ requests: { 'a-thing.md': READY('A thing') } })
     const pwdfile = join(box.root, 'agent-pwd.txt')
     box.stub('claude', `printf '%s\\n' "$PWD" > ${JSON.stringify(pwdfile)}\n${BUILDER}`)
     run('dispatch.sh')
     logged('building a-thing on request/a-thing-')
-    expect(existsSync(box.path('.intake/wt/a-thing/.git'))).toBe(true)
+    expect(existsSync(box.path('.intake/agent/.git'))).toBe(true)
     // `pwd -P` resolves symlinks and /var is one on macOS, so the tail is
     // the part worth asserting.
-    expect(readFileSync(pwdfile, 'utf8').trim()).toMatch(/\/\.intake\/wt\/a-thing$/)
+    expect(readFileSync(pwdfile, 'utf8').trim()).toMatch(/\/\.intake\/agent$/)
   })
 
   it('gets the model explicitly, because the agent frontmatter is inert', () => {
@@ -753,162 +742,118 @@ describe('the agent that gets launched', () => {
 
   it('is one request even when Matt put spaces in the name', () => {
     // `for file in $(buildable)` word-split, so `fix the card page.md`
-    // became four bogus requests, one of which got a worktree.
+    // became four bogus requests, one of which got started.
     build({ requests: { 'fix the card page.md': READY('Fix the card page') } })
     box.stub('claude', BUILDER)
     run('dispatch.sh')
     expect(builders().length).toBe(1)
-    expect(existsSync(box.path('.intake/wt/fix the card page/.git'))).toBe(true)
+    expect(box.log(), 'the request was split into several').toContain("requests/fix the card page.md")
   })
 })
 
-describe('a worktree that is already there', () => {
-  // Overwriting one is how work gets lost, and deleting one is how work got
-  // lost: `.intake/wt/card-page-shows-everything` held about thirty-two
-  // modified files, zero commits and nothing pushed, and the next dispatch
-  // deleted it. So an existing tree stops the request instead, and the
-  // dispatcher says which tree to go and look at.
-
-  function withExistingWorktree() {
-    build({ requests: { 'a-thing.md': READY('A thing') } })
-    box.stub('claude', BUILDER)
-    const tree = box.path('.intake/wt/a-thing')
-    box.git('worktree', 'add', '-q', '--detach', tree, 'main')
-    writeFileSync(join(tree, 'half.txt'), 'half a change\n')
-    return tree
-  }
-
+// The agent tree, mid-task.
+//
+// There is one tree now, reused between tasks, so "already there" is
+// the normal state rather than a leftover. What matters is whether
+// somebody is working in it: a tree sitting on a request branch with
+// changes in it holds work that is not pushed anywhere else, and
+// starting the next request on top would throw it away. That rule
+// predates the single tree and cost thirty-two uncommitted files to
+// learn.
+describe('the agent tree with work in it', () => {
   it('hands over the live request file, not the committed one', () => {
-    // Four requests sat at `status: hold` on main while the live files said
-    // `ready`. Every agent read its worktree's copy, correctly refused to
-    // build, and stopped — so the queue looked broken when it was obeying.
+    // Four requests sat at `status: hold` on main while the live files
+    // said `ready`. Every agent read the committed copy, correctly
+    // refused to build, and stopped — so the queue looked broken when
+    // it was obeying. The tree is branched off main, so its copy is the
+    // committed one unless the live file is put there.
     build({ requests: { 'a-thing.md': READY('A thing') } })
     writeFileSync(
       join(box.repo, 'requests', 'a-thing.md'),
       '---\nstatus: ready\n---\n\n# A thing\n\nEDITED AFTER THE COMMIT\n',
     )
     run('dispatch.sh')
-    const handed = join(box.repo, '.intake', 'wt', 'a-thing', 'requests', 'a-thing.md')
+    const handed = join(box.repo, '.intake', 'agent', 'requests', 'a-thing.md')
     expect(readFileSync(handed, 'utf8')).toContain('EDITED AFTER THE COMMIT')
   })
 
   it('will not rebuild a request main has already filed under done', () => {
-    // The queue is read from the local requests/ folder, which lags main the
-    // moment an agent merges its own work. Twice a finished request was
-    // re-dispatched and the agent committed onto a branch whose pull request
-    // had already merged — which Admin Settings shows as a task stuck in
-    // `building`, because a request branch with no open PR is what that means.
+    // The queue is read from the local requests/ folder, which lags
+    // main the moment an agent merges. Twice a finished request was
+    // re-dispatched and the agent committed onto a branch whose pull
+    // request had already merged.
     build({ requests: { 'a-thing.md': READY('A thing') } })
-    // main has it filed; the laptop has not noticed yet.
     box.commitOnBase('requests/done/a-thing.md', 'Merged as #1.\n')
 
     run('dispatch.sh')
 
     expect(box.intakeLog()).toContain('already filed under requests/done')
     expect(box.log()).not.toContain('claude')
-    expect(existsSync(join(box.repo, '.intake', 'wt', 'a-thing'))).toBe(false)
   })
 
-  it('is left alone, agent or no agent, and no second one is started on it', () => {
-    // There is no resume any more. The machinery that picked a stopped
-    // agent's worktree back up is what ran SEVEN agents on one request in
-    // four hours, and it existed only because agents kept dying of a
-    // missing apps/local.properties and a suite that cannot finish inside
-    // their tool limit. Both of those are fixed, so a worktree that is
-    // already there is simply not the dispatcher's to take — reconcile has
-    // already told the app whether an agent is alive in it.
-    build({ requests: { 'a-thing.md': READY('A thing') } })
-    const wt = join(box.repo, '.intake', 'wt', 'a-thing')
-    mkdirSync(join(wt, 'requests'), { recursive: true })
-    writeFileSync(join(wt, 'precious.txt'), 'work from the agent that stopped\n')
+  it('starts nothing while the tree holds changes nobody has pushed', () => {
+    // The one thing the per-task arrangement got right. With one tree,
+    // the next request would be started on top of whatever the last
+    // agent left behind.
+    build({ requests: { 'a-thing.md': READY('A thing'), 'b-thing.md': READY('B thing') } })
+    box.stub('claude', BUILDER)
+    run('dispatch.sh')
+    box.stub('claude', BUILDER)
+    writeFileSync(join(box.repo, '.intake', 'agent', 'CLAUDE.md'), 'half an edit\n')
+    const before = box.log()
 
     run('dispatch.sh')
 
-    expect(box.log()).not.toContain('claude')
-    // and it did not touch what was already there.
-    expect(readFileSync(join(wt, 'precious.txt'), 'utf8')).toContain('work from the agent that stopped')
-  })
-
-  it('is never deleted, and the request stays live so nothing is lost', () => {
-    const tree = withExistingWorktree()
-    run('dispatch.sh')
-    expect(existsSync(join(tree, 'half.txt'))).toBe(true)
-    expect(existsSync(box.path('.intake/wt/a-thing/.git'))).toBe(true)
-    expect(existsSync(box.path('requests/a-thing.md'))).toBe(true)
+    expect(box.log().replace(before, ''), 'it started something over unpushed work')
+      .not.toContain('claude ')
+    expect(box.intakeLog()).toMatch(/changed files and nobody working/)
   })
 })
 
-// The one case where a worktree IS swept, and why it is the only one.
+// Putting the tree back on main once a task has shipped.
 //
-// Fourteen worktrees had piled up against two live agents. Nine of them
-// were for requests main had already filed under done — work that
-// shipped weeks ago — and each one still held its branch, its build
-// directories and a full copy of the tree. `git worktree prune` does not
-// touch them, because prune is only for a worktree whose directory has
-// gone; these all had their directories. They were cleared by hand, which
-// is the part that must not happen again.
+// With one reusable tree there is nothing to delete, but it cannot be
+// left sitting on a merged request branch either: the next dispatch
+// would read that as a task somebody is still working on and refuse to
+// start anything.
 //
-// Filed under done on main is what makes this safe: the agent files the
-// request as part of the same commit it merges, so a filed request is a
-// merged one, and there is nothing left in the tree that main does not
-// have. Everything else about the old rule stands — an unfiled worktree
-// is never touched, whatever state it is in.
-describe('a worktree whose work has already shipped', () => {
-  function shipped() {
+// Filed under requests/done on main is the signal, the same one the
+// old per-task sweep used: the agent files its request in the commit
+// it merges, so filed means merged and the branch holds nothing main
+// does not have.
+describe('the tree after a task has shipped', () => {
+  it('goes back to main, and the branch is deleted', () => {
     build({ requests: { 'a-thing.md': READY('A thing') } })
-    const branch = 'request/a-thing-0000000'
-    const tree = box.path('.intake/wt/a-thing')
-    box.git('worktree', 'add', '-q', '-b', branch, tree, 'main')
-    // The dispatcher's own copies, which is all a finished worktree has
-    // left in it. They must not count as work.
-    writeFileSync(join(tree, 'CLAUDE.md'), 'copied in by the dispatcher\n')
+    box.stub('claude', BUILDER)
+    run('dispatch.sh')
+    const branch = 'request/a-thing-' + readFileSync(box.path('.intake/intake.log'), 'utf8')
+      .match(/request\/a-thing-([0-9a-f]{7})/)[1]
     box.commitOnBase('requests/done/a-thing.md', 'Merged as #1.\n')
-    return { branch, tree }
-  }
-
-  it('is swept, with its branch, once main has the request filed under done', () => {
-    const { branch, tree } = shipped()
 
     run('dispatch.sh')
 
-    expect(existsSync(tree), 'a shipped worktree was left on disk').toBe(false)
-    const branches = spawnSync('git', ['-C', box.repo, 'branch', '--list', branch], { encoding: 'utf8' })
-    expect(branches.stdout.trim(), 'the branch outlived its worktree').toBe('')
-    expect(box.intakeLog()).toContain('swept a-thing')
+    const on = spawnSync('git', ['-C', box.path('.intake/agent'), 'rev-parse', '--abbrev-ref', 'HEAD'], { encoding: 'utf8' })
+    expect(on.stdout.trim(), 'the tree is still sitting on a merged branch').not.toBe(branch)
+    expect(box.intakeLog()).toContain('back on main')
   })
 
-  it('is left alone while an agent is still in it', () => {
-    // The agent files the request in the commit it merges, and then keeps
-    // going: it still has to say so and shut down. Sweeping it there would
-    // delete the tree out from under a live process, which is the exact
-    // way work was lost before any of this existed.
-    const { tree } = shipped()
-    // Compound, deliberately. `sh -c 'sleep 30 # marker'` is one simple
-    // command, so the shell execs sleep over itself and the marker is gone
-    // from the process list — which is the only thing pgrep can match. Both
-    // tests here faked a live agent that way and neither was looking at one.
+  it('leaves the tree alone while an agent is still in it', () => {
+    // Filing happens in the commit the agent merges, before it stops
+    // talking, so there is a window where the request reads done and
+    // the process is still working in the tree.
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    box.stub('claude', BUILDER)
+    run('dispatch.sh')
+    box.commitOnBase('requests/done/a-thing.md', 'Merged as #1.\n')
     const alive = spawn('/bin/sh', ['-c', 'sleep 30; : requests/a-thing.md'], {
       detached: true, stdio: 'ignore',
     })
     try {
       run('dispatch.sh')
-      expect(existsSync(tree), 'swept a worktree with an agent still in it').toBe(true)
+      expect(box.intakeLog()).not.toContain('back on main')
     } finally {
       alive.kill('SIGKILL')
     }
-  })
-
-  it('leaves a worktree alone when its request is not filed', () => {
-    // The whole safety of the sweep is that filed means merged. A request
-    // still live is work that may exist nowhere else.
-    build({ requests: { 'a-thing.md': READY('A thing') } })
-    const tree = box.path('.intake/wt/a-thing')
-    box.git('worktree', 'add', '-q', '-b', 'request/a-thing-0000000', tree, 'main')
-    writeFileSync(join(tree, 'precious.txt'), 'the only copy\n')
-
-    run('dispatch.sh')
-
-    expect(existsSync(join(tree, 'precious.txt'))).toBe(true)
   })
 })
 
@@ -1262,11 +1207,11 @@ describe('status.sh', () => {
 // What a worktree is handed, beyond the request file.
 //
 // Two things an agent cannot work without and cannot get for itself.
-describe('what a worktree is handed', () => {
+describe('what the agent tree is handed', () => {
   it('gets the Android SDK path, or no Android task can run in it at all', () => {
-    // `apps/local.properties` is gitignored, as it has to be, so it exists
-    // in the clone and in no worktree cut from it. All three live worktrees
-    // were missing it: any Gradle task touching :androidApp died in sixteen
+    // `apps/local.properties` is gitignored, as it has to be, so it
+    // exists in the clone and in no worktree. All three live worktrees
+    // were once missing it: any Gradle task touching :androidApp died in sixteen
     // seconds on "SDK location not found", so the narrow `--tests` run the
     // instructions send agents to was never available to them either.
     build({ requests: { 'a-thing.md': READY('A thing') } })
@@ -1275,22 +1220,35 @@ describe('what a worktree is handed', () => {
 
     run('dispatch.sh')
 
-    expect(readFileSync(join(box.repo, '.intake/wt/a-thing/apps/local.properties'), 'utf8'))
+    expect(readFileSync(join(box.repo, '.intake/agent/apps/local.properties'), 'utf8'))
       .toContain('sdk.dir=/the/clone')
   })
 
-  it('gets the instructions as they are now, not as its branch was cut', () => {
+  it('gets the instructions off the branch, which is cut from current main', () => {
     // An agent reads CLAUDE.md out of the tree it works in.
-    // `remove-task-title` nearly died an eighth time on this: main had just
-    // banned the suite that killed its seven previous agents, and its own
-    // worktree still said to run it.
+    // `remove-task-title` nearly died an eighth time on this: main had
+    // just banned the suite that killed its seven previous agents, and
+    // its own worktree still said to run it.
+    //
+    // The dispatcher used to copy CLAUDE.md in to fix that. It does not
+    // any more, and must not: CLAUDE.md is tracked, so the copy made
+    // the tree dirty and the next run refused to start anything because
+    // the tree was dirty — six ticks in a row saying "1 changed files
+    // and nobody working" about a file it had changed itself.
+    //
+    // It is not needed. Every task switches the tree to a branch off
+    // current main, so the instructions are current by construction.
     build({ requests: { 'a-thing.md': READY('A thing') } })
-    writeFileSync(box.path('CLAUDE.md'), '# the law\n\nNever run the screens suite locally.\n')
+    box.commitOnBase('CLAUDE.md', '# the law\n\nNever run the screens suite locally.\n')
+    box.stub('claude', BUILDER)
 
     run('dispatch.sh')
 
-    expect(readFileSync(join(box.repo, '.intake/wt/a-thing/CLAUDE.md'), 'utf8'))
+    expect(readFileSync(join(box.repo, '.intake/agent/CLAUDE.md'), 'utf8'))
       .toContain('Never run the screens suite')
+    const dirty = spawnSync('git', ['-C', box.path('.intake/agent'), 'status', '--porcelain'], { encoding: 'utf8' })
+      .stdout.split('\n').filter((l) => l && !l.startsWith('?? '))
+    expect(dirty, 'the dispatcher left the tree dirty, which blocks the next run').toEqual([])
   })
 
   it('builds anyway when the clone has no SDK path, because most requests are not Android', () => {
@@ -1301,50 +1259,48 @@ describe('what a worktree is handed', () => {
     expect(box.log()).toContain('claude')
   })
 })
+// The agent tree on a request branch with nobody in it.
+//
+// Two tasks once sat at `in review` for three hours with nothing
+// running, and the only reason anyone found out is that Matt asked.
+// There is no resume by design, so a stalled one needs a person, and
+// the way to reach a person is the task row.
+describe('the tree left on a branch with nobody working', () => {
+  /** Leave the tree on a request branch, as a stopped agent would. */
+  const stranded = (name = 'a-thing') => {
+    build({ requests: { [`${name}.md`]: READY('A thing') } })
+    box.stub('claude', BUILDER)
+    run('dispatch.sh')
+    box.clearLog?.()
+    return name
+  }
 
-// A worktree nobody is working in says so.
-//
-// There is no resume: the machinery that picked a stopped agent's
-// worktree back up is what ran seven agents on one request in four hours,
-// and it went in the strip. The consequence nobody wrote down is that a
-// dead agent's worktree blocks its request FOREVER — the dispatcher skips
-// anything with a worktree, so the request is never claimed again and
-// nothing anywhere says why.
-//
-// Two tasks sat at `in review` for three hours with no agent alive on
-// them. The only reason it came to light is that Matt asked.
-describe('a worktree with nobody in it', () => {
   it('marks the task paused, so somebody knows it needs picking up', () => {
-    build({ requests: { 'a-thing.md': READY('A thing') } })
-    // A stopped agent's worktree: it exists, nothing is running in it.
-    mkdirSync(join(box.repo, '.intake', 'wt', 'a-thing', 'requests'), { recursive: true })
+    stranded()
 
     run('dispatch.sh')
 
-    // task-status.mjs runs for real here and has no credential in a box,
-    // so what it writes to the log is the proof it was asked at all.
-    // `paused`, not `blocked`. A worktree with work in it and no agent
-    // is recoverable by definition — another agent picks it up. Blocked
-    // is reserved for what cannot be recovered at all, and writing it
-    // here made tasks flap in and out of it once a minute.
+    // task-status.mjs runs for real here and has no credential in a
+    // box, so what it writes to the log is the proof it was asked at
+    // all. `paused`, not `blocked`: a tree with work in it and no agent
+    // is recoverable by definition. Blocked is for what cannot be
+    // recovered at all, and writing it here made tasks flap in and out
+    // of it once a minute.
     expect(box.intakeLog(), 'nothing told D1 the task had stalled')
       .toMatch(/a-thing paused|paused was not written/)
     expect(box.intakeLog(), 'a recoverable stall was called blocked')
       .not.toMatch(/a-thing blocked/)
-    // And still no second agent on it.
-    expect(box.log()).not.toContain('claude ')
   })
 
   it('says nothing when an agent is alive in there', () => {
     build({ requests: { 'a-thing.md': READY('A thing') } })
-    const wt = join(box.repo, '.intake', 'wt', 'a-thing')
-    mkdirSync(join(wt, 'requests'), { recursive: true })
+    box.stub('claude', BUILDER)
+    run('dispatch.sh')
     // A process whose command line names the request, which is how the
-    // dispatcher tells a live agent from a dead one.
-    // Compound, deliberately. `sh -c 'sleep 30 # marker'` is one simple
-    // command, so the shell execs sleep over itself and the marker is gone
-    // from the process list — which is the only thing pgrep can match. Both
-    // tests here faked a live agent that way and neither was looking at one.
+    // dispatcher tells a live agent from a dead one. Compound,
+    // deliberately: `sh -c 'sleep 30 # marker'` is one simple command,
+    // so the shell execs sleep over itself and the marker — the only
+    // thing pgrep can match — is gone from the process list.
     const alive = spawn('/bin/sh', ['-c', 'sleep 30; : requests/a-thing.md'], {
       detached: true, stdio: 'ignore',
     })
@@ -1357,119 +1313,106 @@ describe('a worktree with nobody in it', () => {
     }
   })
 })
-
-// The task row says WHY the agent stopped.
-//
-// One morning every task failed at once and every row said the same
-// thing: "stopped with work left in its worktree". The actual reason was
-// the last line of each agent's own log — "Not logged in · Please run
-// /login", because Matt's Claude session had expired overnight and a
-// headless agent cannot refresh one. Nothing read it, so the rows could
-// not tell a crashed build from a login that needed renewing.
 // Work that is finished and nobody merged.
 //
 // `i-can-t-tap-done-tasks-to-look-at-the-details` took 52.2 hours of
-// wall clock and 170 turns of actual work. The rest was its pull request
-// sitting there as a draft with nobody on it. Three tasks account for 76
-// of the 190 hours this repo has spent, all the same way: the building
-// finished, and then nothing happened.
+// wall clock and 170 turns of actual work. The rest was its pull
+// request sitting there with nobody on it. Three tasks account for 76
+// of the 190 hours this repo has spent, all the same way.
 //
-// Nothing noticed, because a worktree that already exists is not the
-// dispatcher's to take — that rule is what stopped seven agents running
-// on one request, and it stands. But "an agent is mid-build" and "the
-// work is done and unmerged" are different states, and only the first
-// one wants leaving alone.
-//
-// So: an open pull request, no agent, and the tree untouched for a
-// while, gets ONE finisher. One, guarded by a marker that is never
-// cleared, because a loop here is the failure that cost four hours.
+// An open pull request means the building is done and what is left is
+// the gate and a merge, which is bounded. So it gets ONE finisher —
+// one, marked on disk and never cleared, because something picking
+// work back up repeatedly is how seven agents came to run on a single
+// request in four hours.
 describe('a pull request nobody finished', () => {
-  const abandoned = (name = 'fin-one') => {
-    const wt = join(box.repo, '.intake', 'wt', name)
-    mkdirSync(join(wt, 'requests'), { recursive: true })
-    // Old enough that nothing is about to touch it.
-    const old = new Date(Date.now() - 60 * 60 * 1000)
-    utimesSync(wt, old, old)
-    return wt
+  const withPr = () => box.stub('gh', `[ "$1 $2" = "pr list" ] && printf '%s\\n' '[{"number":7,"state":"OPEN"}]'\nexit 0`)
+
+  /** A tree left on a request branch, with the agent gone. */
+  const abandoned = () => {
+    build({ requests: { 'a-thing.md': READY('A thing') } })
+    box.stub('claude', BUILDER)
+    run('dispatch.sh')
+    box.stub('claude', BUILDER)
   }
 
   it('starts one finisher when the pull request is open and nobody is on it', () => {
-    build({ requests: { 'fin-one.md': READY('A thing') } })
-    box.stub('claude', BUILDER)
-    box.stub('gh', `[ "$1 $2" = "pr list" ] && printf '%s\\n' '[{"number":7,"state":"OPEN","headRefName":"request/fin-one-0000000"}]'\nexit 0`)
     abandoned()
+    withPr()
+    const before = box.log()
 
     run('dispatch.sh')
 
-    const launched = box.log().split('\n').find((l) => l.startsWith('claude '))
-    expect(launched, 'nothing was started on an abandoned pull request').toBeTruthy()
-    expect(launched, 'the finisher was not told it is finishing, not building').toMatch(/finish|merge/i)
+    const launched = box.log().replace(before, '')
+    expect(launched, 'nothing was started on an abandoned pull request').toContain('claude ')
+    expect(launched, 'the finisher was not told it is finishing, not building').toMatch(/finish|ALREADY BUILT/i)
   })
 
   it('starts exactly one, ever, however many times the timer fires', () => {
-    // The whole reason this is allowed to exist. Seven agents once ran
-    // on one request because something kept picking it back up.
-    build({ requests: { 'fin-one.md': READY('A thing') } })
-    box.stub('claude', BUILDER)
-    box.stub('gh', `[ "$1 $2" = "pr list" ] && printf '%s\\n' '[{"number":7,"state":"OPEN","headRefName":"request/fin-one-0000000"}]'\nexit 0`)
     abandoned()
+    withPr()
+    const before = box.log()
+    run('dispatch.sh')
+    const first = box.log().replace(before, '').split('\n').filter((l) => l.startsWith('claude ')).length
+    const mid = box.log()
+    run('dispatch.sh')
+    run('dispatch.sh')
+    const after = box.log().replace(mid, '').split('\n').filter((l) => l.startsWith('claude ')).length
 
-    run('dispatch.sh')
-    const first = box.log().split('\n').filter((l) => l.startsWith('claude ')).length
-    run('dispatch.sh')
-    run('dispatch.sh')
-    const after = box.log().split('\n').filter((l) => l.startsWith('claude ')).length
-
-    expect(first, 'the first tick started nothing').toBe(1)
-    expect(after, 'it started another finisher on a later tick').toBe(1)
+    expect(first, 'the first tick started no finisher').toBe(1)
+    expect(after, 'it started another finisher on a later tick').toBe(0)
   })
 
-  it('leaves a tree alone while an agent is still in it', () => {
-    build({ requests: { 'fin-one.md': READY('A thing') } })
-    box.stub('claude', BUILDER)
-    box.stub('gh', `[ "$1 $2" = "pr list" ] && printf '%s\\n' '[{"number":7,"state":"OPEN","headRefName":"request/fin-one-0000000"}]'\nexit 0`)
+  it('leaves the tree alone while an agent is still in it', () => {
     abandoned()
-    const alive = spawn('/bin/sh', ['-c', 'sleep 30; : requests/fin-one.md'], {
+    withPr()
+    const alive = spawn('/bin/sh', ['-c', 'sleep 30; : requests/a-thing.md'], {
       detached: true, stdio: 'ignore',
     })
+    const before = box.log()
     try {
       run('dispatch.sh')
-      expect(box.log()).not.toContain('claude ')
+      expect(box.log().replace(before, '')).not.toContain('claude ')
     } finally {
       alive.kill('SIGKILL')
     }
   })
 
-  it('leaves a tree alone that was touched a moment ago', () => {
-    // An agent that has just died still has a warm worktree, and the
-    // next tick is a minute away. Waiting costs nothing and starting on
-    // top of a half-written tree costs everything.
-    build({ requests: { 'fin-one.md': READY('A thing') } })
-    box.stub('claude', BUILDER)
-    box.stub('gh', `[ "$1 $2" = "pr list" ] && printf '%s\\n' '[{"number":7,"state":"OPEN","headRefName":"request/fin-one-0000000"}]'\nexit 0`)
-    mkdirSync(join(box.repo, '.intake', 'wt', 'fin-one', 'requests'), { recursive: true })
+  it('does not finish a tree with work in it that nobody pushed', () => {
+    // A dirty tree holds something that exists nowhere else. A finisher
+    // would build on top of a half-written file and then merge it. The
+    // per-task arrangement guarded this by asking whether the directory
+    // had been touched in the last ten minutes, which was a guess at
+    // this question; whether the tree is clean is the answer to it.
+    abandoned()
+    withPr()
+    writeFileSync(join(box.repo, '.intake', 'agent', 'CLAUDE.md'), 'half an edit\n')
+    const before = box.log()
 
     run('dispatch.sh')
 
-    expect(box.log()).not.toContain('claude ')
+    expect(box.log().replace(before, ''), 'it finished on top of unpushed work').not.toContain('claude ')
+    expect(box.intakeLog()).toMatch(/nobody working/)
   })
 
-  it('does not finish a tree with no pull request at all', () => {
-    // That one is a stalled build, which is `paused` and wants a person.
-    build({ requests: { 'fin-one.md': READY('A thing') } })
-    box.stub('claude', BUILDER)
+  it('does not finish a tree whose branch has no pull request at all', () => {
+    // That one is a stalled build, which is `paused` and wants a
+    // person, not an agent started on top of it.
     abandoned()
+    const before = box.log()
 
     run('dispatch.sh')
 
-    expect(box.log()).not.toContain('claude ')
+    expect(box.log().replace(before, '')).not.toContain('claude ')
+    expect(box.intakeLog()).toMatch(/nobody working/)
   })
 })
 
 describe('why an agent stopped', () => {
+  /** Start one, let it stop, and leave its last words where it writes them. */
   const stopped = (name, lastWords) => {
-    const wt = join(box.repo, '.intake', 'wt', name)
-    mkdirSync(join(wt, 'requests'), { recursive: true })
+    box.stub('claude', BUILDER)
+    run('dispatch.sh')
     if (lastWords !== undefined) {
       writeFileSync(join(box.repo, '.intake', `${name}.log`),
         `{"type":"result","is_error":true,"result":"${lastWords}"}\n`)
