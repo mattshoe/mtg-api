@@ -90,6 +90,8 @@ class RulesPageTest {
                         ResponseInit(status = 200, headers = js("({'Content-Type':'application/json'})")),
                     ),
                 )
+            } else if ("$url".contains("/c/")) {
+                Promise.resolve(collectionAt("$url"))
             } else {
                 realFetch!!(url, init)
             }
@@ -215,17 +217,22 @@ class RulesPageTest {
 
     @Test
     fun aRefusalLeavesNoSpinnerSaysWhyAndTryAgainLoadsThem() = runTest {
-        refusals = 1
+        // Refused until Try again is pressed. The page may ask more than
+        // once on its own — it loads again when the address's collection
+        // resolves — and a single refusal was used up by that second load
+        // the moment `/c/` answered without a network round trip.
+        refusals = Int.MAX_VALUE
         val view = mount("#/guide/rules")
         waitFor("the load to fail") { view.all(".rules-failed").isNotEmpty() }
         assertTrue(view.all(".rules-loading").isEmpty(), "the spinner is still up after the load failed")
         val said = view.all(".rules-failed .err").single().textContent.orEmpty()
         assertEquals("Could not load the rules: Wizards answered 503 for the rules text", said)
 
+        refusals = asked
         (view.all("button.rules-retry").singleOrNull() ?: error("there is no Try again")).click()
         waitFor("the rules to load on the second try") { view.all(".rules-hint").isNotEmpty() }
         assertTrue(view.all(".rules-failed").isEmpty(), "the old error is still on the page")
-        assertEquals(2, asked)
+        assertEquals(refusals + 1, asked, "Try again should ask exactly once more")
         view.search("trample")
         waitFor("the trample rules") { view.numbers().size == 4 }
     }

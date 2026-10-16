@@ -233,6 +233,11 @@ class AppDriverTest {
                     ResponseInit(status = 200, headers = js("({'Content-Type':'application/json'})")),
                 )
                 Promise<Response> { ok, _ -> window.setTimeout({ ok(answer) }, whoAmIMs) }
+            } else if ("$url".contains("/c/")) {
+                // Whose collection the address names. This used to go to
+                // the live Worker, which answers `allow-origin: *`; now the
+                // site's calls carry the cookie, a browser refuses `*`.
+                Promise.resolve(collectionAt("$url"))
             } else {
                 realFetch!!(url, init)
             }
