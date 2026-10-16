@@ -242,6 +242,40 @@ class MtgApiTest {
         assertEquals("that needs the admin role", e.message)
     }
 
+    /**
+     * Matt: "the server logs page shows no logs". Nothing on either
+     * platform ever asked for them.
+     */
+    @Test
+    fun theServerLogComesFromTheWorkerWithTheSession() = runTest {
+        val found = api(
+            body = """{"rows":[{"id":9,"ts":"2026-10-16T16:45:10.949Z","level":"error","event":"cards.add",
+                "method":"POST","path":"/cards/add","status":500,"ms":812,"message":"boom","detail":null,
+                "ip":"1.2.3.4","country":"US","ray":null,"admin":1},
+                {"id":8,"ts":"2026-10-16T16:44:00.000Z","level":"info","event":"decks","method":"GET",
+                "path":"/decks","status":null,"ms":0,"message":"in flight"}],"total":2,"limit":200,"offset":0}""",
+        ).logs("0.abc")
+        assertEquals(
+            listOf(
+                LogLine("2026-10-16T16:45:10.949Z", "error", "cards.add", "POST", "/cards/add", 500, 812, "boom"),
+                LogLine("2026-10-16T16:44:00.000Z", "info", "decks", "GET", "/decks", null, 0, "in flight"),
+            ),
+            found,
+        )
+        val req = seen.single()
+        assertEquals("/logs", req.url.encodedPath)
+        assertEquals("info", req.url.parameters["min"], "the log should open on info and above")
+        assertEquals("Bearer 0.abc", req.headers[HttpHeaders.Authorization])
+    }
+
+    @Test
+    fun aRefusedServerLogSaysWhatTheServerSaid() = runTest {
+        val e = assertFailsWith<ApiFailure> {
+            api(HttpStatusCode.Forbidden, """{"error":"the server log needs the admin role"}""").logs("0.abc")
+        }
+        assertEquals("the server log needs the admin role", e.message)
+    }
+
     @Test
     fun aCommandersRankComesFromTheWorkerByName() = runTest {
         val found = api(
