@@ -40,7 +40,9 @@ class MtgApi internal constructor(
      * Ktor to say the word. Tests reach the internal constructor because
      * they live in the same module.
      */
-    constructor(base: String = DEFAULT_BASE) : this(base, defaultClient())
+    constructor(base: String = DEFAULT_BASE) : this(base, defaultClient()) {
+        sendSessionTo(base)
+    }
 
     @Serializable
     private data class UnlockRequest(val password: String)
