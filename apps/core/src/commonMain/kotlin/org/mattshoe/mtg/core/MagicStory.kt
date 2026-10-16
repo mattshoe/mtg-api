@@ -102,6 +102,8 @@ object MagicStory {
         setBloomburrow,
         setDuskmourn,
         setAetherdrift,
+        setTarkirDragonstorm,
+        setEdgeOfEternities,
         setLorwynEclipsed,
     )
 
