@@ -196,6 +196,42 @@ internal val storyNewPhyrexia = StorySection(
                     quote = StoryQuote("The Gitaxians whisper among themselves of other worlds. If they exist, we must bring Phyrexia's magnificence to them.", "Elesh Norn, Grand Cenobite"),
                 ),
                 StoryTab(
+                    "elesh-norn", "Elesh Norn",
+                    listOf(
+                        "[Elesh Norn](who/elesh-norn) was the praetor of the white sun and the Grand Cenobite of the Machine Orthodoxy, the largest of the five factions and the one that kept the faith. White on Mirrodin had been the colour of order and of the many standing together, and in Phyrexian hands it became the belief that every creature had one right place in a single perfect body, and that the knife was how it got there. {Elesh Norn, Grand Cenobite} towered over her congregations, pale and serene, and she spoke of compleation as a mercy. The Orthodoxy were its priests and preachers, and they wanted the other four factions brought back under one creed, hers.",
+                        "Her greatest work was an angel. After the last battle for Mirrodin, Norn took a captured Mirran angel named Atraxa and had her compleated, not as a weapon but as a voice. Atraxa was to speak for all the praetors at once and show the plane that Phyrexia was one. Norn invited every praetor to give a part of their faction to her making, and four of them did, so Atraxa was built from white, blue, black and green. Urabrask refused, which is why {Atraxa, Praetors' Voice} has no red in her.",
+                        "Once Norn ruled alone, Atraxa stopped speaking for five and started speaking for one. She became the Mother of Machines' herald and general, rebuilt for war as {Atraxa, Grand Unifier}, still with no red in her, and she carried Norn's will to the front. When the invasion came she led the attack on Capenna, and that is where she fell, crushed under a whole district the crime families dropped on her.",
+                    ),
+                ),
+                StoryTab(
+                    "jin-gitaxias", "Jin-Gitaxias",
+                    listOf(
+                        "Jin-Gitaxias was the praetor of the blue sun and the Core Augur of the Progress Engine. Blue on Mirrodin had been the colour of the vedalken and their love of knowledge, and the Progress Engine turned that love into vivisection. To them Phyrexia was not finished. It was a problem still being solved, and every body, Phyrexian or not, was a draft to be opened up, studied and improved. {Jin-Gitaxias, Core Augur} ruled his laboratories with a cold mind and little patience for faith, and his followers, the Gitaxians, were the first to whisper that there were other worlds to study.",
+                        "He wanted Karn more than any of them, because the silver golem was the one thing on the plane that nobody understood, and Norn moved Karn up out of the core to keep him from Jin-Gitaxias. Even so he was the first praetor to bow to her once she had won, and it kept him his command. His great prize came later, on Kamigawa. There, as {Jin-Gitaxias, Progress Tyrant}, he learned how to compleat a planeswalker without destroying the soul the spark lived in, and proved it on Tamiyo. That one discovery is what made Norn's war on the multiverse possible.",
+                    ),
+                ),
+                StoryTab(
+                    "sheoldred", "Sheoldred",
+                    listOf(
+                        "Sheoldred was the praetor of the black sun and ruled the Steel Thanes from the Dross Pits. Black was the colour old Phyrexia had always been, the colour of death and of power taken by force, and her faction kept closest to the Phyrexia of [Yawgmoth](who/yawgmoth). They believed in slaughter and in slavery, and they saw no need to change. {Sheoldred, Whispering One} was a towering thing of armour and claws who built her strength slowly in the depths, with the patience of a spider, and she never stopped believing that the throne of New Phyrexia should be hers.",
+                        "That made her the most dangerous of Norn's rivals. Norn laid waste to her domain, and Sheoldred survived, beaten and bitter. Rather than keep her close, Norn sent her away to Dominaria to bring back the Father of Machines, a task that would keep her busy and far from home. There she came back stronger than before as {Sheoldred, the Apocalypse}, raising an army of compleated Dominarians and sleeper agents and nearly taking the plane. Her rivalry with Norn never ended, and how it finished is told in the [Invasion of the Multiverse](invasion-of-the-multiverse).",
+                    ),
+                ),
+                StoryTab(
+                    "urabrask", "Urabrask",
+                    listOf(
+                        "Urabrask was the praetor of the red sun and led the Quiet Furnace. Red on Mirrodin had been the colour of the goblins and the furnaces, of passion and of doing as you please, and his faction kept more of that than anyone. The Quiet Furnace built for the sake of building, and its creatures were left more or less free to follow their own wants. Of all the praetors {Urabrask the Hidden} was the least like the old hive mind, and he kept to his own layer of the plane, away from the others.",
+                        "It made him the odd one out. When the war for Mirrodin ended he let the surviving Mirrans shelter in his furnace layer and sealed it off, partly out of something close to empathy and partly out of dislike for everybody else. He would not give any part of his faction to Atraxa, which is why she was made without red. When Norn won, he went to Capenna in secret, because its people had once beaten Phyrexia, and as {Urabrask, Heretic Praetor} he came home with Halo, a substance distilled from angels that burned Phyrexians. Of all the praetors he was the nearest thing Phyrexia's enemies had to a friend.",
+                    ),
+                ),
+                StoryTab(
+                    "vorinclex", "Vorinclex",
+                    listOf(
+                        "Vorinclex was the praetor of the green sun and ruled the Vicious Swarm. Green on Mirrodin had been the colour of the elves and the tangle, of growth and of nature taking its course, and in his faction that became the hunt and nothing else. The Vicious Swarm were predators, and their law was that only the strongest deserved to live. {Vorinclex, Voice of Hunger} was a great beast of horn and metal who hunted whatever he was told was weak, and he had little interest in faith or in rule.",
+                        "That was why he mattered least to the others and why Norn found him the easiest of all to manipulate. Once she had won she pointed him outward. Through Tezzeret's planar bridge he went to Kaldheim as {Vorinclex, Monstrous Raider}, stalking its realms for prey worthy of him, and he wounded a god there. When he came home he carried a sample of tyrite, the sap of Kaldheim's World Tree. From that sap Norn grew Realmbreaker, the invasion tree whose roots would one day reach every plane at once. The least ambitious of the praetors had brought home the thing that made the invasion possible.",
+                    ),
+                ),
+                StoryTab(
                     "mother-of-machines", "Mother of Machines",
                     listOf(
                         "[Elesh Norn](who/elesh-norn) won. She laid waste to the domains of Sheoldred and Urabrask, and both survived, beaten and bitter. Vorinclex, the least ambitious of the praetors, was easy for her to manipulate, and Jin-Gitaxias was the first to pledge his faction to her vision, which earned him the right to keep his command. Norn became the Mother of Machines, the highest power in New Phyrexia, and her white faction grew into the Machine Orthodoxy.",
