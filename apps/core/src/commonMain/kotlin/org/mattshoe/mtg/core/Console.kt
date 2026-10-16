@@ -1,8 +1,11 @@
 package org.mattshoe.mtg.core
 
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
 
 /**
  * The query console, and the server-side log viewer.
@@ -80,6 +83,24 @@ data class LogsState(
 }
 
 object LogQueries {
+    /**
+     * `GET /logs` answers `{rows: [{ts, level, ...}], total}`. A row
+     * this build cannot read is left out, and a body it cannot read at
+     * all is no lines rather than a crash.
+     */
+    fun fromJson(body: String): List<LogLine> = try {
+        val rows = ((Json.parseToJsonElement(body) as? JsonObject)?.get("rows") as? JsonArray).orEmpty()
+        decode(
+            rows.mapNotNull { row ->
+                (row as? JsonObject)?.jsonObject?.mapValues { (_, v) ->
+                    (v as? JsonPrimitive)?.takeIf { it !is JsonNull }?.content
+                }
+            },
+        )
+    } catch (e: Exception) {
+        emptyList()
+    }
+
     fun decode(rows: List<Map<String, String?>>): List<LogLine> = rows.map {
         LogLine(
             ts = it["ts"].orEmpty(),
