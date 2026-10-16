@@ -94,6 +94,7 @@ object MagicStory {
      */
     val sets: List<StorySection> = listOf(
         setWildsOfEldraine,
+        setLostCavernsOfIxalan,
         setMurdersAtKarlovManor,
         setOutlawsOfThunderJunction,
         setBloomburrow,
