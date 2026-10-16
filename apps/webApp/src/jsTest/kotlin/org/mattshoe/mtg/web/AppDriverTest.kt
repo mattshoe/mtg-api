@@ -128,8 +128,8 @@ class AppDriverTest {
                         """"rows":[["alela","Fairy Deck","e7de0cb1","Matt","Alela","UB",3,"abcdef12-3456"]],"n":1}"""
 
                 body.contains("FROM deck_cards dc") ->
-                    """{"cols":["name","name_norm","qty","role","owned","type_line","scryfall_id"],""" +
-                        """"rows":[["Sol Ring","sol ring",1,null,1,"Artifact",null]],"n":1}"""
+                    """{"cols":["name","name_norm","qty","role","owned","type_line","scryfall_id","setcode","collector_number"],""" +
+                        """"rows":[["Sol Ring","sol ring",1,null,1,"Artifact",null,"m3c","409"]],"n":1}"""
 
                 request.url.encodedPath == "/cards/add" && addFails -> {
                     addRefusals++
@@ -610,6 +610,34 @@ class AppDriverTest {
             copied.single(),
             "the copied link is not one a crawler can read the deck out of",
         )
+    }
+
+    @Test
+    fun aCopiedDeckListSaysWhichPrintingEachCardIs() = runTest {
+        // Matt: "copying deck lists does not include set codes
+        // information as it should. it only contains the card name
+        // and the quantity".
+        val copied = mutableListOf<String>()
+        val nav = window.navigator.asDynamic()
+        val stub = js("({})")
+        stub.writeText = { text: String -> copied += text; Promise.resolve(Unit) }
+        val descriptor = js("({configurable: true})")
+        descriptor.value = stub
+        js("Object").defineProperty(nav, "clipboard", descriptor)
+        try {
+            val view = mount("#/decks/alela")
+            waitFor("the deck") { view.textContent.orEmpty().contains("Sol Ring") }
+            val share = view.querySelector("button[aria-label='Share this deck']") as HTMLButtonElement
+            share.click()
+            settle()
+            // Link: Copy, Download. Deck list: Copy, Download.
+            val anchor = share.parentElement as HTMLElement
+            (anchor.querySelectorAll("button.app-tab")[2] as HTMLButtonElement).click()
+            waitFor("the deck list on the clipboard") { copied.isNotEmpty() }
+        } finally {
+            js("delete navigator.clipboard")
+        }
+        assertEquals("1 Sol Ring (M3C) 409", copied.single(), "the copied deck list does not name the printing")
     }
 
     @Test

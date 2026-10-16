@@ -1,0 +1,3 @@
+What was wrong: Share, then Deck list, then Copy or Download gave only the quantity and the card name, "1 Sol Ring", with no set code.
+Why: The deck export wrote quantity and name and nothing else, even though the deck already loads the printing the collection holds for each card.
+Fix: Each line now ends with the set code and collector number, "1 Sol Ring (M3C) 409", the way Moxfield and Archidekt write it, so it still pastes back into the entry box here. A card nobody owns has no printing and stays the name alone. A card owned in more than one printing names the one the deck page already shows. Same export on the phone and the website. The Library's own export is unchanged, because a Library row is a card summed over every printing owned.

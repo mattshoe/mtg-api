@@ -137,6 +137,63 @@ internal class JourneyTest : E2eTest() {
     }
 
     /**
+     * Matt: "copying deck lists does not include set codes information
+     * as it should. it only contains the card name and the quantity".
+     *
+     * Through the real share menu and the real clipboard, with the
+     * printing coming back from SQL that actually ran.
+     */
+    @Test
+    fun aCopiedDeckListSaysWhichPrintingEachCardIs() {
+        settled()
+        compose.onNodeWithContentDescription("Decks").performClick()
+        until("the deck list never filled") { state().decks.decks.isNotEmpty() }
+        compose.onAllNodesWithText(aDeck, substring = true).onFirst().performClick()
+        until("the deck opened with no cards in it") { state().decks.cards.isNotEmpty() }
+        val ring = state().decks.cards.first { it.name == "Sol Ring" }
+        val set = ring.setCode
+        assertTrue(!set.isNullOrBlank(), "the deck query brought Sol Ring back with no set, so there is nothing to copy")
+
+        compose.onNodeWithContentDescription("Share this deck").performClick()
+        // Link: Copy, Download. Deck list: Copy, Download.
+        until("the share menu never opened") {
+            compose.onAllNodesWithText("Copy").fetchSemanticsNodes().size == 2
+        }
+        compose.onAllNodesWithText("Copy")[1].performClick()
+        until("pressing Copy under Deck list did not copy the deck: ${state().toast}") {
+            state().toast?.endsWith("cards copied") == true
+        }
+
+        // Read once the menu's popup has gone: Android only lets the
+        // app with window focus read the clipboard, and while the popup
+        // is up it holds the focus.
+        until("the share menu never closed") {
+            compose.onAllNodesWithText("Copy").fetchSemanticsNodes().isEmpty()
+        }
+        var copied = ""
+        val automation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
+        automation.adoptShellPermissionIdentity("android.permission.READ_CLIPBOARD_IN_BACKGROUND")
+        try {
+            until("the clipboard is empty") {
+                compose.runOnUiThread {
+                    val clip = compose.activity.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                        as android.content.ClipboardManager
+                    copied = clip.primaryClip?.getItemAt(0)?.text?.toString().orEmpty()
+                }
+                copied.isNotEmpty()
+            }
+        } finally {
+            automation.dropShellPermissionIdentity()
+        }
+        val line = copied.lines().firstOrNull { it.contains("Sol Ring") }
+        assertEquals(
+            "1 Sol Ring (${set!!.uppercase()}) ${ring.collectorNumber}",
+            line,
+            "the copied deck list does not name the printing: $copied",
+        )
+    }
+
+    /**
      * Signed out, on a real device, there is one way in and it is
      * Google.
      *

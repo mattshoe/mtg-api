@@ -125,9 +125,18 @@ object Export {
      * because that is the form every builder reads a commander from,
      * and the rest alphabetical. Quantities first so the whole thing
      * pastes straight back into the mass entry box here.
+     *
+     * Each card names the printing the collection holds, "3 Sol Ring
+     * (M3C) 409", the way Moxfield and Archidekt write it. A card
+     * nobody owns has no printing and is the name alone.
      */
     fun deck(cards: List<DeckCard>): String {
-        fun line(c: DeckCard) = "${c.qty} ${c.shown}"
+        fun printing(c: DeckCard): String {
+            val set = c.setCode?.trim()?.takeIf { it.isNotEmpty() }?.uppercase() ?: return ""
+            val number = c.collectorNumber?.trim()?.takeIf { it.isNotEmpty() } ?: return " ($set)"
+            return " ($set) $number"
+        }
+        fun line(c: DeckCard) = "${c.qty} ${c.shown}${printing(c)}"
         val leaders = cards.filter { it.isCommander }.sortedBy { it.shown.lowercase() }
         val rest = cards.filterNot { it.isCommander }.sortedBy { it.shown.lowercase() }
         return (leaders.map(::line) + listOf("").takeIf { leaders.isNotEmpty() && rest.isNotEmpty() }.orEmpty() + rest.map(::line))
