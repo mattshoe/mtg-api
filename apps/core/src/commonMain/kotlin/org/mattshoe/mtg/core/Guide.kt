@@ -36,6 +36,9 @@ object Guide {
     const val GAME_CHANGERS = "game-changers"
     const val BANNED = "banned"
     const val BRACKETS = "brackets"
+    const val SETS = "sets"
+
+    val sets: List<GuideTile> = emptyList()
 
     /**
      * Every story tile, in the order the story happened, roughly.

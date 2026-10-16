@@ -83,6 +83,8 @@ object MagicStory {
         storyBlindEternities,
     )
 
+    val sets: List<StorySection> = emptyList()
+
     val people: List<StoryPerson> get() = storyPeople
 
     val articles: List<StoryArticle> get() = sections.flatMap { it.articles }
