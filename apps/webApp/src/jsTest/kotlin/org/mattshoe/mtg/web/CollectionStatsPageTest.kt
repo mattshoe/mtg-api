@@ -166,6 +166,31 @@ class CollectionStatsPageTest {
         assertEquals("5", doc.querySelector(".stats-figures .figure .n")?.textContent, "the Creatures tab's five copies")
     }
 
+    /**
+     * The second query failing, the way `intoPage` reports it: the
+     * spinner goes, the error says what happened, no stale chart is
+     * left under it, and a pull brings the charts back.
+     */
+    @Test
+    fun aLoadThatFailsSaysSoAndAPullBringsTheChartsBack() = runTest {
+        val doc = mount(390 to 844)
+        held.value = held.value.refreshed()
+        settle(screen!!.window)
+        assertTrue(doc.body!!.textContent!!.contains("Loading…"), "a pull does not show it is loading")
+        held.value = held.value.fetchFailed("500 from /query", View.STATS)
+        settle(screen!!.window)
+        val text = doc.body!!.textContent!!
+        assertTrue(!text.contains("Loading…"), "the spinner outlived the failure")
+        assertTrue(text.contains("Could not load stats: 500 from /query"), "the failure is not said: $text")
+        assertEquals(0, doc.all(".stats-tabs").size, "tabs from the last load sit under the error")
+        assertEquals(0, doc.all(".stats-card").size, "charts from the last load sit under the error")
+        held.value = held.value.refreshed()
+        held.value = held.value.copy(stats = held.value.stats.loaded(Totals(), pile))
+        settle(screen!!.window)
+        assertTrue(doc.all(".stats-card").size >= 10, "a retry did not bring the charts back")
+        assertTrue(!doc.body!!.textContent!!.contains("Could not load"), "the error outlived the retry")
+    }
+
     /** Nothing past the right edge, and on a wide screen the charts sit side by side. */
     private suspend fun fits(size: Pair<Int, Int>, columns: Int) {
         val doc = mount(size)

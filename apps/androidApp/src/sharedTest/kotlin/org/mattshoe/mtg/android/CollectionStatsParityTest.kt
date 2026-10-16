@@ -167,6 +167,30 @@ class CollectionStatsParityTest {
         assertEquals("5 cards", told("stats-figure-0"), "the Creatures tab's five copies")
     }
 
+    /**
+     * The second query failing, the way `intoPage` reports it: the
+     * spinner goes, the error says what happened, no stale chart is
+     * left under it, and a pull brings the charts back.
+     */
+    @Test
+    fun aLoadThatFailsSaysSoAndAPullBringsTheChartsBack() {
+        show()
+        held.value = held.value.refreshed()
+        rule.waitForIdle()
+        assertTrue(exists("stats-busy"), "a pull does not show it is loading")
+        held.value = held.value.fetchFailed("500 from /query", View.STATS)
+        rule.waitForIdle()
+        assertTrue(!exists("stats-busy"), "the spinner outlived the failure")
+        assertEquals("Could not load stats: 500 from /query", words("stats-err"))
+        assertTrue(!exists("stats-tabs"), "tabs from the last load sit under the error")
+        assertTrue(!exists("stats-chart-Colour"), "charts from the last load sit under the error")
+        held.value = held.value.refreshed()
+        held.value = held.value.copy(stats = held.value.stats.loaded(Totals(), pile))
+        rule.waitForIdle()
+        assertTrue(exists("stats-chart-Colour"), "a retry did not bring the charts back")
+        assertTrue(!exists("stats-err"), "the error outlived the retry")
+    }
+
     /** Nothing past the right edge, and on a wide screen the charts sit side by side. */
     private fun fits(size: DpSize?, sideBySide: Boolean) {
         show(size)
