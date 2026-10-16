@@ -95,6 +95,7 @@ object MagicStory {
     val sets: List<StorySection> = listOf(
         setMurdersAtKarlovManor,
         setDuskmourn,
+        setAetherdrift,
     )
 
     val people: List<StoryPerson> get() = storyPeople
