@@ -795,7 +795,7 @@ describe('the agent tree with work in it', () => {
     // The one thing the per-task arrangement got right. With one tree,
     // the next request would be started on top of whatever the last
     // agent left behind.
-    build({ requests: { 'a-thing.md': READY('A thing'), 'b-thing.md': READY('B thing') } })
+    build({ requests: { 'dirty-one.md': READY('Dirty one'), 'dirty-two.md': READY('Dirty two') } })
     box.stub('claude', BUILDER)
     run('dispatch.sh')
     box.stub('claude', BUILDER)
@@ -823,12 +823,12 @@ describe('the agent tree with work in it', () => {
 // does not have.
 describe('the tree after a task has shipped', () => {
   it('goes back to main, and the branch is deleted', () => {
-    build({ requests: { 'a-thing.md': READY('A thing') } })
+    build({ requests: { 'shipped-one.md': READY('Shipped one') } })
     box.stub('claude', BUILDER)
     run('dispatch.sh')
-    const branch = 'request/a-thing-' + readFileSync(box.path('.intake/intake.log'), 'utf8')
-      .match(/request\/a-thing-([0-9a-f]{7})/)[1]
-    box.commitOnBase('requests/done/a-thing.md', 'Merged as #1.\n')
+    const branch = readFileSync(box.path('.intake/intake.log'), 'utf8')
+      .match(/request\/shipped-one-[0-9a-f]{7}/)[0]
+    box.commitOnBase('requests/done/shipped-one.md', 'Merged as #1.\n')
 
     run('dispatch.sh')
 
@@ -841,11 +841,15 @@ describe('the tree after a task has shipped', () => {
     // Filing happens in the commit the agent merges, before it stops
     // talking, so there is a window where the request reads done and
     // the process is still working in the tree.
-    build({ requests: { 'a-thing.md': READY('A thing') } })
+    //
+    // Its own request name, because these run four at a time and a
+    // fake agent named after a request another test is using answers
+    // that test's question instead.
+    build({ requests: { 'shipped-live.md': READY('Shipped live') } })
     box.stub('claude', BUILDER)
     run('dispatch.sh')
-    box.commitOnBase('requests/done/a-thing.md', 'Merged as #1.\n')
-    const alive = spawn('/bin/sh', ['-c', 'sleep 30; : requests/a-thing.md'], {
+    box.commitOnBase('requests/done/shipped-live.md', 'Merged as #1.\n')
+    const alive = spawn('/bin/sh', ['-c', 'sleep 30; : requests/shipped-live.md'], {
       detached: true, stdio: 'ignore',
     })
     try {
@@ -1267,7 +1271,7 @@ describe('what the agent tree is handed', () => {
 // the way to reach a person is the task row.
 describe('the tree left on a branch with nobody working', () => {
   /** Leave the tree on a request branch, as a stopped agent would. */
-  const stranded = (name = 'a-thing') => {
+  const stranded = (name = 'stall-one') => {
     build({ requests: { [`${name}.md`]: READY('A thing') } })
     box.stub('claude', BUILDER)
     run('dispatch.sh')
@@ -1287,13 +1291,13 @@ describe('the tree left on a branch with nobody working', () => {
     // recovered at all, and writing it here made tasks flap in and out
     // of it once a minute.
     expect(box.intakeLog(), 'nothing told D1 the task had stalled')
-      .toMatch(/a-thing paused|paused was not written/)
+      .toMatch(/stall-one paused|paused was not written/)
     expect(box.intakeLog(), 'a recoverable stall was called blocked')
-      .not.toMatch(/a-thing blocked/)
+      .not.toMatch(/stall-one blocked/)
   })
 
   it('says nothing when an agent is alive in there', () => {
-    build({ requests: { 'a-thing.md': READY('A thing') } })
+    build({ requests: { 'stall-live.md': READY('Stall live') } })
     box.stub('claude', BUILDER)
     run('dispatch.sh')
     // A process whose command line names the request, which is how the
@@ -1301,13 +1305,17 @@ describe('the tree left on a branch with nobody working', () => {
     // deliberately: `sh -c 'sleep 30 # marker'` is one simple command,
     // so the shell execs sleep over itself and the marker — the only
     // thing pgrep can match — is gone from the process list.
-    const alive = spawn('/bin/sh', ['-c', 'sleep 30; : requests/a-thing.md'], {
+    //
+    // Its own request name: these run four at a time, and a fake agent
+    // named after a request another test uses answers that test's
+    // question instead.
+    const alive = spawn('/bin/sh', ['-c', 'sleep 30; : requests/stall-live.md'], {
       detached: true, stdio: 'ignore',
     })
     try {
       run('dispatch.sh')
       expect(box.intakeLog(), 'a live agent was called stalled')
-        .not.toMatch(/a-thing paused/)
+        .not.toMatch(/stall-live paused/)
     } finally {
       alive.kill('SIGKILL')
     }
@@ -1330,7 +1338,7 @@ describe('a pull request nobody finished', () => {
 
   /** A tree left on a request branch, with the agent gone. */
   const abandoned = () => {
-    build({ requests: { 'a-thing.md': READY('A thing') } })
+    build({ requests: { 'fin-one.md': READY('Fin one') } })
     box.stub('claude', BUILDER)
     run('dispatch.sh')
     box.stub('claude', BUILDER)
@@ -1364,9 +1372,11 @@ describe('a pull request nobody finished', () => {
   })
 
   it('leaves the tree alone while an agent is still in it', () => {
+    // `abandoned()` builds `fin-one`, so the fake has to name that —
+    // but nothing else may, or these tests answer each other.
     abandoned()
     withPr()
-    const alive = spawn('/bin/sh', ['-c', 'sleep 30; : requests/a-thing.md'], {
+    const alive = spawn('/bin/sh', ['-c', 'sleep 30; : requests/fin-one.md'], {
       detached: true, stdio: 'ignore',
     })
     const before = box.log()
@@ -1420,8 +1430,8 @@ describe('why an agent stopped', () => {
   }
 
   it('carries the agent\'s own last words onto the row', () => {
-    build({ requests: { 'a-thing.md': READY('A thing') } })
-    stopped('a-thing', 'Not logged in · Please run /login')
+    build({ requests: { 'why-one.md': READY('Why one') } })
+    stopped('why-one', 'Not logged in · Please run /login')
 
     run('dispatch.sh')
 
@@ -1430,12 +1440,12 @@ describe('why an agent stopped', () => {
   })
 
   it('still says something useful when the log has no reason in it', () => {
-    build({ requests: { 'a-thing.md': READY('A thing') } })
-    stopped('a-thing')
+    build({ requests: { 'why-one.md': READY('Why one') } })
+    stopped('why-one')
 
     run('dispatch.sh')
 
-    expect(box.intakeLog()).toMatch(/a-thing paused|paused was not written/)
+    expect(box.intakeLog()).toMatch(/why-one paused|paused was not written/)
   })
 
   it('says nothing at all when the agent left a pull request behind', () => {
@@ -1449,13 +1459,13 @@ describe('why an agent stopped', () => {
     // A worktree with no agent and an open pull request is not stalled.
     // The agent finished, pushed, and stopped — which is what `in review`
     // means. Only a worktree with nothing to show is stalled.
-    build({ requests: { 'a-thing.md': READY('A thing') } })
-    stopped('a-thing', 'all done')
-    box.stub('gh', `[ "$1 $2" = "pr list" ] && printf '%s\\n' '[{"number":7,"state":"OPEN","headRefName":"request/a-thing-0000000"}]'\nexit 0`)
+    build({ requests: { 'why-one.md': READY('Why one') } })
+    stopped('why-one', 'all done')
+    box.stub('gh', `[ "$1 $2" = "pr list" ] && printf '%s\\n' '[{"number":7,"state":"OPEN","headRefName":"request/why-one-0000000"}]'\nexit 0`)
 
     run('dispatch.sh')
 
     expect(box.intakeLog(), 'a finished agent was called stalled')
-      .not.toMatch(/a-thing paused/)
+      .not.toMatch(/why-one paused/)
   })
 })

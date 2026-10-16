@@ -33,7 +33,7 @@ afterEach(() => { if (root) rmSync(root, { recursive: true, force: true }); root
  * writes, so a test can say "nothing attached" and then "attached" without
  * timing anything.
  */
-function sdk({ attached = [], avds = ['Pixel_9'], bootsAfter = 0, unauthorized = false, installed = false, hang = false } = {}) {
+function sdk({ attached = [], avds = ['Pixel_9'], bootsAfter = 0, unauthorized = false, installed = false, hang = false, refuses = false } = {}) {
   root = mkdtempSync(join(tmpdir(), 'emu-'))
   const bin = join(root, 'bin')
   mkdirSync(bin, { recursive: true })
@@ -61,7 +61,7 @@ case "$1" in
     exit 0 ;;
   uninstall)
     ${hang ? 'sleep 300' : 'true'}
-    echo Success; exit 0 ;;
+    ${refuses ? 'echo "Failure [DELETE_FAILED_INTERNAL_ERROR]"; exit 1' : 'echo Success; exit 0'} ;;
   shell)
     if [ "$2" = "pm" ]; then
       if [ ${JSON.stringify(installed ? '1' : '0')} = 1 ]; then
@@ -174,6 +174,21 @@ describe('the gate makes sure there is a phone', () => {
     expect(took, `it hung for ${took}s instead of giving up`).toBeLessThan(60)
     expect(`${r.stderr}${r.stdout}`, 'it did not say adb had stopped answering')
       .toMatch(/not answering|timed out|wedged/i)
+  })
+
+  it('stops when the phone refuses to let go of the old app', () => {
+    // It used to warn and carry on, and the suite then failed two
+    // minutes later with INSTALL_FAILED_UPDATE_INCOMPATIBLE — a worse
+    // message about the same thing. A refused uninstall means the
+    // install that follows cannot work.
+    //
+    // It refused because this ran OUTSIDE the Gradle lock while a live
+    // agent's device suite was installing. Holding the lock is the
+    // other half of the fix; failing loudly is this half.
+    const box = sdk({ attached: ['emulator-5554'], installed: true, refuses: true })
+    const r = box.run()
+    expect(r.status, 'it carried on after a refused uninstall').not.toBe(0)
+    expect(`${r.stderr}${r.stdout}`).toMatch(/would not remove|refused/i)
   })
 
   it('fails with a sentence a person can act on when the SDK has no AVD', () => {
