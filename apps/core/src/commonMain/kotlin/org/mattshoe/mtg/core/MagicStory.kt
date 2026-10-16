@@ -83,15 +83,43 @@ object MagicStory {
         storyBlindEternities,
     )
 
+    /**
+     * The modern sets, a page each, in the order they came out.
+     *
+     * Matt: "i want to see Guide section on all the modern sets from
+     * that few years. it should be similar to the root Lore section".
+     * A set is told exactly as a Lore section is, its articles its
+     * tabs, so the shells draw it with what they already have. The
+     * words are in the `Set*.kt` files beside this one, a set to a file.
+     */
+    val sets: List<StorySection> = listOf(
+        setPhyrexiaAllWillBeOne,
+        setMarchOfTheMachine,
+        setWildsOfEldraine,
+        setLostCavernsOfIxalan,
+        setMurdersAtKarlovManor,
+        setOutlawsOfThunderJunction,
+        setBloomburrow,
+        setDuskmourn,
+        setAetherdrift,
+        setTarkirDragonstorm,
+        setEdgeOfEternities,
+        setLorwynEclipsed,
+    )
+
     val people: List<StoryPerson> get() = storyPeople
 
+    /** Lore's articles, in story order. The sets' are apart from them, so Lore's end is still its end. */
     val articles: List<StoryArticle> get() = sections.flatMap { it.articles }
 
-    fun article(slug: String): StoryArticle? = articles.firstOrNull { it.slug == slug }
+    /** Every article there is, Lore's and then the sets'. */
+    private val everything: List<StoryArticle> get() = (sections + sets).flatMap { it.articles }
+
+    fun article(slug: String): StoryArticle? = everything.firstOrNull { it.slug == slug }
 
     fun person(slug: String): StoryPerson? = people.firstOrNull { it.slug == slug }
 
-    fun sectionOf(article: StoryArticle): StorySection = sections.first { article in it.articles }
+    fun sectionOf(article: StoryArticle): StorySection = (sections + sets).first { article in it.articles }
 
     // Every bracket escaped: JavaScript reads this in unicode mode,
     // where a bare `]` or `}` is a syntax error, and the site died of it.
@@ -129,10 +157,10 @@ object MagicStory {
     }
 
     /** Every article a person appears in, in story order. */
-    fun appearances(person: StoryPerson): List<StoryArticle> = articles.filter { mentions(it, person) }
+    fun appearances(person: StoryPerson): List<StoryArticle> = everything.filter { mentions(it, person) }
 
     /** A section, by its tile's slug. */
-    fun section(slug: String): StorySection? = sections.firstOrNull { it.slug == slug }
+    fun section(slug: String): StorySection? = (sections + sets).firstOrNull { it.slug == slug }
 
     /**
      * The page a link target opens from [section], or null when it
@@ -157,8 +185,15 @@ object MagicStory {
     /** A person's link target. */
     fun target(person: StoryPerson): String = "$WHO/${person.slug}"
 
-    /** The article after this one, across sections, or null at the very end. */
-    fun nextArticle(article: StoryArticle): StoryArticle? = articles.getOrNull(articles.indexOf(article) + 1)
+    /**
+     * The article after this one, across sections, or null at the very
+     * end. Lore reads on through Lore and a set on through the sets.
+     */
+    fun nextArticle(article: StoryArticle): StoryArticle? {
+        val run = if (article in articles) articles else sets.flatMap { it.articles }
+        val at = run.indexOf(article)
+        return if (at < 0) null else run.getOrNull(at + 1)
+    }
 }
 
 /**

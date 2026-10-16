@@ -147,6 +147,7 @@ fun GuideScreen(
             }
             when (tile.slug) {
                 Guide.LORE -> Guide.lore.forEach { GuideTileCard(it, onOpen) }
+                Guide.SETS -> Guide.sets.forEach { GuideTileCard(it, onOpen) }
                 Guide.COLOURS -> Colours()
                 Guide.WHEEL -> Wheel()
                 Guide.PHYREXIA -> Lore(era ?: PhyrexianLore.eras.first(), onEra)

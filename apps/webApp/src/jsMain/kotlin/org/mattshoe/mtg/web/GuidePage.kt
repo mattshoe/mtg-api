@@ -93,6 +93,7 @@ fun GuidePage(
             }
             when (tile.slug) {
                 Guide.LORE -> GuideTiles(Guide.lore, onOpen)
+                Guide.SETS -> GuideTiles(Guide.sets, onOpen)
                 Guide.COLOURS -> Colours()
                 Guide.WHEEL -> Wheel()
                 Guide.PHYREXIA -> Lore(era ?: PhyrexianLore.eras.first(), onEra)

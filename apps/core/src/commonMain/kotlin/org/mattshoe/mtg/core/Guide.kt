@@ -36,6 +36,10 @@ object Guide {
     const val GAME_CHANGERS = "game-changers"
     const val BANNED = "banned"
     const val BRACKETS = "brackets"
+    const val SETS = "sets"
+
+    /** Every set's tile, oldest first. Its page is told in `MagicStory.sets`. */
+    val sets: List<GuideTile> by lazy { MagicStory.sets.map { GuideTile(it.slug, it.title, it.hook) } }
 
     /**
      * Every story tile, in the order the story happened, roughly.
@@ -76,12 +80,20 @@ object Guide {
         GuideTile(COLOURS, "Colour combinations", "Every name, from Azorius to WUBRG. Guilds, shards, wedges and the rest."),
         GuideTile(WHEEL, "The colour wheel", "What each colour wants, what it is good at, and who its friends and enemies are."),
         GuideTile(LORE, "Lore", "The story of Magic, from the Thran to the Omenpaths, in the order it happened."),
+        // Matt: "i want to see Guide section on all the modern sets ...
+        // similar to the root Lore section". The sets are in `Set*.kt`.
+        GuideTile(SETS, "Sets", "The modern sets, one page each. The world, the story, the people, the mechanics and the cards."),
     )
 
-    fun tile(slug: String): GuideTile? = tiles.firstOrNull { it.slug == slug } ?: lore.firstOrNull { it.slug == slug }
+    fun tile(slug: String): GuideTile? =
+        tiles.firstOrNull { it.slug == slug } ?: lore.firstOrNull { it.slug == slug } ?: sets.firstOrNull { it.slug == slug }
 
-    /** The page a tile's way back leads to: Lore for a story, the Guide's front page for the rest. */
-    fun up(tile: GuideTile): GuideTile? = if (tile in lore) tile(LORE) else null
+    /** The page a tile's way back leads to: Lore for a story, Sets for a set, the Guide's front page for the rest. */
+    fun up(tile: GuideTile): GuideTile? = when (tile) {
+        in lore -> tile(LORE)
+        in sets -> tile(SETS)
+        else -> null
+    }
 
     /**
      * Every colour combination there is, one to five, by name.

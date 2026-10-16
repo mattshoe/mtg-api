@@ -19,7 +19,7 @@ class GuideSearchTest {
     private val texts: Map<String, String> =
         PhyrexianLore.eras.associate { e ->
             "${Guide.PHYREXIA}/${e.slug}" to (listOf(e.tab, e.title) + e.story + listOfNotNull(e.quote?.words)).joinToString(" ")
-        } + MagicStory.sections.flatMap { s ->
+        } + (MagicStory.sections + MagicStory.sets).flatMap { s ->
             s.articles.map { a ->
                 "${s.slug}/${a.slug}" to (listOf(a.title) + a.tabs.flatMap { t ->
                     listOf(t.tab) + t.story.map(MagicStory::plain) + listOfNotNull(t.quote?.words)
