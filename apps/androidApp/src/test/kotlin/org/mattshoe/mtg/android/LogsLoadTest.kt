@@ -5,7 +5,6 @@ import android.net.Uri
 import android.os.Looper
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
@@ -44,8 +43,7 @@ import kotlin.test.assertTrue
  * screen its lines and so could never see it. Sibling of the web's
  * `LogsLoadTest`.
  */
-@RunWith(AndroidJUnit4::class)
-class LogsLoadTest {
+abstract class LogsHarness {
 
     // The activity is built by hand, so the rule launches nothing; it
     // is the handle on the Compose tree the activity puts up.
@@ -54,7 +52,7 @@ class LogsLoadTest {
 
     private var controller: ActivityController<MainActivity>? = null
     private var asked = 0
-    private var broken = false
+    protected var broken = false
 
     @After
     fun tearDown() {
@@ -62,7 +60,7 @@ class LogsLoadTest {
         controller = null
     }
 
-    private fun until(activity: MainActivity, what: String, cond: (AppState) -> Boolean) {
+    protected fun until(activity: MainActivity, what: String, cond: (AppState) -> Boolean) {
         val looper = shadowOf(Looper.getMainLooper())
         repeat(500) {
             looper.idle()
@@ -88,7 +86,7 @@ class LogsLoadTest {
         },
     ) { install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) } }
 
-    private fun open(): MainActivity {
+    protected fun open(): MainActivity {
         asked = 0
         val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
         context.getSharedPreferences("mtg", android.content.Context.MODE_PRIVATE)
@@ -98,11 +96,11 @@ class LogsLoadTest {
         controller = built
         val activity = built.get()
         activity.useForTesting(MtgApi.withEngine("https://example.invalid", client()))
-        built.create().start().resume()
+        built.create().start().resume().visible()
         return activity
     }
 
-    private fun showsTheLog() {
+    protected fun showsTheLog() {
         broken = false
         val activity = open()
         until(activity, "the log") { it.view == View.LOGS && !it.logs.busy && (it.logs.lines.isNotEmpty() || it.logs.error != null) }
@@ -116,24 +114,39 @@ class LogsLoadTest {
         assertTrue(asked >= 1, "nothing asked the Worker for the log")
 
         // Drawn, not only held: the grid is on screen with the failed row first.
-        compose.waitForIdle()
         compose.onNodeWithTag("log-grid").assertExists("the log has no grid")
         compose.onNodeWithTag("log-cell-0-3").assertExists("the first row has no path")
         val grid = compose.onNodeWithTag("log-grid").getUnclippedBoundsInRoot()
-        assertTrue(grid.width > 0.dp && grid.height > 0.dp, "the log grid is not drawn: $grid")
+        assertTrue(grid.right > grid.left && grid.bottom > grid.top, "the log grid is not drawn: $grid")
         compose.onNodeWithTag("logs-empty").assertDoesNotExist()
     }
 
+    protected companion object {
+        val LOGS = """{"rows":[
+            {"id":9,"ts":"2026-10-16T16:45:10.949Z","level":"error","event":"cards.add","method":"POST",
+             "path":"/cards/add","status":500,"ms":812,"message":"boom","detail":null},
+            {"id":8,"ts":"2026-10-16T16:44:00.000Z","level":"info","event":"decks","method":"POST",
+             "path":"/decks","status":200,"ms":14,"message":null,"detail":null}
+        ],"total":2,"limit":200,"offset":0}"""
+    }
+}
+
+/**
+ * The phone. One Compose-reading test per class: Robolectric keeps the
+ * Compose root of an activity from an earlier test in the same JVM, and
+ * it never goes idle, so a second test that reads the screen timed out.
+ * `forkEvery(1)` gives each class its own JVM.
+ */
+@RunWith(AndroidJUnit4::class)
+class LogsLoadTest : LogsHarness() {
+
     @Test
     fun theServerLogShowsWhatTheWorkerLogged() = showsTheLog()
+}
 
-    @Test
-    @Config(qualifiers = Tablet.UNFOLDED_QUALIFIERS)
-    fun theServerLogShowsOnAFoldingPhoneOpenedOut() = showsTheLog()
-
-    @Test
-    @Config(qualifiers = Tablet.LANDSCAPE_QUALIFIERS)
-    fun theServerLogShowsOnATabletHeldSideways() = showsTheLog()
+/** The Worker failing: what the person is left looking at, and the way back. */
+@RunWith(AndroidJUnit4::class)
+class LogsFailureTest : LogsHarness() {
 
     @Test
     fun aFailedLogSaysWhyStopsSpinningAndAPullAsksAgain() {
@@ -143,9 +156,9 @@ class LogsLoadTest {
         val failed = activity.stateForTesting().logs
         assertTrue("D1 is unavailable" in failed.error.orEmpty(), "the failure does not say what happened: $failed")
         assertFalse(failed.busy, "the log is still spinning over a failure")
-        compose.waitForIdle()
         compose.onNodeWithTag("err").assertExists("the failure is not on screen")
         compose.onNodeWithTag("logs-busy").assertDoesNotExist()
+        compose.onNodeWithTag("logs-empty").assertDoesNotExist()
 
         broken = false
         activity.refreshForTesting()
@@ -153,13 +166,18 @@ class LogsLoadTest {
         assertNull(activity.stateForTesting().logs.error, "the old failure is still on screen")
         assertEquals(View.LOGS, activity.stateForTesting().view)
     }
+}
 
-    private companion object {
-        val LOGS = """{"rows":[
-            {"id":9,"ts":"2026-10-16T16:45:10.949Z","level":"error","event":"cards.add","method":"POST",
-             "path":"/cards/add","status":500,"ms":812,"message":"boom","detail":null},
-            {"id":8,"ts":"2026-10-16T16:44:00.000Z","level":"info","event":"decks","method":"POST",
-             "path":"/decks","status":200,"ms":14,"message":null,"detail":null}
-        ],"total":2,"limit":200,"offset":0}"""
-    }
+@RunWith(AndroidJUnit4::class)
+class LogsOnAFoldingPhoneTest : LogsHarness() {
+    @Test
+    @Config(qualifiers = Tablet.UNFOLDED_QUALIFIERS)
+    fun theServerLogShowsOnAFoldingPhoneOpenedOut() = showsTheLog()
+}
+
+@RunWith(AndroidJUnit4::class)
+class LogsOnATabletSidewaysTest : LogsHarness() {
+    @Test
+    @Config(qualifiers = Tablet.LANDSCAPE_QUALIFIERS)
+    fun theServerLogShowsOnATabletHeldSideways() = showsTheLog()
 }

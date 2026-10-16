@@ -102,7 +102,7 @@ class LogsLoadTest {
     }
 
     private fun rows(root: HTMLElement): List<String> =
-        root.querySelectorAll("tbody tr").let { n -> (0 until n.length).map { (n[it] as HTMLElement).textContent.orEmpty() } }
+        root.querySelectorAll("tbody tr").let { n -> (0 until n.length).map { n.item(it)!!.unsafeCast<HTMLElement>().textContent.orEmpty() } }
 
     @Test
     fun theServerLogShowsWhatTheWorkerLogged() = runTest {

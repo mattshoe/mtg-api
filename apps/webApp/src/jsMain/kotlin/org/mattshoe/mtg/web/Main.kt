@@ -702,6 +702,18 @@ object MtgApp {
                 intoPage(View.STATS) { loadStats(s) }
             }
 
+            // Matt: "the server logs page shows no logs". Nothing here
+            // asked for them, so the page drew its empty state over a
+            // list nobody had fetched.
+            View.LOGS -> {
+                app = app.fetching(View.LOGS)
+                intoPage(View.LOGS) {
+                    // Asked first, then copied: see `loadPeople`.
+                    val found = api.logs(token())
+                    app.copy(logs = app.logs.loaded(found))
+                }
+            }
+
             View.ADMIN -> {
                 app = app.fetching(View.ADMIN)
                 intoPage(View.ADMIN) { loadPeople() }
