@@ -157,7 +157,7 @@ class TasksPanelTest {
      * this status.
      */
     @Test
-    fun aLiveTaskShowsOneDurationTheTimeSinceItWasCreated() = runTest {
+    fun aLiveTaskShowsOneDurationTheTimeSinceItWasPickedUp() = runTest {
         val now = Tasks.epochMillis("2026-10-08T09:17:00Z")!!
         val running = Tasks().loaded(
             listOf(

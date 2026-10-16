@@ -156,7 +156,7 @@ class TasksParityTest {
      * this status.
      */
     @Test
-    fun aLiveTaskShowsOneDurationTheTimeSinceItWasCreated() {
+    fun aLiveTaskShowsOneDurationTheTimeSinceItWasPickedUp() {
         val now = Tasks.epochMillis("2026-10-08T09:17:00Z")!!
         val running = Tasks().loaded(
             listOf(
