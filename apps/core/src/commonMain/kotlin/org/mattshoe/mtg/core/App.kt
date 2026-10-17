@@ -350,14 +350,26 @@ data class AppState(
     fun peekTo(index: Int): AppState {
         val run = runFor(peek.of, peek.tribe)
         if (run.isEmpty() || !peek.open || peek.zoom.zoomed) return this
-        return copy(peek = peek.copy(at = index.coerceIn(0, run.lastIndex)))
+        val to = index.coerceIn(0, run.lastIndex)
+        // The next card opens face up: its back is not what you
+        // swiped to see.
+        return copy(peek = peek.copy(at = to, flipped = peek.flipped && to == peek.at))
     }
 
-    /** Turns the card on show over, if it has a back. */
-    fun peekFlip(): AppState = this
+    /**
+     * Turns the card on show over, and back again. Matt: "an icon
+     * overlaid on double sided cards that allows you to flip the card
+     * so you can see the opposite side back and forth". A card with
+     * one printed side has nothing to turn over to.
+     */
+    fun peekFlip(): AppState =
+        if (peeked?.twoSided != true) this else copy(peek = peek.copy(flipped = !peek.flipped))
+
+    /** The card on show is showing its back. */
+    val peekFlipped: Boolean get() = peek.flipped && peeked?.twoSided == true
 
     /** The picture of the card on show, whichever side is up. */
-    val peekArt: String? get() = peeked?.let { CardQueries.art(it.scryfallId, "normal") }
+    val peekArt: String? get() = peeked?.let { CardQueries.art(it.scryfallId, "normal", back = peekFlipped) }
 
     /** Fingers on the card on show. See [CardZoom]. */
     fun peekZoom(zoom: CardZoom): AppState =
@@ -406,6 +418,7 @@ data class AppState(
                     inDeck = card,
                     stepped = stepped,
                     facts = PeekFact.line(card.knownTypeLine, card.knownColorIdentity, card.rarity),
+                    twoSided = CardQueries.twoSided(card.layout),
                 )
             }
 
@@ -427,6 +440,7 @@ data class AppState(
                     ),
                     stepped = stepped,
                     facts = PeekFact.line(row.typeLine, row.colorIdentity, row.rarity),
+                    twoSided = CardQueries.twoSided(row.layout),
                 )
             }
 
@@ -442,6 +456,7 @@ data class AppState(
                     price = null,
                     tags = listOfNotNull(PeekTag.edhrec(card.edhrecRank), Banned.tag(card.name)),
                     facts = PeekFact.line(card.typeLine, card.colorIdentity, card.rarity),
+                    twoSided = CardQueries.twoSided(card.layout),
                 )
             }
 
@@ -464,6 +479,7 @@ data class AppState(
                         ),
                         facts = PeekFact.line(card.types ?: section.type.label, section.colors, section.rarity.slug),
                         tick = PeekTick(fetch.isTicked(card.name), fetch.progress),
+                        twoSided = CardQueries.twoSided(card.layout),
                     )
                 }
             }

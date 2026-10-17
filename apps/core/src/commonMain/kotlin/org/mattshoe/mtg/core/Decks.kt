@@ -474,17 +474,19 @@ object DeckQueries {
                   COALESCE(mine.setcode, alt.setcode)             AS setcode,
                   COALESCE(mine.set_name, alt.set_name)           AS set_name,
                   COALESCE(mine.collector_number, alt.collector_number) AS collector_number,
-                  COALESCE(mine.edhrec_rank, alt.edhrec_rank)     AS edhrec_rank
+                  COALESCE(mine.edhrec_rank, alt.edhrec_rank)     AS edhrec_rank,
+                  -- Whether the carousel can turn the card over.
+                  COALESCE(mine.layout, alt.layout)               AS layout
              FROM deck_cards dc
              JOIN decks d ON d.id = dc.deck_id
              LEFT JOIN (SELECT owner_id, name_norm, MIN(id) AS id, scryfall_id, type_line,
                                mana_cost, cmc, produced_mana, oracle_text, color_identity, rarity,
-                               setcode, set_name, collector_number, edhrec_rank
+                               setcode, set_name, collector_number, edhrec_rank, layout
                           FROM cards GROUP BY owner_id, name_norm) mine
                ON mine.name_norm = dc.name_norm AND mine.owner_id = d.owner_id
              LEFT JOIN (SELECT name_norm, MIN(id) AS id, scryfall_id, type_line,
                                mana_cost, cmc, produced_mana, oracle_text, color_identity, rarity,
-                               setcode, set_name, collector_number, edhrec_rank
+                               setcode, set_name, collector_number, edhrec_rank, layout
                           FROM cards GROUP BY name_norm) alt
                ON alt.name_norm = dc.name_norm
              LEFT JOIN prices pm ON pm.scryfall_id = mine.scryfall_id
@@ -542,6 +544,7 @@ object DeckQueries {
                 setName = it.str("set_name"),
                 collectorNumber = it.str("collector_number"),
                 edhrecRank = it.str("edhrec_rank")?.toDoubleOrNull()?.toLong(),
+                layout = it.str("layout"),
             )
         }
     }
