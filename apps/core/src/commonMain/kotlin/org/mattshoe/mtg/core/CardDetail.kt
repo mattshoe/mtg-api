@@ -450,12 +450,24 @@ data class CardDetail(
 
 object CardQueries {
 
+    /**
+     * Whether a card of this layout has a second printed side, which
+     * Scryfall keeps under `/back/`. The same layouts as the search
+     * box's `is:dfc`. Not split, adventure or flip, which print both
+     * halves on one side, and not meld, whose back is half of another
+     * card.
+     */
+    fun twoSided(layout: String?): Boolean = layout in TWO_SIDED
+
+    private val TWO_SIDED = setOf("transform", "modal_dfc", "reversible_card", "double_faced_token")
+
     /** Scryfall addresses art by the id already on the row. */
-    fun art(scryfallId: String?, size: String = "normal"): String? {
+    fun art(scryfallId: String?, size: String = "normal", back: Boolean = false): String? {
         if (scryfallId.isNullOrBlank() || scryfallId.length < 2) return null
         val a = scryfallId[0]
         val b = scryfallId[1]
-        return "https://cards.scryfall.io/$size/front/$a/$b/$scryfallId.jpg"
+        val side = if (back) "back" else "front"
+        return "https://cards.scryfall.io/$size/$side/$a/$b/$scryfallId.jpg"
     }
 
     /**

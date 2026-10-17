@@ -149,7 +149,9 @@ class CarouselPinchZoomTest {
     }
 
     private fun scaleOnScreen(): Double {
-        val face = assertNotNull(shown().firstElementChild as? HTMLElement, "the card cell is empty")
+        // The picture, which is what the zoom moves. It sits in the
+        // card's own box, `.peek-face`, beside the flip icon.
+        val face = assertNotNull((shown().querySelector("img") ?: shown().firstElementChild) as? HTMLElement, "the card cell is empty")
         val t = window.getComputedStyle(face).transform
         if (t == "none") return 1.0
         return t.substringAfter("(").substringBefore(",").trim().toDouble()

@@ -193,6 +193,7 @@ enum class Glyph(val tag: String) {
     PENCIL("glyph-pencil"),
     CROSS("glyph-cross"),
     RENAME("glyph-rename"),
+    FLIP("glyph-flip"),
 }
 
 /**
@@ -246,6 +247,23 @@ fun GlyphIcon(glyph: Glyph, tint: Color, size: Dp = 18.dp, modifier: Modifier = 
                 pen.line(18.5f, 4f, 18.5f, 20f)
                 pen.line(16.5f, 4f, 20.5f, 4f)
                 pen.line(16.5f, 20f, 20.5f, 20f)
+            }
+            // Two arrows chasing each other round, over the top and
+            // back under: turn it over. `app.css`'s `.icon-flip`.
+            Glyph.FLIP -> {
+                val ring = androidx.compose.ui.geometry.Rect(pen.at(4f, 4f), pen.at(20f, 20f))
+                pen.path { arcTo(ring, 0f, -145f, true) }
+                pen.path { arcTo(ring, 180f, -145f, true) }
+                pen.path { p ->
+                    moveTo(p.at(4.5f, 3.5f).x, p.at(4.5f, 3.5f).y)
+                    lineTo(p.at(4.5f, 7.5f).x, p.at(4.5f, 7.5f).y)
+                    lineTo(p.at(8.5f, 7.5f).x, p.at(8.5f, 7.5f).y)
+                }
+                pen.path { p ->
+                    moveTo(p.at(19.5f, 20.5f).x, p.at(19.5f, 20.5f).y)
+                    lineTo(p.at(19.5f, 16.5f).x, p.at(19.5f, 16.5f).y)
+                    lineTo(p.at(15.5f, 16.5f).x, p.at(15.5f, 16.5f).y)
+                }
             }
         }
     }

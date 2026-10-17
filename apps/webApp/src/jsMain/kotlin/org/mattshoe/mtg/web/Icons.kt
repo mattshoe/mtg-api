@@ -71,6 +71,7 @@ enum class Glyph(val css: String) {
     PENCIL("icon-pencil"),
     CROSS("icon-close"),
     RENAME("icon-rename"),
+    FLIP("icon-flip"),
 }
 
 /**

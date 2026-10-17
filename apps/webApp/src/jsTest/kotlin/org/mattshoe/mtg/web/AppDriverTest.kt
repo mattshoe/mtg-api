@@ -427,7 +427,8 @@ class AppDriverTest {
             val box = rail.getBoundingClientRect()
             r.left >= box.left - 2 && r.right <= box.right + 2
         }
-        val face = cell.firstElementChild as HTMLElement
+        // The picture, which is what the zoom moves, inside `.peek-face`.
+        val face = (cell.querySelector("img") ?: cell.firstElementChild) as HTMLElement
         fun scale(): String = window.getComputedStyle(face).transform
 
         val r = cell.getBoundingClientRect()

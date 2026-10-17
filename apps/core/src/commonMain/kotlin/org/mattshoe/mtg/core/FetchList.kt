@@ -98,6 +98,8 @@ data class OwnedPrinting(
     val decks: List<String> = emptyList(),
     /** One printing of it, for the carousel's picture. */
     val scryfallId: String? = null,
+    /** Scryfall's `layout`, for whether the carousel can turn it over. */
+    val layout: String? = null,
 )
 
 /**
@@ -170,6 +172,8 @@ data class FetchCard(
     val scryfallId: String? = null,
     /** The `types` column, for the line under the carousel's name. */
     val types: String? = null,
+    /** Scryfall's `layout`, for whether the carousel can turn it over. */
+    val layout: String? = null,
 ) {
     val alsoCheckLine: String get() = "Also check: " + alsoCheck.joinToString(", ") { it.label }
 
@@ -285,6 +289,7 @@ object FetchList {
                     nameNorm = first.nameNorm,
                     scryfallId = rows.firstNotNullOfOrNull { it.scryfallId },
                     types = first.types,
+                    layout = rows.firstNotNullOfOrNull { it.layout },
                 ),
             )
             if (have < e.qty) missing += MissingCard(first.name, e.qty - have, have, e.key)
@@ -325,7 +330,7 @@ object FetchList {
         val json = Json.encodeToString(ListSerializer(String.serializer()), names)
         return Sql(
             """SELECT c.name_norm, c.name, c.face1, c.types, c.colors, c.color_identity, c.rarity, SUM(c.qty) AS qty,
-                      MIN(c.scryfall_id) AS scryfall_id,
+                      MIN(c.scryfall_id) AS scryfall_id, MIN(c.layout) AS layout,
                       (SELECT COALESCE(SUM(dc.qty), 0) FROM deck_cards dc JOIN decks d ON d.id = dc.deck_id
                         WHERE $REAL_DECK) AS in_decks,
                       (SELECT json_group_array(name) FROM (
@@ -366,6 +371,7 @@ object FetchList {
                 decks = str("decks")?.let { runCatching { Json.decodeFromString(ListSerializer(String.serializer()), it) }.getOrNull() }
                     .orEmpty(),
                 scryfallId = str("scryfall_id"),
+                layout = str("layout"),
             )
         }
     }
