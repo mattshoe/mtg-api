@@ -271,7 +271,7 @@ class CollectionStatsTest {
     fun theOverviewLeadsWithTheWholeCollectionAndATypeTabWithItsOwnNumbers() {
         val overview = StatsState().loaded(Totals(decks = 3, free = 7), pile)
         assertEquals(
-            listOf("cards" to "23", "unique" to "7", "value" to "$45.50", "decks" to "3", "free" to "7", "sets" to "2", "foils" to "2", "avg mana" to overview.breakdown.averageManaValueText),
+            listOf("cards" to "23", "unique" to "7", "value" to "$46", "decks" to "3", "free" to "7", "sets" to "2", "foils" to "2", "avg mana" to overview.breakdown.averageManaValueText),
             overview.figures.map { it.label to it.value },
         )
         assertEquals("10 cards have no price", overview.figures.single { it.label == "value" }.hint)

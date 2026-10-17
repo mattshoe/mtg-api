@@ -37,13 +37,13 @@ data class StatCard(
 }
 
 /**
- * A tab on the Stats page: everything, or one card type.
+ * A tab on the Stats page: the overview, or one card type.
  *
  * Matt: "a tab for every card type would be cool, with the landing
  * page being the data on the collection as a whole".
  */
 enum class StatTab(val title: String, val type: String?) {
-    ALL("Everything", null),
+    ALL("Overview", null),
     CREATURE("Creatures", "Creature"),
     PLANESWALKER("Planeswalkers", "Planeswalker"),
     INSTANT("Instants", "Instant"),
@@ -83,6 +83,36 @@ data class StatFilter(
         return colourOk && rarityOk
     }
 }
+
+/** One chart on the Stats page. Its title is the heading both shells draw over it. */
+enum class StatChart(val title: String) {
+    COLOUR("Colour"),
+    IDENTITY("Colour identity"),
+    TYPES("Card types"),
+    RARITY("Rarity"),
+    CURVE("Mana curve"),
+    TRIBES("Creature types"),
+    PRICES("Price per card"),
+    VALUE_BY_RARITY("Value by rarity"),
+    VALUE_BY_COLOUR("Value by colour"),
+    PRICIEST("Most valuable"),
+    SETS("Top sets"),
+    YEARS("Release years"),
+    ARTISTS("Top artists"),
+}
+
+/**
+ * A titled group of charts on one tab.
+ *
+ * Matt, on all thirteen in one grid: "this is so fucking
+ * discombobulated and crowded ... MAKE IT LOOK STYLISH AND ORGANIZED
+ * AND TABBED AND READY TO DIGEST". So a tab is a few of these, each a
+ * question somebody would ask, and each holds only what answers it.
+ */
+data class StatSection(val title: String, val charts: List<StatChart>)
+
+/** A headline number: "23" over "cards". The hint is what a hover or a reader says. */
+data class StatNumber(val value: String, val label: String, val hint: String = "")
 
 /** A card in a "most valuable" list: one name, what one copy is worth, how many. */
 data class PricedCard(val name: String, val setName: String, val each: Double, val qty: Int, val foil: Boolean)
@@ -222,6 +252,77 @@ object CollectionAnalysis {
                 .take(TOP)
                 .map { c -> PricedCard(c.name, c.setName, c.price!!, kept.filter { it.name == c.name }.sumOf { it.qty }, c.foil) },
         )
+    }
+
+    /**
+     * What a tab shows, in sections, with every chart that would be
+     * empty left out and every section left empty left out with it.
+     *
+     * The overview is the whole collection's shape; a type tab keeps
+     * what says something about that type. The card types bar on the
+     * Instants tab is one bar reading 100%, and the instants' release
+     * years and artists are noise, so neither is there. The creature
+     * types are about creatures, so they live on that tab.
+     */
+    fun sections(tab: StatTab, b: CollectionBreakdown): List<StatSection> {
+        if (b.isEmpty) return emptyList()
+        val overview = tab == StatTab.ALL
+        val plan = listOf(
+            "Colours" to listOf(StatChart.COLOUR, StatChart.IDENTITY),
+            "Make-up" to if (overview) {
+                listOf(StatChart.TYPES, StatChart.RARITY, StatChart.CURVE)
+            } else {
+                listOf(StatChart.CURVE, StatChart.RARITY) + if (tab == StatTab.CREATURE) listOf(StatChart.TRIBES) else emptyList()
+            },
+            "Value" to if (overview) {
+                listOf(StatChart.PRICES, StatChart.VALUE_BY_RARITY, StatChart.VALUE_BY_COLOUR, StatChart.PRICIEST)
+            } else {
+                listOf(StatChart.PRICES, StatChart.PRICIEST)
+            },
+            "Printings" to if (overview) listOf(StatChart.SETS, StatChart.YEARS, StatChart.ARTISTS) else listOf(StatChart.SETS),
+        )
+        return plan.map { (title, charts) -> StatSection(title, charts.filter { has(it, b) }) }
+            .filter { it.charts.isNotEmpty() }
+    }
+
+    private fun has(chart: StatChart, b: CollectionBreakdown): Boolean = when (chart) {
+        StatChart.COLOUR -> b.colours.isNotEmpty()
+        StatChart.IDENTITY -> b.identities.isNotEmpty()
+        StatChart.TYPES -> b.types.isNotEmpty()
+        StatChart.RARITY -> b.rarities.isNotEmpty()
+        StatChart.CURVE -> b.hasCurve
+        StatChart.TRIBES -> b.tribes.isNotEmpty()
+        StatChart.PRICES -> b.priceBands.any { it.value > 0 }
+        StatChart.VALUE_BY_RARITY -> b.valueByRarity.isNotEmpty()
+        StatChart.VALUE_BY_COLOUR -> b.valueByColour.isNotEmpty()
+        StatChart.PRICIEST -> b.priciest.isNotEmpty()
+        StatChart.SETS -> b.topSets.isNotEmpty()
+        StatChart.YEARS -> b.years.isNotEmpty()
+        StatChart.ARTISTS -> b.artists.isNotEmpty()
+    }
+
+    /**
+     * The numbers along the top of a tab. The overview's are the whole
+     * collection's, so they carry the decks and the free copies, which
+     * a card type has no share of.
+     */
+    fun figures(tab: StatTab, b: CollectionBreakdown, totals: Totals): List<StatNumber> {
+        val cards = StatNumber("${b.copies}", "cards")
+        val unique = StatNumber("${b.uniques}", "unique")
+        // `unpriced`, never `$0`: nothing priced and nothing worth anything are different facts.
+        val value = StatNumber(
+            Prices.money(b.value, dash = "unpriced"),
+            "value",
+            hint = if (b.unpriced > 0) "${b.unpriced} cards have no price" else "",
+        )
+        val mana = StatNumber(b.averageManaValueText, "avg mana")
+        val foils = StatNumber("${b.foils}", "foils")
+        val sets = StatNumber("${b.sets}", "sets")
+        return if (tab == StatTab.ALL) {
+            listOf(cards, unique, value, StatNumber("${totals.decks}", "decks"), StatNumber("${totals.free}", "free"), sets, foils, mana)
+        } else {
+            listOf(cards, unique, value, mana, foils, sets)
+        }
     }
 
     private fun cents(v: Double): Double = (v * 100).roundToInt() / 100.0
