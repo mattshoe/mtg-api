@@ -204,4 +204,83 @@ class CollectionStatsTest {
         assertEquals(StatTab.INSTANT, cleared.tab, "clearing the filters keeps the tab")
         assertEquals(StatFilter(), cleared.filter)
     }
+
+    /*
+     * Matt, on the first version: "i asked for a tabbed fucking page
+     * where the landing tab is overall stats about the whole
+     * collection, then a series of other tabs about each card type ...
+     * this is so fucking discombobulated and crowded". So the landing
+     * tab is called what it is, and every tab is a few titled sections
+     * of the charts that are about it rather than all thirteen in one
+     * grid.
+     */
+
+    private fun shape(tab: StatTab, filter: StatFilter = StatFilter()) =
+        StatsState().loaded(Totals(decks = 3, free = 7), pile).onTab(tab).let { s ->
+            (if (filter.isEmpty) s else s.copy(filter = filter)).sections.map { sec -> sec.title to sec.charts }
+        }
+
+    @Test
+    fun theLandingTabIsCalledOverview() {
+        assertEquals("Overview", StatTab.ALL.title)
+        assertEquals(StatTab.ALL, StatsState().tab, "the page does not open on the overview")
+    }
+
+    @Test
+    fun theOverviewIsFourTitledSectionsRatherThanOneGridOfEverything() {
+        assertEquals(
+            listOf(
+                "Colours" to listOf(StatChart.COLOUR, StatChart.IDENTITY),
+                "Make-up" to listOf(StatChart.TYPES, StatChart.RARITY, StatChart.CURVE),
+                "Value" to listOf(StatChart.PRICES, StatChart.VALUE_BY_RARITY, StatChart.VALUE_BY_COLOUR, StatChart.PRICIEST),
+                "Printings" to listOf(StatChart.SETS, StatChart.YEARS, StatChart.ARTISTS),
+            ),
+            shape(StatTab.ALL),
+        )
+    }
+
+    @Test
+    fun aTypeTabCarriesOnlyTheChartsThatSaySomethingAboutThatType() {
+        assertEquals(
+            listOf(
+                "Colours" to listOf(StatChart.COLOUR, StatChart.IDENTITY),
+                "Make-up" to listOf(StatChart.CURVE, StatChart.RARITY),
+                "Value" to listOf(StatChart.PRICES, StatChart.PRICIEST),
+                "Printings" to listOf(StatChart.SETS),
+            ),
+            shape(StatTab.INSTANT),
+        )
+        // The creature types belong to the Creatures tab, and only to it.
+        val creatures = shape(StatTab.CREATURE).toMap()
+        assertEquals(listOf(StatChart.CURVE, StatChart.RARITY, StatChart.TRIBES), creatures["Make-up"])
+        assertTrue(shape(StatTab.ALL).none { StatChart.TRIBES in it.second }, "the creature types are on the overview")
+        // Lands have no curve: the curve leaves lands out, so it would be empty.
+        assertEquals(listOf(StatChart.RARITY), shape(StatTab.LAND).toMap()["Make-up"])
+    }
+
+    @Test
+    fun aChartWithNothingToShowIsLeftOutAndSoIsAnEmptySection() {
+        // Under red there are no creatures: no sections at all, the page says "no cards match".
+        assertEquals(emptyList(), shape(StatTab.CREATURE, StatFilter().toggle(Pip.R)))
+        // A pile with no prices has no value by rarity or colour, and no most valuable.
+        val unpriced = StatsState().loaded(Totals(), pile.map { it.copy(price = null) }).sections.associate { it.title to it.charts }
+        assertEquals(listOf(StatChart.PRICES), unpriced["Value"])
+    }
+
+    @Test
+    fun theOverviewLeadsWithTheWholeCollectionAndATypeTabWithItsOwnNumbers() {
+        val overview = StatsState().loaded(Totals(decks = 3, free = 7), pile)
+        assertEquals(
+            listOf("cards" to "23", "unique" to "7", "value" to "$46", "decks" to "3", "free" to "7", "sets" to "2", "foils" to "2", "avg mana" to overview.breakdown.averageManaValueText),
+            overview.figures.map { it.label to it.value },
+        )
+        assertEquals("10 cards have no price", overview.figures.single { it.label == "value" }.hint)
+        val instants = overview.onTab(StatTab.INSTANT)
+        assertEquals(
+            listOf("cards", "unique", "value", "avg mana", "foils", "sets"),
+            instants.figures.map { it.label },
+            "decks and free copies are about the whole collection, not its instants",
+        )
+        assertEquals("5", instants.figures.first().value)
+    }
 }

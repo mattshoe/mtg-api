@@ -109,13 +109,16 @@ class CollectionStatsParityTest {
         } ==
             androidx.compose.ui.state.ToggleableState.On
 
+    private fun selected(t: String): Boolean =
+        tag(t).fetchSemanticsNode().config.getOrElse(SemanticsProperties.Selected) { false }
+
     private fun press(t: String) {
         tag(t).performScrollTo().performClick()
         rule.waitForIdle()
     }
 
     private val charts = listOf(
-        "Colour", "Colour identity", "Card types", "Mana curve", "Rarity", "Creature types",
+        "Colour", "Colour identity", "Card types", "Mana curve", "Rarity",
         "Price per card", "Value by colour", "Value by rarity", "Top sets", "Release years",
         "Top artists", "Most valuable",
     )
@@ -124,17 +127,18 @@ class CollectionStatsParityTest {
     fun theLandingTabIsTheWholeCollectionAndEveryTypeWithCardsHasATab() {
         show()
         assertTrue(exists("stats-tab-ALL"), "no landing tab on the Stats screen")
-        assertEquals("Everything 22", told("stats-tab-ALL"), "the landing tab does not say how many cards")
+        assertEquals("Overview 22", told("stats-tab-ALL"), "the landing tab does not say how many cards")
         assertEquals("Instants 5", told("stats-tab-INSTANT"))
         assertTrue(!exists("stats-tab-BATTLE"), "a tab with nothing in it")
-        assertTrue(pressed("stats-tab-ALL"), "the landing tab is not the one on")
+        assertTrue(selected("stats-tab-ALL"), "the landing tab is not the one on")
     }
 
     @Test
-    fun theLandingPageHasEveryChart() {
+    fun theLandingPageHasEveryChartAboutTheWholeCollection() {
         show()
         val missing = charts.filter { !exists("stats-chart-$it") }
         assertTrue(missing.isEmpty(), "no chart for $missing")
+        assertTrue(!exists("stats-chart-Creature types"), "the creature types are on the overview")
         assertTrue(exists("stats-priciest-0"), "the most valuable cards are not listed")
         assertTrue(told("stats-priciest-0").startsWith("Atraxa, Praetors' Voice"), "the first is ${told("stats-priciest-0")}")
         // The rings are real rings: what they paint, read back.
@@ -149,7 +153,7 @@ class CollectionStatsParityTest {
         show()
         press("stats-tab-INSTANT")
         assertEquals(StatTab.INSTANT, held.value.stats.tab, "the tab was not picked")
-        assertTrue(pressed("stats-tab-INSTANT"))
+        assertTrue(selected("stats-tab-INSTANT"))
         assertEquals("5 cards", told("stats-figure-0"), "the first figure is not the Instants' five copies")
     }
 
@@ -165,6 +169,84 @@ class CollectionStatsParityTest {
         rule.waitForIdle()
         assertTrue(held.value.stats.filter.isEmpty, "clearing did not clear")
         assertEquals("5 cards", told("stats-figure-0"), "the Creatures tab's five copies")
+    }
+
+    /*
+     * Matt, on the first version: "i asked for a tabbed fucking page
+     * where the landing tab is overall stats about the whole
+     * collection, then a series of other tabs about each card type ...
+     * this is so fucking discombobulated and crowded". The tabs were a
+     * wrapped row of chips, the same chips as the filters under them,
+     * over eight totals, six figures and thirteen charts in one list.
+     */
+
+    @Test
+    fun theTabsAreATabBarOnOneLineAndNotMoreChips() {
+        show()
+        val tabs = held.value.stats.tabs.map { "stats-tab-${it.first.name}" }
+        assertTrue(tabs.size >= 4, "only ${tabs.size} tabs")
+        val tops = tabs.map { tag(it).getUnclippedBoundsInRoot().top }.distinct()
+        assertEquals(1, tops.size, "the tabs wrap onto ${tops.size} lines, like chips")
+        assertTrue(
+            SemanticsProperties.HorizontalScrollAxisRange in tag("stats-tabs").fetchSemanticsNode().config,
+            "the tab bar cannot scroll sideways, so a tab past the edge is out of reach",
+        )
+        // The open tab is underlined: a line, measured, under that tab and no other.
+        fun underline() = tag("stats-tab-underline").getUnclippedBoundsInRoot()
+        fun under(t: String) {
+            val tab = tag(t).getUnclippedBoundsInRoot()
+            val line = underline()
+            assertTrue(line.left >= tab.left - androidx.compose.ui.unit.Dp(0.5f) && line.right <= tab.right + androidx.compose.ui.unit.Dp(0.5f), "the underline $line is not under $t $tab")
+            assertTrue(line.bottom <= tab.bottom + androidx.compose.ui.unit.Dp(0.5f) && line.top >= tab.bottom - androidx.compose.ui.unit.Dp(4f), "the underline $line is not along the foot of $t $tab")
+            assertTrue(line.bottom - line.top >= androidx.compose.ui.unit.Dp(2f), "the underline is ${line.bottom - line.top} thick")
+        }
+        under("stats-tab-ALL")
+        press("stats-tab-INSTANT")
+        under("stats-tab-INSTANT")
+        assertEquals(1, rule.onAllNodesWithTag("stats-tab-underline", useUnmergedTree = true).fetchSemanticsNodes().size, "more than one tab is underlined")
+    }
+
+    private fun sections(): List<String> =
+        listOf("Colours", "Make-up", "Value", "Printings").filter { exists("stats-section-$it") }
+
+    private fun inside(chart: String, section: String): Boolean {
+        val c = tag("stats-chart-$chart").getUnclippedBoundsInRoot()
+        val s = tag("stats-section-$section").getUnclippedBoundsInRoot()
+        return c.top >= s.top && c.bottom <= s.bottom
+    }
+
+    @Test
+    fun eachTabIsAFewTitledSectionsOfTheChartsAboutIt() {
+        show()
+        assertEquals(listOf("Colours", "Make-up", "Value", "Printings"), sections(), "the overview's sections")
+        assertEquals("Colours", words("stats-section-title-Colours"), "a section with no heading")
+        val tops = sections().map { tag("stats-section-$it").getUnclippedBoundsInRoot().top }
+        assertEquals(tops.sorted(), tops, "the sections are out of order")
+        assertTrue(inside("Colour identity", "Colours"), "the identity ring is not in Colours")
+        assertTrue(inside("Most valuable", "Value"), "the most valuable cards are not in Value")
+        assertTrue(inside("Top artists", "Printings"), "the artists are not in Printings")
+        press("stats-tab-INSTANT")
+        val loose = listOf("Card types", "Release years", "Top artists", "Value by colour", "Creature types").filter { exists("stats-chart-$it") }
+        assertTrue(loose.isEmpty(), "the Instants tab still draws $loose")
+        assertTrue(inside("Mana curve", "Make-up"), "the Instants' curve is not in Make-up")
+        press("stats-tab-CREATURE")
+        assertTrue(exists("stats-chart-Creature types"), "no creature types on the Creatures tab")
+    }
+
+    @Test
+    fun theOverviewLeadsWithTheWholeCollectionsNumbersOnce() {
+        show()
+        assertEquals(
+            listOf("cards", "unique", "value", "decks", "free", "sets", "foils", "avg mana"),
+            (0..7).map { told("stats-figure-$it").substringAfter(" ").substringBefore(" —") },
+        )
+        assertTrue(!exists("stats-figure-8"), "a ninth figure")
+        // The eight-line totals list said the same things again above the tabs.
+        assertTrue(!exists("stat-row-0"), "the totals list is still drawn over the tabs")
+        assertTrue(
+            tag("stats-tabs").getUnclippedBoundsInRoot().bottom <= tag("stats-figure-0").getUnclippedBoundsInRoot().top,
+            "the tabs are not above what they choose between",
+        )
     }
 
     /**

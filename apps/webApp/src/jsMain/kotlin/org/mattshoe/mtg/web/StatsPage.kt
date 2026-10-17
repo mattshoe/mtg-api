@@ -3,6 +3,8 @@ package org.mattshoe.mtg.web
 import androidx.compose.runtime.Composable
 import org.jetbrains.compose.web.dom.Button
 import org.jetbrains.compose.web.dom.Div
+import org.jetbrains.compose.web.dom.H2
+import org.jetbrains.compose.web.dom.Section
 import org.jetbrains.compose.web.dom.Span
 import org.jetbrains.compose.web.dom.Table
 import org.jetbrains.compose.web.dom.Tbody
@@ -12,6 +14,8 @@ import org.jetbrains.compose.web.dom.Tr
 import org.mattshoe.mtg.core.CollectionBreakdown
 import org.mattshoe.mtg.core.Pip
 import org.mattshoe.mtg.core.Prices
+import org.mattshoe.mtg.core.StatChart
+import org.mattshoe.mtg.core.StatTab
 import org.mattshoe.mtg.core.StatsState
 
 /** Collection totals, on the web. Sibling of `StatsScreen`. */
@@ -28,6 +32,9 @@ fun StatsPage(state: StatsState, onState: (StatsState) -> Unit = {}) {
         when {
             state.busy -> Div(attrs = { classes("empty") }) { Text("Loading…") }
             state.error != null -> Div(attrs = { classes("err") }) { Text("Could not load stats: ${state.error}") }
+            // With the cards loaded the overview's figures say all of
+            // this, so the list is only for a collection with none.
+            state.cards.isNotEmpty() -> Tabbed(state, onState)
             else -> {
                 val t = state.totals
                 Div(attrs = { classes("panel") }) {
@@ -53,31 +60,39 @@ fun StatsPage(state: StatsState, onState: (StatsState) -> Unit = {}) {
                     }
                 }
                 t.pricedAt?.let { Div(attrs = { classes("muted", "small") }) { Text("Prices from $it") } }
-                if (state.cards.isNotEmpty()) Charts(state, onState)
             }
         }
     }
 }
 
 /**
- * The tabs, the filters and every chart. The phone's `Charts` in
- * `StatsScreen` draws the same, from the same `CollectionBreakdown`.
+ * The tab bar, the filters, the tab's numbers and its sections. The
+ * phone's `Tabbed` in `StatsScreen` draws the same, from the same
+ * `StatsState`.
  *
- * Matt: "i want TONS of data and i want to be able to filter on like
- * colors and types and stuff ... a tab for every card type would be
- * cool, with the landing page being the data on the collection as a
- * whole".
+ * Matt: "i asked for a tabbed fucking page where the landing tab is
+ * overall stats about the whole collection, then a series of other
+ * tabs about each card type ... MAKE IT LOOK STYLISH AND ORGANIZED AND
+ * TABBED AND READY TO DIGEST". The first version wrapped the tabs as
+ * chips, the same chips as the filters, over every chart in one grid.
  */
 @Composable
-private fun Charts(state: StatsState, onState: (StatsState) -> Unit) {
-    Div(attrs = { classes("stats-tabs") }) {
+private fun Tabbed(state: StatsState, onState: (StatsState) -> Unit) {
+    // One line that scrolls sideways, underlined under the open tab,
+    // so it reads as tabs and not as one more row of filters.
+    Div(attrs = {
+        classes("stats-tabs")
+        attr("role", "tablist")
+        attr("aria-label", "Card types")
+    }) {
         state.tabs.forEach { (tab, n) ->
             val on = tab == state.tab
             Button(attrs = {
-                classes("chip")
+                classes("stats-tab")
                 if (on) classes("on")
                 attr("type", "button")
-                attr("aria-pressed", on.toString())
+                attr("role", "tab")
+                attr("aria-selected", on.toString())
                 onClick { onState(state.onTab(tab)) }
             }) {
                 Text(tab.title)
@@ -128,63 +143,61 @@ private fun Charts(state: StatsState, onState: (StatsState) -> Unit) {
     }
     Div(attrs = { classes("panel") }) {
         Div(attrs = { classes("figures", "stats-figures") }) {
-            StatFigure("${b.copies}", "cards")
-            StatFigure("${b.uniques}", "unique")
-            StatFigure(
-                Prices.money(b.value, dash = "unpriced"),
-                "value",
-                hint = if (b.unpriced > 0) "${b.unpriced} cards have no price" else "",
-            )
-            StatFigure(b.averageManaValueText, "avg mana")
-            StatFigure("${b.foils}", "foils")
-            StatFigure("${b.sets}", "sets")
+            state.figures.forEach { StatFigure(it.value, it.label, hint = it.hint) }
         }
-        Div(attrs = { classes("stats-grid") }) { ChartGrid(b) }
+    }
+    if (state.tab == StatTab.ALL) {
+        state.totals.pricedAt?.let { Div(attrs = { classes("muted", "small", "stats-priced") }) { Text("Prices from $it") } }
+    }
+    state.sections.forEach { section ->
+        Section(attrs = { classes("stats-section") }) {
+            H2 { Text(section.title) }
+            Div(attrs = { classes("panel") }) {
+                Div(attrs = { classes("stats-grid") }) { section.charts.forEach { Chart(it, b) } }
+            }
+        }
     }
 }
 
 @Composable
-private fun ChartGrid(b: CollectionBreakdown) {
+private fun Chart(chart: StatChart, b: CollectionBreakdown) {
     val money: (Int) -> String = { Prices.money(it.toDouble()) }
-    StatChart("Colour") { StatPie("Per colour", b.colours) }
-    StatChart("Colour identity") { StatPie("Exact identity", b.identities, b.identityRing) }
-    StatChart("Card types") {
-        StatBars(b.types, b.copies, "Of ${b.copies} cards. A card of two types counts in each.")
-    }
-    if (b.hasCurve) StatChart("Mana curve") { StatCurve(b.curve, "Average ${b.averageManaValueText}. Lands excluded.") }
-    StatChart("Rarity") { StatBars(b.rarities, b.copies, "Of ${b.copies} cards.") }
-    if (b.tribes.isNotEmpty()) StatChart("Creature types") { StatBars(b.tribes, b.creatures, b.tribesNote) }
-    StatChart("Price per card") { StatBars(b.priceBands, b.copies, "Copies, by what one is worth.") }
-    if (b.valueByColour.isNotEmpty()) {
-        StatChart("Value by colour") {
-            StatBars(b.valueByColour, b.valueByColour.sumOf { it.value }, "A card of two colours counts in each.", money)
+    StatChart(chart.title) {
+        when (chart) {
+            StatChart.COLOUR -> StatPie("Per colour", b.colours)
+            StatChart.IDENTITY -> StatPie("Exact identity", b.identities, b.identityRing)
+            StatChart.TYPES -> StatBars(b.types, b.copies, "Of ${b.copies} cards. A card of two types counts in each.")
+            StatChart.CURVE -> StatCurve(b.curve, "Average ${b.averageManaValueText}. Lands excluded.")
+            StatChart.RARITY -> StatBars(b.rarities, b.copies, "Of ${b.copies} cards.")
+            StatChart.TRIBES -> StatBars(b.tribes, b.creatures, b.tribesNote)
+            StatChart.PRICES -> StatBars(b.priceBands, b.copies, "Copies, by what one is worth.")
+            StatChart.VALUE_BY_COLOUR ->
+                StatBars(b.valueByColour, b.valueByColour.sumOf { it.value }, "A card of two colours counts in each.", money)
+            StatChart.VALUE_BY_RARITY ->
+                StatBars(b.valueByRarity, b.valueByRarity.sumOf { it.value }, "In whole dollars.", money)
+            StatChart.SETS -> StatBars(b.topSets, b.copies, "Of ${b.copies} cards.")
+            StatChart.YEARS -> StatBars(b.years, b.copies, "By the year the printing came out.")
+            StatChart.ARTISTS -> StatBars(b.artists, b.copies, "Of ${b.copies} cards.")
+            StatChart.PRICIEST -> Priciest(b)
         }
     }
-    if (b.valueByRarity.isNotEmpty()) {
-        StatChart("Value by rarity") {
-            StatBars(b.valueByRarity, b.valueByRarity.sumOf { it.value }, "In whole dollars.", money)
-        }
-    }
-    StatChart("Top sets") { StatBars(b.topSets, b.copies, "Of ${b.copies} cards.") }
-    if (b.years.isNotEmpty()) StatChart("Release years") { StatBars(b.years, b.copies, "By the year the printing came out.") }
-    if (b.artists.isNotEmpty()) StatChart("Top artists") { StatBars(b.artists, b.copies, "Of ${b.copies} cards.") }
-    if (b.priciest.isNotEmpty()) {
-        StatChart("Most valuable") {
-            Table(attrs = { classes("pie-table", "priciest") }) {
-                Tbody {
-                    b.priciest.forEachIndexed { i, c ->
-                        Tr {
-                            Td(attrs = { classes("no") }) { Text("${i + 1}") }
-                            Td {
-                                Text(c.name)
-                                Div(attrs = { classes("muted", "small") }) {
-                                    Text(c.setName + if (c.foil) " · foil" else "")
-                                }
-                            }
-                            Td(attrs = { classes("num") }) { Text(Prices.money(c.each)) }
-                            Td(attrs = { classes("num") }) { Text("×${c.qty}") }
+}
+
+@Composable
+private fun Priciest(b: CollectionBreakdown) {
+    Table(attrs = { classes("pie-table", "priciest") }) {
+        Tbody {
+            b.priciest.forEachIndexed { i, c ->
+                Tr {
+                    Td(attrs = { classes("no") }) { Text("${i + 1}") }
+                    Td {
+                        Text(c.name)
+                        Div(attrs = { classes("muted", "small") }) {
+                            Text(c.setName + if (c.foil) " · foil" else "")
                         }
                     }
+                    Td(attrs = { classes("num") }) { Text(Prices.money(c.each)) }
+                    Td(attrs = { classes("num") }) { Text("×${c.qty}") }
                 }
             }
         }

@@ -163,6 +163,12 @@ data class StatsState(
     /** What the page draws: the cards on [tab], under [filter]. */
     val breakdown: CollectionBreakdown by lazy { CollectionAnalysis.of(cards, tab, filter) }
 
+    /** What the tab draws, in titled sections. */
+    val sections: List<StatSection> by lazy { CollectionAnalysis.sections(tab, breakdown) }
+
+    /** The numbers along the top of the tab. */
+    val figures: List<StatNumber> by lazy { CollectionAnalysis.figures(tab, breakdown, totals) }
+
     /** The tabs worth offering, with how many copies each holds under [filter]. */
     val tabs: List<Pair<StatTab, Int>> by lazy { CollectionAnalysis.tabs(cards, filter) }
 
