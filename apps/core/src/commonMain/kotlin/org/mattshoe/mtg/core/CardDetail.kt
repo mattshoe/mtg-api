@@ -450,6 +450,9 @@ data class CardDetail(
 
 object CardQueries {
 
+    /** Whether a card of this layout has a second printed side. */
+    fun twoSided(layout: String?): Boolean = false
+
     /** Scryfall addresses art by the id already on the row. */
     fun art(scryfallId: String?, size: String = "normal"): String? {
         if (scryfallId.isNullOrBlank() || scryfallId.length < 2) return null

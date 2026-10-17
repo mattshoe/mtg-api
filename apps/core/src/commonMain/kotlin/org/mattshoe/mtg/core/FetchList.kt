@@ -98,6 +98,8 @@ data class OwnedPrinting(
     val decks: List<String> = emptyList(),
     /** One printing of it, for the carousel's picture. */
     val scryfallId: String? = null,
+    /** Scryfall's `layout`, for whether the carousel can turn it over. */
+    val layout: String? = null,
 )
 
 /**
@@ -170,6 +172,8 @@ data class FetchCard(
     val scryfallId: String? = null,
     /** The `types` column, for the line under the carousel's name. */
     val types: String? = null,
+    /** Scryfall's `layout`, for whether the carousel can turn it over. */
+    val layout: String? = null,
 ) {
     val alsoCheckLine: String get() = "Also check: " + alsoCheck.joinToString(", ") { it.label }
 

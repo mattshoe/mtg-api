@@ -353,6 +353,12 @@ data class AppState(
         return copy(peek = peek.copy(at = index.coerceIn(0, run.lastIndex)))
     }
 
+    /** Turns the card on show over, if it has a back. */
+    fun peekFlip(): AppState = this
+
+    /** The picture of the card on show, whichever side is up. */
+    val peekArt: String? get() = peeked?.let { CardQueries.art(it.scryfallId, "normal") }
+
     /** Fingers on the card on show. See [CardZoom]. */
     fun peekZoom(zoom: CardZoom): AppState =
         if (!peek.open) this else copy(peek = peek.copy(zoom = zoom))

@@ -111,6 +111,8 @@ data class Peek(
     val zoom: CardZoom = CardZoom(),
     /** The creature type whose bar opened it, or null for the whole deck. */
     val tribe: String? = null,
+    /** The card on show is turned over to its back. See [AppState.peekFlip]. */
+    val flipped: Boolean = false,
 ) {
     val open: Boolean get() = at >= 0
 }
@@ -166,6 +168,8 @@ data class PeekCard(
     val facts: List<PeekFact> = emptyList(),
     /** The Found box, over a fetch list, and null over anything else. */
     val tick: PeekTick? = null,
+    /** A second printed side the carousel can turn over to. See [CardQueries.twoSided]. */
+    val twoSided: Boolean = false,
 )
 
 /** The fetch list's box on the carousel's sheet, and the count beside it. */
@@ -252,6 +256,8 @@ data class DeckCard(
     val collectorNumber: String? = null,
     /** How much it is played, for the sheet under the carousel. Lower is more. */
     val edhrecRank: Long? = null,
+    /** Scryfall's `layout`, which says whether there is a back to turn over to. */
+    val layout: String? = null,
 ) {
     val isCommander: Boolean get() = role == "commander"
 
