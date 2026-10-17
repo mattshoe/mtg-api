@@ -987,7 +987,13 @@ object MtgApp {
     private suspend fun loadStats(s: AppState): AppState {
         val scope = s.statsScope()
         val r = api.query(StatsQueries.totals(scope))
-        return app.copy(stats = app.stats.scopedTo(scope.owner).loaded(StatsQueries.decode(r.cols, r.rows)))
+        // Every stack, for the charts. Either failing fails the page,
+        // so the totals never sit over charts from another collection.
+        val c = api.query(StatsQueries.cards(scope))
+        return app.copy(
+            stats = app.stats.scopedTo(scope.owner)
+                .loaded(StatsQueries.decode(r.cols, r.rows), StatsQueries.decodeCards(c.cols, c.rows)),
+        )
     }
 
     // ------------------------------------------------------ card detail

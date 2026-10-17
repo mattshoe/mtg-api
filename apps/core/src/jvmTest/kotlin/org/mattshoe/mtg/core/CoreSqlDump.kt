@@ -85,6 +85,9 @@ class CoreSqlDump {
         listOf("m4tt0001", "k4yy0003").forEach { o -> case("stats for $o", Load.stats(StatsScope(o))) }
         case("stats for everything", Load.stats(StatsScope()))
         case("stats per owner", StatsQueries.perOwner())
+        // Every stack, for the Stats page's charts.
+        case("stats cards for m4tt0001", StatsQueries.cards(StatsScope("m4tt0001")))
+        case("stats cards for everything", StatsQueries.cards(StatsScope()))
         Load.card("sol ring").forEachIndexed { i, s -> case("card detail $i", s) }
         case("palette find", Load.find("sol"))
         // `test/fetch-list.test.js` asserts on the decks these rows name.

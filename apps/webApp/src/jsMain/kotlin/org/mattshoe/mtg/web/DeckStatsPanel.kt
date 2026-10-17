@@ -112,10 +112,13 @@ private fun card(title: String, wide: Boolean = false, body: @Composable () -> U
  * not say.
  */
 @Composable
-private fun Curve(s: DeckStats) {
-    val most = s.curve.maxOfOrNull { it.value } ?: 0
+private fun Curve(s: DeckStats) = CurveOf(s.curve, "Median ${s.medianManaValueText}. Lands excluded.")
+
+@Composable
+private fun CurveOf(curve: List<Bar>, note: String) {
+    val most = curve.maxOfOrNull { it.value } ?: 0
     Div(attrs = { classes("curve") }) {
-        s.curve.forEach { bar ->
+        curve.forEach { bar ->
             Div(attrs = {
                 classes("col")
                 if (bar.value == 0) classes("none")
@@ -142,10 +145,30 @@ private fun Curve(s: DeckStats) {
         }
     }
     Div(attrs = { classes("curve") ; style { property("height", "auto") } }) {
-        s.curve.forEach { bar -> Div(attrs = { classes("col") }) { Div(attrs = { classes("x") }) { Text(bar.label) } } }
+        curve.forEach { bar -> Div(attrs = { classes("col") }) { Div(attrs = { classes("x") }) { Text(bar.label) } } }
     }
-    Div(attrs = { classes("sub") }) { Text("Median ${s.medianManaValueText}. Lands excluded.") }
+    Div(attrs = { classes("sub") }) { Text(note) }
 }
+
+// The deck page's chart pieces, lent to the Stats page so the two
+// draw a bar, a ring and a curve the same way.
+
+@Composable
+internal fun StatFigure(n: String, k: String, hint: String = "") = figure(n, k, hint = hint)
+
+@Composable
+internal fun StatChart(title: String, wide: Boolean = false, body: @Composable () -> Unit) = card(title, wide, body)
+
+@Composable
+internal fun StatBars(bars: List<Bar>, total: Int, note: String, shown: (Int) -> String = { "$it" }) =
+    Bars(bars, total, note, shown = shown)
+
+@Composable
+internal fun StatPie(caption: String, bars: List<Bar>, numbered: List<RingSlice> = emptyList()) =
+    Pie(caption, bars, numbered)
+
+@Composable
+internal fun StatCurve(curve: List<Bar>, note: String) = CurveOf(curve, note)
 
 /**
  * What the deck asks for against what it can make, per colour.
@@ -210,6 +233,8 @@ private fun Bars(
     total: Int,
     note: String = "Of $total cards.",
     onTap: ((String) -> Unit)? = null,
+    /** How a bar's number reads: a count, or dollars on the Stats page. */
+    shown: (Int) -> String = { "$it" },
 ) {
     val most = bars.maxOfOrNull { it.value } ?: 0
     bars.forEach { bar ->
@@ -226,7 +251,7 @@ private fun Bars(
             Div(attrs = { classes("rail") }) {
                 Div(attrs = { classes("fill"); style { property("width", "${bar.share(most)}%") } }) {}
             }
-            Span(attrs = { classes("v") }) { Text("${bar.value}") }
+            Span(attrs = { classes("v") }) { Text(shown(bar.value)) }
         }
     }
     Div(attrs = { classes("sub") }) { Text(note) }
