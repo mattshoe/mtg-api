@@ -1197,7 +1197,7 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
   margin-bottom: -1px; padding: 10px 12px 9px; cursor: pointer; white-space: nowrap;
   font: 600 13.5px/1.2 var(--sans); color: var(--text-3);
 }
-.stats-tab:hover { color: var(--text-2); }
+@media (hover: hover) { .stats-tab:hover { color: var(--text-2); } }
 .stats-tab.on { color: var(--text); border-bottom-color: var(--accent); }
 .stats-tab .count { margin-left: 6px; font: 500 11px var(--mono); color: var(--text-3); }
 .stats-tab.on .count { color: var(--accent-2); }
