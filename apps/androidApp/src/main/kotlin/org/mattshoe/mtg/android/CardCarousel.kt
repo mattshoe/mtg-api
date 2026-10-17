@@ -230,6 +230,9 @@ private fun Modifier.pinchZoom(zoom: CardZoom, onZoom: (CardZoom) -> Unit): Modi
     }
 }
 
+/** The picture a carousel card is drawn from, for a test to read back. */
+internal val CardArt = androidx.compose.ui.semantics.SemanticsPropertyKey<String>("CardArt")
+
 /**
  * One card, as big as the space allows: the width on a phone, the
  * height on a tablet.
@@ -259,7 +262,10 @@ private fun CardFace(card: PeekCard, zoom: CardZoom = CardZoom(), zoomable: Modi
             // a card frame by.
             .clip(androidx.compose.foundation.shape.RoundedCornerShape(5))
             .background(Bg3)
-            .semantics { contentDescription = card.title },
+            .semantics {
+                contentDescription = card.title
+                url?.let { this[CardArt] = it }
+            },
     ) {
         if (url != null) {
             AsyncImage(
