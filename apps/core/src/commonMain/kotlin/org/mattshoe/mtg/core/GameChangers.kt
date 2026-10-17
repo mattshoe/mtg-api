@@ -75,7 +75,7 @@ object GameChangers {
         gc("Smothering Tithe", "861b5889-0183-4bee-afeb-a4b2aa700a8e", "Enchantment", "W", "{3}{W}", "mythic", 66L, "cmm", "57"),
         gc("Survival of the Fittest", "4ef0d7f9-ddb9-4e83-a9bf-09bec22fc80d", "Enchantment", "G", "{1}{G}", "mythic", 2365L, "tpr", "199"),
         gc("Teferi's Protection", "483fa1cb-1e35-44f2-a143-98c0f107f5ca", "Instant", "W", "{2}{W}", "rare", 109L, "2x2", "32"),
-        gc("Tergrid, God of Fright // Tergrid's Lantern", "14dc88ee-bba9-4625-af0d-89f3762a0ead", "Legendary Creature — God // Legendary Artifact", "B", "{3}{B}{B}", "rare", 1587L, "khm", "112"),
+        gc("Tergrid, God of Fright // Tergrid's Lantern", "14dc88ee-bba9-4625-af0d-89f3762a0ead", "Legendary Creature — God // Legendary Artifact", "B", "{3}{B}{B}", "rare", 1587L, "khm", "112", layout = "modal_dfc"),
         gc("Thassa's Oracle", "726e8b29-13e9-4138-b6a9-d2a0d8188d1c", "Creature — Merfolk Wizard", "U", "{U}{U}", "rare", 452L, "thb", "73"),
         gc("The One Ring", "d5806e68-1054-458e-866d-1f2470f682b2", "Legendary Artifact", "", "{4}", "mythic", 96L, "ltr", "246"),
         gc("The Tabernacle at Pendrell Vale", "cd3f7f4e-cb25-4121-96a0-a4dc530420b9", "Legendary Land", "", "", "rare", 8849L, "me3", "212"),
@@ -118,6 +118,8 @@ object GameChangers {
         edhrecRank: Long?,
         set: String,
         number: String,
+        /** Only where it matters: the carousel turns a two-faced card over. */
+        layout: String? = null,
     ) = DeckCard(
         name = name,
         qty = 1,
@@ -133,6 +135,7 @@ object GameChangers {
         setCode = set,
         collectorNumber = number,
         edhrecRank = edhrecRank,
+        layout = layout,
     )
 }
 

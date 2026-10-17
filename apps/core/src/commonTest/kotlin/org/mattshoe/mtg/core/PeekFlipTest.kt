@@ -128,6 +128,17 @@ class PeekFlipTest {
     }
 
     @Test
+    fun tergridOnTheGameChangersListCanBeTurnedOver() {
+        // The one two-faced card on either built-in list. Erayo on the
+        // banned list is a flip card, both halves on one side.
+        val page = AppState().navigate(Route.parse("#/guide/" + Guide.GAME_CHANGERS))
+        val tergrid = page.gameChangerOrder.first { it.name.startsWith("Tergrid") }
+        assertTrue(assertNotNull(page.peekGameChanger(tergrid).peeked).twoSided, "Tergrid has a back and no way to see it")
+        val erayo = Banned.lists.flatMap { it.cards }.first { it.name.startsWith("Erayo") }
+        assertFalse(CardQueries.twoSided(erayo.layout), "Erayo is a flip card and is offered a back")
+    }
+
+    @Test
     fun aFetchListsCardsCanBeTurnedOver() {
         assertTrue("layout" in FetchList.query(listOf("delver of secrets"), "e7de0cb1")!!.sql, "the fetch query never asks for a layout")
         val owned = FetchList.decode(
