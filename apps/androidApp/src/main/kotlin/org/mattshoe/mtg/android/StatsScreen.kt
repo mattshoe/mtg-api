@@ -2,6 +2,7 @@ package org.mattshoe.mtg.android
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -10,11 +11,13 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
@@ -22,10 +25,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -38,6 +44,8 @@ import org.mattshoe.mtg.core.CollectionBreakdown
 import org.mattshoe.mtg.core.Design
 import org.mattshoe.mtg.core.Pip
 import org.mattshoe.mtg.core.Prices
+import org.mattshoe.mtg.core.StatChart
+import org.mattshoe.mtg.core.StatTab
 import org.mattshoe.mtg.core.StatsState
 
 /**
@@ -69,6 +77,9 @@ fun StatsScreen(state: StatsState, onState: (StatsState) -> Unit = {}) {
                 Bad,
                 modifier = Modifier.testTag("stats-err"),
             )
+            // With the cards loaded the overview's figures say all of
+            // this, so the list is only for a collection with none.
+            state.cards.isNotEmpty() -> Tabbed(state, onState)
             else -> {
                 val t = state.totals
                 Panel {
@@ -98,49 +109,42 @@ fun StatsScreen(state: StatsState, onState: (StatsState) -> Unit = {}) {
                         }
                     }
                 }
-                t.pricedAt?.let {
-                    Line(
-                        "Prices from $it",
-                        Ink3,
-                        Design.MINI,
-                        modifier = Modifier.testTag("priced-at"),
-                    )
-                }
-                if (state.cards.isNotEmpty()) Charts(state, onState)
+                t.pricedAt?.let { PricedAt(it) }
             }
         }
     }
 }
 
+@Composable
+private fun PricedAt(at: String) =
+    Line("Prices from $at", Ink3, Design.MINI, modifier = Modifier.testTag("priced-at"))
+
 /**
- * The tabs, the filters and every chart. The web's `Charts` in
- * `StatsPage` draws the same, from the same `CollectionBreakdown`.
+ * The tab bar, the filters, the tab's numbers and its sections. The
+ * web's `Tabbed` in `StatsPage` draws the same, from the same
+ * `StatsState`.
  *
- * Matt: "i want TONS of data and i want to be able to filter on like
- * colors and types and stuff ... a tab for every card type would be
- * cool, with the landing page being the data on the collection as a
- * whole".
+ * Matt: "i asked for a tabbed fucking page where the landing tab is
+ * overall stats about the whole collection, then a series of other
+ * tabs about each card type ... MAKE IT LOOK STYLISH AND ORGANIZED AND
+ * TABBED AND READY TO DIGEST". The first version wrapped the tabs as
+ * chips, the same chips as the filters, over every chart in one list.
  */
 @Composable
-private fun Charts(state: StatsState, onState: (StatsState) -> Unit) {
-    // Wrapped rather than scrolled sideways, as on the web, so every
-    // tab is in sight at once.
-    FlowRow(
-        Modifier.fillMaxWidth().padding(top = 8.dp).testTag("stats-tabs"),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+private fun Tabbed(state: StatsState, onState: (StatsState) -> Unit) {
+    // One line that scrolls sideways over a hairline, underlined under
+    // the open tab, as the web's `.stats-tabs`.
+    Row(
+        Modifier.fillMaxWidth()
+            .testTag("stats-tabs")
+            .drawBehind {
+                val y = size.height - 0.5.dp.toPx()
+                drawLine(Line, Offset(0f, y), Offset(size.width, y), 1.dp.toPx())
+            }
+            .horizontalScroll(rememberScrollState()),
     ) {
         state.tabs.forEach { (tab, n) ->
-            Toggle(
-                "${tab.title} $n",
-                on = tab == state.tab,
-                tag = "stats-tab-${tab.name}",
-                role = Role.Tab,
-                onClick = { onState(state.onTab(tab)) },
-            ) {
-                Line(tab.title, if (tab == state.tab) Accent2 else Ink2, Design.SMALL, FontWeight.Medium)
-                Line("$n", if (tab == state.tab) Accent2 else Ink3, Design.MINI, fontFamily = monoSmall.fontFamily)
-            }
+            Tab(tab, n, on = tab == state.tab) { onState(state.onTab(tab)) }
         }
     }
 
@@ -190,35 +194,39 @@ private fun Charts(state: StatsState, onState: (StatsState) -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            listOf(
-                "${b.copies}" to "cards",
-                "${b.uniques}" to "unique",
-                Prices.money(b.value, dash = "unpriced") to "value",
-                b.averageManaValueText to "avg mana",
-                "${b.foils}" to "foils",
-                "${b.sets}" to "sets",
-            ).forEachIndexed { i, (n, k) ->
-                StatFigure(
-                    n,
-                    k,
-                    hint = if (k == "value" && b.unpriced > 0) "${b.unpriced} cards have no price" else "",
-                    modifier = Modifier.testTag("stats-figure-$i"),
-                )
+            state.figures.forEachIndexed { i, f ->
+                StatFigure(f.value, f.label, hint = f.hint, modifier = Modifier.testTag("stats-figure-$i"))
             }
         }
     }
+    if (state.tab == StatTab.ALL) state.totals.pricedAt?.let { PricedAt(it) }
 
-    // One column on a phone, and side by side as the screen widens, as
-    // the web's `.stats-grid` does with `minmax(260px, 1fr)`.
-    BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val columns = (maxWidth / CHART_MIN).toInt().coerceAtLeast(1)
-        Column(verticalArrangement = Arrangement.spacedBy(Design.GAP.dp)) {
-            charts(b).chunked(columns).forEach { row ->
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Design.GAP.dp)) {
-                    row.forEach { (title, body) ->
-                        Panel(Modifier.weight(1f).testTag("stats-chart-$title")) { body() }
+    state.sections.forEach { section ->
+        Column(
+            Modifier.fillMaxWidth().padding(top = 14.dp).testTag("stats-section-${section.title}"),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Line(
+                section.title,
+                Ink,
+                Design.H2,
+                FontWeight.SemiBold,
+                Modifier.testTag("stats-section-title-${section.title}").semantics { heading() },
+            )
+            // One column on a phone, and side by side as the screen
+            // widens, as the web's `.stats-grid` does with
+            // `minmax(260px, 1fr)`.
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val columns = (maxWidth / CHART_MIN).toInt().coerceAtLeast(1)
+                Column(verticalArrangement = Arrangement.spacedBy(Design.GAP.dp)) {
+                    section.charts.chunked(columns).forEach { row ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Design.GAP.dp)) {
+                            row.forEach { chart ->
+                                Panel(Modifier.weight(1f).testTag("stats-chart-${chart.title}")) { Chart(chart, b) }
+                            }
+                            repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+                        }
                     }
-                    repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
         }
@@ -228,7 +236,37 @@ private fun Charts(state: StatsState, onState: (StatsState) -> Unit) {
 /** How narrow a chart may get before the next one moves down a row. */
 private val CHART_MIN = 300.dp
 
-/** A chip that is on or off: a tab, a rarity. `.chip` and `.chip.on` on the web. */
+/**
+ * One tab: its title and count, and a line along its foot when it is
+ * the open one. Brighter words as well, so lightness says which is
+ * open and never hue alone. The web's `.stats-tab`.
+ */
+@Composable
+private fun Tab(tab: StatTab, n: Int, on: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .testTag("stats-tab-${tab.name}")
+            .sizeIn(minHeight = TouchTarget)
+            .semantics { contentDescription = "${tab.title} $n" }
+            .selectable(selected = on, role = Role.Tab, onClick = onClick),
+    ) {
+        Row(
+            Modifier.align(Alignment.Center).padding(horizontal = 12.dp).clearAndSetSemantics {},
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Line(tab.title, if (on) Ink else Ink3, Design.SMALL, FontWeight.SemiBold)
+            Line("$n", if (on) Accent2 else Ink3, Design.TINY, fontFamily = monoSmall.fontFamily)
+        }
+        if (on) {
+            Box(Modifier.matchParentSize(), contentAlignment = Alignment.BottomCenter) {
+                Box(Modifier.fillMaxWidth().height(2.dp).background(Accent).testTag("stats-tab-underline"))
+            }
+        }
+    }
+}
+
+/** A chip that is on or off: a rarity. `.chip` and `.chip.on` on the web. */
 @Composable
 private fun Toggle(
     told: String,
@@ -258,36 +296,27 @@ private fun Toggle(
     ) { content() }
 }
 
-/** Every chart, titled, in the web's order. */
-private fun charts(b: CollectionBreakdown): List<Pair<String, @Composable () -> Unit>> {
+/** One chart, titled, drawn as the web's `Chart` draws it. */
+@Composable
+private fun Chart(chart: StatChart, b: CollectionBreakdown) {
     val money: (Int) -> String = { Prices.money(it.toDouble()) }
-    return buildList {
-        add("Colour" to @Composable { Heading("Colour"); Centred { StatRing("Per colour", b.colours) } })
-        add("Colour identity" to @Composable {
-            Heading("Colour identity")
-            Centred { StatRing("Exact identity", b.identities, numbered = b.identityRing) }
-        })
-        add("Card types" to @Composable {
-            StatBars("Card types", b.types, b.copies, "Of ${b.copies} cards. A card of two types counts in each.")
-        })
-        if (b.hasCurve) add("Mana curve" to @Composable { StatCurve(b.curve, "Average ${b.averageManaValueText}. Lands excluded.") })
-        add("Rarity" to @Composable { StatBars("Rarity", b.rarities, b.copies, "Of ${b.copies} cards.") })
-        if (b.tribes.isNotEmpty()) add("Creature types" to @Composable { StatBars("Creature types", b.tribes, b.creatures, b.tribesNote) })
-        add("Price per card" to @Composable { StatBars("Price per card", b.priceBands, b.copies, "Copies, by what one is worth.") })
-        if (b.valueByColour.isNotEmpty()) {
-            add("Value by colour" to @Composable {
-                StatBars("Value by colour", b.valueByColour, b.valueByColour.sumOf { it.value }, "A card of two colours counts in each.", money)
-            })
-        }
-        if (b.valueByRarity.isNotEmpty()) {
-            add("Value by rarity" to @Composable {
-                StatBars("Value by rarity", b.valueByRarity, b.valueByRarity.sumOf { it.value }, "In whole dollars.", money)
-            })
-        }
-        add("Top sets" to @Composable { StatBars("Top sets", b.topSets, b.copies, "Of ${b.copies} cards.") })
-        if (b.years.isNotEmpty()) add("Release years" to @Composable { StatBars("Release years", b.years, b.copies, "By the year the printing came out.") })
-        if (b.artists.isNotEmpty()) add("Top artists" to @Composable { StatBars("Top artists", b.artists, b.copies, "Of ${b.copies} cards.") })
-        if (b.priciest.isNotEmpty()) add("Most valuable" to @Composable { Priciest(b) })
+    val t = chart.title
+    when (chart) {
+        StatChart.COLOUR -> { Heading(t); Centred { StatRing("Per colour", b.colours) } }
+        StatChart.IDENTITY -> { Heading(t); Centred { StatRing("Exact identity", b.identities, numbered = b.identityRing) } }
+        StatChart.TYPES -> StatBars(t, b.types, b.copies, "Of ${b.copies} cards. A card of two types counts in each.")
+        StatChart.CURVE -> StatCurve(b.curve, "Average ${b.averageManaValueText}. Lands excluded.")
+        StatChart.RARITY -> StatBars(t, b.rarities, b.copies, "Of ${b.copies} cards.")
+        StatChart.TRIBES -> StatBars(t, b.tribes, b.creatures, b.tribesNote)
+        StatChart.PRICES -> StatBars(t, b.priceBands, b.copies, "Copies, by what one is worth.")
+        StatChart.VALUE_BY_COLOUR ->
+            StatBars(t, b.valueByColour, b.valueByColour.sumOf { it.value }, "A card of two colours counts in each.", money)
+        StatChart.VALUE_BY_RARITY ->
+            StatBars(t, b.valueByRarity, b.valueByRarity.sumOf { it.value }, "In whole dollars.", money)
+        StatChart.SETS -> StatBars(t, b.topSets, b.copies, "Of ${b.copies} cards.")
+        StatChart.YEARS -> StatBars(t, b.years, b.copies, "By the year the printing came out.")
+        StatChart.ARTISTS -> StatBars(t, b.artists, b.copies, "Of ${b.copies} cards.")
+        StatChart.PRICIEST -> Priciest(b)
     }
 }
 
