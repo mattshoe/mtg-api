@@ -60,6 +60,9 @@ fun CardCarousel(
     onTick: () -> Unit = {},
     /** Remove beside the Found box, over a fetch list. See `AppState.peekRemove`. */
     onRemove: () -> Unit = {},
+    /** The card on show is turned over. See `AppState.peekFlipped`. */
+    flipped: Boolean = false,
+    onFlip: () -> Unit = {},
 ) {
     if (cards.isEmpty()) return
     val index = at.coerceIn(0, cards.size - 1)
@@ -115,7 +118,7 @@ fun CardCarousel(
             }
         }) {
             cards.forEachIndexed { i, c ->
-                if (i == index) CardFace(c, zoom, onZoom) else CardFace(c)
+                if (i == index) CardFace(c, zoom, onZoom, flipped, onFlip) else CardFace(c)
             }
         }
 
@@ -143,7 +146,13 @@ fun CardCarousel(
  * as — zooms. The arithmetic is `CardZoom`'s, shared with the phone.
  */
 @Composable
-private fun CardFace(card: PeekCard, zoom: CardZoom? = null, onZoom: (CardZoom) -> Unit = {}) {
+private fun CardFace(
+    card: PeekCard,
+    zoom: CardZoom? = null,
+    onZoom: (CardZoom) -> Unit = {},
+    flipped: Boolean = false,
+    onFlip: (() -> Unit)? = null,
+) {
     val now = remember { arrayOf(CardZoom()) }
     val tell = remember { arrayOf(onZoom) }
     now[0] = zoom ?: CardZoom()
@@ -152,13 +161,29 @@ private fun CardFace(card: PeekCard, zoom: CardZoom? = null, onZoom: (CardZoom) 
         classes("peek-card")
         if (zoom != null) ref { el -> pinchZoom(el, now, tell) }
     }) {
-        val url = CardQueries.art(card.scryfallId, "normal")
+        val url = CardQueries.art(card.scryfallId, "normal", back = flipped)
         // Drawn about the centre, which is where `CardZoom` measures
         // from.
         val transform = zoom?.takeIf { it.zoomed }
             ?.let { "translate(${it.x}px, ${it.y}px) scale(${it.scale})" }
         if (url != null) {
-            Img(src = url, alt = card.title, attrs = { transform?.let { t -> style { property("transform", t) } } })
+            // The card's own box, so the flip icon can sit on the card
+            // rather than on the cell around it, which is wider on a
+            // phone and taller on a tablet.
+            Div(attrs = { classes("peek-face") }) {
+                Img(src = url, alt = card.title, attrs = { transform?.let { t -> style { property("transform", t) } } })
+                // Matt: "an icon overlaid on double sided cards that
+                // allows you to flip the card so you can see the
+                // opposite side back and forth". Outside the zoom so it
+                // stays put while the art moves. Only on the card on
+                // show, and only on one with a back.
+                if (onFlip != null && card.twoSided) {
+                    IconAction("Flip card", Glyph.FLIP, look = listOf("peek-flip")) { e ->
+                        e.stopPropagation()
+                        onFlip()
+                    }
+                }
+            }
         } else {
             // A card the deck wants that nobody owns has no printing
             // and so no picture. Its name, rather than a grey

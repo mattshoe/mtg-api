@@ -1107,6 +1107,13 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
   mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'><rect x='2.5' y='7' width='12.5' height='10' rx='2'/><path d='M18.5 4v16'/><path d='M16.5 4h4'/><path d='M16.5 20h4'/></svg>");
 }
 
+/* Two arrows chasing each other round, over the top and back under:
+   turn it over. The phone's `Glyph.FLIP`. */
+.icon-flip {
+  -webkit-mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'><path d='M20 12a8 8 0 0 0-14.55-4.59'/><path d='M4 12a8 8 0 0 0 14.55 4.59'/><path d='M4.5 3.5v4h4'/><path d='M19.5 20.5v-4h-4'/></svg>");
+  mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'><path d='M20 12a8 8 0 0 0-14.55-4.59'/><path d='M4 12a8 8 0 0 0 14.55 4.59'/><path d='M4.5 3.5v4h4'/><path d='M19.5 20.5v-4h-4'/></svg>");
+}
+
 .btn.icon-only { padding: 0; width: 30px; height: 30px; display: inline-grid; place-items: center; }
 
 /* --------------------------------------------------------- mana art */
@@ -2002,7 +2009,7 @@ select.sort {
    picture's size no longer waits on the picture loading. The phone's
    `CardFace` is `aspectRatio` alone, which is the same rule. */
 .peek-card { container-type: size; }
-.peek-card img, .peek-blank {
+.peek-face, .peek-blank {
   width: min(100cqw, calc(100cqh * 488 / 680));
   /* The height pinned as well, not left to `aspect-ratio`: Chrome 155
      drops the ratio on an image that failed to load and draws it
@@ -2010,11 +2017,25 @@ select.sort {
   height: min(100cqh, calc(100cqw * 680 / 488));
   aspect-ratio: 488 / 680;
 }
-.peek-card img {
+.peek-face { position: relative; }
+.peek-face img {
+  width: 100%; height: 100%;
   object-fit: contain;
   border-radius: 4.75% / 3.5%;
   display: block;
 }
+/* Turn a two-faced card over. On the card, in the corner where the art
+   is sky rather than rules text, a dark disc so it reads over any art.
+   The phone's `CardFace` draws the same button in the same place. */
+.peek-flip {
+  position: absolute; top: 12px; right: 10px;
+  width: 44px; height: 44px; padding: 0;
+  display: grid; place-items: center;
+  border: 0; border-radius: 50%;
+  background: rgba(0,0,0,.62); color: var(--text);
+  cursor: pointer;
+}
+.peek-flip .icon { width: 22px; height: 22px; }
 .peek-blank {
   display: grid; place-items: center;
   background: var(--bg-3); border-radius: 4.75% / 3.5%;

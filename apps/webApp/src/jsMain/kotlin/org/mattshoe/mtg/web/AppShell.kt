@@ -388,6 +388,8 @@ fun AppShell(
             onCount = { by -> state.peekStep(by)?.let(onCount) },
             onTick = { onState(state.peekTick()) },
             onRemove = { onState(state.peekRemove()) },
+            flipped = state.peekFlipped,
+            onFlip = { onState(state.peekFlip()) },
         )
     }
 
