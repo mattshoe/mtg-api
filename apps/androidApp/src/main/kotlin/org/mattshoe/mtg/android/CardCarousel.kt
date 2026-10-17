@@ -2,6 +2,7 @@ package org.mattshoe.mtg.android
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateCentroid
@@ -20,6 +21,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.selection.toggleable
@@ -92,6 +94,9 @@ fun CardCarousel(
     onTick: () -> Unit = {},
     /** Remove beside the Found box, over a fetch list. See `AppState.peekRemove`. */
     onRemove: () -> Unit = {},
+    /** The card on show is turned over. See `AppState.peekFlipped`. */
+    flipped: Boolean = false,
+    onFlip: () -> Unit = {},
 ) {
     if (cards.isEmpty()) return
     val index = at.coerceIn(0, cards.lastIndex)
@@ -168,7 +173,7 @@ fun CardCarousel(
                     // a tablet the card is narrower than the page.
                     Box(Modifier.fillMaxSize().clipToBounds(), contentAlignment = Alignment.Center) {
                         if (page == index) {
-                            CardFace(cards[page], zoom, Modifier.pinchZoom(zoom, onZoom))
+                            CardFace(cards[page], zoom, Modifier.pinchZoom(zoom, onZoom), flipped, onFlip)
                         } else {
                             CardFace(cards[page])
                         }
@@ -245,41 +250,70 @@ internal val CardArt = androidx.compose.ui.semantics.SemanticsPropertyKey<String
  * ways.
  */
 @Composable
-private fun CardFace(card: PeekCard, zoom: CardZoom = CardZoom(), zoomable: Modifier = Modifier) {
-    val url = CardQueries.art(card.scryfallId, "normal")
-    Box(
-        zoomable.aspectRatio(Design.CARD_ASPECT)
-            // After the gesture's `pointerInput`, so the fingers are
-            // read against the card where it sits and not where the
-            // zoom has drawn it.
-            .graphicsLayer {
-                scaleX = zoom.scale
-                scaleY = zoom.scale
-                translationX = zoom.x
-                translationY = zoom.y
+private fun CardFace(
+    card: PeekCard,
+    zoom: CardZoom = CardZoom(),
+    zoomable: Modifier = Modifier,
+    flipped: Boolean = false,
+    onFlip: (() -> Unit)? = null,
+) {
+    val url = CardQueries.art(card.scryfallId, "normal", back = flipped)
+    Box(zoomable.aspectRatio(Design.CARD_ASPECT)) {
+        Box(
+            Modifier.fillMaxSize()
+                // After the gesture's `pointerInput`, so the fingers are
+                // read against the card where it sits and not where the
+                // zoom has drawn it.
+                .graphicsLayer {
+                    scaleX = zoom.scale
+                    scaleY = zoom.scale
+                    translationX = zoom.x
+                    translationY = zoom.y
+                }
+                // 4.75% of the width, which is what the stylesheet rounds
+                // a card frame by.
+                .clip(androidx.compose.foundation.shape.RoundedCornerShape(5))
+                .background(Bg3)
+                .semantics {
+                    contentDescription = card.title
+                    url?.let { this[CardArt] = it }
+                },
+        ) {
+            if (url != null) {
+                AsyncImage(
+                    model = url,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit,
+                )
+            } else {
+                // A card the deck wants that nobody owns has no printing
+                // and so no picture. Its name, rather than a grey
+                // rectangle that reads as a failure to load.
+                Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+                    Line(card.title, Ink2, Design.H3, FontWeight.SemiBold)
+                }
             }
-            // 4.75% of the width, which is what the stylesheet rounds
-            // a card frame by.
-            .clip(androidx.compose.foundation.shape.RoundedCornerShape(5))
-            .background(Bg3)
-            .semantics {
-                contentDescription = card.title
-                url?.let { this[CardArt] = it }
-            },
-    ) {
-        if (url != null) {
-            AsyncImage(
-                model = url,
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Fit,
-            )
-        } else {
-            // A card the deck wants that nobody owns has no printing
-            // and so no picture. Its name, rather than a grey
-            // rectangle that reads as a failure to load.
-            Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-                Line(card.title, Ink2, Design.H3, FontWeight.SemiBold)
+        }
+        // Matt: "an icon overlaid on double sided cards that allows you
+        // to flip the card so you can see the opposite side back and
+        // forth". On the card and not on the sheet, in the corner where
+        // the art is sky rather than rules text, and outside the zoom
+        // so it stays put while the art moves. Only on the card on
+        // show, and only on one with a back.
+        if (onFlip != null && card.twoSided && url != null) {
+            Box(
+                Modifier.align(Alignment.TopEnd)
+                    .padding(top = 12.dp, end = 10.dp)
+                    .size(TouchTarget)
+                    .clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(Color.Black.copy(alpha = 0.62f))
+                    .semantics { contentDescription = "Flip card"; role = Role.Button }
+                    .clickable { onFlip() }
+                    .testTag("carousel-flip"),
+                contentAlignment = Alignment.Center,
+            ) {
+                GlyphIcon(Glyph.FLIP, Ink, size = 22.dp)
             }
         }
     }
