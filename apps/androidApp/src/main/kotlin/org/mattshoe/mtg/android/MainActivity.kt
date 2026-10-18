@@ -2,6 +2,7 @@ package org.mattshoe.mtg.android
 
 import org.mattshoe.mtg.core.onRules
 import org.mattshoe.mtg.core.TaskDetail
+import org.mattshoe.mtg.core.UserQueries
 import org.mattshoe.mtg.core.openTaskKey
 import org.mattshoe.mtg.core.taskCancelled
 import org.mattshoe.mtg.core.CommanderRank
@@ -785,6 +786,13 @@ class MainActivity : ComponentActivity() {
                 intoPage(View.LIBRARY) { search() }
             }
 
+            // The tiles, or one person's Library: `search` is scoped
+            // by `viewing`, which is the key in the address here.
+            View.USERS -> {
+                app = app.fetching(View.USERS)
+                intoPage(View.USERS) { if (s.route.rest.isEmpty()) loadUsers() else search() }
+            }
+
             View.DECKS -> {
                 app = app.fetching(View.DECKS)
                 intoPage(View.DECKS) {
@@ -956,6 +964,12 @@ class MainActivity : ComponentActivity() {
         return app.copy(
             library = app.library.loaded(Rows.cards(rows.cols, rows.rows), Rows.count(total.rows)),
         )
+    }
+
+    /** Everybody's collection, for the Users tab. Sibling of the website's `loadUsers`. */
+    private suspend fun loadUsers(): AppState {
+        val r = api.query(UserQueries.all())
+        return app.copy(users = app.users.loaded(UserQueries.decode(r.cols, r.rows)))
     }
 
     private suspend fun loadDecks(): AppState {
