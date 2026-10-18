@@ -291,6 +291,61 @@ async function until(fn, ms = 20_000) {
 /** Every `claude -p` the dispatcher launched, in order. */
 const builders = () => box.log().split('\n').filter((l) => l.startsWith('claude '))
 
+// The dispatcher runs main's code, not the working tree's.
+//
+// Matt: "WHY HAS MY FUCKING TASK BEEN QUEUED FOR 12 MINUTES?!?! I SEE
+// NO OTHER AGENTS FUCKING RUNNING!!!" An agent was running. The board
+// said `queued` because the launchd timer executes whatever the clone
+// happens to be checked out at, and the clone was parked on a
+// debugging branch that did not have the fix which lets reconcile see
+// a live agent.
+//
+// That is the thread running through most of one evening's damage:
+// branches switched in the clone to gate or debug something silently
+// changed what production did. Cancelled tickets, stray rows, a task
+// reading `in review` for five hours — all the same cause.
+//
+// So dispatch.sh re-runs itself from `origin/main`. Whatever is in the
+// working tree is for the person editing it; the timer gets what has
+// been merged. The cost is deliberate: a bug on main cannot be
+// hot-fixed by editing a file, it is fixed by merging one.
+describe('which copy of the scripts actually runs', () => {
+  it('runs the version on origin/main, not the one in the working tree', () => {
+    // Vandalise a script the dispatcher calls. If the working tree is
+    // what runs, the marker shows up.
+    //
+    // Not `dispatch.sh` itself: that is the file the timer invokes, so
+    // its first lines always run whatever they say. They re-exec main's
+    // copy, and everything from there — including the rest of
+    // dispatch.sh — is what has been merged. The real hazard was a
+    // clone left on an older branch, and that is covered.
+    build({ requests: { 'pin-one.md': READY('Pin one') } })
+    box.stub('claude', BUILDER)
+    writeFileSync(
+      box.path('scripts/intake/task-status.mjs'),
+      'console.error("WORKING-TREE-COPY-RAN")\nprocess.exit(0)\n',
+    )
+
+    const r = run('dispatch.sh')
+
+    expect(`${r.stderr}${box.intakeLog()}`, 'it ran the working tree copy instead of main')
+      .not.toContain('WORKING-TREE-COPY-RAN')
+    expect(box.log(), 'it did not start the agent main would have').toContain('claude ')
+  })
+
+  it('still reads requests from the working tree, because those are data', () => {
+    // The code is pinned; the queue is not. A request written a second
+    // ago has not been committed anywhere and must still be seen.
+    build({ requests: {} })
+    box.stub('claude', BUILDER)
+    writeFileSync(box.path('requests/pin-two.md'), READY('Pin two'))
+
+    run('dispatch.sh')
+
+    expect(box.log(), 'an uncommitted request was invisible').toContain('requests/pin-two.md')
+  })
+})
+
 describe('the switches', () => {
   // There was no way to stop this machine, and then no way to start it on
   // purpose. `.intake/` is gitignored, so the committed PostToolUse hook

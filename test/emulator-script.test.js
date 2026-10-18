@@ -93,7 +93,18 @@ exit 0
     run: (extra = {}) => spawnSync('node', [SCRIPT], {
       encoding: 'utf8',
       timeout: 60_000,
-      env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, MTG_EMULATOR_POLL_MS: '10', ...extra },
+      env: {
+        ...process.env,
+        PATH: `${bin}:${process.env.PATH}`,
+        MTG_EMULATOR_POLL_MS: '10',
+        // Its own lock file. The preflight takes the Gradle mutex now,
+        // and without this the tests queue behind whatever is really
+        // building on this machine — two of them sat for thirty
+        // seconds and failed.
+        INTAKE_GRADLE_LOCK: join(root, 'gradle.lock'),
+        MTG_ADB_LOCK_WAIT: '5',
+        ...extra,
+      },
     }),
   }
 }
