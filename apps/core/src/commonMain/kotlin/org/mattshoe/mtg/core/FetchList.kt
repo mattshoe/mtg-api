@@ -613,7 +613,21 @@ data class FetchListState(
 
         fun syncedAs(store: Store, account: String) = store.put(SYNCED, account)
 
-        const val NOT_LOADED = "Your saved Fetch lists did not load: "
+        @Serializable
+        private data class AccountLists(val lists: List<SavedFetch> = emptyList())
+
+        /** `GET /fetch-lists`. A body with no `lists` is none. */
+        fun decodeAccount(text: String): List<SavedFetch> =
+            json.decodeFromString(AccountLists.serializer(), text).lists
+
+        /** The body of `POST /fetch-lists`. */
+        fun encodeAccount(lists: List<SavedFetch>): String =
+            json.encodeToString(AccountLists.serializer(), AccountLists(lists))
+
+        /** How long a change waits for the next one before the lists are sent, so a run of ticks is one write. */
+        const val SEND_MS = 300L
+
+        const val NOT_LOADED ="Your saved Fetch lists did not load: "
         const val NOT_SAVED = "Your Fetch lists did not save to your account: "
 
         /** `#/fetch/list`: the list's own page. `#/fetch` is the entry box. */

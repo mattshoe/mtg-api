@@ -411,6 +411,24 @@ class MtgApi internal constructor(
         return Releases.decode(text)
     }
 
+    /** The account's saved Fetch lists, the same on every device. Signed in. */
+    suspend fun fetchLists(session: String): List<SavedFetch> {
+        val res = http.get("$base/fetch-lists") { header("Authorization", "Bearer $session") }
+        val text = res.bodyAsText()
+        if (!res.status.isSuccess()) throw ApiFailure(errorIn(text, res.status))
+        return FetchListState.decodeAccount(text)
+    }
+
+    /** Replace the account's saved Fetch lists with these. Signed in. */
+    suspend fun saveFetchLists(session: String, lists: List<SavedFetch>) {
+        val res = http.post("$base/fetch-lists") {
+            contentType(ContentType.Application.Json)
+            header("Authorization", "Bearer $session")
+            setBody(FetchListState.encodeAccount(lists))
+        }
+        if (!res.status.isSuccess()) throw ApiFailure(errorIn(res.bodyAsText(), res.status))
+    }
+
     /**
      * The Comprehensive Rules, the whole text file, as the Worker
      * relayed it from Wizards. Parsed on the device by `RuleBook`.
