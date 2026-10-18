@@ -54,6 +54,7 @@ internal abstract class E2eTest {
                 .edit().clear().commit()
             fake = FakeWorker.start()
             Wiring.apiBase = fake.base
+            beforeLaunch()
         }
 
         override fun after() {
@@ -63,6 +64,13 @@ internal abstract class E2eTest {
     }
 
     protected lateinit var fake: FakeWorker
+
+    /**
+     * After the worker is up and before the activity starts: where a
+     * journey that begins signed in puts its session, or seeds what
+     * another device saved.
+     */
+    protected open fun beforeLaunch() {}
 
     protected val compose: AndroidComposeTestRule<ActivityScenarioRule<MainActivity>, MainActivity> =
         createAndroidComposeRule()

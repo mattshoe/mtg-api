@@ -22,6 +22,8 @@
 //   POST /tasks/status one transition, from the dispatcher (admin)
 //   GET  /tasks/:key  one task, its details and its files, and a done one's
 //                     builder's writeup (or else release note) as its summary (admin)
+//   GET  /fetch-lists your saved Fetch lists, the same on every device
+//   POST /fetch-lists replace them (signed in)
 //   GET  /releases    the release notes, GitHub's list as the Worker keeps it
 //   GET  /rules       the Comprehensive Rules, Wizards' text file relayed untouched
 //   GET  /edhrec/commander?name=  a commander's rank among commanders, from EDHREC
@@ -55,6 +57,7 @@ import { releases } from './releases.js';
 import { rules } from './rules.js';
 import { remember as rememberDevice, forget as forgetDevice, listDevices } from './devices.js';
 import { tell } from './notify.js';
+import { read as readFetchLists, write as writeFetchLists } from './fetchLists.js';
 import { commanderRank } from './edhrec.js';
 import { preview } from './preview.js';
 // The site's own file, bundled in, so the two hosts cannot disagree.
@@ -311,6 +314,8 @@ const INDEX = {
     'POST /devices': '{"token","platform":"android","label"?} — where to push to; said by the app on every start, keyed on the token',
     'DELETE /devices': '{"token"} — stop pushing to a device',
     'GET /devices': 'which devices are registered, with the tokens shortened; admin only',
+    'GET /fetch-lists': 'your saved Fetch lists, the same on every device; signed in',
+    'POST /fetch-lists': '{"lists":[...]} — replace your saved Fetch lists with these; signed in',
     'GET /maintenance': 'what the daily job did last',
     'POST /maintenance': 'run it now — needs admin; {"only":"orphans"} or {"all":true,"wait":true}',
     'GET /s': '/s/<route> — a shared link: Open Graph tags for that deck, card or collection, then on to the site',
@@ -930,6 +935,23 @@ async function route(request, env, ctx, entry) {
         return json({ devices: await listDevices(env.DB) });
       }
       return notAllowed('POST');
+    }
+
+    // Saved Fetch lists, the account's rather than the device's, so a
+    // list saved on the website is on the phone and the other way round.
+    if (path === '/fetch-lists') {
+      const who = await whoAmI(env, request, verifyToken);
+      if (!who.user) return denied('sign in to keep Fetch lists');
+      if (method === 'GET') return send(await readFetchLists(env.DB, who.user.id));
+      if (method === 'POST') {
+        entry.write = true;
+        const { body, error } = await readJson(request);
+        if (error) return json({ error }, 400);
+        const out = await writeFetchLists(env.DB, who.user.id, body);
+        if (out.status >= 400) entry.message = out.body.error;
+        return send(out);
+      }
+      return notAllowed('GET', 'POST');
     }
 
     if (path === '/admin/sql') {

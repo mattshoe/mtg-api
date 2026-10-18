@@ -381,8 +381,10 @@ object FetchList {
  * The Fetch screen: the list being typed, its answer, and the lists
  * kept.
  *
- * Saved lists are kept per device, the way the entry history is —
- * see `Store`. Matt: "it's very important that a pull list can be saved
+ * Saved lists are the account's, kept by the Worker so every device
+ * sees the same ones, and a copy is kept on the device in `Store` for
+ * a start with no network. Matt: "making a fetch list on web does not
+ * show on android and vice versa". See [adopted]. And: "it's very important that a pull list can be saved
  * and referenced later", and "a title should be required in order to
  * save it".
  */
@@ -403,6 +405,12 @@ data class FetchListState(
     val openId: String? = null,
     /** The list text while Edit is open, or null. */
     val editing: String? = null,
+    /**
+     * The account's lists have come back from the Worker, so a change
+     * to [saved] is sent there. False until then, so a device's stale
+     * copy is never written over the account's before it has been read.
+     */
+    val synced: Boolean = false,
 ) {
     fun drafted(text: String) = copy(draft = text, error = null)
 
@@ -499,7 +507,27 @@ data class FetchListState(
         if (list != this.list) copy(checking = false) else copy(result = r, busy = false, checking = false).synced()
 
     /** A fresh list, keeping the saved ones. */
-    fun cleared() = FetchListState(saved = saved)
+    fun cleared() = FetchListState(saved = saved, synced = synced)
+
+    /**
+     * The account's saved lists, back from the Worker.
+     *
+     * They are the lists from now on. `merge` is the first time any
+     * account syncs on this device: lists saved here before then were
+     * only ever here, so they are kept after the account's rather than
+     * lost. The list open on the page follows its saved copy — ticks
+     * made on the other device show — unless Edit is open; one deleted
+     * elsewhere stays on the page, unsaved.
+     */
+    fun adopted(remote: List<SavedFetch>, merge: Boolean): FetchListState {
+        val theirs = remote.map(::unfiled)
+        val ids = theirs.map { it.id }.toSet()
+        val all = if (merge) theirs + saved.filter { it.id !in ids } else theirs
+        val open = openId?.let { id -> all.firstOrNull { it.id == id } }
+        val base = copy(saved = all, synced = true, openId = open?.id)
+        return if (open == null || editing != null) base
+        else base.copy(list = open.list, title = open.title, result = open.result, ticked = open.ticked)
+    }
 
     /**
      * Kept under a title. No title, no save — it says so instead.
@@ -540,13 +568,7 @@ data class FetchListState(
         fun restore(store: Store): FetchListState = try {
             reopen(store, FetchListState(
                 saved = store.get(KEY)?.let { json.decodeFromString(ListSerializer(SavedFetch.serializer()), it) }
-                    ?.map { s ->
-                        // Filed by colour words, Multicolor among them,
-                        // before identities had their own sections. The
-                        // list stays; the old filing is not shown as if
-                        // it were right, and Find files it again.
-                        if (s.result?.sections?.any { it.legacy != null } == true) s.copy(result = null) else s
-                    }
+                    ?.map(::unfiled)
                     ?: emptyList(),
             ))
         } catch (e: Exception) {
@@ -566,8 +588,47 @@ data class FetchListState(
             s
         }
 
+        /**
+         * Filed by colour words, Multicolor among them, before
+         * identities had their own sections. The list stays; the old
+         * filing is not shown as if it were right, and Find files it
+         * again.
+         */
+        private fun unfiled(s: SavedFetch): SavedFetch =
+            if (s.result?.sections?.any { it.legacy != null } == true) s.copy(result = null) else s
+
         /** Where the list on its page is kept, saved or not. */
         const val OPEN = "mtg.fetch.open"
+
+        /** The account that last synced its lists on this device. */
+        const val SYNCED = "mtg.fetch.synced"
+
+        /**
+         * Whether no account has synced on this device yet, so the
+         * lists on it were saved here and nowhere else. Only then are
+         * they merged in: once any account has synced, a second one
+         * signing in must not have the first one's lists made theirs.
+         */
+        fun firstSync(store: Store): Boolean = store.get(SYNCED) == null
+
+        fun syncedAs(store: Store, account: String) = store.put(SYNCED, account)
+
+        @Serializable
+        private data class AccountLists(val lists: List<SavedFetch> = emptyList())
+
+        /** `GET /fetch-lists`. A body with no `lists` is none. */
+        fun decodeAccount(text: String): List<SavedFetch> =
+            json.decodeFromString(AccountLists.serializer(), text).lists
+
+        /** The body of `POST /fetch-lists`. */
+        fun encodeAccount(lists: List<SavedFetch>): String =
+            json.encodeToString(AccountLists.serializer(), AccountLists(lists))
+
+        /** How long a change waits for the next one before the lists are sent, so a run of ticks is one write. */
+        const val SEND_MS = 300L
+
+        const val NOT_LOADED ="Your saved Fetch lists did not load: "
+        const val NOT_SAVED = "Your Fetch lists did not save to your account: "
 
         /** `#/fetch/list`: the list's own page. `#/fetch` is the entry box. */
         const val PAGE = "list"
@@ -600,6 +661,12 @@ fun AppState.savedFetch(now: String): AppState {
     val s = copy(fetch = next)
     return if (next.error == null) s.say("Saved \"" + next.title + "\"") else s
 }
+
+/** The account's lists could not be read. The ones on this device stay, and the Fetch page asks again. */
+fun AppState.fetchListsFailedToLoad(why: String): AppState = say(FetchListState.NOT_LOADED + why, failed = true)
+
+/** A change did not reach the Worker. It is still on this device, and the next change sends them all again. */
+fun AppState.fetchListsFailedToSave(why: String): AppState = say(FetchListState.NOT_SAVED + why, failed = true)
 
 /** `#/fetch/list` rather than the entry box at `#/fetch`. */
 val AppState.onFetchList: Boolean get() = view == View.FETCH && route.rest == FetchListState.PAGE

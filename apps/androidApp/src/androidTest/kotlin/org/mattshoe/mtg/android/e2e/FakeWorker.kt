@@ -67,6 +67,59 @@ internal class FakeWorker private constructor(
     /** The token it hands back. */
     var token: String = "e2e-token"
 
+    /** `/fetch-lists` answers 500 while this is true, the way a D1 outage would. */
+    @Volatile var fetchListsFail: Boolean = false
+
+    /**
+     * The account's saved Fetch lists, in the real `fetch_lists` table
+     * from `schema.sql`: one row for the session's account, the whole
+     * set, read or replaced. The same shape as `src/fetchLists.js`.
+     */
+    private fun fetchLists(method: String, authorization: String?, body: String): MockResponse {
+        val held = authorization.orEmpty().removePrefix("Bearer ").trim()
+        if (held != session) return fail(401, "sign in to keep Fetch lists")
+        if (fetchListsFail) return fail(500, "D1 is down")
+        return synchronized(db) {
+            val id = db.prepare("SELECT id FROM users WHERE key = ?").use { s ->
+                s.bindText(1, whoAmI)
+                if (s.step()) s.getLong(0) else return@synchronized fail(401, "no such account")
+            }
+            if (method == "GET") {
+                val lists = db.prepare("SELECT lists FROM fetch_lists WHERE user_id = ?").use { s ->
+                    s.bindLong(1, id)
+                    if (s.step()) s.getText(0) else "[]"
+                }
+                ok(JSONObject().put("lists", JSONArray(lists)))
+            } else {
+                val lists = runCatching { JSONObject(body).getJSONArray("lists") }.getOrNull()
+                    ?: return@synchronized fail(400, "send the saved lists as `lists`, an array")
+                keepFetchLists(id, lists.toString())
+                ok(JSONObject().put("ok", true))
+            }
+        }
+    }
+
+    private fun keepFetchLists(userId: Long, lists: String) {
+        db.prepare(
+            "INSERT INTO fetch_lists (user_id, lists, updated_at) VALUES (?, ?, datetime('now')) " +
+                "ON CONFLICT(user_id) DO UPDATE SET lists = excluded.lists, updated_at = excluded.updated_at",
+        ).use { s ->
+            s.bindLong(1, userId)
+            s.bindText(2, lists)
+            s.step()
+        }
+    }
+
+    /** Put saved lists against the session's account, as another device would have. */
+    fun saveFetchListsElsewhere(listsJson: String) = synchronized(db) {
+        val id = db.prepare("SELECT id FROM users WHERE key = ?").use { s ->
+            s.bindText(1, whoAmI)
+            check(s.step()) { "no account $whoAmI in the seed" }
+            s.getLong(0)
+        }
+        keepFetchLists(id, listsJson)
+    }
+
     override fun close() {
         runCatching { server.shutdown() }
         runCatching { db.close() }
@@ -87,6 +140,7 @@ internal class FakeWorker private constructor(
         return when (path) {
             "/query" -> query(body)
             "/auth/me" -> me(request.headers["Authorization"])
+            "/fetch-lists" -> fetchLists(request.method.orEmpty(), request.headers["Authorization"], body)
             // Not served, and loudly rather than quietly: a journey
             // that reaches one of these is a journey this harness
             // cannot honestly run yet, and a silent empty answer

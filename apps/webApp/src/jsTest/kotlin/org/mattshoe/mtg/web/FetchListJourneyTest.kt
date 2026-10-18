@@ -57,16 +57,31 @@ class FetchListJourneyTest {
     /** The Worker answers the owned printings with a 500 while this is true. */
     private var ownedFails = false
 
+    /** The account's saved lists, as the Worker keeps them. See `FetchListAccountTest`. */
+    private var account = "[]"
+
     @BeforeTest
     fun stubTheNetwork() {
         localStorage.removeItem("mtg.fetch")
         localStorage.removeItem("mtg.fetch.open")
+        localStorage.removeItem("mtg.fetch.synced")
         asked.clear()
         scryfallGate = null
         ownedGate = null
         ownedFails = false
+        account = "[]"
         val engine = MockEngine { request ->
             val body = (request.body as? io.ktor.http.content.TextContent)?.text.orEmpty()
+            if (request.url.encodedPath.endsWith("/fetch-lists")) {
+                if (request.method != io.ktor.http.HttpMethod.Get) {
+                    account = Json.parseToJsonElement(body).let { it as kotlinx.serialization.json.JsonObject }["lists"].toString()
+                }
+                return@MockEngine respond(
+                    "{\"lists\":" + account + "}",
+                    HttpStatusCode.OK,
+                    headersOf(HttpHeaders.ContentType, "application/json"),
+                )
+            }
             val q = request.url.parameters["q"].orEmpty()
             asked += if (body.isNotEmpty()) body else request.url.toString()
             if (request.url.encodedPath.endsWith("/cards/search")) scryfallGate?.await()
@@ -134,6 +149,7 @@ class FetchListJourneyTest {
         roots.clear()
         localStorage.removeItem("mtg.fetch")
         localStorage.removeItem("mtg.fetch.open")
+        localStorage.removeItem("mtg.fetch.synced")
         window.location.hash = ""
     }
 

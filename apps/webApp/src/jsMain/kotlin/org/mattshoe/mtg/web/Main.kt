@@ -50,6 +50,9 @@ import org.mattshoe.mtg.core.DisassembleState
 import org.mattshoe.mtg.core.EntryHistory
 import org.mattshoe.mtg.core.FetchList
 import org.mattshoe.mtg.core.FetchListState
+import org.mattshoe.mtg.core.SavedFetch
+import org.mattshoe.mtg.core.fetchListsFailedToLoad
+import org.mattshoe.mtg.core.fetchListsFailedToSave
 import org.mattshoe.mtg.core.findingFetch
 import org.mattshoe.mtg.core.savedFetch
 import org.mattshoe.mtg.core.find
@@ -155,6 +158,11 @@ object MtgApp {
             if (value.fetch.saved != was.fetch.saved) FetchListState.persist(store, value.fetch.saved)
             // And the list on its page, ticks and all, saved or not.
             if (value.fetch.current != was.fetch.current) FetchListState.keep(store, value.fetch.current)
+            // And the account's copy, so the phone has them too — once
+            // the account's lists have been read, never before.
+            if (value.fetch.synced && value.admin.signedIn && value.fetch.saved != was.fetch.saved) {
+                sendFetchLists(value.fetch.saved)
+            }
             if (value.toast != null && value.toast != was.toast) fadeToast(value.toast!!)
             // Every write, so whichever path put a commander on screen —
             // its page, the carousel, a link — asks for its rank.
@@ -227,6 +235,8 @@ object MtgApp {
     private var tasksClock: Job? = null
     private var taskDetailJob: Job? = null
     private var findJob: Job? = null
+    private var fetchSyncJob: Job? = null
+    private var fetchSendJob: Job? = null
     private var tweakJob: Job? = null
 
     private val store: Store = BrowserStore()
@@ -671,6 +681,8 @@ object MtgApp {
      * forgetting this cannot leak a row.
      */
     private fun loadFor(s: AppState) {
+        // The account's lists did not load before: the Fetch page asks again.
+        if (s.view == View.FETCH && !s.fetch.synced) syncFetchLists()
         if (!s.collectionKnown && s.view in View.COLLECTION) return
         when (s.view) {
             // Only if the rows on screen do not already answer it.
@@ -959,6 +971,46 @@ object MtgApp {
     }
 
     /**
+     * The account's saved Fetch lists, so the ones saved on the phone
+     * are here too. Sibling of Android's `syncFetchLists`.
+     */
+    private fun syncFetchLists() {
+        val who = app.admin.account ?: return
+        if (fetchSyncJob?.isActive == true) return
+        fetchSyncJob = scope.launch {
+            app = try {
+                val theirs = api.fetchLists(token())
+                val merge = FetchListState.firstSync(store)
+                val next = app.copy(fetch = app.fetch.adopted(theirs, merge))
+                FetchListState.syncedAs(store, who.key)
+                next
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                app.fetchListsFailedToLoad(e.message ?: "that did not work")
+            }
+        }
+    }
+
+    /**
+     * Every saved list to the account, after a change. A tick is a
+     * change, so a run of them is one send: each cancels the one before.
+     */
+    private fun sendFetchLists(lists: List<SavedFetch>) {
+        fetchSendJob?.cancel()
+        fetchSendJob = scope.launch {
+            delay(FetchListState.SEND_MS)
+            try {
+                api.saveFetchLists(token(), lists)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                app = app.fetchListsFailedToSave(e.message ?: "that did not work")
+            }
+        }
+    }
+
+    /**
      * The Fetch list: the owned printings of every card on the list,
      * and every rarity Scryfall knows them at, filed by `FetchList`.
      */
@@ -1051,6 +1103,7 @@ object MtgApp {
             app = app.copy(
                 admin = if (who != null) app.admin.signIn(who) else app.admin.settle(),
             )
+            syncFetchLists()
             // Arrived without naming a collection? Go to your own, and
             // put its key in the address — so the link in the bar is
             // one that can be copied and handed to somebody else.
@@ -1128,7 +1181,10 @@ object MtgApp {
                     RequestInit(method = "POST", credentials = "include".unsafeCast<RequestCredentials>()),
                 ).await()
             }
-            app = app.copy(admin = app.admin.signOut()).navigate(app.route)
+            // The next account to sign in reads its own lists before
+            // anything is sent on its behalf.
+            fetchSendJob?.cancel()
+            app = app.copy(admin = app.admin.signOut(), fetch = app.fetch.copy(synced = false)).navigate(app.route)
         }
     }
 

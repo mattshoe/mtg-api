@@ -75,6 +75,8 @@ class MtgViewModel : ViewModel() {
 
     var lookupJob: Job? = null
     var findJob: Job? = null
+    var fetchSyncJob: Job? = null
+    var fetchSendJob: Job? = null
     var tweakJob: Job? = null
     var commanderJob: Job? = null
 
