@@ -1,12 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { env } from 'cloudflare:test';
+import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
+import worker from '../src/index.js';
 import {
   get, post, postAnon, postAs, call, sql, count, adminToken,
   TEST_PASSWORD, stubScryfall, mattSession,
 } from './helpers.js';
 import { newSession } from '../src/accounts.js';
 import {
-  levelFor, eventFor, buildLogQuery, pruneLogs, logStats, RETENTION_DAYS,
+  levelFor, eventFor, buildLogQuery, pruneLogs, logStats, RETENTION_HOURS, LOG_PRUNE_CRON,
   newEntry, startEntry, writeEntry, IN_FLIGHT,
 } from '../src/log.js';
 
@@ -260,7 +261,7 @@ describe('stats', () => {
     await postAnon('/query', { sql: 'SELECT * FROM nope' });
     await settle();
     const s = await logStats(env.DB, 24);
-    expect(s.retention_days).toBe(RETENTION_DAYS);
+    expect(s.retention_hours).toBe(RETENTION_HOURS);
     expect(s.total).toBeGreaterThan(0);
     expect(s.by_level.map((l) => l.level)).toContain('warn');
     expect(s.by_event.length).toBeGreaterThan(0);
@@ -276,14 +277,57 @@ describe('retention', () => {
       env.DB.prepare("INSERT INTO logs (ts, level, event) VALUES (?, 'info', 'old')").bind(old),
       env.DB.prepare("INSERT INTO logs (ts, level, event) VALUES (?, 'info', 'fresh')").bind(fresh),
     ]);
-    const out = await pruneLogs(env.DB, RETENTION_DAYS);
+    const out = await pruneLogs(env.DB);
     expect(out.removed).toBe(1);
     expect(await count('logs', "event = 'old'")).toBe(0);
     expect(await count('logs', "event = 'fresh'")).toBe(1);
   });
 
-  it('a week is the window', () => {
-    expect(RETENTION_DAYS).toBe(7);
+  it('a log over a day old is deleted, one under a day is kept', async () => {
+    const hoursAgo = (h) => new Date(Date.now() - h * 3600_000).toISOString();
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO logs (ts, level, event) VALUES (?, 'info', 'day-old')").bind(hoursAgo(25)),
+      env.DB.prepare("INSERT INTO logs (ts, level, event) VALUES (?, 'info', 'hours-old')").bind(hoursAgo(23)),
+    ]);
+    await pruneLogs(env.DB);
+    expect(await count('logs', "event = 'day-old'"), 'a 25-hour-old log survived the prune').toBe(0);
+    expect(await count('logs', "event = 'hours-old'"), 'a 23-hour-old log was deleted').toBe(1);
+  });
+
+  it('a day is the window', () => {
+    expect(RETENTION_HOURS).toBe(24);
+  });
+
+  it('the hourly cron deletes logs over a day old, and only that', async () => {
+    const old = new Date(Date.now() - 30 * 3600_000).toISOString();
+    await env.DB.prepare("INSERT INTO logs (ts, level, event) VALUES (?, 'info', 'cron-old')").bind(old).run();
+    const runs = await count('maintenance_log');
+    const ctx = createExecutionContext();
+    await worker.scheduled({ cron: LOG_PRUNE_CRON, scheduledTime: Date.now() }, env, ctx);
+    await waitOnExecutionContext(ctx);
+    expect(await count('logs', "event = 'cron-old'"), 'the hourly cron left a 30-hour-old log').toBe(0);
+    expect(await count('maintenance_log'), 'the hourly cron ran the whole daily job').toBe(runs);
+  });
+
+  it('the server log never shows a row over a day old, even before any cron ran', async () => {
+    const old = new Date(Date.now() - 30 * 3600_000).toISOString();
+    await env.DB.prepare("INSERT INTO logs (ts, level, event, message) VALUES (?, 'error', 'stale', 'from yesterday')").bind(old).run();
+    const token = await adminToken();
+    const r = await authed('/logs?min=info&limit=500', token);
+    expect(r.status).toBe(200);
+    expect(r.body.rows.map((x) => x.event), 'GET /logs returned a 30-hour-old row').not.toContain('stale');
+    expect(await count('logs', "event = 'stale'"), 'reading the log left a 30-hour-old row in the table').toBe(0);
+  });
+
+  it('stats never count past a day either', async () => {
+    const old = new Date(Date.now() - 30 * 3600_000).toISOString();
+    await env.DB.prepare("INSERT INTO logs (ts, level, event) VALUES (?, 'error', 'stats-stale')").bind(old).run();
+    const token = await adminToken();
+    const r = await authed('/logs/stats?since=168', token);
+    expect(r.status).toBe(200);
+    expect(r.body.hours, 'stats looked back past the retention window').toBe(24);
+    expect(r.body.retention_hours).toBe(24);
+    expect(await count('logs', "event = 'stats-stale'"), 'stats left a 30-hour-old row in the table').toBe(0);
   });
 });
 
