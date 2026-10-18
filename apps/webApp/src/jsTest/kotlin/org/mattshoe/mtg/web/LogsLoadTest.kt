@@ -1,9 +1,18 @@
 package org.mattshoe.mtg.web
 
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.respond
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.headersOf
+import io.ktor.serialization.kotlinx.json.json
 import kotlinx.browser.document
 import kotlinx.browser.window
 import kotlinx.coroutines.await
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
 import org.mattshoe.mtg.core.MtgApi
 import org.mattshoe.mtg.core.Scryfall
 import org.w3c.dom.HTMLElement
@@ -22,10 +31,8 @@ import kotlin.test.assertTrue
  *
  * Nothing on the website ever asked the Worker for them: `loadFor` had
  * no branch for the log, so the page drew its empty state over a list
- * nobody had fetched. The real client and the real page, with the
- * browser's `fetch` playing the Worker, as `SessionCookieTest` does —
- * so the session cookie has to go with the call for the log to come
- * back. Sibling of Android's `LogsLoadTest`.
+ * nobody had fetched. The real page, over a stubbed Worker.
+ * Sibling of Android's `LogsLoadTest`.
  */
 class LogsLoadTest {
 
@@ -45,51 +52,63 @@ class LogsLoadTest {
     fun playTheWorker() {
         asked = 0
         broken = false
-        realFetch = window.asDynamic().fetch
-        window.asDynamic().fetch = { input: dynamic, init: dynamic ->
-            val url = if (jsTypeOf(input) == "string") input as String else input.url as String
-            val withCookie = init?.credentials == "include"
-            val path = url.substringAfter("://").substringAfter('/', "").let { "/" + it.substringBefore('?') }
-            val (status, body) = when {
-                path == "/auth/me" ->
-                    if (withCookie) 200 to """{"key":"e7de0cb1","name":"Matt","role":"admin"}""" else 200 to "{}"
-                path == "/logs" -> {
+        // The Worker, behind a stubbed engine as `AppDriverTest` has it.
+        // This played the Worker through the browser's `fetch` with the
+        // real client, as `SessionCookieTest` does, and every MtgApp test
+        // after it in the suite then stalled: RulesPageTest and
+        // SessionCookieTest failed and the web suite ran 19 minutes.
+        // The cookie is `SessionCookieTest`'s to prove.
+        val engine = MockEngine { request ->
+            val (status, body) = when (request.url.encodedPath) {
+                "/logs" -> {
                     asked++
-                    when {
-                        broken -> 500 to """{"error":"D1 is unavailable"}"""
-                        !withCookie -> 401 to """{"error":"admin mode required","admin_required":true}"""
-                        else -> 200 to LOGS
-                    }
+                    if (broken) HttpStatusCode.InternalServerError to """{"error":"D1 is unavailable"}"""
+                    else HttpStatusCode.OK to LOGS
                 }
-                path == "/releases" -> 200 to "[]"
-                else -> 200 to """{"cols":[],"rows":[],"n":0}"""
+                "/releases" -> HttpStatusCode.OK to "[]"
+                else -> HttpStatusCode.OK to """{"cols":[],"rows":[],"n":0}"""
             }
-            Promise.resolve(
-                Response(body, ResponseInit(status = status.toShort(), headers = js("({'Content-Type':'application/json'})"))),
-            )
+            respond(body, status, headersOf(HttpHeaders.ContentType, "application/json"))
         }
-        MtgApp.useForTesting(MtgApi(base), Scryfall())
+        val http = HttpClient(engine) {
+            install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true; isLenient = true }) }
+        }
+        MtgApp.useForTesting(MtgApi.withEngine(base, http), Scryfall.withEngine(http))
+        // Who the session is goes by `window.fetch`; see `AppDriverTest`.
+        if (realFetch == null) realFetch = window.asDynamic().fetch
+        window.asDynamic().fetch = { url: dynamic, init: dynamic ->
+            if ("$url".contains("/auth/me")) {
+                Promise.resolve(
+                    Response(
+                        """{"key":"e7de0cb1","name":"Matt","role":"admin"}""",
+                        ResponseInit(status = 200, headers = js("({'Content-Type':'application/json'})")),
+                    ),
+                )
+            } else {
+                realFetch!!(url, init)
+            }
+        }
     }
 
     @AfterTest
     fun cleanUp() {
+        val back = realFetch
+        if (back != null) window.asDynamic().fetch = back
         MtgApp.unmount()
-        window.asDynamic().fetch = realFetch
         roots.forEach { it.remove() }
         roots.clear()
         screen?.frame?.remove()
         screen = null
-        window.location.hash = ""
-        // Left scrolled, the next tablet test's frame sits above the
-        // viewport, Chrome stops giving it animation frames, and that
-        // test waits on one forever: LoreOnATabletTest hung the web
-        // suite this way, and RulesPageTest and SessionCookieTest
-        // failed behind it.
+        // `replace` rather than setting the hash, here and below, so
+        // these visits leave no steps in the history for a later test's
+        // back to walk into. And the page put back at the top, where a
+        // tablet test's frame expects to be seen.
+        window.location.replace("#")
         window.scrollTo(0.0, 0.0)
     }
 
     private fun mount(hash: String, into: HTMLElement? = null): HTMLElement {
-        window.location.hash = hash
+        window.location.replace(hash)
         val view = into ?: (document.createElement("div") as HTMLElement).also {
             document.body!!.appendChild(it)
             roots += it
@@ -132,9 +151,9 @@ class LogsLoadTest {
         assertFalse("Nothing logged." in text, "a failure reads as an empty log: $text")
 
         broken = false
-        window.location.hash = "#/search"
+        window.location.replace("#/search")
         tick()
-        window.location.hash = "#/logs"
+        window.location.replace("#/logs")
         waitFor("the log on the second visit", root) { rows(root).size == 2 }
         assertFalse("D1 is unavailable" in root.textContent.orEmpty(), "the old failure is still on screen")
     }
