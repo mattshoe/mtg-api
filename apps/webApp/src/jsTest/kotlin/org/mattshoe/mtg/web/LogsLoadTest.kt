@@ -80,6 +80,12 @@ class LogsLoadTest {
         screen?.frame?.remove()
         screen = null
         window.location.hash = ""
+        // Left scrolled, the next tablet test's frame sits above the
+        // viewport, Chrome stops giving it animation frames, and that
+        // test waits on one forever: LoreOnATabletTest hung the web
+        // suite this way, and RulesPageTest and SessionCookieTest
+        // failed behind it.
+        window.scrollTo(0.0, 0.0)
     }
 
     private fun mount(hash: String, into: HTMLElement? = null): HTMLElement {
