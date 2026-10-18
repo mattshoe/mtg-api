@@ -36,6 +36,13 @@ enum class View(
     LIBRARY("search", "Library"),
     DECKS("decks", "Decks"),
     /**
+     * Everybody's collections, as tiles, and any one of them as a
+     * Library. See `Users.kt`.
+     *
+     * Matt: "i should have a bottom nav option to browse users".
+     */
+    USERS("users", "Users"),
+    /**
      * A deck list in, where every card is filed out. See `FetchList.kt`.
      *
      * Matt: "this feature should take the place of the stats tab in

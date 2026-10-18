@@ -77,6 +77,7 @@ private val HOLDS_NOTHING = setOf(Overlay.CHEATSHEET)
 
 private fun busyOn(s: AppState, v: View): Boolean = when (v) {
     View.LIBRARY -> s.library.busy
+    View.USERS -> s.users.busy
     View.DECKS -> s.decks.busy
     View.STATS -> s.stats.busy
     View.LOGS -> s.logs.busy
@@ -89,6 +90,7 @@ private fun busyOn(s: AppState, v: View): Boolean = when (v) {
 
 private fun errorOn(s: AppState, v: View): String? = when (v) {
     View.LIBRARY -> s.library.error
+    View.USERS -> s.users.error
     View.DECKS -> s.decks.error
     View.STATS -> s.stats.error
     View.LOGS -> s.logs.error
@@ -2025,6 +2027,7 @@ class LoadNeedsTest {
         View.entries.forEach {
             val expected = when (it) {
                 View.LIBRARY -> listOf("cards", "count")
+                View.USERS -> listOf("users")
                 View.DECKS -> listOf("decks")
                 View.STATS -> listOf("totals")
                 View.LOGS -> listOf("logs")
@@ -2049,8 +2052,9 @@ class LoadNeedsTest {
     }
 
     @Test
-    fun anythingAfterTheSlashOnlyMattersForDecks() {
-        View.entries.filterNot { it == View.DECKS }.forEach {
+    fun anythingAfterTheSlashOnlyMattersForDecksAndUsers() {
+        // Users: `#/users/<key>` is that person's Library. See `UsersTest`.
+        View.entries.filterNot { it == View.DECKS || it == View.USERS }.forEach {
             assertEquals(Load.needs(Route(it)), Load.needs(Route(it, "rest")), it.slug)
         }
     }

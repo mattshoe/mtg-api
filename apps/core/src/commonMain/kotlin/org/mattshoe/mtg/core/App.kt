@@ -50,6 +50,8 @@ data class AppState(
     val resolvedCollection: String = "",
     /** Who is there, for the Admin Settings screen. */
     val people: People = People(),
+    /** Everybody's collections, for the Users tab. See `Users.kt`. */
+    val users: UsersState = UsersState(),
     /** Every build that shipped, for the release notes on Admin Settings. */
     val releases: Releases = Releases(),
     /** The Guide's rules page: the Comprehensive Rules, once fetched, and what was searched. */
@@ -102,7 +104,7 @@ data class AppState(
         // stack left a half-typed new deck and a stale palette answer
         // sitting behind the nav bar, so the next `/` showed rows that
         // answered a search from two screens ago.
-        return overlays.stack.fold(this) { s, o -> s.forget(o) }.copy(
+        val next = overlays.stack.fold(this) { s, o -> s.forget(o) }.copy(
             route = landed,
             toast = null,
             toastFailed = false,
@@ -120,6 +122,13 @@ data class AppState(
             // task list; anywhere else is. See `Tasks.fresh`.
             tasks = if (landed == route) tasks else tasks.stale(),
         )
+        // The Library's rows answer a collection as well as its
+        // filters. Going from your cards to somebody's on the Users
+        // tab changes only the first, so without this the rows on
+        // screen would be "fresh" and the wrong person's.
+        // A card is not a collection; coming back from one keeps them.
+        return if (landed.view == View.CARD || route.view == View.CARD || next.viewing == viewing) next
+        else next.copy(library = next.library.copy(loadedFor = null))
     }
 
     fun navigate(view: View, rest: String = "") = navigate(Route(view, rest))
@@ -201,7 +210,23 @@ data class AppState(
      * are.
      */
     val viewing: String
-        get() = resolvedCollection.ifEmpty { admin.account?.key.orEmpty() }
+        get() = browsing ?: resolvedCollection.ifEmpty { admin.account?.key.orEmpty() }
+
+    /**
+     * Whose Library the Users tab has open, `#/users/<key>`, or null.
+     *
+     * Only while you are on it. Your own Library tab stays yours,
+     * which is the difference between this and following a shared
+     * link: that names the collection the whole app is about.
+     */
+    private val browsing: String?
+        get() = route.rest.takeIf { view == View.USERS && it.isNotBlank() }
+
+    /** The person whose Library is open on the Users tab, once the list has them. */
+    val browsed: Collector? get() = browsing?.let { users.find(it) }
+
+    /** A tile tapped: their Library, under the Users tab. */
+    fun browseUser(key: String): AppState = navigate(Route(View.USERS, key))
 
     /**
      * Where to send somebody who arrived without naming a collection.
@@ -262,7 +287,7 @@ data class AppState(
      * that key names a collection outright: a link somebody sent
      * works for a stranger, which is the whole point of having one.
      */
-    val collectionKnown: Boolean get() = admin.settled || resolvedCollection.isNotEmpty()
+    val collectionKnown: Boolean get() = admin.settled || resolvedCollection.isNotEmpty() || browsing != null
 
     /**
      * Which collection the stats are about: the one on screen.
@@ -562,6 +587,7 @@ data class AppState(
      */
     fun fetching(view: View = this.view): AppState = when (view) {
         View.LIBRARY -> copy(library = library.loading())
+        View.USERS -> if (browsing != null) copy(library = library.loading()) else copy(users = users.loading())
         View.DECKS -> copy(decks = decks.loading())
         View.STATS -> copy(stats = stats.loading())
         View.LOGS -> copy(logs = logs.loading())
@@ -595,6 +621,7 @@ data class AppState(
     /** And the same screen, told why it has nothing to show. */
     fun fetchFailed(message: String, view: View = this.view): AppState = when (view) {
         View.LIBRARY -> copy(library = library.failed(message))
+        View.USERS -> if (browsing != null) copy(library = library.failed(message)) else copy(users = users.failed(message))
         View.DECKS -> copy(decks = decks.failed(message))
         View.STATS -> copy(stats = stats.failed(message))
         View.LOGS -> copy(logs = logs.failed(message))
@@ -624,6 +651,7 @@ data class AppState(
         View.ENTRY, View.FETCH, View.GUIDE -> this
         View.CARD -> if (card == null) this else fetching().copy(pulled = view)
         View.LIBRARY -> copy(library = library.copy(loadedFor = null)).fetching().copy(pulled = view)
+        View.USERS -> copy(library = library.copy(loadedFor = null)).fetching().copy(pulled = view)
         else -> fetching().copy(pulled = view, tasks = tasks.stale())
     }
 
@@ -644,6 +672,7 @@ data class AppState(
     private val pageBusy: Boolean
         get() = when (view) {
             View.LIBRARY -> library.busy
+            View.USERS -> if (browsing != null) library.busy else users.busy
             View.DECKS -> decks.busy
             View.STATS -> stats.busy
             View.LOGS -> logs.busy
@@ -1022,6 +1051,9 @@ object Load {
      */
     fun needs(route: Route, collectionKnown: Boolean = true): List<String> = when (route.view) {
         View.LIBRARY -> if (collectionKnown) listOf("cards", "count") else emptyList()
+        // The tiles are every account; a tile's page is a Library
+        // whose key is in the address, so it never waits on who you are.
+        View.USERS -> if (route.rest.isEmpty()) listOf("users") else listOf("cards", "count")
         View.DECKS -> when {
             !collectionKnown -> emptyList()
             route.rest.isEmpty() -> listOf("decks")
