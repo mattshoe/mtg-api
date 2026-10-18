@@ -379,6 +379,15 @@ CREATE TABLE devices (
 );
 CREATE INDEX idx_devices_user ON devices(user_id);
 
+-- Saved Fetch lists, kept against the account so every device sees the
+-- same ones. One row per account, the whole set as the apps send it.
+-- See src/fetchLists.js and migrations/0014.
+CREATE TABLE fetch_lists (
+  user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  lists      TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 -- Every task and where it is. Written in the app and collected by the
 -- laptop that dispatches requests, or written there straight into
 -- requests/, and either way its status is written here by the
