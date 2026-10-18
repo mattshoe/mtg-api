@@ -79,7 +79,7 @@ class UsersPageTest {
         frame.style.left = "0px"
         document.body!!.appendChild(frame)
         roots += frame
-        renderComposable(root = frame, content = shell(start))
+        renderComposable(root = frame) { shell(start)() }
         return frame
     }
 
@@ -164,12 +164,12 @@ class UsersPageTest {
 
     private suspend fun tilesSitInAGrid(size: Pair<Int, Int>) {
         val s = Tablet.open(size).also { screen = it }
-        renderComposable(root = s.body, content = shell(onTiles()))
+        renderComposable(root = s.body) { shell(onTiles())() }
         settle(s.window)
         val doc = s.frame.contentDocument!!
         val on = "on a ${size.first} by ${size.second} screen"
-        val a = doc.all("[data-user='k1']").single().getBoundingClientRect()
-        val b = doc.all("[data-user='k2']").single().getBoundingClientRect()
+        val a = (doc.all("[data-user='k1']").singleOrNull() ?: error("$on Kayla has no tile")).getBoundingClientRect()
+        val b = (doc.all("[data-user='k2']").singleOrNull() ?: error("$on Matt has no tile")).getBoundingClientRect()
         assertTrue(
             abs(a.top - b.top) < 2.0 && b.left > a.right,
             "$on the tiles are one long column: Kayla's at ${a.left},${a.top}, Matt's at ${b.left},${b.top}",
@@ -186,7 +186,7 @@ class UsersPageTest {
     @Test
     fun theirLibraryFitsAFoldingPhoneOpenedOut() = runTest {
         val s = Tablet.open(Tablet.UNFOLDED).also { screen = it }
-        renderComposable(root = s.body, content = shell(onTiles().browseUser("k1")))
+        renderComposable(root = s.body) { shell(onTiles().browseUser("k1"))() }
         settle(s.window)
         val doc = s.frame.contentDocument!!
         assertTrue(doc.body!!.textContent.orEmpty().contains("Kayla's cards"), "the browsed Library does not say whose it is")

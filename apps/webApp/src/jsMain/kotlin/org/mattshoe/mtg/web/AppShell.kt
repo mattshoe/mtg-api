@@ -137,6 +137,8 @@ fun AppShell(
     onCancelTask: (String) -> Unit = {},
     onFetch: () -> Unit = {},
     onSaveFetch: () -> Unit = {},
+    /** The page on screen, asked for again: a failed Users list's Try again. */
+    onRefresh: () -> Unit = {},
 ) {
     // The page underneath an overlay holds still. `overscroll-behavior`
     // on the overlay only stops the chaining once the overlay itself
@@ -151,8 +153,10 @@ fun AppShell(
     // `.tabs` into a hamburger drawer below 720px and opens it from the
     // header's own JavaScript, so borrowing that class left the phone
     // with no navigation at all.
-    when (state.view) {
-        View.LIBRARY -> LibraryPage(
+    // Two tabs draw it: your own Library, and anybody's under Users.
+    // One call, so the two cannot drift.
+    val library: @Composable () -> Unit = {
+        LibraryPage(
             state = state.library,
             onState = { onState(state.filtered(it)) },
             onSearch = onSearch,
@@ -182,6 +186,22 @@ fun AppShell(
             onDismissNames = onDismissNames ?: { onState(state.copy(complete = state.complete.closed())) },
             facets = state.facets,
         )
+    }
+
+    when (state.view) {
+        View.LIBRARY -> library()
+
+        // The tiles, or one person's Library under them.
+        View.USERS -> if (state.route.rest.isEmpty()) {
+            UsersPage(
+                state = state.users,
+                onOpen = { onState(state.browseUser(it.key)) },
+                onRetry = onRefresh,
+            )
+        } else {
+            BrowsedHead(state.browsed?.shownName ?: state.route.rest) { onState(state.navigate(View.USERS)) }
+            library()
+        }
 
         View.DECKS -> DecksPage(
             state = state.decks,
@@ -201,6 +221,7 @@ fun AppShell(
         )
 
         View.STATS -> StatsPage(state.stats) { onState(state.copy(stats = it)) }
+
 
         View.FETCH -> FetchListPage(
             state = state.fetch,

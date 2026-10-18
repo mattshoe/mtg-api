@@ -2,6 +2,7 @@ package org.mattshoe.mtg.web
 
 import org.mattshoe.mtg.core.onRules
 import org.mattshoe.mtg.core.TaskDetail
+import org.mattshoe.mtg.core.UserQueries
 import org.mattshoe.mtg.core.openTaskKey
 import org.mattshoe.mtg.core.taskCancelled
 import org.mattshoe.mtg.core.CommanderRank
@@ -424,6 +425,7 @@ object MtgApp {
                 onCancelTask = { cancelTask(it) },
                 onFetch = { fetchCards() },
                 onSaveFetch = { app = app.savedFetch(now()) },
+                onRefresh = { refresh() },
             )
         }
     }
@@ -690,6 +692,15 @@ object MtgApp {
             // hundred cards again, and emptied the grid to do it.
             View.LIBRARY -> if (!s.library.fresh) searchSoon()
 
+            // The tiles, or one person's Library: `search` is scoped
+            // by `viewing`, which is the key in the address here.
+            View.USERS -> if (s.route.rest.isNotEmpty()) {
+                if (!s.library.fresh) searchSoon()
+            } else {
+                app = app.fetching(View.USERS)
+                intoPage(View.USERS) { loadUsers() }
+            }
+
             View.DECKS -> {
                 app = app.fetching(View.DECKS)
                 intoPage(View.DECKS) {
@@ -850,6 +861,12 @@ object MtgApp {
      * stayed on "Creating…" for as long as anybody was willing to
      * watch it.
      */
+    /** Everybody's collection, for the Users tab. Sibling of the phone's `loadUsers`. */
+    private suspend fun loadUsers(): AppState {
+        val r = api.query(UserQueries.all())
+        return app.copy(users = app.users.loaded(UserQueries.decode(r.cols, r.rows)))
+    }
+
     private suspend fun loadDecks(): AppState {
         // One collection's decks, not every deck in the database.
         // The collection on screen, or every one of them for a reader

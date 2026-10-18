@@ -607,7 +607,7 @@ private fun RuleCard(rule: Rule, open: Boolean, onToggle: () -> Unit) {
 }
 
 /** The colours left to right, each its own stretch of the strip. */
-private fun band(pips: String): String {
+internal fun band(pips: String): String {
     val colours = pips.map { Design.css(Design.pip(it.toString())) }
     if (colours.size == 1) return "linear-gradient(90deg, ${colours[0]}, ${colours[0]})"
     return "linear-gradient(90deg, ${colours.joinToString(", ")})"
