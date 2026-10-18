@@ -70,6 +70,9 @@ internal class FakeWorker private constructor(
     /** `/fetch-lists` answers 500 while this is true, the way a D1 outage would. */
     @Volatile var fetchListsFail: Boolean = false
 
+    /** The Users tab's list answers 500 while this is true. See `UsersJourneyTest`. */
+    @Volatile var usersFail: Boolean = false
+
     /**
      * The account's saved Fetch lists, in the real `fetch_lists` table
      * from `schema.sql`: one row for the session's account, the whole
@@ -170,6 +173,7 @@ internal class FakeWorker private constructor(
             ?: return fail(400, "not JSON")
         val sql = request.optString("sql")
         if (sql.isBlank()) return fail(400, "no sql")
+        if (usersFail && "FROM users u" in sql) return fail(500, "D1 is down")
         synchronized(statements) { statements.add(sql) }
         val params = request.optJSONArray("params") ?: JSONArray()
         return try {
