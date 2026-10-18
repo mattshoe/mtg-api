@@ -9,7 +9,7 @@
 // working is visible rather than merely absent.
 
 import { makeThrottle } from './throttle.js';
-import { pruneLogs, RETENTION_DAYS } from './log.js';
+import { pruneLogs } from './log.js';
 
 const SCRYFALL = 'https://api.scryfall.com';
 const UA = 'MattMTGCollectionAPI/1.0';
@@ -198,8 +198,8 @@ export async function runMaintenance(db, { fetchImpl = fetch, only, tasks: want 
   const tasks = [
     ['prices', () => refreshPrices(db, { fetchImpl })],
     ['prune-prices', () => prunePrices(db)],
-    // Logs are kept for a week. Without this they would grow forever.
-    ['prune-logs', () => pruneLogs(db, RETENTION_DAYS)],
+    // Logs are kept for a day. The hourly trigger does this too.
+    ['prune-logs', () => pruneLogs(db)],
     // An idempotency key only matters for as long as a client might
     // still be retrying under it, which is seconds. A day is generous
     // and keeps the table from growing forever.

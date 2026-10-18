@@ -74,6 +74,8 @@ export default defineWorkersConfig({
       // Drives scripts/emulator.mjs with a stubbed adb on PATH, so it needs
       // node:child_process too.
       'test/emulator-script.test.js', 'test/gate-resume.test.js', 'test/guard-lock.test.js', 'test/icon-actions.test.js', 'test/device-classes.test.js',
+      // Reads wrangler.toml off disk, which workerd cannot.
+      'test/log-cron.test.js',
     ],
     setupFiles: ['./test/setup.js'],
     // A stuck test fails; it does not hang the run. Without these a

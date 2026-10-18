@@ -10,9 +10,18 @@
 //      minted from it are stripped before anything reaches the table, and
 //      the /admin body is never recorded at all.
 //
-// Rows live a week; the daily maintenance job prunes them.
+// Rows live a day. Matt: "logs older than 24hrs should always be deleted".
+// An hourly cron prunes them, and reading the log prunes first, so the
+// page never shows a row past the window even between cron runs.
 
-export const RETENTION_DAYS = 7;
+export const RETENTION_HOURS = 24;
+
+/** The trigger in wrangler.toml that runs the prune and nothing else. */
+export const LOG_PRUNE_CRON = '0 * * * *';
+
+/** Where the window starts, right now. */
+export const retentionCutoff = (hours = RETENTION_HOURS) =>
+  new Date(Date.now() - hours * 3600_000).toISOString();
 
 const MAX_MESSAGE = 400;
 const MAX_DETAIL = 20000;
@@ -289,8 +298,11 @@ export function buildLogQuery(params) {
 }
 
 /** Headline numbers for the top of the log page. */
-export async function logStats(db, hours = 24) {
-  const since = new Date(Date.now() - hours * 3600_000).toISOString();
+export async function logStats(db, hours = RETENTION_HOURS) {
+  // Nothing older than the window exists, so asking for more is asking
+  // for the window.
+  hours = Math.min(Number(hours) > 0 ? Number(hours) : RETENTION_HOURS, RETENTION_HOURS);
+  const since = retentionCutoff(hours);
   const [byLevel, byEvent, slowest, recentErrors] = await Promise.all([
     db.prepare('SELECT level, COUNT(*) AS n FROM logs WHERE ts >= ? GROUP BY level').bind(since).all(),
     db.prepare('SELECT event, COUNT(*) AS n, ROUND(AVG(ms)) AS avg_ms FROM logs WHERE ts >= ? GROUP BY event ORDER BY n DESC LIMIT 12').bind(since).all(),
@@ -306,13 +318,13 @@ export async function logStats(db, hours = 24) {
     errors: recentErrors?.n ?? 0,
     oldest: oldest?.t || null,
     total: oldest?.n ?? 0,
-    retention_days: RETENTION_DAYS,
+    retention_hours: RETENTION_HOURS,
   };
 }
 
-/** Delete anything past the retention window. Called by the daily job. */
-export async function pruneLogs(db, days = RETENTION_DAYS) {
-  const cutoff = new Date(Date.now() - days * 86400_000).toISOString();
+/** Delete anything past the retention window. Hourly, and before every read. */
+export async function pruneLogs(db, hours = RETENTION_HOURS) {
+  const cutoff = retentionCutoff(hours);
   const r = await db.prepare('DELETE FROM logs WHERE ts < ?').bind(cutoff).run();
   return { removed: r.meta?.changes ?? 0, cutoff };
 }

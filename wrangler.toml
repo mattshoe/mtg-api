@@ -19,8 +19,9 @@ migrations_dir = "migrations"
 
 # Daily maintenance: re-price the collection, prune, sweep, health check.
 # 08:10 UTC is a little after Scryfall publishes its daily price update.
+# Hourly: delete logs over 24 hours old, LOG_PRUNE_CRON in src/log.js.
 [triggers]
-crons = ["10 8 * * *"]
+crons = ["10 8 * * *", "0 * * * *"]
 
 [observability]
 enabled = true

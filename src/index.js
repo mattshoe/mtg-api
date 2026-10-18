@@ -50,7 +50,7 @@ import {
 import { startSignIn, finishSignIn, verifyIdToken } from './google.js';
 import { lookupPrices } from './prices.js';
 import { runMaintenance, CRON_TASKS } from './maintenance.js';
-import { newEntry, startEntry, writeEntry, buildLogQuery, logStats } from './log.js';
+import { newEntry, startEntry, writeEntry, buildLogQuery, logStats, pruneLogs, LOG_PRUNE_CRON } from './log.js';
 import { keyFrom, claim, remember, release } from './idempotency.js';
 import { newTask, inbox, received, list as taskList, setStatus, task as oneTask, summary as taskSummary } from './tasks.js';
 import { releases } from './releases.js';
@@ -344,6 +344,12 @@ const touchesLogs = (sql) => typeof sql === 'string'
 export default {
   /** Cloudflare Cron Trigger. Nothing has to be awake for this to run. */
   async scheduled(event, env, ctx) {
+    // The hourly trigger prunes the log and does nothing else. The daily
+    // job re-prices the collection and is not something to run 24 times.
+    if (event?.cron === LOG_PRUNE_CRON) {
+      ctx.waitUntil(pruneLogs(env.DB));
+      return;
+    }
     ctx.waitUntil(runMaintenance(env.DB, {
       fetchImpl: env.SCRYFALL_FETCH || fetch,
       tasks: CRON_TASKS,
@@ -577,9 +583,14 @@ async function route(request, env, ctx, entry) {
       return denied(v.reason);
     }
     entry.admin = true;
+    // Anything past a day is deleted before anybody reads it, so the page
+    // never shows what the next hourly prune would have taken.
+    // A prune that fails is not a reason to show nothing; the hourly one
+    // will try again.
+    await pruneLogs(env.DB).catch(() => {});
 
     if (path === '/logs/stats') {
-      const hours = Number(url.searchParams.get('since')) || 24;
+      const hours = Number(url.searchParams.get('since')) || undefined;
       return json(await logStats(env.DB, hours));
     }
     const q = buildLogQuery(url.searchParams);
