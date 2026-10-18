@@ -118,10 +118,15 @@ class FetchListAccountTest {
         return launch()
     }
 
+    /**
+     * Runs the main looper, moving its clock on as it goes: a send waits
+     * `FetchListState.SEND_MS` for the next change, and a paused
+     * Robolectric looper never reaches a delayed task on `idle()` alone.
+     */
     private fun idleUntil(what: String, cond: () -> Boolean) {
         val looper = shadowOf(Looper.getMainLooper())
         repeat(500) {
-            looper.idle()
+            looper.idleFor(java.time.Duration.ofMillis(10))
             if (cond()) return
             Thread.sleep(10)
         }
@@ -180,8 +185,7 @@ class FetchListAccountTest {
         idleUntil("a failure toast") { activity.stateForTesting().toastFailed }
         assertEquals("Your saved Fetch lists did not load: D1 is down", activity.stateForTesting().toast)
         assertEquals(listOf("Only here"), titles(activity), "this phone's lists went with the failed load")
-        Thread.sleep(FetchListState.SEND_MS * 2)
-        shadowOf(Looper.getMainLooper()).idle()
+        shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(FetchListState.SEND_MS * 2))
         assertTrue(sent.isEmpty(), "this phone's copy was written over the account's before it had been read: $sent")
 
         // Try again, without restarting: leave the page and come back.

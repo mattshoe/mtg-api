@@ -50,6 +50,9 @@ import org.mattshoe.mtg.core.DisassembleState
 import org.mattshoe.mtg.core.EntryHistory
 import org.mattshoe.mtg.core.FetchList
 import org.mattshoe.mtg.core.FetchListState
+import org.mattshoe.mtg.core.SavedFetch
+import org.mattshoe.mtg.core.fetchListsFailedToLoad
+import org.mattshoe.mtg.core.fetchListsFailedToSave
 import org.mattshoe.mtg.core.findingFetch
 import org.mattshoe.mtg.core.savedFetch
 import org.mattshoe.mtg.core.find
@@ -126,9 +129,13 @@ class MainActivity : ComponentActivity() {
             if (value.fetch.saved != model.app.fetch.saved) FetchListState.persist(store, value.fetch.saved)
             // And the list on its page, ticks and all, saved or not.
             if (value.fetch.current != model.app.fetch.current) FetchListState.keep(store, value.fetch.current)
+            // And the account's copy, so the website has them too — once
+            // the account's lists have been read, never before.
+            val sendLists = value.fetch.synced && value.admin.signedIn && value.fetch.saved != model.app.fetch.saved
             // Every write, so a pull lets go of its spinner the moment
             // its page's fetch lands, whichever coroutine landed it.
             model.app = value.settled()
+            if (sendLists) sendFetchLists(value.fetch.saved)
             // Every write, so whichever path put a commander on screen —
             // its page, the carousel, a link — asks for its rank.
             model.app.commanderRankWanted?.let { askCommanderRank(it) }
@@ -142,6 +149,12 @@ class MainActivity : ComponentActivity() {
     private var findJob: Job?
         get() = model.findJob
         set(v) { model.findJob = v }
+    private var fetchSyncJob: Job?
+        get() = model.fetchSyncJob
+        set(v) { model.fetchSyncJob = v }
+    private var fetchSendJob: Job?
+        get() = model.fetchSendJob
+        set(v) { model.fetchSendJob = v }
     private var tweakJob: Job?
         get() = model.tweakJob
         set(v) { model.tweakJob = v }
@@ -295,6 +308,7 @@ class MainActivity : ComponentActivity() {
             } catch (e: Exception) {
                 app.say(e.message ?: "could not sign in", failed = true)
             }
+            syncFetchLists()
         }
     }
 
@@ -313,7 +327,10 @@ class MainActivity : ComponentActivity() {
      */
     private fun signOutOfGoogle() {
         val held = app.admin.token
-        app = app.copy(admin = app.admin.signOut()).navigate(app.route)
+        // The next account to sign in reads its own lists before
+        // anything is sent on its behalf.
+        fetchSendJob?.cancel()
+        app = app.copy(admin = app.admin.signOut(), fetch = app.fetch.copy(synced = false)).navigate(app.route)
         if (!held.isNullOrBlank()) {
             scope.launch {
                 runCatching {
@@ -361,6 +378,46 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * The account's saved Fetch lists, so the ones saved on the website
+     * are here too. Sibling of the web's `syncFetchLists`.
+     */
+    private fun syncFetchLists() {
+        val who = app.admin.account ?: return
+        if (fetchSyncJob?.isActive == true) return
+        fetchSyncJob = scope.launch {
+            app = try {
+                val theirs = api.fetchLists(token())
+                val merge = FetchListState.firstSync(store)
+                val next = app.copy(fetch = app.fetch.adopted(theirs, merge))
+                FetchListState.syncedAs(store, who.key)
+                next
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                app.fetchListsFailedToLoad(e.message ?: "that did not work")
+            }
+        }
+    }
+
+    /**
+     * Every saved list to the account, after a change. A tick is a
+     * change, so a run of them is one send: each cancels the one before.
+     */
+    private fun sendFetchLists(lists: List<SavedFetch>) {
+        fetchSendJob?.cancel()
+        fetchSendJob = scope.launch {
+            delay(FetchListState.SEND_MS)
+            try {
+                api.saveFetchLists(token(), lists)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                app = app.fetchListsFailedToSave(e.message ?: "that did not work")
+            }
+        }
+    }
+
     private fun restoreAccount() {
         val held = app.admin.token
         if (held.isNullOrBlank()) {
@@ -375,6 +432,7 @@ class MainActivity : ComponentActivity() {
             app = app.copy(
                 admin = if (who != null) app.admin.signIn(who, held) else app.admin.settle(),
             )
+            syncFetchLists()
             // A gated route was held rather than bounced while the
             // answer was out — a share or a deep link to the wizard
             // must not land on the Library every time — so land it
@@ -718,6 +776,8 @@ class MainActivity : ComponentActivity() {
      * forgetting this cannot leak a row.
      */
     private fun loadFor(s: AppState) {
+        // The account's lists did not load before: the Fetch screen asks again.
+        if (s.view == View.FETCH && !s.fetch.synced) syncFetchLists()
         if (!s.collectionKnown && s.view in View.COLLECTION) return
         when (s.view) {
             View.LIBRARY -> {
