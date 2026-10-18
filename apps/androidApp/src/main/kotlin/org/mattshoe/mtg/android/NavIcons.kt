@@ -160,6 +160,41 @@ fun ProfileIcon(tint: Color, size: Dp = 22.dp, modifier: Modifier = Modifier) =
     }
 
 /**
+ * Everybody: two people, one a step behind the other. `app.css`'s
+ * `.nav-icon-users` is the same shape.
+ */
+@Composable
+fun UsersIcon(tint: Color, size: Dp = 22.dp, modifier: Modifier = Modifier) =
+    Canvas(modifier.size(size)) {
+        val pen = Pen(this, tint)
+        pen.circle(9f, 8.5f, 3.5f)
+        pen.path { p ->
+            moveTo(p.at(2.5f, 20f).x, p.at(2.5f, 20f).y)
+            cubicTo(
+                p.at(3f, 16f).x, p.at(3f, 16f).y,
+                p.at(15f, 16f).x, p.at(15f, 16f).y,
+                p.at(15.5f, 20f).x, p.at(15.5f, 20f).y,
+            )
+        }
+        pen.path { p ->
+            moveTo(p.at(15f, 5.2f).x, p.at(15f, 5.2f).y)
+            cubicTo(
+                p.at(18.5f, 5.2f).x, p.at(18.5f, 5.2f).y,
+                p.at(18.5f, 11.8f).x, p.at(18.5f, 11.8f).y,
+                p.at(15f, 11.8f).x, p.at(15f, 11.8f).y,
+            )
+        }
+        pen.path { p ->
+            moveTo(p.at(17.5f, 15.5f).x, p.at(17.5f, 15.5f).y)
+            cubicTo(
+                p.at(20f, 16.2f).x, p.at(20f, 16.2f).y,
+                p.at(21.3f, 18f).x, p.at(21.3f, 18f).y,
+                p.at(21.5f, 20f).x, p.at(21.5f, 20f).y,
+            )
+        }
+    }
+
+/**
  * The icon for a view, by the view.
  *
  * One place, so a tab cannot be added to `Admin.bar` and then drawn
@@ -173,6 +208,7 @@ fun NavIcon(view: View, tint: Color, size: Dp = 22.dp, modifier: Modifier = Modi
     when (view) {
         View.LIBRARY -> LibraryIcon(tint, size, tagged)
         View.DECKS -> DecksIcon(tint, size, tagged)
+        View.USERS -> UsersIcon(tint, size, tagged)
         View.STATS -> StatsIcon(tint, size, tagged)
         View.FETCH -> FetchIcon(tint, size, tagged)
         View.GUIDE -> GuideIcon(tint, size, tagged)

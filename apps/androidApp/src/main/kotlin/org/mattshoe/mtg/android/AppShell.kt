@@ -371,8 +371,10 @@ fun AppShell(
                 // landed on nothing and the pull went nowhere. Any
                 // touch the page does not take lands here instead.
                 Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()))
-                when (state.view) {
-                    View.LIBRARY -> LibraryScreen(
+                // Two tabs draw it: your own Library, and anybody's
+                // under Users. One call, so the two cannot drift.
+                val library: @Composable () -> Unit = {
+                    LibraryScreen(
                         state = state.library,
                         onState = { onState(state.filtered(it)) },
                         onSearch = onSearch,
@@ -403,6 +405,25 @@ fun AppShell(
                         facets = state.facets,
                         gridState = libraryGridState,
                     )
+                }
+                when (state.view) {
+                    View.LIBRARY -> library()
+
+                    // The tiles, or one person's Library under them.
+                    View.USERS -> if (state.route.rest.isEmpty()) {
+                        UsersScreen(
+                            state = state.users,
+                            onOpen = { onState(state.browseUser(it.key)) },
+                            onRetry = onRefresh,
+                        )
+                    } else {
+                        Column(Modifier.fillMaxSize()) {
+                            BrowsedHead(state.browsed?.shownName ?: state.route.rest) {
+                                onState(state.navigate(View.USERS))
+                            }
+                            library()
+                        }
+                    }
 
                     // Two destinations under one `View`, composed one at
                     // a time, and **the route decides which** — not
@@ -458,6 +479,7 @@ fun AppShell(
                     }
 
                     View.STATS -> StatsScreen(state.stats) { onState(state.copy(stats = it)) }
+
 
                     View.GUIDE -> GuideScreen(
                         tile = state.guideTile,

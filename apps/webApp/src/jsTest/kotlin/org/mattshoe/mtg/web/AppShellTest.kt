@@ -78,7 +78,7 @@ class AppShellTest {
      * it did.
      */
     @Test
-    fun lockedShowsFourTabsAndNoAdminOnes() = runTest {
+    fun lockedShowsFiveTabsAndNoAdminOnes() = runTest {
         val root = mount(AppState())
         settle()
         val tabs = root.tabs()
@@ -93,7 +93,7 @@ class AppShellTest {
         // hamburger, which is places to go and nothing else.
         assertFalse(tabs.contains("Log in"), "the shared password is back")
         assertTrue(tabs.contains("Sign in with Google"))
-        assertEquals(4, root.querySelectorAll(".app-menu button").length, tabs.toString())
+        assertEquals(5, root.querySelectorAll(".app-menu button").length, tabs.toString())
         assertEquals(1, root.querySelectorAll(".profile-menu .app-lock").length, tabs.toString())
     }
 

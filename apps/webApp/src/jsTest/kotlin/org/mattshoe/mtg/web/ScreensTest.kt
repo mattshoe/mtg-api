@@ -618,11 +618,11 @@ class NavTest {
         val box = nav.getBoundingClientRect()
         assertTrue(box.width > 0 && box.height > 0, "the nav is not rendered: $box")
         assertEquals(1, root.querySelectorAll("button.nav-burger").length, "no hamburger")
-        // Three views while locked, and nothing else: who you are and
+        // Five views while locked (Users joined), and nothing else: who you are and
         // the ways in moved behind the profile avatar. It was four
         // views until the Query page went, and five buttons while the
         // account lived in here too.
-        assertEquals(4, root.querySelectorAll(".app-menu button").length)
+        assertEquals(5, root.querySelectorAll(".app-menu button").length)
         // The avatar beside it, which is the other half of the pair.
         assertEquals(1, root.querySelectorAll("button.nav-profile").length, "no profile button")
     }
@@ -760,7 +760,7 @@ class NavTest {
         fun labels(css: String) = root.querySelectorAll(css).let { n ->
             (0 until n.length).mapNotNull { (n[it] as? org.w3c.dom.HTMLElement)?.textContent?.trim() }
         }
-        assertEquals(listOf("Library", "Decks", "Fetch", "Guide", "Entry"), labels(".app-menu button"))
+        assertEquals(listOf("Library", "Decks", "Users", "Fetch", "Guide", "Entry"), labels(".app-menu button"))
         assertEquals(0, root.querySelectorAll(".app-menu .app-menu-sep").length, "a rule with nothing to divide")
 
         val behind = labels(".profile-menu button")

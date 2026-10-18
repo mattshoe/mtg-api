@@ -665,6 +665,23 @@ td.mono { font-family: var(--mono); font-size: 12.5px; }
   .guide-tile:hover { border-color: var(--line-2); transform: translateY(-1px); }
 }
 .guide-back { margin-bottom: 6px; }
+/* The Users tab: the Guide's tile with a face on it. `UsersScreen` is the phone's. */
+.users-intro { margin-bottom: 12px; }
+.user-tiles { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.user-tile { display: flex; align-items: center; gap: 14px; padding: 22px 16px 18px; }
+.user-face {
+  width: 56px; height: 56px; flex: none;
+  border-radius: 50%; border: 1px solid var(--line-2); object-fit: cover;
+}
+.user-initial {
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg-3); font: 700 22px/1 var(--sans);
+}
+.user-words { min-width: 0; }
+.user-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.users-retry { margin-top: 10px; }
+.users-head { display: flex; align-items: center; gap: 12px; padding-top: 10px; padding-bottom: 0; }
+.users-whose { font: 700 16px/1.2 var(--sans); }
 /* The colour page: one line per combination, WUBRG order, for scanning. */
 .combo-list { margin: 6px 0 4px; border-top: 1px solid var(--line); }
 .combo-row {

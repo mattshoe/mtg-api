@@ -77,6 +77,7 @@ private val HOLDS_NOTHING = setOf(Overlay.CHEATSHEET)
 
 private fun busyOn(s: AppState, v: View): Boolean = when (v) {
     View.LIBRARY -> s.library.busy
+    View.USERS -> s.users.busy
     View.DECKS -> s.decks.busy
     View.STATS -> s.stats.busy
     View.LOGS -> s.logs.busy
@@ -89,6 +90,7 @@ private fun busyOn(s: AppState, v: View): Boolean = when (v) {
 
 private fun errorOn(s: AppState, v: View): String? = when (v) {
     View.LIBRARY -> s.library.error
+    View.USERS -> s.users.error
     View.DECKS -> s.decks.error
     View.STATS -> s.stats.error
     View.LOGS -> s.logs.error
@@ -1489,16 +1491,16 @@ class AdminGateTest {
     @Test
     fun theMenuOffersTheUngatedOnesWhileLocked() {
         assertEquals(View.entries.filter { it.inNav && !it.gated }, locked.visible)
-        // Library, Decks, Fetch, Guide, and Stats behind the profile.
-        assertEquals(5, locked.visible.size)
+        // Library, Decks, Users, Fetch, Guide, and Stats behind the profile.
+        assertEquals(6, locked.visible.size)
     }
 
     @Test
     fun andEveryOneInTheNavForAnOperator() {
         assertEquals(View.entries.filter { it.inNav }, operator.visible)
-        assertEquals(8, operator.visible.size)
-        // Six for an ordinary account: the admin half is not theirs.
-        assertEquals(6, open.visible.size)
+        assertEquals(9, operator.visible.size)
+        // Seven for an ordinary account: the admin half is not theirs.
+        assertEquals(7, open.visible.size)
     }
 
     @Test
@@ -1787,10 +1789,10 @@ class RouteSpellingTest {
 class ViewTableTest {
 
     @Test
-    fun thereAreNineOfThem() {
-        // Nine, with the Guide. Eight with the Fetch list, seven with
+    fun thereAreTenOfThem() {
+        // Ten, with Users. nine with the Guide, eight with the Fetch list, seven with
         // Admin Settings, six after the Query page went.
-        assertEquals(9, View.entries.size)
+        assertEquals(10, View.entries.size)
     }
 
     @Test
@@ -1875,7 +1877,7 @@ class FetchingTest {
 
     @Test
     fun everyScreenThatFetchesSaysSo() {
-        val fetches = setOf(View.LIBRARY, View.DECKS, View.STATS, View.LOGS, View.ADMIN, View.CARD, View.FETCH)
+        val fetches = setOf(View.LIBRARY, View.USERS, View.DECKS, View.STATS, View.LOGS, View.ADMIN, View.CARD, View.FETCH)
         View.entries.forEach {
             assertEquals(it in fetches, busyOn(withACard.fetching(it), it), it.slug)
         }
@@ -1945,7 +1947,7 @@ class FetchFailedTest {
 
     @Test
     fun everyScreenWithSomewhereToSayItSaysIt() {
-        val says = setOf(View.LIBRARY, View.DECKS, View.STATS, View.LOGS, View.ADMIN, View.CARD, View.FETCH)
+        val says = setOf(View.LIBRARY, View.USERS, View.DECKS, View.STATS, View.LOGS, View.ADMIN, View.CARD, View.FETCH)
         View.entries.forEach {
             assertEquals(
                 if (it in says) "the database said no" else null,
@@ -2025,6 +2027,7 @@ class LoadNeedsTest {
         View.entries.forEach {
             val expected = when (it) {
                 View.LIBRARY -> listOf("cards", "count")
+                View.USERS -> listOf("users")
                 View.DECKS -> listOf("decks")
                 View.STATS -> listOf("totals")
                 View.LOGS -> listOf("logs")
@@ -2049,8 +2052,9 @@ class LoadNeedsTest {
     }
 
     @Test
-    fun anythingAfterTheSlashOnlyMattersForDecks() {
-        View.entries.filterNot { it == View.DECKS }.forEach {
+    fun anythingAfterTheSlashOnlyMattersForDecksAndUsers() {
+        // Users: `#/users/<key>` is that person's Library. See `UsersTest`.
+        View.entries.filterNot { it == View.DECKS || it == View.USERS }.forEach {
             assertEquals(Load.needs(Route(it)), Load.needs(Route(it, "rest")), it.slug)
         }
     }
