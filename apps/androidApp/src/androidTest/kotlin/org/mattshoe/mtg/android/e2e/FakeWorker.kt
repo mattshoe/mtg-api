@@ -64,6 +64,12 @@ internal class FakeWorker private constructor(
      */
     var whoAmI: String = "m4tt0001"
 
+    /** The session's role, as `/auth/me` says it. `admin` opens Admin Settings. */
+    var role: String = "user"
+
+    /** `/admin/users/delete` answers 500 while this is true. See `DeleteAccountJourneyTest`. */
+    @Volatile var deleteAccountFail: Boolean = false
+
     /** The token it hands back. */
     var token: String = "e2e-token"
 
@@ -144,6 +150,8 @@ internal class FakeWorker private constructor(
             "/query" -> query(body)
             "/auth/me" -> me(request.headers["Authorization"])
             "/fetch-lists" -> fetchLists(request.method.orEmpty(), request.headers["Authorization"], body)
+            "/admin/users" -> people(request.headers["Authorization"])
+            "/admin/users/delete" -> deleteAccount(request.headers["Authorization"], body)
             // Not served, and loudly rather than quietly: a journey
             // that reaches one of these is a journey this harness
             // cannot honestly run yet, and a silent empty answer
@@ -164,8 +172,51 @@ internal class FakeWorker private constructor(
             JSONObject()
                 .put("key", whoAmI)
                 .put("name", "Matt Shoemaker")
-                .put("role", "user"),
+                .put("role", role),
         )
+    }
+
+    /** Admin Settings' list: every account in the seed, as `allUsers` sends it. */
+    private fun people(authorization: String?): MockResponse {
+        if (authorization.orEmpty().removePrefix("Bearer ").trim() != session || role != "admin") {
+            return fail(403, "that needs the admin role")
+        }
+        val users = JSONArray()
+        synchronized(db) {
+            rows("SELECT key, display_name, role FROM users ORDER BY id").forEach { (key, name, r) ->
+                users.put(JSONObject().put("key", key).put("name", name).put("role", r))
+            }
+        }
+        return ok(JSONObject().put("users", users))
+    }
+
+    /**
+     * The account and what it owns, gone. The Worker's own SQL is
+     * proved by `test/delete-account.test.js`; this is the phone's
+     * half of the journey, so it only has to do what that does to the
+     * rows a journey can see.
+     */
+    private fun deleteAccount(authorization: String?, body: String): MockResponse {
+        if (authorization.orEmpty().removePrefix("Bearer ").trim() != session || role != "admin") {
+            return fail(403, "that needs the admin role")
+        }
+        if (deleteAccountFail) return fail(500, "D1 is down")
+        val key = runCatching { JSONObject(body).getString("key") }.getOrNull()
+            ?: return fail(400, "say which account")
+        if (key == whoAmI) return fail(409, "that is your own account; another admin has to delete it")
+        return synchronized(db) {
+            val id = db.prepare("SELECT id FROM users WHERE key = ?").use { s ->
+                s.bindText(1, key)
+                if (s.step()) s.getLong(0) else return@synchronized fail(404, "there is no account at $key")
+            }
+            listOf(
+                "DELETE FROM deck_cards WHERE deck_id IN (SELECT id FROM decks WHERE owner_id = ?)",
+                "DELETE FROM decks WHERE owner_id = ?",
+                "DELETE FROM cards WHERE owner_id = ?",
+                "DELETE FROM users WHERE id = ?",
+            ).forEach { q -> db.prepare(q).use { s -> s.bindLong(1, id); s.step() } }
+            ok(JSONObject().put("ok", true).put("key", key))
+        }
     }
 
     private fun query(body: String): MockResponse {
