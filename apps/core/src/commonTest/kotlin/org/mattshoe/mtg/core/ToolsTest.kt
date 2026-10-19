@@ -27,6 +27,20 @@ class ToolsTest {
         assertEquals("Tools", View.TOOLS.label)
     }
 
+    /**
+     * Matt: "the tools tab should always be on the far right of bottom
+     * nav". Last in `bar` is the far right on the phone and the bottom
+     * of the website's menu, whoever is signed in.
+     */
+    @Test
+    fun toolsIsAlwaysTheLastTabInTheBar() {
+        val operator = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t")
+        listOf("a stranger" to Admin(), "somebody signed in" to signedIn, "an operator" to operator)
+            .forEach { (who, admin) ->
+                assertEquals(View.TOOLS, admin.bar.last(), "for $who Tools is not the far right: ${admin.bar}")
+            }
+    }
+
     @Test
     fun toolsOffersFetchToAnybodyAndEntryOnceSignedIn() {
         assertEquals(listOf(View.FETCH), Admin().tools, "a stranger can enter cards, or cannot fetch")
