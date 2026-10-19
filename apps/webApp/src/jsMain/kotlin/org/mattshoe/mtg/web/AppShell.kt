@@ -266,6 +266,8 @@ fun AppShell(
 
         View.LOGS -> LogsPage(state.logs) { onState(state.copy(logs = it)) }
 
+        View.TOOLS -> {}
+
         View.GUIDE -> GuidePage(
             tile = state.guideTile,
             onOpen = { onState(state.openGuide(it)) },
