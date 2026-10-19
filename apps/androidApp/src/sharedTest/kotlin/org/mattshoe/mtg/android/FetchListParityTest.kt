@@ -102,9 +102,11 @@ class FetchListParityTest {
 
     private fun found() {
         shell(AppState(admin = me))
-        rule.onNodeWithContentDescription("Fetch").performClick()
+        rule.onNodeWithContentDescription("Tools").performClick()
         rule.waitForIdle()
-        assertEquals(View.FETCH, held.value.view, "the Fetch tab did not open the Fetch screen")
+        rule.onNodeWithTag("tool-tile-fetch").performClick()
+        rule.waitForIdle()
+        assertEquals(View.FETCH, held.value.view, "the Fetch tile under Tools did not open the Fetch screen")
         rule.onNodeWithTag("fetch-list").performTextInput(list)
         rule.waitForIdle()
         rule.onNodeWithTag("fetch-find").performClick()

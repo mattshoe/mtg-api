@@ -603,7 +603,7 @@ data class AppState(
         View.CARD -> copy(card = card?.loading())
         View.ENTRY -> this
         View.FETCH -> copy(fetch = fetch.loading())
-        View.GUIDE -> this
+        View.GUIDE, View.TOOLS -> this
     }
 
     /**
@@ -637,7 +637,7 @@ data class AppState(
         View.CARD -> copy(card = card?.failed(message))
         View.ENTRY -> broke(message)
         View.FETCH -> copy(fetch = fetch.failed(message))
-        View.GUIDE -> this
+        View.GUIDE, View.TOOLS -> this
     }
 
     /**
@@ -656,7 +656,7 @@ data class AppState(
      * ends at once.
      */
     fun refreshed(): AppState = when (view) {
-        View.ENTRY, View.FETCH, View.GUIDE -> this
+        View.ENTRY, View.FETCH, View.GUIDE, View.TOOLS -> this
         View.CARD -> if (card == null) this else fetching().copy(pulled = view)
         View.LIBRARY -> copy(library = library.copy(loadedFor = null)).fetching().copy(pulled = view)
         View.USERS -> copy(library = library.copy(loadedFor = null)).fetching().copy(pulled = view)
@@ -688,7 +688,7 @@ data class AppState(
             View.CARD -> card?.busy == true
             View.ENTRY -> false
             View.FETCH -> fetch.busy
-            View.GUIDE -> false
+            View.GUIDE, View.TOOLS -> false
         }
 
     /**
@@ -1077,7 +1077,7 @@ object Load {
         // Nothing until a list is pasted and Find is pressed.
         View.FETCH -> emptyList()
         // Everything on it is in `Guide`; it never asks the server.
-        View.GUIDE -> emptyList()
+        View.GUIDE, View.TOOLS -> emptyList()
     }
 
     /**

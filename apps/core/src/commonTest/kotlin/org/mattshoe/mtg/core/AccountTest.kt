@@ -77,8 +77,8 @@ class AccountTest {
     fun theGatedTabsFollowBeingSignedIn() {
         // Mass Entry writes to a collection, so it appears for an
         // account exactly as it appeared for the password.
-        assertTrue(View.ENTRY in Admin().signIn(me).bar)
-        assertFalse(View.ENTRY in Admin().bar)
+        assertTrue(View.ENTRY in Admin().signIn(me).tools)
+        assertFalse(View.ENTRY in Admin().tools)
     }
 
     @Test

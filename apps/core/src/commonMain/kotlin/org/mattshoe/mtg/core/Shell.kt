@@ -32,6 +32,11 @@ enum class View(
     val bar: Boolean = true,
     /** Whether it needs a role and not merely an account. */
     val operator: Boolean = false,
+    /**
+     * Whether the Tools tab offers it, as a tile, rather than the bar
+     * or the profile. See `Tools.kt`.
+     */
+    val tool: Boolean = false,
 ) {
     LIBRARY("search", "Library"),
     DECKS("decks", "Decks"),
@@ -43,13 +48,19 @@ enum class View(
      */
     USERS("users", "Users"),
     /**
+     * Fetch and Entry, as tiles. See `Tools.kt`.
+     *
+     * Matt: "let's collapse fetch and entry into a "Tools" tab".
+     */
+    TOOLS("tools", "Tools"),
+    /**
      * A deck list in, where every card is filed out. See `FetchList.kt`.
      *
      * Matt: "this feature should take the place of the stats tab in
      * bottom nav ... the stats feature can just move into the profile
      * menu".
      */
-    FETCH("fetch", "Fetch"),
+    FETCH("fetch", "Fetch", bar = false, tool = true),
     /** Behind the profile since the Fetch list took its place in the bar. */
     STATS("stats", "Stats", bar = false),
     /**
@@ -62,7 +73,7 @@ enum class View(
     GUIDE("guide", "Guide"),
     // "Mass Entry" wrapped onto two lines under an icon. The screen
     // is unchanged; only what the bar calls it.
-    ENTRY("entry", "Entry", gated = true),
+    ENTRY("entry", "Entry", gated = true, bar = false, tool = true),
     /**
      * Running the server, not owning cards.
      *
@@ -96,6 +107,9 @@ enum class View(
      */
     CARD("card", "Card", inNav = false, bar = false),
     ;
+
+    /** The bar tab that is lit while this is on screen: a tool lights Tools. */
+    val tab: View get() = if (tool) TOOLS else this
 
     companion object {
         val DEFAULT = LIBRARY
@@ -309,7 +323,10 @@ data class Admin(
      * Empty for almost everybody: the log is the one screen that
      * needs a role, and a role is Matt's to hand out.
      */
-    val behindProfile: List<View> get() = visible.filter { !it.bar }
+    val behindProfile: List<View> get() = visible.filter { !it.bar && !it.tool }
+
+    /** What the Tools tab offers: Fetch, and Entry once there is somebody to write as. */
+    val tools: List<View> get() = visible.filter { it.tool }
 
     /**
      * Where a route actually lands.

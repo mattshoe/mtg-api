@@ -116,7 +116,7 @@ object Inventory {
                 "theProfileOffersNoLogWhileLocked", "soIsEveryTabInTheBottomBar",
                 // Which views exist and where each one is offered.
                 "thereIsNoQueryPage", "theBarIsTheThreeAnybodyCanReach",
-                "unlockingAddsEntryToTheBarAndNothingElse", "massEntryIsOneWordInTheBar",
+                "unlockingAddsEntryToToolsAndNothingToTheBar", "massEntryIsOneWordInTheBar",
                 "theAdminHalfLivesBehindTheProfileAndNotInTheBar",
                 "everyItemInTheBarIsOneShortWord", "everythingReachableIsOfferedSomewhere",
             )),

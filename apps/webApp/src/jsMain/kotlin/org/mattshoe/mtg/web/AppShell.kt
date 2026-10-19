@@ -266,6 +266,9 @@ fun AppShell(
 
         View.LOGS -> LogsPage(state.logs) { onState(state.copy(logs = it)) }
 
+        // Fetch and Entry, as tiles; a tile opens the tool.
+        View.TOOLS -> ToolsPage(state.admin.tools) { onState(state.navigate(it)) }
+
         View.GUIDE -> GuidePage(
             tile = state.guideTile,
             onOpen = { onState(state.openGuide(it)) },

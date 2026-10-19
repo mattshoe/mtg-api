@@ -481,6 +481,9 @@ fun AppShell(
                     View.STATS -> StatsScreen(state.stats) { onState(state.copy(stats = it)) }
 
 
+                    // Fetch and Entry, as tiles; a tile opens the tool.
+                    View.TOOLS -> ToolsScreen(state.admin.tools) { onState(state.navigate(it)) }
+
                     View.GUIDE -> GuideScreen(
                         tile = state.guideTile,
                         onOpen = { onState(state.openGuide(it)) },
@@ -618,7 +621,8 @@ fun AppShell(
 
             BottomNav(
                 items = state.admin.bar,
-                current = state.view,
+                // A tool lights Tools, the tab it was opened from.
+                current = state.view.tab,
                 onGo = { view ->
                     menuOpen = false
                     onState(state.navigate(view))

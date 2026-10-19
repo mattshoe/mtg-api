@@ -112,8 +112,8 @@ class BottomNavParityTest {
     @Test
     fun theBarIsTheThreeYouCanReachWhileLocked() {
         shell()
-        assertEquals(5, tabs().size, "a locked app's bar should be Library, Decks, Users, Fetch, Guide")
-        listOf("Library", "Decks", "Users", "Fetch", "Guide").forEach { label ->
+        assertEquals(5, tabs().size, "a locked app's bar should be Library, Decks, Users, Tools, Guide")
+        listOf("Library", "Decks", "Users", "Tools", "Guide").forEach { label ->
             assertTrue(
                 rule.onAllNodes(hasText(label)).fetchSemanticsNodes().isNotEmpty(),
                 "$label is missing from the bar",
@@ -124,10 +124,11 @@ class BottomNavParityTest {
     @Test
     fun adminAddsEntryAndNothingElse() {
         shell(unlocked())
-        assertEquals(6, tabs().size, "unlocking should add exactly one tab")
+        // Entry is a tile under Tools now, so the bar keeps its shape.
+        assertEquals(5, tabs().size, "signing in changed the bar's shape")
         assertTrue(
-            rule.onAllNodes(hasText("Entry")).fetchSemanticsNodes().isNotEmpty(),
-            "Mass Entry is not in the bar while unlocked",
+            rule.onAllNodes(hasText("Entry")).fetchSemanticsNodes().isEmpty(),
+            "Entry is still in the bar; it lives under Tools",
         )
         assertTrue(
             rule.onAllNodes(hasText("Server Logs")).fetchSemanticsNodes().isEmpty(),
@@ -150,7 +151,7 @@ class BottomNavParityTest {
         // The icon and the label are separate nodes inside the item,
         // and the icon sits above the label — which is what makes it
         // a standard bottom bar rather than a row of text buttons.
-        listOf("Library", "Decks", "Users", "Fetch", "Entry").forEach { label ->
+        listOf("Library", "Decks", "Users", "Tools", "Guide").forEach { label ->
             val icon = rule.onNodeWithTag("nav-icon-$label", useUnmergedTree = true)
                 .getUnclippedBoundsInRoot()
             val word = rule.onAllNodes(hasText(label), useUnmergedTree = true)
@@ -181,7 +182,7 @@ class BottomNavParityTest {
     @Test
     fun everyTabIsThumbSized() {
         shell(unlocked())
-        listOf("Library", "Decks", "Users", "Fetch", "Entry").forEach { label ->
+        listOf("Library", "Decks", "Users", "Tools", "Guide").forEach { label ->
             val box = tab(label).getUnclippedBoundsInRoot()
             val h = box.bottom.value - box.top.value
             assertTrue(h >= 47.5f, "the $label tab is only ${h}dp tall")
@@ -208,11 +209,11 @@ class BottomNavParityTest {
                 .fetchSemanticsNodes().size == 1,
             "exactly one tab should be marked as current",
         )
-        tab("Fetch").performClick()
+        tab("Tools").performClick()
         rule.waitForIdle()
         val marked = rule.onNodeWithTag("nav-current", useUnmergedTree = true)
             .getUnclippedBoundsInRoot()
-        val stats = tab("Fetch").getUnclippedBoundsInRoot()
+        val stats = tab("Tools").getUnclippedBoundsInRoot()
         assertTrue(
             marked.left.value >= stats.left.value - 1f &&
                 marked.right.value <= stats.right.value + 1f,
@@ -227,7 +228,7 @@ class BottomNavParityTest {
         // that?!?!" They were — every one of them, because the
         // header printed `view.label` and so does the bar.
         shell(unlocked())
-        listOf("Library", "Decks", "Users", "Fetch", "Entry").forEach { label ->
+        listOf("Library", "Decks", "Users", "Tools", "Guide").forEach { label ->
             tab(label).performClick()
             rule.waitForIdle()
             assertEquals(
@@ -249,7 +250,7 @@ class BottomNavParityTest {
         // a header that said Library, directly above a tab that says
         // Library. One of the three has to go and it is not the tab.
         shell(unlocked())
-        listOf("Library", "Decks", "Users", "Fetch", "Entry").forEach { label ->
+        listOf("Library", "Decks", "Users", "Tools", "Guide").forEach { label ->
             tab(label).performClick()
             rule.waitForIdle()
             val printed = rule.onAllNodes(hasText(label), useUnmergedTree = true)

@@ -84,7 +84,7 @@ class AppShellTest {
         val tabs = root.tabs()
         assertTrue(tabs.contains("Library"))
         assertTrue(tabs.contains("Decks"))
-        assertTrue(tabs.contains("Fetch"))
+        assertTrue(tabs.contains("Tools"))
         assertTrue(tabs.contains("Guide"))
         assertFalse(tabs.contains("Query"), "the Query page is gone")
         assertFalse(tabs.contains("Entry"), "a gated tab must not be visible")
@@ -99,10 +99,10 @@ class AppShellTest {
 
     @Test
     fun unlockedShowsThemAll() = runTest {
-        val root = mount(AppState(admin = Admin().signIn(Account(key = "matt", role = "admin"), "t")))
+        val root = mount(AppState(admin = Admin().signIn(Account(key = "matt", role = "admin"), "t")).navigate(View.TOOLS))
         settle()
         val tabs = root.tabs()
-        assertTrue(tabs.contains("Entry"))
+        assertEquals(1, root.querySelectorAll("[data-tool='entry']").length, "signing in did not offer Entry under Tools")
         assertTrue(tabs.contains("Server Logs"))
         assertTrue(tabs.contains("Log out"))
     }

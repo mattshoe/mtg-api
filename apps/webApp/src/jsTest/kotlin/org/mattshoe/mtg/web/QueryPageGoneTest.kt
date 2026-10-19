@@ -153,7 +153,7 @@ class QueryPageGoneTest {
         // Matt: "Why the fuck is all that shit still in the hamburger
         // menu!!!!!" — so the lock's effect on it is one entry now.
         assertEquals(
-            listOf("Library", "Decks", "Users", "Fetch", "Guide"),
+            listOf("Library", "Decks", "Users", "Tools", "Guide"),
             shut.menuLabels(),
             "the locked menu changed shape",
         )
@@ -161,11 +161,11 @@ class QueryPageGoneTest {
         val open = mount(unlocked)
         settle()
         assertEquals(
-            // Entry joins the places you go. The log is not one of
-            // them — it is a screen you open when something is wrong
-            // — so it sits behind the profile with the sign-in and
-            // the password, exactly as it does on the phone.
-            listOf("Library", "Decks", "Users", "Fetch", "Guide", "Entry"),
+            // Entry joins Tools rather than the places you go. The log
+            // is not one of them — it is a screen you open when
+            // something is wrong — so it sits behind the profile with
+            // the sign-in, exactly as it does on the phone.
+            listOf("Library", "Decks", "Users", "Tools", "Guide"),
             open.menuLabels(),
             "the unlocked menu changed shape",
         )

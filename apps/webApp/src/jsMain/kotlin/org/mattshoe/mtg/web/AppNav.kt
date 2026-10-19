@@ -81,7 +81,8 @@ fun AppNav(
             state.admin.bar.forEach { view ->
                 Button(attrs = {
                     classes("app-tab")
-                    if (state.view == view) classes("on")
+                    // A tool lights Tools, the place it was opened from.
+                    if (state.view.tab == view) classes("on")
                     // Closes even when the view picked is the one
                     // already showing — otherwise the menu sits open
                     // over the page.

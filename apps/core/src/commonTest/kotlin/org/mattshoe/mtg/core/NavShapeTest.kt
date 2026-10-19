@@ -56,20 +56,21 @@ class NavShapeTest {
     @Test
     fun theBarIsTheThreeAnybodyCanReach() {
         assertEquals(
-            listOf(View.LIBRARY, View.DECKS, View.USERS, View.FETCH, View.GUIDE),
+            listOf(View.LIBRARY, View.DECKS, View.USERS, View.TOOLS, View.GUIDE),
             Admin().bar,
             "a locked app's bottom bar is wrong",
         )
     }
 
     @Test
-    fun unlockingAddsEntryToTheBarAndNothingElse() {
+    fun unlockingAddsEntryToToolsAndNothingToTheBar() {
         val unlocked = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t")
         assertEquals(
-            listOf(View.LIBRARY, View.DECKS, View.USERS, View.FETCH, View.GUIDE, View.ENTRY),
+            listOf(View.LIBRARY, View.DECKS, View.USERS, View.TOOLS, View.GUIDE),
             unlocked.bar,
-            "Mass Entry should join the bar when admin is on, and the log should not",
+            "Entry lives under Tools now, and the log is behind the profile",
         )
+        assertEquals(listOf(View.FETCH, View.ENTRY), unlocked.tools)
     }
 
     @Test
@@ -101,7 +102,7 @@ class NavShapeTest {
         // chrome has to offer it. Otherwise it is a screen with no
         // door.
         listOf(Admin(), Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t")).forEach { admin ->
-            val offered = (admin.bar + admin.behindProfile).toSet()
+            val offered = (admin.bar + admin.behindProfile + admin.tools).toSet()
             admin.visible.forEach { view ->
                 assertTrue(
                     view in offered,

@@ -39,7 +39,11 @@ internal class FetchListsJourneyTest : E2eTest() {
         until("the website's list never reached the phone: ${state().fetch.saved.map { it.title }}") {
             state().fetch.saved.any { it.title == "From the website" }
         }
-        compose.onNodeWithContentDescription("Fetch").performClick()
+        // Fetch is a tile under Tools.
+        compose.onNodeWithContentDescription("Tools").performClick()
+        until("the Tools tab never opened") { state().view == View.TOOLS }
+        compose.waitForIdle()
+        node("tool-tile-fetch").performClick()
         until("the Fetch screen never opened") { state().view == View.FETCH }
         compose.waitForIdle()
         node("fetch-saved:From the website").assertIsDisplayed()
