@@ -481,6 +481,8 @@ fun AppShell(
                     View.STATS -> StatsScreen(state.stats) { onState(state.copy(stats = it)) }
 
 
+                    View.TOOLS -> {}
+
                     View.GUIDE -> GuideScreen(
                         tile = state.guideTile,
                         onOpen = { onState(state.openGuide(it)) },
