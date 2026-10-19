@@ -315,6 +315,21 @@ object MtgApp {
                         }
                     }
                 },
+                onDeleteAccount = { person ->
+                    // `AppShell` has already marked the page busy. A
+                    // refusal and a dropped connection both stop the
+                    // spinner and leave the bin to try again.
+                    scope.launch {
+                        app = try {
+                            api.deleteAccount(token(), person.key)
+                            app.accountDeleted(person.key)
+                        } catch (ex: ApiFailure) {
+                            app.deleteFailed(ex.message ?: "that did not work")
+                        } catch (ex: Exception) {
+                            app.deleteFailed("could not reach the server: ${ex.message ?: "no answer"}")
+                        }
+                    }
+                },
                 onSearch = { searchSoon() },
                 onOpenDeck = { key -> work { openDeck(app, key) } },
                 onPreviewEntry = {

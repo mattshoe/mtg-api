@@ -86,6 +86,9 @@ class MtgApi internal constructor(
     private data class RoleRequest(val key: String, val role: String)
 
     @Serializable
+    private data class DeleteAccountRequest(val key: String)
+
+    @Serializable
     private data class ErrorBody(val error: String = "")
 
     /**
@@ -167,6 +170,19 @@ class MtgApi internal constructor(
             contentType(ContentType.Application.Json)
             header("Authorization", "Bearer $session")
             setBody(RoleRequest(key, role))
+        }
+        if (!res.status.isSuccess()) throw ApiFailure(errorIn(res.bodyAsText(), res.status))
+    }
+
+    /**
+     * Delete that account and everything it owns. Admin only, and
+     * never your own, server-side; the key is all that goes up.
+     */
+    suspend fun deleteAccount(session: String, key: String) {
+        val res = http.post("$base/admin/users/delete") {
+            contentType(ContentType.Application.Json)
+            header("Authorization", "Bearer $session")
+            setBody(DeleteAccountRequest(key))
         }
         if (!res.status.isSuccess()) throw ApiFailure(errorIn(res.bodyAsText(), res.status))
     }

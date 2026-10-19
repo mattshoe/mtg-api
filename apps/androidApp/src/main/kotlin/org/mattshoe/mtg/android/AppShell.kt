@@ -155,6 +155,8 @@ fun AppShell(
     onLoadRules: () -> Unit = {},
     /** Give that account that role, on Admin Settings. */
     onSetRole: (org.mattshoe.mtg.core.Person, String) -> Unit = { _, _ -> },
+    /** Yes on Delete account's question: that person, already marked deleting. */
+    onDeleteAccount: (org.mattshoe.mtg.core.Person) -> Unit = {},
     onOpenCard: (CardRow) -> Unit = {},
     onOpenFound: (Found) -> Unit = {},
     /** A card tapped in a deck list. Carries its own `name_norm`. */
@@ -550,6 +552,11 @@ fun AppShell(
                         onSearch = { onState(state.copy(people = state.people.searching(it))) },
                         onOpen = { onState(state.navigate(Route(View.ADMIN, it.key))) },
                         onSetRole = onSetRole,
+                        onPeople = { onState(state.copy(people = it)) },
+                        onDeleteAccount = { person ->
+                            onState(state.copy(people = state.people.deletingAccount(person.key)))
+                            onDeleteAccount(person)
+                        },
                     )
 
                     View.LOGS -> LogsScreen(state.logs) { onState(state.copy(logs = it)) }

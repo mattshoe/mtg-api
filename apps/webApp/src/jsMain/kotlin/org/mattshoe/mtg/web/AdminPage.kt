@@ -46,10 +46,14 @@ fun AdminPage(
     onSearch: (String) -> Unit = {},
     onOpen: (Person) -> Unit = {},
     onSetRole: (Person, String) -> Unit = { _, _ -> },
+    /** The list's own state changed: Delete account's question opened or closed. */
+    onPeople: (People) -> Unit = {},
+    /** Yes on Delete account's question. */
+    onDeleteAccount: (Person) -> Unit = {},
 ) {
     Div(attrs = { classes("wrap") }) {
         if (person != null) {
-            PersonPage(state, person, me, onSetRole)
+            PersonPage(state, person, me, onSetRole, onPeople, onDeleteAccount)
         } else {
             Everybody(state, onSearch, onOpen)
             TaskList(tasks, onToggleDone, onNewTask, onOpenTask)
@@ -224,6 +228,8 @@ private fun PersonPage(
     person: Person,
     me: String?,
     onSetRole: (Person, String) -> Unit,
+    onPeople: (People) -> Unit,
+    onDeleteAccount: (Person) -> Unit,
 ) {
     Div(attrs = { classes("panel") }) {
         Div(attrs = { classes("panel-body") }) {
@@ -240,6 +246,7 @@ private fun PersonPage(
                 Fact("Role", person.role)
                 Fact("Key", person.key)
             }
+            DeleteAccount(state, person, me, onPeople, onDeleteAccount)
         }
     }
 
@@ -273,6 +280,48 @@ private fun PersonPage(
                 "You are the only admin. Taking your own role away leaves nobody who can "
                     + "hand it out, and only the server password could undo it.",
             )
+        }
+    }
+}
+
+/**
+ * Matt: "i want to be able to delete accounts via admin settings, and
+ * all associated database info." A bin, then a question that says what
+ * goes, then the Worker. Never on your own page. Sibling of Android's
+ * `DeleteAccount`.
+ */
+@Composable
+private fun DeleteAccount(
+    state: People,
+    person: Person,
+    me: String?,
+    onPeople: (People) -> Unit,
+    onDelete: (Person) -> Unit,
+) {
+    if (!state.mayDelete(person.key, me)) return
+    Div(attrs = { classes("task-cancel") }) {
+        if (state.isConfirmingDelete(person.key)) {
+            Div(attrs = {
+                classes("small")
+                attr("data-delete-account-ask", "")
+            }) { Text(People.askDelete(person)) }
+            Div(attrs = { classes("task-cancel-buttons") }) {
+                Button(attrs = {
+                    classes("btn", "sm", "danger")
+                    onClick { onDelete(person) }
+                }) { Text(People.CONFIRM) }
+                Button(attrs = {
+                    classes("btn", "sm", "ghost")
+                    onClick { onPeople(state.keepAccount()) }
+                }) { Text(People.KEEP) }
+            }
+        } else {
+            IconAction(
+                People.DELETE,
+                Glyph.BIN,
+                look = listOf("btn", "sm", "danger"),
+                enabled = !state.isDeleting(person.key),
+            ) { onPeople(state.askToDelete(person.key)) }
         }
     }
 }

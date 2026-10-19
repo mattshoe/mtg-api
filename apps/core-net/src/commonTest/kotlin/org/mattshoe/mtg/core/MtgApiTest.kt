@@ -357,4 +357,34 @@ class MtgApiTest {
         }
         assertEquals("no task has that key", e.message)
     }
+
+    @Test
+    fun deletingAnAccountNamesItByKeyAndCarriesTheToken() = runTest {
+        api(body = """{"ok":true,"key":"k4yy0003","deleted":{"cards":3,"decks":1}}""")
+            .deleteAccount("0.abc", "k4yy0003")
+        val req = seen.single()
+        assertEquals("/admin/users/delete", req.url.encodedPath)
+        assertEquals("POST", req.method.value)
+        assertEquals("Bearer 0.abc", req.headers[HttpHeaders.Authorization])
+        val sent = Json.parseToJsonElement(req.bodyText()).jsonObject
+        assertEquals(setOf("key"), sent.keys, "the delete sent more than the key: $sent")
+        assertEquals("k4yy0003", sent["key"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun aRefusedDeleteSaysWhatTheServerSaid() = runTest {
+        val e = assertFailsWith<ApiFailure> {
+            api(HttpStatusCode.Conflict, """{"error":"that is your own account; another admin has to delete it"}""")
+                .deleteAccount("0.abc", "m4tt0001")
+        }
+        assertEquals("that is your own account; another admin has to delete it", e.message)
+    }
+
+    @Test
+    fun aDeleteThatHitAServerErrorIsAFailureNotASuccess() = runTest {
+        assertFailsWith<ApiFailure> {
+            api(HttpStatusCode.InternalServerError, "<html>upstream is having a moment</html>")
+                .deleteAccount("0.abc", "k4yy0003")
+        }
+    }
 }
