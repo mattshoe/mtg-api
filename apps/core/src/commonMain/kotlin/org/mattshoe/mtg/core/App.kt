@@ -420,7 +420,7 @@ data class AppState(
     val peekFlipped: Boolean get() = peek.flipped && peeked?.twoSided == true
 
     /** The picture of the card on show, whichever side is up. */
-    val peekArt: String? get() = peeked?.let { CardQueries.art(it.scryfallId, "normal", back = peekFlipped) }
+    val peekArt: String? get() = peeked?.picture(back = peekFlipped)
 
     /** Fingers on the card on show. See [CardZoom]. */
     fun peekZoom(zoom: CardZoom): AppState =
@@ -441,6 +441,7 @@ data class AppState(
         PeekOf.GAME_CHANGERS -> gameChangerOrder
         PeekOf.BANNED -> banned.flatMap { it.cards }
         PeekOf.FETCH -> fetch.pageOrder.map { DeckCard(it.name, it.want, null, it.have, it.nameNorm) }
+        PeekOf.FETCH_MISSING -> fetch.result?.missing.orEmpty().map { DeckCard(it.name, it.short, null, it.have, it.key) }
     }
 
     /** Every card the carousel can reach from here, in the order it draws them. */
@@ -508,6 +509,26 @@ data class AppState(
                     tags = listOfNotNull(PeekTag.edhrec(card.edhrecRank), Banned.tag(card.name)),
                     facts = PeekFact.line(card.typeLine, card.colorIdentity, card.rarity),
                     twoSided = CardQueries.twoSided(card.layout),
+                )
+            }
+
+            // Not in the collection, so no printing to draw from: the
+            // picture is asked for by name, and the box checks it off.
+            PeekOf.FETCH_MISSING -> fetch.result?.missing.orEmpty().map { card ->
+                PeekCard(
+                    title = card.name,
+                    nameNorm = card.key.ifEmpty { card.name.lowercase() },
+                    scryfallId = null,
+                    typeLine = null,
+                    printing = null,
+                    price = null,
+                    tags = listOfNotNull(
+                        PeekTag("${card.short}× missing", bad = true),
+                        PeekTag("you have ${card.have}").takeIf { card.have > 0 },
+                        Banned.tag(card.name),
+                    ),
+                    tick = PeekTick(fetch.isMissingTicked(card.name), fetch.missingProgress),
+                    byName = card.name,
                 )
             }
 

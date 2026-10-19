@@ -95,7 +95,7 @@ data class Deck(
 }
 
 /** Which list the carousel is over. */
-enum class PeekOf { DECK, LIBRARY, GAME_CHANGERS, FETCH, BANNED }
+enum class PeekOf { DECK, LIBRARY, GAME_CHANGERS, FETCH, BANNED, FETCH_MISSING }
 
 /**
  * Which card of a run the carousel is showing, or none.
@@ -170,7 +170,13 @@ data class PeekCard(
     val tick: PeekTick? = null,
     /** A second printed side the carousel can turn over to. See [CardQueries.twoSided]. */
     val twoSided: Boolean = false,
-)
+    /** A card with no printing to draw from, drawn by its name instead. A fetch list's missing cards. */
+    val byName: String? = null,
+) {
+    /** What the carousel draws for this card, whichever side is up. */
+    fun picture(back: Boolean): String? =
+        CardQueries.art(scryfallId, "normal", back = back) ?: byName?.let { CardQueries.named(it) }
+}
 
 /** The fetch list's box on the carousel's sheet, and the count beside it. */
 data class PeekTick(val ticked: Boolean, val progress: String)

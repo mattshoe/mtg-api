@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.mattshoe.mtg.core.DeckList
 import org.mattshoe.mtg.core.FetchCard
+import org.mattshoe.mtg.core.MissingCard
 import org.mattshoe.mtg.core.Design
 import org.mattshoe.mtg.core.FetchListState
 import kotlin.math.cos
@@ -63,6 +64,7 @@ fun FetchListScreen(
     onOpen: (String) -> Unit,
     onBack: () -> Unit,
     onPeek: (FetchCard) -> Unit = {},
+    onPeekMissing: (MissingCard) -> Unit = {},
 ) {
     Column(
         Modifier.fillMaxWidth()
@@ -71,7 +73,7 @@ fun FetchListScreen(
             .testTag(if (onList) "fetch-page" else "fetch"),
         verticalArrangement = Arrangement.spacedBy(Design.GAP.dp),
     ) {
-        if (onList) FetchListOpen(state, onState, onFind, onSave, onBack, onPeek)
+        if (onList) FetchListOpen(state, onState, onFind, onSave, onBack, onPeek, onPeekMissing)
         else FetchListRoot(state, onState, onFind, onOpen)
     }
 }
@@ -131,6 +133,7 @@ private fun FetchListOpen(
     onSave: () -> Unit,
     onBack: () -> Unit,
     onPeek: (FetchCard) -> Unit = {},
+    onPeekMissing: (MissingCard) -> Unit = {},
 ) {
     Panel {
         Row(
@@ -269,15 +272,34 @@ private fun FetchListOpen(
     if (result.missing.isNotEmpty()) {
         Panel(modifier = Modifier.testTag("fetch-section:Missing"), head = "Not in your collection") {
             result.missing.forEach { m ->
+                val ticked = state.isMissingTicked(m.name)
+                // The box checks it off; anywhere else on the row opens
+                // the missing cards' own carousel at it.
+                Row(Modifier.fillMaxWidth().testTag("fetch-missing:${m.name}")) {
                 Row(
-                    Modifier.fillMaxWidth().testTag("fetch-missing:${m.name}"),
+                    Modifier.fillMaxWidth()
+                        .clickable { onPeekMissing(m) }
+                        .testTag("fetch-missing-row:${m.name}"),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
+                    Box(
+                        Modifier
+                            .toggleable(value = ticked, role = Role.Checkbox) { onState(state.tickMissing(m.name)) }
+                            .semantics { contentDescription = "Got ${m.name}" }
+                            .testTag("fetch-missing-tick:${m.name}"),
+                    ) {
+                        Checkbox(
+                            checked = ticked,
+                            onCheckedChange = null,
+                            colors = CheckboxDefaults.colors(checkedColor = Accent, uncheckedColor = Ink3),
+                        )
+                    }
                     Line("${m.short}×", Ink3, Design.BODY)
-                    Line(m.name, Ink, Design.BODY, modifier = Modifier.weight(1f))
+                    Line(m.name, if (ticked) Ink3 else Ink, Design.BODY, modifier = Modifier.weight(1f))
                     if (m.have > 0) Line("you have ${m.have}", Ink3, Design.MINI)
                     RemoveButton(m.name) { onState(state.remove(m)) }
+                }
                 }
             }
         }

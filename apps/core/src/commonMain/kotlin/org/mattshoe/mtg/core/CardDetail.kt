@@ -485,6 +485,13 @@ object CardQueries {
             percent(name) + "&format=image&version=art_crop"
     }
 
+    /** A card's picture by its name, for a card with no printing to take an id from. */
+    fun named(name: String): String? {
+        val n = name.trim()
+        if (n.isEmpty()) return null
+        return "https://api.scryfall.com/cards/named?exact=" + percent(n) + "&format=image&version=normal"
+    }
+
     /** No `encodeURIComponent` on Android or iOS, so by hand. */
     private fun percent(s: String): String = buildString {
         s.encodeToByteArray().forEach { b ->

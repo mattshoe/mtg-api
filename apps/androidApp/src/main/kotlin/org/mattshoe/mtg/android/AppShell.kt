@@ -52,6 +52,7 @@ import org.mattshoe.mtg.core.peekBanned
 import org.mattshoe.mtg.core.searchBanned
 import org.mattshoe.mtg.core.banned
 import org.mattshoe.mtg.core.peekFetch
+import org.mattshoe.mtg.core.peekMissing
 import org.mattshoe.mtg.core.peekRemove
 import org.mattshoe.mtg.core.peekTick
 import org.mattshoe.mtg.core.gameChangers
@@ -521,6 +522,7 @@ fun AppShell(
                         onOpen = { onState(state.openFetch(it)) },
                         onBack = { onState(state.leaveFetchList()) },
                         onPeek = { onState(state.peekFetch(it)) },
+                        onPeekMissing = { onState(state.peekMissing(it)) },
                     )
 
 
