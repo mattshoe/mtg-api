@@ -117,8 +117,11 @@ async function account(name, { role = null } = {}) {
  */
 async function furnish() {
   await mattSession()
+  // Once a test: the refusal loops below call it per attempt.
+  if ((await sql("SELECT 1 FROM devices WHERE token = 'fcm-kayla'")).length) return
   await exec(`INSERT INTO card_search (rowid, name, type_line, oracle_text, flavor_text, keywords, tags)
-              SELECT id, name, type_line, oracle_text, flavor_text, '', '' FROM cards`)
+              SELECT id, name, type_line, oracle_text, flavor_text, '', '' FROM cards
+               WHERE id NOT IN (SELECT rowid FROM card_search)`)
   for (const [id, who] of [[1, 'matt'], [3, 'kayla']]) {
     await exec(`INSERT INTO identities (provider, subject, user_id, created_at)
                 VALUES ('google', ?2, ?1, datetime('now'))`, id, `sub-${who}`)
@@ -130,7 +133,9 @@ async function furnish() {
                 VALUES (?2, 'a task', 'details', ?1, datetime('now'))`, id, `task${who}`)
     await exec(`INSERT INTO deck_notes (deck_id, section, body)
                 SELECT id, 'Gameplan', 'win' FROM decks WHERE owner_id = ?1`, id)
-    await exec(`INSERT INTO card_tags (card_id, tag, kind)
+    await exec(`INSERT INTO deck_cards (deck_id, qty, name, name_norm, role)
+                SELECT id, 1, 'Sol Ring', 'sol ring', 'spell' FROM decks WHERE owner_id = ?1`, id)
+    await exec(`INSERT OR IGNORE INTO card_tags (card_id, tag, kind)
                 SELECT id, 'ramp', 'oracle' FROM cards WHERE owner_id = ?1`, id)
   }
   // Kayla holds a printing Matt holds too, under her own id.

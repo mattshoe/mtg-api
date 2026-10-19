@@ -329,3 +329,64 @@ export function profileOf(user) {
     role: user.role,
   };
 }
+
+/**
+ * Card rows hang off a card by `card_id`, with nothing in the schema
+ * to cascade them. The same list `decks.js` and the nightly sweep use.
+ */
+const CARD_CHILDREN = ['card_faces', 'card_colors', 'card_types', 'card_keywords',
+  'card_finishes', 'card_games', 'card_promo_types', 'card_frame_effects', 'card_tags'];
+
+/**
+ * Delete an account and everything it owns.
+ *
+ * Matt: "deleting an account should NOT have any impact on other users
+ * whatsoever. this is ABSOLUTELY CRITICAL." So every statement is
+ * scoped by the one integer id the key resolved to, and nothing else:
+ * no name, no slug, no LIKE, no key compared inside the batch. A row
+ * with no owner at all is never matched, because `owner_id = ?` is
+ * never true of a NULL.
+ *
+ * One batch, which D1 runs as one transaction: it all goes or none of
+ * it does. Children before parents, because D1 enforces the foreign
+ * keys and `cards` and `decks` point at `users`.
+ *
+ * What stays: a task the account sent is still a task on the board,
+ * so it keeps its row and loses the name. Prices, aliases, tags and
+ * the rest of the card reference data belong to nobody; the nightly
+ * sweep tidies anything no card uses any more.
+ *
+ * Returns `{ ok, key, deleted }` or `{ error, status }`.
+ */
+export async function deleteAccount(db, key) {
+  if (typeof key !== 'string' || !key.trim()) {
+    return { error: 'say which account: {"key":"..."}', status: 400 };
+  }
+  const row = await db.prepare('SELECT id, key FROM users WHERE key = ?1').bind(key).first();
+  if (!row || !Number.isInteger(row.id)) return { error: `there is no account at ${key}`, status: 404 };
+  const { id } = row;
+
+  const count = async (q) => (await db.prepare(q).bind(id).first())?.n ?? 0;
+  const deleted = {
+    cards: await count('SELECT COUNT(*) AS n FROM cards WHERE owner_id = ?1'),
+    decks: await count('SELECT COUNT(*) AS n FROM decks WHERE owner_id = ?1'),
+  };
+
+  const cards = 'SELECT id FROM cards WHERE owner_id = ?1';
+  const decks = 'SELECT id FROM decks WHERE owner_id = ?1';
+  await db.batch([
+    ...CARD_CHILDREN.map((t) => `DELETE FROM ${t} WHERE card_id IN (${cards})`),
+    `DELETE FROM card_search WHERE rowid IN (${cards})`,
+    'DELETE FROM cards WHERE owner_id = ?1',
+    `DELETE FROM deck_notes WHERE deck_id IN (${decks})`,
+    `DELETE FROM deck_cards WHERE deck_id IN (${decks})`,
+    'DELETE FROM decks WHERE owner_id = ?1',
+    'DELETE FROM sessions WHERE user_id = ?1',
+    'DELETE FROM identities WHERE user_id = ?1',
+    'DELETE FROM devices WHERE user_id = ?1',
+    'DELETE FROM fetch_lists WHERE user_id = ?1',
+    'UPDATE task_inbox SET created_by = NULL WHERE created_by = ?1',
+    'DELETE FROM users WHERE id = ?1',
+  ].map((q) => db.prepare(q).bind(id)));
+  return { ok: true, key: row.key, deleted };
+}

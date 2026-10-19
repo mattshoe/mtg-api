@@ -15,6 +15,7 @@
 //   POST /admin       password in, admin token out
 //   GET  /admin/users every account and its role (admin)
 //   POST /admin/role  hand the admin role out, or take it back (admin)
+//   POST /admin/users/delete  delete an account and everything it owns (admin)
 //   POST /tasks       a new task, from Admin Settings (admin)
 //   GET  /tasks/inbox the tasks the laptop has not collected (admin)
 //   POST /tasks/inbox/received  the laptop has them (admin)
@@ -45,7 +46,7 @@ import { disassembleDeck, editDeckList, createDeck, renameDeck, FORMATS } from '
 import { mintToken, verifyToken, bearer } from './admin.js';
 import {
   whoAmI, canEdit, profileOf, endSession, signIn, newSession, cookieValue,
-  collectionByKey, allUsers, setRole, ownerOfKey, SESSION_COOKIE, AGENT,
+  collectionByKey, allUsers, setRole, deleteAccount, ownerOfKey, SESSION_COOKIE, AGENT,
 } from './accounts.js';
 import { startSignIn, finishSignIn, verifyIdToken } from './google.js';
 import { lookupPrices } from './prices.js';
@@ -299,6 +300,7 @@ const INDEX = {
     'POST /admin': '{"password":"..."} -> {"token":"...","expires_at":null}',
     'GET /admin/users': 'every account, its role and the key its collection is shared by — admin only',
     'POST /admin/role': '{"key":"...","role":"user|admin"} — hands the admin role out or takes it back; admin only',
+    'POST /admin/users/delete': '{"key":"..."} — deletes that account and everything it owns, nobody else\'s; admin only, never your own',
     'POST /tasks': '{"title":"...","details":"...","files":[{"name","type","data":"<base64>"}]} — a new task for the intake; admin only',
     'GET /tasks/inbox': 'the tasks the laptop has not collected yet, files included; admin only',
     'POST /tasks/inbox/received': '{"keys":["..."],"names":{"<key>":"<request file>"}} — the laptop has written these; admin only',
@@ -804,6 +806,42 @@ async function route(request, env, ctx, entry) {
       entry.admin = true;
       entry.write = true;
       entry.detail = `${body.key} -> ${body.role}`;
+      if (out.error) {
+        entry.message = out.error;
+        return json({ error: out.error }, out.status);
+      }
+      return json(out);
+    }
+
+    /**
+     * Delete an account and everything it owns.
+     *
+     * Matt: "i want to be able to delete accounts via admin settings,
+     * and all associated database info." Admin only, like handing out
+     * a role, plus the operator's password.
+     *
+     * Not your own: the session doing it would go with it, and the
+     * last admin deleting themselves leaves nobody who can sign in and
+     * hand the role out. Another admin can, which is a person deciding
+     * rather than a slip of the thumb.
+     */
+    if (path === '/admin/users/delete') {
+      if (method !== 'POST') return notAllowed('POST');
+      const who = await whoAmI(env, request, verifyToken);
+      if (!who.operator && who.user?.role !== 'admin') {
+        return who.user
+          ? json({ error: 'that needs the admin role' }, 403)
+          : denied('that needs the admin role');
+      }
+      const { body, error } = await readJson(request);
+      if (error) return json({ error }, 400);
+      entry.admin = true;
+      entry.write = true;
+      entry.detail = `delete ${typeof body?.key === 'string' ? body.key : '?'}`;
+      if (who.user && body?.key === who.user.key) {
+        return json({ error: 'that is your own account; another admin has to delete it' }, 409);
+      }
+      const out = await deleteAccount(env.DB, body?.key);
       if (out.error) {
         entry.message = out.error;
         return json({ error: out.error }, out.status);
