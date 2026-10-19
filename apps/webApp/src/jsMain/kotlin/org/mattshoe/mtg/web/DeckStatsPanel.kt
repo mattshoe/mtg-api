@@ -1,7 +1,13 @@
 package org.mattshoe.mtg.web
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import org.jetbrains.compose.web.dom.Div
+import org.jetbrains.compose.web.dom.Option
+import org.jetbrains.compose.web.dom.Select
 import org.jetbrains.compose.web.dom.H2
 import org.jetbrains.compose.web.dom.H3
 import org.jetbrains.compose.web.dom.Span
@@ -12,6 +18,7 @@ import org.jetbrains.compose.web.dom.Tr
 import org.jetbrains.compose.web.dom.Text
 import org.mattshoe.mtg.core.Bar
 import org.mattshoe.mtg.core.ColourRing
+import org.mattshoe.mtg.core.CurveSplit
 import org.mattshoe.mtg.core.DeckStats
 import org.mattshoe.mtg.core.Design
 import org.mattshoe.mtg.core.Pip
@@ -112,16 +119,50 @@ private fun card(title: String, wide: Boolean = false, body: @Composable () -> U
  * not say.
  */
 @Composable
-private fun Curve(s: DeckStats) = CurveOf(s.curve, "Median ${s.medianManaValueText}. Lands excluded.")
+private fun Curve(s: DeckStats) {
+    // Matt: "i want a dropdown to select what my mana curve graph
+    // shows. it defaults to all cards". Card type and Colour draw a
+    // graph each, all on one scale so a tall column means the same
+    // number of cards in every one of them.
+    var split by remember { mutableStateOf(CurveSplit.DEFAULT) }
+    Select(attrs = {
+        classes("field", "curve-split")
+        attr("aria-label", "Show the mana curve by")
+        onChange { e -> split = CurveSplit.of(e.value ?: "") }
+    }) {
+        CurveSplit.entries.forEach { c ->
+            Option(c.slug, attrs = { if (c == split) attr("selected", "") }) { Text(c.label) }
+        }
+    }
+    val charts = s.curves(split)
+    val most = charts.maxOfOrNull { c -> c.bars.maxOfOrNull { it.value } ?: 0 } ?: 0
+    charts.forEach { c ->
+        Div(attrs = {
+            classes("curve-chart")
+            if (charts.size > 1) classes("split")
+        }) {
+            if (charts.size > 1) Div(attrs = { classes("curve-title") }) { Text(c.title) }
+            CurveColumns(c.bars, most)
+        }
+    }
+    Div(attrs = { classes("sub") }) { Text("Median ${s.medianManaValueText}. Lands excluded.") }
+}
 
 @Composable
 private fun CurveOf(curve: List<Bar>, note: String) {
-    val most = curve.maxOfOrNull { it.value } ?: 0
+    CurveColumns(curve, curve.maxOfOrNull { it.value } ?: 0)
+    Div(attrs = { classes("sub") }) { Text(note) }
+}
+
+/** The columns and their labels, measured against [most] so several graphs share one scale. */
+@Composable
+private fun CurveColumns(curve: List<Bar>, most: Int) {
     Div(attrs = { classes("curve") }) {
         curve.forEach { bar ->
             Div(attrs = {
                 classes("col")
                 if (bar.value == 0) classes("none")
+                attr("data-mv", bar.label.trimEnd('+'))
                 attr("title", "${bar.value} at ${bar.note}")
             }) {
                 // The bar measures itself against the track, not
@@ -147,7 +188,6 @@ private fun CurveOf(curve: List<Bar>, note: String) {
     Div(attrs = { classes("curve") ; style { property("height", "auto") } }) {
         curve.forEach { bar -> Div(attrs = { classes("col") }) { Div(attrs = { classes("x") }) { Text(bar.label) } } }
     }
-    Div(attrs = { classes("sub") }) { Text(note) }
 }
 
 // The deck page's chart pieces, lent to the Stats page so the two

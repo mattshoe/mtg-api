@@ -67,7 +67,7 @@ class DeckCurveSplitTest {
 
     private fun org.w3c.dom.Document.all(sel: String): List<HTMLElement> {
         val f = querySelectorAll(sel)
-        return (0 until f.length).map { f[it]!!.unsafeCast<HTMLElement>() }
+        return (0 until f.length).map { f.item(it)!!.unsafeCast<HTMLElement>() }
     }
 
     private fun org.w3c.dom.Document.curveCard(): HTMLElement = assertNotNull(
