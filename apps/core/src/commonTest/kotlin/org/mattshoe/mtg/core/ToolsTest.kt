@@ -54,7 +54,7 @@ class ToolsTest {
         assertEquals(View.TOOLS, s.view)
         assertTrue(Load.needs(Route(View.TOOLS)).isEmpty())
         assertEquals(s, s.fetching(View.TOOLS))
-        assertFalse(s.busy)
+        assertFalse(s.fetching(View.TOOLS).refreshing)
         assertEquals(Brand.NAME, s.titleBeside(signedIn.bar))
     }
 

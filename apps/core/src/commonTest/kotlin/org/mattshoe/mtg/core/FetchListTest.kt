@@ -306,7 +306,8 @@ class FetchListTest {
     @Test
     fun fetchTakesStatsPlaceInTheBarAndStatsMovesBehindTheProfile() {
         assertEquals("Fetch", View.FETCH.label)
-        assertTrue(View.FETCH in Admin().bar)
+        // And then under Tools, with Entry: "let's collapse fetch and entry into a "Tools" tab".
+        assertTrue(View.FETCH in Admin().tools)
         assertTrue(View.STATS !in Admin().bar, "Stats is still in the bar")
         assertTrue(View.STATS in Admin().behindProfile, "Stats is not behind the profile")
         assertEquals(View.FETCH, Route.parse("#/fetch").view)
