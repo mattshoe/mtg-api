@@ -113,8 +113,8 @@ class DeleteAccountTest {
     @Test
     fun andItSaysSo() {
         val done = onKaylasPage().accountDeleted(kayla.key)
-        assertEquals("Deleted Kayla M's account", done.toast?.text)
-        assertFalse(done.toast?.failed ?: true)
+        assertEquals("Deleted Kayla M's account", done.toast)
+        assertFalse(done.toastFailed)
     }
 
     @Test
@@ -125,7 +125,7 @@ class DeleteAccountTest {
         assertEquals(people.rows, refused.people.rows, "a refused delete changed the list")
         assertEquals("that needs the admin role", refused.people.error)
         assertEquals(Route(View.ADMIN, kayla.key), refused.route, "a refusal left the page")
-        assertTrue(refused.toast?.failed == true, "a refusal was toasted as a success")
+        assertTrue(refused.toastFailed, "a refusal was toasted as a success")
         assertTrue(refused.people.mayDelete(kayla.key, matt.key), "it cannot be tried again")
     }
 

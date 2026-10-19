@@ -262,6 +262,24 @@ data class AppState(
         get() = if (view != View.ADMIN || route.rest.isBlank()) null
         else people.rows.firstOrNull { it.key == route.rest }
 
+    /**
+     * The Worker deleted that account.
+     *
+     * It leaves Admin Settings' list and the Users tab, and nobody else
+     * moves. Their page, if it is the one open, goes back to the list:
+     * it is a page about somebody who is not there any more.
+     */
+    fun accountDeleted(key: String): AppState {
+        val name = people.rows.firstOrNull { it.key == key }?.shownName ?: return copy(people = people.deleted(key))
+        val onTheirPage = view == View.ADMIN && route.rest == key
+        val next = copy(people = people.deleted(key), users = users.without(key))
+        return (if (onTheirPage) next.navigate(Route(View.ADMIN)) else next).say("Deleted $name's account")
+    }
+
+    /** The delete was refused or never arrived: the spinner stops and the page says why. */
+    fun deleteFailed(message: String): AppState =
+        copy(people = people.deleteRefused(message)).say(message, failed = true)
+
     /** On Admin Settings' New task page, `#/admin/new-task`. */
     val writingTask: Boolean get() = view == View.ADMIN && route.rest == NewTask.ROUTE
 

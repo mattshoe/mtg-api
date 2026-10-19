@@ -86,6 +86,10 @@ data class People(
     val busy: Boolean = false,
     val changing: String? = null,
     val error: String? = null,
+    /** Delete account was tapped on this person's page, and the page is asking whether to. */
+    val confirmingDelete: String? = null,
+    /** This person's delete is on its way to the Worker. */
+    val deleting: String? = null,
 ) {
 
     /** Who the list draws, which is everybody until somebody types. */
@@ -153,7 +157,51 @@ data class People(
         return row.isAdmin && key == me && admins <= 1
     }
 
+    /**
+     * Whether that person's page offers Delete account.
+     *
+     * Matt: "i want to be able to delete accounts via admin settings".
+     * Anybody on the list but you: the session doing it would go with
+     * it, and the Worker refuses it too. Another admin can delete yours.
+     */
+    fun mayDelete(key: String, me: String?): Boolean = key != me && rows.any { it.key == key }
+
+    /** Delete account, tapped: the page asks before anything goes. One at a time. */
+    fun askToDelete(key: String) = if (deleting != null) this else copy(confirmingDelete = key, error = null)
+
+    fun isConfirmingDelete(key: String) = confirmingDelete == key
+
+    /** Keep it: the question goes away and nothing was sent. */
+    fun keepAccount() = copy(confirmingDelete = null)
+
+    /** Yes: the delete is on its way, and that page is busy until it lands. */
+    fun deletingAccount(key: String) = copy(confirmingDelete = null, deleting = key, error = null)
+
+    fun isDeleting(key: String) = deleting == key
+
+    /** The Worker deleted it: that row goes, and every other row is exactly as it was. */
+    fun deleted(key: String) = copy(
+        rows = rows.filterNot { it.key == key },
+        confirmingDelete = null,
+        deleting = null,
+        error = null,
+    )
+
+    /** Refused, or never got there: the person stays, the page says why, and it can be tried again. */
+    fun deleteRefused(message: String) = copy(confirmingDelete = null, deleting = null, error = message)
+
     companion object {
+        /** The button's word, for a screen reader: the button itself is a bin. */
+        const val DELETE = "Delete account"
+        const val CONFIRM = "Delete"
+        const val KEEP = "Keep"
+        const val DELETING = "Deleting…"
+
+        /** What the page asks, naming who and what goes with them. */
+        fun askDelete(person: Person) =
+            "Delete ${person.shownName}'s account? Their cards, decks, saved lists and sign-in go with it, " +
+                "for good. Nobody else's are touched."
+
         private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
         /**
