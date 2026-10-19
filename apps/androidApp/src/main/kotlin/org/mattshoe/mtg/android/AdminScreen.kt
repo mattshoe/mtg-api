@@ -66,7 +66,7 @@ fun AdminScreen(
         verticalArrangement = Arrangement.spacedBy(Design.GAP.dp),
     ) {
         if (person != null) {
-            PersonPage(state, person, me, onSetRole)
+            PersonPage(state, person, me, onSetRole, onPeople, onDeleteAccount)
         } else {
             Everybody(state, onSearch, onOpen)
             TaskList(tasks, onToggleDone, onNewTask, onOpenTask)
@@ -230,6 +230,8 @@ private fun PersonPage(
     person: Person,
     me: String?,
     onSetRole: (Person, String) -> Unit,
+    onPeople: (People) -> Unit,
+    onDeleteAccount: (Person) -> Unit,
 ) {
     Panel {
         Row(
@@ -245,6 +247,7 @@ private fun PersonPage(
         }
         Fact("Role", person.role)
         Fact("Key", person.key)
+        DeleteAccount(state, person, me, onPeople, onDeleteAccount)
     }
 
     Line("Role", Ink, Design.H3)
@@ -265,6 +268,39 @@ private fun PersonPage(
             Ink3,
             Design.MINI,
         )
+    }
+}
+
+/**
+ * Matt: "i want to be able to delete accounts via admin settings, and
+ * all associated database info." A bin, then a question that says what
+ * goes, then the Worker. Never on your own page. Sibling of the web's
+ * `DeleteAccount`.
+ */
+@Composable
+private fun DeleteAccount(
+    state: People,
+    person: Person,
+    me: String?,
+    onPeople: (People) -> Unit,
+    onDelete: (Person) -> Unit,
+) {
+    if (!state.mayDelete(person.key, me)) return
+    if (state.isConfirmingDelete(person.key)) {
+        Line(People.askDelete(person), Ink, Design.SMALL, modifier = Modifier.padding(top = 6.dp).testTag("delete-account-ask"))
+        Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(Design.GAP.dp)) {
+            Btn(People.CONFIRM, danger = true, modifier = Modifier.testTag("delete-account-confirm")) { onDelete(person) }
+            Box(Modifier.testTag("delete-account-keep")) { Ghost(People.KEEP) { onPeople(state.keepAccount()) } }
+        }
+    } else {
+        IconAction(
+            People.DELETE,
+            Glyph.BIN,
+            enabled = !state.isDeleting(person.key),
+            danger = true,
+            bordered = true,
+            modifier = Modifier.padding(top = 6.dp).testTag("delete-account"),
+        ) { onPeople(state.askToDelete(person.key)) }
     }
 }
 
