@@ -54,6 +54,10 @@ fun AdminScreen(
     onSearch: (String) -> Unit = {},
     onOpen: (Person) -> Unit = {},
     onSetRole: (Person, String) -> Unit = { _, _ -> },
+    /** The list's own state changed: Delete account's question opened or closed. */
+    onPeople: (People) -> Unit = {},
+    /** Yes on Delete account's question. */
+    onDeleteAccount: (Person) -> Unit = {},
 ) {
     Column(
         Modifier.fillMaxWidth()
