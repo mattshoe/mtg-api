@@ -705,8 +705,31 @@ class SliceFillTest {
             ColourRing.entries.map { it.caption },
         )
     }
+}
 
-    // ------------------------------------------- the curve, split up
+/**
+ * The mana curve, split by card type or by colour.
+ *
+ * Matt: "i want a dropdown to select what my mana curve graph shows.
+ * it defaults to all cards ... card type, color ... this will mean
+ * showing numerous graphs at once".
+ */
+class CurveSplitTest {
+
+    private fun card(
+        name: String,
+        type: String?,
+        cost: String?,
+        cmc: Double?,
+        qty: Int = 1,
+        produces: String? = null,
+        role: String? = null,
+        ci: String? = "W",
+    ) = DeckCard(
+        name, qty, role, qty,
+        nameNorm = name.lowercase(), typeLine = type, manaCost = cost, cmc = cmc,
+        producedMana = produces, colorIdentity = ci,
+    )
 
     /** A commander, two creatures, an instant, a gold sorcery, a rock and lands. */
     private fun split() = DeckAnalysis.of(
