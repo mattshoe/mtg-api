@@ -230,6 +230,8 @@ data class SavedFetch(
     val result: FetchResult?,
     /** The cards ticked off as found. Matt: "the checked boxes should Persist". */
     val ticked: Set<String> = emptySet(),
+    /** The missing cards checked off. Matt: "check off the missing ones just like the collection ones". */
+    val tickedMissing: Set<String> = emptySet(),
 )
 
 object FetchList {
@@ -401,6 +403,12 @@ data class FetchListState(
     val draft: String = "",
     /** Names ticked off as found on the list page. */
     val ticked: Set<String> = emptySet(),
+    /**
+     * Missing cards checked off, apart from [ticked]: a card two short
+     * with one in the binder is on both lists, and finding the one is
+     * not getting the two.
+     */
+    val tickedMissing: Set<String> = emptySet(),
     /** The saved list on the list page, or null for one not saved yet. */
     val openId: String? = null,
     /** The list text while Edit is open, or null. */
@@ -417,7 +425,7 @@ data class FetchListState(
     /** Find from the root's box: a new list, so no ticks and no title. */
     fun started() = copy(
         list = draft, draft = "", title = "", result = null, ticked = emptySet(),
-        openId = null, editing = null, error = null, checking = false,
+        tickedMissing = emptySet(), openId = null, editing = null, error = null, checking = false,
     )
 
     /**
@@ -429,6 +437,17 @@ data class FetchListState(
     fun tick(name: String) = copy(ticked = if (name in ticked) ticked - name else ticked + name).synced()
 
     fun isTicked(name: String) = name in ticked
+
+    fun tickMissing(name: String) =
+        copy(tickedMissing = if (name in tickedMissing) tickedMissing - name else tickedMissing + name).synced()
+
+    fun isMissingTicked(name: String) = name in tickedMissing
+
+    /** `1 of 3 checked off`, against the missing cards. */
+    val missingProgress: String get() {
+        val names = result?.missing?.map { it.name } ?: return ""
+        return "${names.count { it in tickedMissing }} of ${names.size} checked off"
+    }
 
     /** `1 of 4 found`, against the cards filed. One not owned cannot be found. */
     val progress: String get() {
@@ -457,6 +476,7 @@ data class FetchListState(
                 missing = r.missing.filter { it.name != name },
             ),
             ticked = ticked - name,
+            tickedMissing = tickedMissing - name,
         ).synced()
     }
 
@@ -466,7 +486,7 @@ data class FetchListState(
 
     /** The list on its page, as kept across a restart. Null with nothing open. */
     val current: SavedFetch? get() =
-        if (list.isBlank()) null else SavedFetch(openId.orEmpty(), title, "", list, result, ticked)
+        if (list.isBlank()) null else SavedFetch(openId.orEmpty(), title, "", list, result, ticked, tickedMissing)
 
     val canStart: Boolean get() = !busy && DeckList.entries(draft).isNotEmpty()
 
@@ -476,7 +496,7 @@ data class FetchListState(
     /** The open saved list brought up to date with the page. */
     private fun synced(): FetchListState {
         val id = openId ?: return this
-        return copy(saved = saved.map { if (it.id == id) it.copy(list = list, result = result, ticked = ticked) else it })
+        return copy(saved = saved.map { if (it.id == id) it.copy(list = list, result = result, ticked = ticked, tickedMissing = tickedMissing) else it })
     }
 
     /** The cards on the list, the way `DeckList` reads any list. */
@@ -526,7 +546,7 @@ data class FetchListState(
         val open = openId?.let { id -> all.firstOrNull { it.id == id } }
         val base = copy(saved = all, synced = true, openId = open?.id)
         return if (open == null || editing != null) base
-        else base.copy(list = open.list, title = open.title, result = open.result, ticked = open.ticked)
+        else base.copy(list = open.list, title = open.title, result = open.result, ticked = open.ticked, tickedMissing = open.tickedMissing)
     }
 
     /**
@@ -540,7 +560,7 @@ data class FetchListState(
         val r = result ?: return copy(error = "Find the cards first")
         if (t.isEmpty()) return copy(error = "Give it a title first")
         val id = saved.firstOrNull { it.title == t }?.id ?: "$now-${saved.size}"
-        val entry = SavedFetch(id, t, now, list, r, ticked)
+        val entry = SavedFetch(id, t, now, list, r, ticked, tickedMissing)
         return copy(title = t, error = null, openId = id, saved = listOf(entry) + saved.filter { it.id != id })
     }
 
@@ -548,7 +568,7 @@ data class FetchListState(
     fun open(id: String): FetchListState {
         val s = saved.firstOrNull { it.id == id } ?: return this
         return copy(
-            list = s.list, title = s.title, result = s.result, ticked = s.ticked, openId = id,
+            list = s.list, title = s.title, result = s.result, ticked = s.ticked, tickedMissing = s.tickedMissing, openId = id,
             editing = null, busy = false, error = null, checking = false,
         )
     }
@@ -580,7 +600,7 @@ data class FetchListState(
             val c = store.get(OPEN)?.let { json.decodeFromString(SavedFetch.serializer(), it) }
             if (c == null) s
             else s.copy(
-                list = c.list, title = c.title, ticked = c.ticked,
+                list = c.list, title = c.title, ticked = c.ticked, tickedMissing = c.tickedMissing,
                 result = c.result?.takeIf { r -> r.sections.none { it.legacy != null } },
                 openId = c.id.takeIf { id -> s.saved.any { it.id == id } },
             )
@@ -716,20 +736,36 @@ fun AppState.peekFetch(card: FetchCard): AppState =
  * the end it is the one before. Nothing left shuts the carousel.
  */
 fun AppState.peekRemove(): AppState {
-    if (peek.of != PeekOf.FETCH || !peek.open) return this
-    val card = fetch.pageOrder.getOrNull(peek.at) ?: return this
-    val left = copy(fetch = fetch.remove(card))
-    val last = left.fetch.pageOrder.lastIndex
+    if (!peek.open) return this
+    val left = when (peek.of) {
+        PeekOf.FETCH -> copy(fetch = fetch.remove(fetch.pageOrder.getOrNull(peek.at) ?: return this))
+        // The missing carousel stays over the missing cards.
+        PeekOf.FETCH_MISSING -> copy(fetch = fetch.remove(fetch.result?.missing?.getOrNull(peek.at) ?: return this))
+        else -> return this
+    }
+    val last = (if (peek.of == PeekOf.FETCH) left.fetch.pageOrder else left.fetch.result?.missing.orEmpty()).lastIndex
     if (last < 0) return left.closing(Overlay.CARD_PEEK)
     return left.copy(peek = peek.copy(at = peek.at.coerceAtMost(last), zoom = CardZoom()))
 }
+
+/**
+ * A missing card tapped outside its box: a carousel over the missing
+ * cards alone. Matt: "it is a different carousel of its own. i
+ * shouldn't be able to swipe into the missing ones while swiping
+ * through the collection ones and vice versa".
+ */
+fun AppState.peekMissing(card: MissingCard): AppState =
+    peekAt(fetch.result?.missing.orEmpty().indexOfFirst { it.name == card.name }, PeekOf.FETCH_MISSING)
 
 /**
  * The Found box on the carousel's sheet. The page's own tick, so the
  * count on one is the count on the other.
  */
 fun AppState.peekTick(): AppState {
-    if (peek.of != PeekOf.FETCH) return this
     val name = peeked?.title ?: return this
-    return copy(fetch = fetch.tick(name))
+    return when (peek.of) {
+        PeekOf.FETCH -> copy(fetch = fetch.tick(name))
+        PeekOf.FETCH_MISSING -> copy(fetch = fetch.tickMissing(name))
+        else -> this
+    }
 }
