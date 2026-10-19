@@ -103,6 +103,16 @@ class UsersScreenTest {
     }
 
     @Test
+    fun yourOwnAccountHasNoTile() {
+        shell(onTiles())
+        rule.onNodeWithTag("user-tile-k1").assertExists("Kayla has no tile")
+        assertTrue(
+            rule.onAllNodes(hasTestTag("user-tile-k2")).fetchSemanticsNodes().isEmpty(),
+            "Matt is signed in and his own account is a tile",
+        )
+    }
+
+    @Test
     fun tappingATileOpensTheirLibrary() {
         shell(onTiles())
         rule.onNodeWithTag("user-tile-k1").performClick()
@@ -148,10 +158,11 @@ class UsersScreenTest {
         shell(onTiles(), size)
         val on = "on a ${size.width} by ${size.height} screen"
         val a = rule.onNodeWithTag("user-tile-k1").getUnclippedBoundsInRoot()
-        val b = rule.onNodeWithTag("user-tile-k2").getUnclippedBoundsInRoot()
+        // k3, not Matt: he is signed in and has no tile of his own.
+        val b = rule.onNodeWithTag("user-tile-k3").getUnclippedBoundsInRoot()
         assertTrue(
             (a.top - b.top).value in -2f..2f && b.left > a.right,
-            "$on the tiles are one long column: Kayla's at ${a.left},${a.top}, Matt's at ${b.left},${b.top}",
+            "$on the tiles are one long column: Kayla's at ${a.left},${a.top}, k3's at ${b.left},${b.top}",
         )
         listOf(a, b).forEach {
             assertTrue(it.right <= size.width, "$on a tile runs off the side: ${it.right}")
