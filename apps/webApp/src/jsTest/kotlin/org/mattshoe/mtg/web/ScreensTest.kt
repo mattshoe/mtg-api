@@ -32,6 +32,7 @@ import org.mattshoe.mtg.core.PaletteState
 import org.mattshoe.mtg.core.Printing
 import org.mattshoe.mtg.core.Step
 import org.mattshoe.mtg.core.Tally
+import org.mattshoe.mtg.core.View
 import org.w3c.dom.HTMLButtonElement
 import org.w3c.dom.HTMLElement
 import org.w3c.dom.get
@@ -127,9 +128,10 @@ class ScreensTest {
 
     @Test
     fun unlockingBringsTheGatedTabsBack() = runTest {
-        val root = shell(AppState(admin = Admin().signIn(Account(key = "matt", role = "admin"), "t")))
+        val root = shell(AppState(admin = Admin().signIn(Account(key = "matt", role = "admin"), "t")).navigate(View.TOOLS))
         settle()
-        assertTrue(root.hasButton("Entry"))
+        // Entry is a tile under Tools now.
+        assertEquals(1, root.querySelectorAll("[data-tool='entry']").length, "signing in did not offer Entry")
         assertTrue(root.hasButton("Server Logs"))
         assertTrue(root.hasButton("Log out"))
     }
@@ -760,7 +762,7 @@ class NavTest {
         fun labels(css: String) = root.querySelectorAll(css).let { n ->
             (0 until n.length).mapNotNull { (n[it] as? org.w3c.dom.HTMLElement)?.textContent?.trim() }
         }
-        assertEquals(listOf("Library", "Decks", "Users", "Fetch", "Guide", "Entry"), labels(".app-menu button"))
+        assertEquals(listOf("Library", "Decks", "Users", "Tools", "Guide"), labels(".app-menu button"))
         assertEquals(0, root.querySelectorAll(".app-menu .app-menu-sep").length, "a rule with nothing to divide")
 
         val behind = labels(".profile-menu button")
