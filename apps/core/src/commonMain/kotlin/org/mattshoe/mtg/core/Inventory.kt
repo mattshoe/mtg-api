@@ -81,7 +81,7 @@ object Inventory {
         Feature(Area.SHELL, "Nav tabs, with the gated ones hidden until you sign in", "app.js, index.html", logic = true, done = true,
             tests = listOf(
                 "lockedHidesTheAdminViewsEntirely", "unlockedShowsThemAll", "noViewIsLostBetweenTheNavAndTheRouter",
-                "lockedShowsFourTabsAndNoAdminOnes", "theCurrentTabIsMarked", "gatedTabsAreAbsentWhileLocked",
+                "lockedShowsFiveTabsAndNoAdminOnes", "theCurrentTabIsMarked", "gatedTabsAreAbsentWhileLocked",
                 "unlockingBringsTheGatedTabsBack",
                 "theNavDoesNotBorrowTheClassTheHeadersOwnScriptOpens",
                 "itIsOneHamburgerAndNothingElse", "theHamburgerOpensAndClosesTheMenu",

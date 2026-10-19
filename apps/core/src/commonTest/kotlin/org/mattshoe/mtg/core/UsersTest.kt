@@ -117,6 +117,23 @@ class UsersTest {
     }
 
     @Test
+    fun theTilesLeaveOutYourOwnAccount() {
+        val list = UsersState().loaded(
+            listOf(Collector("k1", "Kayla", null, 3, 1), Collector("mattkey1", "Matt", null, 9, 2)),
+        )
+        val mine = signedIn().copy(users = list).navigate(View.USERS)
+        assertEquals(listOf("k1"), mine.others.rows.map { it.key }, "your own account is a tile on the Users tab")
+        // Signed out there is nobody to leave out.
+        assertEquals(listOf("k1", "mattkey1"), AppState(users = list).others.rows.map { it.key })
+    }
+
+    @Test
+    fun withOnlyYouThereIsNobodyToBrowse() {
+        val s = signedIn().copy(users = UsersState().loaded(listOf(Collector("mattkey1", "Matt", null, 9, 2))))
+        assertTrue(s.others.isEmpty, "the tiles page has only you and does not say it is empty")
+    }
+
+    @Test
     fun aPullOnTheListWaitsForIt() {
         assertTrue(signedIn().navigate(View.USERS).refreshed().refreshing)
     }

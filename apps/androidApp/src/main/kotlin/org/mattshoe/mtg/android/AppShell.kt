@@ -412,7 +412,7 @@ fun AppShell(
                     // The tiles, or one person's Library under them.
                     View.USERS -> if (state.route.rest.isEmpty()) {
                         UsersScreen(
-                            state = state.users,
+                            state = state.others,
                             onOpen = { onState(state.browseUser(it.key)) },
                             onRetry = onRefresh,
                         )

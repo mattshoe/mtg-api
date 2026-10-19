@@ -124,6 +124,17 @@ class UsersPageTest {
     }
 
     @Test
+    fun yourOwnAccountHasNoTile() = runTest {
+        val root = mount(onTiles())
+        settle()
+        root.tile("k1")
+        assertTrue(
+            root.all("[data-user='k2']").isEmpty(),
+            "Matt is signed in and his own account is a tile: ${root.all(".user-tile").map { it.textContent }}",
+        )
+    }
+
+    @Test
     fun tappingATileOpensTheirLibrary() = runTest {
         val root = mount(onTiles())
         settle()
@@ -169,10 +180,11 @@ class UsersPageTest {
         val doc = s.frame.contentDocument!!
         val on = "on a ${size.first} by ${size.second} screen"
         val a = (doc.all("[data-user='k1']").singleOrNull() ?: error("$on Kayla has no tile")).getBoundingClientRect()
-        val b = (doc.all("[data-user='k2']").singleOrNull() ?: error("$on Matt has no tile")).getBoundingClientRect()
+        // k3, not Matt: he is signed in and has no tile of his own.
+        val b = (doc.all("[data-user='k3']").singleOrNull() ?: error("$on k3 has no tile")).getBoundingClientRect()
         assertTrue(
             abs(a.top - b.top) < 2.0 && b.left > a.right,
-            "$on the tiles are one long column: Kayla's at ${a.left},${a.top}, Matt's at ${b.left},${b.top}",
+            "$on the tiles are one long column: Kayla's at ${a.left},${a.top}, k3's at ${b.left},${b.top}",
         )
         assertTrue(doc.documentElement!!.scrollWidth <= size.first, "$on the page is ${doc.documentElement!!.scrollWidth}px wide")
     }

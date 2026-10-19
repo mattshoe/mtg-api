@@ -54,6 +54,10 @@ data class UsersState(
     fun failed(message: String) = copy(rows = emptyList(), busy = false, error = message)
 
     fun find(key: String): Collector? = rows.firstOrNull { it.key == key }
+
+    /** The list with one account left out, or all of it when there is nobody to leave out. */
+    fun without(key: String?): UsersState =
+        if (key.isNullOrEmpty()) this else copy(rows = rows.filterNot { it.key == key })
 }
 
 object UserQueries {
