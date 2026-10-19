@@ -56,7 +56,7 @@ class NavShapeTest {
     @Test
     fun theBarIsTheThreeAnybodyCanReach() {
         assertEquals(
-            listOf(View.LIBRARY, View.DECKS, View.USERS, View.TOOLS, View.GUIDE),
+            listOf(View.LIBRARY, View.DECKS, View.USERS, View.GUIDE, View.TOOLS),
             Admin().bar,
             "a locked app's bottom bar is wrong",
         )
@@ -66,7 +66,7 @@ class NavShapeTest {
     fun unlockingAddsEntryToToolsAndNothingToTheBar() {
         val unlocked = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t")
         assertEquals(
-            listOf(View.LIBRARY, View.DECKS, View.USERS, View.TOOLS, View.GUIDE),
+            listOf(View.LIBRARY, View.DECKS, View.USERS, View.GUIDE, View.TOOLS),
             unlocked.bar,
             "Entry lives under Tools now, and the log is behind the profile",
         )

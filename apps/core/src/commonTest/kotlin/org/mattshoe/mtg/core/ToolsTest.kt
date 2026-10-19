@@ -20,7 +20,7 @@ class ToolsTest {
 
     @Test
     fun theBarHasToolsWhereFetchAndEntryWere() {
-        val bar = listOf(View.LIBRARY, View.DECKS, View.USERS, View.TOOLS, View.GUIDE)
+        val bar = listOf(View.LIBRARY, View.DECKS, View.USERS, View.GUIDE, View.TOOLS)
         assertEquals(bar, Admin().bar, "a stranger's bar")
         assertEquals(bar, signedIn.bar, "signing in still adds a tab to the bar")
         assertEquals(View.TOOLS, Route.parse("#/tools").view)

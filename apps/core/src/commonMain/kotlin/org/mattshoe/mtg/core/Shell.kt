@@ -315,7 +315,10 @@ data class Admin(
      * Three while locked, four while not — `Entry` joins rather than
      * the bar changing shape around it.
      */
-    val bar: List<View> get() = visible.filter { it.bar }
+    // Tools last, whatever else joins. Matt: "the tools tab should
+    // always be on the far right of bottom nav". A rule rather than an
+    // enum position, so a tab added after it cannot push it inward.
+    val bar: List<View> get() = visible.filter { it.bar }.sortedBy { it == View.TOOLS }
 
     /**
      * Everywhere the profile offers, which today is the server log.

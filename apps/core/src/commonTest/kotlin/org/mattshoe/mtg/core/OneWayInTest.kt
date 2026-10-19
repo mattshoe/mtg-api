@@ -99,9 +99,9 @@ class OneWayInTest {
 
     @Test
     fun theBarIsTheSameFiveWhoeverYouAre() {
-        assertEquals(listOf(View.LIBRARY, View.DECKS, View.USERS, View.TOOLS, View.GUIDE), Admin().bar)
+        assertEquals(listOf(View.LIBRARY, View.DECKS, View.USERS, View.GUIDE, View.TOOLS), Admin().bar)
         assertEquals(
-            listOf(View.LIBRARY, View.DECKS, View.USERS, View.TOOLS, View.GUIDE),
+            listOf(View.LIBRARY, View.DECKS, View.USERS, View.GUIDE, View.TOOLS),
             Admin().signIn(me, "s").bar,
         )
     }

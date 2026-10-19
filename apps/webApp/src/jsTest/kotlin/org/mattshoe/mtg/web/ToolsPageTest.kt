@@ -90,7 +90,7 @@ class ToolsPageTest {
         settle()
         root.all("button.nav-burger").single().click()
         settle()
-        assertEquals(listOf("Library", "Decks", "Users", "Tools", "Guide"), root.menu(), "the menu's places")
+        assertEquals(listOf("Library", "Decks", "Users", "Guide", "Tools"), root.menu(), "the menu's places")
         root.all(".app-menu button.app-tab").first { it.textContent?.trim() == "Tools" }.click()
         settle()
         assertEquals(View.TOOLS, held.value.view, "the Tools item went somewhere else")

@@ -153,7 +153,7 @@ class QueryPageGoneTest {
         // Matt: "Why the fuck is all that shit still in the hamburger
         // menu!!!!!" — so the lock's effect on it is one entry now.
         assertEquals(
-            listOf("Library", "Decks", "Users", "Tools", "Guide"),
+            listOf("Library", "Decks", "Users", "Guide", "Tools"),
             shut.menuLabels(),
             "the locked menu changed shape",
         )
@@ -165,7 +165,7 @@ class QueryPageGoneTest {
             // is not one of them — it is a screen you open when
             // something is wrong — so it sits behind the profile with
             // the sign-in, exactly as it does on the phone.
-            listOf("Library", "Decks", "Users", "Tools", "Guide"),
+            listOf("Library", "Decks", "Users", "Guide", "Tools"),
             open.menuLabels(),
             "the unlocked menu changed shape",
         )
