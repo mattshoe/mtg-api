@@ -225,8 +225,13 @@ data class AppState(
     /** The person whose Library is open on the Users tab, once the list has them. */
     val browsed: Collector? get() = browsing?.let { users.find(it) }
 
-    /** The tiles the Users tab draws. */
-    val others: UsersState get() = users
+    /**
+     * The tiles the Users tab draws: everybody but you.
+     *
+     * Matt: "when browsing users in the Users tab, you should not see
+     * your own account". Your own cards are the Library tab.
+     */
+    val others: UsersState get() = users.without(admin.account?.key)
 
     /** A tile tapped: their Library, under the Users tab. */
     fun browseUser(key: String): AppState = navigate(Route(View.USERS, key))
