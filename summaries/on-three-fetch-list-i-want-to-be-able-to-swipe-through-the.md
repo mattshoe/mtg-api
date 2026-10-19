@@ -1,0 +1,3 @@
+What was built: The Not in your collection cards on a Fetch list now open their own carousel when tapped, and each has a box to check it off, on the row and on the carousel. Phone and website.
+Choices: The missing carousel and the collection carousel are separate runs, so swiping either one stops at its own ends. Checking off a missing card is kept apart from ticking a card found, because a card two short with one in the binder is on both lists. The checks are saved and synced with the list like the ticks. The count under the missing carousel reads "1 of 3 checked off".
+Liberties: A missing card has no printing in the collection to draw from, so its picture is asked for from Scryfall by name.

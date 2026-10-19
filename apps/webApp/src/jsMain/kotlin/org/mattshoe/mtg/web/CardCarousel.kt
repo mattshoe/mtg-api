@@ -161,7 +161,7 @@ private fun CardFace(
         classes("peek-card")
         if (zoom != null) ref { el -> pinchZoom(el, now, tell) }
     }) {
-        val url = CardQueries.art(card.scryfallId, "normal", back = flipped)
+        val url = card.picture(back = flipped)
         // Drawn about the centre, which is where `CardZoom` measures
         // from.
         val transform = zoom?.takeIf { it.zoomed }

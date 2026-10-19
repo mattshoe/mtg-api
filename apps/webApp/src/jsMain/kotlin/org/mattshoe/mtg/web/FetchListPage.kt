@@ -15,6 +15,7 @@ import org.jetbrains.compose.web.dom.Text
 import org.jetbrains.compose.web.dom.TextArea
 import org.mattshoe.mtg.core.DeckList
 import org.mattshoe.mtg.core.FetchCard
+import org.mattshoe.mtg.core.MissingCard
 import org.mattshoe.mtg.core.FetchListState
 
 /**
@@ -40,12 +41,13 @@ fun FetchListPage(
     onOpen: (String) -> Unit,
     onBack: () -> Unit,
     onPeek: (FetchCard) -> Unit = {},
+    onPeekMissing: (MissingCard) -> Unit = {},
 ) {
     Div(attrs = {
         classes("wrap", "fetch")
         attr("data-fetch", if (onList) "list" else "root")
     }) {
-        if (onList) FetchListOpen(state, onState, onFind, onSave, onBack, onPeek)
+        if (onList) FetchListOpen(state, onState, onFind, onSave, onBack, onPeek, onPeekMissing)
         else FetchListRoot(state, onState, onFind, onOpen)
     }
 }
@@ -129,6 +131,7 @@ private fun FetchListOpen(
     onSave: () -> Unit,
     onBack: () -> Unit,
     onPeek: (FetchCard) -> Unit = {},
+    onPeekMissing: (MissingCard) -> Unit = {},
 ) {
     Div(attrs = { classes("panel", "fetch-top") }) {
         Div(attrs = { classes("panel-head") }) {
@@ -304,12 +307,24 @@ private fun FetchListOpen(
             }
             Div(attrs = { classes("panel-body") }) {
                 result.missing.forEach { m ->
+                    val ticked = state.isMissingTicked(m.name)
+                    // The box checks it off; anywhere else on the row
+                    // opens the missing cards' own carousel at it.
                     Div(attrs = {
-                        classes("fetch-card", "flex-wrap")
+                        classes("fetch-card", "flex-wrap", "fetch-tick")
+                        if (ticked) classes("ticked")
                         attr("data-fetch-missing", m.name)
+                        onClick { onPeekMissing(m) }
                     }) {
+                        Input(InputType.Checkbox, attrs = {
+                            attr("data-fetch-missing-tick", m.name)
+                            attr("aria-label", "Got " + m.name)
+                            checked(ticked)
+                            onClick { it.stopPropagation() }
+                            onChange { onState(state.tickMissing(m.name)) }
+                        })
                         Span(attrs = { classes("fetch-qty") }) { Text("${m.short}×") }
-                        Span { Text(m.name) }
+                        Span(attrs = { classes("fetch-name") }) { Text(m.name) }
                         Span(attrs = { classes("spacer") }) {}
                         if (m.have > 0) Span(attrs = { classes("muted", "small") }) { Text("you have ${m.have}") }
                         RemoveButton(m.name) { onState(state.remove(m)) }

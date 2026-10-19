@@ -98,6 +98,10 @@ class FetchListMissingCarouselTest {
         rule.onAllNodes(hasText(text) and hasAnyAncestor(hasTestTag(under)), useUnmergedTree = true)
             .fetchSemanticsNodes().isNotEmpty()
 
+    private fun place(text: String): Boolean =
+        rule.onAllNodes(hasText(text) and hasTestTag("carousel-place"), useUnmergedTree = true)
+            .fetchSemanticsNodes().isNotEmpty()
+
     private fun ticked(tag: String): Boolean =
         rule.onNodeWithTag(tag).fetchSemanticsNode().config.getOrNull(SemanticsProperties.ToggleableState) == ToggleableState.On
 
@@ -113,7 +117,7 @@ class FetchListMissingCarouselTest {
         assertTrue(Overlay.CARD_PEEK in held.value.overlays, "$on tapping Black Lotus opened no carousel")
         assertEquals(PeekOf.FETCH_MISSING, held.value.peek.of, "$on the carousel is not over the missing cards")
         assertFalse(held.value.fetch.isMissingTicked("Black Lotus"), "$on tapping the row checked it off as well")
-        assertTrue(shows("1 of 2", "carousel-place"), "$on the carousel does not count the two missing cards")
+        assertTrue(place("1 of 2"), "$on the carousel does not count the two missing cards")
         assertTrue(
             pictures().any { "named?exact=Black%20Lotus" in it },
             "$on Black Lotus is drawn with no picture: ${pictures()}",
@@ -122,7 +126,7 @@ class FetchListMissingCarouselTest {
         // On a swipe, past the end of the missing cards.
         held.value = held.value.peekTo(held.value.peek.at + 5)
         rule.waitForIdle()
-        assertTrue(shows("2 of 2", "carousel-place"), "$on swiping on from the last missing card left the missing carousel")
+        assertTrue(place("2 of 2"), "$on swiping on from the last missing card left the missing carousel")
         assertEquals("Mox Pearl", held.value.peeked?.title)
 
         val box = rule.onNodeWithTag("carousel-tick").getUnclippedBoundsInRoot()
@@ -144,7 +148,7 @@ class FetchListMissingCarouselTest {
         rule.onNodeWithTag("fetch-row:Sol Ring").performScrollTo().performClick()
         rule.waitForIdle()
         assertEquals(PeekOf.FETCH, held.value.peek.of)
-        assertTrue(shows("2 of 2", "carousel-place"), "${on(size)} the collection carousel counts the missing cards")
+        assertTrue(place("2 of 2"), "${on(size)} the collection carousel counts the missing cards")
         held.value = held.value.peekTo(held.value.peek.at + 5)
         rule.waitForIdle()
         assertEquals("Sol Ring", held.value.peeked?.title, "${on(size)} swiping on from the last collection card reached a missing one")

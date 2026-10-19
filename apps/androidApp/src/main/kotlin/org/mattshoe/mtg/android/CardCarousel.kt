@@ -257,7 +257,7 @@ private fun CardFace(
     flipped: Boolean = false,
     onFlip: (() -> Unit)? = null,
 ) {
-    val url = CardQueries.art(card.scryfallId, "normal", back = flipped)
+    val url = card.picture(back = flipped)
     Box(zoomable.aspectRatio(Design.CARD_ASPECT)) {
         Box(
             Modifier.fillMaxSize()
