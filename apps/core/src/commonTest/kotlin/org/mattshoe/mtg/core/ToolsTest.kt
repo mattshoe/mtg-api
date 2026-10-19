@@ -20,11 +20,25 @@ class ToolsTest {
 
     @Test
     fun theBarHasToolsWhereFetchAndEntryWere() {
-        val bar = listOf(View.LIBRARY, View.DECKS, View.USERS, View.TOOLS, View.GUIDE)
+        val bar = listOf(View.LIBRARY, View.DECKS, View.USERS, View.GUIDE, View.TOOLS)
         assertEquals(bar, Admin().bar, "a stranger's bar")
         assertEquals(bar, signedIn.bar, "signing in still adds a tab to the bar")
         assertEquals(View.TOOLS, Route.parse("#/tools").view)
         assertEquals("Tools", View.TOOLS.label)
+    }
+
+    /**
+     * Matt: "the tools tab should always be on the far right of bottom
+     * nav". Last in `bar` is the far right on the phone and the bottom
+     * of the website's menu, whoever is signed in.
+     */
+    @Test
+    fun toolsIsAlwaysTheLastTabInTheBar() {
+        val operator = Admin().signIn(Account(key = "e7de0cb1", role = "admin"), "t")
+        listOf("a stranger" to Admin(), "somebody signed in" to signedIn, "an operator" to operator)
+            .forEach { (who, admin) ->
+                assertEquals(View.TOOLS, admin.bar.last(), "for $who Tools is not the far right: ${admin.bar}")
+            }
     }
 
     @Test

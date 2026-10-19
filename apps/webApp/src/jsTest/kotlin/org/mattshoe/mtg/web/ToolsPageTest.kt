@@ -90,7 +90,7 @@ class ToolsPageTest {
         settle()
         root.all("button.nav-burger").single().click()
         settle()
-        assertEquals(listOf("Library", "Decks", "Users", "Tools", "Guide"), root.menu(), "the menu's places")
+        assertEquals(listOf("Library", "Decks", "Users", "Guide", "Tools"), root.menu(), "the menu's places")
         root.all(".app-menu button.app-tab").first { it.textContent?.trim() == "Tools" }.click()
         settle()
         assertEquals(View.TOOLS, held.value.view, "the Tools item went somewhere else")
@@ -162,8 +162,45 @@ class ToolsPageTest {
         assertTrue(doc.documentElement!!.scrollWidth <= size.first, "$on the page is ${doc.documentElement!!.scrollWidth}px wide")
     }
 
+    /**
+     * Matt: "the tools tab should always be on the far right of bottom
+     * nav". The website's menu runs top to bottom, so the phone's far
+     * right is the last place in it, measured. The phone's half is
+     * `ToolsTabOnTheRightTest`.
+     */
+    private suspend fun toolsIsLast(start: AppState, size: Pair<Int, Int>) {
+        val s = Tablet.open(size).also { screen = it }
+        renderComposable(root = s.body) { shell(start)() }
+        settle(s.window)
+        val doc = s.frame.contentDocument!!
+        val on = "on a ${size.first} by ${size.second} screen"
+        doc.all("button.nav-burger").single().click()
+        settle(s.window)
+        val places = doc.all(".app-menu button.app-tab")
+        val tools = places.singleOrNull { it.textContent?.trim() == "Tools" } ?: error("$on the menu has no Tools")
+        val top = tools.getBoundingClientRect().top
+        places.filter { it !== tools }.forEach {
+            assertTrue(
+                it.getBoundingClientRect().bottom <= top + 1.0,
+                "$on ${it.textContent?.trim()} sits below Tools, so Tools is not the last place",
+            )
+        }
+    }
+
     @Test
-    fun tilesSitSideBySideOnAFoldingPhoneOpenedOut() = runTest { tilesSitSideBySide(Tablet.UNFOLDED) }
+    fun toolsIsLastOnAPhoneSignedOut() = runTest { toolsIsLast(AppState(admin = Admin().settle()), 390 to 844) }
+
+    @Test
+    fun toolsIsLastOnAPhoneSignedIn() = runTest { toolsIsLast(signedIn(), 390 to 844) }
+
+    @Test
+    fun toolsIsLastOnAFoldingPhoneOpenedOut() = runTest { toolsIsLast(signedIn(), Tablet.UNFOLDED) }
+
+    @Test
+    fun toolsIsLastOnATabletHeldSideways() = runTest { toolsIsLast(signedIn(), Tablet.LANDSCAPE) }
+
+    @Test
+    fun tilesSitSideBySideOnAFoldingPhoneOpenedOut()= runTest { tilesSitSideBySide(Tablet.UNFOLDED) }
 
     @Test
     fun tilesSitSideBySideOnATabletHeldSideways() = runTest { tilesSitSideBySide(Tablet.LANDSCAPE) }
