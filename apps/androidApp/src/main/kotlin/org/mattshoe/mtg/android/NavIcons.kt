@@ -143,6 +143,25 @@ fun EntryIcon(tint: Color, size: Dp = 22.dp, modifier: Modifier = Modifier) =
         pen.line(13f, 7f, 17f, 11f)
     }
 
+/**
+ * Tools: a toolbox, lid line and handle, because it is the box Fetch
+ * and Entry are kept in. `app.css`'s `.icon-tools` is the same shape.
+ */
+@Composable
+fun ToolsIcon(tint: Color, size: Dp = 22.dp, modifier: Modifier = Modifier) =
+    Canvas(modifier.size(size)) {
+        val pen = Pen(this, tint)
+        pen.box(3f, 8f, 18f, 12f)
+        pen.path { p ->
+            moveTo(p.at(9f, 8f).x, p.at(9f, 8f).y)
+            lineTo(p.at(9f, 5f).x, p.at(9f, 5f).y)
+            lineTo(p.at(15f, 5f).x, p.at(15f, 5f).y)
+            lineTo(p.at(15f, 8f).x, p.at(15f, 8f).y)
+        }
+        pen.line(3f, 13f, 21f, 13f)
+        pen.line(12f, 12f, 12f, 14.5f)
+    }
+
 /** Who you are: a head and shoulders. */
 @Composable
 fun ProfileIcon(tint: Color, size: Dp = 22.dp, modifier: Modifier = Modifier) =
@@ -209,6 +228,7 @@ fun NavIcon(view: View, tint: Color, size: Dp = 22.dp, modifier: Modifier = Modi
         View.LIBRARY -> LibraryIcon(tint, size, tagged)
         View.DECKS -> DecksIcon(tint, size, tagged)
         View.USERS -> UsersIcon(tint, size, tagged)
+        View.TOOLS -> ToolsIcon(tint, size, tagged)
         View.STATS -> StatsIcon(tint, size, tagged)
         View.FETCH -> FetchIcon(tint, size, tagged)
         View.GUIDE -> GuideIcon(tint, size, tagged)

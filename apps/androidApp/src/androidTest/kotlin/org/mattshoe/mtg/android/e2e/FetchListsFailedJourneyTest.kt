@@ -37,7 +37,11 @@ internal class FetchListsFailedJourneyTest : E2eTest() {
         assertTrue(state().fetch.saved.isEmpty(), "lists appeared from a read that failed")
 
         fake.fetchListsFail = false
-        compose.onNodeWithContentDescription("Fetch").performClick()
+        // Fetch is a tile under Tools.
+        compose.onNodeWithContentDescription("Tools").performClick()
+        until("the Tools tab never opened") { state().view == View.TOOLS }
+        compose.waitForIdle()
+        node("tool-tile-fetch").performClick()
         until("opening Fetch did not ask for the lists again") {
             state().fetch.saved.any { it.title == "From the website" }
         }

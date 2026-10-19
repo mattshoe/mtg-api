@@ -141,11 +141,11 @@ class ScreensTest {
 
     @Test
     fun unlockingBringsTheGatedTabsBack() {
-        var state = AppState(admin = Admin().signIn(Account(key = "matt", role = "admin"), "t"))
+        var state = AppState(admin = Admin().signIn(Account(key = "matt", role = "admin"), "t")).navigate(View.TOOLS)
         content { AppShell(state, { state = it }, {}, {}, {}, {}, {}) }
-        // Entry joins the bar; the log and the lock are behind the
+        // Entry joins Tools; the log and the lock are behind the
         // profile, which is the split Matt asked for.
-        rule.onNodeWithText("Entry").assertExists()
+        rule.onNodeWithTag("tool-tile-entry").assertExists()
         openTheProfile()
         rule.onNodeWithText("Server Logs").assertExists()
         rule.onNodeWithText("Log out").assertExists()

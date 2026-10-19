@@ -214,8 +214,8 @@ internal class JourneyTest : E2eTest() {
     fun signedOutThereIsOneWayInAndItIsGoogle() {
         settled()
         assertTrue(
-            compose.onAllNodesWithText("Entry").fetchSemanticsNodes().isEmpty(),
-            "Entry is in the bar with nobody signed in",
+            state().admin.tools == listOf(View.FETCH),
+            "Tools offers Entry with nobody signed in",
         )
         openTheProfile(andFind = "Sign in with Google")
         assertEquals(
