@@ -47,6 +47,7 @@ import coil3.compose.AsyncImage
 import org.mattshoe.mtg.core.CardQueries
 import org.mattshoe.mtg.core.Deck
 import org.mattshoe.mtg.core.Bar
+import org.mattshoe.mtg.core.CurveSplit
 import org.mattshoe.mtg.core.DeckAnalysis
 import org.mattshoe.mtg.core.DeckCard
 import org.mattshoe.mtg.core.Pip
@@ -801,15 +802,53 @@ private val CurveFill = Brush.verticalGradient(
  * not say.
  */
 @Composable
-private fun Curve(s: org.mattshoe.mtg.core.DeckStats) =
-    CurveOf(s.curve, "Median ${s.medianManaValueText}. Lands excluded.")
+private fun Curve(s: org.mattshoe.mtg.core.DeckStats) {
+    Line("Mana curve".uppercase(), Ink3, Design.MINI, FontWeight.SemiBold)
+    // Matt: "i want a dropdown to select what my mana curve graph
+    // shows. it defaults to all cards". The web's `.curve-split`.
+    // Card type and Colour draw a graph each, all on one scale so a
+    // tall column means the same number of cards in every one.
+    var split by remember { mutableStateOf(CurveSplit.DEFAULT) }
+    Box(Modifier.padding(top = 8.dp).width(176.dp)) {
+        Dropdown("curve-split", CurveSplit.entries.map { it.slug to it.label }, split.slug) {
+            split = CurveSplit.of(it)
+        }
+    }
+    val charts = s.curves(split)
+    val most = charts.maxOfOrNull { c -> c.bars.maxOfOrNull { it.value } ?: 0 } ?: 0
+    charts.forEach { c ->
+        if (charts.size == 1) {
+            CurveColumns(c.bars, most, "curve", CURVE_HEIGHT)
+        } else {
+            Column(Modifier.fillMaxWidth().padding(top = 14.dp).testTag("curve-chart-${c.title}")) {
+                // `.curve-title`.
+                Line(c.title.uppercase(), Ink2, Design.MINI, FontWeight.SemiBold)
+                CurveColumns(c.bars, most, "curve-${c.title}", SPLIT_CURVE_HEIGHT)
+            }
+        }
+    }
+    Line("Median ${s.medianManaValueText}. Lands excluded.", Ink3, Design.MINI)
+}
+
+/**
+ * A split graph is shorter, so a deck's worth of them reads as one
+ * panel. The web's `.curve-chart.split .curve` is 84px of columns;
+ * this row holds the labels too, as [CURVE_HEIGHT] does.
+ */
+private val SPLIT_CURVE_HEIGHT = 108.dp
 
 @Composable
 private fun CurveOf(curve: List<Bar>, note: String) {
     Line("Mana curve".uppercase(), Ink3, Design.MINI, FontWeight.SemiBold)
-    val most = curve.maxOfOrNull { it.value } ?: 0
+    CurveColumns(curve, curve.maxOfOrNull { it.value } ?: 0, "curve", CURVE_HEIGHT)
+    Line(note, Ink3, Design.MINI)
+}
+
+/** The columns and their labels, measured against [most] so several graphs share one scale. */
+@Composable
+private fun CurveColumns(curve: List<Bar>, most: Int, tag: String, height: androidx.compose.ui.unit.Dp) {
     Row(
-        Modifier.fillMaxWidth().height(CURVE_HEIGHT).padding(top = 10.dp).testTag("curve"),
+        Modifier.fillMaxWidth().height(height).padding(top = 10.dp).testTag(tag),
         // `.curve { gap: 6px }`. Five was a dp narrower than the
         // page's, which over eight columns is a chart eight dp wider
         // with eight slightly fatter bars in it.
@@ -859,7 +898,7 @@ private fun CurveOf(curve: List<Bar>, note: String) {
                                 Ink2,
                                 Design.MINI,
                                 FontWeight.SemiBold,
-                                Modifier.testTag("curve-count-${bar.label}"),
+                                Modifier.testTag("$tag-count-${bar.label}"),
                                 // `.curve .n` is `var(--mono)` on the
                                 // web, so a 15 and a 17 line up digit
                                 // for digit over their bars.
@@ -883,7 +922,7 @@ private fun CurveOf(curve: List<Bar>, note: String) {
                                         Modifier.background(Bg3, CurveCap)
                                     },
                                 )
-                                .testTag("curve-bar-${bar.label}"),
+                                .testTag("$tag-bar-${bar.label}"),
                         )
                     }
                 }
@@ -891,14 +930,13 @@ private fun CurveOf(curve: List<Bar>, note: String) {
                     bar.label,
                     Ink3,
                     Design.MINI,
-                    modifier = Modifier.testTag("curve-label-${bar.label}"),
+                    modifier = Modifier.testTag("$tag-label-${bar.label}"),
                     // `.curve .x` is `var(--mono)` on the web too.
                     fontFamily = monoSmall.fontFamily,
                 )
             }
         }
     }
-    Line(note, Ink3, Design.MINI)
 }
 
 /**
