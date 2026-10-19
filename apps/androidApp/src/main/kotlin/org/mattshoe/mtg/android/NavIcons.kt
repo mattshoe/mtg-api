@@ -145,7 +145,7 @@ fun EntryIcon(tint: Color, size: Dp = 22.dp, modifier: Modifier = Modifier) =
 
 /**
  * Tools: a toolbox, lid line and handle, because it is the box Fetch
- * and Entry are kept in. `app.css`'s `.icon-tools` is the same shape.
+ * and Entry are kept in. The website's menu is words, so it has no twin.
  */
 @Composable
 fun ToolsIcon(tint: Color, size: Dp = 22.dp, modifier: Modifier = Modifier) =

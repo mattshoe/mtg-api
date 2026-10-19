@@ -680,6 +680,8 @@ td.mono { font-family: var(--mono); font-size: 12.5px; }
 .user-words { min-width: 0; }
 .user-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .users-retry { margin-top: 10px; }
+/* The Tools tab: the Users tile with the tool's bar icon where a face goes. `ToolsScreen` is the phone's. */
+.tool-face .icon { width: 28px; height: 28px; }
 .users-head { display: flex; align-items: center; gap: 12px; padding-top: 10px; padding-bottom: 0; }
 .users-whose { font: 700 16px/1.2 var(--sans); }
 /* The colour page: one line per combination, WUBRG order, for scanning. */
@@ -1129,6 +1131,18 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
 .icon-flip {
   -webkit-mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'><path d='M20 12a8 8 0 0 0-14.55-4.59'/><path d='M4 12a8 8 0 0 0 14.55 4.59'/><path d='M4.5 3.5v4h4'/><path d='M19.5 20.5v-4h-4'/></svg>");
   mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'><path d='M20 12a8 8 0 0 0-14.55-4.59'/><path d='M4 12a8 8 0 0 0 14.55 4.59'/><path d='M4.5 3.5v4h4'/><path d='M19.5 20.5v-4h-4'/></svg>");
+}
+
+/* The phone's bar icons for the two tools, on the same grid at the same
+   weight: `FetchIcon`'s checklist, `EntryIcon`'s pencil, and
+   `ToolsIcon`'s toolbox. */
+.icon-fetch {
+  -webkit-mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'><path d='M3.5 5.5L5 7l3-3'/><path d='M11 6h9.5'/><path d='M3.5 11.5L5 13l3-3'/><path d='M11 12h9.5'/><path d='M3.5 17.5L5 19l3-3'/><path d='M11 18h9.5'/></svg>");
+  mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'><path d='M3.5 5.5L5 7l3-3'/><path d='M11 6h9.5'/><path d='M3.5 11.5L5 13l3-3'/><path d='M11 12h9.5'/><path d='M3.5 17.5L5 19l3-3'/><path d='M11 18h9.5'/></svg>");
+}
+.icon-entry {
+  -webkit-mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'><path d='M4 20v-4L16 4l4 4L8 20z'/><path d='M13 7l4 4'/></svg>");
+  mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'><path d='M4 20v-4L16 4l4 4L8 20z'/><path d='M13 7l4 4'/></svg>");
 }
 
 .btn.icon-only { padding: 0; width: 30px; height: 30px; display: inline-grid; place-items: center; }
