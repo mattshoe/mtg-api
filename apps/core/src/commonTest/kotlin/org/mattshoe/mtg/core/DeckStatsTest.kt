@@ -706,3 +706,107 @@ class SliceFillTest {
         )
     }
 }
+
+/**
+ * The mana curve, split by card type or by colour.
+ *
+ * Matt: "i want a dropdown to select what my mana curve graph shows.
+ * it defaults to all cards ... card type, color ... this will mean
+ * showing numerous graphs at once".
+ */
+class CurveSplitTest {
+
+    private fun card(
+        name: String,
+        type: String?,
+        cost: String?,
+        cmc: Double?,
+        qty: Int = 1,
+        produces: String? = null,
+        role: String? = null,
+        ci: String? = "W",
+    ) = DeckCard(
+        name, qty, role, qty,
+        nameNorm = name.lowercase(), typeLine = type, manaCost = cost, cmc = cmc,
+        producedMana = produces, colorIdentity = ci,
+    )
+
+    /** A commander, two creatures, an instant, a gold sorcery, a rock and lands. */
+    private fun split() = DeckAnalysis.of(
+        listOf(
+            card("Leader", "Legendary Creature — Elf", "{2}{G}", 3.0, role = "commander", ci = "G"),
+            card("Bear", "Creature — Bear", "{1}{G}", 2.0, qty = 3, ci = "G"),
+            card("Bolt", "Instant", "{R}", 1.0, qty = 2, ci = "R"),
+            card("Gold", "Sorcery", "{R}{G}", 2.0, ci = "RG"),
+            card("Rock", "Artifact", "{2}", 2.0, ci = ""),
+            card("Forest", "Basic Land — Forest", null, 0.0, qty = 10, produces = "G", ci = "G"),
+        ),
+    )
+
+    private fun DeckStats.counts(split: CurveSplit) =
+        curves(split).associate { c -> c.title to c.bars.filter { it.value > 0 }.associate { it.label to it.value } }
+
+    @Test
+    fun theCurveChoicesAreAllCardsThenCardTypeThenColourAndAllCardsIsTheDefault() {
+        assertEquals(listOf("All cards", "Card type", "Colour"), CurveSplit.entries.map { it.label })
+        assertEquals(CurveSplit.ALL, CurveSplit.DEFAULT)
+        assertEquals(CurveSplit.TYPE, CurveSplit.of(CurveSplit.TYPE.slug))
+        assertEquals(CurveSplit.ALL, CurveSplit.of("nonsense"), "an unknown choice falls back to all cards")
+    }
+
+    @Test
+    fun allCardsIsTheOneCurveItAlwaysWas() {
+        val s = split()
+        val all = s.curves(CurveSplit.ALL)
+        assertEquals(1, all.size, "all cards is one graph")
+        assertEquals(s.curve, all.single().bars)
+    }
+
+    @Test
+    fun byCardTypeIsOneCurvePerTypeWithTheCommanderUnderItsOwnTypeAndNoLands() {
+        assertEquals(
+            mapOf(
+                "Creatures" to mapOf("2" to 3, "3" to 1),
+                "Instants" to mapOf("1" to 2),
+                "Sorceries" to mapOf("2" to 1),
+                "Artifacts" to mapOf("2" to 1),
+            ),
+            split().counts(CurveSplit.TYPE),
+            "one curve per card type, in deck-list order, lands left out",
+        )
+    }
+
+    @Test
+    fun byColourIsOneCurvePerColourAGoldCardInEachOfItsColoursAndColourlessLast() {
+        assertEquals(
+            mapOf(
+                "Red" to mapOf("1" to 2, "2" to 1),
+                "Green" to mapOf("2" to 4, "3" to 1),
+                "Colourless" to mapOf("2" to 1),
+            ),
+            split().counts(CurveSplit.COLOUR),
+        )
+        assertEquals(
+            listOf("Red", "Green", "Colourless"),
+            split().curves(CurveSplit.COLOUR).map { it.title },
+            "WUBRG order, colourless last",
+        )
+    }
+
+    @Test
+    fun everySplitCurveHasEveryColumnSoTheyLineUp() {
+        val s = split()
+        CurveSplit.entries.forEach { split ->
+            s.curves(split).forEach { c ->
+                assertEquals(s.curve.map { it.label }, c.bars.map { it.label }, "${c.title} has different columns")
+            }
+        }
+    }
+
+    @Test
+    fun aCardWithNoCostIsTheColourOfItsIdentity() {
+        // Ancestral Vision has no mana cost and is blue.
+        val s = DeckAnalysis.of(listOf(card("Vision", "Sorcery", "", 0.0, ci = "U")))
+        assertEquals(listOf("Blue"), s.curves(CurveSplit.COLOUR).map { it.title })
+    }
+}

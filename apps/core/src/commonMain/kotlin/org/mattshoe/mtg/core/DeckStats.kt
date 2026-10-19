@@ -165,6 +165,29 @@ enum class ColourRing(val tag: String, val caption: String) {
 }
 
 /**
+ * What the mana curve is drawn over: the whole deck, or one graph per
+ * card type or per colour.
+ *
+ * Matt: "i want a dropdown to select what my mana curve graph shows.
+ * it defaults to all cards ... card type, color ... this will mean
+ * showing numerous graphs at once".
+ */
+enum class CurveSplit(val slug: String, val label: String) {
+    ALL("all", "All cards"),
+    TYPE("type", "Card type"),
+    COLOUR("colour", "Colour"),
+    ;
+
+    companion object {
+        val DEFAULT = ALL
+        fun of(slug: String): CurveSplit = entries.firstOrNull { it.slug == slug } ?: DEFAULT
+    }
+}
+
+/** One mana curve with what it is a curve of: "Creatures", "Red", "All cards". */
+data class CurveChart(val title: String, val bars: List<Bar>)
+
+/**
  * What a deck is made of.
  *
  * All of it derived from the cards, in the shared core, so the phone
@@ -215,7 +238,18 @@ data class DeckStats(
     val creatureTypes: List<Bar> = emptyList(),
     /** Copies that carry at least one creature type: what [creatureTypes] is out of. */
     val creatures: Int = 0,
+    /** The curve again, one per card type that has a non-land in it. */
+    val curvesByType: List<CurveChart> = emptyList(),
+    /** The curve again, one per colour, a gold card in each of its colours. */
+    val curvesByColour: List<CurveChart> = emptyList(),
 ) {
+    /** The graphs the mana curve panel draws for [split]. */
+    fun curves(split: CurveSplit): List<CurveChart> = when (split) {
+        CurveSplit.ALL -> listOf(CurveChart(CurveSplit.ALL.label, curve))
+        CurveSplit.TYPE -> curvesByType
+        CurveSplit.COLOUR -> curvesByColour
+    }
+
     /** The line under the creature types chart, the same on both platforms. */
     val creatureTypesNote: String
         get() = "Of $creatures card${if (creatures == 1) "" else "s"} with a creature type. " +
@@ -287,7 +321,44 @@ object DeckAnalysis {
             identity = identity(cards),
             creatureTypes = creatureTypes(cards),
             creatures = cards.filter { creatureTypesOf(it).isNotEmpty() }.sumOf { it.qty },
+            curvesByType = curvesByType(nonland),
+            curvesByColour = curvesByColour(nonland),
         )
+    }
+
+    /**
+     * One curve per card type, in the order a list is written in.
+     *
+     * The commander goes under what it is — a creature, usually — so
+     * the Commander group never draws a curve of one card.
+     */
+    private fun curvesByType(nonland: List<DeckCard>): List<CurveChart> {
+        val typed = nonland.groupBy { c -> if (c.isCommander) DeckGroup.of(c.copy(role = null)) else c.group }
+        return DeckGroup.entries.mapNotNull { g ->
+            typed[g]?.let { CurveChart(g.title, curve(it)) }
+        }
+    }
+
+    /**
+     * One curve per colour, WUBRG, then colourless.
+     *
+     * A card's colours are the coloured symbols in its cost, so a
+     * Lightning Helix is on the white curve and the red one. A card
+     * with no cost at all — Ancestral Vision — is the colour of its
+     * identity, which for those is its colour indicator.
+     */
+    private fun curvesByColour(nonland: List<DeckCard>): List<CurveChart> {
+        fun colours(c: DeckCard): Set<Pip> {
+            val cost = ManaCost.pips(c.manaCost).filter { it != Pip.C }.toSet()
+            if (cost.isNotEmpty() || !c.manaCost.isNullOrBlank()) return cost
+            return c.colorIdentity.orEmpty().mapNotNull { Pip.of(it.toString()) }.filter { it != Pip.C }.toSet()
+        }
+        val coloured = Pip.COLOURS.mapNotNull { pip ->
+            nonland.filter { pip in colours(it) }.takeIf { it.isNotEmpty() }?.let { CurveChart(pip.label, curve(it)) }
+        }
+        val colourless = nonland.filter { colours(it).isEmpty() }
+            .takeIf { it.isNotEmpty() }?.let { CurveChart(Pip.C.label, curve(it)) }
+        return coloured + listOfNotNull(colourless)
     }
 
     /**

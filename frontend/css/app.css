@@ -1287,6 +1287,16 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
 }
 .curve .col.none .bar { background: var(--bg-3); }
 .curve .x { font: 600 10.5px/1 var(--mono); color: var(--text-3); text-align: center; }
+/* What the curve is drawn over: all cards, or a graph per card type
+   or per colour. Split graphs are shorter so a deck's worth of them
+   reads as one panel, all on one scale. */
+.curve-split { width: auto; margin-bottom: 10px; }
+.curve-chart.split + .curve-chart.split { margin-top: 14px; }
+.curve-chart.split .curve { height: 84px; }
+.curve-title {
+  font: 600 10.5px/1 var(--sans); text-transform: uppercase; letter-spacing: .05em;
+  color: var(--text-2); margin-bottom: 4px;
+}
 
 /* Needs against makes, one row per colour. Two bars on one track so
    the comparison is a glance rather than arithmetic. */
