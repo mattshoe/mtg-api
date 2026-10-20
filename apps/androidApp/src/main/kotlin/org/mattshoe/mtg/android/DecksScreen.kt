@@ -724,26 +724,19 @@ internal fun DeckStatsPanel(
             // whatever you call it."
             guild?.let { Tag(it) }
         }
+        // The numbers stand on the panel itself. Each was a bordered
+        // box inside the bordered panel, and Matt: "i don't like this
+        // 'tile in tile' layout ... it feels sloppy". The list is
+        // `DeckStats.figures`, the one the website draws.
         FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.padding(top = 10.dp),
         ) {
-            Figure("${s.totalCards}", "cards")
-            Figure("${s.lands}", "lands · ${s.landShare}%")
-            Figure(s.averageManaValueText, "avg mana")
-            Figure("${s.spells}", "spells")
             // The hint is the web's `title`. A phone has nothing to
             // hover, so it is the figure's description instead —
             // which is also the only way a screen reader hears it.
-            s.value?.let {
-                Figure(
-                    Prices.money(it),
-                    "value",
-                    hint = if (s.unpriced > 0) "${s.unpriced} cards have no price" else "",
-                )
-            }
-            if (s.missing > 0) Figure("${s.missing}", "not owned", Warn)
+            s.figures.forEach { f -> Figure(f.n, f.k, if (f.warn) Warn else Ink, f.hint) }
         }
     }
 
@@ -827,7 +820,7 @@ private fun Curve(s: org.mattshoe.mtg.core.DeckStats) {
             }
         }
     }
-    Line("Median ${s.medianManaValueText}. Lands excluded.", Ink3, Design.MINI)
+    Line("Lands excluded.", Ink3, Design.MINI)
 }
 
 /**
@@ -1199,13 +1192,7 @@ private fun Figure(
 ) {
     val told = if (hint.isEmpty()) "$n $k" else "$n $k — $hint"
     Column(
-        modifier.semantics { contentDescription = told }
-            // The web's `.figures` grid draws a 1px seam between cells
-            // with a `--line` background under a 1px gap; a hairline
-            // border around each cell is the same seam without a grid
-            // of Android's own to lay six figures into on a phone.
-            .border(1.dp, Line, RadiusSm)
-            .padding(horizontal = 10.dp, vertical = 8.dp),
+        modifier.semantics { contentDescription = told },
     ) {
         Line(n, tint, Design.H2, FontWeight.SemiBold)
         // `.figure .k { text-transform: uppercase }` on the web. The
