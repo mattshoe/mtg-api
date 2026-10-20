@@ -1262,6 +1262,22 @@ tr.row-error td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
 }
 .figure.warn .n { color: var(--warn); }
 
+/* The deck at a glance. Matt: "i don't like this 'tile in tile'
+   layout ... it feels sloppy". The numbers stand on the panel with
+   room between them, and the charts are sections of the panel under
+   one hairline rather than bordered cells inside it. The phone's
+   DecksScreen draws the same. */
+.figures.glance {
+  display: flex; flex-wrap: wrap; gap: 12px 28px;
+  padding: 14px 15px 16px; background: none;
+}
+.figures.glance .figure { background: none; padding: 0; }
+.stats-grid.glance {
+  column-gap: 32px; padding: 0 15px;
+  border-top: 1px solid var(--line);
+}
+.stats-grid.glance .stats-card { padding: 16px 0 18px; border: 0; }
+
 /* The mana curve: columns, tallest to scale, the count above each. */
 .curve { display: flex; align-items: flex-end; gap: 6px; height: 132px; }
 .curve .col { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; height: 100%; min-width: 0; }

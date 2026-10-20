@@ -22,7 +22,6 @@ import org.mattshoe.mtg.core.CurveSplit
 import org.mattshoe.mtg.core.DeckStats
 import org.mattshoe.mtg.core.Design
 import org.mattshoe.mtg.core.Pip
-import org.mattshoe.mtg.core.Prices
 import org.mattshoe.mtg.core.RingSlice
 
 /**
@@ -54,16 +53,15 @@ fun DeckStatsPanel(
             }
         }
 
-        Div(attrs = { classes("figures") }) {
-            figure("${s.totalCards}", "cards")
-            figure("${s.lands}", "lands · ${s.landShare}%")
-            figure(s.averageManaValueText, "avg mana")
-            figure("${s.spells}", "spells")
-            s.value?.let { figure(Prices.money(it), "value", hint = if (s.unpriced > 0) "${s.unpriced} cards have no price" else "") }
-            if (s.missing > 0) figure("${s.missing}", "not owned", warn = true)
+        // The numbers stand on the panel itself. They were cells with
+        // seams between them inside the bordered panel, and Matt: "i
+        // don't like this 'tile in tile' layout ... it feels sloppy".
+        // The list is `DeckStats.figures`, the one the phone draws.
+        Div(attrs = { classes("figures", "glance") }) {
+            s.figures.forEach { figure(it.n, it.k, warn = it.warn, hint = it.hint) }
         }
 
-        Div(attrs = { classes("stats-grid") }) {
+        Div(attrs = { classes("stats-grid", "glance") }) {
             if (s.hasCurve) card("Mana curve") { Curve(s) }
             if (s.pips.isNotEmpty() || s.sources.isNotEmpty()) card("Colour") { Colours(s) }
             if (s.types.isNotEmpty()) card("Card types") { Bars(s.types, s.totalCards) }
@@ -145,7 +143,7 @@ private fun Curve(s: DeckStats) {
             CurveColumns(c.bars, most)
         }
     }
-    Div(attrs = { classes("sub") }) { Text("Median ${s.medianManaValueText}. Lands excluded.") }
+    Div(attrs = { classes("sub") }) { Text("Lands excluded.") }
 }
 
 @Composable
