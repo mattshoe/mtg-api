@@ -48,7 +48,11 @@ describe('0015: deck rows named by a front face take the full name', () => {
       FROM deck_cards dc JOIN decks d ON d.id = dc.deck_id
      WHERE dc.deck_id = ? ORDER BY dc.name`, deck);
 
-  const migrate = () => env.DB.prepare(migration).run();
+  /** Statements in a .sql file. Comments go first: they contain semicolons. */
+  const statements = (text) => text
+    .split('\n').map((l) => l.replace(/--.*$/, '')).join('\n')
+    .split(';').map((s) => s.trim()).filter(Boolean);
+  const migrate = () => env.DB.batch(statements(migration).map((s) => env.DB.prepare(s)));
 
   it('a deck row naming the front face of a card that is owned reads as owned after it runs', async () => {
     await row(DECK, FRONT).run();
