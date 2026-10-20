@@ -146,6 +146,61 @@ async function claimedBy(db, ownerId, exceptDeckId, keys) {
   return found;
 }
 
+/**
+ * The full name of each two-faced card named here by one face, as
+ * `name_norm -> canonical name`. `aliases` is written by /cards/add for
+ * every face it sees. A name that is itself a card is left alone, so an
+ * art-series "Breya // Breya" cannot swallow the real Breya.
+ */
+async function fullNameIndex(db, keys) {
+  const found = new Map();
+  const faces = keys.filter((k) => !k.includes('//'));
+  for (let i = 0; i < faces.length; i += CHUNK) {
+    const slice = faces.slice(i, i + CHUNK);
+    const marks = slice.map(() => '?').join(',');
+    const r = await db.prepare(`
+      SELECT a.alias_norm, MIN(a.canonical_name) AS name
+        FROM aliases a
+       WHERE a.alias_norm IN (${marks})
+         AND a.canonical_name LIKE '% // %'
+         AND NOT EXISTS (SELECT 1 FROM cards c WHERE c.name_norm = a.alias_norm)
+       GROUP BY a.alias_norm`).bind(...slice).all();
+    for (const row of r.results || []) found.set(row.alias_norm, row.name);
+  }
+  return found;
+}
+
+/** Re-key `wanted` by full name, merging a card written both ways. */
+async function toFullNames(db, wanted, commanders) {
+  const full = await fullNameIndex(db, [...wanted.keys()]);
+  if (!full.size) return;
+  const entries = [...wanted.values()];
+  wanted.clear();
+  for (const w of entries) {
+    const name = full.get(w.name_norm);
+    const key = name ? normalize(name) : w.name_norm;
+    if (name && commanders.delete(w.name_norm)) commanders.add(key);
+    const prev = wanted.get(key);
+    if (prev) { if (!commanders.has(key)) prev.qty += w.qty; } else {
+      wanted.set(key, { ...w, name_norm: key });
+    }
+  }
+}
+
+/** The same for deck rows written before the card existed to be named. */
+async function rowsToFullNames(db, rows) {
+  const full = await fullNameIndex(db, rows.map((r) => r.name_norm));
+  if (!full.size) return;
+  const byKey = new Map();
+  for (const r of rows.splice(0)) {
+    const name = full.get(r.name_norm);
+    const row = name ? { ...r, name, name_norm: normalize(name) } : r;
+    const prev = byKey.get(row.name_norm);
+    if (prev) prev.qty += row.qty; else byKey.set(row.name_norm, row);
+  }
+  rows.push(...byKey.values());
+}
+
 /** Any printing at all, for the oracle_id and type of a card nobody owns. */
 async function anyPrintingIndex(db, keys) {
   const found = new Map();
@@ -410,6 +465,13 @@ async function planAndWrite(db, deck, body, fetchImpl) {
     }
   }
 
+  // "Aang, Swift Savior" is the front of a card the collection calls
+  // "Aang, Swift Savior // Aang and La, Ocean's Fury", and every lookup
+  // below is by exact name. Without this a front face typed into a list
+  // was bought again when it was owned, and the deck row kept the short
+  // name, so it never joined the copy it claimed.
+  await toFullNames(db, wanted, commanders);
+
   const keys = [...wanted.keys()];
   const [owned, anywhere, currentRows, elsewhere] = await Promise.all([
     ownedIndex(db, deck.owner_id, keys),
@@ -563,6 +625,10 @@ async function planAndWrite(db, deck, body, fetchImpl) {
     acquisition = await addCards(db, deck.owner_id, purchase, fetchImpl);
     if (acquisition.status !== 200 || acquisition.body?.failed) return refuse(acquisition);
   }
+
+  // A card nobody had before was just bought under its full name, which
+  // only now exists to be found.
+  if (acquisition) await rowsToFullNames(db, rows);
 
   // Transfers move real rows between collections, so they go in the same
   // batch as the deck: a deck that claims transferred cards while the
