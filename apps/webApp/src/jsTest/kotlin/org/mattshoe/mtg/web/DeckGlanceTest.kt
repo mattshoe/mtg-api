@@ -12,18 +12,20 @@ import kotlin.math.abs
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * The deck at a glance, on the real deck page.
+ * The top of the deck at a glance, on the real deck page.
  *
- * Matt: "i don't like this 'tile in tile' layout in the deck at a
- * glance section ... i want it to be sleek and stylish". The headline
- * numbers were cells with seams between them and every chart a
- * bordered cell, all inside the bordered panel. Now they stand on the
- * panel. And: "i also want to see median, mode for mana cost". At a
- * phone's size and both tablet sizes. Android's sibling is
- * `DeckGlanceParityTest`.
+ * Matt, after the borders came off and nothing else changed: "i asked
+ * you to make the fucking at a glance view more stylish and attractive
+ * and you just removed the borders!!!!". The numbers were one ragged
+ * row at one size, wrapping wherever they ran out of room. Now they
+ * are laid out: the cards and their worth big, lands against spells as
+ * one split bar, and the mana value's average, median and mode in
+ * three equal columns. At a phone's size and both tablet sizes.
+ * Android's sibling is `DeckGlanceParityTest`.
  */
 class DeckGlanceTest {
 
@@ -46,7 +48,7 @@ class DeckGlanceTest {
             price = 1.0,
         )
 
-    /** Spells at 1, 1, 2, 2, 2, 2, 2, 3: average 1.88, median 2, mode 2. */
+    /** 10 lands and 8 spells, the spells at 1, 1, 2, 2, 2, 2, 2, 3: average 1.88, median 2, mode 2. */
     private fun opened() = DecksState()
         .loaded(listOf(Deck("a", "Gruul", "matt", "Leader (KHC) 2", "RG", 18, null)))
         .opened(
@@ -73,49 +75,64 @@ class DeckGlanceTest {
         return (0 until f.length).map { f.item(it)!!.unsafeCast<HTMLElement>() }
     }
 
+    /** The figure whose title, its accessible name, is [told]. */
+    private fun org.w3c.dom.Document.figure(told: String): HTMLElement =
+        assertNotNull(all(".figure").firstOrNull { it.title == told }, "no figure \"$told\" on the deck page")
+
+    private fun HTMLElement.said() = "${querySelector(".n")?.textContent} ${querySelector(".k")?.textContent}"
+
     private suspend fun check(size: Pair<Int, Int>) {
         val doc = mount(size)
         val w = screen!!.window
-        val figures = doc.all(".figure")
-        val said = figures.map { "${it.querySelector(".n")?.textContent} ${it.querySelector(".k")?.textContent}" }
+        fun px(e: HTMLElement) = w.getComputedStyle(e.querySelector(".n")!!.unsafeCast<HTMLElement>()).fontSize.removeSuffix("px").toDouble()
+
+        // Lands against spells, one bar split by share.
+        val bar = assertNotNull(
+            doc.querySelector(".glance-split .split-bar")?.unsafeCast<HTMLElement>(),
+            "no bar splitting the deck's lands from its spells",
+        ).getBoundingClientRect()
+        val spells = doc.querySelector(".glance-split .split-bar .spells")!!.getBoundingClientRect()
+        val share = spells.width / bar.width
+        assertTrue(abs(share - 8.0 / 18.0) < 0.02, "the spells take ${share * 100}% of the split bar, not 8 of 18 cards")
         assertEquals(
-            listOf("18 cards", "10 lands · 56%", "8 spells", "1.88 avg mana", "2 median mana", "2 mode mana", "\$18 value"),
-            said,
-            "the headline numbers are not the deck's, with median and mode beside the average",
+            listOf("8 spells", "10 lands · 56%"),
+            doc.all(".glance-split .figure").map { it.said() },
+            "the split bar's ends are not named",
         )
 
-        val row = doc.querySelector(".figure")!!.parentElement!!.unsafeCast<HTMLElement>()
-        assertEquals(
-            "rgba(0, 0, 0, 0)", w.getComputedStyle(row).backgroundColor,
-            "the row of numbers paints a background through gaps between them: a seam around each, a tile in a tile",
-        )
-        figures.forEach { f ->
-            val told = f.textContent
-            val box = f.getBoundingClientRect()
-            val n = f.querySelector(".n")!!.getBoundingClientRect()
-            val inset = maxOf(abs(n.left - box.left), abs(n.top - box.top))
-            assertTrue(inset < 1.0, "\"$told\" is a tile inside the panel: its number sits ${inset}px inside a frame of its own")
-            assertEquals(
-                "rgba(0, 0, 0, 0)", w.getComputedStyle(f).backgroundColor,
-                "\"$told\" is painted as a cell of its own",
-            )
-            assertTrue(box.right <= w.innerWidth + 0.5, "\"$told\" runs off the right of the screen")
+        // Avg, median and mode: three equal columns on one line, under one caption.
+        val trio = listOf("1.88 avg mana", "2 median mana", "2 mode mana").map { doc.figure(it) }
+        assertEquals(listOf("1.88 avg", "2 median", "2 mode"), trio.map { it.said() }, "the mana trio's labels")
+        val a = trio.first().getBoundingClientRect()
+        trio.drop(1).forEach { f ->
+            val b = f.getBoundingClientRect()
+            assertTrue(abs(b.top - a.top) < 1.0, "\"${f.title}\" is not on the line with the average")
+            assertTrue(abs(b.width - a.width) < 1.0, "\"${f.title}\" is ${b.width}px wide and the average ${a.width}px: a ragged row, not three columns")
         }
+        val spread = trio.last().getBoundingClientRect().right - a.left
+        assertTrue(spread > bar.width * 0.9, "the mana trio spans ${spread}px of a ${bar.width}px panel: bunched to one side")
+
+        // The cards and their worth are the headline, so they are big.
+        val big = px(doc.figure("18 cards"))
+        val mana = px(trio.first())
+        assertTrue(big > mana * 1.25, "the deck's card count is set at ${big}px beside the average's ${mana}px: nothing leads")
+        assertEquals(big, px(doc.figure("\$18 value")), "the deck's value is not set as big as its card count")
+
+        doc.all(".figure").forEach { f ->
+            assertTrue(f.getBoundingClientRect().right <= w.innerWidth + 0.5, "\"${f.title}\" runs off the right of the screen")
+        }
+        // Still no tile in a tile: the charts are sections of the panel.
         doc.all(".stats-card").forEach { c ->
-            val style = w.getComputedStyle(c)
-            val title = c.querySelector("h3")?.textContent
-            assertEquals("0px", style.borderRightWidth, "the $title chart is a bordered cell inside the panel")
-            assertEquals("0px", style.borderTopWidth, "the $title chart is a bordered cell inside the panel")
+            assertEquals("0px", w.getComputedStyle(c).borderRightWidth, "the ${c.querySelector("h3")?.textContent} chart is a bordered cell inside the panel")
         }
-        assertTrue(doc.all(".stats-card").isNotEmpty(), "the deck page drew no charts, so this proves nothing about them")
     }
 
     @Test
-    fun onAPhoneTheNumbersStandOnThePanelWithMedianAndMode() = runTest { check(390 to 844) }
+    fun theGlanceIsLaidOutOnAPhone() = runTest { check(390 to 844) }
 
     @Test
-    fun onAFoldingPhoneOpenedOut() = runTest { check(Tablet.UNFOLDED) }
+    fun theGlanceOnAFoldingPhoneOpenedOut() = runTest { check(Tablet.UNFOLDED) }
 
     @Test
-    fun onATabletHeldSideways() = runTest { check(Tablet.LANDSCAPE) }
+    fun theGlanceOnATabletHeldSideways() = runTest { check(Tablet.LANDSCAPE) }
 }

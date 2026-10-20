@@ -736,7 +736,9 @@ internal fun DeckStatsPanel(
             // The hint is the web's `title`. A phone has nothing to
             // hover, so it is the figure's description instead —
             // which is also the only way a screen reader hears it.
-            s.figures.forEach { f -> Figure(f.n, f.k, if (f.warn) Warn else Ink, f.hint) }
+            val g = s.glance
+            (listOf(g.headline.first(), g.lands, g.spells) + g.mana + g.headline.drop(1))
+                .forEach { f -> Figure(f.n, f.k, if (f.warn) Warn else Ink, f.hint) }
         }
     }
 

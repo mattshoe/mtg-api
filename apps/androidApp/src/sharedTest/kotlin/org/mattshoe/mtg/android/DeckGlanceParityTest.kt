@@ -3,14 +3,17 @@ package org.mattshoe.mtg.android
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onChildren
 import androidx.compose.ui.test.onFirst
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.unit.DpRect
 import androidx.compose.ui.unit.DpSize
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
@@ -29,13 +32,15 @@ import kotlin.math.abs
 import kotlin.test.assertTrue
 
 /**
- * The deck at a glance's headline numbers, through the real shell.
+ * The top of the deck at a glance, through the real shell.
  *
- * Matt: "i don't like this 'tile in tile' layout in the deck at a
- * glance section ... i want it to be sleek and stylish". Every number
- * sat in a bordered box of its own inside the bordered panel. Now the
- * numbers stand on the panel itself. And: "i also want to see median,
- * mode for mana cost". On a phone and both tablet sizes. The website's
+ * Matt, after the borders came off and nothing else changed: "i asked
+ * you to make the fucking at a glance view more stylish and attractive
+ * and you just removed the borders!!!!". The numbers were one ragged
+ * row at one size, wrapping wherever they ran out of room. Now they
+ * are laid out: the cards and their worth big, lands against spells as
+ * one split bar, and the mana value's average, median and mode in
+ * three equal columns. On a phone and both tablet sizes. The website's
  * sibling is `DeckGlanceTest`.
  */
 @RunWith(AndroidJUnit4::class)
@@ -51,7 +56,7 @@ class DeckGlanceParityTest {
             price = 1.0,
         )
 
-    /** Spells at 1, 1, 2, 2, 2, 2, 2, 3: average 1.88, median 2, mode 2. */
+    /** 10 lands and 8 spells, the spells at 1, 1, 2, 2, 2, 2, 2, 3: average 1.88, median 2, mode 2. */
     private fun opened() = AppState(
         route = Route(View.DECKS, "a"),
         admin = Admin().signIn(Account(key = "matt", role = "admin"), "t"),
@@ -98,45 +103,77 @@ class DeckGlanceParityTest {
     private fun figure(told: String) =
         rule.onAllNodes(hasContentDescription(told), useUnmergedTree = true).onFirst()
 
-    private fun shows(told: String): Boolean =
-        rule.onAllNodes(hasContentDescription(told), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+    private fun box(told: String): DpRect = figure(told).performScrollTo().getUnclippedBoundsInRoot()
+
+    private fun tagged(t: String) = rule.onAllNodes(hasTestTag(t), useUnmergedTree = true)
+
+    /** The size the figure's number is set in, read back off its laid-out text. */
+    private fun numberSize(told: String): Float {
+        val node = figure(told).onChildren().onFirst().fetchSemanticsNode()
+        val layouts = mutableListOf<TextLayoutResult>()
+        node.config[SemanticsActions.GetTextLayoutResult].action?.invoke(layouts)
+        return layouts.single().layoutInput.style.fontSize.value
+    }
+
+    private fun DpRect.w() = (right - left).value
 
     private fun check(size: DpSize?) {
         shell(size)
-        standOnThePanel(listOf("18 cards", "10 lands · 56%", "8 spells", "1.88 avg mana"))
-        val wanted = listOf("2 median mana", "2 mode mana")
-        wanted.forEach { assertTrue(shows(it), "no \"$it\" among the deck's headline numbers") }
-        standOnThePanel(wanted)
-    }
-
-    private fun standOnThePanel(figures: List<String>) {
         val screen = rule.onRoot().getUnclippedBoundsInRoot()
-        figures.forEach { told ->
-            val f = figure(told).performScrollTo()
-            val box = f.getUnclippedBoundsInRoot()
-            val number = f.onChildren().onFirst().getUnclippedBoundsInRoot()
-            // A figure with a frame of its own pads its number in from
-            // the frame's edge. One standing on the panel has no inset.
-            val inset = maxOf(abs(number.left.value - box.left.value), abs(number.top.value - box.top.value))
+
+        // Lands against spells, one bar split by share.
+        assertTrue(
+            tagged("glance-split").fetchSemanticsNodes().isNotEmpty(),
+            "no bar splitting the deck's lands from its spells",
+        )
+        tagged("glance-split").onFirst().performScrollTo()
+        val bar = tagged("glance-split").onFirst().getUnclippedBoundsInRoot()
+        val spells = tagged("glance-split-spells").onFirst().getUnclippedBoundsInRoot()
+        val share = spells.w() / bar.w()
+        assertTrue(
+            abs(share - 8f / 18f) < 0.02f,
+            "the spells take ${share * 100}% of the split bar, not 8 of 18 cards",
+        )
+
+        // Avg, median and mode: three equal columns on one line.
+        val trio = listOf("1.88 avg mana", "2 median mana", "2 mode mana").map { it to box(it) }
+        val (first, a) = trio.first()
+        trio.drop(1).forEach { (told, b) ->
+            assertTrue(abs(b.top.value - a.top.value) < 1f, "\"$told\" is not on the line with \"$first\"")
             assertTrue(
-                inset < 1f,
-                "\"$told\" is a tile inside the panel: its number sits ${inset}dp inside a frame of its own",
+                abs(b.w() - a.w()) < 1f,
+                "\"$told\" is ${b.w()}dp wide and \"$first\" ${a.w()}dp: a ragged row, not three columns",
             )
-            assertTrue(
-                box.right <= screen.right,
-                "\"$told\" runs off the right of the screen, ${box.right} past ${screen.right}",
-            )
+        }
+        val spread = trio.last().second.right.value - a.left.value
+        assertTrue(
+            spread > bar.w() * 0.9f,
+            "the mana trio spans ${spread}dp of a ${bar.w()}dp panel: bunched to one side, not laid across it",
+        )
+
+        // The cards and their worth are the headline, so they are big.
+        val big = numberSize("18 cards")
+        val mana = numberSize("1.88 avg mana")
+        assertTrue(
+            big > mana * 1.25f,
+            "the deck's card count is set at ${big}sp beside the average's ${mana}sp: nothing leads",
+        )
+        assertTrue(numberSize("\$18 value") == big, "the deck's value is not set as big as its card count")
+
+        (trio.map { it.first } + listOf("18 cards", "\$18 value", "8 spells", "10 lands · 56%")).forEach { told ->
+            val b = box(told)
+            assertTrue(b.right <= screen.right, "\"$told\" runs off the right of the screen, ${b.right} past ${screen.right}")
         }
     }
 
     @Test
-    fun theHeadlineNumbersStandOnThePanelAndIncludeMedianAndMode() = check(null)
+    fun theGlanceIsLaidOutOnAPhone() = check(null)
 
     @Test
     @Config(qualifiers = Tablet.UNFOLDED_QUALIFIERS)
-    fun theHeadlineNumbersOnAFoldingPhoneOpenedOut() = check(Tablet.UNFOLDED)
+    fun theGlanceOnAFoldingPhoneOpenedOut() = check(Tablet.UNFOLDED)
 
     @Test
     @Config(qualifiers = Tablet.LANDSCAPE_QUALIFIERS)
-    fun theHeadlineNumbersOnATabletHeldSideways() = check(Tablet.LANDSCAPE)
+    fun theGlanceOnATabletHeldSideways() = check(Tablet.LANDSCAPE)
 }

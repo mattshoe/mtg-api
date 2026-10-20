@@ -58,7 +58,9 @@ fun DeckStatsPanel(
         // don't like this 'tile in tile' layout ... it feels sloppy".
         // The list is `DeckStats.figures`, the one the phone draws.
         Div(attrs = { classes("figures", "glance") }) {
-            s.figures.forEach { figure(it.n, it.k, warn = it.warn, hint = it.hint) }
+            val g = s.glance
+            (listOf(g.headline.first(), g.lands, g.spells) + g.mana + g.headline.drop(1))
+                .forEach { figure(it.n, it.k, warn = it.warn, hint = it.hint) }
         }
 
         Div(attrs = { classes("stats-grid", "glance") }) {
