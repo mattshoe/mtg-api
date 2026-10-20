@@ -41,6 +41,26 @@ describe('POST /cards/validate', () => {
     expect(stub.calls.collection).toBe(1);
   });
 
+  // Matt, adding a deck: "i tried to add a deck with aang swift savior and
+  // it would not work. i had to remove the second face to get it to work".
+  // Scryfall's collection lookup will not take a name with both faces, and
+  // that is how every decklist export writes a two-faced card.
+  it('confirms a two-faced card nobody owns, written with both faces', async () => {
+    const stub = stubScryfall();
+    const full = 'Delver of Secrets // Insectile Aberration';
+    const r = await post('/cards/validate', { list: `1 ${full}` }, stub);
+    expect(byName(r.body, full).ok, 'a real two-faced card, refused because both faces were named').toBe(true);
+    expect(byName(r.body, full).source).toBe('scryfall');
+    expect(r.body.ok).toBe(true);
+  });
+
+  it('still refuses a made-up back face on a real front', async () => {
+    const r = await post('/cards/validate', {
+      names: ['Delver of Secrets // Not The Back Face'],
+    }, stubScryfall());
+    expect(r.body.ok).toBe(false);
+  });
+
   it('flags a name that is not a card', async () => {
     const r = await post('/cards/validate', { names: ['Definitely Not A Card'] }, stubScryfall());
     expect(r.status).toBe(200);
