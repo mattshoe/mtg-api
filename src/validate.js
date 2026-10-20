@@ -9,7 +9,7 @@
 // keeps a list of familiar cards validating with no network at all.
 
 import { parseList, normalize } from './parse.js';
-import { makeClient } from './scryfall.js';
+import { makeClient, identifierFor } from './scryfall.js';
 
 // No limit here either: this is the check the app runs before an import, so
 // a cap on it is a cap on the import. See the note in `src/cards.js`.
@@ -91,7 +91,12 @@ export async function validateNames(db, body, fetchImpl) {
   if (unknown.length) {
     const scry = makeClient(fetchImpl);
     try {
-      const res = await scry.collection(unknown.map((e) => ({ name: e.name })));
+      // The front face, not the name as written. Scryfall answers
+      // not_found for "Aang, Swift Savior // Aang and La, Ocean's Fury",
+      // so every two-faced card nobody owned yet was refused. The card
+      // that comes back carries its full name, and that is what the
+      // entry is matched against, so a made-up back face still fails.
+      const res = await scry.collection(unknown.map((e) => identifierFor({ name: e.name })));
       const hit = new Set((res.data || []).flatMap(
         (c) => [c.name, ...(c.card_faces || []).map((f) => f.name)].map(normalize),
       ));
