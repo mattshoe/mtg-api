@@ -1,0 +1,1 @@
+The deck at a glance has a real layout now. Card count and value lead in big type, lands against spells is one split bar, and average, median and mode mana sit in three even gold columns under a Mana value caption. Phone and website.
