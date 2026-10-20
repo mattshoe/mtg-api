@@ -141,7 +141,7 @@ class DeckGlanceParityTest {
         trio.drop(1).forEach { (told, b) ->
             assertTrue(abs(b.top.value - a.top.value) < 1f, "\"$told\" is not on the line with \"$first\"")
             assertTrue(
-                abs(b.w() - a.w()) < 1f,
+                abs(b.w() - a.w()) < 2f, // weights hand a pixel of remainder to one cell
                 "\"$told\" is ${b.w()}dp wide and \"$first\" ${a.w()}dp: a ragged row, not three columns",
             )
         }
