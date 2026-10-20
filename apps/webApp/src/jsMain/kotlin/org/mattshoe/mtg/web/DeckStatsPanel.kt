@@ -53,14 +53,36 @@ fun DeckStatsPanel(
             }
         }
 
-        // The numbers stand on the panel itself. They were cells with
-        // seams between them inside the bordered panel, and Matt: "i
-        // don't like this 'tile in tile' layout ... it feels sloppy".
-        // The list is `DeckStats.figures`, the one the phone draws.
-        Div(attrs = { classes("figures", "glance") }) {
-            val g = s.glance
-            (listOf(g.headline.first(), g.lands, g.spells) + g.mana + g.headline.drop(1))
-                .forEach { figure(it.n, it.k, warn = it.warn, hint = it.hint) }
+        // Laid out, not one ragged row of numbers at one size. Matt,
+        // when the borders came off and nothing else changed: "i asked
+        // you to make the fucking at a glance view more stylish and
+        // attractive and you just removed the borders!!!!". The groups
+        // are `DeckStats.glance`, the ones the phone draws.
+        val g = s.glance
+        Div(attrs = { classes("glance-top") }) {
+            Div(attrs = { classes("glance-hero") }) {
+                g.headline.forEach { figure(it.n, it.k, warn = it.warn, hint = it.hint) }
+            }
+            // Lands against spells, one bar split by share. Spells in
+            // the accent, lands a dark grey: they differ by lightness.
+            Div(attrs = { classes("glance-split") }) {
+                Div(attrs = { classes("split-bar"); attr("aria-hidden", "true") }) {
+                    if (g.spellShare > 0) {
+                        Div(attrs = { classes("seg", "spells"); style { property("width", "${g.spellShare * 100}%") } }) {}
+                    }
+                    Div(attrs = { classes("seg", "lands") }) {}
+                }
+                Div(attrs = { classes("split-key") }) {
+                    figure(g.spells.n, g.spells.k, extra = "spells")
+                    figure(g.lands.n, g.lands.k)
+                }
+            }
+            Div(attrs = { classes("glance-mana") }) {
+                Div(attrs = { classes("cap") }) { Text("Mana value") }
+                Div(attrs = { classes("trio") }) {
+                    g.mana.forEach { figure(it.n, it.k, hint = it.hint, label = it.label) }
+                }
+            }
         }
 
         Div(attrs = { classes("stats-grid", "glance") }) {
@@ -89,14 +111,23 @@ fun DeckStatsPanel(
 }
 
 @Composable
-private fun figure(n: String, k: String, warn: Boolean = false, hint: String = "") {
+private fun figure(
+    n: String,
+    k: String,
+    warn: Boolean = false,
+    hint: String = "",
+    /** What is printed under the number; [k] is the title. */
+    label: String = k,
+    extra: String? = null,
+) {
     Div(attrs = {
         classes("figure")
         if (warn) classes("warn")
+        extra?.let { classes(it) }
         attr("title", if (hint.isEmpty()) "$n $k" else "$n $k — $hint")
     }) {
         Div(attrs = { classes("n") }) { Text(n) }
-        Div(attrs = { classes("k") }) { Text(k) }
+        Div(attrs = { classes("k") }) { Text(label) }
     }
 }
 
