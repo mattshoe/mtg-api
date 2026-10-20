@@ -184,6 +184,14 @@ enum class CurveSplit(val slug: String, val label: String) {
     }
 }
 
+/**
+ * One headline number over the deck's charts: "44" over "cards".
+ *
+ * [hint] is what the web puts in the figure's `title` and the phone
+ * in its description. [warn] draws the number in the warning colour.
+ */
+data class HeadlineFigure(val n: String, val k: String, val hint: String = "", val warn: Boolean = false)
+
 /** One mana curve with what it is a curve of: "Creatures", "Red", "All cards". */
 data class CurveChart(val title: String, val bars: List<Bar>)
 
@@ -242,6 +250,11 @@ data class DeckStats(
     val curvesByType: List<CurveChart> = emptyList(),
     /** The curve again, one per colour, a gold card in each of its colours. */
     val curvesByColour: List<CurveChart> = emptyList(),
+    /**
+     * The mana value most copies cost, lands excluded, the cheaper one
+     * on a tie. Matt: "i also want to see median, mode for mana cost".
+     */
+    val modeManaValue: Int = 0,
 ) {
     /** The graphs the mana curve panel draws for [split]. */
     fun curves(split: CurveSplit): List<CurveChart> = when (split) {
@@ -268,6 +281,27 @@ data class DeckStats(
 
     /** The median's own text, for the same reason. */
     val medianManaValueText: String get() = manaValueText(medianManaValue)
+
+    val modeManaValueText: String get() = "$modeManaValue"
+
+    /**
+     * The numbers along the top of the deck at a glance, in order.
+     *
+     * One list in the core, so the phone and the website cannot order
+     * or word them differently. The average, the median and the mode
+     * sit together, since they answer the one question.
+     */
+    val figures: List<HeadlineFigure>
+        get() = listOfNotNull(
+            HeadlineFigure("$totalCards", "cards"),
+            HeadlineFigure("$lands", "lands · $landShare%"),
+            HeadlineFigure("$spells", "spells"),
+            HeadlineFigure(averageManaValueText, "avg mana"),
+            HeadlineFigure(medianManaValueText, "median mana"),
+            HeadlineFigure(modeManaValueText, "mode mana"),
+            value?.let { HeadlineFigure(Prices.money(it), "value", if (unpriced > 0) "$unpriced cards have no price" else "") },
+            HeadlineFigure("$missing", "not owned", warn = true).takeIf { missing > 0 },
+        )
 
     /**
      * Colours the deck asks for but cannot produce.
@@ -323,6 +357,7 @@ object DeckAnalysis {
             creatures = cards.filter { creatureTypesOf(it).isNotEmpty() }.sumOf { it.qty },
             curvesByType = curvesByType(nonland),
             curvesByColour = curvesByColour(nonland),
+            modeManaValue = mode(nonland),
         )
     }
 
@@ -533,6 +568,13 @@ object DeckAnalysis {
         if (all.isEmpty()) return 0.0
         val mid = all.size / 2
         return if (all.size % 2 == 1) all[mid] else ((all[mid - 1] + all[mid]) / 2)
+    }
+
+    private fun mode(nonland: List<DeckCard>): Int {
+        val counts = mutableMapOf<Int, Int>()
+        nonland.forEach { c -> manaValue(c).toInt().let { counts[it] = (counts[it] ?: 0) + c.qty } }
+        return counts.entries.sortedWith(compareByDescending<Map.Entry<Int, Int>> { it.value }.thenBy { it.key })
+            .firstOrNull()?.key ?: 0
     }
 
     /** WUBRG, from every card in the deck. */
