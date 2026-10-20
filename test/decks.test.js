@@ -700,6 +700,19 @@ describe('POST /decks/create', () => {
     expect(row.colors).toBe('R');
   });
 
+  // A guard, not a fix: this path already sent the front face to
+  // Scryfall. Pinned because the stub now refuses a two-faced name the
+  // way Scryfall does, so it would go red if it ever stopped.
+  it('takes a two-faced commander nobody owns, named with both faces', async () => {
+    const full = 'Delver of Secrets // Insectile Aberration';
+    const r = await post('/decks/create',
+      { ...NEW, commander: full, list: '1 Lightning Bolt', dry_run: false }, stubScryfall());
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    const rows = await sql(
+      'SELECT name, role FROM deck_cards WHERE deck_id = (SELECT id FROM decks WHERE key = ?1)', r.body.key);
+    expect(rows).toContainEqual({ name: full, role: 'commander' });
+  });
+
   it('refuses without a token', async () => {
     const snap = await snapshot();
     const r = await postAnon('/decks/create', { ...NEW, list: '1 Lightning Bolt' });
