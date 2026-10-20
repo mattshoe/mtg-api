@@ -1,0 +1,1 @@
+A two-faced card typed into a deck list by its front face, like "Aang, Swift Savior", now links to the card in your collection. It used to be added to the collection and then still show as missing in the deck, and a copy you already owned got added a second time.
