@@ -713,6 +713,42 @@ describe('POST /decks/create', () => {
     expect(rows).toContainEqual({ name: full, role: 'commander' });
   });
 
+  /**
+   * Matt: "entering a new deck list did not add missing cards to my
+   * collection". Cracker Barrel listed "Aang, Swift Savior" and "Witch
+   * Enchanter", the front faces only. Both were bought, as
+   * "Aang, Swift Savior // Aang and La, Ocean's Fury" and so on, but the
+   * deck rows kept the short name, so nothing joined them: the deck
+   * claimed a card the collection did not have, and the bought copy sat
+   * in bulk as if no deck held it.
+   */
+  it('a two-faced card nobody owns, named by its front face, is added and held by the deck', async () => {
+    const full = 'Delver of Secrets // Insectile Aberration';
+    const r = await post('/decks/create',
+      { ...NEW, list: '1 Delver of Secrets', dry_run: false }, stubScryfall());
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    const rows = await sql(
+      'SELECT name FROM deck_cards WHERE deck_id = (SELECT id FROM decks WHERE key = ?1) AND role = ?2',
+      r.body.key, 'spell');
+    expect(rows, 'the deck row kept the front face, so it names no card in the collection')
+      .toEqual([{ name: full }]);
+    expect(await usage(full.toLowerCase()), 'the bought copy is not held by the deck')
+      .toMatchObject({ owned: 1, in_decks: 1, free: 0 });
+  });
+
+  it('a two-faced card already owned, named by its front face, comes from bulk rather than bought again', async () => {
+    const full = 'Delver of Secrets // Insectile Aberration';
+    const add = await post('/cards/add', { list: `1 ${full}` }, stubScryfall());
+    expect(add.status, JSON.stringify(add.body)).toBe(200);
+    expect(await usage(full.toLowerCase())).toMatchObject({ owned: 1, free: 1 });
+
+    const r = await post('/decks/create',
+      { ...NEW, list: '1 Delver of Secrets', dry_run: false }, stubScryfall());
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    expect(r.body.acquired, 'bought a second copy of a card sitting in bulk').toEqual([]);
+    expect(await usage(full.toLowerCase())).toMatchObject({ owned: 1, in_decks: 1, free: 0 });
+  });
+
   it('refuses without a token', async () => {
     const snap = await snapshot();
     const r = await postAnon('/decks/create', { ...NEW, list: '1 Lightning Bolt' });
