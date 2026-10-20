@@ -153,10 +153,10 @@ class DeckStatsParityTest {
         rule.onAllNodes(hasText(fragment, substring = true), useUnmergedTree = true)
             .fetchSemanticsNodes().isNotEmpty()
 
-    // ============================================ the six headline figures
+    // ================================================ the headline figures
 
     @Test
-    fun allSixHeadlineFiguresAreDrawn() {
+    fun everyHeadlineFigureIsDrawn() {
         // `.figure .k { text-transform: uppercase }` on the web — the
         // visible label is shouted; the accessible name (asserted
         // elsewhere by content description) stays sentence case.
@@ -164,6 +164,8 @@ class DeckStatsParityTest {
         rule.onNodeWithText("CARDS").assertExists()
         rule.onNodeWithText("LANDS · 55%").assertExists()
         rule.onNodeWithText("AVG MANA").assertExists()
+        rule.onNodeWithText("MEDIAN MANA").assertExists()
+        rule.onNodeWithText("MODE MANA").assertExists()
         rule.onNodeWithText("SPELLS").assertExists()
         rule.onNodeWithText("VALUE").assertExists()
         rule.onNodeWithText("NOT OWNED").assertExists()
@@ -385,13 +387,15 @@ class DeckStatsParityTest {
     }
 
     @Test
-    fun theMedianIsCaptionedUnderTheCurve() {
+    fun theMedianIsAHeadlineFigureAndNotRepeatedUnderTheCurve() {
         show(deck())
         // "2", not "2.0" — `Double.toString()` disagreed with itself
         // between Kotlin/JS and Kotlin/JVM on exactly this value, and
         // this assertion used to pin the JVM's own spelling of it.
         // See `manaValueText` in `:core`.
-        rule.onNodeWithText("Median 2. Lands excluded.").assertExists()
+        rule.onNodeWithContentDescription("2 median mana", useUnmergedTree = true).assertExists()
+        rule.onNodeWithText("Lands excluded.").assertExists()
+        assertTrue(!textSomewhere("Median 2"), "the median is said twice, once under the curve")
     }
 
     @Test
