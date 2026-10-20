@@ -223,37 +223,49 @@ class DeckStatsTest {
     }
 
     @Test
-    fun theHeadlineFiguresAreOneListBothScreensDraw() {
-        // Matt: "i also want to see median, mode for mana cost". The
-        // average, the median and the mode sit side by side, and the
-        // list is in the core so the phone and the website cannot
-        // order or word it differently.
-        val s = DeckAnalysis.of(
+    fun theGlanceIsLaidOutInTheCoreForBothScreens() {
+        // Matt: "i asked you to make the fucking at a glance view more
+        // stylish and attractive and you just removed the borders". So
+        // the numbers are grouped rather than one ragged row: the deck
+        // and its worth big, lands against spells as one split bar,
+        // and the mana value's average, median and mode as a trio.
+        val g = DeckAnalysis.of(
             listOf(
                 card("Island", type = "Basic Land — Island", cost = null, cmc = 0.0, qty = 2, price = null),
                 card("One", cmc = 1.0, qty = 2, owned = 2, price = 0.5),
                 card("Two", cmc = 2.0, qty = 1, owned = 0, price = 2.0),
                 card("Six", cmc = 6.0, qty = 1, price = 1.0),
             ),
-        )
+        ).glance
         assertEquals(
-            listOf(
-                "6" to "cards", "2" to "lands · 33%", "4" to "spells",
-                "2.5" to "avg mana", "1.5" to "median mana", "1" to "mode mana",
-                "\$4.00" to "value", "1" to "not owned",
-            ),
-            s.figures.map { it.n to it.k },
+            listOf("6" to "cards", "\$4.00" to "value", "1" to "not owned"),
+            g.headline.map { it.n to it.k },
         )
-        assertEquals("2 cards have no price", s.figures.first { it.k == "value" }.hint)
-        assertEquals(listOf("not owned"), s.figures.filter { it.warn }.map { it.k })
+        assertEquals("2 cards have no price", g.headline.first { it.k == "value" }.hint)
+        assertEquals(listOf("not owned"), g.headline.filter { it.warn }.map { it.k })
+        assertEquals("4" to "spells", g.spells.n to g.spells.k)
+        assertEquals("2" to "lands · 33%", g.lands.n to g.lands.k)
+        assertEquals(4.0 / 6.0, g.spellShare, 1e-9)
+        assertEquals(
+            listOf("2.5" to "avg mana", "1.5" to "median mana", "1" to "mode mana"),
+            g.mana.map { it.n to it.k },
+        )
+        // The trio sits under one "Mana value" caption, so each says
+        // only which of the three it is.
+        assertEquals(listOf("avg", "median", "mode"), g.mana.map { it.label })
     }
 
     @Test
     fun aFullyPricedFullyOwnedDeckHasNoValueHintAndNoNotOwnedFigure() {
         val s = DeckAnalysis.of(listOf(card("One", cmc = 1.0, qty = 2, owned = 2)))
-        assertEquals("", s.figures.first { it.k == "value" }.hint)
-        assertTrue(s.figures.none { it.k == "not owned" }, "nothing is short and it still says not owned")
-        assertTrue(DeckAnalysis.of(listOf(card("One", price = null))).figures.none { it.k == "value" }, "no prices, still a value")
+        assertEquals("", s.glance.headline.first { it.k == "value" }.hint)
+        assertTrue(s.glance.headline.none { it.k == "not owned" }, "nothing is short and it still says not owned")
+        assertTrue(DeckAnalysis.of(listOf(card("One", price = null))).glance.headline.none { it.k == "value" }, "no prices, still a value")
+    }
+
+    @Test
+    fun aDeckWithNoCardsHasNoSpellShare() {
+        assertEquals(0.0, DeckAnalysis.of(emptyList()).glance.spellShare)
     }
 
     @Test
