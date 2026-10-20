@@ -190,7 +190,31 @@ enum class CurveSplit(val slug: String, val label: String) {
  * [hint] is what the web puts in the figure's `title` and the phone
  * in its description. [warn] draws the number in the warning colour.
  */
-data class HeadlineFigure(val n: String, val k: String, val hint: String = "", val warn: Boolean = false)
+data class HeadlineFigure(
+    val n: String,
+    val k: String,
+    val hint: String = "",
+    val warn: Boolean = false,
+    /** What is printed under the number, when a caption over a group says the rest: "avg" under "Mana value". */
+    val label: String = k,
+)
+
+/**
+ * The top of the deck at a glance, in three groups rather than one
+ * ragged row of numbers.
+ *
+ * [headline] is drawn big: the cards, their worth, anything not owned.
+ * [spells] and [lands] are the two ends of one split bar, [spellShare]
+ * of it the spells'. [mana] is the average, median and mode side by
+ * side in equal columns under one "Mana value" caption.
+ */
+data class Glance(
+    val headline: List<HeadlineFigure>,
+    val spells: HeadlineFigure,
+    val lands: HeadlineFigure,
+    val spellShare: Double,
+    val mana: List<HeadlineFigure>,
+)
 
 /** One mana curve with what it is a curve of: "Creatures", "Red", "All cards". */
 data class CurveChart(val title: String, val bars: List<Bar>)
@@ -285,22 +309,28 @@ data class DeckStats(
     val modeManaValueText: String get() = "$modeManaValue"
 
     /**
-     * The numbers along the top of the deck at a glance, in order.
+     * The top of the deck at a glance, laid out.
      *
-     * One list in the core, so the phone and the website cannot order
-     * or word them differently. The average, the median and the mode
-     * sit together, since they answer the one question.
+     * In the core so the phone and the website cannot order or word
+     * it differently. Matt: "i asked you to make the fucking at a
+     * glance view more stylish and attractive and you just removed the
+     * borders".
      */
-    val figures: List<HeadlineFigure>
-        get() = listOfNotNull(
-            HeadlineFigure("$totalCards", "cards"),
-            HeadlineFigure("$lands", "lands · $landShare%"),
-            HeadlineFigure("$spells", "spells"),
-            HeadlineFigure(averageManaValueText, "avg mana"),
-            HeadlineFigure(medianManaValueText, "median mana"),
-            HeadlineFigure(modeManaValueText, "mode mana"),
-            value?.let { HeadlineFigure(Prices.money(it), "value", if (unpriced > 0) "$unpriced cards have no price" else "") },
-            HeadlineFigure("$missing", "not owned", warn = true).takeIf { missing > 0 },
+    val glance: Glance
+        get() = Glance(
+            headline = listOfNotNull(
+                HeadlineFigure("$totalCards", "cards"),
+                value?.let { HeadlineFigure(Prices.money(it), "value", if (unpriced > 0) "$unpriced cards have no price" else "") },
+                HeadlineFigure("$missing", "not owned", warn = true).takeIf { missing > 0 },
+            ),
+            spells = HeadlineFigure("$spells", "spells"),
+            lands = HeadlineFigure("$lands", "lands · $landShare%"),
+            spellShare = if (lands + spells <= 0) 0.0 else spells.toDouble() / (lands + spells),
+            mana = listOf(
+                HeadlineFigure(averageManaValueText, "avg mana", label = "avg"),
+                HeadlineFigure(medianManaValueText, "median mana", label = "median"),
+                HeadlineFigure(modeManaValueText, "mode mana", label = "mode"),
+            ),
         )
 
     /**

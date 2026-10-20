@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -724,19 +725,39 @@ internal fun DeckStatsPanel(
             // whatever you call it."
             guild?.let { Tag(it) }
         }
-        // The numbers stand on the panel itself. Each was a bordered
-        // box inside the bordered panel, and Matt: "i don't like this
-        // 'tile in tile' layout ... it feels sloppy". The list is
-        // `DeckStats.figures`, the one the website draws.
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.padding(top = 10.dp),
+        // Laid out, not one ragged row of numbers at one size. Matt,
+        // when the borders came off and nothing else changed: "i asked
+        // you to make the fucking at a glance view more stylish and
+        // attractive and you just removed the borders!!!!". The groups
+        // are `DeckStats.glance`, the ones the website draws.
+        val g = s.glance
+        // The hint is the web's `title`. A phone has nothing to hover,
+        // so it is the figure's description instead — which is also
+        // the only way a screen reader hears it.
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(36.dp),
+            verticalAlignment = Alignment.Bottom,
+            modifier = Modifier.padding(top = 8.dp),
         ) {
-            // The hint is the web's `title`. A phone has nothing to
-            // hover, so it is the figure's description instead —
-            // which is also the only way a screen reader hears it.
-            s.figures.forEach { f -> Figure(f.n, f.k, if (f.warn) Warn else Ink, f.hint) }
+            g.headline.forEach { f -> Figure(f.n, f.k, if (f.warn) Warn else Ink, f.hint, size = GLANCE_HERO) }
+        }
+        GlanceSplit(g)
+        Column(Modifier.padding(top = 4.dp)) {
+            Line("Mana value".uppercase(), Ink3, Design.TINY, FontWeight.SemiBold)
+            // Three equal columns with a hairline between, so the
+            // average, median and mode read as one answer.
+            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(top = 8.dp)) {
+                g.mana.forEachIndexed { i, f ->
+                    if (i > 0) Box(Modifier.width(1.dp).fillMaxHeight().background(Line))
+                    Figure(
+                        f.n, f.k, Accent2, f.hint,
+                        label = f.label,
+                        size = Design.H1,
+                        modifier = Modifier.weight(1f),
+                        inset = if (i > 0) 14.dp else 0.dp,
+                    )
+                }
+            }
         }
     }
 
@@ -1182,6 +1203,49 @@ private fun PipDot(
     ManaSymbol(letter, size = size, text = text, tag = tag)
 }
 
+/** `.glance-hero .figure .n`: the deck's card count and worth, the size nothing else on the panel is. */
+private const val GLANCE_HERO = 30
+
+/**
+ * `.glance-split`: lands against spells, one bar split by share, each
+ * end named under it. Spells in the accent, lands in a dark grey, so
+ * the two halves differ by lightness and not by hue alone.
+ */
+@Composable
+private fun GlanceSplit(g: org.mattshoe.mtg.core.Glance) {
+    Column(Modifier.fillMaxWidth().padding(top = 6.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+        Row(
+            Modifier.fillMaxWidth().height(8.dp).clip(Pill).background(Bg3).testTag("glance-split"),
+        ) {
+            val share = g.spellShare.toFloat()
+            if (share > 0f) {
+                Box(
+                    Modifier.weight(share).fillMaxHeight()
+                        .background(Brush.horizontalGradient(listOf(Accent, Accent2)))
+                        .testTag("glance-split-spells"),
+                )
+            }
+            if (share < 1f) Box(Modifier.weight(1f - share).fillMaxHeight().background(Line2))
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            SplitEnd(g.spells, Accent2)
+            SplitEnd(g.lands, Ink)
+        }
+    }
+}
+
+@Composable
+private fun SplitEnd(f: org.mattshoe.mtg.core.HeadlineFigure, tint: androidx.compose.ui.graphics.Color) {
+    Row(
+        Modifier.semantics(mergeDescendants = true) { contentDescription = "${f.n} ${f.k}" },
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
+        verticalAlignment = Alignment.Bottom,
+    ) {
+        Line(f.n, tint, Design.SMALL, FontWeight.SemiBold)
+        Line(f.label.uppercase(), Ink3, Design.TINY, FontWeight.SemiBold)
+    }
+}
+
 @Composable
 private fun Figure(
     n: String,
@@ -1189,16 +1253,21 @@ private fun Figure(
     tint: androidx.compose.ui.graphics.Color = Ink,
     hint: String = "",
     modifier: Modifier = Modifier,
+    /** What is printed under the number; [k] is what is read out. */
+    label: String = k,
+    size: Int = Design.H2,
+    /** Room before the number, inside the figure, so a column of three keeps equal cells. */
+    inset: androidx.compose.ui.unit.Dp = 0.dp,
 ) {
     val told = if (hint.isEmpty()) "$n $k" else "$n $k — $hint"
     Column(
-        modifier.semantics { contentDescription = told },
+        modifier.semantics { contentDescription = told }.padding(start = inset),
     ) {
-        Line(n, tint, Design.H2, FontWeight.SemiBold)
+        Line(n, tint, size, FontWeight.SemiBold)
         // `.figure .k { text-transform: uppercase }` on the web. The
         // accessible name stays sentence case — a screen reader is
         // not shown CSS text-transform either.
-        Line(k.uppercase(), Ink3, Design.MINI)
+        Line(label.uppercase(), Ink3, Design.MINI)
     }
 }
 
