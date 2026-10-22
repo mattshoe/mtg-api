@@ -129,6 +129,11 @@ class GameChangerMarkParityTest {
         val mark = bounds(marks[0])
         val sheet = bounds(rule.onNode(hasTestTag("carousel-sheet")))
         assertTrue(mark.width > 0f && sheet.contains(mark.center), "the mark is not on the sheet: $mark in $sheet")
+        val name = bounds(rule.onNode(hasText("Rhystic Study") and hasAnyAncestor(hasTestTag("carousel-sheet")), useUnmergedTree = true))
+        assertTrue(
+            abs(mark.center.y - name.center.y) < name.height,
+            "the carousel's mark (y ${mark.center.y}) is not level with the card's name (y ${name.center.y})",
+        )
     }
 
     private fun SemanticsNodeInteraction.assertTextEqualsGameChanger() {

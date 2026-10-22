@@ -254,6 +254,7 @@ private fun CardLine(
                 Span(attrs = { classes("line-type") }) { Text(it) }
             }
         }
+        if (card.gameChanger) GameChangerMark(short = true)
         if (card.short > 0) {
             Span(attrs = { classes("tag", "bad", "mini") }) { Text("has ${card.owned}") }
         }

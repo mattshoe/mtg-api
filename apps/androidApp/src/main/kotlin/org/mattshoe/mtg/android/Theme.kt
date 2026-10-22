@@ -379,10 +379,10 @@ fun IconAction(
  * the words either way.
  */
 @Composable
-fun GameChangerMark(short: Boolean = false) {
+fun GameChangerMark(short: Boolean = false, modifier: Modifier = Modifier) {
     Text(
         if (short) GameChangers.SHORT else GameChangers.MARK,
-        Modifier
+        modifier
             .testTag("game-changer-mark")
             .semantics { contentDescription = GameChangers.MARK }
             .background(Accent, RadiusSm)
