@@ -18,6 +18,7 @@ import org.jetbrains.compose.web.dom.Text
 import org.mattshoe.mtg.core.CardQueries
 import org.mattshoe.mtg.core.CardZoom
 import org.mattshoe.mtg.core.DeckCard
+import org.mattshoe.mtg.core.GameChangers
 import org.mattshoe.mtg.core.PeekCard
 import org.mattshoe.mtg.core.PeekFact
 import org.mattshoe.mtg.core.Prices
@@ -247,6 +248,7 @@ private fun Sheet(
                     .takeIf { it.isNotEmpty() }
                     ?.let { Div(attrs = { classes("peek-sub") }) { Text(it.joinToString(" · ")) } }
             }
+            if (card.gameChanger) GameChangerMark()
             place?.let { Span(attrs = { classes("peek-place") }) { Text(it) } }
         }
 
@@ -429,4 +431,18 @@ private fun DisposableEffectScope.pinchZoom(
         el.removeEventListener("pointercancel", onUp)
         el.removeEventListener("wheel", onWheel)
     }
+}
+
+/**
+ * `.gc-mark`: a game changer. "GC" on a deck row, where the name needs
+ * the room, the words on the carousel, and read aloud as the words
+ * either way. The phone's is `GameChangerMark` in `Theme.kt`.
+ */
+@Composable
+internal fun GameChangerMark(short: Boolean = false) {
+    Span(attrs = {
+        classes("gc-mark")
+        attr("title", GameChangers.MARK)
+        attr("aria-label", GameChangers.MARK)
+    }) { Text(if (short) GameChangers.SHORT else GameChangers.MARK) }
 }

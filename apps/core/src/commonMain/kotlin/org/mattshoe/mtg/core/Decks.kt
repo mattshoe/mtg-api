@@ -173,6 +173,9 @@ data class PeekCard(
     /** A card with no printing to draw from, drawn by its name instead. A fetch list's missing cards. */
     val byName: String? = null,
 ) {
+    /** On Wizards' list, so the sheet says so. See [GameChangers.MARK]. */
+    val gameChanger: Boolean get() = GameChangers.isOne(title)
+
     /** What the carousel draws for this card, whichever side is up. */
     fun picture(back: Boolean): String? =
         CardQueries.art(scryfallId, "normal", back = back) ?: byName?.let { CardQueries.named(it) }
@@ -287,6 +290,9 @@ data class DeckCard(
 
     /** Cropped art, square in the page, or null when nobody owns a printing. */
     val art: String? get() = CardQueries.art(scryfallId, "art_crop")
+
+    /** On Wizards' list, so the row says so. See [GameChangers.MARK]. */
+    val gameChanger: Boolean get() = GameChangers.isOne(name)
 
     /**
      * The basic land this is, if it is one.

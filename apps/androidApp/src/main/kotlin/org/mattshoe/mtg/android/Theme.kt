@@ -44,6 +44,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontFamily
 import org.mattshoe.mtg.core.Design
+import org.mattshoe.mtg.core.GameChangers
 
 /**
  * The website's look, on Android.
@@ -369,6 +370,28 @@ fun IconAction(
             GlyphIcon(glyph, if (!enabled) Ink3 else if (danger) Bad else Ink2)
         }
     }
+}
+
+/**
+ * `.gc-mark`: a game changer, filled with the accent so it stands out
+ * by lightness and not by hue alone. "GC" on a deck row, where the
+ * name needs the room, the words on the carousel, and read aloud as
+ * the words either way.
+ */
+@Composable
+fun GameChangerMark(short: Boolean = false, modifier: Modifier = Modifier) {
+    Text(
+        if (short) GameChangers.SHORT else GameChangers.MARK,
+        modifier
+            .testTag("game-changer-mark")
+            .semantics { contentDescription = GameChangers.MARK }
+            .background(Accent, RadiusSm)
+            .padding(horizontal = 7.dp, vertical = 2.dp),
+        color = c(Design.ON_ACCENT),
+        fontSize = Design.TINY.sp,
+        fontWeight = FontWeight.Bold,
+        maxLines = 1,
+    )
 }
 
 /** `.tag`: a small stated fact, not a control. */

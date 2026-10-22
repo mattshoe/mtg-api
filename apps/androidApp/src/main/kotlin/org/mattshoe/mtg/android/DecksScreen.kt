@@ -513,6 +513,7 @@ private fun CardLine(
             // Island, Plains and Forest with a blank second line.
             card.knownTypeLine?.takeIf { it.isNotBlank() }?.let { Line(it, Ink3, Design.MINI) }
         }
+        if (card.gameChanger) GameChangerMark(short = true)
         if (card.short > 0) Tag("has ${card.owned}", Bad)
         // `.deck-line .num` is `var(--mono)`, so a 6 and a 16 do not
         // shift the row's text beside them.

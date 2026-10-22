@@ -400,6 +400,8 @@ private fun CardSheet(
                     Line(it.joinToString(" · "), Ink2, Design.SMALL)
                 }
             }
+            // Level with the name, as the site's `.peek-head .gc-mark` is.
+            if (card.gameChanger) GameChangerMark(modifier = Modifier.align(Alignment.Top).padding(top = 2.dp))
             place?.let { Line(it, Ink3, Design.MINI, modifier = Modifier.testTag("carousel-place")) }
         }
 
