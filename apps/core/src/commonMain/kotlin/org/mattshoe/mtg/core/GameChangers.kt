@@ -22,6 +22,24 @@ object GameChangers {
     const val ABOUT = "Wizards' list of the cards that warp a Commander game on their own. " +
         "Brackets 1 and 2 allow none, bracket 3 allows up to three, and 4 and 5 any number. Tap a card to see it."
 
+    /**
+     * What a carousel and a deck row call a game changer. Matt: "i want
+     * a clear indicator in carousels and deck lists for any game
+     * changer cards".
+     */
+    const val MARK = "Game Changer"
+
+    /**
+     * Whether a card is on the list. By its front face, in any
+     * capitals, so a deck's or the Library's two-faced card finds it
+     * whichever way it is named, as [Banned.formatsOf] does.
+     */
+    fun isOne(name: String): Boolean = front(name) in names
+
+    private fun front(name: String): String = name.substringBefore(" // ").trim().lowercase()
+
+    private val names: Set<String> by lazy { cards.map { front(it.name) }.toSet() }
+
     /** The line above the list while a name is searched. */
     fun count(n: Int): String = "$n of ${cards.size} cards"
 
