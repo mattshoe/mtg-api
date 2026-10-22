@@ -400,6 +400,7 @@ private fun CardSheet(
                     Line(it.joinToString(" · "), Ink2, Design.SMALL)
                 }
             }
+            if (card.gameChanger) GameChangerMark()
             place?.let { Line(it, Ink3, Design.MINI, modifier = Modifier.testTag("carousel-place")) }
         }
 

@@ -29,6 +29,9 @@ object GameChangers {
      */
     const val MARK = "Game Changer"
 
+    /** The same mark on a deck row, where the name needs the room. Read aloud as [MARK]. */
+    const val SHORT = "GC"
+
     /**
      * Whether a card is on the list. By its front face, in any
      * capitals, so a deck's or the Library's two-faced card finds it

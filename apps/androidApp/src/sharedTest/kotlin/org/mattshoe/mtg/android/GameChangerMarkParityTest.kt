@@ -88,7 +88,7 @@ class GameChangerMarkParityTest {
         rule.waitForIdle()
     }
 
-    private fun marksIn(tag: String) = rule.onAllNodes(hasTestTag(MARK_TAG) and hasAnyAncestor(hasTestTag(tag)))
+    private fun marksIn(tag: String) = rule.onAllNodes(hasTestTag(MARK_TAG) and hasAnyAncestor(hasTestTag(tag)), useUnmergedTree = true)
 
     private fun bounds(n: SemanticsNodeInteraction): Rect = n.getUnclippedBoundsInRoot().let {
         Rect(it.left.value, it.top.value, it.right.value, it.bottom.value)
