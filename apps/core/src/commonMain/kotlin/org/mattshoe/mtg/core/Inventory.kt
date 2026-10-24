@@ -511,9 +511,10 @@ object Inventory {
                 "andBothWhenTheCardIsInBoth", "aQuantityIsKeptAndOnlyTheNameChanges",
                 "aNameInsideAnotherNameIsLeftAlone", "takingASuggestionMeansCheckingAgain",
             )),
-        Feature(Area.DECKS, "A created deck stops saying it is being created", "decks.js", logic = true, done = true,
+        Feature(Area.DECKS, "A created deck closes its wizard and opens itself", "decks.js", logic = true, done = true,
             tests = listOf(
-                "aCreatedDeckStopsSayingItIsBeingCreated",
+                "aCreatedDeckClosesTheWizardAndOpensTheDeck", "aDeckStartedFromTheEntryWizardLeavesThatWizardToo",
+                "aRefusedCreateKeepsTheWizardAndSaysWhy",
             )),
         Feature(Area.SHELL, "Nothing that writes is offered twice", "app.js", logic = true, done = true,
             tests = listOf(
@@ -587,6 +588,11 @@ object Inventory {
             tests = listOf(
                 "startsWithNothingChosen", "aDirectionIsNeededBeforeAnythingElse", "anEmptyListGoesNoFurther",
                 "theStepperOnlyOffersStepsAlreadyAnswered", "enterMoreClearsEverything",
+                "aCleanWriteLeavesTheWizardForTheLibrary", "aWriteThatLandsLeavesTheWizardForTheLibrary",
+                "whatMovedIsSaidOnTheWayOut", "aWriteThatMovedNothingSaysSoAndStillLeaves",
+                "cardsTheServerCouldNotResolveKeepTheReceiptOnScreen",
+                "leavingTheReceiptGoesToTheLibraryWithNothingLeftBehind",
+                "cardsTheServerDroppedKeepTheReceiptAndDoneLeavesIt", "aRefusedWriteStaysInTheWizardAndSaysWhy",
                 "theWizardIsThreeStepsAndNoneOfThemAskWhose", "choosingADirectionEnablesContinue",
                 "theStepperRefusesStepsNotYetAnswered",
             )),
