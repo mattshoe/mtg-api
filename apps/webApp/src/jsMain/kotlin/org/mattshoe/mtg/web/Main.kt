@@ -349,14 +349,14 @@ object MtgApp {
                     if (app.entry.canApply) {
                         app = app.copy(entry = app.entry.working("Applying…"))
                         work {
+                            // The write, and then out of the wizard.
+                            // See `AppState.entryApplied`.
                             val s = app.entry
-                            val done = app.copy(
-                                entry = s.finished(
-                                    api.cards(token(), s.direction!!, app.viewing, s.list, dryRun = false),
-                                ),
-                            ).shareUsed().recordEntry(now())
-                            EntryHistory.save(store, done.history)
-                            done
+                            val result = api.cards(token(), s.direction!!, app.viewing, s.list, dryRun = false)
+                            app = app.entryApplied(result, now())
+                            EntryHistory.save(store, app.history)
+                            if (app.view != View.ENTRY) loadFor(app)
+                            app
                         }
                     }
                 },
@@ -1755,8 +1755,12 @@ object MtgApp {
                 list = n.list,
                 dryRun = false,
             )
-            app = app.copy(newDeck = app.newDeck.finished(made.key.orEmpty()))
-            loadDecks().say("Created ${n.name}")
+            // Out of the wizard and onto the deck it made. `loadFor`
+            // fetches it the way any visit to a deck does, and says so
+            // on the page if that read fails.
+            app = loadDecks().deckCreated(made.key.orEmpty(), n.name)
+            loadFor(app)
+            app
         } catch (ex: ApiFailure) {
             app.copy(newDeck = app.newDeck.failed(ex.message ?: "that did not work"))
         }

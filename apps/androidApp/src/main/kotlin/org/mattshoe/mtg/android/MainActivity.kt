@@ -591,21 +591,7 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                         },
-                        onApplyEntry = {
-                            claim(
-                                app.entry.canApply,
-                                { app.copy(entry = app.entry.working("Applying…")) },
-                            ) {
-                                val s = app.entry
-                                val done = app.copy(
-                                    entry = s.finished(
-                                        api.cards(token(), s.direction!!, app.viewing, s.list, dryRun = false),
-                                    ),
-                                ).shareUsed().recordEntry(now())
-                                EntryHistory.save(store, done.history)
-                                done
-                            }
-                        },
+                        onApplyEntry = { applyEntry() },
                         onExport = { where -> work { exportList(where) } },
                         onOpenCard = { row -> openCard(row) },
                         onOpenFound = { found -> openFound(found) },
@@ -685,12 +671,7 @@ class MainActivity : ComponentActivity() {
                                 { app.copy(newDeck = app.newDeck.working("Checking every name…")) },
                             ) { checkNames() }
                         },
-                        onCreateDeck = {
-                            claim(
-                                app.newDeck.canCreate,
-                                { app.copy(newDeck = app.newDeck.working("Creating…")) },
-                            ) { createDeck() }
-                        },
+                        onCreateDeck = { startCreatingDeck() },
                         onCommanderTyped = { c -> commanderTyped(c) },
                         onExit = { finish() },
                         onRefresh = { refresh() },
@@ -1700,12 +1681,43 @@ class MainActivity : ComponentActivity() {
                 list = n.list,
                 dryRun = false,
             )
-            app = app.copy(newDeck = app.newDeck.finished(made.key.orEmpty()))
-            loadDecks().say("Created ${n.name}")
+            // Out of the wizard and onto the deck it made. `loadFor`
+            // fetches it the way any visit to a deck does, and says so
+            // on the page if that read fails.
+            app = loadDecks().deckCreated(made.key.orEmpty(), n.name)
+            loadFor(app)
+            app
         } catch (ex: ApiFailure) {
             app.copy(newDeck = app.newDeck.failed(ex.message ?: "that did not work"))
         }
     }
+
+    private fun startCreatingDeck() = claim(
+        app.newDeck.canCreate,
+        { app.copy(newDeck = app.newDeck.working("Creating…")) },
+    ) { createDeck() }
+
+    /** "Create deck", for a test that cannot press it through the activity. */
+    internal fun createDeckForTesting() = startCreatingDeck()
+
+    /**
+     * The write, and then out of the wizard. Where it lands and what
+     * it says on the way is `AppState.entryApplied`, the website's too.
+     */
+    private fun applyEntry() = claim(
+        app.entry.canApply,
+        { app.copy(entry = app.entry.working("Applying…")) },
+    ) {
+        val s = app.entry
+        val result = api.cards(token(), s.direction!!, app.viewing, s.list, dryRun = false)
+        app = app.entryApplied(result, now())
+        EntryHistory.save(store, app.history)
+        if (app.view != View.ENTRY) loadFor(app)
+        app
+    }
+
+    /** Apply, for a test that cannot press it through the activity. */
+    internal fun applyEntryForTesting() = applyEntry()
 
     private fun now(): String = Instant.now().toString()
 

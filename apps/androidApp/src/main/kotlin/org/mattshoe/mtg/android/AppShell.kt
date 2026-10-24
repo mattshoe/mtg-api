@@ -613,6 +613,7 @@ fun AppShell(
                             onPickFile = onPickFile,
                             onReuse = onReuse,
                             onClearHistory = onClearHistory,
+                            onLeave = { onState(state.leftEntry()) },
                         )
                     }
                 }

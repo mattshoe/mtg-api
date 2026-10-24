@@ -325,6 +325,7 @@ fun AppShell(
             onReuse = onReuse,
             onClearHistory = onClearHistory,
             onNewDeck = { onState(state.startingADeck()) },
+            onLeave = { onState(state.leftEntry()) },
         )
     }
 

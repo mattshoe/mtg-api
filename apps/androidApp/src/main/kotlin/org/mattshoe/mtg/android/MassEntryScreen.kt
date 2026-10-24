@@ -62,6 +62,8 @@ fun MassEntryScreen(
     onPickFile: () -> Unit = {},
     onReuse: (HistoryEntry) -> Unit = {},
     onClearHistory: () -> Unit = {},
+    /** Out of the wizard from the receipt. See `AppState.leftEntry`. */
+    onLeave: () -> Unit = {},
 ) {
     Column(
         Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),
@@ -99,7 +101,7 @@ fun MassEntryScreen(
                 HistoryPanel(history, onReuse, onClearHistory)
             }
             state.step == Step.REVIEW -> Review(state, onState, onApply)
-            state.step == Step.DONE -> Done(state) { onState(state.again()) }
+            state.step == Step.DONE -> Done(state, onLeave)
         }
 
         state.error?.let { Text(it, fontSize = 14.sp) }
@@ -222,12 +224,13 @@ private fun Review(s: MassEntry, onState: (MassEntry) -> Unit, apply: () -> Unit
  * made — the same question the web page asks.
  */
 @Composable
-private fun Done(s: MassEntry, again: () -> Unit) {
+private fun Done(s: MassEntry, leave: () -> Unit) {
     val r = s.result!!
     val moved = r.applied && r.changes.isNotEmpty()
     Panel(head = if (moved) "Applied" else "Nothing applied") {
         Outcome(r)
-        Foot { Primary("Enter more", true, again) }
+        // Not "Enter more". A finished flow does not ask for another.
+        Foot { Primary("Done", true, leave) }
     }
 }
 

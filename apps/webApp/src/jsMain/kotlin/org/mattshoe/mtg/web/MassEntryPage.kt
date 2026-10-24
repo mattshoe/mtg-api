@@ -47,6 +47,8 @@ fun MassEntryPage(
     onClearHistory: () -> Unit = {},
     /** The first question's third answer. See `WhichStep`. */
     onNewDeck: () -> Unit = {},
+    /** Out of the wizard from the receipt. See `AppState.leftEntry`. */
+    onLeave: () -> Unit = {},
 ) {
     // State is hoisted, the same as every other screen and the same as
     // the Android sibling. The shell owns it, so a share can put a list
@@ -87,7 +89,7 @@ fun MassEntryPage(
                 HistoryPanel(history, onReuse, onClearHistory)
             }
             s.step == Step.REVIEW -> ReviewStep(s, { onState(s.goTo(it)) }, onApply)
-            s.step == Step.DONE -> DoneStep(s) { onState(s.again()) }
+            s.step == Step.DONE -> DoneStep(s, onLeave)
         }
 
         s.error?.let { Div(attrs = { classes("err") }) { Text(it) } }
@@ -223,12 +225,13 @@ private fun ReviewStep(s: MassEntry, go: (Step) -> Unit, apply: () -> Unit) {
  * made.
  */
 @Composable
-private fun DoneStep(s: MassEntry, again: () -> Unit) {
+private fun DoneStep(s: MassEntry, leave: () -> Unit) {
     val r = s.result!!
     val moved = r.applied && r.changes.isNotEmpty()
     Panel(if (moved) "Applied" else "Nothing applied") {
         Outcome(r)
-        Foot { Primary("Enter more", true, again) }
+        // Not "Enter more". A finished flow does not ask for another.
+        Foot { Primary("Done", true, leave) }
     }
 }
 
