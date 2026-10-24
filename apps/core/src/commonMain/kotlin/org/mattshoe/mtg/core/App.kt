@@ -1006,6 +1006,45 @@ data class AppState(
         if (entry.result == null) this
         else copy(history = history.remember(EntryHistory.of(entry, now, viewing)))
 
+    /**
+     * A write that came back. The wizard is over, so it goes.
+     *
+     * Matt: "when a 'entry' flow of any kind finishes, DO NOT fucking
+     * ask for more ... just exit the fucking flow back to home". It
+     * used to end on a receipt whose only button was "Enter more".
+     *
+     * The one time it stays is when the server dropped cards: the
+     * receipt is the only place that says which, and leaving would
+     * throw that away. Its button leaves too — see [leftEntry].
+     */
+    fun entryApplied(a: Applied, now: String): AppState {
+        val done = copy(entry = entry.finished(a)).shareUsed().recordEntry(now)
+        if (a.failed > 0 || a.errors.isNotEmpty()) return done
+        return done.leftEntry().say(done.entry.receipt)
+    }
+
+    /**
+     * Out of the entry wizard and home, with nothing of the last run
+     * kept. The Library is told its rows are old, because the write
+     * that just landed is exactly what changed them.
+     */
+    fun leftEntry(): AppState =
+        copy(entry = MassEntry(), library = library.copy(loadedFor = null)).navigate(View.LIBRARY)
+
+    /**
+     * A deck the server has made. The wizard closes and the deck it
+     * made is where you land, rather than a "Created" step with a
+     * Done button in front of it.
+     *
+     * A deck started from the entry wizard's third answer leaves that
+     * wizard behind too, or going back to Entry would find the list
+     * the deck was made from still sitting in it.
+     */
+    fun deckCreated(key: String, name: String): AppState {
+        val entryLeft = if (entry.startingADeck) copy(entry = MassEntry()) else this
+        return entryLeft.navigate(Route(View.DECKS, key)).say("Created $name")
+    }
+
     companion object {
         /**
          * How long a toast says its piece before it goes on its own.

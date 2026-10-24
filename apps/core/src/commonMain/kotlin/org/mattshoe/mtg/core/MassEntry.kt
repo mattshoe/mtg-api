@@ -220,6 +220,21 @@ data class MassEntry(
      */
     fun again() = MassEntry(list = "")
 
+    /**
+     * What the write did, in one line, for the toast it leaves on.
+     * "Added 3 copies of 2 printings", "Nothing changed".
+     */
+    val receipt: String
+        get() {
+            val r = result ?: return ""
+            if (!r.applied || r.changes.isEmpty()) return "Nothing changed"
+            val verb = if (direction == Direction.REMOVE) "Removed" else "Added"
+            val copies = r.copies
+            val printings = r.changes.size
+            return "$verb $copies ${if (copies == 1) "copy" else "copies"} of " +
+                "$printings ${if (printings == 1) "printing" else "printings"}"
+        }
+
     companion object {
         /** A share arrives as a list nobody has said anything about yet. */
         fun fromShare(text: String) = MassEntry(list = text)

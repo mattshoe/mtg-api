@@ -82,6 +82,15 @@ class AppDriverTest {
     /** How many times `/cards/add` was refused, so a test can prove it tried. */
     private var addRefusals = 0
 
+    /** Makes the real write to `/cards/add` fail with a 500, while the dry run still answers. */
+    private var writeFails = false
+
+    /** Makes `/cards/add` say one card could not be resolved. */
+    private var addDrops = false
+
+    /** Makes `/decks/create` fail with a 500. */
+    private var createFails = false
+
     @BeforeTest
     fun stubTheNetwork() {
         writes.clear()
@@ -93,6 +102,9 @@ class AppDriverTest {
         whoAmIMs = 0
         addFails = false
         addRefusals = 0
+        writeFails = false
+        addDrops = false
+        createFails = false
         val engine = MockEngine { request ->
             if (request.method.value == "POST" && """"dry_run":false""" in
                 (request.body as? io.ktor.http.content.TextContent)?.text.orEmpty()
@@ -139,6 +151,24 @@ class AppDriverTest {
                         headersOf(HttpHeaders.ContentType, "application/json"),
                     )
                 }
+
+                request.url.encodedPath == "/cards/add" && writeFails && """"dry_run":false""" in body ->
+                    return@MockEngine respond(
+                        """{"error":"the database is down"}""",
+                        HttpStatusCode.InternalServerError,
+                        headersOf(HttpHeaders.ContentType, "application/json"),
+                    )
+
+                request.url.encodedPath == "/decks/create" && createFails && """"dry_run":false""" in body ->
+                    return@MockEngine respond(
+                        """{"error":"the database is down"}""",
+                        HttpStatusCode.InternalServerError,
+                        headersOf(HttpHeaders.ContentType, "application/json"),
+                    )
+
+                request.url.encodedPath == "/cards/add" && addDrops ->
+                    """{"applied":true,"dry_run":false,"resolved":1,"failed":1,""" +
+                        """"changes":[["Sol Ring","M3C","409","nonfoil",0,4]],"errors":["Sol Rong: no such card"]}"""
 
                 request.url.encodedPath == "/cards/add" ->
                     """{"applied":true,"dry_run":false,"resolved":1,"failed":0,""" +
@@ -734,16 +764,11 @@ class AppDriverTest {
         box.dispatchEvent(org.w3c.dom.events.Event("input", js("({bubbles: true})")))
     }
 
-    @Test
-    fun aCreatedDeckStopsSayingItIsBeingCreated() = runTest {
-        // The panel sat on "Creating…" after the deck already
-        // existed. The reload that follows a create builds on
-        // whatever `app` holds when it comes back, and the finished
-        // state was handed to it as an argument it ignored — so the
-        // toast appeared, the deck appeared, and the box never moved.
-        // The decks page has no New deck button any more; a deck is
-        // started from the entry wizard's first question.
-        val view = mount("#/entry", token = "t")
+    /**
+     * The deck wizard, from the entry wizard's first question to
+     * pressing Create.
+     */
+    private suspend fun createATestDeck(view: HTMLElement) {
         waitFor("the entry wizard") { view.textContent.orEmpty().contains("What are you doing?") }
         view.all("button.opt").first { it.textContent.orEmpty().contains("New deck") }.click()
         settle()
@@ -784,16 +809,52 @@ class AppDriverTest {
             paletteButtons().any { it.says() == "Create Test Deck" && !it.disabled }
         }
         press("Create Test Deck")
+    }
 
-        waitFor("the deck to be made") { document.body!!.textContent.orEmpty().contains("Created Test Deck") }
-        settle()
+    private fun toast(): String = document.querySelector(".toast-says")?.textContent.orEmpty()
+
+    @Test
+    fun aCreatedDeckClosesTheWizardAndOpensTheDeck() = runTest {
+        // Matt: "when a 'entry' flow of any kind finishes, DO NOT
+        // fucking ask for more ... just exit the fucking flow". It
+        // ended on a "Created" step with a Done button in front of the
+        // deck it had made.
+        val view = mount("#/entry", token = "t")
+        createATestDeck(view)
+
+        waitFor("the deck to be made") { writes.contains("/decks/create") }
+        try {
+            waitFor("the wizard to close and the deck to open") { palette() == null && hash() == "#/decks/q8ytka9m" }
+        } catch (e: IllegalStateException) {
+            throw AssertionError(
+                "the deck wizard did not leave for the deck it made: address " + hash() +
+                    ", wizard open " + (palette() != null) + ", toast '" + toast() + "', wizard says " +
+                    palette()?.textContent.orEmpty().take(200),
+            )
+        }
+        waitFor("the new deck's cards to be asked for") {
+            sent.any { "FROM deck_cards dc" in it && "\"q8ytka9m\"" in it }
+        }
+        assertEquals("Created Test Deck", toast(), "nothing said the deck was made")
+        assertTrue("Creating" !in view.textContent.orEmpty(), "something is still saying it is creating")
+    }
+
+    @Test
+    fun aRefusedCreateKeepsTheWizardAndSaysWhy() = runTest {
+        createFails = true
+        val view = mount("#/entry", token = "t")
+        createATestDeck(view)
+
+        waitFor("the create to come back") {
+            palette()?.textContent.orEmpty().contains("the database is down")
+        }
         val text = palette()?.textContent.orEmpty()
-        assertTrue("Creating" !in text, "the panel is still saying it is creating: $text")
-        assertTrue("Created" in text, "the panel never said it was done: $text")
+        assertTrue("Creating…" !in text, "the wizard is still spinning after a refusal: $text")
         assertTrue(
-            "#/decks/q8ytka9m" in text,
-            "the new deck's address is not the key the server gave it: $text",
+            paletteButtons().any { it.says() == "Create Test Deck" && !it.disabled },
+            "there is no way to try again: ${paletteButtons().map { it.says() }}",
         )
+        assertTrue(hash().startsWith("#/entry"), "a refused create left the wizard anyway: ${hash()}")
     }
 
     // ------------------------------------------- whose, by key and id
@@ -866,6 +927,83 @@ class AppDriverTest {
             },
             "the apply button is still live after being pressed",
         )
+    }
+
+    /** The entry wizard, from the first question to an armed Apply. */
+    private suspend fun reviewAnAdd(view: HTMLElement) {
+        waitFor("the wizard") { view.all("button").isNotEmpty() }
+        view.button("Add to the collection").click()
+        waitFor("the direction to take") { !view.button("Continue →").disabled }
+        view.button("Continue →").click()
+        waitFor("the box") { view.all("textarea").isNotEmpty() }
+        val box = view.all("textarea").first() as org.w3c.dom.HTMLTextAreaElement
+        box.value = "4 Sol Ring"
+        box.dispatchEvent(org.w3c.dom.events.Event("input", js("({bubbles: true})")))
+        waitFor("preview to arm") { !view.button("Preview changes →").disabled }
+        view.button("Preview changes →").click()
+        waitFor("the preview") { view.has("Add 1 printings") }
+    }
+
+    @Test
+    fun aWriteThatLandsLeavesTheWizardForTheLibrary() = runTest {
+        // Matt: "when a 'entry' flow of any kind finishes, DO NOT
+        // fucking ask for more you dipshit just exit the fucking flow
+        // back to home". It ended on a receipt that said "Enter more".
+        val view = mount("#/entry", token = "t")
+        reviewAnAdd(view)
+        view.button("Add 1 printings").click()
+
+        waitFor("the write") { writes.isNotEmpty() }
+        waitFor("the Library") { hash().startsWith("#/search") }
+        waitFor("the grid") { view.all("div.card").isNotEmpty() }
+        assertTrue(!view.textContent.orEmpty().contains("Enter more"), "it is still asking for more")
+        assertEquals("Added 4 copies of 1 printing", toast(), "nothing said what the write did")
+
+        // And the wizard is empty the next time, not sat on the receipt.
+        window.location.replace("#/entry")
+        waitFor("the wizard again") { view.textContent.orEmpty().contains("What are you doing?") }
+        assertTrue(!view.textContent.orEmpty().contains("Applied"), "the old receipt is still in the wizard")
+    }
+
+    @Test
+    fun aRefusedWriteStaysInTheWizardAndSaysWhy() = runTest {
+        writeFails = true
+        val view = mount("#/entry", token = "t")
+        reviewAnAdd(view)
+        view.button("Add 1 printings").click()
+
+        waitFor("the write to be refused") { view.querySelector(".err") != null }
+        assertTrue(
+            view.querySelector(".err")?.textContent.orEmpty().contains("the database is down"),
+            "the refusal was swallowed, so nothing says what happened",
+        )
+        assertTrue(!view.textContent.orEmpty().contains("Applying…"), "still spinning after the refusal")
+        assertTrue(hash().startsWith("#/entry"), "a refused write left the wizard anyway: ${hash()}")
+        assertTrue(
+            view.all("button").any { b -> b as HTMLButtonElement; b.reads() == "Add 1 printings" && !b.disabled },
+            "there is no way to try again",
+        )
+    }
+
+    @Test
+    fun cardsTheServerDroppedKeepTheReceiptAndDoneLeavesIt() = runTest {
+        // The receipt is the one place that says which cards were
+        // dropped, so this is the one time it stays, and its button
+        // goes home rather than asking for more.
+        addDrops = true
+        val view = mount("#/entry", token = "t")
+        reviewAnAdd(view)
+        view.button("Add 1 printings").click()
+
+        // The dry run carries the same errors, so the receipt is known
+        // by its own title, not by the dropped card's name.
+        waitFor("the receipt") { writes.isNotEmpty() && view.textContent.orEmpty().contains("Applied") }
+        assertTrue(view.textContent.orEmpty().contains("Sol Rong: no such card"), "the receipt does not say which card was dropped")
+        assertTrue(!view.textContent.orEmpty().contains("Enter more"), "the receipt is still asking for more")
+        view.button("Done").click()
+        waitFor("the Library") { hash().startsWith("#/search") }
+        window.location.replace("#/entry")
+        waitFor("the wizard again") { view.textContent.orEmpty().contains("What are you doing?") }
     }
 
     // ------------------------------------------- uploading a file

@@ -254,22 +254,6 @@ class MassEntryStepsTest {
     }
 
     @Test
-    fun enterMoreEmptiesTheWizardWithoutLeavingIt() = runTest {
-        val root = mount(done())
-        settle()
-        root.button("Enter more").click()
-        settle()
-        assertEquals("", current.list, "the old list is still in the box")
-        assertNull(current.result, "the old receipt is still in the state")
-        assertNull(current.preview, "the old dry run is still in the state")
-        assertEquals(Step.WHICH, current.step, "it did not go back to the start of the wizard")
-        // Still the wizard, not somewhere else.
-        assertEquals("What are you doing?", root.title())
-        assertFalse(root.words().contains("Applied"), "the receipt is still on the screen")
-        assertTrue(root.all("div.chg").isEmpty(), "the old rows are still listed")
-    }
-
-    @Test
     fun theDoneStepCannotBeReachedWithoutAResult() = runTest {
         val ready = MassEntry(direction = Direction.ADD)
             .type("1 Sol Ring")
@@ -280,7 +264,7 @@ class MassEntryStepsTest {
         settle()
         assertEquals(Step.REVIEW, current.step, "it landed on the receipt with no receipt")
         assertEquals("Preview — nothing written yet", root.title())
-        assertNull(root.maybeButton("Enter more"), "the done step rendered with no result behind it")
+        assertNull(root.maybeButton("Done"), "the done step rendered with no result behind it")
     }
 
     @Test

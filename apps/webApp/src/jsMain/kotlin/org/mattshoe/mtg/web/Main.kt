@@ -349,14 +349,14 @@ object MtgApp {
                     if (app.entry.canApply) {
                         app = app.copy(entry = app.entry.working("Applying…"))
                         work {
+                            // The write, and then out of the wizard.
+                            // See `AppState.entryApplied`.
                             val s = app.entry
-                            val done = app.copy(
-                                entry = s.finished(
-                                    api.cards(token(), s.direction!!, app.viewing, s.list, dryRun = false),
-                                ),
-                            ).shareUsed().recordEntry(now())
-                            EntryHistory.save(store, done.history)
-                            done
+                            val result = api.cards(token(), s.direction!!, app.viewing, s.list, dryRun = false)
+                            app = app.entryApplied(result, now())
+                            EntryHistory.save(store, app.history)
+                            if (app.view != View.ENTRY) loadFor(app)
+                            app
                         }
                     }
                 },
@@ -1755,10 +1755,32 @@ object MtgApp {
                 list = n.list,
                 dryRun = false,
             )
-            app = app.copy(newDeck = app.newDeck.finished(made.key.orEmpty()))
-            loadDecks().say("Created ${n.name}")
+            // Out of the wizard and onto the deck it made.
+            //
+            // The wizard's history entry is given up rather than
+            // popped, the way `openFromCarousel` does it: a pop is
+            // asynchronous, lands after the deck's address is pushed,
+            // and takes it straight back off to the entry wizard.
+            OverlayHistory.forget(app.historyDepth)
+            app = loadDecks().deckCreated(made.key.orEmpty(), n.name)
+            openCreated(made.key.orEmpty())
         } catch (ex: ApiFailure) {
             app.copy(newDeck = app.newDeck.failed(ex.message ?: "that did not work"))
+        }
+    }
+
+    /**
+     * The deck just made, read in. `openDeck` navigates, which takes
+     * the toast with it, so "Created" is said again after. A read that
+     * fails says so on the deck page, the same as any visit to one.
+     */
+    private suspend fun openCreated(key: String): AppState {
+        val said = app.toast
+        app = app.fetching(View.DECKS)
+        return try {
+            openDeck(app, key).say(said)
+        } catch (ex: ApiFailure) {
+            app.fetchFailed(ex.message ?: "that did not work", View.DECKS).say(said)
         }
     }
 

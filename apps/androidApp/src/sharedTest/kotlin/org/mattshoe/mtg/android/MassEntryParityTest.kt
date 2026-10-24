@@ -454,9 +454,10 @@ class MassEntryParityTest {
                 says("A Card With Quite A Long Name Number 1") &&
                     says("A Card With Quite A Long Name Number 3")
             },
-            fact("the way back into the wizard is offered") {
-                says("Enter more") && pressable("Enter more")
+            fact("the way out of the wizard is offered") {
+                says("Done") && pressable("Done")
             },
+            fact("and it does not ask for more") { !says("Enter more") },
             fact("the step is not still offering a write") { !says("Add 3 printings") },
         )
     }
@@ -475,7 +476,7 @@ class MassEntryParityTest {
             fact("it does not claim to have applied anything") { !says("Applied") },
             fact("nought printings, nought copies, nought new") { howMany("0") == 3 },
             fact("no rows under a receipt with nothing on it") { !says("FRA 1") },
-            fact("the way back into the wizard is still offered") { says("Enter more") },
+            fact("the way out of the wizard is still offered") { says("Done") },
         )
     }
 
@@ -489,28 +490,6 @@ class MassEntryParityTest {
             },
             fact("the server's own words are not swallowed") {
                 says("Sol Rong: no such card")
-            },
-        )
-    }
-
-    @Test
-    fun enterMoreEmptiesTheWizardWithoutLeavingIt() {
-        wizard(done())
-        rule.onNodeWithText("Enter more").performScrollTo().performClick()
-        rule.waitForIdle()
-
-        rule.runOnIdle {
-            assertEquals("", live.value.list, "the old list is still in the box")
-            assertNull(live.value.result, "the old receipt is still in the state")
-            assertNull(live.value.preview, "the old dry run is still in the state")
-            assertEquals(Step.WHICH, live.value.step, "it did not go back to the start")
-        }
-        Parity.check(
-            fact("it is the first step of the wizard again") { says("What are you doing?") },
-            fact("the receipt is off the screen") { !says("Applied") },
-            fact("the old rows are gone") { !says("FRA 1") },
-            fact("nothing is preselected the second time either") {
-                !ticked("Add to the collection") && howMany("✓") == 0
             },
         )
     }
