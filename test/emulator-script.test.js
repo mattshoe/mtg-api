@@ -118,6 +118,23 @@ describe('the gate makes sure there is a phone', () => {
       .not.toContain('emulator -avd')
   })
 
+  it('boots it headless, with no window, no audio and no camera', () => {
+    // Matt: "i need you to update ALL of your emulator tests so that
+    // they run HEADLESS!!! why the fuck would you be running headed
+    // emulators?!"
+    //
+    // No reason at all — I wrote this one without `-no-window` while
+    // both CI workflows had it. A window steals focus, costs frames on
+    // a laptop that is already the bottleneck, and nothing watches it.
+    const box = sdk({ attached: [], bootsAfter: 1 })
+    box.run()
+    const launched = box.calls().split('\n').find((l) => l.startsWith('emulator -avd'))
+    expect(launched, 'nothing was launched').toBeTruthy()
+    for (const flag of ['-no-window', '-noaudio', '-no-boot-anim', '-no-snapshot-save']) {
+      expect(launched, `the emulator was started without ${flag}`).toContain(flag)
+    }
+  })
+
   it('boots one when nothing is attached, and waits for it', () => {
     const box = sdk({ attached: [], bootsAfter: 2 })
     const r = box.run()

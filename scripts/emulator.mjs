@@ -173,8 +173,17 @@ console.log(`emulator: nothing attached, starting ${avd}`);
 // flag, it does not babysit the emulator's stdout. `-no-snapshot-save`
 // keeps a crashed run from poisoning the next one's snapshot.
 const child = spawnSync('bash', ['-c',
-  `nohup emulator -avd ${JSON.stringify(avd)} -no-snapshot-save -no-boot-anim `
-  + '-gpu swiftshader_indirect >/dev/null 2>&1 &'],
+  // Headless, and the same flags both CI workflows already used.
+  //
+  // Matt: "why the fuck would you be running headed emulators?!" No
+  // reason — I wrote this without `-no-window` while `apps.yml` and
+  // `emulator-cache.yml` both had it. A window steals focus, costs
+  // frames on the laptop that is already the bottleneck, and nothing
+  // ever looks at it. `-camera-back none` because emulating a camera
+  // nobody uses is pure cost.
+  `nohup emulator -avd ${JSON.stringify(avd)} -no-window -no-snapshot-save `
+  + '-noaudio -no-boot-anim -camera-back none -gpu swiftshader_indirect '
+  + '>/dev/null 2>&1 &'],
 { encoding: 'utf8', env });
 if (child.status !== 0) {
   console.error(`emulator: could not start ${avd}: ${child.stderr || child.status}`);
