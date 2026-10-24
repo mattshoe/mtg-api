@@ -206,6 +206,9 @@ data class FetchSection(
 
     /** The section in words, for an address or a test: `Instants · UR · Uncommon`. */
     val title: String get() = "${type.label} · ${colors.ifEmpty { "C" }} · ${rarity.label}"
+
+    /** The cards to pull from it, copies counted, for its head. */
+    val count: Int get() = cards.sumOf { it.want }
 }
 
 /** A card the collection does not have enough of. `short` is how many are missing. */
@@ -216,7 +219,10 @@ data class MissingCard(val name: String, val short: Int, val have: Int = 0, val 
 data class FetchResult(
     val sections: List<FetchSection> = emptyList(),
     val missing: List<MissingCard> = emptyList(),
-)
+) {
+    /** The copies short, for the Not in your collection head. */
+    val missingCount: Int get() = missing.sumOf { it.short }
+}
 
 /** A result kept under a title, with the list it came from. */
 @Serializable
