@@ -212,6 +212,8 @@ data class AppState(
     val viewing: String
         get() = browsing ?: resolvedCollection.ifEmpty { admin.account?.key.orEmpty() }
 
+    val cardScope: String get() = viewing
+
     /**
      * Whose Library the Users tab has open, `#/users/<key>`, or null.
      *
@@ -1040,7 +1042,7 @@ object Load {
      * platforms ended up with a card page that never said what the
      * card does.
      */
-    fun card(nameNorm: String): List<Sql> = listOf(
+    fun card(nameNorm: String, owner: String): List<Sql> = listOf(
         CardQueries.face(nameNorm),
         CardQueries.printings(nameNorm),
         CardQueries.usedIn(nameNorm),

@@ -463,7 +463,7 @@ class TheRestOfTheClaimsTest {
 
     @Test
     fun theDrawerAsksForLegalitiesAndRulings() {
-        val queries = Load.card("sol ring")
+        val queries = Load.card("sol ring", "m4tt0001")
         assertEquals(6, queries.size, "face, printings, decks, legalities, rulings, facts")
         assertTrue(queries[3].sql.contains("FROM legalities"), queries[3].sql)
         assertTrue(queries[4].sql.contains("FROM rulings"), queries[4].sql)
