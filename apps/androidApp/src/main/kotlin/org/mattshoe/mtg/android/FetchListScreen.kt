@@ -203,8 +203,9 @@ private fun FetchListOpen(
         Panel(modifier = Modifier.testTag("fetch-section:${section.title}")) {
             // The colour as its mana symbols, in the order the card
             // prints them, between the type and the rarity.
+            // The count at the end of the line, as the website's `.tag`.
             Row(
-                Modifier.testTag("fetch-head:${section.title}"),
+                Modifier.fillMaxWidth().testTag("fetch-head:${section.title}"),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
@@ -214,7 +215,8 @@ private fun FetchListOpen(
                         ManaSymbol(letter, size = 18.dp, tag = "fetch-symbol:${section.title}:$i")
                     }
                 }
-                Line(section.rarity.label, Ink, Design.H2, FontWeight.SemiBold)
+                Line(section.rarity.label, Ink, Design.H2, FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                Tag(section.count.toString())
             }
             section.cards.forEach { card ->
                 val ticked = state.isTicked(card.name)
@@ -270,7 +272,15 @@ private fun FetchListOpen(
     }
 
     if (result.missing.isNotEmpty()) {
-        Panel(modifier = Modifier.testTag("fetch-section:Missing"), head = "Not in your collection") {
+        Panel(modifier = Modifier.testTag("fetch-section:Missing")) {
+            Row(
+                Modifier.fillMaxWidth().testTag("fetch-head:Missing"),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Line("Not in your collection", Ink, Design.H2, FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                Tag(result.missingCount.toString(), Bad)
+            }
             result.missing.forEach { m ->
                 val ticked = state.isMissingTicked(m.name)
                 // The box checks it off; anywhere else on the row opens

@@ -243,7 +243,7 @@ private fun FetchListOpen(
                     }
                     Text(section.rarity.label)
                 }
-                Span(attrs = { classes("tag") }) { Text(section.cards.sumOf { it.want }.toString()) }
+                Span(attrs = { classes("tag") }) { Text(section.count.toString()) }
             }
             Div(attrs = { classes("panel-body") }) {
                 section.cards.forEach { card ->
@@ -303,7 +303,7 @@ private fun FetchListOpen(
         }) {
             Div(attrs = { classes("panel-head") }) {
                 H2 { Text("Not in your collection") }
-                Span(attrs = { classes("tag", "bad") }) { Text(result.missing.sumOf { it.short }.toString()) }
+                Span(attrs = { classes("tag", "bad") }) { Text(result.missingCount.toString()) }
             }
             Div(attrs = { classes("panel-body") }) {
                 result.missing.forEach { m ->

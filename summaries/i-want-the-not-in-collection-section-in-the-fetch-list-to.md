@@ -1,0 +1,3 @@
+What was built: On the phone, every fetch list section header now ends with a count of the cards to pull from it, copies counted, and the Not in your collection header ends with how many cards are short, in red. The website already showed both counts, so it looks the same as before.
+Choices: The counts are worked out once in the shared code and both the phone and the website read them, so they cannot drift. A section counts copies, so 2 Counterspell counts 2. The missing count is copies short, so owning 1 of 3 counts 2.
+Liberties: The counts are totals and do not go down as you check cards off, the same as the website has always done.

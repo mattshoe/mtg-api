@@ -312,4 +312,14 @@ class FetchListTest {
         assertTrue(View.STATS in Admin().behindProfile, "Stats is not behind the profile")
         assertEquals(View.FETCH, Route.parse("#/fetch").view)
     }
+
+    @Test
+    fun everySectionAndTheMissingOnesCountTheCardsToPull() {
+        // Matt: "i want the 'not in collection' section in the fetch list
+        // to show the count in the header, and every section of it".
+        val r = fetch("2 Arcane Signet\n1 Fractured Identity\n3 Black Lotus\n1 Mox Pearl")
+        assertEquals(2, r.sections.single { it.type == FetchType.ARTIFACT }.count, "two Arcane Signets are not counted two")
+        assertEquals(1, r.sections.single { it.type == FetchType.SORCERY }.count)
+        assertEquals(4, r.missingCount, "three Black Lotus and a Mox Pearl are four cards short")
+    }
 }
