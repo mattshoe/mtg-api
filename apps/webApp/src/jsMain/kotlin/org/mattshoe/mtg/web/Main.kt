@@ -1755,14 +1755,32 @@ object MtgApp {
                 list = n.list,
                 dryRun = false,
             )
-            // Out of the wizard and onto the deck it made. `loadFor`
-            // fetches it the way any visit to a deck does, and says so
-            // on the page if that read fails.
+            // Out of the wizard and onto the deck it made.
+            //
+            // The wizard's history entry is given up rather than
+            // popped, the way `openFromCarousel` does it: a pop is
+            // asynchronous, lands after the deck's address is pushed,
+            // and takes it straight back off to the entry wizard.
+            OverlayHistory.forget(app.historyDepth)
             app = loadDecks().deckCreated(made.key.orEmpty(), n.name)
-            loadFor(app)
-            app
+            openCreated(made.key.orEmpty())
         } catch (ex: ApiFailure) {
             app.copy(newDeck = app.newDeck.failed(ex.message ?: "that did not work"))
+        }
+    }
+
+    /**
+     * The deck just made, read in. `openDeck` navigates, which takes
+     * the toast with it, so "Created" is said again after. A read that
+     * fails says so on the deck page, the same as any visit to one.
+     */
+    private suspend fun openCreated(key: String): AppState {
+        val said = app.toast
+        app = app.fetching(View.DECKS)
+        return try {
+            openDeck(app, key).say(said)
+        } catch (ex: ApiFailure) {
+            app.fetchFailed(ex.message ?: "that did not work", View.DECKS).say(said)
         }
     }
 

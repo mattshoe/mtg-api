@@ -823,8 +823,18 @@ class AppDriverTest {
         createATestDeck(view)
 
         waitFor("the deck to be made") { writes.contains("/decks/create") }
-        waitFor("the wizard to close and the deck to open") { palette() == null && hash() == "#/decks/q8ytka9m" }
-        waitFor("the deck's own cards") { view.textContent.orEmpty().contains("Sol Ring") }
+        try {
+            waitFor("the wizard to close and the deck to open") { palette() == null && hash() == "#/decks/q8ytka9m" }
+        } catch (e: IllegalStateException) {
+            throw AssertionError(
+                "the deck wizard did not leave for the deck it made: address " + hash() +
+                    ", wizard open " + (palette() != null) + ", toast '" + toast() + "', wizard says " +
+                    palette()?.textContent.orEmpty().take(200),
+            )
+        }
+        waitFor("the new deck's cards to be asked for") {
+            sent.any { "FROM deck_cards dc" in it && "\"q8ytka9m\"" in it }
+        }
         assertEquals("Created Test Deck", toast(), "nothing said the deck was made")
         assertTrue("Creating" !in view.textContent.orEmpty(), "something is still saying it is creating")
     }
@@ -985,7 +995,10 @@ class AppDriverTest {
         reviewAnAdd(view)
         view.button("Add 1 printings").click()
 
-        waitFor("the receipt") { view.textContent.orEmpty().contains("Sol Rong: no such card") }
+        // The dry run carries the same errors, so the receipt is known
+        // by its own title, not by the dropped card's name.
+        waitFor("the receipt") { writes.isNotEmpty() && view.textContent.orEmpty().contains("Applied") }
+        assertTrue(view.textContent.orEmpty().contains("Sol Rong: no such card"), "the receipt does not say which card was dropped")
         assertTrue(!view.textContent.orEmpty().contains("Enter more"), "the receipt is still asking for more")
         view.button("Done").click()
         waitFor("the Library") { hash().startsWith("#/search") }
