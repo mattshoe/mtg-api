@@ -19,6 +19,7 @@
 // makes one.
 
 import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 
 // The SDK is not on a plain PATH on macOS. Take whatever the environment
 // has, then the two standard spots, so this works from a bare shell.
@@ -87,6 +88,23 @@ function attached() {
  */
 const PACKAGES = ['org.mattshoe.mtg.share', 'org.mattshoe.mtg.share.test'];
 
+/**
+ * The same mutex every Gradle invocation uses.
+ *
+ * This ran outside it and collided with a live agent: the agent's
+ * device suite was installing while this was uninstalling, adb refused
+ * the uninstall, this warned and carried on, and the suite then failed
+ * two minutes later with INSTALL_FAILED_UPDATE_INCOMPATIBLE — a worse
+ * message about the same collision. Touching the phone is exactly the
+ * kind of thing the lock exists for.
+ */
+const LOCK = process.env.INTAKE_GRADLE_LOCK
+  || `${process.env.HOME || '/tmp'}/.mtg-gradle.lock`;
+const WAIT = String(Number(process.env.MTG_ADB_LOCK_WAIT) || 900);
+const locked = (args) => (existsSync('/usr/bin/lockf')
+  ? run('/usr/bin/lockf', ['-k', '-t', WAIT, LOCK, ...args])
+  : run(args[0], args.slice(1)));
+
 function clearStale() {
   const r = run('adb', ['shell', 'pm', 'list', 'packages']);
   if (wedged(r)) {
@@ -97,13 +115,20 @@ function clearStale() {
   const listed = r.stdout || '';
   for (const pkg of PACKAGES) {
     if (!listed.includes(`package:${pkg}`)) continue;
-    const r = run('adb', ['uninstall', pkg]);
+    const r = locked(['adb', 'uninstall', pkg]);
     if (wedged(r)) {
       console.error(`emulator: adb is not answering (uninstall ${pkg} ran out of time).`);
       console.error('The phone is wedged. `adb kill-server` and restart the emulator.');
       process.exit(6);
     }
-    console.log(`emulator: removed the old ${pkg}${r.status === 0 ? '' : ' (it refused, the suite may still fail to install)'}`);
+    if (r.status !== 0) {
+      // Carrying on here just moves the failure two minutes later and
+      // makes it harder to read.
+      console.error(`emulator: the phone would not remove ${pkg}: ${(r.stdout || r.stderr || '').trim().slice(0, 120)}`);
+      console.error('The install that follows cannot work. Something else is probably using the phone.');
+      process.exit(7);
+    }
+    console.log(`emulator: removed the old ${pkg}`);
   }
 }
 
@@ -148,8 +173,17 @@ console.log(`emulator: nothing attached, starting ${avd}`);
 // flag, it does not babysit the emulator's stdout. `-no-snapshot-save`
 // keeps a crashed run from poisoning the next one's snapshot.
 const child = spawnSync('bash', ['-c',
-  `nohup emulator -avd ${JSON.stringify(avd)} -no-snapshot-save -no-boot-anim `
-  + '-gpu swiftshader_indirect >/dev/null 2>&1 &'],
+  // Headless, and the same flags both CI workflows already used.
+  //
+  // Matt: "why the fuck would you be running headed emulators?!" No
+  // reason — I wrote this without `-no-window` while `apps.yml` and
+  // `emulator-cache.yml` both had it. A window steals focus, costs
+  // frames on the laptop that is already the bottleneck, and nothing
+  // ever looks at it. `-camera-back none` because emulating a camera
+  // nobody uses is pure cost.
+  `nohup emulator -avd ${JSON.stringify(avd)} -no-window -no-snapshot-save `
+  + '-noaudio -no-boot-anim -camera-back none -gpu swiftshader_indirect '
+  + '>/dev/null 2>&1 &'],
 { encoding: 'utf8', env });
 if (child.status !== 0) {
   console.error(`emulator: could not start ${avd}: ${child.stderr || child.status}`);

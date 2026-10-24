@@ -1,7 +1,13 @@
 import { describe, it, expect } from 'vitest'
-import { spawn, execFileSync } from 'node:child_process'
-import { outcome, titleOf, started, report, reconcile, requestOfBranch, cancels, cancelFile, stop } from '../scripts/intake/task-status.mjs'
-import { statusOf, buildable } from '../scripts/intake.mjs'
+import { spawn, spawnSync, execFileSync } from 'node:child_process'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const REPO = dirname(dirname(fileURLToPath(import.meta.url)))
+import { outcome, titleOf, started, report, reconcile, requestOfBranch, cancels, cancelFile, stop, whoIsWorking } from '../scripts/intake/task-status.mjs'
+import { statusOf, buildable, branchFor } from '../scripts/intake.mjs'
 
 /**
  * The dispatcher's half of "task status lives in D1".
@@ -149,10 +155,18 @@ describe('what the dispatcher puts right on every run', () => {
       .toEqual([])
   })
 
-  it('a request whose file is gone is cancelled, and a finished one is left alone', () => {
-    expect(reconcile(seen({
-      rows: [row('gone', 'pending'), row('shipped', 'merged'), row('live', 'deployed'), row('dropped', 'cancelled')],
-    }))).toEqual([{ name: 'gone', status: 'cancelled', note: 'request withdrawn' }])
+  it('a request whose file this laptop cannot see is paused, not cancelled', () => {
+    // It used to be cancelled, and `cancel` then rewrote the request
+    // file and KILLED the agent on it. That happened to two of Matt's
+    // tasks, one of them mid-build: "Dude why did you cancel 2 of my
+    // tasks?!"
+    //
+    // "I cannot see a request file" means the file is gone OR the
+    // checkout is somewhere else OR a branch moved under us, and only
+    // the first is a withdrawal. A guess that destroys a ticket is not
+    // worth making. A real cancel comes from Matt in the app.
+    expect(reconcile(seen({ rows: [row('gone', 'queued'), row('shipped', 'merged'), row('live', 'deployed'), row('dropped', 'cancelled')] })))
+      .toEqual([{ name: 'gone', status: 'paused', note: 'no request file on this laptop right now; not cancelled, just not found' }])
   })
 
   it('a filed request nobody has a row for is merged', () => {
@@ -228,9 +242,12 @@ describe('reconcile tells the truth', () => {
       .toEqual([{ name: 'open-one', status: 'in review', pr: 'https://github.com/mattshoe/mtg-api/pull/80' }])
   })
 
-  it('a branch with no request file anywhere still has a row, and it says withdrawn', () => {
-    expect(reconcile(seen({ branches: ['orphan'] })))
-      .toEqual([{ name: 'orphan', status: 'cancelled', note: 'request withdrawn' }])
+  it('a branch with no request file anywhere still has a row, and it says so without cancelling', () => {
+    // The row has to exist — a branch with nothing behind it is worth
+    // seeing — but it is paused, not cancelled, because the dispatcher
+    // kills agents on cancelled rows and this is a guess.
+    expect(reconcile(seen({ branches: ['stray'], rows: [] })))
+      .toEqual([{ name: 'stray', status: 'paused', note: 'no request file on this laptop right now; not cancelled, just not found' }])
   })
 
   it('a merged task with no start is written again with its pull request\'s times', () => {
@@ -473,6 +490,116 @@ describe('a task cancelled in the app', () => {
       expect(alive(bystander.pid), 'an agent on another request was killed too').toBe(true)
     } finally {
       for (const p of [agent.pid, child, bystander.pid]) { try { process.kill(p, 'SIGKILL') } catch { /* gone */ } }
+    }
+  })
+})
+
+/**
+ * Who is working, and on what.
+ *
+ * Matt: "My task has been queued for almost 10 minutes now and nothing
+ * is running." Something WAS running — it had an open pull request and
+ * was inside the gate — but the board said `in review`, which reads as
+ * waiting on a person, so the queue looked stalled behind a task that
+ * looked idle.
+ *
+ * The cause: this asked `.intake/wt` which tasks had a directory and
+ * checked only those. That directory stopped existing when the
+ * per-task worktrees did, so the list was always empty and nothing was
+ * ever seen as running. A detector that depends on where the work
+ * happens breaks when the work moves.
+ */
+describe('who is working', () => {
+  const run = (names) => (name) => names.includes(name)
+  // The branch a request really gets, hash and all: `requestOfBranch`
+  // checks the hash, so a made-up name is not a request branch.
+  const requestBranch = (name) => branchFor(`${name}.md`)
+
+  it('sees an agent on any known task, not only one with a directory', () => {
+    const { alive } = whoIsWorking({
+      repo: '/nowhere', known: ['building', 'waiting'], run: run(['building']), branch: '',
+    })
+    expect(alive).toEqual(['building'])
+  })
+
+  it('sees nobody when nothing names a request', () => {
+    expect(whoIsWorking({ repo: '/nowhere', known: ['a', 'b'], run: run([]), branch: '' }).alive).toEqual([])
+  })
+
+  it('does not call the tree stalled while its agent is alive', () => {
+    const { alive, stalled } = whoIsWorking({
+      repo: '/nowhere', known: ['busy'], run: run(['busy']), branch: requestBranch('busy'),
+    })
+    expect(alive).toEqual(['busy'])
+    expect(stalled, 'a live agent was called stalled').toEqual([])
+  })
+
+  it('calls the tree stalled when it sits on a request branch with nobody on it', () => {
+    expect(whoIsWorking({
+      repo: '/nowhere', known: ['left-behind'], run: run([]), branch: requestBranch('left-behind'),
+    }).stalled).toEqual(['left-behind'])
+  })
+
+  it('says nothing is stalled when the tree is not on a request branch', () => {
+    expect(whoIsWorking({ repo: '/nowhere', known: ['a'], run: run([]), branch: 'main' }).stalled).toEqual([])
+  })
+
+  it('says nothing is stalled for a branch whose hash does not match its name', () => {
+    // `requestOfBranch` checks the hash, so a hand-written branch name
+    // is not a request branch and must not be read as a stalled task.
+    expect(whoIsWorking({
+      repo: '/nowhere', known: ['a-thing'], run: run([]), branch: 'request/a-thing-0000000',
+    }).stalled).toEqual([])
+  })
+})
+
+/**
+ * A copy of this repo somewhere else must not write to the real board.
+ *
+ * Matt: "Why do you keep queuing up a task called 'a thing'?!" Because
+ * a throwaway test repo under /tmp ran the dispatcher with the real
+ * HOME, found `~/.mtg-agent.env`, and wrote to production. Its
+ * `requests/` folder held one file, so its reconcile saw every real
+ * task as having no request file and marked them withdrawn — which
+ * cancelled two of his tickets and killed an agent mid-build.
+ *
+ * The guard is the repository's own identity: the real one has this
+ * git remote. A scratch copy does not, and must refuse rather than
+ * guess.
+ */
+describe('writing task status from somewhere that is not the real repo', () => {
+  const run = (cwd, env = {}) => spawnSync('node', [
+    join(REPO, 'scripts', 'intake', 'task-status.mjs'), 'reconcile',
+  ], { encoding: 'utf8', cwd, timeout: 30_000, env: { ...process.env, ...env } })
+
+  it('refuses when a real credential is reached from a repo that is not the real one', () => {
+    // The precise shape of the accident: a credential found in the
+    // home directory, from a tree that is not the mtg-api checkout.
+    const tmp = mkdtempSync(join(tmpdir(), 'notreal-'))
+    try {
+      spawnSync('git', ['init', '-q', tmp])
+      mkdirSync(join(tmp, 'requests'), { recursive: true })
+      writeFileSync(join(tmp, '.mtg-agent.env'), 'MTG_AGENT_TOKEN=pretend\n')
+      const r = run(tmp, { HOME: tmp, MTG_REPO: tmp })
+      expect(`${r.stdout}${r.stderr}`, 'a scratch copy was allowed to write to production')
+        .toMatch(/not the mtg-api checkout|refusing/i)
+    } finally {
+      rmSync(tmp, { recursive: true, force: true })
+    }
+  })
+
+  it('says nothing about the repo when there is no credential to misuse', () => {
+    // A test box has its own HOME and no token. The guard must not
+    // fire there, or it would quietly disable the suite that proves
+    // the dispatcher works.
+    const tmp = mkdtempSync(join(tmpdir(), 'nocred-'))
+    try {
+      spawnSync('git', ['init', '-q', tmp])
+      mkdirSync(join(tmp, 'requests'), { recursive: true })
+      const r = run(tmp, { HOME: tmp, MTG_REPO: tmp })
+      expect(`${r.stdout}${r.stderr}`).not.toMatch(/refusing to write/i)
+    } finally {
+      rmSync(tmp, { recursive: true, force: true })
     }
   })
 })

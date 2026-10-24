@@ -33,7 +33,7 @@ afterEach(() => { if (root) rmSync(root, { recursive: true, force: true }); root
  * writes, so a test can say "nothing attached" and then "attached" without
  * timing anything.
  */
-function sdk({ attached = [], avds = ['Pixel_9'], bootsAfter = 0, unauthorized = false, installed = false, hang = false } = {}) {
+function sdk({ attached = [], avds = ['Pixel_9'], bootsAfter = 0, unauthorized = false, installed = false, hang = false, refuses = false } = {}) {
   root = mkdtempSync(join(tmpdir(), 'emu-'))
   const bin = join(root, 'bin')
   mkdirSync(bin, { recursive: true })
@@ -61,7 +61,7 @@ case "$1" in
     exit 0 ;;
   uninstall)
     ${hang ? 'sleep 300' : 'true'}
-    echo Success; exit 0 ;;
+    ${refuses ? 'echo "Failure [DELETE_FAILED_INTERNAL_ERROR]"; exit 1' : 'echo Success; exit 0'} ;;
   shell)
     if [ "$2" = "pm" ]; then
       if [ ${JSON.stringify(installed ? '1' : '0')} = 1 ]; then
@@ -93,7 +93,18 @@ exit 0
     run: (extra = {}) => spawnSync('node', [SCRIPT], {
       encoding: 'utf8',
       timeout: 60_000,
-      env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, MTG_EMULATOR_POLL_MS: '10', ...extra },
+      env: {
+        ...process.env,
+        PATH: `${bin}:${process.env.PATH}`,
+        MTG_EMULATOR_POLL_MS: '10',
+        // Its own lock file. The preflight takes the Gradle mutex now,
+        // and without this the tests queue behind whatever is really
+        // building on this machine — two of them sat for thirty
+        // seconds and failed.
+        INTAKE_GRADLE_LOCK: join(root, 'gradle.lock'),
+        MTG_ADB_LOCK_WAIT: '5',
+        ...extra,
+      },
     }),
   }
 }
@@ -105,6 +116,23 @@ describe('the gate makes sure there is a phone', () => {
     expect(r.status, r.stderr).toBe(0)
     expect(box.calls(), 'it booted a second emulator over a working one')
       .not.toContain('emulator -avd')
+  })
+
+  it('boots it headless, with no window, no audio and no camera', () => {
+    // Matt: "i need you to update ALL of your emulator tests so that
+    // they run HEADLESS!!! why the fuck would you be running headed
+    // emulators?!"
+    //
+    // No reason at all — I wrote this one without `-no-window` while
+    // both CI workflows had it. A window steals focus, costs frames on
+    // a laptop that is already the bottleneck, and nothing watches it.
+    const box = sdk({ attached: [], bootsAfter: 1 })
+    box.run()
+    const launched = box.calls().split('\n').find((l) => l.startsWith('emulator -avd'))
+    expect(launched, 'nothing was launched').toBeTruthy()
+    for (const flag of ['-no-window', '-noaudio', '-no-boot-anim', '-no-snapshot-save']) {
+      expect(launched, `the emulator was started without ${flag}`).toContain(flag)
+    }
   })
 
   it('boots one when nothing is attached, and waits for it', () => {
@@ -174,6 +202,21 @@ describe('the gate makes sure there is a phone', () => {
     expect(took, `it hung for ${took}s instead of giving up`).toBeLessThan(60)
     expect(`${r.stderr}${r.stdout}`, 'it did not say adb had stopped answering')
       .toMatch(/not answering|timed out|wedged/i)
+  })
+
+  it('stops when the phone refuses to let go of the old app', () => {
+    // It used to warn and carry on, and the suite then failed two
+    // minutes later with INSTALL_FAILED_UPDATE_INCOMPATIBLE — a worse
+    // message about the same thing. A refused uninstall means the
+    // install that follows cannot work.
+    //
+    // It refused because this ran OUTSIDE the Gradle lock while a live
+    // agent's device suite was installing. Holding the lock is the
+    // other half of the fix; failing loudly is this half.
+    const box = sdk({ attached: ['emulator-5554'], installed: true, refuses: true })
+    const r = box.run()
+    expect(r.status, 'it carried on after a refused uninstall').not.toBe(0)
+    expect(`${r.stderr}${r.stdout}`).toMatch(/would not remove|refused/i)
   })
 
   it('fails with a sentence a person can act on when the SDK has no AVD', () => {

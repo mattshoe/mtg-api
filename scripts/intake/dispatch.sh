@@ -35,8 +35,48 @@
 #
 set -uo pipefail
 
-REPO="$(cd "$(dirname "$0")/../.." && pwd -P)"
+REPO="${INTAKE_REPO:-$(cd "$(dirname "$0")/../.." && pwd -P)}"
 STATE="$REPO/.intake"
+# The scripts beside this one, whichever copy of them is running. After
+# the pinning below that is main's copy, and every helper has to come
+# from the same place or half the run is the working tree's code again.
+SCRIPTS="$(cd "$(dirname "$0")/.." && pwd -P)"
+
+# Run the scripts as they are on origin/main, not as the working tree
+# happens to have them.
+#
+# Matt: "WHY HAS MY FUCKING TASK BEEN QUEUED FOR 12 MINUTES?!? I SEE NO
+# OTHER AGENTS FUCKING RUNNING!!!" An agent was running. The board said
+# `queued` because this timer executes whatever the clone is checked
+# out at, and the clone was parked on a debugging branch without the
+# fix that lets reconcile see a live agent.
+#
+# That is the thread running through an evening of damage: a branch
+# switched in the clone to gate or debug something silently changed
+# what production did. Cancelled tickets, stray rows, a task reading
+# `in review` for five hours — one cause.
+#
+# The working tree belongs to whoever is editing it. The timer gets
+# what has been merged. The cost is deliberate and worth saying: a bug
+# on main cannot be hot-fixed by editing a file here, it is fixed by
+# merging one.
+#
+# `requests/` is NOT pinned — those are data, and a request written a
+# second ago has been committed nowhere.
+if [ "${INTAKE_PINNED:-}" != 1 ] && [ -d "$REPO/.git" ]; then
+  git -C "$REPO" fetch -q origin main 2>/dev/null
+  PINNED="$STATE/pinned"
+  if rm -rf "$PINNED" && mkdir -p "$PINNED" \
+    && git -C "$REPO" archive origin/main scripts 2>/dev/null | tar -x -C "$PINNED" 2>/dev/null \
+    && [ -x "$PINNED/scripts/intake/dispatch.sh" -o -f "$PINNED/scripts/intake/dispatch.sh" ]; then
+    INTAKE_PINNED=1 INTAKE_REPO="$REPO" exec bash "$PINNED/scripts/intake/dispatch.sh" "$@"
+  fi
+  # Could not get main's copy — carry on with this one rather than
+  # stopping the queue, and say so, because running the wrong code
+  # quietly is the thing being fixed.
+  printf '%s  %s\n' "$(date '+%H:%M:%S')" \
+    "could not read scripts from origin/main; running the working tree's copy" >>"$LOG"
+fi
 LOG="$STATE/intake.log"
 REQUESTS="$REPO/requests"
 BASE="${INTAKE_BASE:-origin/main}"
@@ -52,8 +92,8 @@ say() { printf '%s  %s\n' "$(date '+%H:%M:%S')" "$1" >>"$LOG"; }
 # Matt watched a task read `in progress` for three hours after I had
 # switched the system off and nothing was running.
 if [ -f "$STATE/disabled" ]; then
-  node "$REPO/scripts/intake/task-status.mjs" cancel >>"$LOG" 2>&1 || true
-  node "$REPO/scripts/intake/task-status.mjs" reconcile >>"$LOG" 2>&1 || true
+  node "$SCRIPTS/intake/task-status.mjs" cancel >>"$LOG" 2>&1 || true
+  node "$SCRIPTS/intake/task-status.mjs" reconcile >>"$LOG" 2>&1 || true
   exit 0
 fi
 
@@ -68,18 +108,18 @@ mkdir -p "$STATE"
 # this a task submitted in the app sat at `pending` forever: nothing polled
 # the inbox, and launchd only fires on a change under requests/, which
 # submitting from the app does not cause.
-node "$REPO/scripts/intake/inbox.mjs" >>"$LOG" 2>&1 || true
+node "$SCRIPTS/intake/inbox.mjs" >>"$LOG" 2>&1 || true
 
 # A task cancelled in the app: its request file marked cancelled, so it is
 # never built again, and any agent on it killed. Matt: "any running agent
 # should be immediately killed". Every tick, so within a minute of the tap,
 # and before reconcile so the row it reads already says cancelled.
-node "$REPO/scripts/intake/task-status.mjs" cancel >>"$LOG" 2>&1 || true
+node "$SCRIPTS/intake/task-status.mjs" cancel >>"$LOG" 2>&1 || true
 
 # Every run puts D1 right about what this laptop can see: a dead agent
 # reads paused rather than in progress forever, a held request paused, a
 # withdrawn one cancelled. It may not stop a build.
-node "$REPO/scripts/intake/task-status.mjs" reconcile >>"$LOG" 2>&1 || true
+node "$SCRIPTS/intake/task-status.mjs" reconcile >>"$LOG" 2>&1 || true
 
 # Leftovers from the worktree era. Harmless when there are none.
 git -C "$REPO" worktree prune
@@ -120,7 +160,7 @@ filed="$(git -C "$REPO" ls-tree --name-only "$BASE" requests/done/ 2>/dev/null |
 cur="$(git -C "$STATE/agent" rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)"
 case "$cur" in
   request/*)
-    done_name="$(cd "$REPO" && node scripts/intake/task-status.mjs request-of "$cur" 2>/dev/null)"
+    done_name="$(cd "$REPO" && node "$SCRIPTS/intake/task-status.mjs" request-of "$cur" 2>/dev/null)"
     if [ -n "$done_name" ] \
       && printf '%s\n' "$filed" | /usr/bin/grep -qxF "$done_name.md" \
       && ! pgrep -f "requests/$done_name.md" >/dev/null 2>&1; then
@@ -162,7 +202,7 @@ CAP="${MTG_AGENT_CAP:-1}"
 # zero, and a live agent read as a stalled one.
 working=0
 on="$(git -C "$STATE/agent" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
-busy_with="$(cd "$REPO" && node scripts/intake/task-status.mjs request-of "${on:-}" 2>/dev/null)"
+busy_with="$(cd "$REPO" && node "$SCRIPTS/intake/task-status.mjs" request-of "${on:-}" 2>/dev/null)"
 if [ -n "$busy_with" ] && pgrep -f "requests/$busy_with.md" >/dev/null 2>&1; then
   working=1
 fi
@@ -175,7 +215,7 @@ fi
 # That conflation is the oldest bug in this system and it has come back
 # twice, so the queue is read into a variable where a failure is visible
 # rather than piped in, where it arrives as "no requests".
-queue="$(cd "$REPO" && node scripts/intake.mjs buildable)" || {
+queue="$(cd "$REPO" && node "$SCRIPTS/intake.mjs" buildable)" || {
   # The one thing worth waking Matt for: nothing can build at all until
   # this is fixed, and no row in the app will say so because reconcile
   # asks the same broken file. There was a `tell` helper for alarms like
@@ -257,8 +297,8 @@ cp "$REPO/apps/local.properties" "$TREE/apps/local.properties" 2>/dev/null || tr
 # when it happens it is loud rather than silent.
 cur="$(git -C "$TREE" rev-parse --abbrev-ref HEAD 2>/dev/null)"
 dirty="$(git -C "$TREE" status --porcelain 2>/dev/null | /usr/bin/grep -cv '^?? ')"
-if [ "$dirty" -gt 0 ] || [ -n "$(cd "$REPO" && node scripts/intake/task-status.mjs request-of "$cur" 2>/dev/null)" ]; then
-  stuck="$(cd "$REPO" && node scripts/intake/task-status.mjs request-of "$cur" 2>/dev/null)"
+if [ "$dirty" -gt 0 ] || [ -n "$(cd "$REPO" && node "$SCRIPTS/intake/task-status.mjs" request-of "$cur" 2>/dev/null)" ]; then
+  stuck="$(cd "$REPO" && node "$SCRIPTS/intake/task-status.mjs" request-of "$cur" 2>/dev/null)"
   # An open pull request means the building is done and what is left is
   # the gate and a merge, which is a bounded job. One finisher, marked
   # on disk and never cleared — something picking work back up over and
@@ -280,7 +320,7 @@ if [ "$dirty" -gt 0 ] || [ -n "$(cd "$REPO" && node scripts/intake/task-status.m
     if [ -n "$stuck" ]; then
       why="$(tail -c 2000 "$STATE/$stuck.log" 2>/dev/null | tr -d '\0' \
         | sed -n 's/.*"result":"\([^"]\{1,120\}\)".*/\1/p' | tail -1)"
-      node "$REPO/scripts/intake/task-status.mjs" stalled "$stuck.md" "$why" >>"$LOG" 2>&1 || true
+      node "$SCRIPTS/intake/task-status.mjs" stalled "$stuck.md" "$why" >>"$LOG" 2>&1 || true
     fi
     exit 0
   fi
@@ -295,7 +335,7 @@ if [ -z "$finishing" ]; then
       say "skipping ${f%.md}: already filed under requests/done on ${BASE}"
       continue
     fi
-    b="$(cd "$REPO" && node scripts/intake.mjs branch "$f")" || continue
+    b="$(cd "$REPO" && node "$SCRIPTS/intake.mjs" branch "$f")" || continue
     if git -C "$TREE" switch -q -C "$b" "$BASE" 2>>"$LOG"; then
       file="$f"; branch="$b"; break
     fi
@@ -346,7 +386,7 @@ if [ -n "$finishing" ]; then
 else
   say "building $name on $branch"
 fi
-node "$REPO/scripts/intake/task-status.mjs" building "$file" >>"$LOG" 2>&1 || true
+node "$SCRIPTS/intake/task-status.mjs" building "$file" >>"$LOG" 2>&1 || true
 
 # A finisher is told what it is, because the work is already written and
 # re-doing it is the wrong instinct. Everything else about the brief
@@ -389,4 +429,4 @@ NOBODY IS COMING AFTER YOU. There is no resume: if you stop, this request sits w
   >>"$STATE/$name.log" 2>&1
 
 say "$name finished ($?) — its pull request, if it opened one, is the agent's own"
-node "$REPO/scripts/intake/task-status.mjs" settle "$file" "$branch" >>"$LOG" 2>&1 || true
+node "$SCRIPTS/intake/task-status.mjs" settle "$file" "$branch" >>"$LOG" 2>&1 || true

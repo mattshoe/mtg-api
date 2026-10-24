@@ -412,6 +412,13 @@ never happened, and caught three agents with it.
 | web, real browser | `npm run test:web` | ~2m30s |
 | one Compose screen test | `./apps/gradlew -p apps :androidApp:testDebugUnitTest --tests 'YourTest'` | seconds |
 
+The emulator runs **headless** — `scripts/emulator.mjs` starts it with
+`-no-window -noaudio -no-boot-anim -camera-back none`, the same flags
+`apps.yml` and `emulator-cache.yml` already used. Matt: "why the fuck
+would you be running headed emulators?!" No reason: the local preflight
+was written without them while both CI workflows had them. A window
+steals focus and costs frames on the one machine everything queues for.
+
 Those go through `scripts/guard.mjs`, which adds `--daemon` and
 `--configuration-cache` for you. Both matter more than they sound:
 `~/.gradle/gradle.properties` has carried `org.gradle.daemon=false`

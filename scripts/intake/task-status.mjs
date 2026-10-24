@@ -41,6 +41,7 @@ const ORDER = [
 
 const STOPPED = 'the agent stopped; its work is kept in the worktree'
 const WITHDRAWN = 'request withdrawn'
+const MISLAID = 'no request file on this laptop right now; not cancelled, just not found'
 const CANCELLED = 'cancelled; the agent was stopped'
 const FINISHED = new Set(['merged', 'deployed', 'cancelled'])
 
@@ -246,9 +247,26 @@ function truth(name, now, { ready, held, filed, stalled, alive, cancelled = [], 
     // different thing and still exists.
     return now === 'queued' ? null : { status: 'queued' }
   }
-  // A worktree, a branch or a row with no request file anywhere.
+  // A row whose request file this laptop cannot see right now.
+  //
+  // This used to call that `cancelled`, and `cancel` then rewrote the
+  // request file to `status: cancelled` and KILLED the agent working
+  // on it. It did that to two of Matt's tasks: "Dude why did you
+  // cancel 2 of my tasks?!" — one of them mid-build, three processes
+  // killed.
+  //
+  // The inference was always a guess. "I cannot see a request file"
+  // means the file is gone OR the checkout is somewhere else OR a
+  // branch moved under us, and only the first of those is a
+  // withdrawal. Guessing wrong destroys a ticket and the work in
+  // flight, and nothing about guessing right is worth that.
+  //
+  // So it pauses instead: nothing is lost, nothing is killed, no
+  // notification fires, and the row says plainly that it cannot find
+  // the request. A real cancel comes from Matt in the app, through
+  // `cancels()`, which reads what he actually did.
   if (FINISHED.has(now)) return null
-  return { status: 'cancelled', note: WITHDRAWN }
+  return now === 'paused' ? null : { status: 'paused', note: MISLAID }
 }
 
 /**
@@ -372,6 +390,42 @@ async function cancelNow({ repo, token, base = API }) {
 }
 
 /** Everything `reconcile` needs, gathered off this laptop and the Worker, and the fixes written. */
+/**
+ * Which tasks have an agent on them, and which tree was left behind.
+ *
+ * This used to ask `.intake/wt` which tasks had a directory and check
+ * only those. That directory stopped existing when the per-task
+ * worktrees did, so the list was always empty, NOTHING was ever seen as
+ * running, and a task being actively worked on read `in review` off its
+ * open pull request — which reads as waiting on a person.
+ *
+ * Matt: "My task has been queued for almost 10 minutes now and nothing
+ * is running." Something was, and the board said otherwise, so his
+ * queue looked stalled behind a task that looked idle.
+ *
+ * Asking about every task there is does not depend on where the work
+ * happens, which is the property the old version lacked.
+ *
+ * `stalled` is the one tree sitting on a request branch with nobody in
+ * it. At most one, because there is one tree.
+ */
+export function whoIsWorking({ repo, known = [], run = null, branch = null }) {
+  const running = run || ((name) => {
+    try { execFileSync('pgrep', ['-f', `requests/${name}.md`]); return true } catch { return false }
+  })
+  const alive = known.filter(running)
+  let on = branch
+  if (on === null) {
+    try {
+      on = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+        cwd: join(repo, '.intake', 'agent'), encoding: 'utf8',
+      }).trim()
+    } catch { on = '' }
+  }
+  const name = requestOfBranch(on)
+  return { alive, stalled: name && !alive.includes(name) ? [name] : [] }
+}
+
 async function reconcileNow({ repo, token, base = API }) {
   const res = await fetch(`${base}/tasks`, { headers: { authorization: `Bearer ${token}` } })
   if (!res.ok) throw new Error(`the Worker would not list tasks: ${res.status}`)
@@ -394,14 +448,10 @@ async function reconcileNow({ repo, token, base = API }) {
       .split('\n'))
   } catch { /* the local folder will do */ }
   filed = [...new Set(filed.filter((f) => f.endsWith('.md')).map(strip))]
-  // A worktree is a task whatever its request file says, and an agent is
-  // alive in it when a process names its request.
-  const worktrees = ls(join(repo, '.intake', 'wt')).filter((n) => !n.startsWith('.'))
-  const running = (name) => {
-    try { execFileSync('pgrep', ['-f', `requests/${name}.md`]); return true } catch { return false }
-  }
-  const alive = worktrees.filter(running)
-  const stalled = worktrees.filter((n) => !alive.includes(n))
+  const { alive, stalled } = whoIsWorking({
+    repo,
+    known: [...new Set([...ready, ...held, ...rows.map((r) => r.name).filter(Boolean)])],
+  })
   let branches = []
   try {
     branches = execFileSync('git', ['for-each-ref', '--format=%(refname:short)', 'refs/heads/request/'], { cwd: repo, encoding: 'utf8' })
@@ -452,7 +502,41 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const name = basename(String(file || ''), '.md')
   const stamp = new Date().toTimeString().slice(0, 8)
   const say = (line) => console.log(`${stamp}  task-status: ${line}`)
+
+  // Only the real checkout may write to the real board.
+  //
+  // Matt: "Why do you keep queuing up a task called 'a thing'?!" A
+  // throwaway test repo under /tmp ran the dispatcher with the real
+  // HOME, found `~/.mtg-agent.env`, and wrote to production. Worse
+  // than the stray row: its `requests/` folder held one file, so its
+  // reconcile saw every real task as having no request file and marked
+  // them withdrawn — which cancelled two of his tickets and killed an
+  // agent that was mid-build.
+  //
+  // The credential is in the home directory, so it follows you
+  // anywhere. The repository does not: the real one has this remote,
+  // and a scratch copy has none.
+  //
+  // Checked only when a credential was actually found, which is the
+  // precise shape of the accident — a real token reached from the
+  // wrong tree. A test box has its own HOME and no token, so it is not
+  // affected, and the check cannot quietly disable the suite.
   const token = await writeToken()
+  if (token) {
+    const where = process.env.MTG_REPO || repo
+    const remote = (() => {
+      try {
+        return execFileSync('git', ['remote', 'get-url', 'origin'], {
+          cwd: where, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
+        }).trim()
+      } catch { return '' }
+    })()
+    if (!/[:/]mattshoe\/mtg-api(\.git)?$/.test(remote)) {
+      console.error(`${stamp}  task-status: refusing to write: ${where} is not the mtg-api checkout`
+        + `${remote ? ` (origin is ${remote})` : ' (it has no origin)'}`)
+      process.exit(9)
+    }
+  }
 
   let transition
   if (cmd === 'building') {
