@@ -1006,6 +1006,12 @@ data class AppState(
         if (entry.result == null) this
         else copy(history = history.remember(EntryHistory.of(entry, now, viewing)))
 
+    fun entryApplied(a: Applied, now: String): AppState = this
+
+    fun leftEntry(): AppState = this
+
+    fun deckCreated(key: String, name: String): AppState = this
+
     companion object {
         /**
          * How long a toast says its piece before it goes on its own.
