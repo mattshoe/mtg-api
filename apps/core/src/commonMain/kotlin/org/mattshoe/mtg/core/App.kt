@@ -212,7 +212,17 @@ data class AppState(
     val viewing: String
         get() = browsing ?: resolvedCollection.ifEmpty { admin.account?.key.orEmpty() }
 
-    val cardScope: String get() = viewing
+    /**
+     * Whose decks the card page's "In decks" lists, for `Load.card`.
+     *
+     * The collection on screen. Every collection only for a reader the
+     * server has said is nobody, as on the Decks page; and `""`, which
+     * lists nothing, while it has not said yet. The card page is not a
+     * collection view, so it loads before `/auth/me` answers, and both
+     * shells load it again when it does.
+     */
+    val cardScope: String
+        get() = if (!collectionKnown) "" else viewing.ifEmpty { DeckQueries.EVERY }
 
     /**
      * Whose Library the Users tab has open, `#/users/<key>`, or null.
@@ -1045,7 +1055,7 @@ object Load {
     fun card(nameNorm: String, owner: String): List<Sql> = listOf(
         CardQueries.face(nameNorm),
         CardQueries.printings(nameNorm),
-        CardQueries.usedIn(nameNorm),
+        CardQueries.usedIn(nameNorm, owner),
         CardQueries.legalities(nameNorm),
         CardQueries.rulings(nameNorm),
         CardQueries.facts(nameNorm),
