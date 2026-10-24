@@ -2123,10 +2123,10 @@ class LoadNeedsTest {
         // asks four questions about the collection and none about the
         // card is how both platforms ended up showing no mana cost,
         // no type line, no rules text and no power and toughness.
-        assertEquals(6, Load.card("sol ring").size)
-        assertEquals(6, Load.card("sol ring").distinct().size)
+        assertEquals(6, Load.card("sol ring", "m4tt0001").size)
+        assertEquals(6, Load.card("sol ring", "m4tt0001").distinct().size)
         assertTrue(
-            Load.card("sol ring").first().sql.contains("oracle_text"),
+            Load.card("sol ring", "m4tt0001").first().sql.contains("oracle_text"),
             "the card's own face is not the first thing asked for",
         )
     }

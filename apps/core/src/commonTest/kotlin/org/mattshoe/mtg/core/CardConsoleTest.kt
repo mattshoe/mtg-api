@@ -169,13 +169,14 @@ class CardDetailTest {
         assertEquals(card.committed, card.byOwner.sumOf { it.committed })
     }
 
-    /** The card is the card. Its queries must not be scoped to one person. */
+    /** The card is the card: its printings are not scoped to one person. */
     @Test
     fun theCardQueriesAskAboutEverybody() {
         val printings = CardQueries.printings("sol ring")
         assertEquals(listOf<Any?>("sol ring"), printings.params, "still filtered by owner")
         assertTrue("c.owner" in printings.sql, "no owner comes back on a printing")
-        assertEquals(listOf<Any?>("sol ring"), CardQueries.usedIn("sol ring").params)
+        // The decks are not: Matt, "the in decks section keeps showing decks from other peoples collection". See CardDecksScopeTest.
+        assertEquals(listOf<Any?>("sol ring"), CardQueries.usedIn("sol ring", DeckQueries.EVERY).params)
     }
 
     /** A proxy in a deck does not consume a real card. */
@@ -212,7 +213,7 @@ class CardDetailTest {
     @Test
     fun theQueriesBindTheNameAndNothingElse() {
         assertEquals(listOf<Any?>("sol ring"), CardQueries.printings("sol ring").params)
-        assertEquals(listOf<Any?>("sol ring"), CardQueries.usedIn("sol ring").params)
+        assertEquals(listOf<Any?>("sol ring", "m4tt0001"), CardQueries.usedIn("sol ring", "m4tt0001").params)
     }
 }
 

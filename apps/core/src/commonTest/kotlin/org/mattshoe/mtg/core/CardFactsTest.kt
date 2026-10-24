@@ -99,13 +99,13 @@ class CardFactsTest {
 
     @Test
     fun theCardPageLoadsThem() =
-        assertTrue(Load.card("sol ring").any { it == CardQueries.facts("sol ring") }, "Load.card never asks")
+        assertTrue(Load.card("sol ring", "m4tt0001").any { it == CardQueries.facts("sol ring") }, "Load.card never asks")
 
     @Test
     fun theAnswersBecomeThePageWithTheFactsOnIt() {
         // Both shells hand `Load.card`'s answers back in its order and
         // get the page; neither picks them apart itself any more.
-        val queries = Load.card("arcane signet")
+        val queries = Load.card("arcane signet", "m4tt0001")
         val empty = emptyList<String>() to emptyList<JsonArray>()
         val answers = queries.map { q ->
             if (q == CardQueries.facts("arcane signet")) cols to signetRows() else empty

@@ -666,15 +666,26 @@ object CardQueries {
         return CardFacts(cols.mapNotNull { c -> row.at(at, c)?.let { c to it } }.toMap())
     }
 
-    /** Every deck that wants it, whoever built it. */
-    fun usedIn(nameNorm: String) = Sql(
+    /**
+     * The decks that want it, in the collection on screen.
+     *
+     * It was every deck whoever built it, so Matt's Sol Ring listed
+     * Kayla's decks. Scoped the way the Decks page is: `""` is nobody
+     * said yet and lists nothing, [DeckQueries.EVERY] is the pooled
+     * read for a stranger, anything else is a collection's key.
+     */
+    fun usedIn(nameNorm: String, owner: String) = Sql(
         """SELECT d.key, d.name, ${Owners.keyOf("d.owner_id")} AS owner,
                   ${Owners.nameOf("d.owner_id")} AS owner_name, d.is_proxy, dc.qty, dc.role
              FROM deck_cards dc
              JOIN decks d ON d.id = dc.deck_id
-            WHERE dc.name_norm = ?
+            WHERE dc.name_norm = ?${when (owner) {
+                "" -> " AND 1=0"
+                DeckQueries.EVERY -> ""
+                else -> " AND ${Owners.owns("d.owner_id")}"
+            }}
             ORDER BY d.owner_id, d.name""",
-        listOf(nameNorm),
+        if (owner.isEmpty() || owner == DeckQueries.EVERY) listOf(nameNorm) else listOf(nameNorm, owner),
     )
 
     private fun JsonArray.at(cols: Map<String, Int>, n: String): String? {

@@ -88,7 +88,10 @@ class CoreSqlDump {
         // Every stack, for the Stats page's charts.
         case("stats cards for m4tt0001", StatsQueries.cards(StatsScope("m4tt0001")))
         case("stats cards for everything", StatsQueries.cards(StatsScope()))
-        Load.card("sol ring").forEachIndexed { i, s -> case("card detail $i", s) }
+        Load.card("sol ring", "m4tt0001").forEachIndexed { i, s -> case("card detail $i", s) }
+        // `test/card-decks.test.js` asserts on whose decks these name.
+        case("card detail decks, collection not known yet", CardQueries.usedIn("sol ring", ""))
+        case("card detail decks, every collection", CardQueries.usedIn("sol ring", DeckQueries.EVERY))
         case("palette find", Load.find("sol"))
         // `test/fetch-list.test.js` asserts on the decks these rows name.
         case(

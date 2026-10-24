@@ -1223,7 +1223,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private suspend fun loadCard(nameNorm: String, label: String): AppState {
-        val answers = Load.card(nameNorm).map { api.query(it).let { a -> a.cols to a.rows } }
+        val answers = Load.card(nameNorm, app.cardScope).map { api.query(it).let { a -> a.cols to a.rows } }
         return app.showing(Load.cardDetail(nameNorm, label, answers))
     }
 
