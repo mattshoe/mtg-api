@@ -333,6 +333,23 @@ describe('which copy of the scripts actually runs', () => {
     expect(box.log(), 'it did not start the agent main would have').toContain('claude ')
   })
 
+  it('lets the pinned scripts find the real requests folder', () => {
+    // The pinned copy is `.intake/pinned/scripts`, and the helpers
+    // worked the repo out from their own path — so they looked for
+    // `requests/` inside `.intake/pinned`, which holds only `scripts`.
+    // Every tick logged "ENOENT ... scandir .intake/pinned/requests",
+    // the inbox collected nothing, and a task sat at `pending` with no
+    // name for twelve hours.
+    build({ requests: { 'pin-three.md': READY('Pin three') } })
+    box.stub('claude', BUILDER)
+
+    run('dispatch.sh')
+
+    expect(box.intakeLog(), 'the pinned scripts are reading the wrong repo')
+      .not.toMatch(/ENOENT|pinned\/requests/)
+    expect(box.log(), 'nothing was started').toContain('claude ')
+  })
+
   it('still reads requests from the working tree, because those are data', () => {
     // The code is pinned; the queue is not. A request written a second
     // ago has not been committed anywhere and must still be seen.

@@ -588,6 +588,29 @@ describe('writing task status from somewhere that is not the real repo', () => {
     }
   })
 
+  it('takes the repo from INTAKE_REPO, because the pinned copy is not in it', () => {
+    // `dispatch.sh` re-execs from `.intake/pinned/scripts`, so working
+    // the repo out from this file's own path pointed at
+    // `.intake/pinned` — which holds only `scripts`. Every tick logged
+    // "ENOENT: no such file or directory, scandir
+    // .intake/pinned/requests", the inbox collected nothing, and a
+    // task Matt sent sat at `pending` with no name for twelve hours.
+    //
+    // The refusal message names the repo it decided on, which is how
+    // this is checkable at all.
+    const tmp = mkdtempSync(join(tmpdir(), 'pinned-'))
+    try {
+      spawnSync('git', ['init', '-q', tmp])
+      mkdirSync(join(tmp, 'requests'), { recursive: true })
+      writeFileSync(join(tmp, '.mtg-agent.env'), 'MTG_AGENT_TOKEN=pretend\n')
+      const r = run(tmp, { HOME: tmp, INTAKE_REPO: tmp })
+      expect(`${r.stdout}${r.stderr}`, 'it did not use INTAKE_REPO as the repo')
+        .toContain(tmp)
+    } finally {
+      rmSync(tmp, { recursive: true, force: true })
+    }
+  })
+
   it('says nothing about the repo when there is no credential to misuse', () => {
     // A test box has its own HOME and no token. The guard must not
     // fire there, or it would quietly disable the suite that proves

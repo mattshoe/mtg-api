@@ -498,7 +498,18 @@ async function reconcileNow({ repo, token, base = API }) {
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const [cmd, file, branch] = process.argv.slice(2)
-  const repo = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
+  // The repo this is FOR, which is not where this file is.
+  //
+  // `dispatch.sh` re-execs itself from a pinned copy of `scripts/`
+  // under `.intake/pinned`, so working it out from `import.meta.url`
+  // pointed here at `.intake/pinned`, which has no `requests/` folder.
+  // Every tick logged "ENOENT: no such file or directory, scandir
+  // .intake/pinned/requests", the inbox collected nothing, and a task
+  // Matt sent sat at `pending` with no name for twelve hours.
+  //
+  // `INTAKE_REPO` is what the dispatcher exports when it pins itself.
+  const repo = process.env.INTAKE_REPO
+    || join(dirname(fileURLToPath(import.meta.url)), '..', '..')
   const name = basename(String(file || ''), '.md')
   const stamp = new Date().toTimeString().slice(0, 8)
   const say = (line) => console.log(`${stamp}  task-status: ${line}`)
