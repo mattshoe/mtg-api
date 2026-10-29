@@ -63,25 +63,50 @@ SCRIPTS="$(cd "$(dirname "$0")/.." && pwd -P)"
 #
 # `requests/` is NOT pinned — those are data, and a request written a
 # second ago has been committed nowhere.
+#
+# And when the broken code IS main's, this falls back to the working
+# tree, loudly. #197 was exactly that: main's helpers looked for
+# `requests/` inside `.intake/pinned`, and the pinning ran them
+# faithfully once a minute for twelve hours while the queue was dead.
+# The only way out was a fix merged through the whole gate.
+#
+# Falling back is running whatever is checked out, which is the thing
+# pinning exists to prevent, so it takes one of exactly two signals,
+# neither of which a bad day produces:
+#
+#   - main's copy is missing a script this file runs
+#   - main's dispatcher exits BLIND (86): one of its helpers could not
+#     see this repo's `requests/` folder, and it stopped before the
+#     queue. A network failure or a 500 is not that and does not do it.
+#
+# It is run as a child rather than exec'd so its exit can be read. Any
+# other exit is main's answer and is passed straight on.
+LOG="$STATE/intake.log"
+BLIND=86
+say() { printf '%s  %s\n' "$(date '+%H:%M:%S')" "$1" >>"$LOG"; }
+
 if [ "${INTAKE_PINNED:-}" != 1 ] && [ -d "$REPO/.git" ]; then
   git -C "$REPO" fetch -q origin main 2>/dev/null
   PINNED="$STATE/pinned"
+  why=''
   if rm -rf "$PINNED" && mkdir -p "$PINNED" \
-    && git -C "$REPO" archive origin/main scripts 2>/dev/null | tar -x -C "$PINNED" 2>/dev/null \
-    && [ -x "$PINNED/scripts/intake/dispatch.sh" -o -f "$PINNED/scripts/intake/dispatch.sh" ]; then
-    INTAKE_PINNED=1 INTAKE_REPO="$REPO" exec bash "$PINNED/scripts/intake/dispatch.sh" "$@"
+    && git -C "$REPO" archive origin/main scripts 2>/dev/null | tar -x -C "$PINNED" 2>/dev/null; then
+    for s in intake/dispatch.sh intake/inbox.mjs intake/task-status.mjs intake.mjs; do
+      [ -f "$PINNED/scripts/$s" ] || { why="origin/main has no scripts/$s"; break; }
+    done
+    if [ -z "$why" ]; then
+      INTAKE_PINNED=1 INTAKE_REPO="$REPO" bash "$PINNED/scripts/intake/dispatch.sh" "$@"
+      rc=$?
+      [ "$rc" = "$BLIND" ] || exit "$rc"
+      why="origin/main's scripts cannot see $REPO/requests and stopped before the queue"
+    fi
+  else
+    why="could not read scripts from origin/main"
   fi
-  # Could not get main's copy — carry on with this one rather than
-  # stopping the queue, and say so, because running the wrong code
-  # quietly is the thing being fixed.
-  printf '%s  %s\n' "$(date '+%H:%M:%S')" \
-    "could not read scripts from origin/main; running the working tree's copy" >>"$LOG"
+  say "RUNNING UNMERGED CODE: $why; this tick runs the working tree's scripts, on $(git -C "$REPO" rev-parse --abbrev-ref HEAD 2>/dev/null), until main is fixed"
 fi
-LOG="$STATE/intake.log"
 REQUESTS="$REPO/requests"
 BASE="${INTAKE_BASE:-origin/main}"
-
-say() { printf '%s  %s\n' "$(date '+%H:%M:%S')" "$1" >>"$LOG"; }
 
 # Opt-in. .intake/ is gitignored, so a fresh clone must not be armed by the
 # committed hook before anyone has installed anything.
@@ -108,18 +133,31 @@ mkdir -p "$STATE"
 # this a task submitted in the app sat at `pending` forever: nothing polled
 # the inbox, and launchd only fires on a change under requests/, which
 # submitting from the app does not cause.
-node "$SCRIPTS/intake/inbox.mjs" >>"$LOG" 2>&1 || true
+blind=''
+node "$SCRIPTS/intake/inbox.mjs" >>"$LOG" 2>&1
+[ $? = "$BLIND" ] && blind=inbox.mjs
 
 # A task cancelled in the app: its request file marked cancelled, so it is
 # never built again, and any agent on it killed. Matt: "any running agent
 # should be immediately killed". Every tick, so within a minute of the tap,
 # and before reconcile so the row it reads already says cancelled.
-node "$SCRIPTS/intake/task-status.mjs" cancel >>"$LOG" 2>&1 || true
+node "$SCRIPTS/intake/task-status.mjs" cancel >>"$LOG" 2>&1
+[ $? = "$BLIND" ] && blind="${blind:-task-status.mjs}"
 
 # Every run puts D1 right about what this laptop can see: a dead agent
 # reads paused rather than in progress forever, a held request paused, a
 # withdrawn one cancelled. It may not stop a build.
-node "$SCRIPTS/intake/task-status.mjs" reconcile >>"$LOG" 2>&1 || true
+node "$SCRIPTS/intake/task-status.mjs" reconcile >>"$LOG" 2>&1
+[ $? = "$BLIND" ] && blind="${blind:-task-status.mjs}"
+
+# A helper that cannot see `requests/` is not having a bad day, it is
+# reading the wrong repo, and nothing after this line can be right. Stop
+# before the queue. When this is main's copy, the working tree's copy
+# that started it reads the code and takes the tick over.
+if [ -n "$blind" ]; then
+  say "$blind cannot see $REPO/requests; stopping before the queue"
+  exit "$BLIND"
+fi
 
 # Leftovers from the worktree era. Harmless when there are none.
 git -C "$REPO" worktree prune
@@ -403,6 +441,7 @@ env \
   -u CLOUDFLARE_API_TOKEN -u CLOUDFLARE_ACCOUNT_ID -u CLOUDFLARE_API_KEY \
   -u CLOUDFLARE_EMAIL -u CF_API_TOKEN -u CF_ACCOUNT_ID -u CF_EMAIL \
   -u CLOUDFLARE_API_USER_SERVICE_KEY -u WRANGLER_CF_AUTHORIZATION_TOKEN \
+  -u INTAKE_PINNED -u INTAKE_REPO \
   CLOUDFLARE_AUTH_USE_KEYRING=false XDG_CONFIG_HOME="$STATE/void" \
   MTG_API_TOKEN="$AGENT_TOKEN" \
   INTAKE_BUILDER=1 \

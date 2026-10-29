@@ -186,8 +186,14 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   // `INTAKE_REPO` is what the dispatcher exports when it pins itself.
   const repo = process.env.INTAKE_REPO
     || join(dirname(fileURLToPath(import.meta.url)), '..', '..')
-  const token = await writeToken()
   const stamp = new Date().toISOString().replace('T', ' ').slice(0, 19)
+  // Blind: see the same check in task-status.mjs. 86 is the one exit
+  // that sends dispatch.sh back to the working tree.
+  if (!existsSync(join(repo, 'requests'))) {
+    console.error(`${stamp}  inbox: blind: no requests/ in ${repo}`)
+    process.exit(86)
+  }
+  const token = await writeToken()
   if (!token) {
     console.log(`${stamp}  inbox: no credential that may read the inbox, so nothing was collected`)
   } else {
