@@ -38,6 +38,15 @@ import { fileURLToPath } from 'node:url'
 
 const REPO = dirname(dirname(fileURLToPath(import.meta.url)))
 
+// Every box is its own repo, and these two would point it at another one.
+// The dispatcher sets them when it pins itself, and they used to reach the
+// agent it launched, so a builder running this file pointed every box's
+// dispatcher at the real checkout: it skipped pinning and read the live
+// queue. The dispatcher no longer passes them on; this is so that a run
+// from any shell that has them still tests the box and nothing else.
+delete process.env.INTAKE_PINNED
+delete process.env.INTAKE_REPO
+
 /** Files a fake repo needs before any intake script will work in it. */
 const COPY = [
   'scripts/intake.mjs',
@@ -1040,7 +1049,7 @@ describe('what the agent is launched with', () => {
     build({ requests: { 'a-thing.md': READY('A thing') } })
     // An agent that reports its own environment back.
     box.stub('claude', `
-printenv | grep -E '^(CLOUDFLARE|CF_|XDG_|GH_CONFIG_DIR)' > ${JSON.stringify(join(box.root, 'agent-env.txt'))} || true
+printenv | grep -E '^(CLOUDFLARE|CF_|XDG_|GH_CONFIG_DIR|INTAKE_PINNED|INTAKE_REPO)' > ${JSON.stringify(join(box.root, 'agent-env.txt'))} || true
 ${BUILDER}
 `)
     run('dispatch.sh', { env })
@@ -1060,6 +1069,16 @@ ${BUILDER}
     for (const planted of 'abcdefg'.split('').map((c) => `planted-${c}`)) {
       expect(env, `${planted} reached the agent`).not.toContain(planted)
     }
+  })
+
+  it('does not carry the pinning switches, which point anything it runs at the real repo', () => {
+    // `INTAKE_PINNED=1 INTAKE_REPO=<repo>` is how the dispatcher tells its
+    // own pinned copy where it is. Inherited by the agent, they told every
+    // dispatcher its tests started to skip pinning and work on the real
+    // checkout, which is how this was found.
+    const env = withEnv({})
+    expect(env, 'the agent inherited INTAKE_PINNED').not.toContain('INTAKE_PINNED')
+    expect(env, 'the agent inherited INTAKE_REPO').not.toContain('INTAKE_REPO')
   })
 
   it('has the wrangler config path pointed somewhere with no stored login in it', () => {
