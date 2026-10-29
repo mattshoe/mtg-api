@@ -105,6 +105,45 @@ class RulesTest {
         assertEquals(listOf("702.20.", "702.20a"), book.search("702.20").map { it.number })
     }
 
+    /**
+     * Matt: "i want rules searches to support "quoted" text that searches
+     * anything in the quotes as a single string instead of tokenized
+     * words". 702.19a has "assigning", "combat" and "damage" apart;
+     * only 702.19c has them side by side.
+     */
+    @Test
+    fun quotedWordsAreFoundSideBySideNotScatteredAcrossTheRule() {
+        assertEquals(listOf("702.19a", "702.19c"), book.search("assigning combat damage").map { it.number })
+        assertEquals(listOf("702.19c"), book.search("\"assigning combat damage\"").map { it.number })
+    }
+
+    @Test
+    fun aQuotedPhraseAndLooseWordsMustAllBeThere() {
+        assertEquals(listOf("702.19a"), book.search("static \"combat damage\"").map { it.number })
+        assertEquals(listOf("702.19c"), book.search("\"combat damage\" planeswalkers").map { it.number })
+    }
+
+    @Test
+    fun aPhonesCurlyQuotesQuoteAsWell() {
+        assertEquals(listOf("702.19c"), book.search("“assigning combat damage”").map { it.number })
+    }
+
+    @Test
+    fun aQuoteLeftOpenQuotesToTheEnd() {
+        assertEquals(listOf("702.19c"), book.search("\"assigning combat damage").map { it.number })
+    }
+
+    @Test
+    fun aQuotedPhraseIgnoresCaseAndExtraSpaces() {
+        assertEquals(listOf("702.19c"), book.search("\"  Assigning   COMBAT damage \"").map { it.number })
+    }
+
+    @Test
+    fun emptyQuotesFindNothing() {
+        assertEquals(emptyList(), book.search("\"\""))
+        assertEquals(emptyList(), book.search("\" \""))
+    }
+
     @Test
     fun aBlankSearchFindsNothing() {
         assertEquals(emptyList(), book.search(""))

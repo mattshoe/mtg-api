@@ -45,6 +45,7 @@ class RulesPageTest {
 
     private val roots = mutableListOf<HTMLElement>()
     private var realFetch: dynamic = null
+    private var screen: Tablet.Screen? = null
 
     /** How many times the app asked the Worker for the rules. */
     private var asked = 0
@@ -106,6 +107,8 @@ class RulesPageTest {
         MtgApp.unmount()
         roots.forEach { it.remove() }
         roots.clear()
+        screen?.frame?.remove()
+        screen = null
         window.location.hash = ""
     }
 
@@ -122,14 +125,15 @@ class RulesPageTest {
         error("gave up waiting for $what")
     }
 
-    private fun mount(hash: String): HTMLElement {
+    private fun mount(hash: String, into: HTMLElement? = null): HTMLElement {
         window.location.hash = hash
-        val view = document.createElement("div") as HTMLElement
-        view.style.width = "400px"
+        val view = into ?: (document.createElement("div") as HTMLElement).also {
+            it.style.width = "400px"
+            document.body!!.appendChild(it)
+            roots += it
+        }
         val nav = document.createElement("div") as HTMLElement
-        document.body!!.appendChild(view)
         document.body!!.appendChild(nav)
-        roots += view
         roots += nav
         MtgApp.mount(view, null, "")
         MtgApp.mountNav(nav)
@@ -235,6 +239,37 @@ class RulesPageTest {
         assertEquals(refusals + 1, asked, "Try again should ask exactly once more")
         view.search("trample")
         waitFor("the trample rules") { view.numbers().size == 4 }
+    }
+
+    /**
+     * Matt: "i want rules searches to support "quoted" text that searches
+     * anything in the quotes as a single string instead of tokenized
+     * words". 702.19a has "assigning", "combat" and "damage" apart; only
+     * 702.19c has them side by side. The phone's `RulesParityTest` makes
+     * the same claim.
+     */
+    private suspend fun aQuotedPhraseFindsOnlyTheRuleWithItSideBySide(into: HTMLElement? = null) {
+        val view = mount("#/guide/rules", into)
+        waitFor("the rules to load") { view.all(".rules-hint").isNotEmpty() }
+        view.search("assigning combat damage")
+        waitFor("the loose words") { view.numbers().isNotEmpty() }
+        assertEquals(listOf("702.19a", "702.19c"), view.numbers(), "loose words should still be found apart")
+        view.search("\"assigning combat damage\"")
+        waitFor("the quoted phrase") { view.numbers().size != 2 }
+        assertEquals(listOf("702.19c"), view.numbers(), "the quoted phrase was searched as separate words")
+    }
+
+    @Test
+    fun aQuotedPhraseIsSearchedAsOneString() = runTest { aQuotedPhraseFindsOnlyTheRuleWithItSideBySide() }
+
+    @Test
+    fun aQuotedPhraseIsSearchedAsOneStringOnAFoldingPhoneOpenedOut() = runTest {
+        aQuotedPhraseFindsOnlyTheRuleWithItSideBySide(Tablet.open(Tablet.UNFOLDED).also { screen = it }.body)
+    }
+
+    @Test
+    fun aQuotedPhraseIsSearchedAsOneStringOnATabletHeldSideways() = runTest {
+        aQuotedPhraseFindsOnlyTheRuleWithItSideBySide(Tablet.open(Tablet.LANDSCAPE).also { screen = it }.body)
     }
 
     @Test

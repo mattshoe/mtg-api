@@ -13,6 +13,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.text.TextLayoutResult
@@ -23,6 +25,7 @@ import org.junit.runner.RunWith
 import org.mattshoe.mtg.core.AppState
 import org.mattshoe.mtg.core.Route
 import org.mattshoe.mtg.core.Rules
+import org.robolectric.annotation.Config
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -46,22 +49,25 @@ class RulesParityTest {
 
     private var retries = 0
 
-    private fun shell(start: AppState = AppState()) {
+    private fun shell(start: AppState = AppState(), size: DpSize? = null) {
         rule.setContent {
-            MaterialTheme(colorScheme = darkColorScheme()) {
-                Surface {
-                    held = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(start) }
-                    AppShell(
-                        state = held.value,
-                        onState = { held.value = it },
-                        onSearch = {},
-                        onOpenDeck = {},
-                        onPreviewEntry = {},
-                        onApplyEntry = {},
-                        onLoadRules = { retries++ },
-                    )
+            val page = @androidx.compose.runtime.Composable {
+                MaterialTheme(colorScheme = darkColorScheme()) {
+                    Surface {
+                        held = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(start) }
+                        AppShell(
+                            state = held.value,
+                            onState = { held.value = it },
+                            onSearch = {},
+                            onOpenDeck = {},
+                            onPreviewEntry = {},
+                            onApplyEntry = {},
+                            onLoadRules = { retries++ },
+                        )
+                    }
                 }
             }
+            if (size == null) page() else Tablet.Sized(size) { page() }
         }
         rule.waitForIdle()
     }
@@ -154,6 +160,35 @@ class RulesParityTest {
         rule.waitForIdle()
         assertEquals(1, retries, "Try again did not ask for the rules again")
     }
+
+    /**
+     * Matt: "i want rules searches to support "quoted" text that searches
+     * anything in the quotes as a single string instead of tokenized
+     * words". 702.19a has "assigning", "combat" and "damage" apart; only
+     * 702.19c has them side by side. The website's `RulesPageTest` makes
+     * the same claim.
+     */
+    private fun aQuotedPhraseFindsOnlyTheRuleWithItSideBySide(size: DpSize?) {
+        shell(onRulesWith(Rules().loaded(TEXT)), size)
+        search("assigning combat damage")
+        assertEquals(listOf("702.19a", "702.19c"), texts("rule-number"), "loose words should still be found apart")
+        rule.onNodeWithTag("rules-search").performTextReplacement("\"assigning combat damage\"")
+        rule.waitForIdle()
+        assertEquals(listOf("702.19c"), texts("rule-number"), "the quoted phrase was searched as separate words")
+    }
+
+    @Test
+    fun aQuotedPhraseIsSearchedAsOneString() = aQuotedPhraseFindsOnlyTheRuleWithItSideBySide(null)
+
+    @Test
+    @Config(qualifiers = Tablet.UNFOLDED_QUALIFIERS)
+    fun aQuotedPhraseIsSearchedAsOneStringOnAFoldingPhoneOpenedOut() =
+        aQuotedPhraseFindsOnlyTheRuleWithItSideBySide(Tablet.UNFOLDED)
+
+    @Test
+    @Config(qualifiers = Tablet.LANDSCAPE_QUALIFIERS)
+    fun aQuotedPhraseIsSearchedAsOneStringOnATabletHeldSideways() =
+        aQuotedPhraseFindsOnlyTheRuleWithItSideBySide(Tablet.LANDSCAPE)
 
     @Test
     fun aSearchWithNoMatchSaysSo() {
