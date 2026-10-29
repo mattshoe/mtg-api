@@ -42,11 +42,17 @@ data class RuleBook(val effective: String = "", val rules: List<Rule> = emptyLis
      * anywhere in the rule — Matt: "searches anything in the quotes as a
      * single string instead of tokenized words". A phone's curly quotes
      * count, and a quote left open runs to the end.
+     *
+     * A minus leaves out every rule with the word or quoted run after it
+     * — Matt: "-trample should exclude results with the word trample, and
+     * -"when a creature" should exclude that whole string". A minus
+     * before a digit is the number's, so "-1/-1" is still searched for,
+     * and a search that only leaves things out finds nothing.
      */
     fun search(query: String): List<Rule> {
-        val terms = terms(query)
-        if (terms.isEmpty()) return emptyList()
-        return rules.filter { r -> terms.all { it in r.haystack } }
+        val (wanted, unwanted) = terms(query)
+        if (wanted.isEmpty()) return emptyList()
+        return rules.filter { r -> wanted.all { it in r.haystack } && unwanted.none { it in r.haystack } }
     }
 
     companion object {
@@ -62,11 +68,30 @@ data class RuleBook(val effective: String = "", val rules: List<Rule> = emptyLis
 
         private const val EXAMPLE = "Example:"
 
-        /** What [search] looks for: each quoted run whole, each other word alone. */
-        internal fun terms(query: String): List<String> =
-            query.replace('“', '"').replace('”', '"').split('"').flatMapIndexed { i, part ->
-                if (i % 2 == 1) listOf(fold(part)) else fold(part).split(' ')
-            }.filter { it.isNotEmpty() }
+        /**
+         * What [search] looks for, then what it leaves out: each quoted
+         * run whole, each other word alone, and a minus straight before
+         * either moves it to the second list.
+         */
+        internal fun terms(query: String): Pair<List<String>, List<String>> {
+            val wanted = mutableListOf<String>()
+            val unwanted = mutableListOf<String>()
+            var leaveOut = false
+            query.replace('“', '"').replace('”', '"').split('"').forEachIndexed { i, part ->
+                if (i % 2 == 1) {
+                    fold(part).takeIf { it.isNotEmpty() }?.let { (if (leaveOut) unwanted else wanted) += it }
+                    return@forEachIndexed
+                }
+                val words = fold(part).split(' ').filter { it.isNotEmpty() }
+                leaveOut = part.endsWith('-') && words.lastOrNull() == "-"
+                for (w in words) when {
+                    w == "-" -> {}
+                    w.startsWith('-') && !w[1].isDigit() -> unwanted += w.drop(1)
+                    else -> wanted += w
+                }
+            }
+            return wanted to unwanted
+        }
 
         internal fun fold(s: String): String =
             s.lowercase().replace('’', '\'').replace('‘', '\'').replace(Regex("""\s+"""), " ").trim()
