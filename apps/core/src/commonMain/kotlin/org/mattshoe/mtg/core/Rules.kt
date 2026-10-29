@@ -37,11 +37,16 @@ data class RuleBook(val effective: String = "", val rules: List<Rule> = emptyLis
      * order. Case does not matter, a straight apostrophe finds the curly
      * one the file prints, and a rule number finds that rule and its
      * subrules. Blank finds nothing.
+     *
+     * Words in quotes are one string, found side by side rather than
+     * anywhere in the rule — Matt: "searches anything in the quotes as a
+     * single string instead of tokenized words". A phone's curly quotes
+     * count, and a quote left open runs to the end.
      */
     fun search(query: String): List<Rule> {
-        val words = fold(query).split(' ').filter { it.isNotEmpty() }
-        if (words.isEmpty()) return emptyList()
-        return rules.filter { r -> words.all { it in r.haystack } }
+        val terms = terms(query)
+        if (terms.isEmpty()) return emptyList()
+        return rules.filter { r -> terms.all { it in r.haystack } }
     }
 
     companion object {
@@ -56,6 +61,12 @@ data class RuleBook(val effective: String = "", val rules: List<Rule> = emptyLis
         private val SECTION = Regex("""^\d{3}\.\s+\S.*$""")
 
         private const val EXAMPLE = "Example:"
+
+        /** What [search] looks for: each quoted run whole, each other word alone. */
+        internal fun terms(query: String): List<String> =
+            query.replace('“', '"').replace('”', '"').split('"').flatMapIndexed { i, part ->
+                if (i % 2 == 1) listOf(fold(part)) else fold(part).split(' ')
+            }.filter { it.isNotEmpty() }
 
         internal fun fold(s: String): String =
             s.lowercase().replace('’', '\'').replace('‘', '\'').replace(Regex("""\s+"""), " ").trim()
