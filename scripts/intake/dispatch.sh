@@ -85,6 +85,30 @@ LOG="$STATE/intake.log"
 BLIND=86
 say() { printf '%s  %s\n' "$(date '+%H:%M:%S')" "$1" >>"$LOG"; }
 
+# What went wrong this tick, if anything, with the clock taken off so two
+# ticks that failed the same way read the same. `fault_task` is the one
+# request every fault this tick was about; `fault_machine` is any fault
+# that was about no request, which is the dispatcher itself.
+fault=''
+fault_task=''
+fault_machine=''
+fail() {
+  fault="${fault:+$fault; }$1"
+  if [ -n "${2:-}" ]; then fault_task="${fault_task:-$2}"; else fault_machine=1; fi
+}
+
+# A helper run with its output kept: it still goes to the log, and if the
+# helper exits non-zero its last line is this tick's fault.
+helper() {
+  local out rc
+  out="$(node "$@" 2>&1)"; rc=$?
+  [ -n "$out" ] && printf '%s\n' "$out" >>"$LOG"
+  if [ "$rc" != 0 ] && [ "$rc" != "$BLIND" ]; then
+    fail "$(basename "$1")${2:+ $2} failed: $(printf '%s\n' "$out" | tail -1 | sed 's/^[-0-9: ]*  //')" "${HELPER_TASK:-}"
+  fi
+  return "$rc"
+}
+
 if [ "${INTAKE_PINNED:-}" != 1 ] && [ -d "$REPO/.git" ]; then
   git -C "$REPO" fetch -q origin main 2>/dev/null
   PINNED="$STATE/pinned"
@@ -104,6 +128,9 @@ if [ "${INTAKE_PINNED:-}" != 1 ] && [ -d "$REPO/.git" ]; then
     why="could not read scripts from origin/main"
   fi
   say "RUNNING UNMERGED CODE: $why; this tick runs the working tree's scripts, on $(git -C "$REPO" rev-parse --abbrev-ref HEAD 2>/dev/null), until main is fixed"
+  # The queue survives this, which is exactly why it went unread for twelve
+  # hours. It is a fault every tick until main is fixed.
+  fail "running unmerged code: $why"
 fi
 REQUESTS="$REPO/requests"
 BASE="${INTAKE_BASE:-origin/main}"
@@ -112,13 +139,59 @@ BASE="${INTAKE_BASE:-origin/main}"
 # committed hook before anyone has installed anything.
 [ -f "$STATE/enabled" ] || exit 0
 
+# Nothing was watching the log.
+#
+# `.intake/intake.log` said "task-status: ENOENT ... scandir
+# .intake/pinned/requests" once a minute for twelve hours while the queue
+# was dead, seven hundred identical lines, and Matt found out by looking
+# at the app. So every tick ends by counting: the same fault as the tick
+# before is one more in a row, anything else starts again, and a clean
+# tick clears it.
+#
+# Past INTAKE_ALARM_AFTER in a row it is not a bad minute, it is a broken
+# machine, and it says so ONCE for that fault: `blocked` on the request
+# it is about, which is permanent and buzzes his phone, or NEEDS YOU and
+# a desktop notification when it is the dispatcher itself, the path the
+# queue alarm below already uses. Never per tick — a dispatcher that
+# cries wolf gets ignored, and `blocked` flapping once a minute has
+# happened here before.
+#
+# The tick a pinned copy hands back as BLIND is not counted by it: the
+# working tree's copy takes that tick over and counts it, and counting
+# both would reset the run every minute.
+FAILING="$STATE/failing"
+ALARM_AFTER="${INTAKE_ALARM_AFTER:-10}"
+tally() {
+  local rc=$? was='' n=0 told=''
+  [ "$rc" = "$BLIND" ] && [ "${INTAKE_PINNED:-}" = 1 ] && return
+  if [ -z "$fault" ]; then rm -f "$FAILING"; return; fi
+  if [ -f "$FAILING" ]; then
+    was="$(sed -n 1p "$FAILING")"; n="$(sed -n 2p "$FAILING")"; told="$(sed -n 3p "$FAILING")"
+  fi
+  case "$n" in ''|*[!0-9]*) n=0 ;; esac
+  if [ "$was" = "$fault" ]; then n=$((n + 1)); else n=1; told=''; fi
+  if [ "$n" -ge "$ALARM_AFTER" ] && [ -z "$told" ]; then
+    told=1
+    if [ -n "$fault_task" ] && [ -z "$fault_machine" ]; then
+      say "$fault_task has failed the same way $n ticks in a row; marking it blocked: $fault"
+      node "$SCRIPTS/intake/task-status.mjs" blocked "$fault_task.md" \
+        "the dispatcher failed the same way $n ticks in a row: $fault" >>"$LOG" 2>&1
+    else
+      say "NEEDS YOU: the dispatcher has failed the same way $n ticks in a row: $fault"
+      osascript -e 'display notification "mtg intake keeps failing the same way; see .intake/intake.log" with title "mtg intake"' >/dev/null 2>&1 || true
+    fi
+  fi
+  printf '%s\n%s\n%s\n' "$fault" "$n" "$told" >"$FAILING"
+}
+trap tally EXIT
+
 # Reconcile BEFORE honouring the off switch. Status is only ever written
 # inside a dispatch, so pausing intake used to freeze every row mid-flight:
 # Matt watched a task read `in progress` for three hours after I had
 # switched the system off and nothing was running.
 if [ -f "$STATE/disabled" ]; then
-  node "$SCRIPTS/intake/task-status.mjs" cancel >>"$LOG" 2>&1 || true
-  node "$SCRIPTS/intake/task-status.mjs" reconcile >>"$LOG" 2>&1 || true
+  helper "$SCRIPTS/intake/task-status.mjs" cancel || true
+  helper "$SCRIPTS/intake/task-status.mjs" reconcile || true
   exit 0
 fi
 
@@ -134,20 +207,20 @@ mkdir -p "$STATE"
 # the inbox, and launchd only fires on a change under requests/, which
 # submitting from the app does not cause.
 blind=''
-node "$SCRIPTS/intake/inbox.mjs" >>"$LOG" 2>&1
+helper "$SCRIPTS/intake/inbox.mjs"
 [ $? = "$BLIND" ] && blind=inbox.mjs
 
 # A task cancelled in the app: its request file marked cancelled, so it is
 # never built again, and any agent on it killed. Matt: "any running agent
 # should be immediately killed". Every tick, so within a minute of the tap,
 # and before reconcile so the row it reads already says cancelled.
-node "$SCRIPTS/intake/task-status.mjs" cancel >>"$LOG" 2>&1
+helper "$SCRIPTS/intake/task-status.mjs" cancel
 [ $? = "$BLIND" ] && blind="${blind:-task-status.mjs}"
 
 # Every run puts D1 right about what this laptop can see: a dead agent
 # reads paused rather than in progress forever, a held request paused, a
 # withdrawn one cancelled. It may not stop a build.
-node "$SCRIPTS/intake/task-status.mjs" reconcile >>"$LOG" 2>&1
+helper "$SCRIPTS/intake/task-status.mjs" reconcile
 [ $? = "$BLIND" ] && blind="${blind:-task-status.mjs}"
 
 # A helper that cannot see `requests/` is not having a bad day, it is
@@ -156,12 +229,16 @@ node "$SCRIPTS/intake/task-status.mjs" reconcile >>"$LOG" 2>&1
 # that started it reads the code and takes the tick over.
 if [ -n "$blind" ]; then
   say "$blind cannot see $REPO/requests; stopping before the queue"
+  fail "$blind cannot see $REPO/requests"
   exit "$BLIND"
 fi
 
 # Leftovers from the worktree era. Harmless when there are none.
 git -C "$REPO" worktree prune
-git -C "$REPO" fetch -q origin main 2>>"$LOG" || say "could not fetch; base may be stale"
+if ! git -C "$REPO" fetch -q origin main 2>>"$LOG"; then
+  say "could not fetch; base may be stale"
+  fail "could not fetch origin main"
+fi
 
 # What origin/main already has filed. The queue is decided from the LOCAL
 # requests/ folder, and that folder lags main whenever an agent merges its
@@ -299,6 +376,7 @@ if [ ! -e "$TREE" ]; then
     [ -n "$ex" ] && mkdir -p "$(dirname "$ex")" && printf 'node_modules\n' >> "$ex"
   else
     say "NEEDS YOU: could not make the agent tree at $TREE"
+    fail "could not make the agent tree at $TREE"
     exit 1
   fi
 fi
@@ -378,6 +456,7 @@ if [ -z "$finishing" ]; then
       file="$f"; branch="$b"; break
     fi
     say "skipping ${f%.md}: could not start $b"
+    fail "could not start $b" "${f%.md}"
   done <<EOF
 $queue
 EOF

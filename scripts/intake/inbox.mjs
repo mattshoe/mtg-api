@@ -16,9 +16,9 @@ import { join, basename, dirname } from 'node:path'
 import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 
-const BASE = 'https://mtg-api.mattshoe81.workers.dev'
+const BASE = process.env.MTG_API_BASE || 'https://mtg-api.mattshoe81.workers.dev'
 
-const API = 'https://mtg-api.mattshoe81.workers.dev'
+const API = process.env.MTG_API_BASE || 'https://mtg-api.mattshoe81.workers.dev'
 
 /** The same shape `branchFor` slugs a name into, so the branch reads like the title. */
 function slug(text) {

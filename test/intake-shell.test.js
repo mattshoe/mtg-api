@@ -453,6 +453,21 @@ describe('when the pinned copy itself is broken', () => {
     expect(box.log(), 'the queue stayed dead').toContain('requests/blind-three.md')
   })
 
+  it('says so once when it has been falling back tick after tick', () => {
+    // The fallback keeps the queue alive, which is exactly how #197 went
+    // twelve hours with nobody reading the log. Every tick on unmerged
+    // code is the same fault until main is fixed.
+    build({})
+    box.commitOnBase('scripts/intake/task-status.mjs', blindTaskStatus())
+
+    for (let i = 0; i < 6; i++) run('dispatch.sh', { env: { INTAKE_ALARM_AFTER: '3' } })
+
+    expect(box.log().split('\n').filter((l) => l.startsWith('osascript ')),
+      'six ticks on unmerged code did not notify exactly once').toHaveLength(1)
+    expect(box.intakeLog(), 'the alarm does not say it is running unmerged code')
+      .toMatch(/NEEDS YOU.*unmerged code/)
+  })
+
   it('does not fall back over an ordinary bad day', () => {
     // A helper on main that fails the way a network blip does. The pinned
     // copy must still be what runs.
@@ -790,11 +805,15 @@ if (cmd === 'reconcile' && existsSync(join(process.env.HOME, 'broken'))) {
   })
 
   it('blocks the task it cannot start, once, and does not wake Matt for it', () => {
-    // A file where the request branches would go, so `git switch -C
-    // request/...` is refused every tick for this one request.
+    // A branch underneath the name this request's branch would take, so
+    // `git switch -C request/stuck-...` is refused every tick, and only
+    // for this one request.
     build({ requests: { 'stuck.md': READY('Stuck') } })
     box.stub('claude', BUILDER)
-    writeFileSync(box.path('.git/refs/heads/request'), '')
+    const branch = spawnSync('node', [box.path('scripts/intake.mjs'), 'branch', 'stuck.md'],
+      { cwd: box.repo, encoding: 'utf8' }).stdout.trim()
+    expect(branch, 'intake.mjs named no branch').toMatch(/^request\/stuck-/)
+    box.git('branch', `${branch}/in-the-way`)
 
     ticks(AFTER * 2)
 
