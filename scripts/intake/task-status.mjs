@@ -514,6 +514,16 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const stamp = new Date().toTimeString().slice(0, 8)
   const say = (line) => console.log(`${stamp}  task-status: ${line}`)
 
+  // Blind: the repo this worked out has no `requests/`, so it is the
+  // wrong one. 86 is what tells dispatch.sh that, which is how a broken
+  // pinned copy hands the tick to the working tree instead of logging
+  // ENOENT for twelve hours. Checked before the credential, because a
+  // test box has none and #197 hid behind exactly that.
+  if (!existsSync(join(repo, 'requests'))) {
+    console.error(`${stamp}  task-status: blind: no requests/ in ${repo}`)
+    process.exit(86)
+  }
+
   // Only the real checkout may write to the real board.
   //
   // Matt: "Why do you keep queuing up a task called 'a thing'?!" A
