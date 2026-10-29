@@ -30,7 +30,7 @@ import { fileURLToPath } from 'node:url'
 import { writeToken } from './inbox.mjs'
 import { pending, buildable, branchFor, statusOf } from '../intake.mjs'
 
-const API = 'https://mtg-api.mattshoe81.workers.dev'
+const API = process.env.MTG_API_BASE || 'https://mtg-api.mattshoe81.workers.dev'
 
 /** Furthest first: a request built twice is at the furthest any of its pull requests got. */
 const ORDER = [
@@ -642,17 +642,23 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     else {
       await cancelNow({ repo, token })
         .then((done) => done.forEach((line) => say(`cancel: ${line}`)))
-        .catch((e) => say(e.message))
+        .catch((e) => { say(e.message); process.exitCode = 1 })
     }
   } else if (cmd === 'reconcile') {
     if (!token) say('no credential that may write task status, so nothing was reconciled')
     else {
       reconcileNow({ repo, token })
         .then((wrote) => wrote.forEach((t) => say(`${t.name} ${t.status}${t.note ? ` (${t.note})` : ''}`)))
-        .catch((e) => say(e.message))
+        .catch((e) => { say(e.message); process.exitCode = 1 })
     }
+  } else if (cmd === 'blocked') {
+    // The dispatcher has failed on this request the same way tick after
+    // tick, and says so once. Permanent, and it buzzes Matt's phone, which
+    // is the point: the log it used to go to was read by nobody.
+    const said = process.argv.slice(4).join(' ').trim()
+    transition = { name, status: 'blocked', note: (said || 'the dispatcher keeps failing on it').slice(0, 300) }
   } else {
-    console.error('usage: task-status.mjs building <file> | settle <file> <branch> | cancel | reconcile')
+    console.error('usage: task-status.mjs building <file> | settle <file> <branch> | blocked <file> <note> | cancel | reconcile')
     process.exit(2)
   }
 
@@ -665,6 +671,6 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   else if (transition) {
     report(transition, { token })
       .then(() => say(`${name} ${transition.status}`))
-      .catch((e) => say(e.message))
+      .catch((e) => { say(e.message); process.exitCode = 1 })
   }
 }
