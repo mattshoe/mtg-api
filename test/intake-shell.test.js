@@ -186,6 +186,18 @@ function build({ requests = {}, done = {}, enabled = true } = {}) {
       rmSync(tmp, { recursive: true, force: true })
       git('fetch', '-q', 'origin')
     },
+    /** Take a path off origin/main, again without the checkout noticing. */
+    removeOnBase: (rel) => {
+      const tmp = join(root, 'base-push')
+      spawnSync('git', ['clone', '-q', origin, tmp], { encoding: 'utf8' })
+      const g = (...a) => spawnSync('git', ['-C', tmp, ...a], { encoding: 'utf8' })
+      g('config', 'user.email', 'a@b'); g('config', 'user.name', 'a')
+      const r = g('rm', '-rq', rel)
+      if (r.status !== 0) throw new Error(`removeOnBase: ${rel} is not on main: ${r.stderr}`)
+      g('commit', '-qm', `base: rm ${rel}`); g('push', '-q', 'origin', 'main')
+      rmSync(tmp, { recursive: true, force: true })
+      git('fetch', '-q', 'origin')
+    },
     /**
      * Break the copied dispatcher, to prove an assertion is load-bearing.
      *
@@ -360,6 +372,91 @@ describe('which copy of the scripts actually runs', () => {
     run('dispatch.sh')
 
     expect(box.log(), 'an uncommitted request was invisible').toContain('requests/pin-two.md')
+  })
+})
+
+// When the broken code IS the pinned code.
+//
+// The bug above was on main, so the pinning that exists to protect
+// production ran it faithfully, once a minute, for twelve hours. The only
+// way out was merging a fix through the whole gate while the queue was
+// dead. So a pinned copy that is visibly not working hands the tick back
+// to the working tree, and says in the log that it is running unmerged
+// code and why.
+//
+// "Visibly not working" is two things and only two: main's copy is
+// missing a script the dispatcher runs, or one of its helpers cannot see
+// this repo's `requests/` folder. A network failure or a 500 is an
+// ordinary bad day and must not do it, because falling back is running
+// whatever happens to be checked out.
+//
+// The trap that let the original through: a test box has no credential,
+// so the helpers return before they ever read `requests/`, and asserting
+// "no error" passes against the broken code. These assert the fallback
+// being taken, by its log line, and that the queue still drained.
+describe('when the pinned copy itself is broken', () => {
+  /**
+   * The real task-status.mjs with the #197 bug put back: the repo worked
+   * out from its own path, which under `.intake/pinned` is a folder with
+   * no `requests/` in it.
+   */
+  const blindTaskStatus = () => {
+    const text = readFileSync(join(REPO, 'scripts/intake/task-status.mjs'), 'utf8')
+    const from = 'const repo = process.env.INTAKE_REPO\n    || join('
+    if (!text.includes(from)) throw new Error('task-status.mjs no longer reads INTAKE_REPO like this')
+    return text.replace(from, 'const repo = join(')
+  }
+
+  it('falls back to the working tree when a helper on main cannot see requests/', () => {
+    build({ requests: { 'blind-one.md': READY('Blind one') } })
+    box.stub('claude', BUILDER)
+    box.commitOnBase('scripts/intake/task-status.mjs', blindTaskStatus())
+
+    run('dispatch.sh')
+
+    expect(box.intakeLog(), 'the broken pinned copy ran and nothing fell back')
+      .toMatch(/running unmerged code.*requests/i)
+    expect(box.log(), 'the queue stayed dead behind the broken pinned copy').toContain('requests/blind-one.md')
+  })
+
+  it('falls back when main\'s copy is missing a script the dispatcher runs', () => {
+    build({ requests: { 'blind-two.md': READY('Blind two') } })
+    box.stub('claude', BUILDER)
+    box.removeOnBase('scripts/intake/inbox.mjs')
+
+    run('dispatch.sh')
+
+    expect(box.intakeLog(), 'a pinned copy with no inbox.mjs ran anyway')
+      .toMatch(/running unmerged code.*inbox\.mjs/i)
+    expect(box.log(), 'the queue stayed dead behind the broken pinned copy').toContain('requests/blind-two.md')
+  })
+
+  it('falls back, rather than dying, when main has no scripts to pin at all', () => {
+    build({ requests: { 'blind-three.md': READY('Blind three') } })
+    box.stub('claude', BUILDER)
+    box.removeOnBase('scripts')
+
+    const r = run('dispatch.sh')
+
+    expect(r.stderr, 'the dispatcher died before it could fall back').not.toMatch(/unbound variable/)
+    expect(box.intakeLog(), 'it did not say it was running unmerged code')
+      .toMatch(/running unmerged code.*origin\/main/i)
+    expect(box.log(), 'the queue stayed dead').toContain('requests/blind-three.md')
+  })
+
+  it('does not fall back over an ordinary bad day', () => {
+    // A helper on main that fails the way a network blip does. The pinned
+    // copy must still be what runs.
+    build({ requests: { 'bad-day.md': READY('Bad day') } })
+    box.stub('claude', BUILDER)
+    box.commitOnBase('scripts/intake/inbox.mjs',
+      'console.log("inbox: fetch failed MAIN-COPY-RAN")\nprocess.exit(1)\n')
+
+    run('dispatch.sh')
+
+    expect(box.intakeLog(), 'main\'s copy did not run').toContain('MAIN-COPY-RAN')
+    expect(box.intakeLog(), 'one failed fetch sent it to unmerged code').not.toMatch(/unmerged/i)
+    expect(box.log(), 'nothing was started').toContain('requests/bad-day.md')
   })
 })
 
