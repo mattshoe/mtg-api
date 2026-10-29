@@ -190,6 +190,37 @@ class RulesParityTest {
     fun aQuotedPhraseIsSearchedAsOneStringOnATabletHeldSideways() =
         aQuotedPhraseFindsOnlyTheRuleWithItSideBySide(Tablet.LANDSCAPE)
 
+    /**
+     * Matt: "rules searches should support - for exclusion ... -trample
+     * should exclude results with the word trample, and -"when a
+     * creature" should exclude that whole string". The website's
+     * `RulesPageTest` makes the same claim.
+     */
+    private fun aMinusLeavesOutRulesWithTheWordOrTheWholePhrase(size: DpSize?) {
+        shell(onRulesWith(Rules().loaded(TEXT)), size)
+        search("trample")
+        assertEquals(listOf("702.19", "702.19a", "702.19b", "702.19c"), texts("rule-number"))
+        rule.onNodeWithTag("rules-search").performTextReplacement("trample -planeswalkers")
+        rule.waitForIdle()
+        assertEquals(listOf("702.19", "702.19a", "702.19b"), texts("rule-number"), "-planeswalkers did not leave 702.19c out")
+        rule.onNodeWithTag("rules-search").performTextReplacement("trample -\"combat damage\"")
+        rule.waitForIdle()
+        assertEquals(listOf("702.19", "702.19b"), texts("rule-number"), "-\"combat damage\" did not leave out the rules saying it")
+    }
+
+    @Test
+    fun aMinusLeavesOutWhatFollowsIt() = aMinusLeavesOutRulesWithTheWordOrTheWholePhrase(null)
+
+    @Test
+    @Config(qualifiers = Tablet.UNFOLDED_QUALIFIERS)
+    fun aMinusLeavesOutWhatFollowsItOnAFoldingPhoneOpenedOut() =
+        aMinusLeavesOutRulesWithTheWordOrTheWholePhrase(Tablet.UNFOLDED)
+
+    @Test
+    @Config(qualifiers = Tablet.LANDSCAPE_QUALIFIERS)
+    fun aMinusLeavesOutWhatFollowsItOnATabletHeldSideways() =
+        aMinusLeavesOutRulesWithTheWordOrTheWholePhrase(Tablet.LANDSCAPE)
+
     @Test
     fun aSearchWithNoMatchSaysSo() {
         shell(onRulesWith(Rules().loaded(TEXT)))
