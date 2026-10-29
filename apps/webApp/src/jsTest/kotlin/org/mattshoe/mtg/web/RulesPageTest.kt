@@ -272,6 +272,38 @@ class RulesPageTest {
         aQuotedPhraseFindsOnlyTheRuleWithItSideBySide(Tablet.open(Tablet.LANDSCAPE).also { screen = it }.body)
     }
 
+    /**
+     * Matt: "rules searches should support - for exclusion ... -trample
+     * should exclude results with the word trample, and -"when a
+     * creature" should exclude that whole string". The phone's
+     * `RulesParityTest` makes the same claim.
+     */
+    private suspend fun aMinusLeavesOutRulesWithTheWordOrTheWholePhrase(into: HTMLElement? = null) {
+        val view = mount("#/guide/rules", into)
+        waitFor("the rules to load") { view.all(".rules-hint").isNotEmpty() }
+        view.search("trample")
+        waitFor("the trample rules") { view.numbers().size == 4 }
+        view.search("trample -planeswalkers")
+        waitFor("-planeswalkers") { view.numbers().size != 4 }
+        assertEquals(listOf("702.19", "702.19a", "702.19b"), view.numbers(), "-planeswalkers did not leave 702.19c out")
+        view.search("trample -\"combat damage\"")
+        waitFor("-\"combat damage\"") { view.numbers().size != 3 }
+        assertEquals(listOf("702.19", "702.19b"), view.numbers(), "-\"combat damage\" did not leave out the rules saying it")
+    }
+
+    @Test
+    fun aMinusLeavesOutWhatFollowsIt() = runTest { aMinusLeavesOutRulesWithTheWordOrTheWholePhrase() }
+
+    @Test
+    fun aMinusLeavesOutWhatFollowsItOnAFoldingPhoneOpenedOut() = runTest {
+        aMinusLeavesOutRulesWithTheWordOrTheWholePhrase(Tablet.open(Tablet.UNFOLDED).also { screen = it }.body)
+    }
+
+    @Test
+    fun aMinusLeavesOutWhatFollowsItOnATabletHeldSideways() = runTest {
+        aMinusLeavesOutRulesWithTheWordOrTheWholePhrase(Tablet.open(Tablet.LANDSCAPE).also { screen = it }.body)
+    }
+
     @Test
     fun aSearchWithNoMatchSaysSo() = runTest {
         val view = mount("#/guide/rules")

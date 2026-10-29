@@ -144,6 +144,63 @@ class RulesTest {
         assertEquals(emptyList(), book.search("\" \""))
     }
 
+    /**
+     * Matt: "rules searches should support - for exclusion ... -trample
+     * should exclude results with the word trample, and -"when a
+     * creature" should exclude that whole string".
+     */
+    @Test
+    fun aMinusWordLeavesOutEveryRuleThatMentionsIt() {
+        assertEquals(listOf("702.19a", "702.20a"), book.search("static").map { it.number })
+        assertEquals(listOf("702.20a"), book.search("static -trample").map { it.number })
+        assertEquals(listOf("702.19.", "702.19a", "702.19b"), book.search("trample -planeswalkers").map { it.number })
+    }
+
+    @Test
+    fun aMinusQuotedPhraseLeavesOutOnlyRulesWithThatWholeString() {
+        assertEquals(listOf("702.19a", "702.19b", "702.19c"), book.search("damage").map { it.number })
+        // 702.19a has the three words, but not side by side.
+        assertEquals(listOf("702.19a", "702.19b"), book.search("damage -\"assigning combat damage\"").map { it.number })
+        assertEquals(listOf("702.19b"), book.search("damage -\"combat damage\"").map { it.number })
+    }
+
+    @Test
+    fun aMinusBeforeAPhonesCurlyQuotesLeavesThePhraseOut() {
+        assertEquals(listOf("702.19a", "702.19b"), book.search("damage -“assigning combat damage”").map { it.number })
+    }
+
+    @Test
+    fun aMinusIgnoresCase() {
+        assertEquals(listOf("702.20a"), book.search("static -TRAMPLE").map { it.number })
+    }
+
+    @Test
+    fun onlyLeavingThingsOutFindsNothing() {
+        assertEquals(emptyList(), book.search("-trample"))
+        assertEquals(emptyList(), book.search("-\"combat damage\""))
+    }
+
+    @Test
+    fun aMinusOnItsOwnOrInsideAWordIsNotAnExclusion() {
+        assertEquals(listOf("100.1.", "100.1a"), book.search("two-player").map { it.number })
+        assertEquals(listOf("702.20a"), book.search("vigilance - static").map { it.number })
+    }
+
+    /** "-1/-1 counters" is a thing the rules say; a minus before a digit is the number's. */
+    @Test
+    fun aMinusBeforeANumberIsStillSearchedFor() {
+        val book = RuleBook.parse(
+            """
+            |122.1a A +1/+1 counter on a creature or on a creature card.
+            |
+            |122.3. If a permanent has both a +1/+1 counter and a -1/-1 counter on it, they are removed.
+            |
+            |Glossary
+            """.trimMargin(),
+        )
+        assertEquals(listOf("122.3."), book.search("-1/-1 counter").map { it.number })
+    }
+
     @Test
     fun aBlankSearchFindsNothing() {
         assertEquals(emptyList(), book.search(""))
