@@ -690,6 +690,121 @@ describe('refusing to run from a linked worktree', () => {
   })
 })
 
+// Nothing was watching the log.
+//
+// `.intake/intake.log` said "task-status: ENOENT ... scandir
+// .intake/pinned/requests" once a minute for twelve hours while the queue
+// was dead, seven hundred identical lines, and Matt found out by looking
+// at the app and asking why his task had not moved.
+//
+// So the dispatcher counts the ticks in a row that end in the same error,
+// and past a threshold says so ONCE: `blocked` on the task the error is
+// about, or the NEEDS YOU line and the desktop notification when it is
+// the dispatcher itself. Not every minute — a dispatcher that cries wolf
+// gets ignored, and `blocked` flapping once a minute has happened before.
+describe('when it fails the same way every tick', () => {
+  const AFTER = 3
+  const tick = (env = {}) => run('dispatch.sh', { env: { INTAKE_ALARM_AFTER: String(AFTER), ...env } })
+  const ticks = (n, env) => { for (let i = 0; i < n; i++) tick(env) }
+  const alarms = () => box.log().split('\n').filter((l) => l.startsWith('osascript ')).length
+  const needsYou = () => box.intakeLog().split('\n').filter((l) => l.includes('NEEDS YOU'))
+
+  /**
+   * task-status.mjs on main, failing reconcile the way #197 did whenever
+   * HOME/broken exists. Its timestamp moves every tick, as the real one
+   * does, so two ticks only match if the clock is taken off first.
+   */
+  const brokenReconcile = `import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+const [cmd] = process.argv.slice(2)
+if (cmd === 'reconcile' && existsSync(join(process.env.HOME, 'broken'))) {
+  const f = join(process.env.HOME, 'clock')
+  const n = existsSync(f) ? Number(readFileSync(f, 'utf8')) + 1 : 10
+  writeFileSync(f, String(n))
+  console.log('00:00:' + n + '  task-status: ENOENT: no such file or directory, scandir /nowhere/requests')
+  process.exit(1)
+}
+`
+  const breakIt = () => writeFileSync(join(box.root, 'broken'), '')
+  const mendIt = () => rmSync(join(box.root, 'broken'), { force: true })
+
+  it('says so once, not every minute', () => {
+    build({})
+    box.commitOnBase('scripts/intake/task-status.mjs', brokenReconcile)
+    breakIt()
+
+    ticks(AFTER - 1)
+    expect(alarms(), `it alarmed before ${AFTER} ticks in a row had failed`).toBe(0)
+    expect(needsYou(), 'it cried wolf over a bad minute').toEqual([])
+
+    tick()
+    expect(alarms(), `${AFTER} identical failures in a row and nobody was told`).toBe(1)
+    expect(needsYou().join('\n'), 'the alarm does not say what is failing').toMatch(/ENOENT/)
+
+    ticks(AFTER * 3)
+    expect(alarms(), 'it alarmed again for the same failure').toBe(1)
+    expect(needsYou(), 'it wrote NEEDS YOU again for the same failure').toHaveLength(1)
+  })
+
+  it('a good tick in between is a bad minute, not a broken machine', () => {
+    build({})
+    box.commitOnBase('scripts/intake/task-status.mjs', brokenReconcile)
+    breakIt()
+    ticks(AFTER - 1)
+    mendIt()
+    tick()
+    breakIt()
+    ticks(AFTER - 1)
+
+    expect(alarms(), 'failures either side of a healthy tick were counted as one run').toBe(0)
+  })
+
+  it('says so again if it breaks again after it was mended', () => {
+    build({})
+    box.commitOnBase('scripts/intake/task-status.mjs', brokenReconcile)
+    breakIt()
+    ticks(AFTER)
+    mendIt()
+    tick()
+    breakIt()
+    ticks(AFTER)
+
+    expect(alarms(), 'a second breakage after a recovery went unreported').toBe(2)
+  })
+
+  it('hears the real task-status fail, which used to log the error and exit 0', () => {
+    // The real scripts, with a credential and a Worker that is not there.
+    // reconcile catches the failure and logs it, which is what the twelve
+    // hours of ENOENT were; if it then exits 0 the dispatcher cannot tell
+    // a broken tick from a quiet one.
+    build({})
+    const origin = join(box.root, 'mattshoe', 'mtg-api.git')
+    cpSync(box.origin, origin, { recursive: true })
+    box.git('remote', 'set-url', 'origin', origin)
+    writeFileSync(join(box.root, '.mtg-agent.env'), 'MTG_AGENT_TOKEN=not-a-real-token\n')
+
+    ticks(AFTER, { MTG_API_BASE: 'http://127.0.0.1:9' })
+
+    expect(box.intakeLog(), 'the box never reached the helpers').toMatch(/task-status:/)
+    expect(alarms(), 'every tick failed to reach the Worker and nobody was told').toBe(1)
+  })
+
+  it('blocks the task it cannot start, once, and does not wake Matt for it', () => {
+    // A file where the request branches would go, so `git switch -C
+    // request/...` is refused every tick for this one request.
+    build({ requests: { 'stuck.md': READY('Stuck') } })
+    box.stub('claude', BUILDER)
+    writeFileSync(box.path('.git/refs/heads/request'), '')
+
+    ticks(AFTER * 2)
+
+    expect(box.intakeLog(), 'the box never got as far as the queue').toMatch(/skipping stuck: could not start/)
+    expect(box.intakeLog().split('\n').filter((l) => /stuck blocked/.test(l)),
+      'a task that could not start, tick after tick, was not blocked exactly once').toHaveLength(1)
+    expect(alarms(), 'a failure with a task to block also woke Matt').toBe(0)
+  })
+})
+
 describe('asking intake.mjs', () => {
   // The dispatcher used to discard the exit status of `node
   // scripts/intake.mjs`, so node missing, a PATH the plist does not carry,
