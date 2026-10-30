@@ -121,6 +121,11 @@ data class AppState(
             // Landing where it already is is not a new visit to the
             // task list; anywhere else is. See `Tasks.fresh`.
             tasks = if (landed == route) tasks else tasks.stale(),
+            // The suggestion list is drawn under the Library's name box
+            // and nowhere else. Left open on the way out, it went on
+            // answering `back()` from screens that cannot show it, and
+            // the first press anywhere after was spent closing it.
+            complete = if (landed == route) complete else complete.closed(),
         )
         // The Library's rows answer a collection as well as its
         // filters. Going from your cards to somebody's on the Users
@@ -794,7 +799,14 @@ data class AppState(
 
     // --------------------------------------------------------- overlays
 
-    fun opening(o: Overlay) = copy(overlays = overlays.open(o), toast = null, toastFailed = false)
+    /**
+     * The name box's suggestions go away under anything that opens
+     * over them. Left up, they were what the next back closed — Matt,
+     * "i always have to hit back twice to get out of the carousel".
+     * `closed()`, so what was typed stays in the box.
+     */
+    fun opening(o: Overlay) =
+        copy(overlays = overlays.open(o), toast = null, toastFailed = false, complete = complete.closed())
 
     fun closing(o: Overlay) = copy(overlays = overlays.close(o)).forget(o)
 

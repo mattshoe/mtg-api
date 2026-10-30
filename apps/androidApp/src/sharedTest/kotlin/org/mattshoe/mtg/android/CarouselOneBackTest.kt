@@ -10,6 +10,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.DpSize
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -102,6 +104,9 @@ class CarouselOneBackTest {
         shell(suggestingInTheLibrary(), size)
         assertTrue(held.value.complete.open, "the fixture never opened the suggestion list")
 
+        // The grid sits under the filters, below the fold when a name
+        // is typed: the Text section opens to show it.
+        rule.onNodeWithTag("library").performScrollToNode(hasTestTag("card-tile"))
         rule.onAllNodesWithTag("card-tile")[0].performClick()
         rule.waitForIdle()
         assertTrue(carouselIsUp(), "tapping the tile did not open the carousel")
