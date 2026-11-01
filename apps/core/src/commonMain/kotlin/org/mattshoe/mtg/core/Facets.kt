@@ -36,11 +36,27 @@ data class Facets(
 ) {
     val loaded: Boolean get() = types.isNotEmpty() || layouts.isNotEmpty()
 
-    /** The lists as they apply to one collection. */
-    fun forCollection(key: String): Facets = this
+    /**
+     * Only the decks in this collection, named by its public key.
+     *
+     * Empty means nobody named a collection, the same as
+     * `AppState.viewing`, so that is every deck. A deck whose owner
+     * did not come back is in nobody's collection and is not offered.
+     */
+    fun forCollection(key: String): Facets =
+        if (key.isEmpty()) this else copy(decks = decks.filter { it.ownerKey == key })
 
-    /** The deck picker's rows, as value and label. */
-    val deckChoices: List<Pair<String, String>> get() = decks.map { it.key to it.label }
+    /**
+     * The deck picker's rows, as value and label.
+     *
+     * The owner is only worth saying when there is more than one of
+     * them to tell apart.
+     */
+    val deckChoices: List<Pair<String, String>>
+        get() {
+            val owners = decks.map { it.ownerKey }.distinct().size
+            return decks.map { it.key to if (owners > 1) it.label else it.name }
+        }
 
     companion object {
         /** Somewhere to start before the queries come back. */
@@ -76,7 +92,8 @@ object FacetQueries {
     val borders =
         Sql("SELECT DISTINCT border_color FROM cards WHERE border_color IS NOT NULL ORDER BY 1", emptyList())
     val decks = Sql(
-        "SELECT key, name, ${Owners.nameOf("owner_id")} AS owner FROM decks ORDER BY owner_id, name",
+        "SELECT key, name, ${Owners.nameOf("owner_id")} AS owner, ${Owners.keyOf("owner_id")} AS owner_key " +
+            "FROM decks ORDER BY owner_id, name",
         emptyList(),
     )
 
@@ -176,7 +193,7 @@ object FacetQueries {
         fun JsonArray.str(n: String) = at[n]?.let { i ->
             (getOrNull(i) as? kotlinx.serialization.json.JsonPrimitive)?.content
         }.orEmpty()
-        return rows.map { DeckRef2(it.str("key"), it.str("name"), it.str("owner")) }
+        return rows.map { DeckRef2(it.str("key"), it.str("name"), it.str("owner"), it.str("owner_key")) }
     }
 
     /** The twelve answers, in the order `all` asked for them. */

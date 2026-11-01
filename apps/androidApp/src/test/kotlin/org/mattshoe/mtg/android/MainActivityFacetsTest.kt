@@ -259,7 +259,7 @@ class MainActivityFacetsTest {
         val state = activity.stateForTesting()
         assertEquals(emptyList(), state.panelFacets.decks, "a failed read still offered decks")
         assertEquals(emptyList(), state.panelFacets.deckChoices, "a failed read still listed choices")
-        assertTrue(!state.library.loading, "the Library is still spinning after the panel's lists failed")
+        assertTrue(!state.library.busy, "the Library is still spinning after the panel's lists failed")
     }
 
 }

@@ -405,7 +405,7 @@ fun AppShell(
                         // set types, layouts, frames, borders, the deck and
                         // format dropdowns — renders empty on the phone while
                         // the website fills them from the same state.
-                        facets = state.facets,
+                        facets = state.panelFacets,
                         gridState = libraryGridState,
                     )
                 }

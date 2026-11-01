@@ -160,6 +160,9 @@ class DeckPickerLoadTest {
         // Long enough for the failed read to have landed.
         repeat(10) { tick() }
         assertEquals(listOf("any", "— in any deck —", "— in no deck —"), view.deckOptions())
-        assertTrue(view.querySelector(".spinner") == null, "a spinner is still going after the deck read failed")
+        assertTrue(
+            !view.textContent.orEmpty().contains("Searching…"),
+            "the Library is still searching after the panel's lists failed",
+        )
     }
 }
