@@ -167,8 +167,7 @@ private fun Collection(f: Filters, facets: Facets, onChange: (Filters) -> Unit) 
     }
     Row("In a deck") {
         Dropdown(
-            listOf("" to "any", "_any" to "— in any deck —", "_none" to "— in no deck —") +
-                facets.decks.map { it.key to it.label },
+            listOf("" to "any", "_any" to "— in any deck —", "_none" to "— in no deck —") + facets.deckChoices,
             f.deck,
         ) { onChange(f.copy(deck = it)) }
     }

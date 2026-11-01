@@ -187,7 +187,7 @@ fun AppShell(
                 }
             },
             onDismissNames = onDismissNames ?: { onState(state.copy(complete = state.complete.closed())) },
-            facets = state.facets,
+            facets = state.panelFacets,
         )
     }
 

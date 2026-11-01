@@ -575,9 +575,9 @@ class LibraryParityTest {
         Parity.check(
             Fact("the any-deck option is offered") { said("— in any deck —") },
             Fact("the no-deck option is offered") { said("— in no deck —") },
-            Fact("and the collection's decks by name") { said("Alela (matt)") },
+            Fact("and the collection's decks by name") { said("Alela") },
         )
-        pressText("Alela (matt)")
+        pressText("Alela")
         assertEquals("alela", f().deck)
     }
 

@@ -10,7 +10,13 @@ import kotlinx.serialization.json.JsonArray
  * rather than from a hard-coded list, so a panel never offers a type
  * nothing has and never misses one that arrived last week.
  */
-data class DeckRef2(val key: String, val name: String, val owner: String) {
+data class DeckRef2(
+    val key: String,
+    val name: String,
+    val owner: String,
+    /** The owner's public key, which is what a collection is named by. */
+    val ownerKey: String = "",
+) {
     val label: String get() = "$name ($owner)"
 }
 
@@ -29,6 +35,28 @@ data class Facets(
     val decks: List<DeckRef2> = emptyList(),
 ) {
     val loaded: Boolean get() = types.isNotEmpty() || layouts.isNotEmpty()
+
+    /**
+     * Only the decks in this collection, named by its public key.
+     *
+     * Empty means nobody named a collection, the same as
+     * `AppState.viewing`, so that is every deck. A deck whose owner
+     * did not come back is in nobody's collection and is not offered.
+     */
+    fun forCollection(key: String): Facets =
+        if (key.isEmpty()) this else copy(decks = decks.filter { it.ownerKey == key })
+
+    /**
+     * The deck picker's rows, as value and label.
+     *
+     * The owner is only worth saying when there is more than one of
+     * them to tell apart.
+     */
+    val deckChoices: List<Pair<String, String>>
+        get() {
+            val owners = decks.map { it.ownerKey }.distinct().size
+            return decks.map { it.key to if (owners > 1) it.label else it.name }
+        }
 
     companion object {
         /** Somewhere to start before the queries come back. */
@@ -64,7 +92,8 @@ object FacetQueries {
     val borders =
         Sql("SELECT DISTINCT border_color FROM cards WHERE border_color IS NOT NULL ORDER BY 1", emptyList())
     val decks = Sql(
-        "SELECT key, name, ${Owners.nameOf("owner_id")} AS owner FROM decks ORDER BY owner_id, name",
+        "SELECT key, name, ${Owners.nameOf("owner_id")} AS owner, ${Owners.keyOf("owner_id")} AS owner_key " +
+            "FROM decks ORDER BY owner_id, name",
         emptyList(),
     )
 
@@ -164,7 +193,7 @@ object FacetQueries {
         fun JsonArray.str(n: String) = at[n]?.let { i ->
             (getOrNull(i) as? kotlinx.serialization.json.JsonPrimitive)?.content
         }.orEmpty()
-        return rows.map { DeckRef2(it.str("key"), it.str("name"), it.str("owner")) }
+        return rows.map { DeckRef2(it.str("key"), it.str("name"), it.str("owner"), it.str("owner_key")) }
     }
 
     /** The twelve answers, in the order `all` asked for them. */
