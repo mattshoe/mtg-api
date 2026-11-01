@@ -358,6 +358,9 @@ data class AppState(
      */
     val canEdit: Boolean get() = admin.account?.owns(viewing) == true
 
+    /** What the Library's filter panel offers. */
+    val panelFacets: Facets get() = facets
+
     /**
      * The Library, scoped to the collection being looked at.
      *

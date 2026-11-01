@@ -140,9 +140,12 @@ class MainActivityFacetsTest {
         ],"n":8}
     """.trimIndent()
 
-    private val decksBody = """{"cols":["key","name","owner"],"rows":[["alela","Alela","matt"]],"n":1}"""
+    private val decksBody = """{"cols":["key","name","owner","owner_key"],"rows":[["alela","Alela","matt","m4tt0001"]],"n":1}"""
 
     private val emptyBody = """{"cols":[],"rows":[],"n":0}"""
+
+    /** Makes the deck read answer a 500, the way an overloaded D1 does. */
+    private var decksFail = false
 
     /**
      * `MtgApi.withEngine`, the seam `core-net` built for exactly this —
@@ -155,6 +158,13 @@ class MainActivityFacetsTest {
         val engine = MockEngine { request ->
             val text = (request.body as OutgoingContent.ByteArrayContent).bytes().decodeToString()
             seen += text
+            if (decksFail && "FROM decks" in text) {
+                return@MockEngine respond(
+                    content = """{"error":"D1 is overloaded"}""",
+                    status = HttpStatusCode.InternalServerError,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                )
+            }
             val body = when {
                 "FROM decks" in text -> decksBody
                 "AS kind" in text -> facetsBody
@@ -217,6 +227,39 @@ class MainActivityFacetsTest {
             seen.size,
             "a second load re-fetched facets instead of guarding on facets.loaded",
         )
+    }
+
+    private fun launched(): MainActivity {
+        val built = Robolectric.buildActivity(MainActivity::class.java)
+        controller = built
+        val activity = built.get()
+        activity.useForTesting(fakeApi(mutableListOf()))
+        built.create().start().resume()
+        settle(activity)
+        return activity
+    }
+
+    @Test
+    fun theLoadedDecksSayWhoseCollectionTheyAreIn() {
+        val activity = launched()
+        activity.facetsError?.let { throw AssertionError("the facet load threw: $it", it) }
+        val state = activity.stateForTesting()
+        assertEquals(
+            listOf("m4tt0001"),
+            state.facets.decks.map { it.ownerKey },
+            "the deck read did not keep each deck's owner key, so no collection can be told from another",
+        )
+    }
+
+    @Test
+    fun aFailedDeckReadLeavesThePickerEmptyAndTheAppStanding() {
+        decksFail = true
+        val activity = launched()
+        assertTrue(activity.facetsError != null, "the deck read answered 500 and nothing noticed")
+        val state = activity.stateForTesting()
+        assertEquals(emptyList(), state.panelFacets.decks, "a failed read still offered decks")
+        assertEquals(emptyList(), state.panelFacets.deckChoices, "a failed read still listed choices")
+        assertTrue(!state.library.loading, "the Library is still spinning after the panel's lists failed")
     }
 
 }

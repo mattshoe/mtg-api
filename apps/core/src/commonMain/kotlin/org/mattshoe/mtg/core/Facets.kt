@@ -10,7 +10,13 @@ import kotlinx.serialization.json.JsonArray
  * rather than from a hard-coded list, so a panel never offers a type
  * nothing has and never misses one that arrived last week.
  */
-data class DeckRef2(val key: String, val name: String, val owner: String) {
+data class DeckRef2(
+    val key: String,
+    val name: String,
+    val owner: String,
+    /** The owner's public key, which is what a collection is named by. */
+    val ownerKey: String = "",
+) {
     val label: String get() = "$name ($owner)"
 }
 
@@ -29,6 +35,12 @@ data class Facets(
     val decks: List<DeckRef2> = emptyList(),
 ) {
     val loaded: Boolean get() = types.isNotEmpty() || layouts.isNotEmpty()
+
+    /** The lists as they apply to one collection. */
+    fun forCollection(key: String): Facets = this
+
+    /** The deck picker's rows, as value and label. */
+    val deckChoices: List<Pair<String, String>> get() = decks.map { it.key to it.label }
 
     companion object {
         /** Somewhere to start before the queries come back. */
