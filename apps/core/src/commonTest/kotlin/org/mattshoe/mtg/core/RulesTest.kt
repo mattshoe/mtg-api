@@ -260,6 +260,34 @@ class RulesTest {
         assertFalse(AppState().navigate(View.GUIDE).onRules)
     }
 
+    /**
+     * Matt: "i want to be able to copy rules in the rules page. long
+     * press should copy the whole rule (number included)". The whole
+     * rule is its number, its text and the examples printed under it.
+     */
+    @Test
+    fun aCopiedRuleIsItsNumberItsTextAndItsExamples() {
+        val b = book.rules.single { it.number == "702.19b" }
+        val lines = b.copyText.split('\n')
+        assertEquals(3, lines.size, "702.19b and its two examples should be three lines: ${b.copyText}")
+        assertTrue(lines[0].startsWith("702.19b The controller of an attacking creature"), lines[0])
+        assertTrue(lines[1].startsWith("Example: A 2/2 creature that can block"), lines[1])
+        assertTrue(lines[2].startsWith("Example: "), lines[2])
+        val heading = book.rules.single { it.number == "702.19." }
+        assertEquals("702.19 Trample", heading.copyText, "a rule's own trailing dot is not part of its number")
+    }
+
+    @Test
+    fun copyingARuleSaysWhichRuleItWasOrThatTheClipboardRefused() {
+        val b = book.rules.single { it.number == "702.19b" }
+        val done = AppState().copiedRule(b, landed = true)
+        assertEquals("Rule 702.19b copied", done.toast)
+        assertFalse(done.toastFailed, "a copy that landed was styled as a failure")
+        val refused = AppState().copiedRule(b, landed = false)
+        assertEquals("Could not copy rule 702.19b: the clipboard refused it", refused.toast)
+        assertTrue(refused.toastFailed, "a refused copy was styled as a success")
+    }
+
     companion object {
         val TEXT = """
             |Magic: The Gathering Comprehensive Rules
