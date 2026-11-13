@@ -713,6 +713,8 @@ td.mono { font-family: var(--mono); font-size: 12.5px; }
   background: linear-gradient(160deg, var(--bg-3), var(--bg-2) 70%);
   border: 1px solid var(--line); border-left: 3px solid var(--accent);
   border-radius: var(--radius); box-shadow: 0 6px 18px rgba(0, 0, 0, .28); overflow: hidden;
+  /* A long press copies the rule, so iOS gets no callout menu over it. */
+  -webkit-touch-callout: none;
 }
 .rule-head {
   display: flex; align-items: baseline; gap: 10px; width: 100%; padding: 12px 14px;
@@ -2266,6 +2268,8 @@ select.sort {
   background: linear-gradient(160deg, var(--bg-3), var(--bg-2) 70%);
   border: 1px solid var(--line); border-left: 3px solid var(--accent);
   border-radius: var(--radius); box-shadow: 0 6px 18px rgba(0, 0, 0, .28); overflow: hidden;
+  /* A long press copies the rule, so iOS gets no callout menu over it. */
+  -webkit-touch-callout: none;
 }
 .bracket-head {
   display: flex; align-items: center; gap: 14px; width: 100%; padding: 12px 14px;

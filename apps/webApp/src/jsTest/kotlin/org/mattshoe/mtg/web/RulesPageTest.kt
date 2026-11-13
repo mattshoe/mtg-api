@@ -101,6 +101,7 @@ class RulesPageTest {
 
     @AfterTest
     fun cleanUp() {
+        shownIn = document
         val back = realFetch
         if (back != null) window.asDynamic().fetch = back
         Stylesheet.unload()
@@ -342,7 +343,9 @@ class RulesPageTest {
         return menu.defaultPrevented
     }
 
-    private fun toast(): HTMLElement? = document.querySelector(".toast") as? HTMLElement
+    /** The toast, in whichever document the page was mounted into: a tablet frame has its own. */
+    private var shownIn: org.w3c.dom.Document = document
+    private fun toast(): HTMLElement? = shownIn.querySelector(".toast") as? HTMLElement
 
     /**
      * Matt: "i want to be able to copy rules in the rules page. long
@@ -355,6 +358,7 @@ class RulesPageTest {
         stubTheClipboard()
         try {
             val view = mount("#/guide/rules", into)
+            shownIn = view.ownerDocument ?: document
             waitFor("the rules to load") { view.all(".rules-hint").isNotEmpty() }
             view.search("trample")
             waitFor("the trample rules") { view.numbers().size == 4 }
