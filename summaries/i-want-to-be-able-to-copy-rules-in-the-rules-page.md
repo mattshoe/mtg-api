@@ -1,0 +1,3 @@
+What was built: Press and hold any rule on the Rules page to copy the whole rule to the clipboard, number first, then its text, then each Example line under it. A toast says which rule was copied, or that the clipboard refused it. Phone and website.
+Choices: The hold works on the heading and on the text. A tap on the heading still folds the card, and a hold does not fold it. On a phone browser the hold also stops the browser opening its own menu over the card.
+Liberties: "The whole rule" includes its examples, since they are printed as part of it. The number is copied as shown, 702.19 rather than 702.19.
