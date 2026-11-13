@@ -17,6 +17,14 @@ data class Rule(
     /** `702.19`, not `702.19.`: the trailing dot is the file's, not the rule's name. */
     val shownNumber: String get() = number.removeSuffix(".")
 
+    /**
+     * What a long press puts on the clipboard: the number and the rule
+     * on one line, then each example under it as the file prints it.
+     * Matt: "long press should copy the whole rule (number included)".
+     */
+    val copyText: String
+        get() = (listOf("$shownNumber $text") + examples.map { "Example: $it" }).joinToString("\n")
+
     /** Everything a search looks in, lower case, apostrophes made straight. */
     internal val haystack: String by lazy { RuleBook.fold("$number $text ${examples.joinToString(" ")}") }
 }
@@ -180,6 +188,15 @@ data class Rules(
         const val SHOWN = 150
     }
 }
+
+/**
+ * The toast after a long press on a rule: which rule went to the
+ * clipboard, or that the clipboard refused it. Both shells say this and
+ * nothing else, so a failure can never be styled as a success.
+ */
+fun AppState.copiedRule(rule: Rule, landed: Boolean): AppState =
+    if (landed) say("Rule ${rule.shownNumber} copied")
+    else say("Could not copy rule ${rule.shownNumber}: the clipboard refused it", failed = true)
 
 /** Is the rules page the one on screen. */
 val AppState.onRules: Boolean get() = guideTile?.slug == Guide.RULES
