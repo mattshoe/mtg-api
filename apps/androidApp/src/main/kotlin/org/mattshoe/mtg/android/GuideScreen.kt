@@ -3,7 +3,13 @@ package org.mattshoe.mtg.android
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -103,6 +109,7 @@ fun GuideScreen(
     rules: Rules = Rules(),
     onRules: (Rules) -> Unit = {},
     onLoadRules: () -> Unit = {},
+    onCopiedRule: (Rule, Boolean) -> Unit = { _, _ -> },
     search: String = "",
     onSearch: (String) -> Unit = {},
     hits: List<GuideHit> = emptyList(),
@@ -120,7 +127,7 @@ fun GuideScreen(
     // The rules page keeps its search bar on screen and scrolls the
     // cards under it, so it is laid out on its own.
     if (tile?.slug == Guide.RULES) {
-        RulesSearch(rules, onRules, onLoadRules, onBack)
+        RulesSearch(rules, onRules, onLoadRules, onBack, onCopiedRule)
         return
     }
     val scroll = rememberScrollState()
@@ -699,7 +706,17 @@ private const val RADIUS = 0.76
  * give: a page of results is at most `Rules.SHOWN` cards.
  */
 @Composable
-private fun RulesSearch(rules: Rules, onRules: (Rules) -> Unit, onLoad: () -> Unit, onBack: () -> Unit) {
+private fun RulesSearch(
+    rules: Rules,
+    onRules: (Rules) -> Unit,
+    onLoad: () -> Unit,
+    onBack: () -> Unit,
+    onCopied: (Rule, Boolean) -> Unit,
+) {
+    // Matt: "long press should copy the whole rule (number included)".
+    // A clipboard that throws is a refusal, said in a toast, never a crash.
+    val clipboard = LocalClipboardManager.current
+    val copy = { r: Rule -> onCopied(r, runCatching { clipboard.setText(AnnotatedString(r.copyText)) }.isSuccess) }
     Column(Modifier.fillMaxWidth().padding(Design.WRAP_PAD_NARROW.dp).testTag("guide")) {
         Btn("‹ Guide", modifier = Modifier.testTag("guide-back")) { onBack() }
         Spacer(Modifier.height(10.dp))
@@ -729,7 +746,7 @@ private fun RulesSearch(rules: Rules, onRules: (Rules) -> Unit, onLoad: () -> Un
                 rules.total == 0 -> Line("No rule mentions \"${rules.query.trim()}\".", Ink3, modifier = Modifier.testTag("rules-none"))
                 else -> {
                     Line(rules.count, Ink3, size = Design.MINI, modifier = Modifier.testTag("rules-count"))
-                    rules.hits.forEach { r -> RuleCard(r, rules.isOpen(r)) { onRules(rules.toggled(r)) } }
+                    rules.hits.forEach { r -> RuleCard(r, rules.isOpen(r), { copy(r) }) { onRules(rules.toggled(r)) } }
                 }
             }
         }
@@ -739,10 +756,12 @@ private fun RulesSearch(rules: Rules, onRules: (Rules) -> Unit, onLoad: () -> Un
 /**
  * The site's `.rule-card`: the number as the heading, heavy and in the
  * accent, with a rule of it down the left edge; a tap on the heading
- * folds the text and examples away.
+ * folds the text and examples away, and a press held anywhere on the
+ * card copies the whole rule.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun RuleCard(rule: Rule, open: Boolean, onToggle: () -> Unit) {
+private fun RuleCard(rule: Rule, open: Boolean, onCopy: () -> Unit, onToggle: () -> Unit) {
     Box(
         Modifier.fillMaxWidth()
             .testTag("rule-${rule.number}")
@@ -754,7 +773,7 @@ private fun RuleCard(rule: Rule, open: Boolean, onToggle: () -> Unit) {
         Column(Modifier.fillMaxWidth()) {
             Row(
                 Modifier.fillMaxWidth()
-                    .clickable { onToggle() }
+                    .combinedClickable(onLongClick = onCopy, onLongClickLabel = "Copy", onClick = onToggle)
                     .testTag("rule-head")
                     .padding(start = 17.dp, end = 14.dp, top = 12.dp, bottom = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -769,7 +788,9 @@ private fun RuleCard(rule: Rule, open: Boolean, onToggle: () -> Unit) {
             }
             if (open) {
                 Column(
-                    Modifier.fillMaxWidth().padding(start = 17.dp, end = 14.dp, bottom = 13.dp).testTag("rule-body"),
+                    Modifier.fillMaxWidth()
+                        .pointerInput(rule.number) { detectTapGestures(onLongPress = { onCopy() }) }
+                        .padding(start = 17.dp, end = 14.dp, bottom = 13.dp).testTag("rule-body"),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Line(rule.text, Ink, size = Design.BODY, modifier = Modifier.testTag("rule-text"))

@@ -62,6 +62,7 @@ import org.mattshoe.mtg.core.leaveFetchList
 import org.mattshoe.mtg.core.openFetch
 import org.mattshoe.mtg.core.onFetchList
 import org.mattshoe.mtg.core.AppState
+import org.mattshoe.mtg.core.copiedRule
 import org.mattshoe.mtg.core.CountWrite
 import org.mattshoe.mtg.core.cardStep
 import org.mattshoe.mtg.core.cardStepper
@@ -499,6 +500,7 @@ fun AppShell(
                         rules = state.rules,
                         onRules = { onState(state.copy(rules = it)) },
                         onLoadRules = onLoadRules,
+                        onCopiedRule = { r, landed -> onState(state.copiedRule(r, landed)) },
                         search = state.guideSearch,
                         onSearch = { onState(state.searchGuide(it)) },
                         hits = state.guideHits,
