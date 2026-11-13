@@ -304,6 +304,128 @@ class RulesPageTest {
         aMinusLeavesOutRulesWithTheWordOrTheWholePhrase(Tablet.open(Tablet.LANDSCAPE).also { screen = it }.body)
     }
 
+    /** What the stubbed clipboard was handed, and how many writes it refuses first. */
+    private val copied = mutableListOf<String>()
+    private var clipRefusals = 0
+
+    private fun stubTheClipboard() {
+        copied.clear()
+        val stub = js("({})")
+        stub.writeText = { text: String ->
+            if (clipRefusals-- > 0) Promise.reject(Throwable("NotAllowedError: Write permission denied."))
+            else { copied += text; Promise.resolve(Unit) }
+        }
+        val descriptor = js("({configurable: true})")
+        descriptor.value = stub
+        js("Object").defineProperty(window.navigator, "clipboard", descriptor)
+    }
+
+    private fun pointer(type: String): Event {
+        val init = js("({bubbles: true, cancelable: true, pointerId: 1, pointerType: 'touch', isPrimary: true})")
+        return js("function(t, i) { return new PointerEvent(t, i); }")(type, init).unsafeCast<Event>()
+    }
+
+    /**
+     * A finger held down for most of a second and lifted, as a phone
+     * browser sends it: down, then the context menu the browser would
+     * open, then up, then the click a lift-off makes. Says whether the
+     * page kept the browser's own menu from opening over it.
+     */
+    private suspend fun HTMLElement.holdDown(): Boolean {
+        dispatchEvent(pointer("pointerdown"))
+        Promise<Unit> { r, _ -> window.setTimeout({ r(Unit) }, 700) }.await()
+        val menu = Event("contextmenu", js("({bubbles: true, cancelable: true})"))
+        dispatchEvent(menu)
+        dispatchEvent(pointer("pointerup"))
+        click()
+        tick()
+        return menu.defaultPrevented
+    }
+
+    private fun toast(): HTMLElement? = document.querySelector(".toast") as? HTMLElement
+
+    /**
+     * Matt: "i want to be able to copy rules in the rules page. long
+     * press should copy the whole rule (number included)". A press held
+     * on the heading or on the text copies the rule, number first, then
+     * its examples; it does not fold the card. The phone's
+     * `RulesParityTest` makes the same claim.
+     */
+    private suspend fun aLongPressCopiesTheWholeRuleNumberIncluded(into: HTMLElement? = null) {
+        stubTheClipboard()
+        try {
+            val view = mount("#/guide/rules", into)
+            waitFor("the rules to load") { view.all(".rules-hint").isNotEmpty() }
+            view.search("trample")
+            waitFor("the trample rules") { view.numbers().size == 4 }
+
+            val kept = view.all(".rule-card")[2].all("button.rule-head").single().holdDown()
+            waitFor("702.19b on the clipboard") { copied.isNotEmpty() }
+            assertEquals(RULE_702_19B, copied.single(), "the long press did not copy the whole of 702.19b")
+            assertTrue(kept, "the browser's own menu would open over the long press")
+            waitFor("the toast") { toast() != null }
+            assertEquals("Rule 702.19b copied", toast()!!.textContent.orEmpty().removeSuffix("×").trim())
+            assertTrue(!toast()!!.classList.contains("bad"), "a copy that landed was styled as a failure")
+            assertEquals(4, view.all(".rule-card .rule-body").size, "the long press folded the card as well as copying it")
+
+            view.all(".rule-card")[1].all(".rule-text").single().holdDown()
+            waitFor("702.19a on the clipboard") { copied.size == 2 }
+            assertEquals(
+                "702.19a Trample is a static ability that modifies the rules for assigning an attacking creature’s combat damage.",
+                copied[1],
+                "a long press on a rule's text did not copy that rule",
+            )
+
+            // A tap is still a tap: it folds and copies nothing.
+            (view.all(".rule-card")[2].all("button.rule-head").single() as HTMLButtonElement).click()
+            waitFor("702.19b to fold on a tap") { view.all(".rule-card .rule-body").size == 3 }
+            assertEquals(2, copied.size, "a plain tap copied the rule")
+        } finally {
+            js("delete navigator.clipboard")
+        }
+    }
+
+    @Test
+    fun aLongPressCopiesTheWholeRule() = runTest { aLongPressCopiesTheWholeRuleNumberIncluded() }
+
+    @Test
+    fun aLongPressCopiesTheWholeRuleOnAFoldingPhoneOpenedOut() = runTest {
+        aLongPressCopiesTheWholeRuleNumberIncluded(Tablet.open(Tablet.UNFOLDED).also { screen = it }.body)
+    }
+
+    @Test
+    fun aLongPressCopiesTheWholeRuleOnATabletHeldSideways() = runTest {
+        aLongPressCopiesTheWholeRuleNumberIncluded(Tablet.open(Tablet.LANDSCAPE).also { screen = it }.body)
+    }
+
+    @Test
+    fun aClipboardThatRefusesSaysSoAndALongPressCanTryAgain() = runTest {
+        clipRefusals = 1
+        stubTheClipboard()
+        try {
+            val view = mount("#/guide/rules")
+            waitFor("the rules to load") { view.all(".rules-hint").isNotEmpty() }
+            view.search("trample")
+            waitFor("the trample rules") { view.numbers().size == 4 }
+            view.all(".rule-card")[2].all("button.rule-head").single().holdDown()
+            waitFor("the refusal to be said") { toast() != null }
+            assertEquals(
+                "Could not copy rule 702.19b: the clipboard refused it",
+                toast()!!.textContent.orEmpty().removeSuffix("×").trim(),
+            )
+            assertTrue(toast()!!.classList.contains("bad"), "a refused copy was styled as a success")
+            assertEquals(4, view.all(".rule-card .rule-body").size, "the rules page did not survive the refused copy")
+
+            view.all(".rule-card")[2].all("button.rule-head").single().holdDown()
+            waitFor("the second try to land") { copied.isNotEmpty() }
+            assertEquals(RULE_702_19B, copied.single(), "a second long press did not copy it after the first was refused")
+            waitFor("the toast to say so") { toast()?.textContent.orEmpty().contains("Rule 702.19b copied") }
+        } finally {
+            clipRefusals = 0
+            js("delete navigator.clipboard")
+        }
+    }
+
     @Test
     fun aSearchWithNoMatchSaysSo() = runTest {
         val view = mount("#/guide/rules")
@@ -314,6 +436,11 @@ class RulesPageTest {
     }
 
     private companion object {
+        const val RULE_702_19B =
+            "702.19b The controller of an attacking creature with trample first assigns damage to the creature(s) blocking it.\n" +
+                "Example: A 2/2 creature that can block an additional creature blocks two attackers: a 1/1 with no abilities and a 3/3 with trample.\n" +
+                "Example: A 6/6 green creature with trample is blocked by a 2/2 creature with protection from green."
+
         val TEXT = """
             |Magic: The Gathering Comprehensive Rules
             |
