@@ -5,6 +5,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.browser.window
+import org.w3c.dom.pointerevents.PointerEvent
 import org.jetbrains.compose.web.attributes.InputType
 import org.jetbrains.compose.web.attributes.placeholder
 import org.jetbrains.compose.web.dom.A
@@ -63,6 +65,7 @@ fun GuidePage(
     rules: Rules = Rules(),
     onRules: (Rules) -> Unit = {},
     onLoadRules: () -> Unit = {},
+    onCopyRule: (Rule) -> Unit = {},
     search: String = "",
     onSearch: (String) -> Unit = {},
     hits: List<GuideHit> = emptyList(),
@@ -97,7 +100,7 @@ fun GuidePage(
                 Guide.COLOURS -> Colours()
                 Guide.WHEEL -> Wheel()
                 Guide.PHYREXIA -> Lore(era ?: PhyrexianLore.eras.first(), onEra)
-                Guide.RULES -> RulesSearch(rules, onRules, onLoadRules)
+                Guide.RULES -> RulesSearch(rules, onRules, onLoadRules, onCopyRule)
                 Guide.GAME_CHANGERS -> GameChangerList(gameChangerSearch, onGameChangerSearch, gameChangers, onGameChanger)
                 Guide.BANNED -> BannedList(bannedSearch, onBannedSearch, banned, onBanned)
                 Guide.BRACKETS -> BracketList()
@@ -543,7 +546,7 @@ private fun lines(): String {
  * and `RuleBook` parses and searches it here, on the device.
  */
 @Composable
-private fun RulesSearch(rules: Rules, onRules: (Rules) -> Unit, onLoad: () -> Unit) {
+private fun RulesSearch(rules: Rules, onRules: (Rules) -> Unit, onLoad: () -> Unit, onCopy: (Rule) -> Unit) {
     Div(attrs = { classes("rules-bar") }) {
         Clearable(rules.query, { onRules(rules.searched("")) }) {
             Input(InputType.Search, attrs = {
@@ -574,24 +577,45 @@ private fun RulesSearch(rules: Rules, onRules: (Rules) -> Unit, onLoad: () -> Un
         else -> {
             Div(attrs = { classes("muted", "small", "rules-count") }) { Text(rules.count) }
             Div(attrs = { classes("rules-list") }) {
-                rules.hits.forEach { r -> RuleCard(r, rules.isOpen(r)) { onRules(rules.toggled(r)) } }
+                rules.hits.forEach { r -> RuleCard(r, rules.isOpen(r), { onCopy(r) }) { onRules(rules.toggled(r)) } }
             }
         }
     }
 }
 
-/** One rule: its number as the heading, a tap on that to fold it, then its text and examples. */
+/**
+ * One rule: its number as the heading, a tap on that to fold it, then
+ * its text and examples. A press held anywhere on it copies the whole
+ * rule — Matt: "long press should copy the whole rule (number
+ * included)". Sibling of Android's `RuleCard`.
+ */
 @Composable
-private fun RuleCard(rule: Rule, open: Boolean, onToggle: () -> Unit) {
+private fun RuleCard(rule: Rule, open: Boolean, onCopy: () -> Unit, onToggle: () -> Unit) {
+    val press = remember(rule.number) { HeldPress() }
     Div(attrs = {
         classes("rule-card")
         attr("data-rule", rule.number)
         attr("data-open", open.toString())
+        addEventListener("pointerdown") {
+            val p = it.nativeEvent as PointerEvent
+            press.down(p.pointerType, p.clientX, p.clientY, onCopy)
+        }
+        addEventListener("pointermove") {
+            val p = it.nativeEvent as PointerEvent
+            press.moved(p.clientX, p.clientY)
+        }
+        listOf("pointerup", "pointercancel", "pointerleave").forEach { type -> addEventListener(type) { press.cancel() } }
+        // A phone browser opens its own menu on a long press, and may
+        // cancel the pointer to do it before the timer is up. Held on a
+        // touch screen, the menu is the long press: copy, and no menu.
+        onContextMenu { if (press.menu(onCopy)) it.preventDefault() }
     }) {
         Button(attrs = {
             classes("rule-head")
             attr("aria-expanded", open.toString())
-            onClick { onToggle() }
+            // The lift-off after a long press is a click too; it copied,
+            // so it does not also fold.
+            onClick { if (!press.consumeClick()) onToggle() }
         }) {
             Span(attrs = { classes("rule-number") }) { Text(rule.shownNumber) }
             Span(attrs = { classes("rule-section") }) { Text(rule.section) }
@@ -603,6 +627,58 @@ private fun RuleCard(rule: Rule, open: Boolean, onToggle: () -> Unit) {
                 rule.examples.forEach { e -> Div(attrs = { classes("rule-example") }) { Text(e) } }
             }
         }
+    }
+}
+
+/**
+ * A press held long enough to mean something other than a tap. Fires
+ * once per press, from the timer or from the browser's own context menu
+ * on a touch screen, whichever comes first; a finger that moves is a
+ * scroll and fires nothing.
+ */
+private class HeldPress {
+    private var timer: Int? = null
+    private var touch = false
+    private var x = 0
+    private var y = 0
+    private var fired = false
+
+    fun down(type: String, x: Int, y: Int, fire: () -> Unit) {
+        cancel()
+        fired = false
+        touch = type == "touch" || type == "pen"
+        this.x = x
+        this.y = y
+        timer = window.setTimeout({ timer = null; fire(fire) }, HOLD_MS)
+    }
+
+    fun moved(x: Int, y: Int) {
+        if (timer != null && kotlin.math.abs(x - this.x) + kotlin.math.abs(y - this.y) > SLOP) cancel()
+    }
+
+    fun cancel() {
+        timer?.let { window.clearTimeout(it) }
+        timer = null
+    }
+
+    /** The context menu: true when it belongs to a long press and should not open. */
+    fun menu(fire: () -> Unit): Boolean {
+        if (!touch) return false
+        if (timer != null) { cancel(); fire(fire) }
+        return fired
+    }
+
+    fun consumeClick(): Boolean = fired.also { fired = false }
+
+    private fun fire(f: () -> Unit) {
+        if (fired) return
+        fired = true
+        f()
+    }
+
+    private companion object {
+        const val HOLD_MS = 450
+        const val SLOP = 10
     }
 }
 

@@ -13,6 +13,13 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.platform.ClipboardManager
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.text.TextStyle
@@ -49,9 +56,14 @@ class RulesParityTest {
 
     private var retries = 0
 
-    private fun shell(start: AppState = AppState(), size: DpSize? = null) {
+    /** The clipboard the shell was given, read back after a long press. */
+    private lateinit var board: ClipboardManager
+
+    private fun shell(start: AppState = AppState(), size: DpSize? = null, clipboard: ClipboardManager? = null) {
         rule.setContent {
             val page = @androidx.compose.runtime.Composable {
+                board = clipboard ?: LocalClipboardManager.current
+                CompositionLocalProvider(LocalClipboardManager provides board) {
                 MaterialTheme(colorScheme = darkColorScheme()) {
                     Surface {
                         held = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(start) }
@@ -65,6 +77,7 @@ class RulesParityTest {
                             onLoadRules = { retries++ },
                         )
                     }
+                }
                 }
             }
             if (size == null) page() else Tablet.Sized(size) { page() }
@@ -221,6 +234,72 @@ class RulesParityTest {
     fun aMinusLeavesOutWhatFollowsItOnATabletHeldSideways() =
         aMinusLeavesOutRulesWithTheWordOrTheWholePhrase(Tablet.LANDSCAPE)
 
+    /**
+     * Matt: "i want to be able to copy rules in the rules page. long
+     * press should copy the whole rule (number included)". A press held
+     * on the heading or on the text copies the rule, number first, then
+     * its examples; it does not fold the card. The website's
+     * `RulesPageTest` makes the same claim.
+     */
+    private fun aLongPressCopiesTheWholeRuleNumberIncluded(size: DpSize?) {
+        shell(onRulesWith(Rules().loaded(TEXT)), size)
+        search("trample")
+        rule.onAllNodes(hasTestTag("rule-head"), useUnmergedTree = true)[2].performScrollTo().performTouchInput { longClick() }
+        rule.waitForIdle()
+        assertEquals(RULE_702_19B, board.getText()?.text, "the long press did not put 702.19b on the clipboard")
+        assertEquals("Rule 702.19b copied", held.value.toast)
+        assertTrue(!held.value.toastFailed, "a copy that landed was styled as a failure")
+        rule.onNodeWithText("Rule 702.19b copied").assertExists("no toast says the rule was copied")
+        assertEquals(4, count("rule-body"), "the long press folded the card as well as copying it")
+
+        rule.onAllNodes(hasTestTag("rule-text"), useUnmergedTree = true)[1].performScrollTo().performTouchInput { longClick() }
+        rule.waitForIdle()
+        assertEquals(
+            "702.19a Trample is a static ability that modifies the rules for assigning an attacking creature’s combat damage.",
+            board.getText()?.text,
+            "a long press on a rule's text did not copy that rule",
+        )
+    }
+
+    @Test
+    fun aLongPressCopiesTheWholeRule() = aLongPressCopiesTheWholeRuleNumberIncluded(null)
+
+    @Test
+    @Config(qualifiers = Tablet.UNFOLDED_QUALIFIERS)
+    fun aLongPressCopiesTheWholeRuleOnAFoldingPhoneOpenedOut() =
+        aLongPressCopiesTheWholeRuleNumberIncluded(Tablet.UNFOLDED)
+
+    @Test
+    @Config(qualifiers = Tablet.LANDSCAPE_QUALIFIERS)
+    fun aLongPressCopiesTheWholeRuleOnATabletHeldSideways() =
+        aLongPressCopiesTheWholeRuleNumberIncluded(Tablet.LANDSCAPE)
+
+    @Test
+    fun aClipboardThatRefusesSaysSoAndALongPressCanTryAgain() {
+        var refusals = 1
+        var kept: AnnotatedString? = null
+        val fussy = object : ClipboardManager {
+            override fun setText(annotatedString: AnnotatedString) {
+                if (refusals-- > 0) throw SecurityException("clipboard is not available")
+                kept = annotatedString
+            }
+            override fun getText(): AnnotatedString? = kept
+        }
+        shell(onRulesWith(Rules().loaded(TEXT)), clipboard = fussy)
+        search("trample")
+        rule.onAllNodes(hasTestTag("rule-head"), useUnmergedTree = true)[2].performScrollTo().performTouchInput { longClick() }
+        rule.waitForIdle()
+        assertEquals("Could not copy rule 702.19b: the clipboard refused it", held.value.toast)
+        assertTrue(held.value.toastFailed, "a refused copy was styled as a success")
+        rule.onNodeWithText("Could not copy rule 702.19b: the clipboard refused it").assertExists("nothing on screen says the copy failed")
+        assertEquals(4, count("rule-body"), "the rules page did not survive the refused copy")
+
+        rule.onAllNodes(hasTestTag("rule-head"), useUnmergedTree = true)[2].performScrollTo().performTouchInput { longClick() }
+        rule.waitForIdle()
+        assertEquals(RULE_702_19B, kept?.text, "a second long press did not copy it after the first was refused")
+        assertEquals("Rule 702.19b copied", held.value.toast)
+    }
+
     @Test
     fun aSearchWithNoMatchSaysSo() {
         shell(onRulesWith(Rules().loaded(TEXT)))
@@ -230,6 +309,11 @@ class RulesParityTest {
     }
 
     private companion object {
+        const val RULE_702_19B =
+            "702.19b The controller of an attacking creature with trample first assigns damage to the creature(s) blocking it.\n" +
+                "Example: A 2/2 creature that can block an additional creature blocks two attackers: a 1/1 with no abilities and a 3/3 with trample.\n" +
+                "Example: A 6/6 green creature with trample is blocked by a 2/2 creature with protection from green."
+
         val TEXT = """
             |Magic: The Gathering Comprehensive Rules
             |

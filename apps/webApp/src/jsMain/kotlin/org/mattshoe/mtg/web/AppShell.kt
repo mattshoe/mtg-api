@@ -87,6 +87,8 @@ fun AppShell(
     onExport: (ExportTo) -> Unit = {},
     /** Fetch the Comprehensive Rules again, after a load that failed. */
     onLoadRules: () -> Unit = {},
+    /** Put a rule on the clipboard, after a long press on its card. */
+    onCopyRule: (org.mattshoe.mtg.core.Rule) -> Unit = {},
     /** Give that account that role, on Admin Settings. */
     onSetRole: (org.mattshoe.mtg.core.Person, String) -> Unit = { _, _ -> },
     /** Yes on Delete account's question: that person, already marked deleting. */
@@ -290,6 +292,7 @@ fun AppShell(
             rules = state.rules,
             onRules = { onState(state.copy(rules = it)) },
             onLoadRules = onLoadRules,
+            onCopyRule = onCopyRule,
             search = state.guideSearch,
             onSearch = { onState(state.searchGuide(it)) },
             hits = state.guideHits,
