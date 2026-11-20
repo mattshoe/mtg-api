@@ -1,0 +1,1 @@
+The task queue no longer dies when the merged intake scripts are broken. If main's copy is missing a script, or cannot find the requests folder, the dispatcher runs the laptop's own copy for that tick and says so in the log.

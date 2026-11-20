@@ -105,6 +105,102 @@ class RulesTest {
         assertEquals(listOf("702.20.", "702.20a"), book.search("702.20").map { it.number })
     }
 
+    /**
+     * Matt: "i want rules searches to support "quoted" text that searches
+     * anything in the quotes as a single string instead of tokenized
+     * words". 702.19a has "assigning", "combat" and "damage" apart;
+     * only 702.19c has them side by side.
+     */
+    @Test
+    fun quotedWordsAreFoundSideBySideNotScatteredAcrossTheRule() {
+        assertEquals(listOf("702.19a", "702.19c"), book.search("assigning combat damage").map { it.number })
+        assertEquals(listOf("702.19c"), book.search("\"assigning combat damage\"").map { it.number })
+    }
+
+    @Test
+    fun aQuotedPhraseAndLooseWordsMustAllBeThere() {
+        assertEquals(listOf("702.19a"), book.search("static \"combat damage\"").map { it.number })
+        assertEquals(listOf("702.19c"), book.search("\"combat damage\" planeswalkers").map { it.number })
+    }
+
+    @Test
+    fun aPhonesCurlyQuotesQuoteAsWell() {
+        assertEquals(listOf("702.19c"), book.search("“assigning combat damage”").map { it.number })
+    }
+
+    @Test
+    fun aQuoteLeftOpenQuotesToTheEnd() {
+        assertEquals(listOf("702.19c"), book.search("\"assigning combat damage").map { it.number })
+    }
+
+    @Test
+    fun aQuotedPhraseIgnoresCaseAndExtraSpaces() {
+        assertEquals(listOf("702.19c"), book.search("\"  Assigning   COMBAT damage \"").map { it.number })
+    }
+
+    @Test
+    fun emptyQuotesFindNothing() {
+        assertEquals(emptyList(), book.search("\"\""))
+        assertEquals(emptyList(), book.search("\" \""))
+    }
+
+    /**
+     * Matt: "rules searches should support - for exclusion ... -trample
+     * should exclude results with the word trample, and -"when a
+     * creature" should exclude that whole string".
+     */
+    @Test
+    fun aMinusWordLeavesOutEveryRuleThatMentionsIt() {
+        assertEquals(listOf("702.19a", "702.20a"), book.search("static").map { it.number })
+        assertEquals(listOf("702.20a"), book.search("static -trample").map { it.number })
+        assertEquals(listOf("702.19.", "702.19a", "702.19b"), book.search("trample -planeswalkers").map { it.number })
+    }
+
+    @Test
+    fun aMinusQuotedPhraseLeavesOutOnlyRulesWithThatWholeString() {
+        assertEquals(listOf("702.19a", "702.19b", "702.19c"), book.search("damage").map { it.number })
+        // 702.19a has the three words, but not side by side.
+        assertEquals(listOf("702.19a", "702.19b"), book.search("damage -\"assigning combat damage\"").map { it.number })
+        assertEquals(listOf("702.19b"), book.search("damage -\"combat damage\"").map { it.number })
+    }
+
+    @Test
+    fun aMinusBeforeAPhonesCurlyQuotesLeavesThePhraseOut() {
+        assertEquals(listOf("702.19a", "702.19b"), book.search("damage -“assigning combat damage”").map { it.number })
+    }
+
+    @Test
+    fun aMinusIgnoresCase() {
+        assertEquals(listOf("702.20a"), book.search("static -TRAMPLE").map { it.number })
+    }
+
+    @Test
+    fun onlyLeavingThingsOutFindsNothing() {
+        assertEquals(emptyList(), book.search("-trample"))
+        assertEquals(emptyList(), book.search("-\"combat damage\""))
+    }
+
+    @Test
+    fun aMinusOnItsOwnOrInsideAWordIsNotAnExclusion() {
+        assertEquals(listOf("100.1.", "100.1a"), book.search("two-player").map { it.number })
+        assertEquals(listOf("702.20a"), book.search("vigilance - static").map { it.number })
+    }
+
+    /** "-1/-1 counters" is a thing the rules say; a minus before a digit is the number's. */
+    @Test
+    fun aMinusBeforeANumberIsStillSearchedFor() {
+        val book = RuleBook.parse(
+            """
+            |122.1a A +1/+1 counter on a creature or on a creature card.
+            |
+            |122.3. If a permanent has both a +1/+1 counter and a -1/-1 counter on it, they are removed.
+            |
+            |Glossary
+            """.trimMargin(),
+        )
+        assertEquals(listOf("122.3."), book.search("-1/-1 counter").map { it.number })
+    }
+
     @Test
     fun aBlankSearchFindsNothing() {
         assertEquals(emptyList(), book.search(""))
@@ -162,6 +258,34 @@ class RulesTest {
         assertEquals("#/guide/rules", open.route.toHash())
         assertTrue(open.onRules, "the rules tile is open but the app does not know it")
         assertFalse(AppState().navigate(View.GUIDE).onRules)
+    }
+
+    /**
+     * Matt: "i want to be able to copy rules in the rules page. long
+     * press should copy the whole rule (number included)". The whole
+     * rule is its number, its text and the examples printed under it.
+     */
+    @Test
+    fun aCopiedRuleIsItsNumberItsTextAndItsExamples() {
+        val b = book.rules.single { it.number == "702.19b" }
+        val lines = b.copyText.split('\n')
+        assertEquals(3, lines.size, "702.19b and its two examples should be three lines: ${b.copyText}")
+        assertTrue(lines[0].startsWith("702.19b The controller of an attacking creature"), lines[0])
+        assertTrue(lines[1].startsWith("Example: A 2/2 creature that can block"), lines[1])
+        assertTrue(lines[2].startsWith("Example: "), lines[2])
+        val heading = book.rules.single { it.number == "702.19." }
+        assertEquals("702.19 Trample", heading.copyText, "a rule's own trailing dot is not part of its number")
+    }
+
+    @Test
+    fun copyingARuleSaysWhichRuleItWasOrThatTheClipboardRefused() {
+        val b = book.rules.single { it.number == "702.19b" }
+        val done = AppState().copiedRule(b, landed = true)
+        assertEquals("Rule 702.19b copied", done.toast)
+        assertFalse(done.toastFailed, "a copy that landed was styled as a failure")
+        val refused = AppState().copiedRule(b, landed = false)
+        assertEquals("Could not copy rule 702.19b: the clipboard refused it", refused.toast)
+        assertTrue(refused.toastFailed, "a refused copy was styled as a success")
     }
 
     companion object {

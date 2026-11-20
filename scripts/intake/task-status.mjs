@@ -30,7 +30,7 @@ import { fileURLToPath } from 'node:url'
 import { writeToken } from './inbox.mjs'
 import { pending, buildable, branchFor, statusOf } from '../intake.mjs'
 
-const API = 'https://mtg-api.mattshoe81.workers.dev'
+const API = process.env.MTG_API_BASE || 'https://mtg-api.mattshoe81.workers.dev'
 
 /** Furthest first: a request built twice is at the furthest any of its pull requests got. */
 const ORDER = [
@@ -498,10 +498,31 @@ async function reconcileNow({ repo, token, base = API }) {
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const [cmd, file, branch] = process.argv.slice(2)
-  const repo = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
+  // The repo this is FOR, which is not where this file is.
+  //
+  // `dispatch.sh` re-execs itself from a pinned copy of `scripts/`
+  // under `.intake/pinned`, so working it out from `import.meta.url`
+  // pointed here at `.intake/pinned`, which has no `requests/` folder.
+  // Every tick logged "ENOENT: no such file or directory, scandir
+  // .intake/pinned/requests", the inbox collected nothing, and a task
+  // Matt sent sat at `pending` with no name for twelve hours.
+  //
+  // `INTAKE_REPO` is what the dispatcher exports when it pins itself.
+  const repo = process.env.INTAKE_REPO
+    || join(dirname(fileURLToPath(import.meta.url)), '..', '..')
   const name = basename(String(file || ''), '.md')
   const stamp = new Date().toTimeString().slice(0, 8)
   const say = (line) => console.log(`${stamp}  task-status: ${line}`)
+
+  // Blind: the repo this worked out has no `requests/`, so it is the
+  // wrong one. 86 is what tells dispatch.sh that, which is how a broken
+  // pinned copy hands the tick to the working tree instead of logging
+  // ENOENT for twelve hours. Checked before the credential, because a
+  // test box has none and #197 hid behind exactly that.
+  if (!existsSync(join(repo, 'requests'))) {
+    console.error(`${stamp}  task-status: blind: no requests/ in ${repo}`)
+    process.exit(86)
+  }
 
   // Only the real checkout may write to the real board.
   //
@@ -621,17 +642,23 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     else {
       await cancelNow({ repo, token })
         .then((done) => done.forEach((line) => say(`cancel: ${line}`)))
-        .catch((e) => say(e.message))
+        .catch((e) => { say(e.message); process.exitCode = 1 })
     }
   } else if (cmd === 'reconcile') {
     if (!token) say('no credential that may write task status, so nothing was reconciled')
     else {
       reconcileNow({ repo, token })
         .then((wrote) => wrote.forEach((t) => say(`${t.name} ${t.status}${t.note ? ` (${t.note})` : ''}`)))
-        .catch((e) => say(e.message))
+        .catch((e) => { say(e.message); process.exitCode = 1 })
     }
+  } else if (cmd === 'blocked') {
+    // The dispatcher has failed on this request the same way tick after
+    // tick, and says so once. Permanent, and it buzzes Matt's phone, which
+    // is the point: the log it used to go to was read by nobody.
+    const said = process.argv.slice(4).join(' ').trim()
+    transition = { name, status: 'blocked', note: (said || 'the dispatcher keeps failing on it').slice(0, 300) }
   } else {
-    console.error('usage: task-status.mjs building <file> | settle <file> <branch> | cancel | reconcile')
+    console.error('usage: task-status.mjs building <file> | settle <file> <branch> | blocked <file> <note> | cancel | reconcile')
     process.exit(2)
   }
 
@@ -644,6 +671,6 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   else if (transition) {
     report(transition, { token })
       .then(() => say(`${name} ${transition.status}`))
-      .catch((e) => say(e.message))
+      .catch((e) => { say(e.message); process.exitCode = 1 })
   }
 }

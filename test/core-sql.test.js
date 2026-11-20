@@ -46,3 +46,17 @@ describe('every statement the core emits', () => {
     expect(wrong).toEqual([]);
   });
 });
+
+// Each deck has to say whose it is by public key, because that is what a
+// collection is named by and what the filter panel narrows the list with.
+// It must never say so by private id.
+describe("the filter panel's deck list", () => {
+  it('names each deck\'s owner by public key and never by id', async () => {
+    const c = cases.find((x) => x.sql.startsWith('SELECT key, name,') && x.sql.includes('FROM decks'));
+    expect(c, 'core-sql.json has no deck facet').toBeTruthy();
+    const { results } = await env.DB.prepare(c.sql).bind(...c.params).all();
+    const keys = new Set(results.map((r) => r.owner_key));
+    expect(keys).toEqual(new Set(['m4tt0001', 'k4yy0003']));
+    for (const r of results) expect(r).not.toHaveProperty('owner_id');
+  });
+});

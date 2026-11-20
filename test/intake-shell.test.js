@@ -38,6 +38,15 @@ import { fileURLToPath } from 'node:url'
 
 const REPO = dirname(dirname(fileURLToPath(import.meta.url)))
 
+// Every box is its own repo, and these two would point it at another one.
+// The dispatcher sets them when it pins itself, and they used to reach the
+// agent it launched, so a builder running this file pointed every box's
+// dispatcher at the real checkout: it skipped pinning and read the live
+// queue. The dispatcher no longer passes them on; this is so that a run
+// from any shell that has them still tests the box and nothing else.
+delete process.env.INTAKE_PINNED
+delete process.env.INTAKE_REPO
+
 /** Files a fake repo needs before any intake script will work in it. */
 const COPY = [
   'scripts/intake.mjs',
@@ -183,6 +192,18 @@ function build({ requests = {}, done = {}, enabled = true } = {}) {
       mkdirSync(dirname(join(tmp, rel)), { recursive: true })
       writeFileSync(join(tmp, rel), body)
       g('add', '-A'); g('commit', '-qm', `base: ${rel}`); g('push', '-q', 'origin', 'main')
+      rmSync(tmp, { recursive: true, force: true })
+      git('fetch', '-q', 'origin')
+    },
+    /** Take a path off origin/main, again without the checkout noticing. */
+    removeOnBase: (rel) => {
+      const tmp = join(root, 'base-push')
+      spawnSync('git', ['clone', '-q', origin, tmp], { encoding: 'utf8' })
+      const g = (...a) => spawnSync('git', ['-C', tmp, ...a], { encoding: 'utf8' })
+      g('config', 'user.email', 'a@b'); g('config', 'user.name', 'a')
+      const r = g('rm', '-rq', rel)
+      if (r.status !== 0) throw new Error(`removeOnBase: ${rel} is not on main: ${r.stderr}`)
+      g('commit', '-qm', `base: rm ${rel}`); g('push', '-q', 'origin', 'main')
       rmSync(tmp, { recursive: true, force: true })
       git('fetch', '-q', 'origin')
     },
@@ -333,6 +354,23 @@ describe('which copy of the scripts actually runs', () => {
     expect(box.log(), 'it did not start the agent main would have').toContain('claude ')
   })
 
+  it('lets the pinned scripts find the real requests folder', () => {
+    // The pinned copy is `.intake/pinned/scripts`, and the helpers
+    // worked the repo out from their own path — so they looked for
+    // `requests/` inside `.intake/pinned`, which holds only `scripts`.
+    // Every tick logged "ENOENT ... scandir .intake/pinned/requests",
+    // the inbox collected nothing, and a task sat at `pending` with no
+    // name for twelve hours.
+    build({ requests: { 'pin-three.md': READY('Pin three') } })
+    box.stub('claude', BUILDER)
+
+    run('dispatch.sh')
+
+    expect(box.intakeLog(), 'the pinned scripts are reading the wrong repo')
+      .not.toMatch(/ENOENT|pinned\/requests/)
+    expect(box.log(), 'nothing was started').toContain('claude ')
+  })
+
   it('still reads requests from the working tree, because those are data', () => {
     // The code is pinned; the queue is not. A request written a second
     // ago has not been committed anywhere and must still be seen.
@@ -343,6 +381,106 @@ describe('which copy of the scripts actually runs', () => {
     run('dispatch.sh')
 
     expect(box.log(), 'an uncommitted request was invisible').toContain('requests/pin-two.md')
+  })
+})
+
+// When the broken code IS the pinned code.
+//
+// The bug above was on main, so the pinning that exists to protect
+// production ran it faithfully, once a minute, for twelve hours. The only
+// way out was merging a fix through the whole gate while the queue was
+// dead. So a pinned copy that is visibly not working hands the tick back
+// to the working tree, and says in the log that it is running unmerged
+// code and why.
+//
+// "Visibly not working" is two things and only two: main's copy is
+// missing a script the dispatcher runs, or one of its helpers cannot see
+// this repo's `requests/` folder. A network failure or a 500 is an
+// ordinary bad day and must not do it, because falling back is running
+// whatever happens to be checked out.
+//
+// The trap that let the original through: a test box has no credential,
+// so the helpers return before they ever read `requests/`, and asserting
+// "no error" passes against the broken code. These assert the fallback
+// being taken, by its log line, and that the queue still drained.
+describe('when the pinned copy itself is broken', () => {
+  /**
+   * The real task-status.mjs with the #197 bug put back: the repo worked
+   * out from its own path, which under `.intake/pinned` is a folder with
+   * no `requests/` in it.
+   */
+  const blindTaskStatus = () => {
+    const text = readFileSync(join(REPO, 'scripts/intake/task-status.mjs'), 'utf8')
+    const from = 'const repo = process.env.INTAKE_REPO\n    || join('
+    if (!text.includes(from)) throw new Error('task-status.mjs no longer reads INTAKE_REPO like this')
+    return text.replace(from, 'const repo = join(')
+  }
+
+  it('falls back to the working tree when a helper on main cannot see requests/', () => {
+    build({ requests: { 'blind-one.md': READY('Blind one') } })
+    box.stub('claude', BUILDER)
+    box.commitOnBase('scripts/intake/task-status.mjs', blindTaskStatus())
+
+    run('dispatch.sh')
+
+    expect(box.intakeLog(), 'the broken pinned copy ran and nothing fell back')
+      .toMatch(/running unmerged code.*requests/i)
+    expect(box.log(), 'the queue stayed dead behind the broken pinned copy').toContain('requests/blind-one.md')
+  })
+
+  it('falls back when main\'s copy is missing a script the dispatcher runs', () => {
+    build({ requests: { 'blind-two.md': READY('Blind two') } })
+    box.stub('claude', BUILDER)
+    box.removeOnBase('scripts/intake/inbox.mjs')
+
+    run('dispatch.sh')
+
+    expect(box.intakeLog(), 'a pinned copy with no inbox.mjs ran anyway')
+      .toMatch(/running unmerged code.*inbox\.mjs/i)
+    expect(box.log(), 'the queue stayed dead behind the broken pinned copy').toContain('requests/blind-two.md')
+  })
+
+  it('falls back, rather than dying, when main has no scripts to pin at all', () => {
+    build({ requests: { 'blind-three.md': READY('Blind three') } })
+    box.stub('claude', BUILDER)
+    box.removeOnBase('scripts')
+
+    const r = run('dispatch.sh')
+
+    expect(r.stderr, 'the dispatcher died before it could fall back').not.toMatch(/unbound variable/)
+    expect(box.intakeLog(), 'it did not say it was running unmerged code')
+      .toMatch(/running unmerged code.*origin\/main/i)
+    expect(box.log(), 'the queue stayed dead').toContain('requests/blind-three.md')
+  })
+
+  it('says so once when it has been falling back tick after tick', () => {
+    // The fallback keeps the queue alive, which is exactly how #197 went
+    // twelve hours with nobody reading the log. Every tick on unmerged
+    // code is the same fault until main is fixed.
+    build({})
+    box.commitOnBase('scripts/intake/task-status.mjs', blindTaskStatus())
+
+    for (let i = 0; i < 6; i++) run('dispatch.sh', { env: { INTAKE_ALARM_AFTER: '3' } })
+
+    expect(box.log().split('\n').filter((l) => l.startsWith('osascript ')),
+      'six ticks on unmerged code did not notify exactly once').toHaveLength(1)
+    expect(box.intakeLog(), 'the alarm does not say it is running unmerged code')
+      .toMatch(/NEEDS YOU.*unmerged code/)
+  })
+
+  it('does not fall back over an ordinary bad day', () => {
+    // A helper on main that fails the way a network blip does. The pinned
+    // copy must still be what runs.
+    build({ requests: { 'bad-day.md': READY('Bad day') } })
+    box.stub('claude', BUILDER)
+    box.commitOnBase('scripts/intake/inbox.mjs',
+      'console.log("inbox: fetch failed MAIN-COPY-RAN")\nprocess.exit(1)\n')
+
+    run('dispatch.sh')
+
+    expect(box.intakeLog(), 'main\'s copy did not run').toContain('MAIN-COPY-RAN')
+    expect(box.intakeLog(), 'one failed fetch sent it to unmerged code').not.toMatch(/unmerged/i)
+    expect(box.log(), 'nothing was started').toContain('requests/bad-day.md')
   })
 })
 
@@ -564,6 +702,125 @@ describe('refusing to run from a linked worktree', () => {
     const deadline = Date.now() + 3000
     while (Date.now() < deadline) { /* give nohup a chance */ }
     expect(box.log()).not.toContain('NESTED')
+  })
+})
+
+// Nothing was watching the log.
+//
+// `.intake/intake.log` said "task-status: ENOENT ... scandir
+// .intake/pinned/requests" once a minute for twelve hours while the queue
+// was dead, seven hundred identical lines, and Matt found out by looking
+// at the app and asking why his task had not moved.
+//
+// So the dispatcher counts the ticks in a row that end in the same error,
+// and past a threshold says so ONCE: `blocked` on the task the error is
+// about, or the NEEDS YOU line and the desktop notification when it is
+// the dispatcher itself. Not every minute — a dispatcher that cries wolf
+// gets ignored, and `blocked` flapping once a minute has happened before.
+describe('when it fails the same way every tick', () => {
+  const AFTER = 3
+  const tick = (env = {}) => run('dispatch.sh', { env: { INTAKE_ALARM_AFTER: String(AFTER), ...env } })
+  const ticks = (n, env) => { for (let i = 0; i < n; i++) tick(env) }
+  const alarms = () => box.log().split('\n').filter((l) => l.startsWith('osascript ')).length
+  const needsYou = () => box.intakeLog().split('\n').filter((l) => l.includes('NEEDS YOU'))
+
+  /**
+   * task-status.mjs on main, failing reconcile the way #197 did whenever
+   * HOME/broken exists. Its timestamp moves every tick, as the real one
+   * does, so two ticks only match if the clock is taken off first.
+   */
+  const brokenReconcile = `import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+const [cmd] = process.argv.slice(2)
+if (cmd === 'reconcile' && existsSync(join(process.env.HOME, 'broken'))) {
+  const f = join(process.env.HOME, 'clock')
+  const n = existsSync(f) ? Number(readFileSync(f, 'utf8')) + 1 : 10
+  writeFileSync(f, String(n))
+  console.log('00:00:' + n + '  task-status: ENOENT: no such file or directory, scandir /nowhere/requests')
+  process.exit(1)
+}
+`
+  const breakIt = () => writeFileSync(join(box.root, 'broken'), '')
+  const mendIt = () => rmSync(join(box.root, 'broken'), { force: true })
+
+  it('says so once, not every minute', () => {
+    build({})
+    box.commitOnBase('scripts/intake/task-status.mjs', brokenReconcile)
+    breakIt()
+
+    ticks(AFTER - 1)
+    expect(alarms(), `it alarmed before ${AFTER} ticks in a row had failed`).toBe(0)
+    expect(needsYou(), 'it cried wolf over a bad minute').toEqual([])
+
+    tick()
+    expect(alarms(), `${AFTER} identical failures in a row and nobody was told`).toBe(1)
+    expect(needsYou().join('\n'), 'the alarm does not say what is failing').toMatch(/ENOENT/)
+
+    ticks(AFTER * 3)
+    expect(alarms(), 'it alarmed again for the same failure').toBe(1)
+    expect(needsYou(), 'it wrote NEEDS YOU again for the same failure').toHaveLength(1)
+  })
+
+  it('a good tick in between is a bad minute, not a broken machine', () => {
+    build({})
+    box.commitOnBase('scripts/intake/task-status.mjs', brokenReconcile)
+    breakIt()
+    ticks(AFTER - 1)
+    mendIt()
+    tick()
+    breakIt()
+    ticks(AFTER - 1)
+
+    expect(alarms(), 'failures either side of a healthy tick were counted as one run').toBe(0)
+  })
+
+  it('says so again if it breaks again after it was mended', () => {
+    build({})
+    box.commitOnBase('scripts/intake/task-status.mjs', brokenReconcile)
+    breakIt()
+    ticks(AFTER)
+    mendIt()
+    tick()
+    breakIt()
+    ticks(AFTER)
+
+    expect(alarms(), 'a second breakage after a recovery went unreported').toBe(2)
+  })
+
+  it('hears the real task-status fail, which used to log the error and exit 0', () => {
+    // The real scripts, with a credential and a Worker that is not there.
+    // reconcile catches the failure and logs it, which is what the twelve
+    // hours of ENOENT were; if it then exits 0 the dispatcher cannot tell
+    // a broken tick from a quiet one.
+    build({})
+    const origin = join(box.root, 'mattshoe', 'mtg-api.git')
+    cpSync(box.origin, origin, { recursive: true })
+    box.git('remote', 'set-url', 'origin', origin)
+    writeFileSync(join(box.root, '.mtg-agent.env'), 'MTG_AGENT_TOKEN=not-a-real-token\n')
+
+    ticks(AFTER, { MTG_API_BASE: 'http://127.0.0.1:9' })
+
+    expect(box.intakeLog(), 'the box never reached the helpers').toMatch(/task-status:/)
+    expect(alarms(), 'every tick failed to reach the Worker and nobody was told').toBe(1)
+  })
+
+  it('blocks the task it cannot start, once, and does not wake Matt for it', () => {
+    // A branch underneath the name this request's branch would take, so
+    // `git switch -C request/stuck-...` is refused every tick, and only
+    // for this one request.
+    build({ requests: { 'stuck.md': READY('Stuck') } })
+    box.stub('claude', BUILDER)
+    const branch = spawnSync('node', [box.path('scripts/intake.mjs'), 'branch', 'stuck.md'],
+      { cwd: box.repo, encoding: 'utf8' }).stdout.trim()
+    expect(branch, 'intake.mjs named no branch').toMatch(/^request\/stuck-/)
+    box.git('branch', `${branch}/in-the-way`)
+
+    ticks(AFTER * 2)
+
+    expect(box.intakeLog(), 'the box never got as far as the queue').toMatch(/skipping stuck: could not start/)
+    expect(box.intakeLog().split('\n').filter((l) => /stuck blocked/.test(l)),
+      'a task that could not start, tick after tick, was not blocked exactly once').toHaveLength(1)
+    expect(alarms(), 'a failure with a task to block also woke Matt').toBe(0)
   })
 })
 
@@ -926,7 +1183,7 @@ describe('what the agent is launched with', () => {
     build({ requests: { 'a-thing.md': READY('A thing') } })
     // An agent that reports its own environment back.
     box.stub('claude', `
-printenv | grep -E '^(CLOUDFLARE|CF_|XDG_|GH_CONFIG_DIR)' > ${JSON.stringify(join(box.root, 'agent-env.txt'))} || true
+printenv | grep -E '^(CLOUDFLARE|CF_|XDG_|GH_CONFIG_DIR|INTAKE_PINNED|INTAKE_REPO)' > ${JSON.stringify(join(box.root, 'agent-env.txt'))} || true
 ${BUILDER}
 `)
     run('dispatch.sh', { env })
@@ -946,6 +1203,16 @@ ${BUILDER}
     for (const planted of 'abcdefg'.split('').map((c) => `planted-${c}`)) {
       expect(env, `${planted} reached the agent`).not.toContain(planted)
     }
+  })
+
+  it('does not carry the pinning switches, which point anything it runs at the real repo', () => {
+    // `INTAKE_PINNED=1 INTAKE_REPO=<repo>` is how the dispatcher tells its
+    // own pinned copy where it is. Inherited by the agent, they told every
+    // dispatcher its tests started to skip pinning and work on the real
+    // checkout, which is how this was found.
+    const env = withEnv({})
+    expect(env, 'the agent inherited INTAKE_PINNED').not.toContain('INTAKE_PINNED')
+    expect(env, 'the agent inherited INTAKE_REPO').not.toContain('INTAKE_REPO')
   })
 
   it('has the wrangler config path pointed somewhere with no stored login in it', () => {

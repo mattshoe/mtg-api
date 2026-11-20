@@ -16,9 +16,9 @@ import { join, basename, dirname } from 'node:path'
 import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 
-const BASE = 'https://mtg-api.mattshoe81.workers.dev'
+const BASE = process.env.MTG_API_BASE || 'https://mtg-api.mattshoe81.workers.dev'
 
-const API = 'https://mtg-api.mattshoe81.workers.dev'
+const API = process.env.MTG_API_BASE || 'https://mtg-api.mattshoe81.workers.dev'
 
 /** The same shape `branchFor` slugs a name into, so the branch reads like the title. */
 function slug(text) {
@@ -174,9 +174,26 @@ export function agentToken() {
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  const repo = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
-  const token = await writeToken()
+  // The repo this is FOR, which is not where this file is.
+  //
+  // `dispatch.sh` re-execs itself from a pinned copy of `scripts/`
+  // under `.intake/pinned`, so working it out from `import.meta.url`
+  // pointed here at `.intake/pinned`, which has no `requests/` folder.
+  // Every tick logged "ENOENT: no such file or directory, scandir
+  // .intake/pinned/requests", the inbox collected nothing, and a task
+  // Matt sent sat at `pending` with no name for twelve hours.
+  //
+  // `INTAKE_REPO` is what the dispatcher exports when it pins itself.
+  const repo = process.env.INTAKE_REPO
+    || join(dirname(fileURLToPath(import.meta.url)), '..', '..')
   const stamp = new Date().toISOString().replace('T', ' ').slice(0, 19)
+  // Blind: see the same check in task-status.mjs. 86 is the one exit
+  // that sends dispatch.sh back to the working tree.
+  if (!existsSync(join(repo, 'requests'))) {
+    console.error(`${stamp}  inbox: blind: no requests/ in ${repo}`)
+    process.exit(86)
+  }
+  const token = await writeToken()
   if (!token) {
     console.log(`${stamp}  inbox: no credential that may read the inbox, so nothing was collected`)
   } else {

@@ -1,6 +1,7 @@
 package org.mattshoe.mtg.web
 
 import org.mattshoe.mtg.core.onRules
+import org.mattshoe.mtg.core.copiedRule
 import org.mattshoe.mtg.core.TaskDetail
 import org.mattshoe.mtg.core.UserQueries
 import org.mattshoe.mtg.core.openTaskKey
@@ -290,6 +291,7 @@ object MtgApp {
                     if (next.view != was.view || next.route.rest != was.route.rest) loadFor(next)
                 },
                 onLoadRules = { loadRules() },
+                onCopyRule = { r -> scope.launch { app = app.copiedRule(r, copy(r.copyText)) } },
                 // Every one of these marks itself busy *here*, before
                 // the coroutine starts, rather than inside it.
                 // Launching first and setting the flag in the suspend

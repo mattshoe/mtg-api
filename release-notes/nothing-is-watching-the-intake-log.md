@@ -1,0 +1,1 @@
+The task dispatcher notices when it fails the same way ten minutes running and says so once: the task it is stuck on goes to blocked, or the laptop gets a notification when the dispatcher itself is broken.

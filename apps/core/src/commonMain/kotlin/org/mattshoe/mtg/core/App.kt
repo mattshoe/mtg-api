@@ -121,14 +121,29 @@ data class AppState(
             // Landing where it already is is not a new visit to the
             // task list; anywhere else is. See `Tasks.fresh`.
             tasks = if (landed == route) tasks else tasks.stale(),
+            // The suggestion list is drawn under the Library's name box
+            // and nowhere else. Left open on the way out, it went on
+            // answering `back()` from screens that cannot show it, and
+            // the first press anywhere after was spent closing it.
+            complete = if (landed == route) complete else complete.closed(),
         )
         // The Library's rows answer a collection as well as its
         // filters. Going from your cards to somebody's on the Users
         // tab changes only the first, so without this the rows on
         // screen would be "fresh" and the wrong person's.
         // A card is not a collection; coming back from one keeps them.
-        return if (landed.view == View.CARD || route.view == View.CARD || next.viewing == viewing) next
-        else next.copy(library = next.library.copy(loadedFor = null))
+        // A filter on one named deck goes too: it is somebody's deck,
+        // and the panel over the next collection does not list it, so
+        // it would narrow the rows with nothing on screen saying so.
+        if (landed.view == View.CARD || route.view == View.CARD || next.viewing == viewing) return next
+        val filters = next.library.filters
+        val namesADeck = filters.deck.isNotBlank() && !filters.deck.startsWith("_")
+        return next.copy(
+            library = next.library.copy(
+                loadedFor = null,
+                filters = if (namesADeck) filters.copy(deck = "") else filters,
+            ),
+        )
     }
 
     fun navigate(view: View, rest: String = "") = navigate(Route(view, rest))
@@ -352,6 +367,17 @@ data class AppState(
      * was offering it.
      */
     val canEdit: Boolean get() = admin.account?.owns(viewing) == true
+
+    /**
+     * What the Library's filter panel offers.
+     *
+     * The decks of the collection on screen. Matt: "the collection
+     * filter shows ALL decks and NOT the deck the user owns". No decks
+     * at all until it is known whose collection this is, because an
+     * unanswered question read as nobody is every deck in the database.
+     */
+    val panelFacets: Facets
+        get() = if (collectionKnown) facets.forCollection(viewing) else facets.copy(decks = emptyList())
 
     /**
      * The Library, scoped to the collection being looked at.
@@ -794,7 +820,14 @@ data class AppState(
 
     // --------------------------------------------------------- overlays
 
-    fun opening(o: Overlay) = copy(overlays = overlays.open(o), toast = null, toastFailed = false)
+    /**
+     * The name box's suggestions go away under anything that opens
+     * over them. Left up, they were what the next back closed — Matt,
+     * "i always have to hit back twice to get out of the carousel".
+     * `closed()`, so what was typed stays in the box.
+     */
+    fun opening(o: Overlay) =
+        copy(overlays = overlays.open(o), toast = null, toastFailed = false, complete = complete.closed())
 
     fun closing(o: Overlay) = copy(overlays = overlays.close(o)).forget(o)
 

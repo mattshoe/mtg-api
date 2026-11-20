@@ -1,0 +1,1 @@
+The Library's "In a deck" filter lists the decks of the collection you are looking at, your own in your Library and theirs when browsing somebody else's, instead of every deck on the site. Phone and website.

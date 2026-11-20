@@ -1,0 +1,3 @@
+What was built: On the rules page, on the phone and the website, words in quotes are searched as one string, so "assigning combat damage" finds only the rules that say exactly that, not every rule that has the three words somewhere. Words outside quotes still match anywhere in the rule, and both can be mixed, like trample "combat damage".
+Choices: The search lives in the shared code, so both apps read the same rule. Case and extra spaces inside the quotes do not matter, the same as the rest of the search.
+Liberties: A phone keyboard's curly quotes count as quotes. A quote left open runs to the end of what was typed. Empty quotes add nothing.
