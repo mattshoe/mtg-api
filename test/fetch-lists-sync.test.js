@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { env } from 'cloudflare:test';
-import { call } from './helpers.js';
+import { call, adminToken } from './helpers.js';
 import { newSession } from '../src/accounts.js';
 
 // Matt: "making a fetch list on web does not show on android and vice
@@ -73,5 +73,57 @@ describe('saved Fetch lists, kept against the account', () => {
     const t = await newSession(env.DB, MATT);
     const r = await put(t, [{ title: 'No id' }]);
     expect(r.status).toBe(400);
+  });
+});
+
+// Matt: "create a 'fetch list' in my app for those 100 cards". The deck
+// builder skill runs on his Mac with the operator's admin token, not a
+// signed-in Google session, so it couldn't reach /fetch-lists at all. The
+// operator may now name the account whose lists it reads or replaces.
+
+const opList = (id, title) => ({
+  id, title, at: '2026-11-20T12:00:00Z', list: '1 Sol Ring', result: null, ticked: [], tickedMissing: [],
+});
+
+describe('the operator and saved Fetch lists', () => {
+  it('saves a list into an account that the account then sees', async () => {
+    const op = await adminToken();
+    const w = await call('/fetch-lists', { method: 'POST', token: op, body: { user: MATT, lists: [opList('d', 'Built deck')] } });
+    expect(w.status, `the operator's save was refused: ${JSON.stringify(w.body)}`).toBe(200);
+    const r = await call('/fetch-lists', { token: await newSession(env.DB, MATT) });
+    expect(r.body.lists.map((l) => l.title), 'Matt did not see the list the operator saved for him').toEqual(['Built deck']);
+  });
+
+  it('reads an account it names', async () => {
+    await call('/fetch-lists', { method: 'POST', token: await newSession(env.DB, MATT), body: { lists: [opList('a', 'Alela')] } });
+    const r = await call(`/fetch-lists?user=${MATT}`, { token: await adminToken() });
+    expect(r.status).toBe(200);
+    expect(r.body.lists.map((l) => l.title)).toEqual(['Alela']);
+  });
+
+  it('only touches the account it names', async () => {
+    const op = await adminToken();
+    await call('/fetch-lists', { method: 'POST', token: op, body: { user: MATT, lists: [opList('d', 'Built deck')] } });
+    const r = await call('/fetch-lists', { token: await newSession(env.DB, KAYLA) });
+    expect(r.body.lists, "Kayla got the list saved for Matt").toEqual([]);
+  });
+
+  it('has to name an account, rather than guessing one', async () => {
+    const op = await adminToken();
+    const w = await call('/fetch-lists', { method: 'POST', token: op, body: { lists: [opList('d', 'Built deck')] } });
+    expect(w.status).toBe(400);
+    expect(w.body.error).toMatch(/user/);
+    expect((await call('/fetch-lists', { token: op })).status).toBe(400);
+  });
+
+  it('refuses an account that does not exist', async () => {
+    const r = await call('/fetch-lists?user=999', { token: await adminToken() });
+    expect(r.status).toBe(404);
+  });
+
+  it('a signed-in account still cannot reach somebody else by naming them', async () => {
+    await call('/fetch-lists', { method: 'POST', token: await newSession(env.DB, MATT), body: { lists: [opList('a', 'Alela')] } });
+    const r = await call(`/fetch-lists?user=${MATT}`, { token: await newSession(env.DB, KAYLA) });
+    expect(r.body.lists, "Kayla read Matt's lists by naming him").toEqual([]);
   });
 });

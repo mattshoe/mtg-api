@@ -316,8 +316,8 @@ const INDEX = {
     'POST /devices': '{"token","platform":"android","label"?} — where to push to; said by the app on every start, keyed on the token',
     'DELETE /devices': '{"token"} — stop pushing to a device',
     'GET /devices': 'which devices are registered, with the tokens shortened; admin only',
-    'GET /fetch-lists': 'your saved Fetch lists, the same on every device; signed in',
-    'POST /fetch-lists': '{"lists":[...]} — replace your saved Fetch lists with these; signed in',
+    'GET /fetch-lists': 'your saved Fetch lists, the same on every device; signed in, or the admin token with ?user=<id>',
+    'POST /fetch-lists': '{"lists":[...]} — replace your saved Fetch lists with these; signed in, or the admin token with "user":<id>',
     'GET /maintenance': 'what the daily job did last',
     'POST /maintenance': 'run it now — needs admin; {"only":"orphans"} or {"all":true,"wait":true}',
     'GET /s': '/s/<route> — a shared link: Open Graph tags for that deck, card or collection, then on to the site',
@@ -996,13 +996,28 @@ async function route(request, env, ctx, entry) {
     // list saved on the website is on the phone and the other way round.
     if (path === '/fetch-lists') {
       const who = await whoAmI(env, request, verifyToken);
-      if (!who.user) return denied('sign in to keep Fetch lists');
-      if (method === 'GET') return send(await readFetchLists(env.DB, who.user.id));
+      if (!who.user && !who.operator) return denied('sign in to keep Fetch lists');
+      // The operator holds no account of its own, so it names the one it means:
+      // `?user=` to read, `user` in the body to write. A signed-in account only
+      // ever reaches its own, whatever it names.
+      const account = async (named) => {
+        if (who.user) return { id: who.user.id };
+        const id = Number(named);
+        if (!Number.isInteger(id) || id < 1) return { error: json({ error: 'name the account as `user`, its id' }, 400) };
+        const found = await env.DB.prepare('SELECT id FROM users WHERE id = ?1').bind(id).first();
+        return found ? { id } : { error: json({ error: `no account ${id}` }, 404) };
+      };
+      if (method === 'GET') {
+        const a = await account(url.searchParams.get('user'));
+        return a.error ?? send(await readFetchLists(env.DB, a.id));
+      }
       if (method === 'POST') {
         entry.write = true;
         const { body, error } = await readJson(request);
         if (error) return json({ error }, 400);
-        const out = await writeFetchLists(env.DB, who.user.id, body);
+        const a = await account(body?.user);
+        if (a.error) return a.error;
+        const out = await writeFetchLists(env.DB, a.id, body);
         if (out.status >= 400) entry.message = out.body.error;
         return send(out);
       }
