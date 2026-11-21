@@ -899,11 +899,19 @@ object MtgApp {
     private suspend fun openDeck(s: AppState, key: String): AppState {
         // The list first, because the header needs the deck's own row.
         if (app.decks.decks.isEmpty()) app = loadDecks()
+        // A deck somebody else shared is not on this collection's
+        // shelf, so its own row is asked for by its key. None at all
+        // is a key that names no deck, which is said, not spun on.
+        val row = if (!app.decks.needsRow(key)) null else {
+            val one = api.query(DeckQueries.one(key))
+            DeckQueries.decode(one.cols, one.rows).firstOrNull()
+                ?: return app.copy(decks = app.decks.missing(key))
+        }
         val r = api.query(DeckQueries.cards(key))
         // Read `app` again rather than the copy captured before the
         // query: anything that landed while it was in flight — the
         // facet lists, a toast — would otherwise be thrown away.
-        val opened = app.copy(decks = app.decks.opened(key, DeckQueries.decodeCards(r.cols, r.rows)))
+        val opened = app.copy(decks = app.decks.opened(key, DeckQueries.decodeCards(r.cols, r.rows), row))
             .navigate(Route(View.DECKS, key))
         // The tokens come from Scryfall and land behind the list
         // rather than holding it up. A deck that shows its cards and
