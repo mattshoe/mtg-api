@@ -369,6 +369,18 @@ data class AppState(
     val canEdit: Boolean get() = admin.account?.owns(viewing) == true
 
     /**
+     * Whether the decks page offers its edits: the open deck's owner
+     * decides, not the collection in view. A deck somebody shared is
+     * theirs on your screen — Matt's Liliana deck opened on Kayla's
+     * phone offered her Edit list, Rename and Disassemble, which the
+     * server refuses. With no deck open it is the shelf, and [canEdit].
+     */
+    val canEditDeck: Boolean
+        get() = decks.open?.takeIf { route.rest.isNotEmpty() }
+            ?.let { admin.account?.owns(it.owner) == true }
+            ?: canEdit
+
+    /**
      * What the Library's filter panel offers.
      *
      * The decks of the collection on screen. Matt: "the collection

@@ -424,7 +424,24 @@ object DeckQueries {
     const val EVERY = "*"
 
     fun all(owner: String = EVERY) = Sql(
-        """SELECT d.key, d.name, ${Owners.keyOf("d.owner_id")} AS owner,
+        """$ROW
+            ${scopeOf(owner)}
+            ORDER BY d.owner_id, d.name""",
+        if (owner.isEmpty() || owner == EVERY) emptyList() else listOf(owner),
+    )
+
+    /**
+     * One deck's row, by its key, whoever owns it.
+     *
+     * A deck reached by a link is not on the shelf of the collection on
+     * screen when somebody else shared it, so its header has to be
+     * asked for on its own. Reading is open; a key names a deck to look
+     * at, the way `/c/<key>` names a collection.
+     */
+    fun one(key: String) = Sql("$ROW\n            WHERE d.key = ?", listOf(key))
+
+    /** A deck's row as the shelf and the deck's header both read it. */
+    private val ROW = """SELECT d.key, d.name, ${Owners.keyOf("d.owner_id")} AS owner,
                   ${Owners.nameOf("d.owner_id")} AS owner_name,
                   d.commander, d.colors, d.bracket,
                   c.scryfall_id AS art_id
@@ -434,11 +451,7 @@ object DeckQueries {
                ON c.name_norm = lower(trim(CASE
                     WHEN instr(d.commander, ' (') > 0
                     THEN substr(d.commander, 1, instr(d.commander, ' (') - 1)
-                    ELSE d.commander END))
-            ${scopeOf(owner)}
-            ORDER BY d.owner_id, d.name""",
-        if (owner.isEmpty() || owner == EVERY) emptyList() else listOf(owner),
-    )
+                    ELSE d.commander END))"""
 
     /**
      * `""` is "nobody said", which is not "everybody".
@@ -587,8 +600,26 @@ data class DecksState(
     val tokens: List<TokenCard> = emptyList(),
     val busy: Boolean = false,
     val error: String? = null,
+    /**
+     * The open deck's own row when it is not on the shelf: a deck
+     * somebody else shared. Kept apart so it never joins the shelf of
+     * the collection on screen.
+     */
+    val shared: Deck? = null,
 ) {
-    val open: Deck? get() = decks.firstOrNull { it.key == openKey }
+    val open: Deck?
+        get() = decks.firstOrNull { it.key == openKey } ?: shared?.takeIf { it.key == openKey }
+
+    /**
+     * Whether opening [key] needs its row asked for. Matt shared his
+     * Liliana deck with Kayla and it sat on "Loading the deck…" for
+     * her: the row was looked for only on her own shelf.
+     */
+    fun needsRow(key: String): Boolean = decks.none { it.key == key }
+
+    /** A key that names no deck: said, rather than a spinner forever. */
+    fun missing(key: String) = copy(openKey = null, cards = emptyList(), shared = null)
+        .failed("there is no deck at that address")
 
     /** A card the deck wants more of than its owner has. Basics never count. */
     val gaps: List<DeckCard> get() = cards.filter { it.short > 0 }
@@ -620,14 +651,17 @@ data class DecksState(
 
     fun loading() = copy(busy = true, error = null)
     fun loaded(decks: List<Deck>) = copy(decks = decks, busy = false, error = null)
-    fun opened(key: String, cards: List<DeckCard>) =
-        copy(openKey = key, cards = cards, tokens = emptyList(), busy = false, error = null)
+    fun opened(key: String, cards: List<DeckCard>, row: Deck? = null) =
+        copy(
+            openKey = key, cards = cards, tokens = emptyList(), busy = false, error = null,
+            shared = row?.takeIf { it.key == key } ?: shared?.takeIf { it.key == key },
+        )
 
     fun withTokens(t: List<TokenCard>) = copy(tokens = t)
 
     /** Every printing the open deck can ask Scryfall about. */
     val scryfallIds: List<String> get() = cards.mapNotNull { it.scryfallId }.distinct()
 
-    fun close() = copy(openKey = null, cards = emptyList(), tokens = emptyList())
+    fun close() = copy(openKey = null, cards = emptyList(), tokens = emptyList(), shared = null)
     fun failed(message: String) = copy(busy = false, error = message)
 }

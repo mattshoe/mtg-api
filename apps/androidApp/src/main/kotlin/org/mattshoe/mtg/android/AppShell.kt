@@ -446,7 +446,7 @@ fun AppShell(
                             DecksListScreen(
                                 state = state.decks,
                                 scrollState = deckScrollState,
-                                admin = state.canEdit,
+                                admin = state.canEditDeck,
                                 onOpen = { onOpenDeck(it.key) },
                             )
                         } else if (openDeck == null) {
@@ -463,7 +463,7 @@ fun AppShell(
                                 state = state.decks,
                                 open = openDeck,
                                 scrollState = deckScrollState,
-                                admin = state.canEdit,
+                                admin = state.canEditDeck,
                                 onEdit = { onEditDeck(it.key) },
                                 onDisassemble = { onAskDisassemble(it.key) },
                                 onRename = { onAskRename(it.key) },

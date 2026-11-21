@@ -980,8 +980,16 @@ class MainActivity : ComponentActivity() {
 
     private suspend fun openDeck(key: String): AppState {
         val all = if (app.decks.decks.isEmpty()) loadDecks() else app
+        // A deck somebody else shared is not on this collection's
+        // shelf, so its own row is asked for by its key. None at all
+        // is a key that names no deck, which is said, not spun on.
+        val row = if (!all.decks.needsRow(key)) null else {
+            val one = api.query(DeckQueries.one(key))
+            DeckQueries.decode(one.cols, one.rows).firstOrNull()
+                ?: return all.copy(decks = all.decks.missing(key))
+        }
         val r = api.query(DeckQueries.cards(key))
-        val opened = all.copy(decks = all.decks.opened(key, DeckQueries.decodeCards(r.cols, r.rows)))
+        val opened = all.copy(decks = all.decks.opened(key, DeckQueries.decodeCards(r.cols, r.rows), row))
         // Started here and not awaited, the same as the website: a
         // deck that shows its cards and fills in its tokens a moment
         // later is right; one that waits on a second service to show

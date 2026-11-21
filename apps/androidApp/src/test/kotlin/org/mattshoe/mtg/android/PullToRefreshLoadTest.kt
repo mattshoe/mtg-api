@@ -56,7 +56,15 @@ class PullToRefreshLoadTest {
                 val text = (request.body as? io.ktor.http.content.TextContent)?.text.orEmpty()
                 synchronized(asked) { asked += text }
                 respond(
-                    """{"cols":[],"rows":[],"n":0}""",
+                    // The deck the pull is on has to exist: a key that
+                    // names no deck is now said to be gone, and asks
+                    // for no cards.
+                    if ("FROM decks d" in text) {
+                        """{"cols":["key","name","owner","owner_name","commander","colors","bracket","art_id"],""" +
+                            """"rows":[["alela","Fairy Deck","matt","Matt","Alela","UB",3,null]],"n":1}"""
+                    } else {
+                        """{"cols":[],"rows":[],"n":0}"""
+                    },
                     HttpStatusCode.OK,
                     headersOf(HttpHeaders.ContentType, "application/json"),
                 )

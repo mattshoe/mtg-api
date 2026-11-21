@@ -211,7 +211,7 @@ fun AppShell(
         View.DECKS -> DecksPage(
             state = state.decks,
             onOpen = { onOpenDeck(it.key) },
-            admin = state.canEdit,
+            admin = state.canEditDeck,
             onEdit = { onEditDeck(it.key) },
             onRename = { onAskRename(it.key) },
             onDisassemble = { onAskDisassemble(it.key) },

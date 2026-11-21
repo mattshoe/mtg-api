@@ -1,0 +1,1 @@
+A shared deck link opens the deck for somebody else, on the phone and the website, instead of loading forever. A link to a deck that is gone says so. Somebody else's deck no longer offers you Edit list, Rename or Disassemble.
