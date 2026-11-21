@@ -646,12 +646,19 @@ class AppDriverTest {
         settle()
         try {
             waitFor("the deck") {
-                view.textContent.orEmpty().let { "Faultless Victory" in it && "Sol Ring" in it }
+                view.textContent.orEmpty().let { "Liliana the Faultless" in it && "Sol Ring" in it }
             }
         } catch (e: IllegalStateException) {
             error("Matt's deck never opened from its link; the page shows: " + view.textContent.orEmpty().take(200))
         }
         assertEquals("#/decks/x5aqbxtw", hash())
+        // Signed in here as e7de0cb1 and the deck is t4m4tt00's: the
+        // edits are the owner's and the server refuses them to anybody
+        // else, so they are not offered.
+        val offered = listOf("Edit list", "Rename", "Disassemble").filter { label ->
+            view.querySelector("[aria-label='$label']") != null || label in view.textContent.orEmpty()
+        }
+        assertTrue(offered.isEmpty(), "somebody else's deck offers $offered, which the server will refuse")
     }
 
     @Test
@@ -676,7 +683,7 @@ class AppDriverTest {
         deckFails = false
         MtgApp.refreshForTesting()
         try {
-            waitFor("the deck") { "Faultless Victory" in view.textContent.orEmpty() }
+            waitFor("the deck") { "Liliana the Faultless" in view.textContent.orEmpty() }
         } catch (e: IllegalStateException) {
             error("trying again after a failure did not open the deck; the page shows: " + view.textContent.orEmpty().take(200))
         }
