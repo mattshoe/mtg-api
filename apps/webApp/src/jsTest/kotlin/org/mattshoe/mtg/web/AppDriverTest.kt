@@ -91,6 +91,9 @@ class AppDriverTest {
     /** Makes `/decks/create` fail with a 500. */
     private var createFails = false
 
+    /** Makes every deck query answer 500, the way a dropped database does. */
+    private var deckFails = false
+
     @BeforeTest
     fun stubTheNetwork() {
         writes.clear()
@@ -105,6 +108,7 @@ class AppDriverTest {
         writeFails = false
         addDrops = false
         createFails = false
+        deckFails = false
         val engine = MockEngine { request ->
             if (request.method.value == "POST" && """"dry_run":false""" in
                 (request.body as? io.ktor.http.content.TextContent)?.text.orEmpty()
@@ -134,6 +138,23 @@ class AppDriverTest {
                     if ("%bolt%" in body) """{$cols,"rows":[$bolt],"n":1}"""
                     else """{$cols,"rows":[$ring,$bolt],"n":2}"""
                 }
+
+                deckFails && body.contains("decks d") ->
+                    return@MockEngine respond(
+                        """{"error":"the database is down"}""",
+                        HttpStatusCode.InternalServerError,
+                        headersOf(HttpHeaders.ContentType, "application/json"),
+                    )
+
+                // A deck by its own key, whoever owns it: Matt's Liliana
+                // deck, which is on nobody's shelf but his, and a key
+                // that names no deck at all.
+                body.contains("FROM decks d") && "x5aqbxtw" in body ->
+                    """{"cols":["key","name","owner","owner_name","commander","colors","bracket","art_id"],""" +
+                        """"rows":[["x5aqbxtw","Faultless Victory","t4m4tt00","Matt","Liliana the Faultless","B",3,null]],"n":1}"""
+
+                body.contains("FROM decks d") && "n0d3ck00" in body ->
+                    """{"cols":["key","name","owner","owner_name","commander","colors","bracket","art_id"],"rows":[],"n":0}"""
 
                 body.contains("FROM decks d") && body.contains("art_id") ->
                     """{"cols":["key","name","owner","owner_name","commander","colors","bracket","art_id"],""" +
@@ -613,6 +634,52 @@ class AppDriverTest {
         settle()
         waitFor("the deck") { view.textContent.orEmpty().contains("Sol Ring") }
         assertEquals("#/decks/alela", hash())
+    }
+
+    @Test
+    fun aLinkToSomebodyElsesDeckOpensThatDeck() = runTest {
+        // Matt: "i shared a link to my Liliana deck with Kayla, and the
+        // deck doesn't load for her". The shelf is the collection on
+        // screen — hers, here only `alela` — and the deck's own row was
+        // looked for on it, so Matt's deck never opened.
+        val view = mount("#/decks/x5aqbxtw")
+        settle()
+        try {
+            waitFor("the deck") {
+                view.textContent.orEmpty().let { "Faultless Victory" in it && "Sol Ring" in it }
+            }
+        } catch (e: IllegalStateException) {
+            error("Matt's deck never opened from its link; the page shows: " + view.textContent.orEmpty().take(200))
+        }
+        assertEquals("#/decks/x5aqbxtw", hash())
+    }
+
+    @Test
+    fun aLinkToADeckThatIsGoneSaysSo() = runTest {
+        val view = mount("#/decks/n0d3ck00")
+        settle()
+        try {
+            waitFor("an error") { view.querySelector(".err") != null }
+        } catch (e: IllegalStateException) {
+            error("a link to a deck that does not exist showed no error; the page shows: " + view.textContent.orEmpty().take(200))
+        }
+        assertTrue("Fairy Deck" !in view.textContent.orEmpty(), "a link to a missing deck showed somebody's shelf instead")
+    }
+
+    @Test
+    fun aDeckThatFailsToLoadSaysWhyAndPullingAgainOpensIt() = runTest {
+        deckFails = true
+        val view = mount("#/decks/x5aqbxtw")
+        settle()
+        waitFor("an error") { view.querySelector(".err") != null }
+        assertTrue("Loading" !in view.textContent.orEmpty(), "the spinner is still up after the deck failed to load")
+        deckFails = false
+        MtgApp.refreshForTesting()
+        try {
+            waitFor("the deck") { "Faultless Victory" in view.textContent.orEmpty() }
+        } catch (e: IllegalStateException) {
+            error("trying again after a failure did not open the deck; the page shows: " + view.textContent.orEmpty().take(200))
+        }
     }
 
     @Test

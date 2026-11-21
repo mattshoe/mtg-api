@@ -497,6 +497,9 @@ object MtgApp {
         loadFor(app)
     }
 
+    /** A pull, for a test that cannot drag the page. */
+    internal fun refreshForTesting() = refresh()
+
     private fun listen() {
         if (listening) return
         listening = true
